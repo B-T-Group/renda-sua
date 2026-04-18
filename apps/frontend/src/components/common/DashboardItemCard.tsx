@@ -49,6 +49,12 @@ function orderedGalleryImages(
   return [main, ...byOrder.filter((i) => i !== main)];
 }
 
+/** Strip HTML and collapse whitespace for card preview text. */
+function plainTextSummary(text: string | null | undefined): string {
+  if (!text?.trim()) return '';
+  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 interface DashboardItemCardProps {
   item: InventoryItem;
   formatCurrency: (amount: number, currency?: string) => string;
@@ -95,6 +101,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const galleryImages = useMemo(
     () => orderedGalleryImages(inventory.item.item_images),
     [inventory.item.item_images]
+  );
+
+  const descriptionPreview = useMemo(
+    () => plainTextSummary(inventory.item.description),
+    [inventory.item.description]
   );
 
   useEffect(() => {
@@ -484,7 +495,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             <Typography
               variant="h6"
               sx={{
-                mb: 0.5,
+                mb: descriptionPreview ? 0.25 : 0.5,
                 lineHeight: 1.2,
                 fontSize: '1rem',
                 fontWeight: 600,
@@ -492,6 +503,24 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {inventory.item.name}
             </Typography>
+            {descriptionPreview ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mb: 0.5,
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.45,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {descriptionPreview}
+              </Typography>
+            ) : null}
             {showAggregateRating && (
               <Box
                 sx={{

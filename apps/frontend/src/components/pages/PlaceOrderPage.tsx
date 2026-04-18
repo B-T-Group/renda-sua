@@ -16,6 +16,7 @@ import {
   Alert,
   Box,
   Button,
+  ButtonBase,
   Card,
   CardContent,
   CardMedia,
@@ -47,7 +48,12 @@ import {
 import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  Link as RouterLink,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -1294,17 +1300,44 @@ const PlaceOrderPage: React.FC = () => {
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid size={{ xs: 12 }}>
                   {selectedItem.item.item_images?.[0] ? (
-                    <CardMedia
-                      component="img"
-                      image={selectedItem.item.item_images[0].image_url}
-                      alt={selectedItem.item.name}
-                      sx={{
-                        borderRadius: 2,
-                        width: '100%',
-                        height: 'auto',
-                        display: 'block',
-                      }}
-                    />
+                    id ? (
+                      <ButtonBase
+                        component={RouterLink}
+                        to={`/items/${id}`}
+                        sx={{
+                          width: '100%',
+                          display: 'block',
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                        }}
+                        aria-label={t('items.viewProduct', 'View product')}
+                      >
+                        <CardMedia
+                          component="img"
+                          image={selectedItem.item.item_images[0].image_url}
+                          alt={selectedItem.item.name}
+                          sx={{
+                            width: '100%',
+                            height: 'auto',
+                            display: 'block',
+                            verticalAlign: 'bottom',
+                          }}
+                        />
+                      </ButtonBase>
+                    ) : (
+                      <CardMedia
+                        component="img"
+                        image={selectedItem.item.item_images[0].image_url}
+                        alt={selectedItem.item.name}
+                        sx={{
+                          borderRadius: 2,
+                          width: '100%',
+                          height: 'auto',
+                          display: 'block',
+                          verticalAlign: 'bottom',
+                        }}
+                      />
+                    )
                   ) : (
                     <Box
                       sx={{
@@ -2353,26 +2386,53 @@ const PlaceOrderPage: React.FC = () => {
                     </Typography>
                   </Box>
 
-                  <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 5 }}>
+                  <Stack spacing={3}>
+                    <Box sx={{ width: '100%' }}>
                       {selectedItem.item.item_images?.[0] ? (
-                        <CardMedia
-                          component="img"
-                          image={selectedItem.item.item_images[0].image_url}
-                          alt={selectedItem.item.name}
-                          sx={{
-                            borderRadius: 2,
-                            width: '100%',
-                            height: { xs: 200, md: 250 },
-                            objectFit: 'cover',
-                          }}
-                        />
+                        id ? (
+                          <ButtonBase
+                            component={RouterLink}
+                            to={`/items/${id}`}
+                            sx={{
+                              width: '100%',
+                              display: 'block',
+                              borderRadius: 2,
+                              overflow: 'hidden',
+                            }}
+                            aria-label={t('items.viewProduct', 'View product')}
+                          >
+                            <CardMedia
+                              component="img"
+                              image={selectedItem.item.item_images[0].image_url}
+                              alt={selectedItem.item.name}
+                              sx={{
+                                width: '100%',
+                                height: 'auto',
+                                display: 'block',
+                                verticalAlign: 'bottom',
+                              }}
+                            />
+                          </ButtonBase>
+                        ) : (
+                          <CardMedia
+                            component="img"
+                            image={selectedItem.item.item_images[0].image_url}
+                            alt={selectedItem.item.name}
+                            sx={{
+                              borderRadius: 2,
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block',
+                              verticalAlign: 'bottom',
+                            }}
+                          />
+                        )
                       ) : (
                         <Box
                           sx={{
                             borderRadius: 2,
                             width: '100%',
-                            height: { xs: 200, md: 250 },
+                            minHeight: 200,
                             bgcolor: 'grey.200',
                             display: 'flex',
                             alignItems: 'center',
@@ -2384,9 +2444,9 @@ const PlaceOrderPage: React.FC = () => {
                           </Typography>
                         </Box>
                       )}
-                    </Grid>
+                    </Box>
 
-                    <Grid size={{ xs: 12, md: 7 }}>
+                    <Box sx={{ width: '100%' }}>
                       <Typography variant="h5" fontWeight="bold" gutterBottom>
                         {selectedItem.item.name}
                       </Typography>
@@ -2533,8 +2593,8 @@ const PlaceOrderPage: React.FC = () => {
                           )}
                         </Stack>
                       </Paper>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Stack>
 
                   <Divider sx={{ my: 3 }} />
 
