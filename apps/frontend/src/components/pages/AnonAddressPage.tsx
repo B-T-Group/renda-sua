@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
+import { useInventoryItem } from '../../hooks/useInventoryItem';
 import AddressForm from '../addresses/AddressForm';
 import type { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -47,6 +48,21 @@ const AnonAddressPage: React.FC = () => {
     address_type: 'home',
     is_primary: true,
   });
+
+  const { inventoryItem } = useInventoryItem(id || null);
+  const itemOriginCountryIso = useMemo(
+    () =>
+      inventoryItem?.business_location?.address?.country?.trim() ?? '',
+    [inventoryItem]
+  );
+
+  useEffect(() => {
+    if (!itemOriginCountryIso) return;
+    setAddressFormData((prev) => {
+      if (prev.country) return prev;
+      return { ...prev, country: itemOriginCountryIso };
+    });
+  }, [itemOriginCountryIso]);
 
   const { addAddress } = useAddressManager({
     entityType: 'client',

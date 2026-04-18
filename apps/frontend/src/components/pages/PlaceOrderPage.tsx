@@ -520,6 +520,12 @@ const PlaceOrderPage: React.FC = () => {
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
     useInventoryItem(id || null);
 
+  /** ISO country of the selling location — default delivery address country for this item. */
+  const itemOriginCountryIso = useMemo(
+    () => selectedItem?.business_location?.address?.country?.trim() ?? '',
+    [selectedItem]
+  );
+
   // Get delivery fee for the selected item
   const {
     deliveryFee,
@@ -620,7 +626,7 @@ const PlaceOrderPage: React.FC = () => {
       city: '',
       state: '',
       postal_code: '',
-      country: '',
+      country: itemOriginCountryIso,
       address_type: 'home',
       is_primary: true,
     });
@@ -633,8 +639,19 @@ const PlaceOrderPage: React.FC = () => {
     id,
     isAnonFlow,
     isMobile,
+    itemOriginCountryIso,
     navigate,
   ]);
+
+  // If the item loads after the address dialog opens, default country when still empty
+  useEffect(() => {
+    if (!addressDialogOpen) return;
+    if (!itemOriginCountryIso) return;
+    setAddressFormData((prev) => {
+      if (prev.country) return prev;
+      return { ...prev, country: itemOriginCountryIso };
+    });
+  }, [addressDialogOpen, itemOriginCountryIso]);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -800,9 +817,13 @@ const PlaceOrderPage: React.FC = () => {
   };
 
   // Address Dialog Handlers
-  const handleOpenAddressDialog = () => {
+  const handleOpenAddressDialog = useCallback(() => {
+    setAddressFormData((prev) => ({
+      ...prev,
+      country: prev.country || itemOriginCountryIso,
+    }));
     setAddressDialogOpen(true);
-  };
+  }, [itemOriginCountryIso]);
 
   const handleCloseAddressDialog = () => {
     setAddressDialogOpen(false);
