@@ -60,6 +60,7 @@
 - "!include public_rental_location_listings.yaml"
 - "!include public_rental_requests.yaml"
 - "!include public_rental_status_history.yaml"
+- "!include public_site_events.yaml"
 - "!include public_supported_country_states.yaml"
 - "!include public_supported_payment_systems.yaml"
 - "!include public_tags.yaml"

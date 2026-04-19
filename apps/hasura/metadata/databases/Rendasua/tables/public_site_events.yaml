@@ -1,0 +1,3 @@
+table:
+  name: site_events
+  schema: public
