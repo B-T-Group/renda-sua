@@ -198,6 +198,8 @@ export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
   GOOGLE_CACHE_TTL: number;
+  /** Public web app origin (no trailing slash); OG canonical URLs and share HTML. */
+  publicWebAppUrl: string;
   app: AppConfig;
   database: DatabaseConfig;
   hasura: HasuraConfig;
@@ -235,6 +237,10 @@ export default (): Configuration => {
     GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY || '',
     GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
     GOOGLE_CACHE_TTL: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
+    publicWebAppUrl: (process.env.PUBLIC_WEB_APP_URL || 'https://rendasua.com').replace(
+      /\/$/,
+      ''
+    ),
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??

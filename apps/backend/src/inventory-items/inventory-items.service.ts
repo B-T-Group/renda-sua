@@ -4,6 +4,10 @@ import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  buildInventoryItemNotFoundShareHtml,
+  buildInventoryItemShareHtml,
+} from './inventory-item-share-page.util';
 export type InventorySortMode =
   | 'relevance'
   | 'fastest'
@@ -1130,6 +1134,29 @@ export class InventoryItemsService {
         'Failed to fetch inventory item',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  async renderInventoryItemSharePage(
+    id: string
+  ): Promise<{ statusCode: number; html: string }> {
+    const web =
+      this.configService.get<string>('publicWebAppUrl')?.replace(/\/$/, '') ||
+      'https://rendasua.com';
+    try {
+      const inv = await this.getInventoryItemById(id);
+      return {
+        statusCode: HttpStatus.OK,
+        html: buildInventoryItemShareHtml(web, inv),
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException && error.getStatus() === HttpStatus.NOT_FOUND) {
+        return {
+          statusCode: HttpStatus.NOT_FOUND,
+          html: buildInventoryItemNotFoundShareHtml(web, id),
+        };
+      }
+      throw error;
     }
   }
 

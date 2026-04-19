@@ -39,6 +39,8 @@ const getEnvironment = () => {
       process.env.NODE_ENV !== 'production' &&
       process.env.NODE_ENV !== 'development',
     apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
+    /** When set (no trailing slash), share links use `/items/:id/seo` on this origin (proxy to API). */
+    webAppOrigin: (process.env.REACT_APP_WEB_APP_ORIGIN || '').replace(/\/$/, ''),
     /** Browser key with Places API + HTTP referrer restrictions (see Google Cloud Console). */
     googleMapsBrowserApiKey:
       process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||

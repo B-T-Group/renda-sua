@@ -5,8 +5,10 @@ import {
   HttpStatus,
   Param,
   Query,
+  Res,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import type {
   GetInventoryItemsQuery,
@@ -512,6 +514,34 @@ export class InventoryItemsController {
       data,
       message: 'Similar items retrieved successfully',
     };
+  }
+
+  @Public()
+  @Get(':id/seo')
+  @ApiProduces('text/html')
+  @ApiOperation({
+    summary:
+      'HTML share landing page with Open Graph tags for crawlers; redirects people to the item page',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'HTML document with meta tags and redirect to the catalog item',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Item not found; HTML with redirect to catalog',
+  })
+  async getInventoryItemShareHtml(
+    @Param('id') id: string,
+    @Res() res: Response
+  ): Promise<void> {
+    const { statusCode, html } =
+      await this.inventoryItemsService.renderInventoryItemSharePage(id);
+    res
+      .status(statusCode)
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=300')
+      .send(html);
   }
 
   @Public()

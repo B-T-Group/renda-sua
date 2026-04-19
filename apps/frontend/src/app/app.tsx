@@ -65,6 +65,7 @@ import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import FAQ from '../components/pages/FAQ';
 import ItemDetailPage from '../components/pages/ItemDetailPage';
+import ItemSeoShareRedirectPage from '../components/pages/ItemSeoShareRedirectPage';
 import RentalBookingDetailPage from '../components/pages/RentalBookingDetailPage';
 import RentalListingDetailPage from '../components/pages/RentalListingDetailPage';
 import RentalsPage from '../components/pages/RentalsPage';
@@ -301,6 +302,9 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Share / OG landing path on web origin (proxy to API in production) */}
+            <Route path="/items/:id/seo" element={<ItemSeoShareRedirectPage />} />
 
             {/* Item detail (public) */}
             <Route path="/items/:id" element={<ItemDetailPage />} />

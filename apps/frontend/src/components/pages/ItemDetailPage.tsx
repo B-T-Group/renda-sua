@@ -48,6 +48,7 @@ import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import SEOHead from '../seo/SEOHead';
+import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -475,7 +476,7 @@ export default function ItemDetailPage() {
           </Button>
           {id ? (
             <PageShareMenu
-              shareUrl={`${clientOrigin()}/items/${id}`}
+              shareUrl={buildInventoryItemSeoShareUrl(id)}
               shareTitle={item.name}
               shareDescription={checkoutPriceText}
             />
