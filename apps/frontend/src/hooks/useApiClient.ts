@@ -22,6 +22,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   if (url.includes('/cleanup')) return true;
   const substrings = [
     '/track-site-event',
+    '/admin/site-events',
     '/users/me',
     '/auth/email-availability',
     '/pdf/shipping-labels',

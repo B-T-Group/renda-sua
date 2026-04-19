@@ -7,5 +7,6 @@ import { SiteEventsService } from './site-events.service';
   imports: [HasuraModule],
   controllers: [SiteEventsController],
   providers: [SiteEventsService],
+  exports: [SiteEventsService],
 })
 export class SiteEventsModule {}

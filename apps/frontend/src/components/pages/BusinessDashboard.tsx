@@ -352,6 +352,17 @@ const BusinessDashboard: React.FC = () => {
       color: '#5e35b1',
       path: '/admin/pending-mobile-payments',
     },
+    {
+      title: t('business.dashboard.siteEventsModule', 'Site events'),
+      description: t(
+        'business.dashboard.siteEventsModuleDescription',
+        'Reporting and CSV export for client analytics events'
+      ),
+      icon: <SettingsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#455a64',
+      path: '/admin/site-events',
+    },
   ];
 
   const renderModuleRow = (modules: BusinessDashboardModule[]) =>

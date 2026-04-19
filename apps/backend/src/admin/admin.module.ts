@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
+import { AdminSiteEventsController } from './admin-site-events.controller';
 import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -12,8 +14,8 @@ import { ConfigurationsService } from './configurations.service';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
 
 @Module({
-  imports: [AuthModule, HasuraModule, NotificationsModule],
-  controllers: [AdminController, ConfigurationsController],
+  imports: [AuthModule, HasuraModule, NotificationsModule, SiteEventsModule],
+  controllers: [AdminController, ConfigurationsController, AdminSiteEventsController],
   providers: [
     AdminMessageService,
     AdminService,

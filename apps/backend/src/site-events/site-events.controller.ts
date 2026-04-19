@@ -3,11 +3,13 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Request,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBody,
   ApiOperation,
@@ -17,10 +19,12 @@ import {
 import { Public } from '../auth/public.decorator';
 import { resolveTrackViewerFromRequest } from '../tracking/resolve-track-viewer';
 import { TrackSiteEventDto } from './dto/track-site-event.dto';
+import { isLikelyAutomatedSiteEventClient } from './site-event-bot.util';
 import { SiteEventsService } from './site-events.service';
 
 @ApiTags('site-events')
 @Controller()
+@Throttle({ short: { limit: 45, ttl: 60000 } })
 @UsePipes(
   new ValidationPipe({
     transform: true,
@@ -28,6 +32,8 @@ import { SiteEventsService } from './site-events.service';
   })
 )
 export class SiteEventsController {
+  private readonly logger = new Logger(SiteEventsController.name);
+
   constructor(private readonly siteEventsService: SiteEventsService) {}
 
   @Public()
@@ -55,6 +61,12 @@ export class SiteEventsController {
     },
   })
   async trackSiteEvent(@Body() body: TrackSiteEventDto, @Request() req: any) {
+    const rawUa = req.headers?.['user-agent'];
+    const uaStr = Array.isArray(rawUa) ? rawUa[0] : rawUa;
+    if (isLikelyAutomatedSiteEventClient(uaStr)) {
+      this.logger.debug('site_event skipped (likely automated client)');
+      return { success: true };
+    }
     const viewer = resolveTrackViewerFromRequest(req);
     await this.siteEventsService.trackEvent(body, viewer);
     return { success: true };

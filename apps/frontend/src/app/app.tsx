@@ -20,6 +20,7 @@ import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
 import AdminPendingMobilePaymentsPage from '../components/pages/AdminPendingMobilePaymentsPage';
+import AdminSiteEventsPage from '../components/pages/AdminSiteEventsPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -407,6 +408,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminPendingMobilePaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/site-events"
+              element={
+                <ProtectedRoute>
+                  <AdminSiteEventsPage />
                 </ProtectedRoute>
               }
             />

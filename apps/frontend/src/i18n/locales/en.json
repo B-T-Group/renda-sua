@@ -190,6 +190,29 @@
       "resolveReplayed": "Transaction finalized from provider status.",
       "resolveNoReplay": "No replay: provider still pending or already finalized."
     },
+    "siteEvents": {
+      "pageTitle": "Site events",
+      "pageDescription": "Browse client-side analytics events (CTAs, future signals). Export CSV for warehouse or spreadsheets.",
+      "pageKeywords": "admin, analytics, site events, export",
+      "noBusinessProfile": "Business profile not found",
+      "unauthorized": "You are not authorized to access this page",
+      "eventType": "Event type",
+      "subjectType": "Subject type",
+      "subjectId": "Subject id",
+      "from": "From (ISO)",
+      "to": "To (ISO)",
+      "applyFilters": "Apply filters",
+      "exportCsv": "Export CSV",
+      "exportStarted": "Download started",
+      "exportFailed": "Export failed",
+      "loadFailed": "Could not load events",
+      "empty": "No events match these filters.",
+      "colTime": "Time",
+      "colEvent": "Event",
+      "colSubject": "Subject",
+      "colViewer": "Viewer",
+      "colMetadata": "Metadata"
+    },
     "businesses": {
       "imageCleanupEnabled": "Image cleanup enabled"
     },
@@ -793,6 +816,8 @@
       "countryOnboardingDescription": "Multi-step wizard to configure delivery slots and supported states for a country",
       "pendingMobilePaymentsModule": "Pending mobile payments",
       "pendingMobilePaymentsModuleDescription": "Stuck MyPVit or Freemopay transactions: view provider status and replay callbacks",
+      "siteEventsModule": "Site events",
+      "siteEventsModuleDescription": "Reporting and CSV export for client analytics events",
       "firstItem": {
         "saleTitle": "Add your first product",
         "saleBody": "Upload photos, create your item with AI or manually, then add it to a location so customers can buy.",

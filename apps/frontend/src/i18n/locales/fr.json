@@ -190,6 +190,29 @@
       "resolveReplayed": "Transaction finalisée à partir du statut prestataire.",
       "resolveNoReplay": "Aucun rejeu : toujours en attente chez le prestataire ou déjà finalisé."
     },
+    "siteEvents": {
+      "pageTitle": "Événements site",
+      "pageDescription": "Consultez les événements d’analytique côté client (CTA, futurs signaux). Export CSV pour entrepôt ou tableurs.",
+      "pageKeywords": "admin, analytique, événements site, export",
+      "noBusinessProfile": "Profil entreprise introuvable",
+      "unauthorized": "Vous n’êtes pas autorisé à accéder à cette page",
+      "eventType": "Type d’événement",
+      "subjectType": "Type de sujet",
+      "subjectId": "Id du sujet",
+      "from": "Du (ISO)",
+      "to": "Au (ISO)",
+      "applyFilters": "Appliquer les filtres",
+      "exportCsv": "Exporter CSV",
+      "exportStarted": "Téléchargement démarré",
+      "exportFailed": "Échec de l’export",
+      "loadFailed": "Impossible de charger les événements",
+      "empty": "Aucun événement ne correspond à ces filtres.",
+      "colTime": "Heure",
+      "colEvent": "Événement",
+      "colSubject": "Sujet",
+      "colViewer": "Visiteur",
+      "colMetadata": "Métadonnées"
+    },
     "businesses": {
       "imageCleanupEnabled": "Nettoyage d'image activé"
     },
@@ -782,6 +805,8 @@
       "countryOnboardingDescription": "Assistant pour configurer les créneaux de livraison et les régions prises en charge pour un pays",
       "pendingMobilePaymentsModule": "Paiements mobiles en attente",
       "pendingMobilePaymentsModuleDescription": "Transactions MyPVit ou Freemopay bloquées : statut prestataire et rejeu des callbacks",
+      "siteEventsModule": "Événements site",
+      "siteEventsModuleDescription": "Rapports et export CSV des événements d’analytique client",
       "firstItem": {
         "saleTitle": "Ajoutez votre premier produit",
         "saleBody": "Téléversez des photos, créez l’article avec l’IA ou manuellement, puis ajoutez-le à un emplacement pour la vente.",
