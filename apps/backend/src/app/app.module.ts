@@ -38,6 +38,7 @@ import { RatingsModule } from '../ratings/ratings.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalsModule } from '../rentals/rentals.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
 import { ServicesModule } from '../services/services.module';
 import { SmsModule } from '../sms/sms.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
@@ -97,6 +98,7 @@ import { AppService } from './app.service';
     RentalsModule,
     RentalItemImagesModule,
     ItemViewsModule,
+    SiteEventsModule,
     AgentsModule,
     AwsModule,
     MtnMomoModule,

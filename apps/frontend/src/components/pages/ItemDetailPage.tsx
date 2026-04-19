@@ -42,6 +42,11 @@ import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
+import {
+  SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
+  SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
@@ -197,6 +202,7 @@ export default function ItemDetailPage() {
   );
 
   const { trackOnMount, trackView } = useTrackItemView(id || null);
+  const { trackSiteEvent } = useTrackSiteEvent();
 
   React.useEffect(() => {
     if (id) {
@@ -255,6 +261,11 @@ export default function ItemDetailPage() {
 
   const handleOrderClick = () => {
     if (id) {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
+        subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+        subjectId: id,
+      });
       trackView(id);
       if (!isAuthenticated) {
         setAnonBuyNowOpen(true);

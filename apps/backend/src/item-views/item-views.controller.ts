@@ -12,6 +12,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { resolveTrackViewerFromRequest } from '../tracking/resolve-track-viewer';
 import { TrackItemViewDto } from './dto/track-item-view.dto';
 import { ItemViewsService } from './item-views.service';
 
@@ -50,26 +51,7 @@ export class ItemViewsController {
     @Request() req: any
   ) {
     const itemId = body.itemId;
-
-    const userIdHeader =
-      (req.headers['x-user-id'] as string | undefined) ??
-      (req.headers['x-user-id'] as string | undefined);
-    const anonIdHeader =
-      (req.headers['x-anonymous-id'] as string | undefined) ??
-      (req.headers['x-anonymous-id'] as string | undefined);
-
-    const userSub: string | undefined = req.user?.sub;
-
-    let viewerType = 'ip_ua';
-    let viewerId = `${req.ip || 'unknown'}|${req.headers['user-agent'] || 'unknown'}`;
-
-    if (userIdHeader || userSub) {
-      viewerType = 'user';
-      viewerId = (userIdHeader || userSub)!;
-    } else if (anonIdHeader) {
-      viewerType = 'anon';
-      viewerId = anonIdHeader;
-    }
+    const { viewerType, viewerId } = resolveTrackViewerFromRequest(req);
 
     await this.itemViewsService.trackView(itemId, viewerType, viewerId);
 

@@ -32,6 +32,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import {
+  SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
+  SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
+  SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
@@ -99,6 +105,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
+  const { trackSiteEvent } = useTrackSiteEvent();
 
   const galleryImages = useMemo(
     () => orderedGalleryImages(inventory.item.item_images),
@@ -965,7 +972,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             <Button
               variant="contained"
               startIcon={<ShoppingCart />}
-              onClick={() => setAnonBuyNowOpen(true)}
+              onClick={() => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
+                  subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                  subjectId: inventory.id,
+                });
+                setAnonBuyNowOpen(true);
+              }}
               size="small"
               sx={{ width: '75%', alignSelf: 'center' }}
             >
@@ -997,7 +1011,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Button>
               <Button
                 variant="contained"
-                onClick={() => onOrderClick(inventory)}
+                onClick={() => {
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
+                    subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                    subjectId: inventory.id,
+                  });
+                  onOrderClick(inventory);
+                }}
                 size="small"
                 fullWidth
                 sx={{
@@ -1014,7 +1035,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             <Button
               variant="contained"
               startIcon={<ShoppingCart />}
-              onClick={() => onOrderClick(inventory)}
+              onClick={() => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
+                  subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                  subjectId: inventory.id,
+                });
+                onOrderClick(inventory);
+              }}
               size="small"
               sx={{ width: '75%' }}
             >

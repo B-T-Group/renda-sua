@@ -1,27 +1,12 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useRef } from 'react';
+import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
 import { useApiClient } from './useApiClient';
-
-const ANON_ID_STORAGE_KEY = 'rs_anon_id';
 
 export const useTrackItemView = (inventoryItemId: string | null) => {
   const apiClient = useApiClient();
   const { isAuthenticated, user } = useAuth0();
   const hasTrackedRef = useRef<Record<string, boolean>>({});
-
-  const getAnonymousId = useCallback((): string => {
-    try {
-      const existing = window.localStorage.getItem(ANON_ID_STORAGE_KEY);
-      if (existing) {
-        return existing;
-      }
-      const generated = crypto.randomUUID();
-      window.localStorage.setItem(ANON_ID_STORAGE_KEY, generated);
-      return generated;
-    } catch {
-      return `anon-${Math.random().toString(36).slice(2)}`;
-    }
-  }, []);
 
   const trackView = useCallback(
     async (overrideItemId?: string) => {
@@ -40,7 +25,7 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
       if (isAuthenticated && user?.sub) {
         headers['X-User-Id'] = user.sub;
       } else {
-        headers['X-Anonymous-Id'] = getAnonymousId();
+        headers['X-Anonymous-Id'] = getOrCreateRsAnonymousId();
       }
 
       try {
@@ -55,7 +40,7 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
         console.error('Failed to track item view', error);
       }
     },
-    [apiClient, getAnonymousId, inventoryItemId, isAuthenticated, user?.sub]
+    [apiClient, inventoryItemId, isAuthenticated, user?.sub]
   );
 
   const trackOnMount = useCallback(() => {
