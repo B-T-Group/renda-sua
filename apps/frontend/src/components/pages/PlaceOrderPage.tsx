@@ -145,6 +145,10 @@ interface OrderSummaryProps {
     };
   };
   quantity: number;
+  /** Desktop: quantity dropdown lives in the summary panel (same pattern as mobile review). */
+  onQuantityChange: (quantity: number) => void;
+  /** Max selectable quantity (e.g. min(stock, 10)). */
+  maxOrderQuantity: number;
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
@@ -164,6 +168,8 @@ interface OrderSummaryProps {
 const OrderSummary: React.FC<OrderSummaryProps> = ({
   selectedItem,
   quantity,
+  onQuantityChange,
+  maxOrderQuantity,
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
@@ -222,6 +228,32 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
       <Divider sx={{ my: 2 }} />
 
+      {!isMobile && (
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel id="desktop-order-summary-quantity">
+            {t('orders.quantity', 'Quantity')}
+          </InputLabel>
+          <Select
+            labelId="desktop-order-summary-quantity"
+            value={quantity}
+            label={t('orders.quantity', 'Quantity')}
+            onChange={(e) => onQuantityChange(e.target.value as number)}
+            disabled={loading}
+          >
+            {Array.from({ length: maxOrderQuantity }, (_, i) => i + 1).map(
+              (num) => (
+                <MenuItem key={num} value={num}>
+                  {num}{' '}
+                  {num === 1
+                    ? t('orders.unitSingular', 'unit')
+                    : t('orders.unitsPlural', 'units')}
+                </MenuItem>
+              )
+            )}
+          </Select>
+        </FormControl>
+      )}
+
       {/* Item Summary */}
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -231,20 +263,23 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               src={selectedItem.item.item_images[0].image_url}
               alt={selectedItem.item.name}
               sx={{
-                width: 60,
-                height: 60,
+                width: isMobile ? 60 : 120,
+                height: isMobile ? 60 : 120,
+                flexShrink: 0,
                 borderRadius: 1,
                 objectFit: 'cover',
               }}
             />
           )}
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" fontWeight="medium" noWrap>
               {selectedItem.item.name}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {t('orders.quantity', 'Quantity')}: {quantity}
-            </Typography>
+            {isMobile && (
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('orders.quantity', 'Quantity')}: {quantity}
+              </Typography>
+            )}
           </Box>
         </Box>
 
@@ -467,17 +502,15 @@ const PlaceOrderPage: React.FC = () => {
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
   
-  // Wizard step state (for mobile only). Steps 1 & 3 merged: Delivery Options + Address on first step.
+  // Wizard step state (mobile full-screen dialog only). Step 0 merges delivery options + address.
   const [activeStep, setActiveStep] = useState(0);
   const steps = isMobile
     ? [
         t('orders.step.deliveryOptionsAndAddress', 'Delivery & Address'),
-        t('orders.step.quantity', 'Quantity'),
         t('orders.step.review', 'Review & Place Order'),
       ]
     : [
         t('orders.step.deliveryOptions', 'Delivery Options'),
-        t('orders.step.quantity', 'Quantity'),
         t('orders.step.address', 'Delivery Address'),
         t('orders.step.review', 'Review & Place Order'),
       ];
@@ -991,16 +1024,14 @@ const PlaceOrderPage: React.FC = () => {
       : !hasProfilePhone || phoneValidation.isValid) &&
     baseCanPlaceOrder;
 
-  // Step validation function (mobile: 3 steps with merged step 0; desktop: 4 steps)
+  // Step validation (mobile wizard). Quantity is chosen on the final review step.
   const isStepValid = (step: number): boolean => {
     if (isMobile) {
       switch (step) {
         case 0: // Delivery Options & Address (merged)
           return !!selectedAddressId && addresses.length > 0;
-        case 1: // Quantity
-          return quantity >= 1;
-        case 2: // Review & Place Order
-          return !!canPlaceOrder;
+        case 1: // Review & Place Order (includes quantity)
+          return quantity >= 1 && !!canPlaceOrder;
         default:
           return false;
       }
@@ -1008,12 +1039,10 @@ const PlaceOrderPage: React.FC = () => {
     switch (step) {
       case 0: // Delivery Options
         return true; // Optional fields
-      case 1: // Quantity
-        return quantity >= 1;
-      case 2: // Delivery Address
+      case 1: // Delivery Address
         return !!selectedAddressId && addresses.length > 0;
-      case 3: // Review & Place Order
-        return !!canPlaceOrder;
+      case 2: // Review & Place Order (includes quantity)
+        return quantity >= 1 && !!canPlaceOrder;
       default:
         return false;
     }
@@ -1043,8 +1072,7 @@ const PlaceOrderPage: React.FC = () => {
 
   // Render step content for mobile wizard (compact for viewport fit)
   const renderStepContent = (step: number) => {
-    // Mobile: 3 steps — 0 = Delivery & Address (merged), 1 = Quantity, 2 = Review (case 3 content)
-    const contentStep = isMobile && step === 2 ? 3 : step;
+    // Mobile: 2 steps — 0 = Delivery & Address (merged), 1 = Review & quantity
     if (isMobile && step === 0) {
       return (
         <Stack spacing={2}>
@@ -1276,425 +1304,48 @@ const PlaceOrderPage: React.FC = () => {
       );
     }
 
-    switch (contentStep) {
-      case 0: // Delivery Options (desktop only; mobile step 0 handled above)
-        return (
-          <Stack spacing={2}>
-            {fastDeliveryConfig &&
-              isEnabledForLocation(userCountry, userState) && (
-                <Card>
-                  <CardContent sx={{ p: 2 }}>
-                    <FastDeliveryOption
-                      config={fastDeliveryConfig}
-                      selected={requiresFastDelivery}
-                      onToggle={setRequiresFastDelivery}
-                      formatCurrency={(amount) =>
-                        formatCurrency(amount, selectedItem?.item.currency)
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              )}
+    if (!(isMobile && step === 1)) {
+      return null;
+    }
 
-            {selectedAddress && (
-              <Card>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                    {t(
-                      'orders.deliveryTimeWindow.title',
-                      'When will you be available?'
-                    )}
-                  </Typography>
-                  <DeliveryTimeWindowSelector
-                    countryCode={selectedAddress.country}
-                    stateCode={selectedAddress.state}
-                    onChange={handleDeliveryWindowChange}
-                    isFastDelivery={requiresFastDelivery}
-                    loading={loading}
-                    shouldFetchNextAvailable={true}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </Stack>
-        );
-
-      case 1: // Quantity
-        return (
-          <Card>
-            <CardContent sx={{ p: 2 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mb: 2,
-                }}
-              >
-                <ShoppingCart color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {t('orders.productDetails', 'Product Details')}
-                </Typography>
-              </Box>
-
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid size={{ xs: 12 }}>
-                  {selectedItem.item.item_images?.[0] ? (
-                    id ? (
-                      <ButtonBase
-                        component={RouterLink}
-                        to={`/items/${id}`}
-                        sx={{
-                          width: '100%',
-                          display: 'block',
-                          borderRadius: 2,
-                          overflow: 'hidden',
-                        }}
-                        aria-label={t('items.viewProduct', 'View product')}
-                      >
-                        <CardMedia
-                          component="img"
-                          image={selectedItem.item.item_images[0].image_url}
-                          alt={selectedItem.item.name}
-                          sx={{
-                            width: '100%',
-                            height: 'auto',
-                            display: 'block',
-                            verticalAlign: 'bottom',
-                          }}
-                        />
-                      </ButtonBase>
-                    ) : (
-                      <CardMedia
-                        component="img"
-                        image={selectedItem.item.item_images[0].image_url}
-                        alt={selectedItem.item.name}
-                        sx={{
-                          borderRadius: 2,
-                          width: '100%',
-                          height: 'auto',
-                          display: 'block',
-                          verticalAlign: 'bottom',
-                        }}
-                      />
-                    )
-                  ) : (
-                    <Box
-                      sx={{
-                        borderRadius: 2,
-                        width: '100%',
-                        minHeight: 120,
-                        bgcolor: 'grey.200',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Typography color="text.secondary">
-                        {t('common.noImage', 'No Image')}
-                      </Typography>
-                    </Box>
-                  )}
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <Typography variant="h5" fontWeight="bold" gutterBottom>
-                    {selectedItem.item.name}
-                  </Typography>
-                  {(selectedItem.item.item_sub_category?.item_category?.name ||
-                    selectedItem.item.item_sub_category?.name) && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {[
-                        selectedItem.item.item_sub_category?.item_category?.name,
-                        selectedItem.item.item_sub_category?.name,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Typography>
-                  )}
-                  {selectedItem.item.description?.trim() && (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 1.5, whiteSpace: 'pre-wrap' }}
-                    >
-                      {selectedItem.item.description}
-                    </Typography>
-                  )}
-                  <Stack direction="row" flexWrap="wrap" gap={1.5} useFlexGap sx={{ mt: 1 }}>
-                    {selectedItem.item.weight != null && selectedItem.item.weight > 0 && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.weight', 'Weight')}: {selectedItem.item.weight}{' '}
-                        {selectedItem.item.weight_unit || 'g'}
-                      </Typography>
-                    )}
-                    {selectedItem.item.dimensions?.trim() && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.dimensions', 'Dimensions')}: {selectedItem.item.dimensions}
-                      </Typography>
-                    )}
-                    {selectedItem.item.brand?.name && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.brand', 'Brand')}: {selectedItem.item.brand.name}
-                      </Typography>
-                    )}
-                    {selectedItem.item.sku?.trim() && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.sku', 'SKU')}: {selectedItem.item.sku}
-                      </Typography>
-                    )}
-                    {selectedItem.item.model?.trim() && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.model', 'Model')}: {selectedItem.item.model}
-                      </Typography>
-                    )}
-                    {selectedItem.item.color?.trim() && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.color', 'Color')}: {selectedItem.item.color}
-                      </Typography>
-                    )}
-                  </Stack>
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Typography
-                variant="subtitle1"
-                fontWeight="bold"
-                gutterBottom
-              >
-                {t('orders.orderConfiguration', 'Order Configuration')}
-              </Typography>
-
-              <FormControl fullWidth>
-                <InputLabel>
-                  {t('orders.quantity', 'Quantity')}
-                </InputLabel>
-                <Select
-                  value={quantity}
-                  label={t('orders.quantity', 'Quantity')}
-                  onChange={(e) =>
-                    setQuantity(e.target.value as number)
-                  }
-                  disabled={loading}
-                >
-                  {Array.from(
-                    {
-                      length: Math.min(
-                        selectedItem.computed_available_quantity,
-                        10
-                      ),
-                    },
-                    (_, i) => i + 1
-                  ).map((num) => (
-                    <MenuItem key={num} value={num}>
-                      {num} {num === 1 ? 'unit' : 'units'}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </CardContent>
-          </Card>
-        );
-
-      case 2: // Delivery Address
-        return (
-          <Card>
-            <CardContent sx={{ p: 2 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mb: 2,
-                }}
-              >
-                <LocationOn color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {t('orders.deliveryAddress', 'Delivery Address')}
-                </Typography>
-              </Box>
-
-              {addressesLoading ? (
-                <Box
-                  sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
-                >
-                  <CircularProgress />
-                </Box>
-              ) : addresses.length === 0 ? (
-                <Paper
-                  variant="outlined"
-                  sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
-                >
-                  <LocationOn
-                    sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
-                  />
-                  <Typography variant="subtitle1" gutterBottom>
-                    {t('orders.noAddresses', 'No delivery address found')}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 2 }}
-                  >
-                    {t(
-                      'orders.noAddressesMessage',
-                      'Please add a delivery address to continue with your order'
-                    )}
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenAddressDialog}
-                    startIcon={<Add />}
-                  >
-                    {t('orders.addAddress', 'Add Delivery Address')}
-                  </Button>
-                </Paper>
-              ) : (
-                <>
-                  <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel>
-                      {t('orders.selectAddress', 'Select Delivery Address')}
-                    </InputLabel>
-                    <Select
-                      value={selectedAddressId}
-                      label={t(
-                        'orders.selectAddress',
-                        'Select Delivery Address'
-                      )}
-                      onChange={(e) => setSelectedAddressId(e.target.value)}
-                      disabled={loading}
-                    >
-                      {addresses.map((addressWrapper) => {
-                        const address = addressWrapper.address;
-                        return (
-                          <MenuItem key={address.id} value={address.id}>
-                            <Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                }}
-                              >
-                                <Typography variant="body2">
-                                  {address.address_line_1}, {address.city}
-                                </Typography>
-                                {address.is_primary && (
-                                  <Chip
-                                    label="Primary"
-                                    size="small"
-                                    color="primary"
-                                  />
-                                )}
-                              </Box>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {address.address_type}
-                              </Typography>
-                            </Box>
-                          </MenuItem>
-                        );
-                      })}
-                    </Select>
-                  </FormControl>
-
-                  {selectedAddressId &&
-                    (() => {
-                      const selectedAddressWrapper = addresses.find(
-                        (addr) => addr.address.id === selectedAddressId
-                      );
-                      if (!selectedAddressWrapper) return null;
-                      const address = selectedAddressWrapper.address;
-                      return (
-                        <Paper
-                          variant="outlined"
-                          sx={{ p: 2, bgcolor: 'grey.50' }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              mb: 1,
-                            }}
-                          >
-                            <CheckCircle color="success" fontSize="small" />
-                            <Typography
-                              variant="subtitle2"
-                              fontWeight="bold"
-                            >
-                              {t('orders.deliveryTo', 'Delivery to')}
-                            </Typography>
-                          </Box>
-                          {profile?.first_name && (
-                            <Typography
-                              variant="body2"
-                              fontWeight="medium"
-                              sx={{ mb: 0.75 }}
-                            >
-                              {profile.first_name}
-                            </Typography>
-                          )}
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {address.address_line_1}
-                            {address.address_line_2 &&
-                              `, ${address.address_line_2}`}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                          >
-                            {address.city}, {address.state}{' '}
-                            {address.postal_code}
-                          </Typography>
-                          {address.instructions?.trim() && (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ mt: 1 }}
-                            >
-                              <strong>
-                                {t(
-                                  'orders.deliveryInstructions',
-                                  'Delivery instructions'
-                                )}
-                                :
-                              </strong>{' '}
-                              {address.instructions}
-                            </Typography>
-                          )}
-                        </Paper>
-                      );
-                    })()}
-
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    fullWidth
-                    onClick={handleOpenAddressDialog}
-                    startIcon={<Add />}
-                    sx={{ mt: 2 }}
-                  >
-                    {t('orders.addAnotherAddress', 'Add Another Address')}
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        );
-
-      case 3: // Review & Place Order
-        return (
-          <Stack spacing={2}>
+    return (
+      <Stack spacing={2}>
             <Card>
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   {t('orders.orderSummary', 'Order Summary')}
                 </Typography>
                 <Divider sx={{ my: 2 }} />
+
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel id="place-order-review-quantity">
+                    {t('orders.quantity', 'Quantity')}
+                  </InputLabel>
+                  <Select
+                    labelId="place-order-review-quantity"
+                    value={quantity}
+                    label={t('orders.quantity', 'Quantity')}
+                    onChange={(e) => setQuantity(e.target.value as number)}
+                    disabled={loading}
+                  >
+                    {Array.from(
+                      {
+                        length: Math.min(
+                          selectedItem.computed_available_quantity,
+                          10
+                        ),
+                      },
+                      (_, i) => i + 1
+                    ).map((num) => (
+                      <MenuItem key={num} value={num}>
+                        {num}{' '}
+                        {num === 1
+                          ? t('orders.unitSingular', 'unit')
+                          : t('orders.unitsPlural', 'units')}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
                 <Stack spacing={2}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1704,8 +1355,9 @@ const PlaceOrderPage: React.FC = () => {
                         src={selectedItem.item.item_images[0].image_url}
                         alt={selectedItem.item.name}
                         sx={{
-                          width: 60,
-                          height: 60,
+                          width: 120,
+                          height: 120,
+                          flexShrink: 0,
                           borderRadius: 1,
                           objectFit: 'cover',
                         }}
@@ -1714,9 +1366,6 @@ const PlaceOrderPage: React.FC = () => {
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" fontWeight="medium" noWrap>
                         {selectedItem.item.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {t('orders.quantity', 'Quantity')}: {quantity}
                       </Typography>
                       {(selectedItem.item.item_sub_category?.item_category?.name ||
                         selectedItem.item.item_sub_category?.name) && (
@@ -2252,11 +1901,7 @@ const PlaceOrderPage: React.FC = () => {
               <Alert severity="error">{error}</Alert>
             )}
           </Stack>
-        );
-
-      default:
-        return null;
-    }
+    );
   };
 
   return (
@@ -2358,7 +2003,7 @@ const PlaceOrderPage: React.FC = () => {
                     onClick={handleSubmitWithPhoneGate}
                     variant="contained"
                     fullWidth
-                    disabled={!canPlaceOrder || loading}
+                    disabled={!isStepValid(activeStep) || loading}
                     startIcon={
                       loading ? <CircularProgress size={20} /> : <ShoppingCart />
                     }
@@ -2653,49 +2298,6 @@ const PlaceOrderPage: React.FC = () => {
                       </Paper>
                     </Box>
                   </Stack>
-
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Order Configuration */}
-                  <Typography
-                    variant="subtitle1"
-                    fontWeight="bold"
-                    gutterBottom
-                  >
-                    {t('orders.orderConfiguration', 'Order Configuration')}
-                  </Typography>
-
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <FormControl fullWidth>
-                        <InputLabel>
-                          {t('orders.quantity', 'Quantity')}
-                        </InputLabel>
-                        <Select
-                          value={quantity}
-                          label={t('orders.quantity', 'Quantity')}
-                          onChange={(e) =>
-                            setQuantity(e.target.value as number)
-                          }
-                          disabled={loading}
-                        >
-                          {Array.from(
-                            {
-                              length: Math.min(
-                                selectedItem.computed_available_quantity,
-                                10
-                              ),
-                            },
-                            (_, i) => i + 1
-                          ).map((num) => (
-                            <MenuItem key={num} value={num}>
-                              {num} {num === 1 ? 'unit' : 'units'}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
                 </CardContent>
               </Card>
 
@@ -3182,6 +2784,11 @@ const PlaceOrderPage: React.FC = () => {
             <OrderSummary
               selectedItem={selectedItem}
               quantity={quantity}
+              onQuantityChange={setQuantity}
+              maxOrderQuantity={Math.min(
+                selectedItem.computed_available_quantity,
+                10
+              )}
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
