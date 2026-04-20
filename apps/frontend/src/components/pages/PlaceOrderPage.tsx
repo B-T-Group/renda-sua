@@ -554,8 +554,10 @@ const PlaceOrderPage: React.FC = () => {
   )?.address;
   const deliveryAddressMissing =
     !addressesLoading && !selectedAddressId;
-  const userCountry = selectedAddress?.country || 'GA'; // Default to Gabon
-  const userState = selectedAddress?.state || 'Estuaire Province'; // Default to Estuaire
+  // Only query fast delivery config when we have a real address selection.
+  // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
+  const userCountry = selectedAddress?.country?.trim() ?? '';
+  const userState = selectedAddress?.state?.trim() ?? '';
 
   const { config: fastDeliveryConfig, isEnabledForLocation } =
     useFastDeliveryConfig(userCountry, userState);

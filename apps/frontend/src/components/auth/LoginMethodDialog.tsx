@@ -60,19 +60,19 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({ open, onClose }) 
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
           <Button
             variant="contained"
-            onClick={handleEmailPasswordLogin}
-            fullWidth
-            sx={{ borderRadius: 0 }}
-          >
-            {t('auth.loginWithEmailPassword', 'Login with email/password')}
-          </Button>
-          <Button
-            variant="outlined"
             onClick={handleOtpLogin}
             fullWidth
             sx={{ borderRadius: 0 }}
           >
             {t('auth.loginWithOtp', 'Login with one-time password')}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleEmailPasswordLogin}
+            fullWidth
+            sx={{ borderRadius: 0 }}
+          >
+            {t('auth.loginWithEmailPassword', 'Login with email/password')}
           </Button>
         </Stack>
       </DialogContent>

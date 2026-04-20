@@ -355,8 +355,10 @@ const CheckoutPage: React.FC = () => {
   const selectedAddress = addresses.find(
     (addr) => addr.address.id === selectedAddressId
   )?.address;
-  const userCountry = selectedAddress?.country || 'GA';
-  const userState = selectedAddress?.state || 'Estuaire Province';
+  // Only query fast delivery config when we have a real address selection.
+  // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
+  const userCountry = selectedAddress?.country?.trim() ?? '';
+  const userState = selectedAddress?.state?.trim() ?? '';
 
   const { config: fastDeliveryConfig, isEnabledForLocation } =
     useFastDeliveryConfig(userCountry, userState);

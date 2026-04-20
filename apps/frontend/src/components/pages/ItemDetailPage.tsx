@@ -5,6 +5,8 @@ import {
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   Inventory2 as SpecsIcon,
+  LocalShipping as LocalShippingIcon,
+  Payments as PaymentsIcon,
   ShoppingCart,
   Verified,
   Visibility as VisibilityIcon,
@@ -696,6 +698,89 @@ export default function ItemDetailPage() {
                 </>
               )}
             </Stack>
+
+            {/* Conversion highlights */}
+            <Box
+              sx={{
+                mt: 1.5,
+                p: 1.5,
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                {t(
+                  'items.purchaseHighlights.title',
+                  'Pay with mobile money • Get delivery fast'
+                )}
+              </Typography>
+              <Stack spacing={1}>
+                <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}>
+                  <Box
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'success.50',
+                      color: 'success.main',
+                      flex: '0 0 auto',
+                    }}
+                    aria-hidden
+                  >
+                    <PaymentsIcon fontSize="small" />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {t(
+                        'items.purchaseHighlights.mobileMoneyTitle',
+                        'Mobile money payments'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'items.purchaseHighlights.mobileMoneyBody',
+                        'Pay securely using MTN MoMo, Orange Money, Airtel Money, or Moov (depending on your country).'
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}>
+                  <Box
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'primary.50',
+                      color: 'primary.main',
+                      flex: '0 0 auto',
+                    }}
+                    aria-hidden
+                  >
+                    <LocalShippingIcon fontSize="small" />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {t(
+                        'items.purchaseHighlights.deliveryTitle',
+                        'Delivery in 6–24 hours'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'items.purchaseHighlights.deliveryBody',
+                        'Delivery time depends on the time you place your order and local delivery availability.'
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Stack>
+            </Box>
           </Stack>
         </Grid>
       </Grid>

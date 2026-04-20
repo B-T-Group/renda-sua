@@ -2697,6 +2697,13 @@
     "similarItems": "Similar Items",
     "outOfStock": "Out of Stock",
     "notAvailable": "Not Available",
+    "purchaseHighlights": {
+      "title": "Pay with mobile money • Get delivery fast",
+      "mobileMoneyTitle": "Mobile money payments",
+      "mobileMoneyBody": "Pay securely using MTN MoMo, Orange Money, Airtel Money, or Moov (depending on your country).",
+      "deliveryTitle": "Delivery in 6–24 hours",
+      "deliveryBody": "Delivery time depends on the time you place your order and local delivery availability."
+    },
     "seo": {
       "breadcrumbCatalog": "Items",
       "detailTitle": "{{name}} | Rendasua",
