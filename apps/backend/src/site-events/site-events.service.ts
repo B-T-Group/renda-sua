@@ -81,6 +81,32 @@ const EXPORT_SITE_EVENTS = `
   }
 `;
 
+const RECENT_DUPLICATE_LOOKUP = `
+  query RecentDuplicateLookup(
+    $viewerType: String!
+    $viewerId: String!
+    $eventType: String!
+    $subjectType: String!
+    $subjectId: uuid!
+    $since: timestamptz!
+  ) {
+    site_events(
+      where: {
+        viewer_type: { _eq: $viewerType }
+        viewer_id: { _eq: $viewerId }
+        event_type: { _eq: $eventType }
+        subject_type: { _eq: $subjectType }
+        subject_id: { _eq: $subjectId }
+        created_at: { _gte: $since }
+      }
+      order_by: [{ created_at: desc }]
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
 const INSERT_SITE_EVENT = `
   mutation InsertSiteEvent($object: site_events_insert_input!) {
     insert_site_events_one(object: $object) {
@@ -148,6 +174,14 @@ export class SiteEventsService {
   ): Promise<void> {
     this.assertV1Subject(body);
     const metadata = this.normalizeMetadata(body.metadata);
+    const isDupe = await this.isRecentDuplicate({
+      viewerType: viewer.viewerType,
+      viewerId: viewer.viewerId,
+      eventType: body.eventType,
+      subjectType: body.subjectType ?? null,
+      subjectId: body.subjectId ?? null,
+    });
+    if (isDupe) return;
     const object = this.toInsertObject(body, viewer, metadata);
     try {
       await this.hasuraSystemService.executeMutation(INSERT_SITE_EVENT, {
@@ -155,6 +189,36 @@ export class SiteEventsService {
       });
     } catch (error: any) {
       this.logger.error('Failed to track site event', error);
+    }
+  }
+
+  private async isRecentDuplicate(input: {
+    viewerType: string;
+    viewerId: string;
+    eventType: string;
+    subjectType: string | null;
+    subjectId: string | null;
+  }): Promise<boolean> {
+    // This dedupe rule only makes sense for subject-scoped events.
+    if (!input.subjectType || !input.subjectId) return false;
+
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        site_events: Array<{ id: string }>;
+      }>(RECENT_DUPLICATE_LOOKUP, {
+        viewerType: input.viewerType,
+        viewerId: input.viewerId,
+        eventType: input.eventType,
+        subjectType: input.subjectType,
+        subjectId: input.subjectId,
+        since,
+      });
+      return (res.site_events?.length ?? 0) > 0;
+    } catch (error: any) {
+      // If dedupe check fails, still allow tracking (best-effort analytics).
+      this.logger.warn('site_event dedupe lookup failed', error);
+      return false;
     }
   }
 
