@@ -1412,6 +1412,10 @@
       "addFromImage": "Ajouter à partir d’une image",
       "facebookExport": {
         "button": "Exporter pour Facebook (CSV)",
+        "previewTitle": "Aperçu de l’export Facebook",
+        "previewSubtitle": "Aperçu de {{shown}} sur {{total}} lignes.",
+        "download": "Télécharger le CSV",
+        "empty": "Aucune ligne d’inventaire à exporter.",
         "success": "{{count}} produits exportés pour Facebook",
         "error": "Échec de l’export CSV Facebook"
       },

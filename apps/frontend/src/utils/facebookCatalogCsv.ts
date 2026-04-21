@@ -32,7 +32,8 @@ const FACEBOOK_CATALOG_HEADERS = [
   'style[0]',
 ] as const;
 
-type FacebookCatalogHeader = (typeof FACEBOOK_CATALOG_HEADERS)[number];
+export type FacebookCatalogHeader = (typeof FACEBOOK_CATALOG_HEADERS)[number];
+export type FacebookCatalogRow = Record<FacebookCatalogHeader, string>;
 
 type ItemImageLike = {
   image_url?: string | null;
@@ -109,7 +110,7 @@ function buildRow(
   inv: BusinessInventoryLike,
   origin: string,
   opts: { quantityToSell: number; currencyCode: string }
-): Record<FacebookCatalogHeader, string> {
+): FacebookCatalogRow {
   const title = item.name?.trim() ?? '';
   const description = item.description?.trim() ?? '';
   const brand =
@@ -157,17 +158,17 @@ function buildRow(
   };
 }
 
-export function buildFacebookCatalogCsvFromBusinessItems(input: {
+export function buildFacebookCatalogRowsFromBusinessItems(input: {
   items: BusinessItemLike[];
   webOrigin: string;
   quantityToSell?: number;
   currencyCode?: string;
-}): { filename: string; csv: string; rowCount: number } {
+}): { headers: readonly FacebookCatalogHeader[]; rows: FacebookCatalogRow[] } {
   const quantityToSell = input.quantityToSell ?? 5;
   const currencyCode = input.currencyCode ?? 'XAF';
   const origin = input.webOrigin?.trim() || '';
 
-  const rows: Array<Record<FacebookCatalogHeader, string>> = [];
+  const rows: FacebookCatalogRow[] = [];
   for (const item of input.items ?? []) {
     const inventories = item.business_inventories ?? [];
     for (const inv of inventories) {
@@ -181,9 +182,20 @@ export function buildFacebookCatalogCsvFromBusinessItems(input: {
     }
   }
 
-  const headerLine = FACEBOOK_CATALOG_HEADERS.map(csvEscape).join(',');
+  return { headers: FACEBOOK_CATALOG_HEADERS, rows };
+}
+
+export function buildFacebookCatalogCsvFromBusinessItems(input: {
+  items: BusinessItemLike[];
+  webOrigin: string;
+  quantityToSell?: number;
+  currencyCode?: string;
+}): { filename: string; csv: string; rowCount: number } {
+  const { headers, rows } = buildFacebookCatalogRowsFromBusinessItems(input);
+
+  const headerLine = headers.map(csvEscape).join(',');
   const lines = rows.map((row) =>
-    FACEBOOK_CATALOG_HEADERS.map((h) => csvEscape(row[h])).join(',')
+    headers.map((h) => csvEscape(row[h])).join(',')
   );
   const csv = [headerLine, ...lines].join('\n');
 

@@ -1423,6 +1423,10 @@
       "addFromImage": "Add from image",
       "facebookExport": {
         "button": "Export for Facebook (CSV)",
+        "previewTitle": "Facebook export preview",
+        "previewSubtitle": "Previewing {{shown}} of {{total}} rows.",
+        "download": "Download CSV",
+        "empty": "No inventory rows found to export.",
         "success": "Exported {{count}} products for Facebook",
         "error": "Failed to export Facebook CSV"
       },
