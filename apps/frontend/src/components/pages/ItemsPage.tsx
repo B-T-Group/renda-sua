@@ -33,6 +33,7 @@ import {
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTopInventoryLocations } from '../../hooks/useTopInventoryLocations';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsPageFilter, {
@@ -214,6 +215,7 @@ const ItemsPage: React.FC = () => {
     profile?.client !== undefined;
 
   const { trackView } = useTrackItemView(null);
+  const { trackAddToCart } = useMetaPixel();
 
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
@@ -239,6 +241,15 @@ const ItemsPage: React.FC = () => {
       item.original_price > 0;
 
     const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+
+    trackAddToCart({
+      content_type: 'product',
+      content_ids: [item.id],
+      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+      value: unitPrice,
+      currency: item.item.currency || 'USD',
+      content_name: item.item.name,
+    });
 
     addToCart({
       inventoryItemId: item.id,

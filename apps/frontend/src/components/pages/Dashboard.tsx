@@ -22,6 +22,7 @@ import {
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
@@ -49,6 +50,7 @@ const Dashboard: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
 
   const { trackView } = useTrackItemView(null);
+  const { trackAddToCart } = useMetaPixel();
 
   // Aggregate unique destination address IDs from inventoryItems
   const destinationAddressIds = React.useMemo(() => {
@@ -131,6 +133,23 @@ const Dashboard: React.FC = () => {
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
+    const unitPrice =
+      item.hasActiveDeal &&
+      typeof item.original_price === 'number' &&
+      typeof item.discounted_price === 'number' &&
+      item.original_price > 0
+        ? item.discounted_price!
+        : item.selling_price;
+
+    trackAddToCart({
+      content_type: 'product',
+      content_ids: [item.id],
+      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+      value: unitPrice,
+      currency: item.item.currency || 'USD',
+      content_name: item.item.name,
+    });
+
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
@@ -138,13 +157,7 @@ const Dashboard: React.FC = () => {
       businessLocationId: item.business_location_id,
       itemData: {
         name: item.item.name,
-        price:
-          item.hasActiveDeal &&
-          typeof item.original_price === 'number' &&
-          typeof item.discounted_price === 'number' &&
-          item.original_price > 0
-            ? item.discounted_price!
-            : item.selling_price,
+        price: unitPrice,
         currency: item.item.currency,
         imageUrl: item.item.item_images?.[0]?.image_url,
         weight: item.item.weight,

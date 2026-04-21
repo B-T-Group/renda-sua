@@ -40,6 +40,7 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
@@ -191,6 +192,7 @@ export default function ItemDetailPage() {
   const { isAuthenticated } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
+  const { trackViewContent, trackAddToCart } = useMetaPixel();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
@@ -217,6 +219,31 @@ export default function ItemDetailPage() {
     setSelectedImageIndex(0);
     setImageLightboxOpen(false);
   }, [inventoryItem?.id]);
+
+  const lastPixelViewContentIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!inventoryItem?.id) return;
+    if (lastPixelViewContentIdRef.current === inventoryItem.id) return;
+    lastPixelViewContentIdRef.current = inventoryItem.id;
+
+    const hasDeal =
+      inventoryItem.hasActiveDeal &&
+      typeof inventoryItem.original_price === 'number' &&
+      typeof inventoryItem.discounted_price === 'number' &&
+      inventoryItem.original_price > 0;
+    const unitPrice = hasDeal
+      ? inventoryItem.discounted_price!
+      : inventoryItem.selling_price;
+
+    trackViewContent({
+      content_type: 'product',
+      content_ids: [inventoryItem.id],
+      contents: [{ id: inventoryItem.id, quantity: 1, item_price: unitPrice }],
+      value: unitPrice,
+      currency: inventoryItem.item.currency || 'USD',
+      content_name: inventoryItem.item.name,
+    });
+  }, [inventoryItem, trackViewContent]);
 
   const lightboxGalleryCount =
     inventoryItem?.item?.item_images?.length ?? 0;
@@ -286,6 +313,15 @@ export default function ItemDetailPage() {
       item.original_price > 0;
 
     const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+
+    trackAddToCart({
+      content_type: 'product',
+      content_ids: [item.id],
+      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+      value: unitPrice,
+      currency: item.item.currency || 'USD',
+      content_name: item.item.name,
+    });
 
     addToCart({
       inventoryItemId: item.id,

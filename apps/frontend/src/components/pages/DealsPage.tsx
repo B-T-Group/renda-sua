@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useCart } from '../../contexts/CartContext';
 import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 
@@ -53,6 +54,7 @@ const DealsPage: React.FC = () => {
   );
 
   const { trackView } = useTrackItemView(null);
+  const { trackAddToCart } = useMetaPixel();
 
   const handleLogin = () => {
     loginWithRedirect({
@@ -81,6 +83,15 @@ const DealsPage: React.FC = () => {
       item.original_price > 0;
 
     const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+
+    trackAddToCart({
+      content_type: 'product',
+      content_ids: [item.id],
+      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+      value: unitPrice,
+      currency: item.item.currency || 'USD',
+      content_name: item.item.name,
+    });
 
     addToCart({
       inventoryItemId: item.id,
