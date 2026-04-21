@@ -38,9 +38,29 @@ function salePriceForShare(inv: InventoryItem): number {
   return hasDeal ? inv.discounted_price! : inv.selling_price;
 }
 
+function sortItemImagesLikeListing(
+  images: InventoryItem['item']['item_images']
+): InventoryItem['item']['item_images'] {
+  return [...images].sort((a, b) => {
+    if (a.image_type === 'main') return -1;
+    if (b.image_type === 'main') return 1;
+    return (a.display_order ?? 0) - (b.display_order ?? 0);
+  });
+}
+
 function pickOgImage(webAppOrigin: string, inv: InventoryItem): string {
-  const first = inv.item.item_images?.[0]?.image_url;
-  return toAbsoluteUrl(webAppOrigin, first) ?? DEFAULT_OG_IMAGE;
+  const images = inv.item.item_images ?? [];
+  const sorted = sortItemImagesLikeListing(images);
+  const main = sorted.find((img) => img.image_type === 'main');
+  if (main) {
+    const fromMain = toAbsoluteUrl(webAppOrigin, main.image_url);
+    if (fromMain) return fromMain;
+  }
+  for (const img of sorted) {
+    const abs = toAbsoluteUrl(webAppOrigin, img.image_url);
+    if (abs) return abs;
+  }
+  return DEFAULT_OG_IMAGE;
 }
 
 function formatPrice(amount: number, currency: string): string {
