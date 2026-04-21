@@ -1421,6 +1421,11 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Add Item",
       "addFromImage": "Add from image",
+      "facebookExport": {
+        "button": "Export for Facebook (CSV)",
+        "success": "Exported {{count}} products for Facebook",
+        "error": "Failed to export Facebook CSV"
+      },
       "addItemDescription": "Add a new item to your business catalog",
       "addPaymentFee": "Add 3.5% Payment Fee",
       "backToItem": "Back to Item",

@@ -1410,6 +1410,11 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Ajouter un article",
       "addFromImage": "Ajouter à partir d’une image",
+      "facebookExport": {
+        "button": "Exporter pour Facebook (CSV)",
+        "success": "{{count}} produits exportés pour Facebook",
+        "error": "Échec de l’export CSV Facebook"
+      },
       "addItemDescription": "Ajouter un nouvel article à votre catalogue d'entreprise",
       "addPaymentFee": "Ajouter les frais de paiement de 3,5 %",
       "backToItem": "Retour à l'article",

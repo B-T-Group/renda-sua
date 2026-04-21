@@ -1,6 +1,7 @@
 import {
   AddPhotoAlternate as AddPhotoAlternateIcon,
   CheckCircle as CheckCircleIcon,
+  Download as DownloadIcon,
   Inventory as InventoryIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -45,6 +46,8 @@ import ManageDealsDialog from '../business/ManageDealsDialog';
 import PromoteItemDialog from '../business/PromoteItemDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
+import { environment } from '../../config/environment';
+import { buildFacebookCatalogCsvFromBusinessItems } from '../../utils/facebookCatalogCsv';
 
 // Skeleton loading components
 const ItemsCardsSkeleton: React.FC = () => {
@@ -170,6 +173,46 @@ const BusinessItemsPage: React.FC = () => {
   const handleEditItem = (item: any) => {
     // Navigate to the edit page instead of opening dialog
     navigate(`/business/items/edit/${item.id}`);
+  };
+
+  const exportFacebookCatalogCsv = () => {
+    const { filename, csv, rowCount } = buildFacebookCatalogCsvFromBusinessItems({
+      items: items ?? [],
+      webOrigin: environment.webAppOrigin,
+      quantityToSell: 5,
+      currencyCode: 'XAF',
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    enqueueSnackbar(
+      t(
+        'business.items.facebookExport.success',
+        'Exported {{count}} products for Facebook',
+        { count: rowCount }
+      ),
+      { variant: 'success' }
+    );
+  };
+
+  const handleExportFacebookCatalogCsv = () => {
+    try {
+      exportFacebookCatalogCsv();
+    } catch (error: any) {
+      enqueueSnackbar(
+        t(
+          'business.items.facebookExport.error',
+          'Failed to export Facebook CSV'
+        ),
+        { variant: 'error' }
+      );
+    }
   };
 
   const handleViewItem = (item: any) => {
@@ -439,6 +482,20 @@ const BusinessItemsPage: React.FC = () => {
             sx={{ borderRadius: 0 }}
           >
             {t('business.items.addFromImage', 'Add from image')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportFacebookCatalogCsv}
+            size="medium"
+            sx={{ borderRadius: 0 }}
+            disabled={loading || (items?.length ?? 0) === 0}
+          >
+            {t(
+              'business.items.facebookExport.button',
+              'Export for Facebook (CSV)'
+            )}
           </Button>
         </Stack>
       </Stack>
