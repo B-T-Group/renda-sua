@@ -566,7 +566,10 @@
     },
     "profile": "Profil",
     "signIn": "Se connecter",
-    "signUp": "S'inscrire"
+    "signUp": "S'inscrire",
+    "chooseLoginMethod": "Choisir le mode de connexion",
+    "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
+    "loginWithEmailPassword": "Se connecter avec l'e-mail et le mot de passe"
   },
   "signupPage": {
     "title": "Créer votre compte",
@@ -2640,6 +2643,7 @@
     "description": "Description",
     "details": "Détails",
     "viewProduct": "Voir le produit",
+    "viewImage": "Voir l'image",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Délai de livraison estimé",
     "fragile": "Fragile",

@@ -15,13 +15,13 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { RatingsService } from './ratings.service';
 
 @ApiTags('ratings')
 @Controller('ratings')
-@ApiBearerAuth()
 export class RatingsController {
   constructor(
     private readonly ratingsService: RatingsService,
@@ -29,6 +29,7 @@ export class RatingsController {
   ) {}
 
   @Get('order/:orderId')
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get ratings for a specific order' })
   @ApiResponse({
@@ -97,6 +98,7 @@ export class RatingsController {
     }
   }
 
+  @Public()
   @Get('entity/:entityType/:entityId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get public ratings for an entity (e.g. item)' })
@@ -162,6 +164,7 @@ export class RatingsController {
   }
 
   @Post()
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new rating' })
   @ApiResponse({

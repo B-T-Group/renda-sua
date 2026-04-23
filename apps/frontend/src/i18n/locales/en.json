@@ -577,7 +577,10 @@
     },
     "profile": "Profile",
     "signIn": "Sign In",
-    "signUp": "Sign up"
+    "signUp": "Sign up",
+    "chooseLoginMethod": "Choose login method",
+    "loginWithOtp": "Login with one-time password",
+    "loginWithEmailPassword": "Login with email/password"
   },
   "signupPage": {
     "title": "Create your account",
@@ -2677,6 +2680,7 @@
     "description": "Description",
     "details": "Details",
     "viewProduct": "View product",
+    "viewImage": "View image",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Est. delivery time",
     "fragile": "Fragile",
