@@ -2676,6 +2676,11 @@
       "deliveryTitle": "Livraison en 6–24 h",
       "deliveryBody": "Le délai dépend de l’heure de commande et de la disponibilité de la livraison dans votre zone."
     },
+    "detail": {
+      "howItWorks": "Commandez sur Rendasua, payez en mobile money, et la livraison se fait à l’adresse indiquée. Aucun déplacement en magasin n’est nécessaire.",
+      "fulfilledBy": "Expédié par",
+      "notWalkIn": "Il s’agit du vendeur / du point d’envoi, pas d’un point de vente à visiter. Achat en ligne uniquement."
+    },
     "seo": {
       "breadcrumbCatalog": "Articles",
       "detailTitle": "{{name}} | Rendasua",

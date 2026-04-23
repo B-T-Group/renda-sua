@@ -2713,6 +2713,11 @@
       "deliveryTitle": "Delivery in 6–24 hours",
       "deliveryBody": "Delivery time depends on the time you place your order and local delivery availability."
     },
+    "detail": {
+      "howItWorks": "Order on Rendasua, pay with mobile money, and we deliver to the address you choose. You do not need to visit a store.",
+      "fulfilledBy": "Fulfilled by",
+      "notWalkIn": "This is the seller and dispatch name—not a walk-in shop. Purchases are online only."
+    },
     "seo": {
       "breadcrumbCatalog": "Items",
       "detailTitle": "{{name}} | Rendasua",

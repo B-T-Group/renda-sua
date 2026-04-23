@@ -4,6 +4,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
+  InfoOutlined as InfoOutlinedIcon,
   Inventory2 as SpecsIcon,
   LocalShipping as LocalShippingIcon,
   Payments as PaymentsIcon,
@@ -26,6 +27,7 @@ import {
   Divider,
   Grid,
   IconButton,
+  Paper,
   Skeleton,
   Stack,
   Typography,
@@ -34,6 +36,7 @@ import {
 } from '@mui/material';
 import { useAuth0 } from '@auth0/auth0-react';
 import React from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
@@ -181,6 +184,148 @@ function buildItemJsonLd(
     catalogLabel
   );
   return { '@context': 'https://schema.org', '@graph': [product, breadcrumb] };
+}
+
+type HighlightDef = {
+  key: string;
+  title: string;
+  body: string;
+  Icon: typeof PaymentsIcon;
+  color: 'success' | 'primary';
+};
+
+function itemDetailHighlightRows(t: TFunction): HighlightDef[] {
+  return [
+    {
+      key: 'mm',
+      title: t('items.purchaseHighlights.mobileMoneyTitle', 'Mobile money payments'),
+      body: t(
+        'items.purchaseHighlights.mobileMoneyBody',
+        'Pay securely using MTN MoMo, Orange Money, Airtel Money, or Moov (depending on your country).'
+      ),
+      Icon: PaymentsIcon,
+      color: 'success',
+    },
+    {
+      key: 'del',
+      title: t('items.purchaseHighlights.deliveryTitle', 'Delivery in 6–24 hours'),
+      body: t(
+        'items.purchaseHighlights.deliveryBody',
+        'Delivery time depends on the time you place your order and local delivery availability.'
+      ),
+      Icon: LocalShippingIcon,
+      color: 'primary',
+    },
+  ];
+}
+
+function ItemDetailPurchaseHighlights({ t }: { t: TFunction }) {
+  const rows = itemDetailHighlightRows(t);
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        {t(
+          'items.purchaseHighlights.title',
+          'Pay with mobile money • Get delivery fast'
+        )}
+      </Typography>
+      <Stack spacing={1}>
+        {rows.map(({ key, title, body, Icon, color }) => (
+          <Box
+            key={key}
+            sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
+          >
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: 2,
+                display: 'grid',
+                placeItems: 'center',
+                bgcolor: `${color}.50`,
+                color: `${color}.main`,
+                flex: '0 0 auto',
+              }}
+              aria-hidden
+            >
+              <Icon fontSize="small" />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={700}>
+                {title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {body}
+              </Typography>
+            </Box>
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
+type ItemDetailMobileOrderBarProps = {
+  visible: boolean;
+  priceText: string;
+  orderLabel: string;
+  onOrder: () => void;
+};
+
+function ItemDetailMobileOrderBar({
+  visible,
+  priceText,
+  orderLabel,
+  onOrder,
+}: ItemDetailMobileOrderBarProps) {
+  if (!visible) return null;
+  return (
+    <Paper
+      component="nav"
+      aria-label={orderLabel}
+      elevation={8}
+      sx={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: (theme) => theme.zIndex.appBar,
+        px: 2,
+        py: 1.5,
+        borderRadius: 0,
+        borderTop: 1,
+        borderColor: 'divider',
+        pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={1.5}
+        alignItems="center"
+        justifyContent="space-between"
+      >
+        <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
+          {priceText}
+        </Typography>
+        <Button
+          variant="contained"
+          size="medium"
+          onClick={onOrder}
+          sx={{ minWidth: 128, flexShrink: 0 }}
+        >
+          {orderLabel}
+        </Button>
+      </Stack>
+    </Paper>
+  );
 }
 
 export default function ItemDetailPage() {
@@ -505,7 +650,14 @@ export default function ItemDetailPage() {
   return (
     <>
       {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
-      <Container maxWidth="lg" component="main" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container
+        maxWidth="lg"
+        component="main"
+        sx={{
+          pt: { xs: 2, md: 4 },
+          pb: { xs: isMobile && canOrder ? 11 : 2, md: 4 },
+        }}
+      >
         {/* Back + share */}
         <Stack
           direction="row"
@@ -651,9 +803,36 @@ export default function ItemDetailPage() {
               </Typography>
             )}
 
-            <Typography variant="h5" color="primary.main" fontWeight={600}>
-              {formatCurrency(inventoryItem.selling_price, item.currency)}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+              {hasDeal && (
+                <Typography
+                  component="span"
+                  variant="body1"
+                  sx={{ textDecoration: 'line-through' }}
+                  color="text.secondary"
+                >
+                  {formatCurrency(inventoryItem.original_price!, item.currency)}
+                </Typography>
+              )}
+              <Typography variant="h5" color="primary.main" fontWeight={600}>
+                {formatCurrency(checkoutUnitPrice, item.currency)}
+              </Typography>
+            </Box>
+
+            <Alert
+              severity="info"
+              icon={<InfoOutlinedIcon fontSize="inherit" />}
+              sx={{ alignItems: 'center', py: 0.75 }}
+            >
+              <Typography variant="body2">
+                {t(
+                  'items.detail.howItWorks',
+                  'Order on Rendasua, pay with mobile money, and we deliver to the address you choose. You do not need to visit a store.'
+                )}
+              </Typography>
+            </Alert>
+
+            <ItemDetailPurchaseHighlights t={t} />
 
             {typeof inventoryItem.viewsCount === 'number' && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -669,18 +848,29 @@ export default function ItemDetailPage() {
             )}
 
             {location && business && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <BusinessIcon fontSize="small" color="action" />
-                <Typography variant="body2" color="text.secondary">
-                  {business.name}
-                  {business.is_verified && (
-                    <Verified
-                      fontSize="small"
-                      color="primary"
-                      sx={{ ml: 0.5, verticalAlign: 'middle' }}
-                    />
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  {t('items.detail.fulfilledBy', 'Fulfilled by')}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <BusinessIcon fontSize="small" color="action" />
+                  <Typography variant="body2" color="text.primary" fontWeight={500}>
+                    {business.name}
+                    {business.is_verified && (
+                      <Verified
+                        fontSize="small"
+                        color="primary"
+                        sx={{ ml: 0.5, verticalAlign: 'middle' }}
+                      />
+                    )}
+                    {location.name && ` · ${location.name}`}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                  {t(
+                    'items.detail.notWalkIn',
+                    'This is the seller and dispatch name—not a walk-in shop. Purchases are online only.'
                   )}
-                  {location.name && ` · ${location.name}`}
                 </Typography>
               </Box>
             )}
@@ -734,89 +924,6 @@ export default function ItemDetailPage() {
                 </>
               )}
             </Stack>
-
-            {/* Conversion highlights */}
-            <Box
-              sx={{
-                mt: 1.5,
-                p: 1.5,
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'background.paper',
-              }}
-            >
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                {t(
-                  'items.purchaseHighlights.title',
-                  'Pay with mobile money • Get delivery fast'
-                )}
-              </Typography>
-              <Stack spacing={1}>
-                <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}>
-                  <Box
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 2,
-                      display: 'grid',
-                      placeItems: 'center',
-                      bgcolor: 'success.50',
-                      color: 'success.main',
-                      flex: '0 0 auto',
-                    }}
-                    aria-hidden
-                  >
-                    <PaymentsIcon fontSize="small" />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      {t(
-                        'items.purchaseHighlights.mobileMoneyTitle',
-                        'Mobile money payments'
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'items.purchaseHighlights.mobileMoneyBody',
-                        'Pay securely using MTN MoMo, Orange Money, Airtel Money, or Moov (depending on your country).'
-                      )}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}>
-                  <Box
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 2,
-                      display: 'grid',
-                      placeItems: 'center',
-                      bgcolor: 'primary.50',
-                      color: 'primary.main',
-                      flex: '0 0 auto',
-                    }}
-                    aria-hidden
-                  >
-                    <LocalShippingIcon fontSize="small" />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      {t(
-                        'items.purchaseHighlights.deliveryTitle',
-                        'Delivery in 6–24 hours'
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'items.purchaseHighlights.deliveryBody',
-                        'Delivery time depends on the time you place your order and local delivery availability.'
-                      )}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Stack>
-            </Box>
           </Stack>
         </Grid>
       </Grid>
@@ -1045,6 +1152,12 @@ export default function ItemDetailPage() {
         )}
       </Box>
       </Container>
+      <ItemDetailMobileOrderBar
+        visible={isMobile && canOrder}
+        priceText={checkoutPriceText}
+        orderLabel={t('common.orderNow', 'Order Now')}
+        onOrder={handleOrderClick}
+      />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
