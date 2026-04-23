@@ -2644,6 +2644,7 @@
     "details": "Détails",
     "viewProduct": "Voir le produit",
     "viewImage": "Voir l'image",
+    "imageThumbnail": "Voir l'image {{index}}",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Délai de livraison estimé",
     "fragile": "Fragile",

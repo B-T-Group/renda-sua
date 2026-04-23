@@ -2681,6 +2681,7 @@
     "details": "Details",
     "viewProduct": "View product",
     "viewImage": "View image",
+    "imageThumbnail": "View image {{index}}",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Est. delivery time",
     "fragile": "Fragile",
