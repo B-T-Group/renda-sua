@@ -57,7 +57,9 @@ import {
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
+import { MobileMoneyOrderIcon } from '../common/MobileMoneyOrderIcon';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
@@ -348,7 +350,7 @@ function ItemDetailMobileOrderBar({
         <Button
           variant="contained"
           size="large"
-          startIcon={<ShoppingCart />}
+          startIcon={<MobileMoneyOrderIcon />}
           onClick={onOrder}
           sx={(theme) => ({
             minWidth: { xs: 168, sm: 180 },
@@ -725,6 +727,8 @@ export default function ItemDetailPage() {
     images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
   const business = inventoryItem.business_location?.business;
   const location = inventoryItem.business_location;
+  const businessCountry = inventoryItem.business_location?.address?.country;
+  const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
   const canOrder =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
   const hasDeal =
@@ -943,6 +947,8 @@ export default function ItemDetailPage() {
             </Alert>
 
             <ItemDetailPurchaseHighlights t={t} />
+
+            {isCameroonBusiness ? <CmAcceptedPaymentLogos /> : null}
 
             {typeof inventoryItem.viewsCount === 'number' && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

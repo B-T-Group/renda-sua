@@ -2717,7 +2717,10 @@
       "howItWorks": "Order on Rendasua, pay with mobile money, and we deliver to the address you choose. You do not need to visit a store.",
       "fulfilledBy": "Fulfilled by",
       "browseMoreItems": "Browse more items",
-      "stickyBarDeliveryHint": "Get your item delivered in less than 24 hours."
+      "stickyBarDeliveryHint": "Get your item delivered in less than 24 hours.",
+      "acceptedPaymentMethods": "Accepted payment methods",
+      "orangeMoneyAlt": "Orange Money",
+      "mtnMomoAlt": "MTN Mobile Money (Cameroon)"
     },
     "seo": {
       "breadcrumbCatalog": "Items",
