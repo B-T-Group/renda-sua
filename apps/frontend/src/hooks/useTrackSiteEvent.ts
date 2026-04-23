@@ -11,9 +11,13 @@ export const SITE_EVENT_INVENTORY_BUY_NOW_CLICK =
 export const SITE_EVENT_INVENTORY_ORDER_NOW_CLICK =
   'inventory.cta.order_now_click' as const;
 
+export const SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK =
+  'inventory.cta.browse_more_click' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
-  | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK;
+  | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
+  | typeof SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

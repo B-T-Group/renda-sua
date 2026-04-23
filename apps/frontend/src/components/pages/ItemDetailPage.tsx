@@ -4,6 +4,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
+  ExploreOutlined as ExploreOutlinedIcon,
   InfoOutlined as InfoOutlinedIcon,
   Inventory2 as SpecsIcon,
   LocalShipping as LocalShippingIcon,
@@ -49,6 +50,7 @@ import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
 import {
+  SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
   SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
@@ -658,30 +660,50 @@ export default function ItemDetailPage() {
           pb: { xs: isMobile && canOrder ? 11 : 2, md: 4 },
         }}
       >
-        {/* Back + share */}
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          spacing={1}
-          sx={{ mb: 2 }}
-        >
+        {/* Back + share, then browse catalog */}
+        <Stack spacing={1.5} sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1}
+          >
+            <Button
+              component={RouterLink}
+              to="/items"
+              startIcon={<ArrowBackIcon />}
+              variant="outlined"
+              size={isMobile ? 'small' : 'medium'}
+            >
+              {t('common.back', 'Back')}
+            </Button>
+            {id ? (
+              <PageShareMenu
+                shareUrl={buildInventoryItemSeoShareUrl(id)}
+                shareTitle={item.name}
+                shareDescription={checkoutPriceText}
+              />
+            ) : null}
+          </Stack>
           <Button
             component={RouterLink}
             to="/items"
-            startIcon={<ArrowBackIcon />}
+            startIcon={<ExploreOutlinedIcon />}
             variant="outlined"
+            color="primary"
             size={isMobile ? 'small' : 'medium'}
+            fullWidth
+            onClick={() => {
+              if (!id) return;
+              void trackSiteEvent({
+                eventType: SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
+                subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                subjectId: id,
+              });
+            }}
           >
-            {t('common.back', 'Back')}
+            {t('items.detail.browseMoreItems', 'Browse more items')}
           </Button>
-          {id ? (
-            <PageShareMenu
-              shareUrl={buildInventoryItemSeoShareUrl(id)}
-              shareTitle={item.name}
-              shareDescription={checkoutPriceText}
-            />
-          ) : null}
         </Stack>
 
         <Box component="article" aria-labelledby="item-detail-heading">

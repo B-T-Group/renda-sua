@@ -2716,7 +2716,8 @@
     "detail": {
       "howItWorks": "Order on Rendasua, pay with mobile money, and we deliver to the address you choose. You do not need to visit a store.",
       "fulfilledBy": "Fulfilled by",
-      "notWalkIn": "This is the seller and dispatch name—not a walk-in shop. Purchases are online only."
+      "notWalkIn": "This is the seller and dispatch name—not a walk-in shop. Purchases are online only.",
+      "browseMoreItems": "Browse more items"
     },
     "seo": {
       "breadcrumbCatalog": "Items",
