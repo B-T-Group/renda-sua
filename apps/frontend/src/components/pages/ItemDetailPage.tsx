@@ -35,6 +35,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useAuth0 } from '@auth0/auth0-react';
 import React from 'react';
 import type { TFunction } from 'i18next';
@@ -279,6 +280,7 @@ type ItemDetailMobileOrderBarProps = {
   visible: boolean;
   priceText: string;
   orderLabel: string;
+  deliveryHint: string;
   onOrder: () => void;
 };
 
@@ -286,14 +288,15 @@ function ItemDetailMobileOrderBar({
   visible,
   priceText,
   orderLabel,
+  deliveryHint,
   onOrder,
 }: ItemDetailMobileOrderBarProps) {
   if (!visible) return null;
   return (
     <Paper
       component="nav"
-      aria-label={orderLabel}
-      elevation={8}
+      aria-label={`${orderLabel}. ${deliveryHint}`}
+      elevation={12}
       sx={{
         position: 'fixed',
         left: 0,
@@ -301,32 +304,117 @@ function ItemDetailMobileOrderBar({
         bottom: 0,
         zIndex: (theme) => theme.zIndex.appBar,
         px: 2,
-        py: 1.5,
+        py: 1.75,
         borderRadius: 0,
         borderTop: 1,
         borderColor: 'divider',
-        pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+        backgroundImage: (theme) =>
+          `linear-gradient(180deg, ${alpha(
+            theme.palette.background.paper,
+            0.98
+          )} 0%, ${theme.palette.background.paper} 100%)`,
+        backdropFilter: 'saturate(1.1)',
+        boxShadow: (theme) =>
+          `0 -8px 32px ${alpha(theme.palette.common.black, 0.12)}`,
+        pb: 'calc(14px + env(safe-area-inset-bottom, 0px))',
       }}
     >
       <Stack
         direction="row"
-        spacing={1.5}
+        spacing={2}
         alignItems="center"
         justifyContent="space-between"
       >
-        <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
-          {priceText}
-        </Typography>
+        <Box sx={{ flex: 1, minWidth: 0, pr: 0.5 }}>
+          <Typography
+            variant="h6"
+            component="p"
+            fontWeight={800}
+            color="primary"
+            noWrap
+            sx={{ lineHeight: 1.2, fontSize: { xs: '1.1rem', sm: '1.2rem' } }}
+          >
+            {priceText}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="p"
+            sx={{ mt: 0.25, lineHeight: 1.3, pr: 0.5 }}
+          >
+            {deliveryHint}
+          </Typography>
+        </Box>
         <Button
           variant="contained"
-          size="medium"
+          size="large"
+          startIcon={<ShoppingCart />}
           onClick={onOrder}
-          sx={{ minWidth: 128, flexShrink: 0 }}
+          sx={(theme) => ({
+            minWidth: { xs: 168, sm: 180 },
+            flexShrink: 0,
+            px: 2.5,
+            py: 1.5,
+            fontSize: '1.02rem',
+            fontWeight: 800,
+            textTransform: 'none',
+            letterSpacing: 0.02,
+            borderRadius: 3,
+            boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
+            background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
+            transition: theme.transitions.create(
+              ['box-shadow', 'transform', 'background-color'],
+              { duration: 200 }
+            ),
+            '&:hover': {
+              boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
+              background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              transform: 'translateY(-2px)',
+            },
+            '&:active': {
+              transform: 'translateY(0)',
+              boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
+            },
+          })}
         >
           {orderLabel}
         </Button>
       </Stack>
     </Paper>
+  );
+}
+
+function ProductSpecRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value == null || value === '') return null;
+  const content =
+    typeof value === 'string' || typeof value === 'number' ? (
+      <Typography variant="body2" component="span" sx={{ lineHeight: 1.35 }}>
+        {value}
+      </Typography>
+    ) : (
+      value
+    );
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: 'minmax(88px, 36%) 1fr', sm: 'minmax(100px, 30%) 1fr' },
+        columnGap: 1.5,
+        alignItems: 'start',
+        py: 0.15,
+        gap: 0.25,
+      }}
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        component="div"
+        sx={{ fontWeight: 600, lineHeight: 1.3 }}
+      >
+        {label}
+      </Typography>
+      <Box sx={{ minWidth: 0 }}>{content}</Box>
+    </Box>
   );
 }
 
@@ -657,7 +745,7 @@ export default function ItemDetailPage() {
         component="main"
         sx={{
           pt: { xs: 2, md: 4 },
-          pb: { xs: isMobile && canOrder ? 11 : 2, md: 4 },
+          pb: { xs: isMobile && canOrder ? 15 : 2, md: 4 },
         }}
       >
         {/* Back + share, then browse catalog */}
@@ -888,12 +976,6 @@ export default function ItemDetailPage() {
                     {location.name && ` · ${location.name}`}
                   </Typography>
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                  {t(
-                    'items.detail.notWalkIn',
-                    'This is the seller and dispatch name—not a walk-in shop. Purchases are online only.'
-                  )}
-                </Typography>
               </Box>
             )}
 
@@ -950,132 +1032,131 @@ export default function ItemDetailPage() {
         </Grid>
       </Grid>
 
-      {/* Product information - full width */}
-      <Card sx={{ mt: 3, border: '1px solid', borderColor: 'divider' }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <SpecsIcon color="primary" />
-            <Typography variant="h6">
+      {/* Product information - full width, dense layout */}
+      <Card variant="outlined" sx={{ mt: 3, borderColor: 'divider' }}>
+        <CardContent
+          sx={{
+            p: 1.5,
+            pt: 1.5,
+            '&:last-child': { pb: 1.5 },
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              mb: item.description ? 1.25 : 1,
+            }}
+          >
+            <SpecsIcon color="primary" fontSize="small" />
+            <Typography variant="subtitle1" fontWeight={600} component="h2" sx={{ lineHeight: 1.3 }}>
               {t('items.productInformation', 'Product Information')}
             </Typography>
           </Box>
 
           {item.description && (
-            <>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            <Box sx={{ mb: 1.25 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                fontWeight={600}
+                sx={{ mb: 0.25 }}
+              >
                 {t('items.description', 'Description')}
               </Typography>
-              <Typography variant="body2" sx={{ mb: 2, whiteSpace: 'pre-wrap' }}>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
                 {item.description}
               </Typography>
-            </>
+            </Box>
           )}
 
-          <Grid container spacing={2}>
+          <Stack
+            spacing={0}
+            divider={
+              <Divider flexItem variant="fullWidth" sx={{ borderColor: 'divider' }} />
+            }
+          >
             {item.item_sub_category?.item_category?.name && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.category', 'Category')}
-                </Typography>
-                <Typography variant="body2">{item.item_sub_category.item_category.name}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.category', 'Category')}
+                value={item.item_sub_category.item_category.name}
+              />
             )}
             {item.item_sub_category?.name && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.subcategory', 'Subcategory')}
-                </Typography>
-                <Typography variant="body2">{item.item_sub_category.name}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.subcategory', 'Subcategory')}
+                value={item.item_sub_category.name}
+              />
             )}
             {item.brand?.name && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.brand', 'Brand')}
-                </Typography>
-                <Typography variant="body2">{item.brand.name}</Typography>
-              </Grid>
+              <ProductSpecRow label={t('items.brand', 'Brand')} value={item.brand.name} />
             )}
             {item.model?.trim() && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.model', 'Model')}
-                </Typography>
-                <Typography variant="body2">{item.model}</Typography>
-              </Grid>
+              <ProductSpecRow label={t('items.model', 'Model')} value={item.model} />
             )}
             {item.color?.trim() && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.color', 'Color')}
-                </Typography>
-                <Typography variant="body2">{item.color}</Typography>
-              </Grid>
+              <ProductSpecRow label={t('items.color', 'Color')} value={item.color} />
             )}
             {item.sku?.trim() && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.sku', 'SKU')}
-                </Typography>
-                <Typography variant="body2" fontFamily="monospace">{item.sku}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.sku', 'SKU')}
+                value={
+                  <Typography variant="body2" component="span" fontFamily="monospace">
+                    {item.sku}
+                  </Typography>
+                }
+              />
             )}
             {item.weight != null && item.weight > 0 && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.weight', 'Weight')}
-                </Typography>
-                <Typography variant="body2">
-                  {item.weight} {item.weight_unit || 'g'}
-                </Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.weight', 'Weight')}
+                value={`${item.weight} ${item.weight_unit || 'g'}`}
+              />
             )}
             {item.dimensions?.trim() && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.dimensions', 'Dimensions')}
-                </Typography>
-                <Typography variant="body2">{item.dimensions}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.dimensions', 'Dimensions')}
+                value={item.dimensions}
+              />
             )}
             {item.min_order_quantity != null && item.min_order_quantity > 0 && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.minOrderQuantity', 'Min. order quantity')}
-                </Typography>
-                <Typography variant="body2">{item.min_order_quantity}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.minOrderQuantity', 'Min. order quantity')}
+                value={item.min_order_quantity}
+              />
             )}
             {item.max_order_quantity != null && item.max_order_quantity > 0 && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.maxOrderQuantity', 'Max. order quantity')}
-                </Typography>
-                <Typography variant="body2">{item.max_order_quantity}</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.maxOrderQuantity', 'Max. order quantity')}
+                value={item.max_order_quantity}
+              />
             )}
             {item.max_delivery_distance != null && item.max_delivery_distance > 0 && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.maxDeliveryDistance', 'Max. delivery distance')}
-                </Typography>
-                <Typography variant="body2">{item.max_delivery_distance} km</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.maxDeliveryDistance', 'Max. delivery distance')}
+                value={`${item.max_delivery_distance} km`}
+              />
             )}
             {item.estimated_delivery_time != null && item.estimated_delivery_time > 0 && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t('items.estimatedDeliveryTime', 'Est. delivery time')}
-                </Typography>
-                <Typography variant="body2">~{item.estimated_delivery_time} min</Typography>
-              </Grid>
+              <ProductSpecRow
+                label={t('items.estimatedDeliveryTime', 'Est. delivery time')}
+                value={`~${item.estimated_delivery_time} min`}
+              />
             )}
-          </Grid>
+          </Stack>
 
           {(item.is_fragile || item.is_perishable || item.requires_special_handling) && (
             <>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+              <Divider sx={{ my: 1.25 }} />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                fontWeight={600}
+                sx={{ mb: 0.5 }}
+              >
                 {t('items.specialProperties', 'Special properties')}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -1086,7 +1167,11 @@ export default function ItemDetailPage() {
                   <Chip label={t('items.perishable', 'Perishable')} size="small" color="error" />
                 )}
                 {item.requires_special_handling && (
-                  <Chip label={t('items.specialHandling', 'Special handling')} size="small" color="info" />
+                  <Chip
+                    label={t('items.specialHandling', 'Special handling')}
+                    size="small"
+                    color="info"
+                  />
                 )}
               </Box>
             </>
@@ -1178,6 +1263,10 @@ export default function ItemDetailPage() {
         visible={isMobile && canOrder}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
+        deliveryHint={t(
+          'items.detail.stickyBarDeliveryHint',
+          'Get your item delivered in less than 24 hours.'
+        )}
         onOrder={handleOrderClick}
       />
       <AnonymousBuyNowDialog
