@@ -139,12 +139,13 @@ export class InventoryItemsController {
   @Public()
   @Get()
   @ApiOperation({
-    summary: 'Get paginated inventory items with optional filters',
+    summary:
+      'Get paginated inventory items with optional filters (one listing per catalog item: nearest / most relevant by sort)',
   })
   @ApiResponse({
     status: 200,
     description:
-      'Successfully retrieved inventory items. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters). Items may include avg_rating and rating_count for display. Results are ordered by the requested sort (relevance, fastest, cheapest, top_rated, or deals).',
+      'Successfully retrieved inventory items. For each product (catalog `item_id`), a single best listing is returned: nearest to the user when address coordinates (or `origin_lat`/`origin_lng`) are available, otherwise the best by the selected sort. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters). Items may include avg_rating and rating_count for display. Results are ordered by the requested sort (relevance, fastest, cheapest, top_rated, or deals).',
     schema: {
       type: 'object',
       properties: {

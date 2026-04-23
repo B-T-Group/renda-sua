@@ -124,6 +124,9 @@ export interface InventoryItem {
       state: string;
       postal_code: string;
       country: string;
+      /** Used for distance ranking; optional when not geocoded. */
+      latitude?: number | null;
+      longitude?: number | null;
     };
   };
 }
@@ -187,6 +190,98 @@ export interface PaginatedInventoryItems {
 const INVENTORY_DISTANCE_CACHE_TTL = 7776000; // 3 months in seconds
 /** Cap rows scanned to rank locations by item count (avoids unbounded reads). */
 const TOP_LOCATIONS_INVENTORY_SCAN_LIMIT = 20000;
+/** Max listing rows to load when de-duplicating by catalog `item_id` (safety cap). */
+const INVENTORY_CATALOG_FETCH_MAX = 20000;
+
+const CATALOG_INVENTORY_LIST_GQL = `
+  query CatalogInventoryList($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
+    business_inventory(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+      id
+      business_location_id
+      item_id
+      computed_available_quantity
+      selling_price
+      is_active
+      created_at
+      updated_at
+      promotion
+      item {
+        id
+        name
+        description
+        price
+        currency
+        weight
+        weight_unit
+        dimensions
+        item_sub_category_id
+        sku
+        brand {
+          id
+          name
+        }
+        model
+        color
+        is_fragile
+        is_perishable
+        requires_special_handling
+        max_delivery_distance
+        estimated_delivery_time
+        min_order_quantity
+        max_order_quantity
+        is_active
+        created_at
+        updated_at
+        item_sub_category {
+          id
+          name
+          item_category {
+            id
+            name
+          }
+        }
+        item_images(order_by: { display_order: asc }) {
+          id
+          image_url
+          image_type
+          alt_text
+          caption
+          display_order
+        }
+        item_tags {
+          tag {
+            id
+            name
+          }
+        }
+      }
+      business_location {
+        id
+        business_id
+        name
+        location_type
+        is_primary
+        logo_url
+        business {
+          id
+          name
+          is_verified
+        }
+        address {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          latitude
+          longitude
+        }
+      }
+    }
+  }
+`;
 
 function haversineMeters(
   lat1: number,
@@ -639,120 +734,29 @@ export class InventoryItemsService {
     }
     const { where } = built;
 
-    // Calculate offset
-    const offset = (page - 1) * limit;
-
-    const queryString = `
-      query GetInventoryItems($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
-        business_inventory(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id
-          business_location_id
-          item_id
-          computed_available_quantity
-          selling_price
-          is_active
-          created_at
-          updated_at
-          promotion
-          item {
-            id
-            name
-            description
-            price
-            currency
-            weight
-            weight_unit
-            dimensions
-            item_sub_category_id
-            sku
-            brand {
-              id
-              name
-            }
-            model
-            color
-            is_fragile
-            is_perishable
-            requires_special_handling
-            max_delivery_distance
-            estimated_delivery_time
-            min_order_quantity
-            max_order_quantity
-            is_active
-            created_at
-            updated_at
-            item_sub_category {
-              id
-              name
-              item_category {
-                id
-                name
-              }
-            }
-            item_images(order_by: { display_order: asc }) {
-              id
-              image_url
-              image_type
-              alt_text
-              caption
-              display_order
-            }
-            item_tags {
-              tag {
-                id
-                name
-              }
-            }
-          }
-          business_location {
-            id
-            business_id
-            name
-            location_type
-            is_primary
-            logo_url
-            business {
-              id
-              name
-              is_verified
-            }
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-            }
-          }
-        }
-        business_inventory_aggregate(where: $where) {
-          aggregate {
-            count
-          }
-        }
-      }
-    `;
-
     try {
-      const result = await this.hasuraSystemService.executeQuery(queryString, {
-        where,
-        limit,
-        offset,
-      });
-
-      const rawItems = result.business_inventory || [];
+      const total = await this.countDistinctCatalogItemIds(where);
+      if (total === 0) {
+        return {
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+      const rawItems = await this.fetchAllCatalogInventoryRows(where);
+      if (rawItems.length >= INVENTORY_CATALOG_FETCH_MAX) {
+        this.logger.warn(
+          `Inventory catalog: reached fetch cap (${INVENTORY_CATALOG_FETCH_MAX}); de-dupe may be incomplete.`
+        );
+      }
       const items: InventoryItem[] = rawItems.map((inv: any) =>
         this.mapItemTagsToTags(inv)
       );
-      const total = result.business_inventory_aggregate?.aggregate?.count || 0;
-      const totalPages = Math.ceil(total / limit);
-
       const inventoryIds = items.map((i) => i.id);
       const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
       const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
-
       const itemsWithViewsAndDeals = items.map((item) => {
         const viewsCount = viewsMap[item.id] ?? 0;
         const deal = dealsMap[item.id];
@@ -767,13 +771,11 @@ export class InventoryItemsService {
             deal_end_at: undefined,
           };
         }
-
         const discounted = this.applyDealPrice(
           originalPrice,
           deal.discount_type,
           deal.discount_value
         );
-
         return {
           ...item,
           viewsCount,
@@ -783,20 +785,35 @@ export class InventoryItemsService {
           deal_end_at: deal.end_at,
         };
       });
-
-      const withDistance = await this.enrichWithDistanceOnly(
+      const relevanceSignals =
+        await this.getRelevanceSignalsFromPastOrders(clientId);
+      const listOrigin = await this.resolveTopLocationsOrigin(query);
+      const withHaversine = this.applyHaversineDistanceForRanking(
         itemsWithViewsAndDeals,
-        parseOptionalLatLng(query.origin_lat, query.origin_lng)
+        listOrigin
       );
-      const withRatings = await this.attachRatingAggregates(withDistance);
-      const finalItems = await this.applySortByMode(
+      const withRatings = await this.attachRatingAggregates(withHaversine);
+      const winners = await this.pickBestListingPerItem(
         withRatings,
         sort,
-        clientId
+        clientId,
+        relevanceSignals
       );
-
+      const sorted = await this.applySortByMode(
+        winners,
+        sort,
+        clientId,
+        relevanceSignals
+      );
+      const totalPages = Math.ceil(total / limit);
+      const listOffset = (page - 1) * limit;
+      const pageItems = sorted.slice(listOffset, listOffset + limit);
+      const withGoogle = await this.enrichWithDistanceOnly(
+        pageItems,
+        parseOptionalLatLng(query.origin_lat, query.origin_lng)
+      );
       return {
-        items: finalItems,
+        items: withGoogle,
         total,
         page,
         limit,
@@ -809,6 +826,130 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private async countDistinctCatalogItemIds(
+    where: Record<string, unknown>
+  ): Promise<number> {
+    const q = `
+      query DistinctCatalogItemCount($where: business_inventory_bool_exp!) {
+        business_inventory_aggregate(where: $where) {
+          aggregate {
+            count(columns: [item_id], distinct: true)
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(q, { where });
+    return res.business_inventory_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async fetchAllCatalogInventoryRows(
+    where: Record<string, unknown>
+  ): Promise<any[]> {
+    const chunk = 500;
+    const all: any[] = [];
+    let offset = 0;
+    for (;;) {
+      const batch = await this.fetchCatalogInventoryPage(where, chunk, offset);
+      all.push(...batch);
+      if (batch.length < chunk) {
+        break;
+      }
+      offset += chunk;
+      if (all.length >= INVENTORY_CATALOG_FETCH_MAX) {
+        break;
+      }
+    }
+    return all;
+  }
+
+  private async fetchCatalogInventoryPage(
+    where: Record<string, unknown>,
+    limit: number,
+    offset: number
+  ): Promise<any[]> {
+    const res = await this.hasuraSystemService.executeQuery(
+      CATALOG_INVENTORY_LIST_GQL,
+      { where, limit, offset }
+    );
+    return res.business_inventory ?? [];
+  }
+
+  private applyHaversineDistanceForRanking(
+    items: InventoryItem[],
+    origin: { lat: number; lng: number } | null
+  ): InventoryItem[] {
+    if (!origin) {
+      return items;
+    }
+    return items.map((item) => {
+      const lat = item.business_location?.address?.latitude;
+      const lng = item.business_location?.address?.longitude;
+      if (
+        lat == null ||
+        lng == null ||
+        !Number.isFinite(Number(lat)) ||
+        !Number.isFinite(Number(lng))
+      ) {
+        return { ...item, distance_value: undefined };
+      }
+      const m = haversineMeters(
+        origin.lat,
+        origin.lng,
+        Number(lat),
+        Number(lng)
+      );
+      return { ...item, distance_value: m };
+    });
+  }
+
+  private async pickBestListingPerItem(
+    items: InventoryItem[],
+    sort: InventorySortMode,
+    clientId: string | null,
+    preloaded: Awaited<
+      ReturnType<InventoryItemsService['getRelevanceSignalsFromPastOrders']>
+    >
+  ): Promise<InventoryItem[]> {
+    const byItem = new Map<string, InventoryItem[]>();
+    for (const it of items) {
+      if (!it.item_id) {
+        continue;
+      }
+      const g = byItem.get(it.item_id) ?? [];
+      g.push(it);
+      byItem.set(it.item_id, g);
+    }
+    const out: InventoryItem[] = [];
+    for (const [, group] of byItem) {
+      if (group.length === 1) {
+        out.push(group[0]);
+        continue;
+      }
+      if (sort === 'deals') {
+        const withDeals = group.filter((g) => g.hasActiveDeal);
+        if (withDeals.length === 0) {
+          continue;
+        }
+        const sorted = await this.applySortByMode(
+          withDeals,
+          'deals',
+          clientId,
+          preloaded
+        );
+        out.push(sorted[0]);
+        continue;
+      }
+      const sorted = await this.applySortByMode(
+        [...group],
+        sort,
+        clientId,
+        preloaded
+      );
+      out.push(sorted[0]);
+    }
+    return out;
   }
 
   private normalizeSuggestionQuery(q: string): string {
@@ -1843,11 +1984,18 @@ export class InventoryItemsService {
   private async applySortByMode(
     items: InventoryItem[],
     sort: InventorySortMode,
-    clientId: string | null
+    clientId: string | null,
+    preloadedRelevanceSignals?: Awaited<
+      ReturnType<InventoryItemsService['getRelevanceSignalsFromPastOrders']>
+    >
   ): Promise<InventoryItem[]> {
     switch (sort) {
       case 'relevance': {
-        return this.applyRelevanceSort(items, clientId);
+        const signals =
+          preloadedRelevanceSignals !== undefined
+            ? preloadedRelevanceSignals
+            : await this.getRelevanceSignalsFromPastOrders(clientId);
+        return this.applyRelevanceSortWithSignals(items, signals);
       }
       case 'fastest': {
         const sorted = [...items];
@@ -1916,11 +2064,12 @@ export class InventoryItemsService {
     }
   }
 
-  private async applyRelevanceSort(
+  private applyRelevanceSortWithSignals(
     items: InventoryItem[],
-    clientId: string | null
-  ): Promise<InventoryItem[]> {
-    const signals = await this.getRelevanceSignalsFromPastOrders(clientId);
+    signals: Awaited<
+      ReturnType<InventoryItemsService['getRelevanceSignalsFromPastOrders']>
+    >
+  ): InventoryItem[] {
     const sorted = [...items];
     const nowMs = Date.now();
     sorted.sort((a, b) => {
@@ -1940,7 +2089,9 @@ export class InventoryItemsService {
         signals.orderedCategoryIds,
         nowMs
       );
-      if (scoreB !== scoreA) return scoreB - scoreA;
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
       return (
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
