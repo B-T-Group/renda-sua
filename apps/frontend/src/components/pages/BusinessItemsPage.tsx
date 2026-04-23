@@ -22,12 +22,6 @@ import {
   Paper,
   Skeleton,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tab,
   Tabs,
   Typography,
@@ -53,11 +47,8 @@ import PromoteItemDialog from '../business/PromoteItemDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
 import { environment } from '../../config/environment';
-import {
-  buildFacebookCatalogCsvFromBusinessItems,
-  buildFacebookCatalogRowsFromBusinessItems,
-  type FacebookCatalogRow,
-} from '../../utils/facebookCatalogCsv';
+import { buildFacebookCatalogCsvFromBusinessItems } from '../../utils/facebookCatalogCsv';
+import FacebookExportSelectDialog from '../business/FacebookExportSelectDialog';
 
 // Skeleton loading components
 const ItemsCardsSkeleton: React.FC = () => {
@@ -117,11 +108,7 @@ const BusinessItemsPage: React.FC = () => {
   const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
   const [refineAiItem, setRefineAiItem] = useState<Item | null>(null);
   const [promoteItem, setPromoteItem] = useState<any | null>(null);
-  const [facebookExportPreviewOpen, setFacebookExportPreviewOpen] =
-    useState(false);
-  const [facebookExportPreviewRows, setFacebookExportPreviewRows] = useState<
-    FacebookCatalogRow[]
-  >([]);
+  const [facebookExportSelectOpen, setFacebookExportSelectOpen] = useState(false);
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -190,13 +177,28 @@ const BusinessItemsPage: React.FC = () => {
     navigate(`/business/items/edit/${item.id}`);
   };
 
-  const exportFacebookCatalogCsv = () => {
+  const downloadFacebookCatalogCsv = (selectedItemIds: Set<string>) => {
+    if (selectedItemIds.size === 0) {
+      return;
+    }
     const { filename, csv, rowCount } = buildFacebookCatalogCsvFromBusinessItems({
       items: items ?? [],
       webOrigin: environment.webAppOrigin,
       quantityToSell: 5,
       currencyCode: 'XAF',
+      itemIds: selectedItemIds,
     });
+
+    if (rowCount === 0) {
+      enqueueSnackbar(
+        t(
+          'business.items.facebookExport.empty',
+          'No inventory rows found to export.'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
@@ -209,42 +211,21 @@ const BusinessItemsPage: React.FC = () => {
     enqueueSnackbar(
       t(
         'business.items.facebookExport.success',
-        'Exported {{count}} products for Facebook',
+        'Exported {{count}} rows for Facebook',
         { count: rowCount }
       ),
       { variant: 'success' }
     );
   };
 
-  const handleExportFacebookCatalogCsv = () => {
-    try {
-      const { rows } = buildFacebookCatalogRowsFromBusinessItems({
-        items: items ?? [],
-        webOrigin: environment.webAppOrigin,
-        quantityToSell: 5,
-        currencyCode: 'XAF',
-      });
-      setFacebookExportPreviewRows(rows);
-      setFacebookExportPreviewOpen(true);
-    } catch (error: any) {
-      enqueueSnackbar(
-        t(
-          'business.items.facebookExport.error',
-          'Failed to export Facebook CSV'
-        ),
-        { variant: 'error' }
-      );
-    }
+  const handleOpenFacebookExportSelect = () => {
+    setFacebookExportSelectOpen(true);
   };
 
-  const handleCloseFacebookExportPreview = () => {
-    setFacebookExportPreviewOpen(false);
-  };
-
-  const handleConfirmFacebookExportDownload = () => {
+  const handleConfirmFacebookExport = (selectedItemIds: Set<string>) => {
     try {
-      exportFacebookCatalogCsv();
-      setFacebookExportPreviewOpen(false);
+      downloadFacebookCatalogCsv(selectedItemIds);
+      setFacebookExportSelectOpen(false);
     } catch (error: any) {
       enqueueSnackbar(
         t(
@@ -528,7 +509,7 @@ const BusinessItemsPage: React.FC = () => {
             variant="outlined"
             color="primary"
             startIcon={<DownloadIcon />}
-            onClick={handleExportFacebookCatalogCsv}
+            onClick={handleOpenFacebookExportSelect}
             size="medium"
             sx={{ borderRadius: 0 }}
             disabled={loading || (items?.length ?? 0) === 0}
@@ -764,84 +745,12 @@ const BusinessItemsPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Facebook export preview */}
-      <Dialog
-        open={facebookExportPreviewOpen}
-        onClose={handleCloseFacebookExportPreview}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          {t(
-            'business.items.facebookExport.previewTitle',
-            'Facebook export preview'
-          )}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t(
-              'business.items.facebookExport.previewSubtitle',
-              'Previewing {{shown}} of {{total}} rows.',
-              {
-                shown: Math.min(10, facebookExportPreviewRows.length),
-                total: facebookExportPreviewRows.length,
-              }
-            )}
-          </Typography>
-
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Availability</TableCell>
-                  <TableCell>Price</TableCell>
-                  <TableCell>Link</TableCell>
-                  <TableCell>Image</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {facebookExportPreviewRows.slice(0, 10).map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.id}</TableCell>
-                    <TableCell>{row.title}</TableCell>
-                    <TableCell>{row.availability}</TableCell>
-                    <TableCell>{row.price}</TableCell>
-                    <TableCell>{row.link}</TableCell>
-                    <TableCell>{row.image_link}</TableCell>
-                  </TableRow>
-                ))}
-                {facebookExportPreviewRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      {t(
-                        'business.items.facebookExport.empty',
-                        'No inventory rows found to export.'
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseFacebookExportPreview}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={handleConfirmFacebookExportDownload}
-            variant="contained"
-            disabled={facebookExportPreviewRows.length === 0}
-          >
-            {t(
-              'business.items.facebookExport.download',
-              'Download CSV'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <FacebookExportSelectDialog
+        open={facebookExportSelectOpen}
+        onClose={() => setFacebookExportSelectOpen(false)}
+        items={items ?? []}
+        onConfirm={handleConfirmFacebookExport}
+      />
     </Container>
   );
 };

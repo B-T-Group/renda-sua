@@ -29,8 +29,19 @@ const FACEBOOK_CATALOG_HEADERS = [
   'gtin',
   'product_tags[0]',
   'product_tags[1]',
+  'product_tags[2]',
+  'product_tags[3]',
+  'product_tags[4]',
+  'product_tags[5]',
+  'product_tags[6]',
+  'product_tags[7]',
+  'product_tags[8]',
+  'product_tags[9]',
   'style[0]',
 ] as const;
+
+/** Facebook catalog allows multiple `product_tags[n]` columns; we cap at 10. */
+export const FACEBOOK_PRODUCT_TAG_COLUMN_COUNT = 10;
 
 export type FacebookCatalogHeader = (typeof FACEBOOK_CATALOG_HEADERS)[number];
 export type FacebookCatalogRow = Record<FacebookCatalogHeader, string>;
@@ -46,9 +57,14 @@ type BusinessInventoryLike = {
   selling_price?: number | null;
   computed_available_quantity?: number | null;
   is_active?: boolean | null;
+  business_location?: { name?: string | null } | null;
 };
 
-type BusinessItemLike = {
+type ItemTagLike = {
+  tag?: { name?: string | null } | null;
+};
+
+export type BusinessItemLike = {
   id: string;
   name?: string | null;
   description?: string | null;
@@ -56,6 +72,7 @@ type BusinessItemLike = {
   brand?: { name?: string | null } | null;
   business?: { name?: string | null } | null;
   item_images?: ItemImageLike[] | null;
+  item_tags?: ItemTagLike[] | null;
   business_inventories?: BusinessInventoryLike[] | null;
 };
 
@@ -95,6 +112,101 @@ function formatPriceAmount(amount: number): string {
   const rounded = Math.round(amount * 100) / 100;
   const s = String(rounded);
   return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
+}
+
+export function uniqueLocationNamesForItem(item: BusinessItemLike): string[] {
+  const set = new Set<string>();
+  for (const inv of item.business_inventories ?? []) {
+    const n = inv?.business_location?.name?.trim();
+    if (n) {
+      set.add(n);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+/** Catalog item tag names (distinct, sorted). */
+function itemTagNamesForItem(item: BusinessItemLike): string[] {
+  const set = new Set<string>();
+  for (const row of item.item_tags ?? []) {
+    const n = row?.tag?.name?.trim();
+    if (n) {
+      set.add(n);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+/** Item tags first, then location names (for Facebook `product_tags` columns). */
+export function combinedProductTagLabelsForItem(item: BusinessItemLike): string[] {
+  return [...itemTagNamesForItem(item), ...uniqueLocationNamesForItem(item)];
+}
+
+/**
+ * Distributes individual tag labels across up to `columnCount` columns in order:
+ * first tags go to column 0, etc., with counts split as evenly as possible.
+ * Each column value is comma-separated tags for that segment.
+ */
+export function distributeTagsEvenlyAcrossColumns(
+  tags: string[],
+  columnCount: number
+): string[] {
+  const result: string[] = Array.from({ length: columnCount }, () => '');
+  if (tags.length === 0 || columnCount <= 0) {
+    return result;
+  }
+  const n = tags.length;
+  const base = Math.floor(n / columnCount);
+  const rem = n % columnCount;
+  let idx = 0;
+  for (let c = 0; c < columnCount; c++) {
+    const size = base + (c < rem ? 1 : 0);
+    const slice = tags.slice(idx, idx + size);
+    result[c] = slice.join(', ');
+    idx += size;
+  }
+  return result;
+}
+
+type FacebookProductTagKeys =
+  | 'product_tags[0]'
+  | 'product_tags[1]'
+  | 'product_tags[2]'
+  | 'product_tags[3]'
+  | 'product_tags[4]'
+  | 'product_tags[5]'
+  | 'product_tags[6]'
+  | 'product_tags[7]'
+  | 'product_tags[8]'
+  | 'product_tags[9]';
+
+const PRODUCT_TAG_KEYS: FacebookProductTagKeys[] = [
+  'product_tags[0]',
+  'product_tags[1]',
+  'product_tags[2]',
+  'product_tags[3]',
+  'product_tags[4]',
+  'product_tags[5]',
+  'product_tags[6]',
+  'product_tags[7]',
+  'product_tags[8]',
+  'product_tags[9]',
+];
+
+function productTagRowFields(
+  tagLabels: string[]
+): Pick<FacebookCatalogRow, FacebookProductTagKeys> {
+  const values = distributeTagsEvenlyAcrossColumns(
+    tagLabels,
+    FACEBOOK_PRODUCT_TAG_COLUMN_COUNT
+  );
+  return PRODUCT_TAG_KEYS.reduce(
+    (acc, key, i) => {
+      acc[key] = values[i] ?? '';
+      return acc;
+    },
+    {} as Pick<FacebookCatalogRow, FacebookProductTagKeys>
+  );
 }
 
 function availabilityForInventoryRow(inv: BusinessInventoryLike): 'in stock' | 'out of stock' {
@@ -152,8 +264,7 @@ function buildRow(
     'video[0].url': '',
     'video[0].tag[0]': '',
     gtin: '',
-    'product_tags[0]': '',
-    'product_tags[1]': '',
+    ...productTagRowFields(combinedProductTagLabelsForItem(item)),
     'style[0]': '',
   };
 }
@@ -163,13 +274,19 @@ export function buildFacebookCatalogRowsFromBusinessItems(input: {
   webOrigin: string;
   quantityToSell?: number;
   currencyCode?: string;
+  /** When set, only include catalog items whose `id` is in this set. */
+  itemIds?: Set<string> | null;
 }): { headers: readonly FacebookCatalogHeader[]; rows: FacebookCatalogRow[] } {
   const quantityToSell = input.quantityToSell ?? 5;
   const currencyCode = input.currencyCode ?? 'XAF';
   const origin = input.webOrigin?.trim() || '';
+  const filter = input.itemIds;
 
   const rows: FacebookCatalogRow[] = [];
   for (const item of input.items ?? []) {
+    if (filter && !filter.has(item.id)) {
+      continue;
+    }
     const inventories = item.business_inventories ?? [];
     for (const inv of inventories) {
       if (!inv?.id) continue;
@@ -190,6 +307,7 @@ export function buildFacebookCatalogCsvFromBusinessItems(input: {
   webOrigin: string;
   quantityToSell?: number;
   currencyCode?: string;
+  itemIds?: Set<string> | null;
 }): { filename: string; csv: string; rowCount: number } {
   const { headers, rows } = buildFacebookCatalogRowsFromBusinessItems(input);
 
