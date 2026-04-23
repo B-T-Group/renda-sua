@@ -740,6 +740,10 @@ export default function ItemDetailPage() {
     ? inventoryItem.discounted_price!
     : inventoryItem.selling_price;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
+  const showMobileStickyOrderBar = isMobile && canOrder;
+  const showInlineOrderNow = !showMobileStickyOrderBar;
+  const showOrderCtaStack =
+    !canOrder || isClientUser || !isMobile;
 
   return (
     <>
@@ -1001,39 +1005,43 @@ export default function ItemDetailPage() {
               ))}
             </Box>
 
-            {/* CTAs */}
-            <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-              {!canOrder ? (
-                <Button variant="outlined" disabled size="medium">
-                  {inventoryItem.computed_available_quantity === 0
-                    ? t('items.outOfStock', 'Out of Stock')
-                    : t('items.notAvailable', 'Not Available')}
-                </Button>
-              ) : (
-                <>
-                  {isClientUser && (
-                    <Button
-                      variant="outlined"
-                      startIcon={<ShoppingCart />}
-                      onClick={() => handleAddToCart(inventoryItem)}
-                      size="medium"
-                      fullWidth
-                    >
-                      {t('cart.addToCart', 'Add to Cart')}
-                    </Button>
-                  )}
-                  <Button
-                    variant="contained"
-                    startIcon={<ShoppingCart />}
-                    onClick={handleOrderClick}
-                    size="medium"
-                    fullWidth
-                  >
-                    {t('common.orderNow', 'Order Now')}
+            {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
+            {showOrderCtaStack ? (
+              <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
+                {!canOrder ? (
+                  <Button variant="outlined" disabled size="medium">
+                    {inventoryItem.computed_available_quantity === 0
+                      ? t('items.outOfStock', 'Out of Stock')
+                      : t('items.notAvailable', 'Not Available')}
                   </Button>
-                </>
-              )}
-            </Stack>
+                ) : (
+                  <>
+                    {isClientUser && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<ShoppingCart />}
+                        onClick={() => handleAddToCart(inventoryItem)}
+                        size="medium"
+                        fullWidth
+                      >
+                        {t('cart.addToCart', 'Add to Cart')}
+                      </Button>
+                    )}
+                    {showInlineOrderNow && (
+                      <Button
+                        variant="contained"
+                        startIcon={<ShoppingCart />}
+                        onClick={handleOrderClick}
+                        size="medium"
+                        fullWidth
+                      >
+                        {t('common.orderNow', 'Order Now')}
+                      </Button>
+                    )}
+                  </>
+                )}
+              </Stack>
+            ) : null}
           </Stack>
         </Grid>
       </Grid>
@@ -1245,28 +1253,26 @@ export default function ItemDetailPage() {
         </Box>
       )}
 
-      {/* Reviews */}
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('items.reviews', 'Reviews')}
-        </Typography>
-        {ratingsLoading ? (
-          <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
-        ) : ratings.length > 0 ? (
-          <OrderRatingsDisplay
-            ratings={ratings}
-            userType="client"
-            title={t('items.reviews', 'Reviews')}
-          />
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            {t('items.noReviews', 'No reviews yet')}
+      {/* Reviews — only when loading or at least one review exists */}
+      {(ratingsLoading || ratings.length > 0) && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            {t('items.reviews', 'Reviews')}
           </Typography>
-        )}
-      </Box>
+          {ratingsLoading ? (
+            <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
+          ) : (
+            <OrderRatingsDisplay
+              ratings={ratings}
+              userType="client"
+              title={t('items.reviews', 'Reviews')}
+            />
+          )}
+        </Box>
+      )}
       </Container>
       <ItemDetailMobileOrderBar
-        visible={isMobile && canOrder}
+        visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
         deliveryHint={t(
