@@ -307,7 +307,7 @@ function ItemDetailMobileOrderBar({
         bottom: 0,
         zIndex: (theme) => theme.zIndex.appBar,
         px: 2,
-        py: 1.75,
+        py: 1,
         borderRadius: 0,
         borderTop: 1,
         borderColor: 'divider',
@@ -319,69 +319,81 @@ function ItemDetailMobileOrderBar({
         backdropFilter: 'saturate(1.1)',
         boxShadow: (theme) =>
           `0 -8px 32px ${alpha(theme.palette.common.black, 0.12)}`,
-        pb: 'calc(14px + env(safe-area-inset-bottom, 0px))',
+        pb: 'calc(8px + env(safe-area-inset-bottom, 0px))',
       }}
     >
-      <Stack
-        direction="row"
-        spacing={2}
-        alignItems="center"
-        justifyContent="space-between"
-      >
-        <Box sx={{ flex: 1, minWidth: 0, pr: 0.5 }}>
-          <Typography
-            variant="h6"
-            component="p"
-            fontWeight={800}
-            color="primary"
-            noWrap
-            sx={{ lineHeight: 1.2, fontSize: { xs: '1.1rem', sm: '1.2rem' } }}
+      <Stack direction="column" spacing={0.5} sx={{ width: '100%' }}>
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Box sx={{ flex: 1, minWidth: 0, pr: 0.5 }}>
+            <Typography
+              variant="h6"
+              component="p"
+              fontWeight={800}
+              color="primary"
+              noWrap
+              sx={{ lineHeight: 1.15, fontSize: { xs: '1.05rem', sm: '1.1rem' } }}
+            >
+              {priceText}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            size="medium"
+            startIcon={<MobileMoneyOrderIcon />}
+            onClick={onOrder}
+            sx={(theme) => ({
+              minWidth: { xs: 160, sm: 172 },
+              minHeight: 40,
+              flexShrink: 0,
+              px: 2.25,
+              py: 0.75,
+              fontSize: '0.95rem',
+              fontWeight: 800,
+              textTransform: 'none',
+              letterSpacing: 0.02,
+              borderRadius: 2.5,
+              boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
+              background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
+              transition: theme.transitions.create(
+                ['box-shadow', 'transform', 'background-color'],
+                { duration: 200 }
+              ),
+              '&:hover': {
+                boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
+                background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                transform: 'translateY(-2px)',
+              },
+              '&:active': {
+                transform: 'translateY(0)',
+                boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
+              },
+            })}
           >
-            {priceText}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            component="p"
-            sx={{ mt: 0.25, lineHeight: 1.3, pr: 0.5 }}
-          >
-            {deliveryHint}
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<MobileMoneyOrderIcon />}
-          onClick={onOrder}
+            {orderLabel}
+          </Button>
+        </Stack>
+        <Typography
+          variant="body2"
+          component="p"
           sx={(theme) => ({
-            minWidth: { xs: 168, sm: 180 },
-            flexShrink: 0,
-            px: 2.5,
-            py: 1.5,
-            fontSize: '1.02rem',
-            fontWeight: 800,
-            textTransform: 'none',
-            letterSpacing: 0.02,
-            borderRadius: 3,
-            boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
-            background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
-            transition: theme.transitions.create(
-              ['box-shadow', 'transform', 'background-color'],
-              { duration: 200 }
-            ),
-            '&:hover': {
-              boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
-              background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-              transform: 'translateY(-2px)',
-            },
-            '&:active': {
-              transform: 'translateY(0)',
-              boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
-            },
+            m: 0,
+            width: '100%',
+            textAlign: 'center',
+            lineHeight: 1.45,
+            fontWeight: 600,
+            letterSpacing: 0.01,
+            fontSize: { xs: '0.8rem', sm: '0.825rem' },
+            color: alpha(theme.palette.text.primary, 0.8),
+            fontStyle: 'italic',
           })}
         >
-          {orderLabel}
-        </Button>
+          {deliveryHint}
+        </Typography>
       </Stack>
     </Paper>
   );
@@ -445,6 +457,10 @@ export default function ItemDetailPage() {
 
   const { trackOnMount, trackView } = useTrackItemView(id || null);
   const { trackSiteEvent } = useTrackSiteEvent();
+
+  React.useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
 
   React.useEffect(() => {
     if (id) {
