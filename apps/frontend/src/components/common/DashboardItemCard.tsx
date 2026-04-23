@@ -39,23 +39,9 @@ import {
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
+import { orderedItemImages } from '../../utils/orderedItemImages';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
-
-type CardItemImage = InventoryItem['item']['item_images'][number];
-
-/** Main image first, then others sorted by display_order. */
-function orderedGalleryImages(
-  images: CardItemImage[] | undefined
-): CardItemImage[] {
-  if (!images?.length) return [];
-  const byOrder = [...images].sort(
-    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
-  );
-  const main = byOrder.find((i) => i.image_type === 'main');
-  if (!main) return byOrder;
-  return [main, ...byOrder.filter((i) => i !== main)];
-}
 
 /** Strip HTML and collapse whitespace for card preview text. */
 function plainTextSummary(text: string | null | undefined): string {
@@ -108,7 +94,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const { trackSiteEvent } = useTrackSiteEvent();
 
   const galleryImages = useMemo(
-    () => orderedGalleryImages(inventory.item.item_images),
+    () => orderedItemImages(inventory.item.item_images),
     [inventory.item.item_images]
   );
 

@@ -1,11 +1,11 @@
 import {
   ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
   Business as BusinessIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   ExploreOutlined as ExploreOutlinedIcon,
-  InfoOutlined as InfoOutlinedIcon,
   Inventory2 as SpecsIcon,
   LocalShipping as LocalShippingIcon,
   Payments as PaymentsIcon,
@@ -65,6 +65,7 @@ import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
+import { orderedItemImages } from '../../utils/orderedItemImages';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -112,7 +113,7 @@ function availabilitySchemaUrl(inv: InventoryItem): string {
 }
 
 function collectProductImageUrls(origin: string, inv: InventoryItem): string[] | undefined {
-  const urls = (inv.item.item_images ?? [])
+  const urls = orderedItemImages(inv.item.item_images ?? [])
     .map((img) => toAbsoluteUrl(origin, img.image_url))
     .filter((u): u is string => Boolean(u));
   return urls.length > 0 ? urls : undefined;
@@ -569,7 +570,7 @@ export default function ItemDetailPage() {
         name: item.item.name,
         price: unitPrice,
         currency: item.item.currency,
-        imageUrl: item.item.item_images?.[0]?.image_url,
+        imageUrl: orderedItemImages(item.item.item_images)[0]?.image_url,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
@@ -642,7 +643,7 @@ export default function ItemDetailPage() {
       SEO_DESC_MAX
     );
     const title = t('items.seo.detailTitle', '{{name}} | Rendasua', { name: item.name });
-    const imgs = item.item_images ?? [];
+    const imgs = orderedItemImages(item.item_images);
     const ogImage = toAbsoluteUrl(origin, imgs[0]?.image_url) || defaultOg;
     const kwParts = [
       item.name,
@@ -721,7 +722,7 @@ export default function ItemDetailPage() {
   }
 
   const item = inventoryItem.item;
-  const images = item.item_images ?? [];
+  const images = orderedItemImages(item.item_images);
   const primaryImage = images.length > 0 ? images[0].image_url : null;
   const selectedImageUrl =
     images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
@@ -784,11 +785,39 @@ export default function ItemDetailPage() {
           <Button
             component={RouterLink}
             to="/items"
-            startIcon={<ExploreOutlinedIcon />}
-            variant="outlined"
+            variant="contained"
             color="primary"
-            size={isMobile ? 'small' : 'medium'}
+            size={isMobile ? 'medium' : 'large'}
             fullWidth
+            startIcon={<ExploreOutlinedIcon sx={{ fontSize: '1.35rem' }} />}
+            endIcon={
+              <ArrowForwardIcon
+                sx={{ fontSize: '1.1rem', opacity: 0.95, transition: 'transform 0.2s' }}
+              />
+            }
+            sx={{
+              py: 1.25,
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              borderRadius: 2,
+              textTransform: 'none',
+              boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.38)}`,
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              transition: theme.transitions.create(
+                ['box-shadow', 'transform', 'filter'],
+                { duration: 220 }
+              ),
+              '&:hover': {
+                boxShadow: `0 10px 28px ${alpha(theme.palette.primary.main, 0.48)}`,
+                transform: 'translateY(-2px)',
+                filter: 'brightness(1.04)',
+                background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+              },
+              '& .MuiButton-endIcon': { ml: 0.75 },
+              '&:hover .MuiButton-endIcon': {
+                transform: 'translateX(4px)',
+              },
+            }}
             onClick={() => {
               if (!id) return;
               void trackSiteEvent({
@@ -936,19 +965,6 @@ export default function ItemDetailPage() {
                 {formatCurrency(checkoutUnitPrice, item.currency)}
               </Typography>
             </Box>
-
-            <Alert
-              severity="info"
-              icon={<InfoOutlinedIcon fontSize="inherit" />}
-              sx={{ alignItems: 'center', py: 0.75 }}
-            >
-              <Typography variant="body2">
-                {t(
-                  'items.detail.howItWorks',
-                  'Order on Rendasua, pay with mobile money, and we deliver to the address you choose. You do not need to visit a store.'
-                )}
-              </Typography>
-            </Alert>
 
             <ItemDetailPurchaseHighlights t={t} />
 
@@ -1227,7 +1243,8 @@ export default function ItemDetailPage() {
                       component="img"
                       height="120"
                       image={
-                        sim.item?.item_images?.[0]?.image_url || NoImage
+                        orderedItemImages(sim.item?.item_images)[0]?.image_url ||
+                        NoImage
                       }
                       alt={sim.item?.name}
                       sx={{ objectFit: 'cover' }}

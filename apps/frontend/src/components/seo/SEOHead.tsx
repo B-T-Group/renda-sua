@@ -55,7 +55,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     updateMetaTag('keywords', keywords);
     updateMetaTag('author', 'Rendasua');
     updateMetaTag('robots', noindex ? 'noindex, nofollow' : 'index, follow');
-    updateMetaTag('language', 'English');
+    updateMetaTag('language', 'French');
 
     // Open Graph tags
     updateMetaTag('og:title', title, true);
@@ -64,7 +64,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     updateMetaTag('og:url', fullUrl, true);
     updateMetaTag('og:type', type, true);
     updateMetaTag('og:site_name', 'Rendasua', true);
-    updateMetaTag('og:locale', 'en_US', true);
+    updateMetaTag('og:locale', 'fr_FR', true);
 
     // Twitter Card tags
     updateMetaTag('twitter:card', 'summary_large_image');

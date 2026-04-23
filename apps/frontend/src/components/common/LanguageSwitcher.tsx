@@ -46,12 +46,13 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ inverted }) => {
   );
 
   const getCurrentLanguageName = () => {
-    switch (i18n.language) {
-      case 'fr':
-        return 'Français';
+    const lng = i18n.language?.split('-')[0];
+    switch (lng) {
       case 'en':
-      default:
         return 'English';
+      case 'fr':
+      default:
+        return 'Français';
     }
   };
 
