@@ -231,7 +231,7 @@
     },
     "siteEvents": {
       "pageTitle": "Site events",
-      "pageDescription": "Browse client-side analytics events (CTAs, future signals). Export CSV for warehouse or spreadsheets.",
+      "pageDescription": "See aggregated event counts to understand what people are doing, then browse raw events or export CSV. Default view is the last 7 full days; adjust the date range as needed.",
       "pageKeywords": "admin, analytics, site events, export",
       "noBusinessProfile": "Business profile not found",
       "unauthorized": "You are not authorized to access this page",
@@ -240,6 +240,8 @@
       "subjectId": "Subject id",
       "from": "From (ISO)",
       "to": "To (ISO)",
+      "fromDate": "From date",
+      "toDate": "To date",
       "applyFilters": "Apply filters",
       "exportCsv": "Export CSV",
       "exportStarted": "Download started",
@@ -250,7 +252,23 @@
       "colEvent": "Event",
       "colSubject": "Subject",
       "colViewer": "Viewer",
-      "colMetadata": "Metadata"
+      "colMetadata": "Metadata",
+      "summary": {
+        "title": "Activity summary",
+        "caption": "Counts in the current date range and filters. Rows are ordered by count (highest first).",
+        "colMetric": "Metric",
+        "colCount": "Count",
+        "totalEvents": "All events (filtered)",
+        "empty": "No events in this range.",
+        "otherBucket": "Other event types",
+        "breakdownHidden": "Event type filter is set — the total above matches that type."
+      },
+      "chart": {
+        "total": "All events (filtered)",
+        "centerLabel": "Total events",
+        "events": "Events",
+        "caption": "Donut: share of each type. Bar: exact counts."
+      }
     },
     "businesses": {
       "imageCleanupEnabled": "Image cleanup enabled"

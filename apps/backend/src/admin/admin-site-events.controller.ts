@@ -51,6 +51,25 @@ export class AdminSiteEventsController {
     });
   }
 
+  @Get('summary')
+  @ApiOperation({
+    summary: 'Aggregated event counts in the current filter (by event type)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Total count and per event_type breakdown',
+  })
+  async summary(@Query() query: AdminSiteEventsQueryDto) {
+    this.assertDateRange(query);
+    return this.siteEventsService.getAdminSiteEventsSummary({
+      eventType: query.eventType,
+      subjectType: query.subjectType,
+      subjectId: query.subjectId,
+      from: query.from,
+      to: query.to,
+    });
+  }
+
   @Get('export')
   @ApiOperation({
     summary: 'Export site events as CSV (warehouse-friendly download)',

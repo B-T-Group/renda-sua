@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "apexcharts": "^4.2.0",
+    "react-apexcharts": "^1.7.0",
     "@apollo/client": "^3.13.8",
     "@mui/x-data-grid": "^8.7.0",
     "@mui/x-date-pickers": "^8.14.0",

@@ -10,6 +10,8 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { useTrackPageView } from '../../hooks/useTrackPageView';
 import type { AboutUsOfficeEntry } from './aboutUsOfficesData';
 import { ABOUT_US_OFFICE_ENTRIES } from './aboutUsOfficesData';
 
@@ -62,7 +64,9 @@ function OfficeLocationCard({ office }: { office: AboutUsOfficeEntry }) {
 
 const AboutUsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const theme = useTheme();
+  useTrackPageView(pathname, t('aboutUs.title', 'About Us'));
 
   return (
     <Box

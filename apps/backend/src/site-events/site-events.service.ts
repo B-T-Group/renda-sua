@@ -6,7 +6,10 @@ import {
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { TrackViewerIdentity } from '../tracking/resolve-track-viewer';
 import { TrackSiteEventDto } from './dto/track-site-event.dto';
-import { SITE_EVENT_SUBJECT_INVENTORY_ITEM } from './site-event-types';
+import {
+  SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+  SITE_EVENT_TYPES_V1,
+} from './site-event-types';
 import { csvLine } from './site-events-csv.util';
 
 export interface SiteEventAdminRow {
@@ -114,6 +117,21 @@ const INSERT_SITE_EVENT = `
     }
   }
 `;
+
+const COUNT_SITE_EVENTS = `
+  query CountSiteEvents($where: site_events_bool_exp!) {
+    site_events_aggregate(where: $where) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export type SiteEventSummaryByType = {
+  eventType: string;
+  count: number;
+};
 
 const MAX_METADATA_KEYS = 20;
 const MAX_METADATA_CHARS = 4000;
@@ -237,6 +255,75 @@ export class SiteEventsService {
     if (p.from) parts.push({ created_at: { _gte: p.from } });
     if (p.to) parts.push({ created_at: { _lte: p.to } });
     return parts.length ? { _and: parts } : {};
+  }
+
+  private withEventType(
+    where: Record<string, unknown>,
+    eventType: string
+  ): Record<string, unknown> {
+    const et = { event_type: { _eq: eventType } };
+    if (!where || Object.keys(where).length === 0) {
+      return et;
+    }
+    const w = where as { _and?: unknown[] };
+    if (Array.isArray(w._and)) {
+      return { _and: [...w._and, et] };
+    }
+    return { _and: [where, et] };
+  }
+
+  private parseAggCount(
+    n: string | number | null | undefined
+  ): number {
+    if (n == null) {
+      return 0;
+    }
+    return typeof n === 'string' ? parseInt(n, 10) : n;
+  }
+
+  private async countSiteEvents(
+    where: Record<string, unknown>
+  ): Promise<number> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      site_events_aggregate: { aggregate: { count: number } | null };
+    }>(COUNT_SITE_EVENTS, { where });
+    return this.parseAggCount(res.site_events_aggregate?.aggregate?.count);
+  }
+
+  async getAdminSiteEventsSummary(
+    p: Pick<
+      AdminSiteEventsListParams,
+      'eventType' | 'subjectType' | 'subjectId' | 'from' | 'to'
+    >
+  ): Promise<{
+    total: number;
+    byEventType: SiteEventSummaryByType[];
+  }> {
+    const where = this.adminWhere(p);
+    if (p.eventType?.trim()) {
+      const c = await this.countSiteEvents(where);
+      return { total: c, byEventType: [] };
+    }
+    const [total, ...v1Counts] = await Promise.all([
+      this.countSiteEvents(where),
+      ...SITE_EVENT_TYPES_V1.map((et) =>
+        this.countSiteEvents(this.withEventType(where, et))
+      ),
+    ]);
+    const byType: SiteEventSummaryByType[] = [];
+    SITE_EVENT_TYPES_V1.forEach((et, i) => {
+      const c = v1Counts[i] ?? 0;
+      if (c > 0) {
+        byType.push({ eventType: et, count: c });
+      }
+    });
+    const sumKnown = byType.reduce((a, b) => a + b.count, 0);
+    const other = total - sumKnown;
+    if (other > 0) {
+      byType.push({ eventType: 'other', count: other });
+    }
+    byType.sort((a, b) => b.count - a.count);
+    return { total, byEventType: byType };
   }
 
   async listSiteEventsForAdmin(params: AdminSiteEventsListParams): Promise<{

@@ -12,6 +12,11 @@ export interface AdminSiteEventRow {
   created_at: string;
 }
 
+export interface AdminSiteEventSummary {
+  total: number;
+  byEventType: Array<{ eventType: string; count: number }>;
+}
+
 export interface AdminSiteEventsListParams {
   limit: number;
   offset: number;
@@ -69,6 +74,30 @@ export function useAdminSiteEventsApi() {
     [apiClient]
   );
 
+  const fetchSummary = useCallback(
+    async (f: Omit<AdminSiteEventsListParams, 'limit' | 'offset'>) => {
+      if (!apiClient) {
+        return { total: 0, byEventType: [] } as AdminSiteEventSummary;
+      }
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        appendFilterParams(params, f);
+        const { data } = await apiClient.get<AdminSiteEventSummary>(
+          `/admin/site-events/summary?${params.toString()}`
+        );
+        return data;
+      } catch (e: unknown) {
+        const msg =
+          (e as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message || (e as Error)?.message || 'Request failed';
+        setError(msg);
+        return { total: 0, byEventType: [] } as AdminSiteEventSummary;
+      }
+    },
+    [apiClient]
+  );
+
   const exportCsv = useCallback(
     async (filters: Omit<AdminSiteEventsListParams, 'limit' | 'offset'>) => {
       if (!apiClient) return;
@@ -103,5 +132,5 @@ export function useAdminSiteEventsApi() {
     [apiClient]
   );
 
-  return { fetchList, exportCsv, listLoading, exportLoading, error };
+  return { fetchList, fetchSummary, exportCsv, listLoading, exportLoading, error };
 }

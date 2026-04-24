@@ -231,7 +231,7 @@
     },
     "siteEvents": {
       "pageTitle": "Événements site",
-      "pageDescription": "Consultez les événements d’analytique côté client (CTA, futurs signaux). Export CSV pour entrepôt ou tableurs.",
+      "pageDescription": "Consultez d’abord des totaux agrégés pour comprendre le comportement, puis le détail ou l’export CSV. Par défaut : les 7 derniers jours complets ; ajustez la période si besoin.",
       "pageKeywords": "admin, analytique, événements site, export",
       "noBusinessProfile": "Profil entreprise introuvable",
       "unauthorized": "Vous n’êtes pas autorisé à accéder à cette page",
@@ -240,6 +240,8 @@
       "subjectId": "Id du sujet",
       "from": "Du (ISO)",
       "to": "Au (ISO)",
+      "fromDate": "Date de début",
+      "toDate": "Date de fin",
       "applyFilters": "Appliquer les filtres",
       "exportCsv": "Exporter CSV",
       "exportStarted": "Téléchargement démarré",
@@ -250,7 +252,23 @@
       "colEvent": "Événement",
       "colSubject": "Sujet",
       "colViewer": "Visiteur",
-      "colMetadata": "Métadonnées"
+      "colMetadata": "Métadonnées",
+      "summary": {
+        "title": "Résumé d’activité",
+        "caption": "Totaux sur la période et les filtres choisis. Tri par effectif (du plus fréquent au moins).",
+        "colMetric": "Indicateur",
+        "colCount": "Nombre",
+        "totalEvents": "Tous les événements (filtrés)",
+        "empty": "Aucun événement sur cette période.",
+        "otherBucket": "Autres types d’événements",
+        "breakdownHidden": "Filtre par type d’événement : le total ci-dessus correspond à ce seul type."
+      },
+      "chart": {
+        "total": "Tous les événements (filtrés)",
+        "centerLabel": "Total des événements",
+        "events": "Événements",
+        "caption": "Anneau : part de chaque type. Barres : effectifs exacts."
+      }
     },
     "businesses": {
       "imageCleanupEnabled": "Nettoyage d'image activé"
