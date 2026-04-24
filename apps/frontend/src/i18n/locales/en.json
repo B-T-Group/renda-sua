@@ -2840,7 +2840,58 @@
       "stickyBarDeliveryHint": "Get your item delivered in less than 24 hours.",
       "acceptedPaymentMethods": "Accepted payment methods",
       "orangeMoneyAlt": "Orange Money",
-      "mtnMomoAlt": "MTN Mobile Money (Cameroon)"
+      "mtnMomoAlt": "MTN Mobile Money (Cameroon)",
+      "savePct": "-{{pct}}%",
+      "verifiedSellerTooltip": "Verified seller",
+      "stickyBar": {
+        "question": "A question before you buy?",
+        "cutoffTime": "2:00 PM",
+        "orderBeforeCutoff": "Order before {{cutoff}} for the same-day delivery window."
+      },
+      "trust": {
+        "mobileMoneySecure": "MoMo secure",
+        "fastDelivery": "Fast delivery",
+        "verifiedSeller": "Verified seller"
+      },
+      "rating": {
+        "summaryLine": "{{count}} reviews"
+      },
+      "scarcity": {
+        "onlyLeft": "Only {{count}} left in stock"
+      },
+      "dealCountdown": {
+        "offerPct": "{{pct}}% off · {{time}}",
+        "offerTime": "Deal ends · {{time}}"
+      },
+      "trustStrip": {
+        "mobileMoney": "MoMo secure",
+        "delivery": "6–24h delivery",
+        "verified": "Verified seller",
+        "support": "Help if something goes wrong"
+      },
+      "howItWorks": {
+        "pay": "Pay MoMo",
+        "ship": "We deliver",
+        "confirm": "You confirm",
+        "payBody": "Pay with mobile money at checkout in a few taps.",
+        "shipBody": "The seller prepares your order and a courier delivers it to you.",
+        "confirmBody": "Confirm receipt so the seller knows everything went well."
+      },
+      "socialProof": {
+        "views": "{{count}} views",
+        "orders30d": "{{count}} orders (30d)"
+      },
+      "faq": {
+        "title": "Common questions",
+        "paymentQ": "How do I pay?",
+        "paymentA": "Pay with MTN MoMo, Orange Money, or other supported mobile money at checkout.",
+        "deliveryQ": "When will I receive my order?",
+        "deliveryA": "Delivery is typically within 6–24 hours depending on when you order and local availability.",
+        "issueQ": "What if something goes wrong?",
+        "issueA": "Contact support with your order details. We will help you resolve delivery or product issues.",
+        "sellerQ": "Who is selling this item?",
+        "sellerA": "The store shown under “Fulfilled by” prepares and ships your order. Verified sellers completed extra checks."
+      }
     },
     "seo": {
       "breadcrumbCatalog": "Items",

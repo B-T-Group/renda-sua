@@ -5,10 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { usePageShare, type ShareChannel } from '../../hooks/usePageShare';
 
+export type PageShareMenuOpenHandler = (event: React.MouseEvent<HTMLElement>) => void;
+
 export interface PageShareMenuProps {
   shareUrl: string;
   shareTitle: string;
   shareDescription?: string;
+  /** Custom trigger (e.g. text link in sticky bar). Default is a share IconButton. */
+  renderTrigger?: (props: { onOpen: PageShareMenuOpenHandler }) => React.ReactNode;
 }
 
 const CHANNELS: ShareChannel[] = [
@@ -33,6 +37,7 @@ export default function PageShareMenu({
   shareUrl,
   shareTitle,
   shareDescription,
+  renderTrigger,
 }: PageShareMenuProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
@@ -70,20 +75,26 @@ export default function PageShareMenu({
 
   const labelKey = (ch: ShareChannel): string => `common.share.${ch}`;
 
+  const onOpenMenu: PageShareMenuOpenHandler = (e) => setAnchorEl(e.currentTarget);
+
   return (
     <>
-      <Tooltip title={t('common.share.openMenu', 'Share')}>
-        <IconButton
-          aria-label={t('common.share.ariaLabel', 'Share this page')}
-          aria-haspopup="true"
-          aria-expanded={open ? 'true' : undefined}
-          onClick={(e) => setAnchorEl(e.currentTarget)}
-          size="medium"
-          edge="end"
-        >
-          <ShareIcon />
-        </IconButton>
-      </Tooltip>
+      {renderTrigger ? (
+        renderTrigger({ onOpen: onOpenMenu })
+      ) : (
+        <Tooltip title={t('common.share.openMenu', 'Share')}>
+          <IconButton
+            aria-label={t('common.share.ariaLabel', 'Share this page')}
+            aria-haspopup="true"
+            aria-expanded={open ? 'true' : undefined}
+            onClick={onOpenMenu}
+            size="medium"
+            edge="end"
+          >
+            <ShareIcon />
+          </IconButton>
+        </Tooltip>
+      )}
       <Menu anchorEl={anchorEl} open={open} onClose={closeMenu}>
         <MenuItem onClick={handleCopy}>{t('common.share.copyLink', 'Copy link')}</MenuItem>
         {canUseNativeShare && (

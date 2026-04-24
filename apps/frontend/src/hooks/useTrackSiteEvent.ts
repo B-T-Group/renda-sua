@@ -14,6 +14,15 @@ export const SITE_EVENT_INVENTORY_ORDER_NOW_CLICK =
 export const SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK =
   'inventory.cta.browse_more_click' as const;
 
+export const SITE_EVENT_INVENTORY_FAQ_TOGGLE =
+  'inventory.cta.faq_toggle' as const;
+
+export const SITE_EVENT_INVENTORY_RATING_SUMMARY_CLICK =
+  'inventory.cta.rating_summary_click' as const;
+
+export const SITE_EVENT_INVENTORY_CONTACT_BEFORE_BUY_CLICK =
+  'inventory.cta.contact_before_buy_click' as const;
+
 export const SITE_EVENT_INVENTORY_SEARCH_SUBMIT =
   'inventory.search.submit' as const;
 
@@ -51,6 +60,9 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK
+  | typeof SITE_EVENT_INVENTORY_FAQ_TOGGLE
+  | typeof SITE_EVENT_INVENTORY_RATING_SUMMARY_CLICK
+  | typeof SITE_EVENT_INVENTORY_CONTACT_BEFORE_BUY_CLICK
   | typeof SITE_EVENT_INVENTORY_SEARCH_SUBMIT
   | typeof SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT
   | typeof SITE_EVENT_INVENTORY_SORT_SELECT

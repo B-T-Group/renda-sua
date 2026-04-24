@@ -546,6 +546,60 @@ export class InventoryItemsController {
   }
 
   @Public()
+  @Get(':id/order-stats')
+  @ApiOperation({
+    summary: 'Public order and view stats for an inventory listing (item detail social proof)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Counts for the last 30 days of order line items and last 7 days of view events',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            recentOrders30d: { type: 'number' },
+            last7dViews: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to load stats',
+  })
+  async getInventoryItemOrderStats(@Param('id') id: string): Promise<{
+    success: boolean;
+    data: { recentOrders30d: number; last7dViews: number };
+    message: string;
+  }> {
+    try {
+      const data = await this.inventoryItemsService.getInventoryItemOrderStats(id);
+      return {
+        success: true,
+        data,
+        message: 'Order stats retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to retrieve order stats',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific inventory item by ID' })
   @ApiResponse({

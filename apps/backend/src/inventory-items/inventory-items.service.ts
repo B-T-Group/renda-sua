@@ -1314,6 +1314,58 @@ export class InventoryItemsService {
     }
   }
 
+  async getInventoryItemOrderStats(inventoryId: string): Promise<{
+    recentOrders30d: number;
+    last7dViews: number;
+  }> {
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const queryString = `
+      query InventoryItemOrderStats($inventoryId: uuid!, $since30: timestamptz!, $since7: timestamptz!) {
+        order_items_aggregate(
+          where: {
+            business_inventory_id: { _eq: $inventoryId }
+            order: { created_at: { _gte: $since30 } }
+          }
+        ) {
+          aggregate {
+            count
+          }
+        }
+        item_view_events_aggregate(
+          where: {
+            inventory_item_id: { _eq: $inventoryId }
+            last_viewed_at: { _gte: $since7 }
+          }
+        ) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+    try {
+      const result = await this.hasuraSystemService.executeQuery(queryString, {
+        inventoryId,
+        since30,
+        since7,
+      });
+      const recentOrders30d = Number(
+        result?.order_items_aggregate?.aggregate?.count ?? 0
+      );
+      const last7dViews = Number(
+        result?.item_view_events_aggregate?.aggregate?.count ?? 0
+      );
+      return { recentOrders30d, last7dViews };
+    } catch (error: any) {
+      this.logger.error(`Failed order stats for inventory ${inventoryId}`, error);
+      throw new HttpException(
+        'Failed to load order stats',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   async renderInventoryItemSharePage(
     id: string
   ): Promise<{ statusCode: number; html: string }> {

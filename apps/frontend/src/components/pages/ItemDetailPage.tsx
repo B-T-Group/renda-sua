@@ -1,17 +1,12 @@
 import {
   ArrowBack as ArrowBackIcon,
-  ArrowForward as ArrowForwardIcon,
   Business as BusinessIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
-  ExploreOutlined as ExploreOutlinedIcon,
   Inventory2 as SpecsIcon,
-  LocalShipping as LocalShippingIcon,
-  Payments as PaymentsIcon,
   ShoppingCart,
   Verified,
-  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -28,9 +23,11 @@ import {
   Divider,
   Grid,
   IconButton,
+  Link,
   Paper,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
@@ -38,7 +35,6 @@ import {
 import { alpha } from '@mui/material/styles';
 import { useAuth0 } from '@auth0/auth0-react';
 import React from 'react';
-import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
@@ -56,12 +52,23 @@ import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
 import {
   SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
+  SITE_EVENT_INVENTORY_CONTACT_BEFORE_BUY_CLICK,
+  SITE_EVENT_INVENTORY_FAQ_TOGGLE,
   SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
+  SITE_EVENT_INVENTORY_RATING_SUMMARY_CLICK,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useItemOrderStats } from '../../hooks/useItemOrderStats';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
+import { ItemDetailDealCountdown } from '../common/ItemDetailDealCountdown';
+import { ItemDetailFaqAccordion } from '../common/ItemDetailFaqAccordion';
+import { ItemDetailHowItWorks } from '../common/ItemDetailHowItWorks';
+import { ItemDetailRatingSummary } from '../common/ItemDetailRatingSummary';
+import { ItemDetailScarcityBadge } from '../common/ItemDetailScarcityBadge';
+import { ItemDetailSocialProof } from '../common/ItemDetailSocialProof';
+import { ItemDetailTrustStrip } from '../common/ItemDetailTrustStrip';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import { MobileMoneyOrderIcon } from '../common/MobileMoneyOrderIcon';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
@@ -196,98 +203,13 @@ function buildItemJsonLd(
   return { '@context': 'https://schema.org', '@graph': [product, breadcrumb] };
 }
 
-type HighlightDef = {
-  key: string;
-  title: string;
-  body: string;
-  Icon: typeof PaymentsIcon;
-  color: 'success' | 'primary';
-};
-
-function itemDetailHighlightRows(t: TFunction): HighlightDef[] {
-  return [
-    {
-      key: 'mm',
-      title: t('items.purchaseHighlights.mobileMoneyTitle', 'Mobile money payments'),
-      body: t(
-        'items.purchaseHighlights.mobileMoneyBody',
-        'Pay securely using MTN MoMo, Orange Money, Airtel Money, or Moov (depending on your country).'
-      ),
-      Icon: PaymentsIcon,
-      color: 'success',
-    },
-    {
-      key: 'del',
-      title: t('items.purchaseHighlights.deliveryTitle', 'Delivery in 6–24 hours'),
-      body: t(
-        'items.purchaseHighlights.deliveryBody',
-        'Delivery time depends on the time you place your order and local delivery availability.'
-      ),
-      Icon: LocalShippingIcon,
-      color: 'primary',
-    },
-  ];
-}
-
-function ItemDetailPurchaseHighlights({ t }: { t: TFunction }) {
-  const rows = itemDetailHighlightRows(t);
-  return (
-    <Box
-      sx={{
-        p: 1.5,
-        borderRadius: 2,
-        border: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
-      }}
-    >
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        {t(
-          'items.purchaseHighlights.title',
-          'Pay with mobile money • Get delivery fast'
-        )}
-      </Typography>
-      <Stack spacing={1}>
-        {rows.map(({ key, title, body, Icon, color }) => (
-          <Box
-            key={key}
-            sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
-          >
-            <Box
-              sx={{
-                width: 34,
-                height: 34,
-                borderRadius: 2,
-                display: 'grid',
-                placeItems: 'center',
-                bgcolor: `${color}.50`,
-                color: `${color}.main`,
-                flex: '0 0 auto',
-              }}
-              aria-hidden
-            >
-              <Icon fontSize="small" />
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" fontWeight={700}>
-                {title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {body}
-              </Typography>
-            </Box>
-          </Box>
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
 type ItemDetailMobileOrderBarProps = {
   visible: boolean;
   priceText: string;
   orderLabel: string;
   deliveryHint: string;
+  topRow?: React.ReactNode;
+  questionSlot?: React.ReactNode;
   onOrder: () => void;
 };
 
@@ -296,14 +218,40 @@ function ItemDetailMobileOrderBar({
   priceText,
   orderLabel,
   deliveryHint,
+  topRow,
+  questionSlot,
   onOrder,
 }: ItemDetailMobileOrderBarProps) {
+  const navRef = React.useRef<HTMLDivElement | null>(null);
+  const [shouldPulse, setShouldPulse] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    const el = navRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    let didPulse = false;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (didPulse) return;
+        if (entries.some((e) => e.isIntersecting)) {
+          didPulse = true;
+          setShouldPulse(true);
+          window.setTimeout(() => setShouldPulse(false), 750);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.6 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visible]);
   if (!visible) return null;
   return (
     <Paper
       component="nav"
       aria-label={`${orderLabel}. ${deliveryHint}`}
       elevation={12}
+      ref={navRef}
       sx={{
         position: 'fixed',
         left: 0,
@@ -312,6 +260,7 @@ function ItemDetailMobileOrderBar({
         zIndex: (theme) => theme.zIndex.appBar,
         px: 2,
         py: 1,
+        pt: 0.75,
         borderRadius: 0,
         borderTop: 1,
         borderColor: 'divider',
@@ -324,9 +273,27 @@ function ItemDetailMobileOrderBar({
         boxShadow: (theme) =>
           `0 -8px 32px ${alpha(theme.palette.common.black, 0.12)}`,
         pb: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+        '@keyframes rendaCtaPulse': {
+          '0%': { transform: 'scale(1)', filter: 'brightness(1)' },
+          '40%': { transform: 'scale(1.03)', filter: 'brightness(1.06)' },
+          '100%': { transform: 'scale(1)', filter: 'brightness(1)' },
+        },
       }}
     >
       <Stack direction="column" spacing={0.5} sx={{ width: '100%' }}>
+        {topRow ? (
+          <Box
+            sx={{
+              width: '100%',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              pb: 0.25,
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            {topRow}
+          </Box>
+        ) : null}
         <Stack
           direction="row"
           spacing={2}
@@ -352,7 +319,7 @@ function ItemDetailMobileOrderBar({
             onClick={onOrder}
             sx={(theme) => ({
               minWidth: { xs: 160, sm: 172 },
-              minHeight: 40,
+              minHeight: 48,
               flexShrink: 0,
               px: 2.25,
               py: 0.75,
@@ -376,6 +343,9 @@ function ItemDetailMobileOrderBar({
                 transform: 'translateY(0)',
                 boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
               },
+              ...(shouldPulse
+                ? { animation: 'rendaCtaPulse 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 1' }
+                : {}),
             })}
           >
             {orderLabel}
@@ -398,6 +368,9 @@ function ItemDetailMobileOrderBar({
         >
           {deliveryHint}
         </Typography>
+        {questionSlot ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>{questionSlot}</Box>
+        ) : null}
       </Stack>
     </Paper>
   );
@@ -452,6 +425,14 @@ export default function ItemDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const { stats: orderStats, loading: orderStatsLoading } = useItemOrderStats(
+    inventoryItem?.id ?? null
+  );
+  const galleryImages = React.useMemo(
+    () => orderedItemImages(inventoryItem?.item?.item_images ?? []),
+    [inventoryItem?.item?.item_images]
+  );
+  const galleryImageCount = galleryImages.length;
   const { items: similarItems, loading: similarLoading } = useSimilarItems(
     id || null
   );
@@ -511,47 +492,48 @@ export default function ItemDetailPage() {
     });
   }, [inventoryItem, trackViewContent]);
 
-  const lightboxGalleryCount =
-    inventoryItem?.item?.item_images?.length ?? 0;
+  const goPrevGalleryImage = React.useCallback(() => {
+    if (galleryImageCount <= 1) return;
+    setSelectedImageIndex((i) => (i === 0 ? galleryImageCount - 1 : i - 1));
+  }, [galleryImageCount]);
 
-  const goPrevLightboxImage = React.useCallback(() => {
-    if (lightboxGalleryCount <= 1) return;
+  const goNextGalleryImage = React.useCallback(() => {
+    if (galleryImageCount <= 1) return;
     setSelectedImageIndex((i) =>
-      i === 0 ? lightboxGalleryCount - 1 : i - 1
+      i === galleryImageCount - 1 ? 0 : i + 1
     );
-  }, [lightboxGalleryCount]);
-
-  const goNextLightboxImage = React.useCallback(() => {
-    if (lightboxGalleryCount <= 1) return;
-    setSelectedImageIndex((i) =>
-      i === lightboxGalleryCount - 1 ? 0 : i + 1
-    );
-  }, [lightboxGalleryCount]);
+  }, [galleryImageCount]);
 
   const itemDetailLightboxSwipe = useSwipeImageNavigation(
-    goNextLightboxImage,
-    goPrevLightboxImage,
-    imageLightboxOpen && lightboxGalleryCount > 1
+    goNextGalleryImage,
+    goPrevGalleryImage,
+    imageLightboxOpen && galleryImageCount > 1
+  );
+
+  const mainGallerySwipe = useSwipeImageNavigation(
+    goNextGalleryImage,
+    goPrevGalleryImage,
+    isMobile && galleryImageCount > 1 && !imageLightboxOpen
   );
 
   React.useEffect(() => {
-    if (!imageLightboxOpen || lightboxGalleryCount <= 1) return undefined;
+    if (!imageLightboxOpen || galleryImageCount <= 1) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        goPrevLightboxImage();
+        goPrevGalleryImage();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        goNextLightboxImage();
+        goNextGalleryImage();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [
     imageLightboxOpen,
-    lightboxGalleryCount,
-    goPrevLightboxImage,
-    goNextLightboxImage,
+    galleryImageCount,
+    goPrevGalleryImage,
+    goNextGalleryImage,
   ]);
 
   const handleOrderClick = () => {
@@ -756,7 +738,7 @@ export default function ItemDetailPage() {
   }
 
   const item = inventoryItem.item;
-  const images = orderedItemImages(item.item_images);
+  const images = galleryImages;
   const primaryImage = images.length > 0 ? images[0].image_url : null;
   const selectedImageUrl =
     images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
@@ -780,6 +762,70 @@ export default function ItemDetailPage() {
   const showOrderCtaStack =
     !canOrder || isClientUser || !isMobile;
 
+  const ratingCount = ratings.length;
+  const ratingAvg =
+    ratingCount > 0
+      ? ratings.reduce((sum, r) => sum + (typeof r.rating === 'number' ? r.rating : 0), 0) /
+        ratingCount
+      : null;
+  const stickyRatingLabel =
+    ratingAvg != null
+      ? `★ ${ratingAvg.toFixed(1)} · ${ratingCount}`
+      : null;
+
+  const hourNow = new Date().getHours();
+  const cutoff = t('items.detail.stickyBar.cutoffTime', '2:00 PM');
+  const stickyDeliveryHint =
+    hourNow < 14
+      ? t(
+          'items.detail.stickyBar.orderBeforeCutoff',
+          'Order before {{cutoff}} for the same-day delivery window.',
+          { cutoff }
+        )
+      : t(
+          'items.detail.stickyBarDeliveryHint',
+          'Get your item delivered in less than 24 hours.'
+        );
+
+  const dealDiscountPct =
+    hasDeal && inventoryItem.original_price > 0
+      ? Math.round((1 - checkoutUnitPrice / inventoryItem.original_price) * 100)
+      : null;
+
+  const scrollToReviews = () => {
+    document
+      .getElementById('item-detail-reviews')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleFaqToggle = (questionId: string, isExpanded: boolean) => {
+    if (!id) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_FAQ_TOGGLE,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: id,
+      metadata: { questionId, expanded: isExpanded },
+    });
+  };
+
+  const handleRatingSummaryTrack = () => {
+    if (!id) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_RATING_SUMMARY_CLICK,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: id,
+    });
+  };
+
+  const handleContactBeforeBuyTrack = () => {
+    if (!id) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_CONTACT_BEFORE_BUY_CLICK,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: id,
+    });
+  };
+
   return (
     <>
       {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
@@ -787,27 +833,38 @@ export default function ItemDetailPage() {
         maxWidth="lg"
         component="main"
         sx={{
-          pt: { xs: 2, md: 4 },
-          pb: { xs: isMobile && canOrder ? 15 : 2, md: 4 },
+          pt: { xs: 1, md: 4 },
+          pb: { xs: isMobile && canOrder ? 18 : 2, md: 4 },
         }}
       >
-        {/* Back + share, then browse catalog */}
-        <Stack spacing={1.5} sx={{ mb: 2 }}>
+        <Stack spacing={isMobile ? 0 : 1.5} sx={{ mb: isMobile ? 1 : 2 }}>
           <Stack
             direction="row"
             alignItems="center"
             justifyContent="space-between"
             spacing={1}
           >
-            <Button
-              component={RouterLink}
-              to="/items"
-              startIcon={<ArrowBackIcon />}
-              variant="outlined"
-              size={isMobile ? 'small' : 'medium'}
-            >
-              {t('common.back', 'Back')}
-            </Button>
+            {isMobile ? (
+              <IconButton
+                component={RouterLink}
+                to="/items"
+                aria-label={t('common.back', 'Back')}
+                size="medium"
+                sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            ) : (
+              <Button
+                component={RouterLink}
+                to="/items"
+                startIcon={<ArrowBackIcon />}
+                variant="outlined"
+                size="medium"
+              >
+                {t('common.back', 'Back')}
+              </Button>
+            )}
             {id ? (
               <PageShareMenu
                 shareUrl={buildInventoryItemSeoShareUrl(id)}
@@ -816,53 +873,24 @@ export default function ItemDetailPage() {
               />
             ) : null}
           </Stack>
-          <Button
-            component={RouterLink}
-            to="/items"
-            variant="contained"
-            color="primary"
-            size={isMobile ? 'medium' : 'large'}
-            fullWidth
-            startIcon={<ExploreOutlinedIcon sx={{ fontSize: '1.35rem' }} />}
-            endIcon={
-              <ArrowForwardIcon
-                sx={{ fontSize: '1.1rem', opacity: 0.95, transition: 'transform 0.2s' }}
-              />
-            }
-            sx={{
-              py: 1.25,
-              fontWeight: 600,
-              letterSpacing: '0.01em',
-              borderRadius: 2,
-              textTransform: 'none',
-              boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.38)}`,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-              transition: theme.transitions.create(
-                ['box-shadow', 'transform', 'filter'],
-                { duration: 220 }
-              ),
-              '&:hover': {
-                boxShadow: `0 10px 28px ${alpha(theme.palette.primary.main, 0.48)}`,
-                transform: 'translateY(-2px)',
-                filter: 'brightness(1.04)',
-                background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
-              },
-              '& .MuiButton-endIcon': { ml: 0.75 },
-              '&:hover .MuiButton-endIcon': {
-                transform: 'translateX(4px)',
-              },
-            }}
-            onClick={() => {
-              if (!id) return;
-              void trackSiteEvent({
-                eventType: SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
-                subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
-                subjectId: id,
-              });
-            }}
-          >
-            {t('items.detail.browseMoreItems', 'Browse more items')}
-          </Button>
+          {!isMobile ? (
+            <Button
+              component={RouterLink}
+              to="/items"
+              variant="outlined"
+              size="medium"
+              onClick={() => {
+                if (!id) return;
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
+                  subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                  subjectId: id,
+                });
+              }}
+            >
+              {t('items.detail.browseMoreItems', 'Browse more items')}
+            </Button>
+          ) : null}
         </Stack>
 
         <Box component="article" aria-labelledby="item-detail-heading">
@@ -880,6 +908,8 @@ export default function ItemDetailPage() {
             {selectedImageUrl ? (
               <ButtonBase
                 onClick={() => setImageLightboxOpen(true)}
+                onTouchStart={mainGallerySwipe.onTouchStart}
+                onTouchEnd={mainGallerySwipe.onTouchEnd}
                 sx={{ width: '100%', display: 'block' }}
                 aria-label={t('items.viewImage', 'View image')}
               >
@@ -910,14 +940,46 @@ export default function ItemDetailPage() {
             )}
           </Card>
 
-          {images.length > 1 && (
+          {isMobile && images.length > 1 ? (
+            <Stack direction="row" justifyContent="center" alignItems="center" spacing={0.5} sx={{ mt: 1 }}>
+              {images.map((_, idx) => {
+                const selected = idx === selectedImageIndex;
+                return (
+                  <ButtonBase
+                    key={`dot-${idx}`}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    aria-label={t('items.imageThumbnail', 'View image {{index}}', {
+                      index: idx + 1,
+                    })}
+                    sx={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      borderRadius: 1,
+                      p: 0.5,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        bgcolor: selected ? 'primary.main' : 'action.disabled',
+                      }}
+                    />
+                  </ButtonBase>
+                );
+              })}
+            </Stack>
+          ) : null}
+
+          {!isMobile && images.length > 1 ? (
             <Stack
               direction="row"
               spacing={1}
               sx={{
                 mt: 1.5,
                 flexWrap: 'wrap',
-                justifyContent: { xs: 'center', md: 'flex-start' },
+                justifyContent: 'flex-start',
                 rowGap: 1,
               }}
             >
@@ -957,34 +1019,58 @@ export default function ItemDetailPage() {
                 );
               })}
             </Stack>
-          )}
+          ) : null}
         </Grid>
 
         {/* Details */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Stack spacing={2}>
+          <Stack spacing={isMobile ? 1.25 : 2}>
             <Typography
               id="item-detail-heading"
               variant="h4"
               component="h1"
-              sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' } }}
+              sx={{
+                fontSize: { xs: '1.5rem', md: '1.75rem' },
+                ...(isMobile
+                  ? {
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical' as const,
+                      overflow: 'hidden',
+                    }
+                  : {}),
+              }}
             >
               {item.name}
             </Typography>
 
+            <ItemDetailRatingSummary
+              ratings={ratings}
+              loading={ratingsLoading}
+              onOpenReviews={scrollToReviews}
+              onTrackOpen={handleRatingSummaryTrack}
+            />
+
             {item.brand && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                noWrap={isMobile}
+                sx={
+                  isMobile
+                    ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+                    : undefined
+                }
+              >
                 {item.brand.name}
                 {item.item_sub_category?.item_category?.name && (
                   <> · {item.item_sub_category.item_category.name}</>
                 )}
-                {item.item_sub_category?.name && (
-                  <> · {item.item_sub_category.name}</>
-                )}
+                {item.item_sub_category?.name && <> · {item.item_sub_category.name}</>}
               </Typography>
             )}
 
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               {hasDeal && (
                 <Typography
                   component="span"
@@ -998,46 +1084,59 @@ export default function ItemDetailPage() {
               <Typography variant="h5" color="primary.main" fontWeight={600}>
                 {formatCurrency(checkoutUnitPrice, item.currency)}
               </Typography>
+              {dealDiscountPct != null && dealDiscountPct > 0 ? (
+                <Chip
+                  size="small"
+                  color="success"
+                  label={t('items.detail.savePct', '-{{pct}}%', { pct: dealDiscountPct })}
+                />
+              ) : null}
             </Box>
 
-            <ItemDetailPurchaseHighlights t={t} />
+            {hasDeal && inventoryItem.deal_end_at ? (
+              <ItemDetailDealCountdown
+                dealEndAt={inventoryItem.deal_end_at}
+                discountPercent={dealDiscountPct}
+              />
+            ) : null}
 
-            {isCameroonBusiness ? <CmAcceptedPaymentLogos /> : null}
+            <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
 
-            {typeof inventoryItem.viewsCount === 'number' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <VisibilityIcon fontSize="small" color="action" />
-                <Typography variant="body2" color="text.secondary">
-                  {t(
-                    'items.itemCard.views',
-                    '{{count}} views',
-                    { count: inventoryItem.viewsCount }
-                  )}
-                </Typography>
-              </Box>
-            )}
+            <ItemDetailTrustStrip isVerifiedSeller={Boolean(business?.is_verified)} />
 
             {location && business && (
               <Box>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                   {t('items.detail.fulfilledBy', 'Fulfilled by')}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <BusinessIcon fontSize="small" color="action" />
                   <Typography variant="body2" color="text.primary" fontWeight={500}>
                     {business.name}
-                    {business.is_verified && (
-                      <Verified
-                        fontSize="small"
-                        color="primary"
-                        sx={{ ml: 0.5, verticalAlign: 'middle' }}
-                      />
-                    )}
+                    {business.is_verified ? (
+                      <Tooltip title={t('items.detail.verifiedSellerTooltip', 'Verified seller')}>
+                        <Verified
+                          fontSize="medium"
+                          color="primary"
+                          sx={{ ml: 0.5, verticalAlign: 'middle' }}
+                        />
+                      </Tooltip>
+                    ) : null}
                     {location.name && ` · ${location.name}`}
                   </Typography>
                 </Box>
               </Box>
             )}
+
+            <ItemDetailSocialProof
+              viewsCount={inventoryItem.viewsCount}
+              recentOrders30d={orderStats?.recentOrders30d ?? null}
+              statsLoading={orderStatsLoading}
+            />
+
+            <ItemDetailHowItWorks />
+
+            {isCameroonBusiness ? <CmAcceptedPaymentLogos compact={isMobile} /> : null}
 
             {/* Quick specs chips */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -1080,10 +1179,22 @@ export default function ItemDetailPage() {
                     {showInlineOrderNow && (
                       <Button
                         variant="contained"
-                        startIcon={<ShoppingCart />}
+                        startIcon={<MobileMoneyOrderIcon />}
                         onClick={handleOrderClick}
                         size="medium"
                         fullWidth
+                        sx={(btnTheme) => ({
+                          minHeight: 48,
+                          fontWeight: 800,
+                          textTransform: 'none',
+                          borderRadius: 2.5,
+                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.primary.main, 0.45)}`,
+                          background: `linear-gradient(160deg, ${btnTheme.palette.primary.light} 0%, ${btnTheme.palette.primary.main} 45%, ${btnTheme.palette.primary.dark} 100%)`,
+                          '&:hover': {
+                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.primary.main, 0.55)}`,
+                            background: `linear-gradient(160deg, ${btnTheme.palette.primary.main} 0%, ${btnTheme.palette.primary.dark} 100%)`,
+                          },
+                        })}
                       >
                         {t('common.orderNow', 'Order Now')}
                       </Button>
@@ -1242,94 +1353,172 @@ export default function ItemDetailPage() {
           )}
         </CardContent>
       </Card>
-        </Box>
+
+        <ItemDetailFaqAccordion onToggle={handleFaqToggle} />
+
+        {(ratingsLoading || ratings.length > 0) && (
+          <Box id="item-detail-reviews" sx={{ mt: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              {t('items.reviews', 'Reviews')}
+            </Typography>
+            {ratingsLoading ? (
+              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
+            ) : (
+              <OrderRatingsDisplay
+                ratings={ratings}
+                userType="client"
+                title={t('items.reviews', 'Reviews')}
+              />
+            )}
+          </Box>
+        )}
 
         {/* Similar items */}
         {similarItems.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            {t('items.similarItems', 'Similar Items')}
-          </Typography>
-          {similarLoading ? (
-            <Grid container spacing={2}>
-              {[1, 2, 3].map((i) => (
-                <Grid size={{ xs: 6, sm: 4 }} key={i}>
-                  <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 1 }} />
-                </Grid>
-              ))}
-            </Grid>
-          ) : (
-            <Grid container spacing={2}>
-              {similarItems.slice(0, 6).map((sim) => (
-                <Grid size={{ xs: 6, sm: 4 }} key={sim.id}>
-                  <Card
-                    component={RouterLink}
-                    to={`/items/${sim.id}`}
-                    sx={{
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      display: 'block',
-                      height: '100%',
-                      '&:hover': { boxShadow: theme.shadows[4] },
-                    }}
-                  >
-                    <CardMedia
-                      component="img"
-                      height="120"
-                      image={
-                        orderedItemImages(sim.item?.item_images)[0]?.image_url ||
-                        NoImage
-                      }
-                      alt={sim.item?.name}
-                      sx={{ objectFit: 'cover' }}
-                    />
-                    <CardContent sx={{ py: 1 }}>
-                      <Typography variant="subtitle2" noWrap>
-                        {sim.item?.name}
-                      </Typography>
-                      <Typography variant="body2" color="primary" fontWeight={600}>
-                        {formatCurrency(
-                          sim.hasActiveDeal && typeof sim.discounted_price === 'number'
-                            ? sim.discounted_price
-                            : sim.selling_price,
-                          sim.item?.currency
-                        )}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
-      )}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              {t('items.similarItems', 'Similar Items')}
+            </Typography>
+            {similarLoading ? (
+              <Grid container spacing={2}>
+                {[1, 2, 3].map((i) => (
+                  <Grid size={{ xs: 6, sm: 4 }} key={i}>
+                    <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 1 }} />
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <Grid container spacing={2}>
+                {similarItems.slice(0, 6).map((sim) => (
+                  <Grid size={{ xs: 6, sm: 4 }} key={sim.id}>
+                    <Card
+                      component={RouterLink}
+                      to={`/items/${sim.id}`}
+                      sx={{
+                        textDecoration: 'none',
+                        color: 'inherit',
+                        display: 'block',
+                        height: '100%',
+                        '&:hover': { boxShadow: theme.shadows[4] },
+                      }}
+                    >
+                      <CardMedia
+                        component="img"
+                        height="120"
+                        image={
+                          orderedItemImages(sim.item?.item_images)[0]?.image_url ||
+                          NoImage
+                        }
+                        alt={sim.item?.name}
+                        sx={{ objectFit: 'cover' }}
+                      />
+                      <CardContent sx={{ py: 1 }}>
+                        <Typography variant="subtitle2" noWrap>
+                          {sim.item?.name}
+                        </Typography>
+                        <Typography variant="body2" color="primary" fontWeight={600}>
+                          {formatCurrency(
+                            sim.hasActiveDeal && typeof sim.discounted_price === 'number'
+                              ? sim.discounted_price
+                              : sim.selling_price,
+                            sim.item?.currency
+                          )}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        )}
 
-      {/* Reviews — only when loading or at least one review exists */}
-      {(ratingsLoading || ratings.length > 0) && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            {t('items.reviews', 'Reviews')}
-          </Typography>
-          {ratingsLoading ? (
-            <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
-          ) : (
-            <OrderRatingsDisplay
-              ratings={ratings}
-              userType="client"
-              title={t('items.reviews', 'Reviews')}
-            />
-          )}
+        <Box sx={{ mt: 3, mb: 1, textAlign: 'center' }}>
+          <Link
+            component={RouterLink}
+            to="/items"
+            underline="hover"
+            variant="body2"
+            color="text.secondary"
+            onClick={() => {
+              if (!id) return;
+              void trackSiteEvent({
+                eventType: SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK,
+                subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                subjectId: id,
+              });
+            }}
+          >
+            {t('items.detail.browseMoreItems', 'Browse more items')} →
+          </Link>
         </Box>
-      )}
+        </Box>
       </Container>
       <ItemDetailMobileOrderBar
         visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
-        deliveryHint={t(
-          'items.detail.stickyBarDeliveryHint',
-          'Get your item delivered in less than 24 hours.'
-        )}
+        deliveryHint={stickyDeliveryHint}
+        topRow={
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>
+            {stickyRatingLabel ? (
+              <Chip
+                label={stickyRatingLabel}
+                sx={{ minHeight: 32, fontWeight: 700 }}
+                variant="outlined"
+              />
+            ) : null}
+            <Chip
+              label={t('items.detail.trust.mobileMoneySecure', 'MoMo secure')}
+              sx={{ minHeight: 32, fontWeight: 700 }}
+              variant="outlined"
+            />
+            <Chip
+              label={t('items.detail.trust.fastDelivery', 'Fast delivery')}
+              sx={{ minHeight: 32, fontWeight: 700 }}
+              variant="outlined"
+            />
+            {business?.is_verified ? (
+              <Chip
+                label={t('items.detail.trust.verifiedSeller', 'Verified seller')}
+                sx={{ minHeight: 32, fontWeight: 700 }}
+                variant="outlined"
+              />
+            ) : null}
+          </Stack>
+        }
+        questionSlot={
+          id ? (
+            <PageShareMenu
+              shareUrl={buildInventoryItemSeoShareUrl(id)}
+              shareTitle={item.name}
+              shareDescription={checkoutPriceText}
+              renderTrigger={({ onOpen }) => (
+                <ButtonBase
+                  onClick={(e) => {
+                    handleContactBeforeBuyTrack();
+                    onOpen(e);
+                  }}
+                  sx={(theme) => ({
+                    minHeight: 44,
+                    px: 1,
+                    borderRadius: 2,
+                    color: alpha(theme.palette.text.primary, 0.75),
+                    '&:hover': { color: theme.palette.text.primary },
+                  })}
+                >
+                  <Typography
+                    variant="caption"
+                    component="span"
+                    sx={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}
+                  >
+                    {t('items.detail.stickyBar.question', 'A question before you buy?')}
+                  </Typography>
+                </ButtonBase>
+              )}
+            />
+          ) : null
+        }
         onOrder={handleOrderClick}
       />
       <AnonymousBuyNowDialog
@@ -1368,8 +1557,8 @@ export default function ItemDetailPage() {
             <>
               <ImageLightboxTapZones
                 showTapZones={images.length > 1}
-                onPrevious={goPrevLightboxImage}
-                onNext={goNextLightboxImage}
+                onPrevious={goPrevGalleryImage}
+                onNext={goNextGalleryImage}
                 previousLabel={t('common.previous', 'Previous')}
                 nextLabel={t('common.next', 'Next')}
                 onTouchStart={itemDetailLightboxSwipe.onTouchStart}
@@ -1399,7 +1588,7 @@ export default function ItemDetailPage() {
                   sx={{ py: 2, px: 2 }}
                 >
                   <IconButton
-                    onClick={goPrevLightboxImage}
+                    onClick={goPrevGalleryImage}
                     sx={{ color: 'common.white' }}
                     aria-label={t('common.previous', 'Previous')}
                   >
@@ -1416,7 +1605,7 @@ export default function ItemDetailPage() {
                     )}
                   </Typography>
                   <IconButton
-                    onClick={goNextLightboxImage}
+                    onClick={goNextGalleryImage}
                     sx={{ color: 'common.white' }}
                     aria-label={t('common.next', 'Next')}
                   >

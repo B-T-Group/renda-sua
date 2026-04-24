@@ -2803,7 +2803,58 @@
       "stickyBarDeliveryHint": "Recevez votre article en moins de 24 h.",
       "acceptedPaymentMethods": "Moyens de paiement acceptés",
       "orangeMoneyAlt": "Orange Money",
-      "mtnMomoAlt": "MTN Mobile Money (Cameroun)"
+      "mtnMomoAlt": "MTN Mobile Money (Cameroun)",
+      "savePct": "-{{pct}} %",
+      "verifiedSellerTooltip": "Vendeur vérifié",
+      "stickyBar": {
+        "question": "Une question avant d’acheter ?",
+        "cutoffTime": "14 h",
+        "orderBeforeCutoff": "Commandez avant {{cutoff}} pour une livraison le jour même."
+      },
+      "trust": {
+        "mobileMoneySecure": "MoMo sécurisé",
+        "fastDelivery": "Livraison rapide",
+        "verifiedSeller": "Vendeur vérifié"
+      },
+      "rating": {
+        "summaryLine": "{{count}} avis"
+      },
+      "scarcity": {
+        "onlyLeft": "Plus que {{count}} en stock"
+      },
+      "dealCountdown": {
+        "offerPct": "-{{pct}} % · {{time}}",
+        "offerTime": "Offre · {{time}}"
+      },
+      "trustStrip": {
+        "mobileMoney": "MoMo sécurisé",
+        "delivery": "Livraison 6–24 h",
+        "verified": "Vendeur vérifié",
+        "support": "Aide en cas de problème"
+      },
+      "howItWorks": {
+        "pay": "Payer MoMo",
+        "ship": "Nous livrons",
+        "confirm": "Vous confirmez",
+        "payBody": "Payez en mobile money au paiement, en quelques gestes.",
+        "shipBody": "Le vendeur prépare votre commande et un livreur vous l’apporte.",
+        "confirmBody": "Confirmez la réception pour que le vendeur sache que tout s’est bien passé."
+      },
+      "socialProof": {
+        "views": "{{count}} vues",
+        "orders30d": "{{count}} commandes (30 j)"
+      },
+      "faq": {
+        "title": "Questions fréquentes",
+        "paymentQ": "Comment payer ?",
+        "paymentA": "Payez avec MTN MoMo, Orange Money ou un autre mobile money pris en charge au paiement.",
+        "deliveryQ": "Quand vais-je recevoir ma commande ?",
+        "deliveryA": "La livraison est en général sous 6–24 h selon l’heure de commande et la disponibilité locale.",
+        "issueQ": "Et si quelque chose ne va pas ?",
+        "issueA": "Contactez le support avec les détails de la commande. Nous vous aidons à résoudre les problèmes de livraison ou de produit.",
+        "sellerQ": "Qui vend cet article ?",
+        "sellerA": "La boutique indiquée sous « Expédié par » prépare et envoie votre commande. Les vendeurs vérifiés ont passé des contrôles supplémentaires."
+      }
     },
     "seo": {
       "breadcrumbCatalog": "Articles",
