@@ -24,6 +24,13 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+export type ItemsSortBy =
+  | 'default'
+  | 'price_asc'
+  | 'price_desc'
+  | 'created_asc'
+  | 'created_desc';
+
 export interface ItemsFilterState {
   searchText: string;
   statusFilter: string;
@@ -32,6 +39,7 @@ export interface ItemsFilterState {
   stockFilter: string;
   /** all | deals | promotions | deals_or_promotions */
   specialListingFilter: string;
+  sortBy: ItemsSortBy;
 }
 
 interface ItemsFilterBarProps {
@@ -71,6 +79,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
       brandFilter: 'all',
       stockFilter: 'all',
       specialListingFilter: 'all',
+      sortBy: 'default',
     });
   };
 
@@ -82,6 +91,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     if (filters.brandFilter !== 'all') count++;
     if (filters.stockFilter !== 'all') count++;
     if (filters.specialListingFilter !== 'all') count++;
+    if (filters.sortBy !== 'default') count++;
     return count;
   };
 
@@ -146,6 +156,16 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           filters.specialListingFilter
         )}`,
         onDelete: () => handleFilterChange('specialListingFilter', 'all'),
+      });
+    }
+
+    if (filters.sortBy !== 'default') {
+      chips.push({
+        label: `${t('business.items.filters.sortBy', 'Sort by')}: ${t(
+          `business.items.filters.sortByValue.${filters.sortBy}`,
+          filters.sortBy
+        )}`,
+        onDelete: () => handleFilterChange('sortBy', 'default'),
       });
     }
 
@@ -301,6 +321,47 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
               {brand}
             </MenuItem>
           ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth size="small">
+        <InputLabel>
+          {t('business.items.filters.sortBy', 'Sort by')}
+        </InputLabel>
+        <Select
+          value={filters.sortBy}
+          onChange={(e) =>
+            handleFilterChange('sortBy', e.target.value as ItemsSortBy)
+          }
+          label={t('business.items.filters.sortBy', 'Sort by')}
+        >
+          <MenuItem value="default">
+            {t('business.items.filters.sortByValue.default', 'Default')}
+          </MenuItem>
+          <MenuItem value="price_asc">
+            {t(
+              'business.items.filters.sortByValue.price_asc',
+              'Price: low to high'
+            )}
+          </MenuItem>
+          <MenuItem value="price_desc">
+            {t(
+              'business.items.filters.sortByValue.price_desc',
+              'Price: high to low'
+            )}
+          </MenuItem>
+          <MenuItem value="created_desc">
+            {t(
+              'business.items.filters.sortByValue.created_desc',
+              'Date created: newest first'
+            )}
+          </MenuItem>
+          <MenuItem value="created_asc">
+            {t(
+              'business.items.filters.sortByValue.created_asc',
+              'Date created: oldest first'
+            )}
+          </MenuItem>
         </Select>
       </FormControl>
 
@@ -498,6 +559,47 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 </Select>
               </FormControl>
 
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>
+                  {t('business.items.filters.sortBy', 'Sort by')}
+                </InputLabel>
+                <Select
+                  value={filters.sortBy}
+                  onChange={(e) =>
+                    handleFilterChange('sortBy', e.target.value as ItemsSortBy)
+                  }
+                  label={t('business.items.filters.sortBy', 'Sort by')}
+                >
+                  <MenuItem value="default">
+                    {t('business.items.filters.sortByValue.default', 'Default')}
+                  </MenuItem>
+                  <MenuItem value="price_asc">
+                    {t(
+                      'business.items.filters.sortByValue.price_asc',
+                      'Price: low to high'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="price_desc">
+                    {t(
+                      'business.items.filters.sortByValue.price_desc',
+                      'Price: high to low'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="created_desc">
+                    {t(
+                      'business.items.filters.sortByValue.created_desc',
+                      'Date created: newest first'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="created_asc">
+                    {t(
+                      'business.items.filters.sortByValue.created_asc',
+                      'Date created: oldest first'
+                    )}
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
               {activeFiltersCount > 0 && (
                 <Button
                   variant="outlined"
@@ -510,7 +612,9 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
             </Stack>
 
             {/* Second Row - Active Filters & Results Count */}
-            {(activeFiltersCount > 0 || filteredItemsCount !== totalItems) && (
+            {(activeFiltersCount > 0 ||
+              filteredItemsCount !== totalItems ||
+              filters.sortBy !== 'default') && (
               <Stack
                 direction="row"
                 spacing={1}

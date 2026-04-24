@@ -1502,6 +1502,14 @@
         "showing": "Showing",
         "status": "Status",
         "specialListingLabel": "Spotlight",
+        "sortBy": "Sort by",
+        "sortByValue": {
+          "default": "Default",
+          "price_asc": "Price: low to high",
+          "price_desc": "Price: high to low",
+          "created_desc": "Date created: newest first",
+          "created_asc": "Date created: oldest first"
+        },
         "specialListingValue": {
           "all": "All listings",
           "deals": "Active deals",
@@ -1529,6 +1537,7 @@
       "secondaryImageUpdated": "This image is now secondary.",
       "imagesCount": "Number of images",
       "cardGalleryPhotosBadge": "{{count}} photos",
+      "cardGalleryClickEnlarge": "Click to view full size",
       "cardGalleryClickForNext": "Click photo for next",
       "cardGalleryPrevious": "Previous photo",
       "cardGalleryNext": "Next photo",

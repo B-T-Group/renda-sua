@@ -1491,6 +1491,14 @@
         "showing": "Affichage",
         "status": "Statut",
         "specialListingLabel": "Visibilité",
+        "sortBy": "Trier par",
+        "sortByValue": {
+          "default": "Par défaut",
+          "price_asc": "Prix : croissant",
+          "price_desc": "Prix : décroissant",
+          "created_desc": "Date de création : plus récent",
+          "created_asc": "Date de création : plus ancien"
+        },
         "specialListingValue": {
           "all": "Toutes les annonces",
           "deals": "Offres actives",
@@ -1518,6 +1526,7 @@
       "secondaryImageUpdated": "Cette image est maintenant secondaire.",
       "imagesCount": "Nombre d’images",
       "cardGalleryPhotosBadge": "{{count}} photos",
+      "cardGalleryClickEnlarge": "Cliquer pour agrandir",
       "cardGalleryClickForNext": "Cliquez sur la photo pour la suivante",
       "cardGalleryPrevious": "Photo précédente",
       "cardGalleryNext": "Photo suivante",

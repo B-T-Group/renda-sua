@@ -27,7 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -36,7 +36,10 @@ import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
 import BusinessItemCardView from '../business/BusinessItemCardView';
-import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
+import ItemsFilterBar, {
+  ItemsFilterState,
+  ItemsSortBy,
+} from '../business/ItemsFilterBar';
 import {
   itemHasActiveDeal,
   itemHasActivePromotion,
@@ -49,6 +52,25 @@ import SEOHead from '../seo/SEOHead';
 import { environment } from '../../config/environment';
 import { buildFacebookCatalogCsvFromBusinessItems } from '../../utils/facebookCatalogCsv';
 import FacebookExportSelectDialog from '../business/FacebookExportSelectDialog';
+
+function sortBusinessItemsBy(list: Item[], sortBy: ItemsSortBy): Item[] {
+  if (sortBy === 'default') return [...list];
+  const next = [...list];
+  const time = (a: Item, b: Item) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  switch (sortBy) {
+    case 'price_asc':
+      return next.sort((a, b) => a.price - b.price);
+    case 'price_desc':
+      return next.sort((a, b) => b.price - a.price);
+    case 'created_asc':
+      return next.sort(time);
+    case 'created_desc':
+      return next.sort((a, b) => time(b, a));
+    default:
+      return next;
+  }
+}
 
 // Skeleton loading components
 const ItemsCardsSkeleton: React.FC = () => {
@@ -118,6 +140,7 @@ const BusinessItemsPage: React.FC = () => {
     brandFilter: 'all',
     stockFilter: 'all',
     specialListingFilter: 'all',
+    sortBy: 'default',
   });
 
   const apiClient = useApiClient();
@@ -375,6 +398,11 @@ const BusinessItemsPage: React.FC = () => {
         matchesSpotlight
       );
     }) || [];
+
+  const sortedItems = useMemo(
+    () => sortBusinessItemsBy(filteredItems, filters.sortBy),
+    [filteredItems, filters.sortBy]
+  );
 
   // Get unique categories and brands for filters
   const categories = Array.from(
@@ -638,7 +666,7 @@ const BusinessItemsPage: React.FC = () => {
             <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
           ) : (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-              {filteredItems.map((item) => (
+              {sortedItems.map((item) => (
                 <Box
                   key={item.id}
                   sx={{

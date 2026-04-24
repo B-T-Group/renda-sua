@@ -12,12 +12,15 @@ import {
   Visibility as ViewIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Box,
   Card,
   CardContent,
   CardMedia,
   Chip,
+  Dialog,
+  DialogContent,
   IconButton,
   Stack,
   Tooltip,
@@ -26,6 +29,8 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
+import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import {
   itemHasActiveDeal,
   itemHasActivePromotion,
@@ -123,10 +128,30 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
     [item.item_images]
   );
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
 
   useEffect(() => {
     setActiveImageIndex(0);
   }, [item.id]);
+
+  useEffect(() => {
+    if (!imageLightboxOpen || galleryImages.length <= 1) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setActiveImageIndex((i) =>
+          i === 0 ? galleryImages.length - 1 : i - 1
+        );
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setActiveImageIndex((i) =>
+          i === galleryImages.length - 1 ? 0 : i + 1
+        );
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [imageLightboxOpen, galleryImages.length]);
 
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
@@ -155,6 +180,12 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       i === galleryImages.length - 1 ? 0 : i + 1
     );
   };
+
+  const cardLightboxSwipe = useSwipeImageNavigation(
+    goNextImage,
+    goPrevImage,
+    imageLightboxOpen && hasMultipleImages
+  );
 
   // Count locations where item is available
   const locationCount = item.business_inventories?.length || 0;
@@ -260,7 +291,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         sx={{
           height: 200,
           position: 'relative',
-          bgcolor: displayImage ? 'transparent' : 'grey.100',
+          bgcolor: 'grey.100',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -269,31 +300,26 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         {displayImage ? (
           <>
             <Tooltip
-              title={
-                hasMultipleImages
-                  ? t(
-                      'business.items.cardGalleryClickForNext',
-                      'Click photo for next'
-                    )
-                  : ''
-              }
-              disableHoverListener={!hasMultipleImages}
+              title={t(
+                'business.items.cardGalleryClickEnlarge',
+                'Click to view full size'
+              )}
             >
               <Box
                 sx={{
                   position: 'relative',
                   flex: hasMultipleImages ? '1 1 auto' : '1 1 100%',
                   minHeight: 0,
-                  cursor: hasMultipleImages ? 'pointer' : 'default',
+                  cursor: displayImage ? 'pointer' : 'default',
                 }}
-                role={hasMultipleImages ? 'button' : undefined}
-                tabIndex={hasMultipleImages ? 0 : undefined}
-                onClick={() => hasMultipleImages && goNextImage()}
+                role={displayImage ? 'button' : undefined}
+                tabIndex={displayImage ? 0 : undefined}
+                onClick={() => displayImage && setImageLightboxOpen(true)}
                 onKeyDown={(e) => {
-                  if (!hasMultipleImages) return;
+                  if (!displayImage) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    goNextImage();
+                    setImageLightboxOpen(true);
                   }
                 }}
               >
@@ -326,7 +352,8 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                     width: '100%',
                     height: hasMultipleImages ? '100%' : 200,
                     minHeight: hasMultipleImages ? 0 : 200,
-                    objectFit: 'cover',
+                    objectFit: 'contain',
+                    objectPosition: 'center',
                     display: 'block',
                   }}
                 />
@@ -399,7 +426,10 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                     key={img.id ?? `${img.image_url}-${idx}`}
                     component="button"
                     type="button"
-                    onClick={() => setActiveImageIndex(idx)}
+                    onClick={() => {
+                      setActiveImageIndex(idx);
+                      setImageLightboxOpen(true);
+                    }}
                     sx={{
                       flex: '0 0 auto',
                       width: 40,
@@ -798,6 +828,143 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           </Tooltip>
         </Stack>
       </CardContent>
+
+      <Dialog
+        open={imageLightboxOpen && Boolean(displayImage)}
+        onClose={() => setImageLightboxOpen(false)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            maxWidth: '90vw',
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+          },
+        }}
+        slotProps={{
+          backdrop: {
+            sx: { bgcolor: 'rgba(0,0,0,0.85)' },
+          },
+        }}
+        onClick={() => setImageLightboxOpen(false)}
+      >
+        <IconButton
+          aria-label={t('common.close', 'Close')}
+          onClick={() => setImageLightboxOpen(false)}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: 'white',
+            bgcolor: 'rgba(0,0,0,0.5)',
+            zIndex: 2,
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent
+          onClick={(e) => e.stopPropagation()}
+          sx={{
+            p: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            position: 'relative',
+            gap: 1,
+          }}
+        >
+          {displayImage && (
+            <>
+              {hasMultipleImages && (
+                <IconButton
+                  aria-label={t(
+                    'business.items.cardGalleryPrevious',
+                    'Previous photo'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goPrevImage();
+                  }}
+                  sx={{
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.45)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
+                  }}
+                >
+                  <ChevronLeft />
+                </IconButton>
+              )}
+              <ImageLightboxTapZones
+                showTapZones={hasMultipleImages}
+                onPrevious={goPrevImage}
+                onNext={goNextImage}
+                previousLabel={t(
+                  'business.items.cardGalleryPrevious',
+                  'Previous photo'
+                )}
+                nextLabel={t('business.items.cardGalleryNext', 'Next photo')}
+                onTouchStart={cardLightboxSwipe.onTouchStart}
+                onTouchEnd={cardLightboxSwipe.onTouchEnd}
+              >
+                <Box
+                  component="img"
+                  src={displayImage.image_url}
+                  alt={displayImage.alt_text || item.name}
+                  sx={{
+                    maxWidth: '100%',
+                    maxHeight: '90vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    touchAction: 'pan-y',
+                  }}
+                />
+              </ImageLightboxTapZones>
+              {hasMultipleImages && (
+                <IconButton
+                  aria-label={t(
+                    'business.items.cardGalleryNext',
+                    'Next photo'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goNextImage();
+                  }}
+                  sx={{
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.45)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
+                  }}
+                >
+                  <ChevronRight />
+                </IconButton>
+              )}
+              {hasMultipleImages && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
+                  }}
+                >
+                  {t('business.items.imageLightboxCounter', '{{current}} of {{total}}', {
+                    current: displayIdx + 1,
+                    total: galleryImages.length,
+                  })}
+                </Typography>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
