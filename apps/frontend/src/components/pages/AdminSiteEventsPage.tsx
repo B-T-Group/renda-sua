@@ -1,10 +1,15 @@
+import { FilterList, ExpandMore } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Paper,
@@ -17,17 +22,21 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { enUS, fr as frDfn } from 'date-fns/locale';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   type AdminSiteEventRow,
   type AdminSiteEventSummary,
+  type SummaryGroupBy,
   useAdminSiteEventsApi,
 } from '../../hooks/useAdminSiteEvents';
 import SiteEventSummaryChart from '../admin/SiteEventSummaryChart';
@@ -49,9 +58,7 @@ function defaultDateRange() {
 }
 
 const emptyTextFields = { eventType: '', subjectType: '', subjectId: '' };
-
 const initialRange = defaultDateRange();
-
 const emptyFilters: FilterForm = {
   ...emptyTextFields,
   from: initialRange.from,
@@ -59,16 +66,12 @@ const emptyFilters: FilterForm = {
 };
 
 function toFromIso(d: Date | null): string | undefined {
-  if (!d) {
-    return undefined;
-  }
+  if (!d) return undefined;
   return startOfDay(d).toISOString();
 }
 
 function toToIso(d: Date | null): string | undefined {
-  if (!d) {
-    return undefined;
-  }
+  if (!d) return undefined;
   return endOfDay(d).toISOString();
 }
 
@@ -83,17 +86,43 @@ function filtersToQuery(f: FilterForm) {
 }
 
 function truncate(s: string, max: number): string {
-  if (s.length <= max) {
-    return s;
-  }
+  if (s.length <= max) return s;
   return `${s.slice(0, max - 1)}…`;
 }
 
-function formatSubject(row: AdminSiteEventRow): string {
+function eventTypeChipColor(et: string) {
+  if (et.includes('buy_now')) return 'error' as const;
+  if (et.includes('order_now')) return 'primary' as const;
+  if (et.includes('browse')) return 'success' as const;
+  return 'default' as const;
+}
+
+function SubjectCell({ row, t }: { row: AdminSiteEventRow; t: (a: string, b: string) => string }) {
   if (!row.subject_type && !row.subject_id) {
-    return '—';
+    return <Typography variant="body2">—</Typography>;
   }
-  return `${row.subject_type ?? ''} ${row.subject_id ?? ''}`.trim();
+  if (row.subject_type === 'inventory_item' && row.subject_id) {
+    const name = row.subject_display_name?.trim();
+    return (
+      <Box sx={{ maxWidth: 360 }}>
+        <Typography variant="body2" fontWeight={600} noWrap title={name ?? undefined}>
+          {name || t('admin.siteEvents.subject.unnamed', 'Unnamed product')}
+        </Typography>
+        <Tooltip title={row.subject_id}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block' }} noWrap>
+            {row.subject_id.length > 24
+              ? `${row.subject_id.slice(0, 10)}…${row.subject_id.slice(-6)}`
+              : row.subject_id}
+          </Typography>
+        </Tooltip>
+      </Box>
+    );
+  }
+  return (
+    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+      {row.subject_type} {row.subject_id}
+    </Typography>
+  );
 }
 
 function formatViewer(row: AdminSiteEventRow): string {
@@ -110,10 +139,15 @@ const AdminSiteEventsPage: React.FC = () => {
 
   const [draft, setDraft] = useState<FilterForm>(() => ({ ...emptyFilters }));
   const [applied, setApplied] = useState<FilterForm>(() => ({ ...emptyFilters }));
+  const [summaryGroupBy, setSummaryGroupBy] = useState<SummaryGroupBy>('eventType');
   const [items, setItems] = useState<AdminSiteEventRow[]>([]);
   const [summary, setSummary] = useState<AdminSiteEventSummary>({
     total: 0,
+    groupBy: 'eventType',
     byEventType: [],
+    byInventoryItem: [],
+    inventoryEventTotal: 0,
+    inventorySummaryTruncated: false,
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -127,12 +161,12 @@ const AdminSiteEventsPage: React.FC = () => {
         offset: page * rowsPerPage,
         ...q,
       }),
-      fetchSummary(q),
+      fetchSummary(q, summaryGroupBy),
     ]);
     setItems(data.items);
     setTotal(data.total);
     setSummary(sum);
-  }, [fetchList, fetchSummary, page, rowsPerPage, applied]);
+  }, [fetchList, fetchSummary, page, rowsPerPage, applied, summaryGroupBy]);
 
   useEffect(() => {
     void load();
@@ -165,6 +199,18 @@ const AdminSiteEventsPage: React.FC = () => {
     return raw;
   };
 
+  const inventoryItemTitle = useMemo(
+    () => (row: { itemName: string | null; inventoryItemId: string }) => {
+      if (row.itemName?.trim()) {
+        return truncate(row.itemName.trim(), 42);
+      }
+      return truncate(row.inventoryItemId, 20);
+    },
+    []
+  );
+
+  const tBind = (a: string, b: string) => t(a, b);
+
   if (profileLoading) {
     return <LoadingScreen />;
   }
@@ -183,10 +229,7 @@ const AdminSiteEventsPage: React.FC = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography color="error">
-          {t(
-            'admin.siteEvents.noBusinessProfile',
-            'Business profile not found'
-          )}
+          {t('admin.siteEvents.noBusinessProfile', 'Business profile not found')}
         </Typography>
       </Container>
     );
@@ -196,36 +239,30 @@ const AdminSiteEventsPage: React.FC = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography color="error">
-          {t(
-            'admin.siteEvents.unauthorized',
-            'You are not authorized to access this page'
-          )}
+          {t('admin.siteEvents.unauthorized', 'You are not authorized to access this page')}
         </Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       <SEOHead
         title={t('admin.siteEvents.pageTitle', 'Site events')}
-        description={t(
-          'admin.siteEvents.pageDescription',
-          'Browse client-side analytics events and export CSV.'
-        )}
-        keywords={t(
-          'admin.siteEvents.pageKeywords',
-          'admin, analytics, site events, export'
-        )}
+        description={t('admin.siteEvents.pageDescription', 'Browse site analytics events.')}
+        keywords={t('admin.siteEvents.pageKeywords', 'admin, analytics, site events, export')}
       />
 
-      <Typography variant="h4" component="h1" gutterBottom>
-        {t('admin.siteEvents.pageTitle', 'Site events')}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+        <FilterList color="action" fontSize="small" />
+        <Typography variant="h5" component="h1" fontWeight={700}>
+          {t('admin.siteEvents.pageTitle', 'Site events')}
+        </Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         {t(
           'admin.siteEvents.pageDescription',
-          'See aggregated event counts to understand what people are doing, then browse raw events or export CSV. Default view is the last 7 full days; adjust the date range as needed.'
+          'See aggregated activity, then review each event. Default period is the last 7 full days. Filters apply to both the chart and the table below.'
         )}
       </Typography>
 
@@ -235,21 +272,65 @@ const AdminSiteEventsPage: React.FC = () => {
         </Alert>
       )}
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1} sx={{ mb: 1 }}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            {t('admin.siteEvents.summary.title', 'Activity summary')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'admin.siteEvents.summary.caption',
-              'Counts in the current date range and filters. Rows are ordered by count.'
-            )}
-          </Typography>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2.5,
+          mb: 2,
+          borderRadius: 2,
+          backgroundColor: (th) => th.palette.action.hover,
+        }}
+      >
+        <Stack
+          direction="row"
+          flexWrap="wrap"
+          alignItems="center"
+          justifyContent="space-between"
+          gap={2}
+          sx={{ mb: 1 }}
+        >
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {t('admin.siteEvents.summary.title', 'Activity summary')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {summaryGroupBy === 'eventType'
+                ? t('admin.siteEvents.summary.caption', 'By event type.')
+                : t('admin.siteEvents.summary.captionByProduct', 'By inventory product (top 40).')}
+            </Typography>
+          </Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+              {t('admin.siteEvents.aggregateBy', 'Aggregate by')}
+            </Typography>
+            <ToggleButtonGroup
+              size="small"
+              value={summaryGroupBy}
+              exclusive
+              onChange={(_, v) => v && setSummaryGroupBy(v)}
+            >
+              <ToggleButton value="eventType">
+                {t('admin.siteEvents.aggregate.eventType', 'Event type')}
+              </ToggleButton>
+              <ToggleButton value="inventoryItem">
+                {t('admin.siteEvents.aggregate.inventoryItem', 'Product')}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
         </Stack>
+
+        {summary.inventorySummaryTruncated && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            {t(
+              'admin.siteEvents.summary.truncatedWarning',
+              'Very large data volume: the product breakdown may be partial. Narrow the date range for a full count.'
+            )}
+          </Alert>
+        )}
+
         {listLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={28} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={32} />
           </Box>
         ) : (
           <Stack
@@ -257,22 +338,43 @@ const AdminSiteEventsPage: React.FC = () => {
             spacing={2}
             alignItems="flex-start"
           >
-            {summary.total > 0 ? (
+            {summary.total > 0 && summaryGroupBy === 'eventType' && (
               <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
                 <SiteEventSummaryChart
                   summary={summary}
                   eventTypeLabel={eventTypeLabel}
+                  inventoryItemTitle={inventoryItemTitle}
                 />
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center' }}>
-                  {t(
-                    'admin.siteEvents.chart.caption',
-                    'Donut: share of each type. Bar: exact counts.'
-                  )}
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center', mt: 0.5 }}>
+                  {t('admin.siteEvents.chart.caption', 'Donut: share. Bar: counts.')}
                 </Typography>
               </Box>
-            ) : null}
+            )}
+            {summary.total > 0 && summaryGroupBy === 'inventoryItem' && summary.byInventoryItem.length > 0 && (
+              <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
+                <SiteEventSummaryChart
+                  summary={summary}
+                  eventTypeLabel={eventTypeLabel}
+                  inventoryItemTitle={inventoryItemTitle}
+                />
+                {summary.inventoryEventTotal > 0 && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center' }}>
+                    {t('admin.siteEvents.inventoryEventTotal', {
+                      n: summary.inventoryEventTotal,
+                      defaultValue: 'Events on catalog products (in range): {{n}}',
+                    })}
+                  </Typography>
+                )}
+              </Box>
+            )}
+
             <TableContainer
-              sx={{ width: { xs: '100%', lg: summary.total > 0 ? '50%' : '100%' } }}
+              component={Paper}
+              variant="outlined"
+              sx={{
+                width: { xs: '100%', lg: summary.total > 0 ? '50%' : '100%' },
+                borderRadius: 1,
+              }}
             >
               <Table size="small">
                 <TableHead>
@@ -290,16 +392,23 @@ const AdminSiteEventsPage: React.FC = () => {
                     <TableCell>
                       {t('admin.siteEvents.summary.totalEvents', 'All events (filtered)')}
                     </TableCell>
-                    <TableCell align="right">{summary.total}</TableCell>
+                    <TableCell align="right">
+                      <Typography fontWeight={600} component="span">
+                        {summary.total}
+                      </Typography>
+                    </TableCell>
                   </TableRow>
-                  {summary.total === 0 ? (
+                  {summary.total === 0 && (
                     <TableRow>
                       <TableCell colSpan={2}>
                         {t('admin.siteEvents.summary.empty', 'No events in this range.')}
                       </TableCell>
                     </TableRow>
-                  ) : null}
-                  {summary.total > 0 && summary.byEventType.length === 0 && applied.eventType ? (
+                  )}
+                  {summary.total > 0 &&
+                    summaryGroupBy === 'eventType' &&
+                    summary.byEventType.length === 0 &&
+                    applied.eventType && (
                     <TableRow>
                       <TableCell colSpan={2}>
                         <Typography variant="body2" color="text.secondary">
@@ -310,18 +419,53 @@ const AdminSiteEventsPage: React.FC = () => {
                         </Typography>
                       </TableCell>
                     </TableRow>
-                  ) : null}
-                  {summary.byEventType.map((row) => (
-                    <TableRow key={row.eventType}>
-                      <TableCell
-                        title={row.eventType}
-                        sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
-                      >
-                        {eventTypeLabel(row.eventType)}
+                  )}
+                  {summaryGroupBy === 'eventType' &&
+                    summary.byEventType.map((row) => (
+                      <TableRow key={row.eventType}>
+                        <TableCell
+                          title={row.eventType}
+                          sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                        >
+                          {eventTypeLabel(row.eventType)}
+                        </TableCell>
+                        <TableCell align="right">{row.count}</TableCell>
+                      </TableRow>
+                    ))}
+                  {summaryGroupBy === 'inventoryItem' &&
+                    summary.total > 0 &&
+                    summary.byInventoryItem.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={2}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t(
+                            'admin.siteEvents.summary.noProductScoped',
+                            'No product-scoped events in this range (or none matched filters).'
+                          )}
+                        </Typography>
                       </TableCell>
-                      <TableCell align="right">{row.count}</TableCell>
                     </TableRow>
-                  ))}
+                  )}
+                  {summaryGroupBy === 'inventoryItem' &&
+                    summary.byInventoryItem.map((row) => (
+                      <TableRow key={row.inventoryItemId}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {row.itemName || t('admin.siteEvents.subject.unnamed', 'Unnamed product')}
+                          </Typography>
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: 'monospace' }}
+                            title={row.inventoryItemId}
+                          >
+                            {truncate(row.inventoryItemId, 12)}…{row.inventoryItemId.slice(-6)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">{row.count}</TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -329,92 +473,101 @@ const AdminSiteEventsPage: React.FC = () => {
         )}
       </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={2} direction="row" flexWrap="wrap" useFlexGap>
-          <TextField
-            size="small"
-            label={t('admin.siteEvents.eventType', 'Event type')}
-            value={draft.eventType}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, eventType: e.target.value }))
-            }
-            sx={{ minWidth: 220 }}
-          />
-          <TextField
-            size="small"
-            label={t('admin.siteEvents.subjectType', 'Subject type')}
-            value={draft.subjectType}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, subjectType: e.target.value }))
-            }
-            sx={{ minWidth: 160 }}
-          />
-          <TextField
-            size="small"
-            label={t('admin.siteEvents.subjectId', 'Subject id')}
-            value={draft.subjectId}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, subjectId: e.target.value }))
-            }
-            sx={{ minWidth: 260 }}
-          />
-          <LocalizationProvider
-            dateAdapter={AdapterDateFns}
-            adapterLocale={i18n.language === 'fr' ? frDfn : enUS}
-          >
-            <DatePicker
-              label={t('admin.siteEvents.fromDate', 'From date')}
-              value={draft.from}
-              onChange={(v) => setDraft((d) => ({ ...d, from: v }))}
-              slotProps={{ textField: { size: 'small' } }}
-              sx={{ minWidth: 200 }}
+      <Accordion
+        defaultExpanded
+        disableGutters
+        elevation={0}
+        sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 2, '&:before': { display: 'none' } }}
+      >
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <FilterList fontSize="small" color="action" />
+            <Typography fontWeight={600}>
+              {t('admin.siteEvents.filtersTitle', 'Filters & export')}
+            </Typography>
+          </Stack>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack spacing={2} direction="row" flexWrap="wrap" useFlexGap>
+            <TextField
+              size="small"
+              label={t('admin.siteEvents.eventType', 'Event type')}
+              value={draft.eventType}
+              onChange={(e) => setDraft((d) => ({ ...d, eventType: e.target.value }))}
+              placeholder="inventory.cta.…"
+              sx={{ minWidth: 220 }}
             />
-            <DatePicker
-              label={t('admin.siteEvents.toDate', 'To date')}
-              value={draft.to}
-              onChange={(v) => setDraft((d) => ({ ...d, to: v }))}
-              slotProps={{ textField: { size: 'small' } }}
-              sx={{ minWidth: 200 }}
+            <TextField
+              size="small"
+              label={t('admin.siteEvents.subjectType', 'Subject type')}
+              value={draft.subjectType}
+              onChange={(e) => setDraft((d) => ({ ...d, subjectType: e.target.value }))}
+              sx={{ minWidth: 160 }}
             />
-          </LocalizationProvider>
-          <Button variant="contained" onClick={() => onApply()}>
-            {t('admin.siteEvents.applyFilters', 'Apply filters')}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => void onExport()}
-            disabled={exportLoading}
-            startIcon={
-              exportLoading ? (
-                <CircularProgress color="inherit" size={18} />
-              ) : undefined
-            }
-          >
-            {t('admin.siteEvents.exportCsv', 'Export CSV')}
-          </Button>
-        </Stack>
-      </Paper>
+            <TextField
+              size="small"
+              label={t('admin.siteEvents.inventoryItemId', 'Inventory item ID')}
+              value={draft.subjectId}
+              onChange={(e) => setDraft((d) => ({ ...d, subjectId: e.target.value }))}
+              placeholder="UUID"
+              sx={{ minWidth: 280 }}
+            />
+            <LocalizationProvider
+              dateAdapter={AdapterDateFns}
+              adapterLocale={i18n.language === 'fr' ? frDfn : enUS}
+            >
+              <DatePicker
+                label={t('admin.siteEvents.fromDate', 'From date')}
+                value={draft.from}
+                onChange={(v) => setDraft((d) => ({ ...d, from: v }))}
+                slotProps={{ textField: { size: 'small' } }}
+                sx={{ minWidth: 200 }}
+              />
+              <DatePicker
+                label={t('admin.siteEvents.toDate', 'To date')}
+                value={draft.to}
+                onChange={(v) => setDraft((d) => ({ ...d, to: v }))}
+                slotProps={{ textField: { size: 'small' } }}
+                sx={{ minWidth: 200 }}
+              />
+            </LocalizationProvider>
+            <Button variant="contained" onClick={() => onApply()}>
+              {t('admin.siteEvents.applyFilters', 'Apply filters')}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => void onExport()}
+              disabled={exportLoading}
+              startIcon={exportLoading ? <CircularProgress color="inherit" size={18} /> : undefined}
+            >
+              {t('admin.siteEvents.exportCsv', 'Export CSV')}
+            </Button>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ borderRadius: 2, overflow: 'auto' }}
+      >
+        <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>{t('admin.siteEvents.colTime', 'Time')}</TableCell>
               <TableCell>{t('admin.siteEvents.colEvent', 'Event')}</TableCell>
-              <TableCell>
+              <TableCell sx={{ minWidth: 200 }}>
                 {t('admin.siteEvents.colSubject', 'Subject')}
               </TableCell>
               <TableCell>{t('admin.siteEvents.colViewer', 'Viewer')}</TableCell>
-              <TableCell>
-                {t('admin.siteEvents.colMetadata', 'Metadata')}
-              </TableCell>
+              <TableCell>{t('admin.siteEvents.colMetadata', 'Metadata')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {listLoading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <CircularProgress size={28} sx={{ my: 2 }} />
+                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : items.length === 0 ? (
@@ -425,21 +578,33 @@ const AdminSiteEventsPage: React.FC = () => {
               </TableRow>
             ) : (
               items.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} hover>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     {new Date(row.created_at).toLocaleString()}
                   </TableCell>
-                  <TableCell>{row.event_type}</TableCell>
-                  <TableCell>{formatSubject(row)}</TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={truncate(row.event_type, 36)}
+                      color={eventTypeChipColor(row.event_type)}
+                      variant="outlined"
+                      sx={{ maxWidth: 280, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <SubjectCell row={row} t={tBind} />
+                  </TableCell>
                   <TableCell
                     title={row.viewer_id}
-                    sx={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}
                   >
-                    {formatViewer(row)}
+                    <Typography variant="body2" fontSize="0.8rem">
+                      {formatViewer(row)}
+                    </Typography>
                   </TableCell>
                   <TableCell
                     title={JSON.stringify(row.metadata)}
-                    sx={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
                   >
                     {truncate(JSON.stringify(row.metadata ?? {}), 80)}
                   </TableCell>

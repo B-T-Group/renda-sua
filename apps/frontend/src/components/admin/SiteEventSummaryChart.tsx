@@ -8,48 +8,51 @@ import type { AdminSiteEventSummary } from '../../hooks/useAdminSiteEvents';
 type SiteEventSummaryChartProps = {
   summary: AdminSiteEventSummary;
   eventTypeLabel: (raw: string) => string;
+  inventoryItemTitle: (row: {
+    itemName: string | null;
+    inventoryItemId: string;
+  }) => string;
 };
 
-function buildLabelsAndValues(
-  summary: AdminSiteEventSummary
-): { displayLabels: string[]; values: number[] } {
+type BuiltSeries = { titles: string[]; values: number[] };
+
+function buildSeries(
+  summary: AdminSiteEventSummary,
+  eventTypeLabel: (raw: string) => string,
+  inventoryItemTitle: SiteEventSummaryChartProps['inventoryItemTitle'],
+  t: (k: string, d: string) => string
+): BuiltSeries {
+  if (summary.groupBy === 'inventoryItem' && summary.byInventoryItem.length > 0) {
+    return {
+      titles: summary.byInventoryItem.map((r) => inventoryItemTitle(r)),
+      values: summary.byInventoryItem.map((r) => r.count),
+    };
+  }
   if (summary.byEventType.length > 0) {
     return {
-      displayLabels: summary.byEventType.map((r) => r.eventType),
+      titles: summary.byEventType.map((r) => eventTypeLabel(r.eventType)),
       values: summary.byEventType.map((r) => r.count),
     };
   }
   if (summary.total > 0) {
-    return { displayLabels: ['__total__'], values: [summary.total] };
+    return {
+      titles: [t('admin.siteEvents.chart.total', 'All events (filtered)')],
+      values: [summary.total],
+    };
   }
-  return { displayLabels: [], values: [] };
-}
-
-function toDisplayName(
-  raw: string,
-  eventTypeLabel: (r: string) => string,
-  t: (k: string, d: string) => string
-): string {
-  if (raw === '__total__') {
-    return t('admin.siteEvents.chart.total', 'All events (filtered)');
-  }
-  return eventTypeLabel(raw);
+  return { titles: [], values: [] };
 }
 
 const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
   summary,
   eventTypeLabel,
+  inventoryItemTitle,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const { displayLabels, values } = useMemo(
-    () => buildLabelsAndValues(summary),
-    [summary]
-  );
-  const resolvedLabels = useMemo(
-    () =>
-      displayLabels.map((raw) => toDisplayName(raw, eventTypeLabel, t)),
-    [displayLabels, eventTypeLabel, t]
+  const { titles, values } = useMemo(
+    () => buildSeries(summary, eventTypeLabel, inventoryItemTitle, t),
+    [summary, eventTypeLabel, inventoryItemTitle, t]
   );
 
   const donutOptions: ApexOptions = useMemo(
@@ -59,7 +62,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
         fontFamily: theme.typography.fontFamily,
         toolbar: { show: true },
       },
-      labels: resolvedLabels,
+      labels: titles,
       colors: [
         theme.palette.primary.main,
         theme.palette.secondary.main,
@@ -79,7 +82,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
           donut: {
             labels: {
               show: true,
-              name: { fontSize: '14px' },
+              name: { fontSize: '13px' },
               value: { fontSize: '20px', fontWeight: 600 },
               total: {
                 show: true,
@@ -95,14 +98,13 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
       stroke: { width: 2, colors: [theme.palette.background.paper] },
       legend: {
         position: 'bottom',
-        fontSize: '12px',
+        fontSize: '11px',
         labels: { colors: theme.palette.text.secondary },
-        formatter: (name: string) => name,
       },
       theme: { mode: theme.palette.mode },
       tooltip: { theme: theme.palette.mode, y: { formatter: (n) => String(n) } },
     }),
-    [theme, resolvedLabels, t, summary.total]
+    [theme, titles, t, summary.total]
   );
 
   const barOptions: ApexOptions = useMemo(
@@ -116,18 +118,18 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
       plotOptions: {
         bar: { horizontal: true, borderRadius: 4, dataLabels: { position: 'top' } },
       },
-      dataLabels: { enabled: true, offsetX: 24, style: { fontSize: '12px' } },
+      dataLabels: { enabled: true, offsetX: 8, style: { fontSize: '11px' } },
       xaxis: {
-        categories: resolvedLabels,
-        labels: { style: { colors: theme.palette.text.secondary, fontSize: '11px' } },
+        categories: titles,
+        labels: { style: { colors: theme.palette.text.secondary, fontSize: '10px' } },
       },
-      yaxis: { labels: { maxWidth: 200 } },
+      yaxis: { labels: { maxWidth: 220 } },
       colors: [theme.palette.primary.main],
       grid: { borderColor: theme.palette.divider },
       theme: { mode: theme.palette.mode },
       tooltip: { theme: theme.palette.mode },
     }),
-    [theme, resolvedLabels]
+    [theme, titles]
   );
 
   if (values.length === 0) {
@@ -136,7 +138,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
 
   return (
     <Box>
-      <Box sx={{ maxWidth: 480, mx: 'auto', my: 1 }}>
+      <Box sx={{ maxWidth: 520, mx: 'auto', my: 1 }}>
         <ReactApexChart
           type="donut"
           options={donutOptions}
@@ -149,7 +151,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
           type="bar"
           options={barOptions}
           series={[{ name: t('admin.siteEvents.chart.events', 'Events'), data: values }]}
-          height={Math.max(180, 40 + values.length * 40)}
+          height={Math.max(200, 48 + values.length * 36)}
         />
       </Box>
     </Box>

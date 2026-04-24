@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -53,4 +54,12 @@ export class AdminSiteEventsQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  @ApiPropertyOptional({
+    enum: ['eventType', 'inventoryItem'],
+    description: 'Summary grouping (summary endpoint only)',
+  })
+  @IsOptional()
+  @IsIn(['eventType', 'inventoryItem'])
+  summaryGroupBy?: 'eventType' | 'inventoryItem';
 }

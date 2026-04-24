@@ -231,7 +231,7 @@
     },
     "siteEvents": {
       "pageTitle": "Site events",
-      "pageDescription": "See aggregated event counts to understand what people are doing, then browse raw events or export CSV. Default view is the last 7 full days; adjust the date range as needed.",
+      "pageDescription": "See aggregated activity, then browse raw events or export CSV. Default period is the last 7 full days. Filters apply to both the chart and the table below.",
       "pageKeywords": "admin, analytics, site events, export",
       "noBusinessProfile": "Business profile not found",
       "unauthorized": "You are not authorized to access this page",
@@ -242,6 +242,7 @@
       "to": "To (ISO)",
       "fromDate": "From date",
       "toDate": "To date",
+      "inventoryItemId": "Inventory item ID",
       "applyFilters": "Apply filters",
       "exportCsv": "Export CSV",
       "exportStarted": "Download started",
@@ -253,21 +254,34 @@
       "colSubject": "Subject",
       "colViewer": "Viewer",
       "colMetadata": "Metadata",
+      "subject": {
+        "unnamed": "Unnamed product"
+      },
+      "aggregateBy": "Aggregate by",
+      "aggregate": {
+        "eventType": "Event type",
+        "inventoryItem": "Product"
+      },
+      "filtersTitle": "Filters & export",
+      "inventoryEventTotal": "Events on catalog products (in range): {{n}}",
       "summary": {
         "title": "Activity summary",
-        "caption": "Counts in the current date range and filters. Rows are ordered by count (highest first).",
+        "caption": "Counts in the current date range and filters, grouped by CTA. Rows are ordered by count (highest first).",
+        "captionByProduct": "Counts per catalog product (inventory item). Top 40 by volume. Only rows tied to a product are included.",
         "colMetric": "Metric",
         "colCount": "Count",
         "totalEvents": "All events (filtered)",
         "empty": "No events in this range.",
         "otherBucket": "Other event types",
-        "breakdownHidden": "Event type filter is set — the total above matches that type."
+        "breakdownHidden": "Event type filter is set — the total above matches that type.",
+        "truncatedWarning": "Very large data volume: the product breakdown may be partial. Narrow the date range for a full count.",
+        "noProductScoped": "No product-scoped events in this range (or none matched the filters). Try a wider period or check event / subject filters."
       },
       "chart": {
         "total": "All events (filtered)",
         "centerLabel": "Total events",
         "events": "Events",
-        "caption": "Donut: share of each type. Bar: exact counts."
+        "caption": "Donut: share of each slice. Bar: exact counts."
       }
     },
     "businesses": {

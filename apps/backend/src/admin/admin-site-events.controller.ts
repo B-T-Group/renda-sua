@@ -53,21 +53,26 @@ export class AdminSiteEventsController {
 
   @Get('summary')
   @ApiOperation({
-    summary: 'Aggregated event counts in the current filter (by event type)',
+    summary:
+      'Aggregated event counts: by event type or by inventory item (use summaryGroupBy)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Total count and per event_type breakdown',
+    description:
+      'Total count, optional byEventType or byInventoryItem, truncation flags',
   })
   async summary(@Query() query: AdminSiteEventsQueryDto) {
     this.assertDateRange(query);
-    return this.siteEventsService.getAdminSiteEventsSummary({
-      eventType: query.eventType,
-      subjectType: query.subjectType,
-      subjectId: query.subjectId,
-      from: query.from,
-      to: query.to,
-    });
+    return this.siteEventsService.getAdminSiteEventsSummary(
+      {
+        eventType: query.eventType,
+        subjectType: query.subjectType,
+        subjectId: query.subjectId,
+        from: query.from,
+        to: query.to,
+      },
+      query.summaryGroupBy ?? 'eventType'
+    );
   }
 
   @Get('export')

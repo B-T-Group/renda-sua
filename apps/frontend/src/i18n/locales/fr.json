@@ -231,7 +231,7 @@
     },
     "siteEvents": {
       "pageTitle": "Événements site",
-      "pageDescription": "Consultez d’abord des totaux agrégés pour comprendre le comportement, puis le détail ou l’export CSV. Par défaut : les 7 derniers jours complets ; ajustez la période si besoin.",
+      "pageDescription": "Consultez d’abord l’activité agrégée, puis le détail ou l’export CSV. Période par défaut : 7 jours complets. Les filtres s’appliquent au graphique et au tableau.",
       "pageKeywords": "admin, analytique, événements site, export",
       "noBusinessProfile": "Profil entreprise introuvable",
       "unauthorized": "Vous n’êtes pas autorisé à accéder à cette page",
@@ -242,6 +242,7 @@
       "to": "Au (ISO)",
       "fromDate": "Date de début",
       "toDate": "Date de fin",
+      "inventoryItemId": "Id d’article (inventaire)",
       "applyFilters": "Appliquer les filtres",
       "exportCsv": "Exporter CSV",
       "exportStarted": "Téléchargement démarré",
@@ -253,21 +254,34 @@
       "colSubject": "Sujet",
       "colViewer": "Visiteur",
       "colMetadata": "Métadonnées",
+      "subject": {
+        "unnamed": "Produit sans nom"
+      },
+      "aggregateBy": "Agréger par",
+      "aggregate": {
+        "eventType": "Type d’événement",
+        "inventoryItem": "Produit"
+      },
+      "filtersTitle": "Filtres et export",
+      "inventoryEventTotal": "Événements liés à un produit (période) : {{n}}",
       "summary": {
         "title": "Résumé d’activité",
-        "caption": "Totaux sur la période et les filtres choisis. Tri par effectif (du plus fréquent au moins).",
+        "caption": "Totaux par type d’action (CTA) sur la période. Tri par effectif (du plus fréquent au moins).",
+        "captionByProduct": "Totaux par produit (ligne d’inventaire). Top 40 par volume. Seules les actions liées à un produit sont comptées.",
         "colMetric": "Indicateur",
         "colCount": "Nombre",
         "totalEvents": "Tous les événements (filtrés)",
         "empty": "Aucun événement sur cette période.",
         "otherBucket": "Autres types d’événements",
-        "breakdownHidden": "Filtre par type d’événement : le total ci-dessus correspond à ce seul type."
+        "breakdownHidden": "Filtre par type d’événement : le total ci-dessus correspond à ce seul type.",
+        "truncatedWarning": "Volume de données élevé : le détail par produit peut être partiel. Réduisez la plage de dates pour un décompte complet.",
+        "noProductScoped": "Aucun événement lié à un produit sur cette période (ou aucun ne correspond aux filtres). Élargissez la période ou ajustez les filtres."
       },
       "chart": {
         "total": "Tous les événements (filtrés)",
         "centerLabel": "Total des événements",
         "events": "Événements",
-        "caption": "Anneau : part de chaque type. Barres : effectifs exacts."
+        "caption": "Anneau : part de chaque segment. Barres : effectifs exacts."
       }
     },
     "businesses": {

@@ -6,15 +6,26 @@ export interface AdminSiteEventRow {
   event_type: string;
   subject_type: string | null;
   subject_id: string | null;
+  subject_display_name?: string | null;
   metadata: Record<string, unknown>;
   viewer_type: string;
   viewer_id: string;
   created_at: string;
 }
 
+export type SummaryGroupBy = 'eventType' | 'inventoryItem';
+
 export interface AdminSiteEventSummary {
   total: number;
+  groupBy: SummaryGroupBy;
   byEventType: Array<{ eventType: string; count: number }>;
+  byInventoryItem: Array<{
+    inventoryItemId: string;
+    itemName: string | null;
+    count: number;
+  }>;
+  inventoryEventTotal: number;
+  inventorySummaryTruncated: boolean;
 }
 
 export interface AdminSiteEventsListParams {
@@ -75,14 +86,18 @@ export function useAdminSiteEventsApi() {
   );
 
   const fetchSummary = useCallback(
-    async (f: Omit<AdminSiteEventsListParams, 'limit' | 'offset'>) => {
+    async (
+      f: Omit<AdminSiteEventsListParams, 'limit' | 'offset'>,
+      groupBy: SummaryGroupBy
+    ) => {
       if (!apiClient) {
-        return { total: 0, byEventType: [] } as AdminSiteEventSummary;
+        return emptySummary(groupBy);
       }
       setError(null);
       try {
         const params = new URLSearchParams();
         appendFilterParams(params, f);
+        params.set('summaryGroupBy', groupBy);
         const { data } = await apiClient.get<AdminSiteEventSummary>(
           `/admin/site-events/summary?${params.toString()}`
         );
@@ -92,7 +107,7 @@ export function useAdminSiteEventsApi() {
           (e as { response?: { data?: { message?: string } } })?.response?.data
             ?.message || (e as Error)?.message || 'Request failed';
         setError(msg);
-        return { total: 0, byEventType: [] } as AdminSiteEventSummary;
+        return emptySummary(groupBy);
       }
     },
     [apiClient]
@@ -133,4 +148,15 @@ export function useAdminSiteEventsApi() {
   );
 
   return { fetchList, fetchSummary, exportCsv, listLoading, exportLoading, error };
+}
+
+function emptySummary(groupBy: SummaryGroupBy): AdminSiteEventSummary {
+  return {
+    total: 0,
+    groupBy,
+    byEventType: [],
+    byInventoryItem: [],
+    inventoryEventTotal: 0,
+    inventorySummaryTruncated: false,
+  };
 }
