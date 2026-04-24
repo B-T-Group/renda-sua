@@ -21,8 +21,10 @@ import {
   Chip,
   Dialog,
   DialogContent,
+  FormControlLabel,
   IconButton,
   Stack,
+  Switch,
   Tooltip,
   Typography,
   useTheme,
@@ -108,6 +110,7 @@ interface BusinessItemCardViewProps {
   onManageDeals?: (item: Item) => void;
   onPromoteItem?: (item: Item) => void;
   onRefineWithAi?: (item: Item) => void;
+  onToggleItemActive?: (item: Item, isActive: boolean) => void | Promise<void>;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -119,9 +122,11 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onManageDeals,
   onPromoteItem,
   onRefineWithAi,
+  onToggleItemActive,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const [togglingActive, setTogglingActive] = useState(false);
 
   const galleryImages = useMemo(
     () => orderedCardGalleryImages(item.item_images),
@@ -214,6 +219,16 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   const hasActiveDeal = itemHasActiveDeal(item);
   const hasActivePromotion = itemHasActivePromotion(item);
   const hasSponsoredPromotion = itemHasSponsoredPromotion(item);
+
+  const handleListingActiveChange = async (checked: boolean) => {
+    if (!onToggleItemActive) return;
+    setTogglingActive(true);
+    try {
+      await onToggleItemActive(item, checked);
+    } finally {
+      setTogglingActive(false);
+    }
+  };
 
   return (
     <Card
@@ -576,6 +591,27 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           >
             {formatCurrency(item.price, item.currency)}
           </Typography>
+
+          {onToggleItemActive && (
+            <FormControlLabel
+              sx={{ mt: 1, ml: 0, mr: 0, display: 'flex', alignItems: 'center' }}
+              control={
+                <Switch
+                  size="small"
+                  checked={item.is_active}
+                  disabled={togglingActive}
+                  onChange={(_e, checked) => {
+                    void handleListingActiveChange(checked);
+                  }}
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  {t('business.items.listingActive', 'Listing active')}
+                </Typography>
+              }
+            />
+          )}
         </Box>
 
         {/* Item Metadata */}

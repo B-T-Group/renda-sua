@@ -1533,6 +1533,7 @@
       "inactive": "Inactif",
       "listingActive": "Annonce active",
       "activeStatusUpdated": "Statut de l’annonce mis à jour",
+      "activeStatusUpdateError": "Échec de la mise à jour du statut de l’annonce",
       "itemCreated": "Article créé avec succès",
       "itemDeleted": "Article supprimé avec succès",
       "itemUpdated": "Article mis à jour avec succès",

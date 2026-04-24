@@ -1544,6 +1544,7 @@
       "inactive": "Inactive",
       "listingActive": "Listing active",
       "activeStatusUpdated": "Listing status updated",
+      "activeStatusUpdateError": "Failed to update listing status",
       "itemCreated": "Item created successfully",
       "itemDeleted": "Item deleted successfully",
       "itemUpdated": "Item updated successfully",

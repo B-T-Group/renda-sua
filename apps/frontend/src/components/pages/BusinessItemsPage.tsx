@@ -27,7 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -93,6 +93,7 @@ const ItemsCardsSkeleton: React.FC = () => {
               <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
               <Skeleton variant="text" height={20} sx={{ mb: 1 }} />
               <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
+              <Skeleton variant="text" width={160} height={32} sx={{ mb: 2 }} />
               <Box
                 display="flex"
                 justifyContent="space-between"
@@ -328,6 +329,28 @@ const BusinessItemsPage: React.FC = () => {
     }
     setPromoteItem(item);
   };
+
+  const handleToggleItemActive = useCallback(
+    async (row: Item, isActive: boolean) => {
+      try {
+        await updateItem(row.id, { is_active: isActive });
+        await refetchPageData();
+        enqueueSnackbar(
+          t('business.items.activeStatusUpdated', 'Listing status updated'),
+          { variant: 'success' }
+        );
+      } catch (err: any) {
+        enqueueSnackbar(
+          t(
+            'business.items.activeStatusUpdateError',
+            'Failed to update listing status'
+          ),
+          { variant: 'error' }
+        );
+      }
+    },
+    [updateItem, refetchPageData, enqueueSnackbar, t]
+  );
 
   const itemMatchesSearchText = (item: Item, q: string): boolean => {
     const needle = q.toLowerCase();
@@ -686,6 +709,7 @@ const BusinessItemsPage: React.FC = () => {
                     onManageDeals={handleManageDeals}
                     onPromoteItem={handlePromoteItem}
                     onRefineWithAi={(i) => setRefineAiItem(i)}
+                    onToggleItemActive={handleToggleItemActive}
                   />
                 </Box>
               ))}
