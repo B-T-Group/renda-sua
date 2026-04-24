@@ -87,9 +87,61 @@ const ItemsCardsSkeleton: React.FC = () => {
             },
           }}
         >
-          <Card>
-            <Skeleton variant="rectangular" height={200} />
-            <CardContent>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <Box
+              sx={{
+                height: 200,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'grey.100',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  flex: '0 0 40px',
+                  minHeight: 40,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  pr: 1,
+                  pt: 0.5,
+                }}
+                aria-hidden
+              >
+                <Skeleton variant="circular" width={34} height={34} />
+              </Box>
+              <Box
+                sx={{
+                  flex: '1 1 0',
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  justifyContent: 'center',
+                }}
+              >
+                <Skeleton
+                  variant="rectangular"
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    minHeight: 0,
+                    flex: 1,
+                    display: 'block',
+                    transform: 'none',
+                  }}
+                />
+              </Box>
+            </Box>
+            <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
               <Skeleton variant="text" height={20} sx={{ mb: 1 }} />
               <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />

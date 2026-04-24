@@ -23,7 +23,6 @@ import {
   Chip,
   Dialog,
   DialogContent,
-  FormControlLabel,
   IconButton,
   Stack,
   Switch,
@@ -264,15 +263,69 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         },
       }}
     >
-      {onToggleFavorite && (
+      {/* Favorites + status — top right of image (favorite at far right) */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 2,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 0.5,
+        }}
+      >
         <Box
           sx={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            zIndex: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 0.5,
+            maxWidth: 'calc(100% - 44px)',
           }}
         >
+          {!item.is_active && (
+            <Chip
+              label={t('business.items.inactive')}
+              size="small"
+              color="default"
+              sx={{
+                bgcolor: 'rgba(0, 0, 0, 0.7)',
+                color: 'white',
+                fontSize: '0.7rem',
+                height: 24,
+              }}
+            />
+          )}
+          {isOutOfStock && (
+            <Chip
+              label={t('business.inventory.status.outOfStock', 'Out of Stock')}
+              size="small"
+              color="error"
+              sx={{
+                bgcolor: 'error.main',
+                color: 'white',
+                fontSize: '0.7rem',
+                height: 24,
+              }}
+            />
+          )}
+          {hasLowStock && !isOutOfStock && (
+            <Chip
+              label={t('business.inventory.status.lowStock', 'Low Stock')}
+              size="small"
+              color="warning"
+              sx={{
+                bgcolor: 'warning.main',
+                color: 'white',
+                fontSize: '0.7rem',
+                height: 24,
+              }}
+            />
+          )}
+        </Box>
+        {onToggleFavorite && (
           <Tooltip
             title={t(
               'business.items.favoriteToggleHint',
@@ -288,6 +341,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 aria-pressed={Boolean(item.is_favorite)}
                 aria-label={t('business.items.favoriteToggleAria', 'Toggle favorite')}
                 sx={{
+                  flexShrink: 0,
                   bgcolor: 'rgba(255, 255, 255, 0.92)',
                   boxShadow: 1,
                   '&:hover': { bgcolor: 'common.white' },
@@ -301,59 +355,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               </IconButton>
             </span>
           </Tooltip>
-        </Box>
-      )}
-
-      {/* Status Badges - Top Right Corner */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 8,
-          right: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.5,
-          zIndex: 1,
-        }}
-      >
-        {!item.is_active && (
-          <Chip
-            label={t('business.items.inactive')}
-            size="small"
-            color="default"
-            sx={{
-              bgcolor: 'rgba(0, 0, 0, 0.7)',
-              color: 'white',
-              fontSize: '0.7rem',
-              height: 24,
-            }}
-          />
-        )}
-        {isOutOfStock && (
-          <Chip
-            label={t('business.inventory.status.outOfStock', 'Out of Stock')}
-            size="small"
-            color="error"
-            sx={{
-              bgcolor: 'error.main',
-              color: 'white',
-              fontSize: '0.7rem',
-              height: 24,
-            }}
-          />
-        )}
-        {hasLowStock && !isOutOfStock && (
-          <Chip
-            label={t('business.inventory.status.lowStock', 'Low Stock')}
-            size="small"
-            color="warning"
-            sx={{
-              bgcolor: 'warning.main',
-              color: 'white',
-              fontSize: '0.7rem',
-              height: 24,
-            }}
-          />
         )}
       </Box>
 
@@ -607,66 +608,79 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           height: '100%',
         }}
       >
-        {/* Item Name and Description */}
-        <Box sx={{ mb: 2, flexGrow: 1 }}>
-          <Typography
-            variant="h6"
-            gutterBottom
-            noWrap
-            sx={{
-              fontWeight: 600,
-              fontSize: '1.1rem',
-            }}
-          >
-            {item.name}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mb: 1.5,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              minHeight: 40,
-            }}
-          >
-            {item.description ||
-              t('business.items.noDescription', 'No description')}
-          </Typography>
+        <Box
+          sx={{
+            mb: 2,
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              noWrap
+              sx={{
+                fontWeight: 600,
+                fontSize: '1.1rem',
+              }}
+            >
+              {item.name}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                mb: 1.5,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                minHeight: 40,
+              }}
+            >
+              {item.description ||
+                t('business.items.noDescription', 'No description')}
+            </Typography>
 
-          {/* Price */}
-          <Typography
-            variant="h6"
-            color="primary"
-            sx={{
-              fontWeight: 700,
-              fontSize: '1.25rem',
-            }}
-          >
-            {formatCurrency(item.price, item.currency)}
-          </Typography>
-
+            <Typography
+              variant="h6"
+              color="primary"
+              sx={{
+                fontWeight: 700,
+                fontSize: '1.25rem',
+              }}
+            >
+              {formatCurrency(item.price, item.currency)}
+            </Typography>
+          </Box>
           {onToggleItemActive && (
-            <FormControlLabel
-              sx={{ mt: 1, ml: 0, mr: 0, display: 'flex', alignItems: 'center' }}
-              control={
-                <Switch
-                  size="small"
-                  checked={item.is_active}
-                  disabled={togglingActive}
-                  onChange={(_e, checked) => {
-                    void handleListingActiveChange(checked);
-                  }}
-                />
-              }
-              label={
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.items.listingActive', 'Listing active')}
-                </Typography>
-              }
-            />
+            <Stack
+              alignItems="flex-end"
+              spacing={0.25}
+              sx={{ flexShrink: 0, maxWidth: 100 }}
+            >
+              <Switch
+                size="small"
+                checked={item.is_active}
+                disabled={togglingActive}
+                onChange={(_e, checked) => {
+                  void handleListingActiveChange(checked);
+                }}
+              />
+              <Typography
+                component="span"
+                variant="caption"
+                color="text.secondary"
+                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
+              >
+                {t('business.items.listingActive', 'Listing active')}
+              </Typography>
+            </Stack>
           )}
         </Box>
 
