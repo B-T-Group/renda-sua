@@ -1,0 +1,3 @@
+table:
+  name: business_item_favorites
+  schema: public
