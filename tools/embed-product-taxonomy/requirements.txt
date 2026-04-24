@@ -1,0 +1,9 @@
+# Local multilingual embeddings (384-d) + Postgres pgvector
+# Keep sentence-transformers < 3: 3.x often expects torch >= 2.4, which has no wheel on some Python/OS combos.
+# If pip still pulls a 2.x that warns about torch, it usually still runs (CPU). Pin e.g. sentence-transformers==2.6.1 if needed.
+# numpy: required by torch/sentence-transformers; pin <2 to avoid "RuntimeError: Numpy is not available" with some torch+st combos.
+numpy>=1.24.0,<2.0.0
+sentence-transformers>=2.2.0,<3.0.0
+torch>=2.0.0
+psycopg2-binary>=2.9.0
+pgvector>=0.2.4

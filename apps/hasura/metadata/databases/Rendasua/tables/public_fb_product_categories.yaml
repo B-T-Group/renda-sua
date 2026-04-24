@@ -14,21 +14,36 @@ array_relationships:
 select_permissions:
   - role: agent
     permission:
-      columns: '*'
+      columns:
+        - id
+        - name_en
+        - name_fr
       filter: {}
   - role: anonymous
     permission:
-      columns: '*'
+      columns:
+        - id
+        - name_en
+        - name_fr
       filter: {}
   - role: business
     permission:
-      columns: '*'
+      columns:
+        - id
+        - name_en
+        - name_fr
       filter: {}
   - role: client
     permission:
-      columns: '*'
+      columns:
+        - id
+        - name_en
+        - name_fr
       filter: {}
   - role: user
     permission:
-      columns: '*'
+      columns:
+        - id
+        - name_en
+        - name_fr
       filter: {}

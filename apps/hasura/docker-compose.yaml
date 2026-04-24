@@ -1,7 +1,11 @@
 services:
   postgres:
-    image: postgres:15
+    # Includes pgvector (vector) for product taxonomy embeddings; see 20260424120300_add_product_taxonomy_embeddings
+    image: pgvector/pgvector:pg15
     restart: always
+    # Expose Postgres to the host so local tools (e.g. tools/embed-product-taxonomy) can use DATABASE_URL=postgres://postgres:postgrespassword@127.0.0.1:5432/postgres
+    ports:
+      - '5432:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     environment:
@@ -9,6 +13,7 @@ services:
   graphql-engine:
     image: hasura/graphql-engine:v2.36.0
     platform: linux/arm64
+    # Host 9693 avoids clashing with another process (or container) on 8080. GraphQL: http://localhost:9693/v1/graphql
     ports:
       - '8080:8080'
     restart: always
