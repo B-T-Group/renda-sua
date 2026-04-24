@@ -18,13 +18,12 @@ import {
     Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
-import { useHorizontalScrollEdges } from '../../hooks/useHorizontalScrollEdges';
 import {
     InventoryItem,
     InventorySortMode,
@@ -70,6 +69,20 @@ const ItemCardSkeleton: React.FC = () => (
   </Card>
 );
 
+/** Same columns/gap as the main catalog grid below curated sections. */
+const ITEMS_CATALOG_GRID_SX = {
+  display: 'grid',
+  gridTemplateColumns: {
+    xs: '1fr',
+    sm: 'repeat(2, 1fr)',
+    md: 'repeat(3, 1fr)',
+    lg: 'repeat(4, 1fr)',
+  },
+  gap: 3,
+  width: '100%',
+  minWidth: 0,
+} as const;
+
 function CatalogSection({
   title,
   subtitle,
@@ -101,11 +114,6 @@ function CatalogSection({
   addToCartButtonText: string;
   buyNowButtonText: string;
 }) {
-  const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const { isScrollable, showLeftFade, showRightFade } =
-    useHorizontalScrollEdges(scrollRef);
-
   if (!loading && items.length === 0) return null;
 
   return (
@@ -114,11 +122,9 @@ function CatalogSection({
         mb: 2.5,
         width: '100%',
         minWidth: 0,
-        maxWidth: 900,
-        mx: 'auto',
       }}
     >
-      <Box sx={{ mb: 1 }}>
+      <Box sx={{ mb: 1.5 }}>
         <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.25 }}>
           {title}
         </Typography>
@@ -127,96 +133,16 @@ function CatalogSection({
             {subtitle}
           </Typography>
         ) : null}
-        {!loading && isScrollable && (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mt: 0.5 }}
-          >
-            {t(
-              'public.items.catalogRow.hint',
-              'Swipe sideways to see more products'
-            )}
-          </Typography>
-        )}
       </Box>
-      <Box sx={{ position: 'relative' }}>
-        {showLeftFade && (
-          <Box
-            aria-hidden
-            sx={(theme) => ({
-              pointerEvents: 'none',
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 18,
-              zIndex: 1,
-              background: `linear-gradient(90deg, ${theme.palette.background.default} 0%, rgba(0,0,0,0) 100%)`,
-            })}
-          />
-        )}
-        {showRightFade && (
-          <Box
-            aria-hidden
-            sx={(theme) => ({
-              pointerEvents: 'none',
-              position: 'absolute',
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: 22,
-              zIndex: 1,
-              background: `linear-gradient(270deg, ${theme.palette.background.default} 0%, rgba(0,0,0,0) 100%)`,
-            })}
-          />
-        )}
-        <Box
-          ref={scrollRef}
-          sx={{
-            display: 'flex',
-            gap: 2,
-            overflowX: 'auto',
-            pb: 0.5,
-            width: '100%',
-            maxWidth: '100%',
-            minWidth: 0,
-            boxSizing: 'border-box',
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-x',
-            scrollSnapType: 'x mandatory',
-            scrollbarGutter: 'stable',
-            '& > *': { scrollSnapAlign: 'start' },
-            '&::-webkit-scrollbar': { height: 6 },
-            '&::-webkit-scrollbar-thumb': {
-              backgroundColor: 'action.disabled',
-              borderRadius: 999,
-            },
-          }}
-        >
+      <Box sx={ITEMS_CATALOG_GRID_SX}>
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <Box
-                key={i}
-                sx={{
-                  // Mobile: show a "peek" of the next card.
-                  minWidth: { xs: '82%', sm: 280, md: 300 },
-                  maxWidth: { xs: '100%', sm: 320, md: 320 },
-                  flex: '0 0 auto',
-                }}
-              >
+              <Box key={i} sx={{ minWidth: 0 }}>
                 <ItemCardSkeleton />
               </Box>
             ))
           : items.slice(0, 8).map((inventoryItem) => (
-              <Box
-                key={inventoryItem.id}
-                sx={{
-                  minWidth: { xs: '82%', sm: 280, md: 300 },
-                  maxWidth: { xs: '100%', sm: 320, md: 320 },
-                  flex: '0 0 auto',
-                }}
-              >
+              <Box key={inventoryItem.id} sx={{ minWidth: 0 }}>
                 <DashboardItemCard
                   item={inventoryItem}
                   viewsCount={inventoryItem.viewsCount}
@@ -235,7 +161,6 @@ function CatalogSection({
                 />
               </Box>
             ))}
-        </Box>
       </Box>
     </Box>
   );
@@ -961,20 +886,35 @@ const ItemsPage: React.FC = () => {
           buyNowButtonText={t('cart.buyNow', 'Buy Now')}
         />
 
+        {/* Full catalog grid (paginated) */}
+        <Box
+          component="section"
+          aria-labelledby="items-catalog-grid-heading"
+          sx={{ mt: 3 }}
+        >
+          <Box sx={{ mb: 1.5 }}>
+            <Typography
+              id="items-catalog-grid-heading"
+              variant="subtitle1"
+              fontWeight={800}
+              sx={{ mb: 0.25 }}
+            >
+              {t(
+                'public.items.sections.catalogGridTitle',
+                'Full catalog'
+              )}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'public.items.sections.catalogGridSubtitle',
+                'All listings matching your filters and sort order.'
+              )}
+            </Typography>
+          </Box>
+
         {/* Items Grid */}
         {loading ? (
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)',
-                lg: 'repeat(4, 1fr)',
-              },
-              gap: 3,
-            }}
-          >
+          <Box sx={ITEMS_CATALOG_GRID_SX}>
             {Array.from(new Array(itemsPerPage)).map((_, index) => (
               <ItemCardSkeleton key={index} />
             ))}
@@ -1038,18 +978,7 @@ const ItemsPage: React.FC = () => {
           </Box>
         ) : (
           <>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, 1fr)',
-                  md: 'repeat(3, 1fr)',
-                  lg: 'repeat(4, 1fr)',
-                },
-                gap: 3,
-              }}
-            >
+            <Box sx={ITEMS_CATALOG_GRID_SX}>
               {paginatedItems.map((inventoryItem) => (
                 <DashboardItemCard
                   key={inventoryItem.id}
@@ -1084,6 +1013,7 @@ const ItemsPage: React.FC = () => {
             )}
           </>
         )}
+        </Box>
       </Paper>
     </Container>
   );

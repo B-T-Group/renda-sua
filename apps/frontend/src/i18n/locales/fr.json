@@ -3257,7 +3257,9 @@
         "topRatedTitle": "Mieux notés",
         "topRatedSubtitle": "Des produits plébiscités",
         "popularTitle": "Sélection populaire",
-        "popularSubtitle": "Suggérés d’après ce que les gens consultent et achètent"
+        "popularSubtitle": "Suggérés d’après ce que les gens consultent et achètent",
+        "catalogGridTitle": "Tout le catalogue",
+        "catalogGridSubtitle": "Toutes les annonces correspondant à vos filtres et à votre tri."
       },
       "authCta": {
         "button": "Se connecter",

@@ -3294,7 +3294,9 @@
         "topRatedTitle": "Top rated",
         "topRatedSubtitle": "Products customers love",
         "popularTitle": "Popular picks",
-        "popularSubtitle": "Recommended based on what people browse and buy"
+        "popularSubtitle": "Recommended based on what people browse and buy",
+        "catalogGridTitle": "Full catalog",
+        "catalogGridSubtitle": "All listings matching your filters and sort order."
       },
       "authCta": {
         "button": "Sign In",
