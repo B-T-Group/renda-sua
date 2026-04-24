@@ -74,6 +74,21 @@ export type BusinessItemLike = {
   item_images?: ItemImageLike[] | null;
   item_tags?: ItemTagLike[] | null;
   business_inventories?: BusinessInventoryLike[] | null;
+  /** Google / Facebook taxonomy is stored on the sub category; joined rows expose the official path. */
+  item_sub_category?: {
+    google_product_category?: number | null;
+    fb_product_category?: number | null;
+    google_product_category_row?: {
+      id?: string | number;
+      name_en?: string | null;
+      name_fr?: string | null;
+    } | null;
+    fb_product_category_row?: {
+      id?: string | number;
+      name_en?: string | null;
+      name_fr?: string | null;
+    } | null;
+  } | null;
 };
 
 function csvEscape(value: unknown): string {
@@ -235,6 +250,11 @@ function buildRow(
   const linkBase = origin.replace(/\/$/, '');
   const link = `${linkBase}/items/${inv.id}`;
 
+  const gPath =
+    item.item_sub_category?.google_product_category_row?.name_en?.trim() ?? '';
+  const fbPath =
+    item.item_sub_category?.fb_product_category_row?.name_en?.trim() ?? '';
+
   return {
     id: inv.id,
     title,
@@ -245,8 +265,8 @@ function buildRow(
     link,
     image_link: img,
     brand,
-    google_product_category: '',
-    fb_product_category: '',
+    google_product_category: gPath,
+    fb_product_category: fbPath,
     quantity_to_sell_on_facebook: String(opts.quantityToSell),
     sale_price: '',
     sale_price_effective_date: '',

@@ -50,6 +50,18 @@ const GET_ITEMS = `
       item_sub_category {
         id
         name
+        google_product_category
+        fb_product_category
+        google_product_category_row {
+          id
+          name_en
+          name_fr
+        }
+        fb_product_category_row {
+          id
+          name_en
+          name_fr
+        }
         item_category {
           id
           name
@@ -174,6 +186,18 @@ const GET_SINGLE_ITEM = `
       item_sub_category {
         id
         name
+        google_product_category
+        fb_product_category
+        google_product_category_row {
+          id
+          name_en
+          name_fr
+        }
+        fb_product_category_row {
+          id
+          name_en
+          name_fr
+        }
         item_category {
           id
           name
@@ -359,6 +383,18 @@ const UPDATE_ITEM = `
       item_sub_category {
         id
         name
+        google_product_category
+        fb_product_category
+        google_product_category_row {
+          id
+          name_en
+          name_fr
+        }
+        fb_product_category_row {
+          id
+          name_en
+          name_fr
+        }
         item_category {
           id
           name
