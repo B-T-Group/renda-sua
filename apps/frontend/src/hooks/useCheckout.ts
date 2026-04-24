@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../contexts/CartContext';
 import { useApiClient } from './useApiClient';
+import { useMetaPixel } from './useMetaPixel';
 
 interface CreateOrderRequest {
   items: Array<{
@@ -30,6 +31,24 @@ interface OrderResult {
   business_id: string;
 }
 
+function buildMetaPixelPurchaseFromCart(
+  cartItems: CartItem[],
+  orders: OrderResult[]
+) {
+  const value = orders.reduce((sum, o) => sum + o.total_amount, 0);
+  return {
+    content_type: 'product' as const,
+    content_ids: cartItems.map((c) => c.inventoryItemId),
+    contents: cartItems.map((c) => ({
+      id: c.inventoryItemId,
+      quantity: c.quantity,
+      item_price: c.itemData.price,
+    })),
+    value,
+    currency: orders[0]?.currency ?? cartItems[0]?.itemData.currency ?? 'USD',
+  };
+}
+
 export const useCheckout = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +57,7 @@ export const useCheckout = () => {
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { clearCart } = useCart();
+  const { trackPurchase } = useMetaPixel();
 
   const groupItemsByBusiness = useCallback((cartItems: CartItem[]) => {
     const itemsByBusiness = new Map<string, CartItem[]>();
@@ -106,6 +126,8 @@ export const useCheckout = () => {
           orders.push(response.data.order);
         }
 
+        trackPurchase(buildMetaPixelPurchaseFromCart(cartItems, orders));
+
         // Clear cart after successful order creation
         clearCart();
 
@@ -130,7 +152,7 @@ export const useCheckout = () => {
         setLoading(false);
       }
     },
-    [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t]
+    [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t, trackPurchase]
   );
 
   const createSingleOrder = useCallback(

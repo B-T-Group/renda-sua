@@ -62,6 +62,7 @@ import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
@@ -480,6 +481,7 @@ const PlaceOrderPage: React.FC = () => {
   } = useSupportedPaymentSystems();
 
   const { trackOnMount } = useTrackItemView(id || null);
+  const { trackPurchase } = useMetaPixel();
 
   useEffect(() => {
     if (id) {
@@ -734,10 +736,30 @@ const PlaceOrderPage: React.FC = () => {
         );
       }
 
+      const order = response.data.order;
+      const hasDeal =
+        selectedItem.hasActiveDeal &&
+        typeof selectedItem.original_price === 'number' &&
+        typeof selectedItem.discounted_price === 'number' &&
+        selectedItem.original_price > 0;
+      const unitPrice = hasDeal
+        ? selectedItem.discounted_price!
+        : selectedItem.selling_price;
+      trackPurchase({
+        content_type: 'product',
+        content_ids: [selectedItem.id],
+        contents: [
+          { id: selectedItem.id, quantity, item_price: unitPrice },
+        ],
+        value: order.total_amount,
+        currency: order.currency || selectedItem.item.currency || 'USD',
+        content_name: selectedItem.item.name,
+      });
+
       // Navigate to order confirmation page
       navigate('/orders/confirmation', {
         state: {
-          order: response.data.order,
+          order,
         },
       });
     } catch (error: unknown) {

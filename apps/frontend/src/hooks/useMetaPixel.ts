@@ -45,6 +45,11 @@ export function useMetaPixel() {
     [track]
   );
 
-  return { track, trackViewContent, trackAddToCart };
+  const trackPurchase = useCallback(
+    (params: MetaPixelProductEventParams) => track('Purchase', params),
+    [track]
+  );
+
+  return { track, trackViewContent, trackAddToCart, trackPurchase };
 }
 
