@@ -2809,7 +2809,19 @@
       "ratingsCount_one": "{{count}} rating",
       "ratingsCount_other": "{{count}} ratings",
       "openImageGallery": "Click to view larger",
-      "photoIndex": "{{current}} / {{total}}"
+      "photoIndex": "{{current}} / {{total}}",
+      "viewDetails": "View details",
+      "openDetails": "Open {{name}} details",
+      "noImage": "No image",
+      "outOfStock": "Out of stock",
+      "notAvailable": "Not available",
+      "clientsOnly": "Available to clients only",
+      "calculatingDistance": "Calculating distance…",
+      "distanceError": "Error",
+      "availableCount": "{{count}} available",
+      "specialHandling": "Special",
+      "fragile": "Fragile",
+      "perishable": "Perishable"
     },
     "dealEndsOn": "Ends on {{date}}",
     "similarItems": "Similar Items",
@@ -3202,6 +3214,15 @@
       "sortPriceLow": "Price: Low to High",
       "subtitle": "Discover amazing products from local businesses",
       "title": "Browse Items",
+      "heroTitle": "Shop local products near you",
+      "results": {
+        "loading": "Loading items…",
+        "none": "No items to show",
+        "count": "{{count}} items"
+      },
+      "catalogRow": {
+        "hint": "Swipe sideways to see more products"
+      },
       "locationFilterNote": "Items are filtered based on your location",
       "state": "State",
       "country": "Country",
@@ -3209,6 +3230,21 @@
       "dealsSubtitle": "Top discounts curated from verified sellers",
       "dealsTitle": "Deals for you",
       "viewAllDeals": "View all deals",
+      "quickPick": {
+        "deals": "Deals",
+        "top_rated": "Top rated",
+        "fastest": "Closest",
+        "cheapest": "Cheapest",
+        "relevance": "Popular"
+      },
+      "sections": {
+        "dealsTitle": "Deals near you",
+        "dealsSubtitle": "Limited-time discounts from verified sellers",
+        "topRatedTitle": "Top rated",
+        "topRatedSubtitle": "Products customers love",
+        "popularTitle": "Popular picks",
+        "popularSubtitle": "Recommended based on what people browse and buy"
+      },
       "authCta": {
         "button": "Sign In",
         "description": "Create an account to browse and order items.",
@@ -3219,6 +3255,8 @@
         "subtitle": "Enter your email to continue. We’ll use it for your receipt, order updates, and to create your account.",
         "emailLabel": "Email address",
         "continue": "Continue",
+        "trustTitle": "No password needed",
+        "trustBody": "We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.",
         "noPasswordHelper": "No password needed, we will send you a one time code."
       },
       "sort": {

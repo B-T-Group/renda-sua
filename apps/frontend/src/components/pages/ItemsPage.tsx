@@ -12,19 +12,19 @@ import {
     CardContent,
     Chip,
     Container,
-    FormControlLabel,
     Pagination,
     Paper,
     Skeleton,
-    Switch,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { alpha } from '@mui/material/styles';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
+import { useHorizontalScrollEdges } from '../../hooks/useHorizontalScrollEdges';
 import {
     InventoryItem,
     InventorySortMode,
@@ -34,6 +34,11 @@ import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTopInventoryLocations } from '../../hooks/useTopInventoryLocations';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import {
+  SITE_EVENT_INVENTORY_LOCATION_SELECT,
+  SITE_EVENT_INVENTORY_SORT_SELECT,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
@@ -64,6 +69,177 @@ const ItemCardSkeleton: React.FC = () => (
     </CardContent>
   </Card>
 );
+
+function CatalogSection({
+  title,
+  subtitle,
+  items,
+  loading,
+  formatCurrency,
+  onOrderClick,
+  onAddToCart,
+  isPublicView,
+  canOrder,
+  showCartButtons,
+  loginButtonText,
+  orderButtonText,
+  addToCartButtonText,
+  buyNowButtonText,
+}: {
+  title: string;
+  subtitle?: string;
+  items: InventoryItem[];
+  loading: boolean;
+  formatCurrency: (amount: number, currency?: string) => string;
+  onOrderClick: (item: InventoryItem) => void;
+  onAddToCart: (item: InventoryItem) => void;
+  isPublicView: boolean;
+  canOrder: boolean;
+  showCartButtons: boolean;
+  loginButtonText: string;
+  orderButtonText: string;
+  addToCartButtonText: string;
+  buyNowButtonText: string;
+}) {
+  const { t } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const { isScrollable, showLeftFade, showRightFade } =
+    useHorizontalScrollEdges(scrollRef);
+
+  if (!loading && items.length === 0) return null;
+
+  return (
+    <Box
+      sx={{
+        mb: 2.5,
+        width: '100%',
+        minWidth: 0,
+        maxWidth: 900,
+        mx: 'auto',
+      }}
+    >
+      <Box sx={{ mb: 1 }}>
+        <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.25 }}>
+          {title}
+        </Typography>
+        {subtitle ? (
+          <Typography variant="body2" color="text.secondary">
+            {subtitle}
+          </Typography>
+        ) : null}
+        {!loading && isScrollable && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.5 }}
+          >
+            {t(
+              'public.items.catalogRow.hint',
+              'Swipe sideways to see more products'
+            )}
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ position: 'relative' }}>
+        {showLeftFade && (
+          <Box
+            aria-hidden
+            sx={(theme) => ({
+              pointerEvents: 'none',
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 18,
+              zIndex: 1,
+              background: `linear-gradient(90deg, ${theme.palette.background.default} 0%, rgba(0,0,0,0) 100%)`,
+            })}
+          />
+        )}
+        {showRightFade && (
+          <Box
+            aria-hidden
+            sx={(theme) => ({
+              pointerEvents: 'none',
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 22,
+              zIndex: 1,
+              background: `linear-gradient(270deg, ${theme.palette.background.default} 0%, rgba(0,0,0,0) 100%)`,
+            })}
+          />
+        )}
+        <Box
+          ref={scrollRef}
+          sx={{
+            display: 'flex',
+            gap: 2,
+            overflowX: 'auto',
+            pb: 0.5,
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-x',
+            scrollSnapType: 'x mandatory',
+            scrollbarGutter: 'stable',
+            '& > *': { scrollSnapAlign: 'start' },
+            '&::-webkit-scrollbar': { height: 6 },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: 'action.disabled',
+              borderRadius: 999,
+            },
+          }}
+        >
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <Box
+                key={i}
+                sx={{
+                  // Mobile: show a "peek" of the next card.
+                  minWidth: { xs: '82%', sm: 280, md: 300 },
+                  maxWidth: { xs: '100%', sm: 320, md: 320 },
+                  flex: '0 0 auto',
+                }}
+              >
+                <ItemCardSkeleton />
+              </Box>
+            ))
+          : items.slice(0, 8).map((inventoryItem) => (
+              <Box
+                key={inventoryItem.id}
+                sx={{
+                  minWidth: { xs: '82%', sm: 280, md: 300 },
+                  maxWidth: { xs: '100%', sm: 320, md: 320 },
+                  flex: '0 0 auto',
+                }}
+              >
+                <DashboardItemCard
+                  item={inventoryItem}
+                  viewsCount={inventoryItem.viewsCount}
+                  formatCurrency={formatCurrency}
+                  onOrderClick={onOrderClick}
+                  onAddToCart={onAddToCart}
+                  estimatedDistance={inventoryItem.distance_text}
+                  estimatedDuration={inventoryItem.duration_text}
+                  isPublicView={isPublicView}
+                  canOrder={canOrder}
+                  showCartButtons={showCartButtons}
+                  loginButtonText={loginButtonText}
+                  orderButtonText={orderButtonText}
+                  addToCartButtonText={addToCartButtonText}
+                  buyNowButtonText={buyNowButtonText}
+                />
+              </Box>
+            ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
 
 const ItemsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -100,7 +276,6 @@ const ItemsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
-  const [showUnavailable, setShowUnavailable] = useState(false);
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
@@ -111,7 +286,6 @@ const ItemsPage: React.FC = () => {
   const { locations: topLocations, loading: topLocationsLoading } =
     useTopInventoryLocations({
       limit: 3,
-      include_unavailable: showUnavailable,
       anonymousOrigin: browserGeo,
     });
 
@@ -124,10 +298,36 @@ const ItemsPage: React.FC = () => {
     limit: 1000,
     is_active: true,
     sort,
-    include_unavailable: showUnavailable,
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
     search: inventorySearch,
+  });
+
+  const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
+    page: 1,
+    limit: 12,
+    is_active: true,
+    sort: 'deals',
+    business_location_id: businessLocationId ?? undefined,
+    anonymousOrigin: browserGeo,
+  });
+
+  const { inventoryItems: topRatedItems, loading: topRatedLoading } = useInventoryItems({
+    page: 1,
+    limit: 12,
+    is_active: true,
+    sort: 'top_rated',
+    business_location_id: businessLocationId ?? undefined,
+    anonymousOrigin: browserGeo,
+  });
+
+  const { inventoryItems: popularItems, loading: popularLoading } = useInventoryItems({
+    page: 1,
+    limit: 12,
+    is_active: true,
+    sort: 'relevance',
+    business_location_id: businessLocationId ?? undefined,
+    anonymousOrigin: browserGeo,
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
@@ -146,6 +346,30 @@ const ItemsPage: React.FC = () => {
     return [];
   }, [filteredItems, inventoryItems, searchTerm, filters]);
 
+  const topCategoryChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const inv of inventoryItems) {
+      const name = inv.item.item_sub_category?.item_category?.name?.trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name]) => name);
+  }, [inventoryItems]);
+
+  const resultsCountLabel = useMemo(() => {
+    const count = displayItems.length;
+    if (loading) {
+      return t('public.items.results.loading', 'Loading items…');
+    }
+    if (count === 0) {
+      return t('public.items.results.none', 'No items to show');
+    }
+    return t('public.items.results.count', '{{count}} items', { count });
+  }, [displayItems.length, loading, t]);
+
   // Reset to first page when filters or sort change
   useEffect(() => {
     setCurrentPage(1);
@@ -156,7 +380,6 @@ const ItemsPage: React.FC = () => {
     filters.brand,
     filters.location,
     sort,
-    showUnavailable,
     businessLocationId,
   ]);
 
@@ -220,6 +443,7 @@ const ItemsPage: React.FC = () => {
 
   const { trackView } = useTrackItemView(null);
   const { trackAddToCart } = useMetaPixel();
+  const { trackSiteEvent } = useTrackSiteEvent();
 
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
@@ -244,7 +468,7 @@ const ItemsPage: React.FC = () => {
       typeof item.discounted_price === 'number' &&
       item.original_price > 0;
 
-    const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+    const unitPrice = hasDeal ? (item.discounted_price ?? item.selling_price) : item.selling_price;
     const contentCategory = metaPixelContentCategoryFromItem(item.item);
     const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
 
@@ -274,8 +498,8 @@ const ItemsPage: React.FC = () => {
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
-        originalPrice: hasDeal ? item.original_price! : undefined,
-        discountedPrice: hasDeal ? item.discounted_price! : undefined,
+        originalPrice: hasDeal ? item.original_price : undefined,
+        discountedPrice: hasDeal ? item.discounted_price : undefined,
         hasActiveDeal: hasDeal,
         dealEndAt: hasDeal ? item.deal_end_at : undefined,
       },
@@ -322,6 +546,14 @@ const ItemsPage: React.FC = () => {
       setBusinessLocationId(loc.id);
       setFilters((f) => ({ ...f, location: loc.name }));
     }
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_LOCATION_SELECT,
+      metadata: {
+        business_location_id: loc.id,
+        name: loc.name,
+        selected: businessLocationId !== loc.id,
+      },
+    });
   };
 
   if (error) {
@@ -347,58 +579,190 @@ const ItemsPage: React.FC = () => {
         keywords={t('seo.public-items.keywords')}
       />
 
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            mb: 2,
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { xs: 'flex-start', sm: 'center' },
-          }}
+      {/* Header / Hero */}
+      <Box sx={{ mb: 2.5, px: { xs: 1, sm: 2 } }}>
+        <Paper
+          elevation={0}
+          sx={(theme) => ({
+            borderRadius: 4,
+            p: { xs: 2, sm: 3 },
+            border: '1px solid',
+            borderColor: alpha(theme.palette.divider, 0.9),
+            background:
+              theme.palette.mode === 'dark'
+                ? `linear-gradient(145deg, ${alpha(theme.palette.primary.main, 0.18)} 0%, ${alpha(theme.palette.background.paper, 0.9)} 60%)`
+                : `linear-gradient(145deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 40%, ${alpha(theme.palette.background.paper, 0.95)} 100%)`,
+          })}
         >
-          <Typography
-            variant="h4"
-            component="h1"
-            gutterBottom
+          <Box
             sx={{
-              mb: 0,
-              fontSize: { xs: '1.75rem', sm: '2.125rem' },
+              display: 'flex',
+              gap: 2,
+              mb: 1,
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              justifyContent: 'space-between',
             }}
           >
-            {isClient
-              ? t('dashboard.client.title', 'Client Dashboard')
-              : t('public.items.title', 'Browse Items')}
-          </Typography>
-          {isAuthenticated && user?.email_verified && (
-            <StatusBadge type="verified" />
-          )}
-        </Box>
-        <Typography
-          variant="body1"
-          color="text.secondary"
-          sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-        >
-          {isClient
-            ? t(
-                'dashboard.client.subtitle',
-                'Welcome back, {{name}}! Browse available items and manage your orders.',
-                {
-                  name:
-                    `${user?.first_name || ''} ${
-                      user?.last_name || ''
-                    }`.trim() || user?.email,
-                }
-              )
-            : t(
-                'public.items.subtitle',
-                'Discover great products from verified sellers'
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                variant="h4"
+                component="h1"
+                sx={{
+                  mb: 0.25,
+                  fontSize: { xs: '1.75rem', sm: '2.125rem' },
+                  fontWeight: 800,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {isClient
+                  ? t('dashboard.client.title', 'Client Dashboard')
+                  : t('public.items.heroTitle', 'Shop local products near you')}
+              </Typography>
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}
+              >
+                {isClient
+                  ? t(
+                      'dashboard.client.subtitle',
+                      'Welcome back, {{name}}! Browse available items and manage your orders.',
+                      {
+                        name:
+                          `${user?.first_name || ''} ${
+                            user?.last_name || ''
+                          }`.trim() || user?.email,
+                      }
+                    )
+                  : t(
+                      'public.items.subtitle',
+                      'Discover amazing products from local businesses'
+                    )}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {isAuthenticated && user?.email_verified && (
+                <StatusBadge type="verified" />
               )}
-        </Typography>
+              <Chip
+                size="small"
+                label={resultsCountLabel}
+                color={displayItems.length > 0 ? 'primary' : 'default'}
+                variant={displayItems.length > 0 ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700 }}
+              />
+            </Box>
+          </Box>
 
-        {/* Address Alert - Only for authenticated clients */}
-        {isClient && <AddressAlert />}
+          {/* Address Alert - Only for authenticated clients */}
+          {isClient && <AddressAlert />}
+
+          {/* Unified filter for all users (contains search bar) */}
+          <ItemsPageFilter
+            items={inventoryItems}
+            searchTerm={searchTerm}
+            onSearchSubmit={setSearchTerm}
+            suggestionsQuery={{
+              is_active: true,
+              business_location_id: businessLocationId ?? undefined,
+              origin_lat: browserGeo?.lat ?? undefined,
+              origin_lng: browserGeo?.lng ?? undefined,
+            }}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onFilterChange={setFilteredItems}
+            loading={loading}
+            onLocationFilterChange={(name) => {
+              if (!name) {
+                setBusinessLocationId(null);
+              }
+            }}
+            onClearFilters={() => setBusinessLocationId(null)}
+          />
+
+          {/* Quick picks */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {(
+              [
+                'deals',
+                'top_rated',
+                'fastest',
+                'cheapest',
+                'relevance',
+              ] as const
+            ).map((mode) => {
+              const selected = sort === mode;
+              const label = t(
+                `public.items.quickPick.${mode}`,
+                mode === 'top_rated'
+                  ? 'Top rated'
+                  : mode === 'fastest'
+                    ? 'Closest'
+                    : mode === 'cheapest'
+                      ? 'Cheap'
+                      : mode === 'deals'
+                        ? 'Deals'
+                        : 'Popular'
+              );
+              return (
+                <Chip
+                  key={mode}
+                  label={label}
+                  onClick={() => setSort(mode)}
+                  color={selected ? 'primary' : 'default'}
+                  variant={selected ? 'filled' : 'outlined'}
+                  size="medium"
+                  sx={
+                    mode === 'deals'
+                      ? {
+                          borderWidth: 2,
+                          borderStyle: 'solid',
+                          borderColor: selected ? 'secondary.dark' : 'secondary.main',
+                          ...(selected
+                            ? { bgcolor: 'secondary.main', color: 'secondary.contrastText' }
+                            : {}),
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })}
+
+            {topCategoryChips.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {topCategoryChips.map((cat) => {
+                  const selected = filters.category === cat;
+                  return (
+                    <Chip
+                      key={cat}
+                      label={cat}
+                      onClick={() =>
+                        setFilters((f) => ({
+                          ...f,
+                          category: selected ? '' : cat,
+                          subcategory: '',
+                        }))
+                      }
+                      color={selected ? 'primary' : 'default'}
+                      variant={selected ? 'filled' : 'outlined'}
+                      size="medium"
+                    />
+                  );
+                })}
+              </Box>
+            )}
+
+            {hasActiveFilters && (
+              <Chip
+                label={t('public.items.clearAll', 'Clear all')}
+                onClick={handleClearAllFilters}
+                variant="outlined"
+                size="medium"
+              />
+            )}
+          </Box>
+        </Paper>
 
         {/* Orders Requiring Action - Only for authenticated clients */}
         {isClient && ordersRequiringAction.length > 0 && (
@@ -465,30 +829,6 @@ const ItemsPage: React.FC = () => {
             : t('public.items.availableItems', 'Available Items')}
         </Typography>
 
-        {/* Unified filter for all users (contains search bar) */}
-        <ItemsPageFilter
-          items={inventoryItems}
-          searchTerm={searchTerm}
-          onSearchSubmit={setSearchTerm}
-          suggestionsQuery={{
-            include_unavailable: showUnavailable,
-            is_active: true,
-            business_location_id: businessLocationId ?? undefined,
-            origin_lat: browserGeo?.lat ?? undefined,
-            origin_lng: browserGeo?.lng ?? undefined,
-          }}
-          filters={filters}
-          onFiltersChange={setFilters}
-          onFilterChange={setFilteredItems}
-          loading={loading}
-          onLocationFilterChange={(name) => {
-            if (!name) {
-              setBusinessLocationId(null);
-            }
-          }}
-          onClearFilters={() => setBusinessLocationId(null)}
-        />
-
         {/* Sort / filter bar */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
           {(
@@ -514,7 +854,13 @@ const ItemsPage: React.FC = () => {
                       ? 'Closest to you'
                       : mode
                 )}
-                onClick={() => setSort(mode)}
+                onClick={() => {
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
+                    metadata: { sort: mode },
+                  });
+                  setSort(mode);
+                }}
                 color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
                 variant={isSelected ? 'filled' : 'outlined'}
                 size="medium"
@@ -554,19 +900,66 @@ const ItemsPage: React.FC = () => {
           onSelect={handleSelectTopLocation}
         />
 
-        {/* Show unavailable toggle */}
-        <Box sx={{ mb: 2 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showUnavailable}
-                onChange={(_, checked) => setShowUnavailable(checked)}
-                color="primary"
-              />
-            }
-            label={t('public.items.showUnavailable', 'Show unavailable')}
-          />
-        </Box>
+        {/* Curated discovery sections (before full catalog grid) */}
+        <CatalogSection
+          title={t('public.items.sections.dealsTitle', 'Deals near you')}
+          subtitle={t(
+            'public.items.sections.dealsSubtitle',
+            'Limited-time discounts from verified sellers'
+          )}
+          items={dealsItems}
+          loading={dealsLoading}
+          formatCurrency={formatCurrency}
+          onOrderClick={handleOrderClick}
+          onAddToCart={handleAddToCart}
+          isPublicView={!isAuthenticated}
+          canOrder={!isAuthenticated || isClientUser}
+          showCartButtons={isAuthenticated && isClientUser}
+          loginButtonText={t('public.items.login', 'Sign In to Order')}
+          orderButtonText={t('common.orderNow', 'Order Now')}
+          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+        />
+
+        <CatalogSection
+          title={t('public.items.sections.topRatedTitle', 'Top rated')}
+          subtitle={t(
+            'public.items.sections.topRatedSubtitle',
+            'Products customers love'
+          )}
+          items={topRatedItems}
+          loading={topRatedLoading}
+          formatCurrency={formatCurrency}
+          onOrderClick={handleOrderClick}
+          onAddToCart={handleAddToCart}
+          isPublicView={!isAuthenticated}
+          canOrder={!isAuthenticated || isClientUser}
+          showCartButtons={isAuthenticated && isClientUser}
+          loginButtonText={t('public.items.login', 'Sign In to Order')}
+          orderButtonText={t('common.orderNow', 'Order Now')}
+          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+        />
+
+        <CatalogSection
+          title={t('public.items.sections.popularTitle', 'Popular picks')}
+          subtitle={t(
+            'public.items.sections.popularSubtitle',
+            'Recommended based on what people browse and buy'
+          )}
+          items={popularItems}
+          loading={popularLoading}
+          formatCurrency={formatCurrency}
+          onOrderClick={handleOrderClick}
+          onAddToCart={handleAddToCart}
+          isPublicView={!isAuthenticated}
+          canOrder={!isAuthenticated || isClientUser}
+          showCartButtons={isAuthenticated && isClientUser}
+          loginButtonText={t('public.items.login', 'Sign In to Order')}
+          orderButtonText={t('common.orderNow', 'Order Now')}
+          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+        />
 
         {/* Items Grid */}
         {loading ? (

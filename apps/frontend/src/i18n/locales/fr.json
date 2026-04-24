@@ -2772,7 +2772,19 @@
       "ratingsCount_one": "{{count}} avis",
       "ratingsCount_other": "{{count}} avis",
       "openImageGallery": "Cliquer pour agrandir",
-      "photoIndex": "{{current}} / {{total}}"
+      "photoIndex": "{{current}} / {{total}}",
+      "viewDetails": "Voir les détails",
+      "openDetails": "Ouvrir les détails de {{name}}",
+      "noImage": "Pas d'image",
+      "outOfStock": "Rupture de stock",
+      "notAvailable": "Non disponible",
+      "clientsOnly": "Réservé aux clients",
+      "calculatingDistance": "Calcul de la distance…",
+      "distanceError": "Erreur",
+      "availableCount": "{{count}} disponibles",
+      "specialHandling": "Spécial",
+      "fragile": "Fragile",
+      "perishable": "Périssable"
     },
     "dealEndsOn": "Se termine le {{date}}",
     "similarItems": "Articles similaires",
@@ -3165,6 +3177,15 @@
       "sortPriceLow": "Price: Low to High",
       "subtitle": "Découvrez des produits incroyables d'entreprises locales",
       "title": "Parcourir les Articles",
+      "heroTitle": "Achetez des produits locaux près de chez vous",
+      "results": {
+        "loading": "Chargement des articles…",
+        "none": "Aucun article à afficher",
+        "count": "{{count}} articles"
+      },
+      "catalogRow": {
+        "hint": "Faites défiler sur le côté pour voir d’autres produits"
+      },
       "locationFilterNote": "Les articles sont filtrés en fonction de votre localisation",
       "state": "État/Province",
       "country": "Pays",
@@ -3172,6 +3193,21 @@
       "dealsSubtitle": "Meilleures remises sélectionnées auprès de vendeurs vérifiés",
       "dealsTitle": "Offres pour vous",
       "viewAllDeals": "Voir toutes les offres",
+      "quickPick": {
+        "deals": "Offres",
+        "top_rated": "Mieux notés",
+        "fastest": "Les plus proches",
+        "cheapest": "Moins cher",
+        "relevance": "Populaire"
+      },
+      "sections": {
+        "dealsTitle": "Offres près de chez vous",
+        "dealsSubtitle": "Remises limitées auprès de vendeurs vérifiés",
+        "topRatedTitle": "Mieux notés",
+        "topRatedSubtitle": "Des produits plébiscités",
+        "popularTitle": "Sélection populaire",
+        "popularSubtitle": "Suggérés d’après ce que les gens consultent et achètent"
+      },
       "authCta": {
         "button": "Se connecter",
         "description": "Créez un compte pour parcourir et commander des articles.",
@@ -3182,6 +3218,8 @@
         "subtitle": "Entrez votre email pour continuer. Nous l’utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
         "emailLabel": "Adresse email",
         "continue": "Continuer",
+        "trustTitle": "Aucun mot de passe nécessaire",
+        "trustBody": "Nous vous enverrons un code à usage unique par email. Vous pourrez payer par mobile money et suivre les mises à jour de votre commande.",
         "noPasswordHelper": "Aucun mot de passe nécessaire, nous vous enverrons un code à usage unique."
       },
       "sort": {

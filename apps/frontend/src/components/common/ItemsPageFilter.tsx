@@ -38,6 +38,13 @@ import {
   InventorySearchSuggestion,
   useInventorySearchSuggestions,
 } from '../../hooks/useInventorySearchSuggestions';
+import {
+  SITE_EVENT_INVENTORY_FILTER_CHANGE,
+  SITE_EVENT_INVENTORY_FILTER_CLEAR,
+  SITE_EVENT_INVENTORY_SEARCH_SUBMIT,
+  SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 export interface ItemsPageFilterState {
@@ -88,6 +95,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [searchDraft, setSearchDraft] = React.useState(searchTerm);
 
@@ -97,6 +105,10 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
 
   const runSearch = React.useCallback(() => {
     onSearchSubmit(searchDraft.trim());
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_SEARCH_SUBMIT,
+      metadata: { q: searchDraft.trim() || null },
+    });
   }, [onSearchSubmit, searchDraft]);
 
   const { suggestions, loading: suggestionsLoading } =
@@ -231,6 +243,10 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     if (field === 'location') {
       onLocationFilterChange?.(value);
     }
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_FILTER_CHANGE,
+      metadata: { field, value: value || null },
+    });
   };
 
   const handleClearFilters = () => {
@@ -242,6 +258,9 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       location: '',
     });
     onClearFilters?.();
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_FILTER_CLEAR,
+    });
   };
 
   const activeFiltersCount = [
@@ -425,14 +444,30 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
               if (typeof value === 'string') {
                 setSearchDraft(value);
                 onSearchSubmit(value.trim());
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+                  metadata: { kind: 'term', value: value.trim() || null },
+                });
                 return;
               }
               if (!value) return;
               switch (value.kind) {
                 case 'product':
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+                    metadata: {
+                      kind: 'product',
+                      inventoryId: value.inventoryId,
+                      title: value.title,
+                    },
+                  });
                   navigate(`/items/${value.inventoryId}`);
                   return;
                 case 'category':
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+                    metadata: { kind: 'category', value: value.value },
+                  });
                   onFiltersChange({
                     ...filters,
                     category: value.value,
@@ -442,11 +477,19 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                   onSearchSubmit('');
                   return;
                 case 'seller':
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+                    metadata: { kind: 'seller', value: value.name },
+                  });
                   setSearchDraft(value.name);
                   onSearchSubmit(value.name.trim());
                   return;
                 case 'term':
                 default:
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
+                    metadata: { kind: 'term', value: value.value },
+                  });
                   setSearchDraft(value.value);
                   onSearchSubmit(value.value.trim());
                   return;

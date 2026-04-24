@@ -16,6 +16,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import {
   Box,
   Button,
+  ButtonBase,
   Card,
   CardActions,
   CardContent,
@@ -34,6 +35,8 @@ import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
+  SITE_EVENT_INVENTORY_CARD_IMAGE_LIGHTBOX_OPEN,
+  SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
   SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
@@ -78,10 +81,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   distanceLoading,
   distanceError,
   isPublicView = false,
-  loginButtonText = 'Login to Order',
-  orderButtonText = 'Order Now',
-  addToCartButtonText = 'Add to Cart',
-  buyNowButtonText = 'Buy Now',
+  loginButtonText,
+  orderButtonText,
+  addToCartButtonText,
+  buyNowButtonText,
   canOrder = true,
   showCartButtons = false,
   viewsCount,
@@ -176,9 +179,33 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
   const isUnavailable = inventory.computed_available_quantity <= 0;
 
+  const viewDetailsLabel = t('items.itemCard.viewDetails', 'View details');
+  const noImageLabel = t('items.itemCard.noImage', 'No image');
+  const outOfStockLabel = t('items.itemCard.outOfStock', 'Out of stock');
+  const notAvailableLabel = t('items.itemCard.notAvailable', 'Not available');
+  const clientsOnlyLabel = t(
+    'items.itemCard.clientsOnly',
+    'Available to clients only'
+  );
+  const calculatingDistanceLabel = t(
+    'items.itemCard.calculatingDistance',
+    'Calculating distance…'
+  );
+  const distanceErrorLabel = t('items.itemCard.distanceError', 'Error');
+
+  const resolvedLoginButtonText = loginButtonText ?? t('auth.login', 'Sign in');
+  const resolvedOrderButtonText = orderButtonText ?? t('common.orderNow', 'Order now');
+  const resolvedAddToCartButtonText = addToCartButtonText ?? t('cart.addToCart', 'Add to cart');
+  const resolvedBuyNowButtonText = buyNowButtonText ?? t('cart.buyNow', 'Buy now');
+
   const checkoutPriceText = hasDealPrices
-    ? formatCurrency(inventory.discounted_price!, inventory.item.currency)
+    ? formatCurrency(
+        inventory.discounted_price ?? inventory.selling_price,
+        inventory.item.currency
+      )
     : formatCurrency(inventory.selling_price, inventory.item.currency);
+
+  const goToDetails = () => navigate(`/items/${inventory.id}`);
 
   return (
     <Card
@@ -229,7 +256,19 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           disableHoverListener={!displayImageUrl}
         >
           <Box
-            onClick={() => displayImageUrl && setImageLightboxOpen(true)}
+            onClick={() => {
+              if (displayImageUrl) {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_INVENTORY_CARD_IMAGE_LIGHTBOX_OPEN,
+                  subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                  subjectId: inventory.id,
+                  metadata: { imageCount: galleryImages.length },
+                });
+                setImageLightboxOpen(true);
+                return;
+              }
+              goToDetails();
+            }}
             sx={{
               flex: hasMultipleImages ? '1 1 auto' : '1 1 100%',
               minHeight: 0,
@@ -345,7 +384,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 }}
               >
                 <Typography variant="body2" color="text.secondary">
-                  No Image
+                  {noImageLabel}
                 </Typography>
               </Box>
             )}
@@ -376,13 +415,13 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                       sx={{ textDecoration: 'line-through' }}
                     >
                       {formatCurrency(
-                        inventory.original_price!,
+                        inventory.original_price ?? inventory.selling_price,
                         inventory.item.currency
                       )}
                     </Typography>
                     <Typography variant="h6" color="primary" fontWeight="bold">
                       {formatCurrency(
-                        inventory.discounted_price!,
+                        inventory.discounted_price ?? inventory.selling_price,
                         inventory.item.currency
                       )}
                     </Typography>
@@ -493,17 +532,33 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 {inventory.item.brand.name}
               </Typography>
             )}
-            <Typography
-              variant="h6"
+            <ButtonBase
+              onClick={goToDetails}
+              aria-label={t('items.itemCard.openDetails', {
+                defaultValue: 'Open {{name}} details',
+                name: inventory.item.name,
+              })}
               sx={{
-                mb: descriptionPreview ? 0.25 : 0.5,
-                lineHeight: 1.2,
-                fontSize: '1rem',
-                fontWeight: 600,
+                width: '100%',
+                display: 'block',
+                textAlign: 'left',
+                borderRadius: 1,
+                '&:hover .rsItemTitle': { textDecoration: 'underline' },
               }}
             >
-              {inventory.item.name}
-            </Typography>
+              <Typography
+                className="rsItemTitle"
+                variant="h6"
+                sx={{
+                  mb: descriptionPreview ? 0.25 : 0.5,
+                  lineHeight: 1.2,
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                }}
+              >
+                {inventory.item.name}
+              </Typography>
+            </ButtonBase>
             {descriptionPreview ? (
               <Typography
                 variant="body2"
@@ -594,7 +649,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               }}
             >
               <Chip
-                label={`${inventory.computed_available_quantity} available`}
+                label={t('items.itemCard.availableCount', '{{count}} available', {
+                  count: inventory.computed_available_quantity,
+                })}
                 color={
                   inventory.computed_available_quantity > 0
                     ? 'success'
@@ -681,20 +738,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Typography>
             </Box>
 
-            {/* SKU */}
-            {inventory.item.sku && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Build fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.sku}
-                </Typography>
-              </Box>
-            )}
-
             {/* Tags */}
             {inventory.item.tags && inventory.item.tags.length > 0 && (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -715,63 +758,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                     sx={{ fontSize: '0.65rem', height: 20 }}
                   />
                 )}
-              </Box>
-            )}
-
-            {/* Weight */}
-            {inventory.item.weight && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Scale fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.weight}
-                  {inventory.item.weight_unit}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Dimensions */}
-            {inventory.item.dimensions && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Straighten fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.dimensions}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Model */}
-            {inventory.item.model && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Build fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.model}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Color */}
-            {inventory.item.color && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Palette fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.color}
-                </Typography>
               </Box>
             )}
 
@@ -797,30 +783,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
           {/* Compact Info Row */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-            {/* Order Limits */}
-            {inventory.item.min_order_quantity > 1 && (
-              <Chip
-                label={`Min: ${inventory.item.min_order_quantity}`}
-                size="small"
-                color="info"
-                variant="outlined"
-                sx={{ fontSize: '0.7rem', height: '20px' }}
-              />
-            )}
-            {inventory.item.max_order_quantity && (
-              <Chip
-                label={`Max: ${inventory.item.max_order_quantity}`}
-                size="small"
-                color="info"
-                variant="outlined"
-                sx={{ fontSize: '0.7rem', height: '20px' }}
-              />
-            )}
-
             {/* Delivery Info */}
             {inventory.item.max_delivery_distance && (
               <Chip
-                label={`Max ${inventory.item.max_delivery_distance}km`}
+                label={t(
+                  'items.itemCard.maxDeliveryDistance',
+                  'Max {{km}} km',
+                  { km: inventory.item.max_delivery_distance }
+                )}
                 size="small"
                 color="secondary"
                 variant="outlined"
@@ -829,7 +799,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             )}
             {inventory.item.estimated_delivery_time && (
               <Chip
-                label={`~${inventory.item.estimated_delivery_time}min`}
+                label={t('items.itemCard.etaMinutes', '~{{min}} min', {
+                  min: inventory.item.estimated_delivery_time,
+                })}
                 size="small"
                 color="secondary"
                 variant="outlined"
@@ -846,7 +818,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                 {inventory.item.is_fragile && (
                   <Chip
-                    label="Fragile"
+                    label={t('items.itemCard.fragile', 'Fragile')}
                     color="warning"
                     size="small"
                     sx={{ fontSize: '0.7rem', height: '20px' }}
@@ -854,7 +826,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 )}
                 {inventory.item.is_perishable && (
                   <Chip
-                    label="Perishable"
+                    label={t('items.itemCard.perishable', 'Perishable')}
                     color="error"
                     size="small"
                     sx={{ fontSize: '0.7rem', height: '20px' }}
@@ -862,7 +834,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 )}
                 {inventory.item.requires_special_handling && (
                   <Chip
-                    label="Special"
+                    label={t('items.itemCard.specialHandling', 'Special')}
                     color="info"
                     size="small"
                     sx={{ fontSize: '0.7rem', height: '20px' }}
@@ -883,7 +855,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   color="text.secondary"
                   sx={{ fontSize: '0.7rem' }}
                 >
-                  Calculating distance...
+                  {calculatingDistanceLabel}
                 </Typography>
               )}
               {distanceError && (
@@ -892,7 +864,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   color="error"
                   sx={{ fontSize: '0.7rem' }}
                 >
-                  Error: {distanceError}
+                  {distanceErrorLabel}: {distanceError}
                 </Typography>
               )}
               {estimatedDistance && estimatedDuration && (
@@ -922,10 +894,17 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             variant="text"
             size="small"
             startIcon={<VisibilityIcon />}
-            onClick={() => navigate(`/items/${inventory.id}`)}
+            onClick={() => {
+              void trackSiteEvent({
+                eventType: SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
+                subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                subjectId: inventory.id,
+              });
+              goToDetails();
+            }}
             sx={{ alignSelf: 'center' }}
           >
-            View details
+            {viewDetailsLabel}
           </Button>
           {inventory.computed_available_quantity === 0 ? (
             <Button
@@ -934,7 +913,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               size="small"
               sx={{ width: '75%' }}
             >
-              Out of Stock
+              {outOfStockLabel}
             </Button>
           ) : !inventory.is_active ? (
             <Button
@@ -943,7 +922,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               size="small"
               sx={{ width: '75%' }}
             >
-              Not Available
+              {notAvailableLabel}
             </Button>
           ) : !canOrder ? (
             <Button
@@ -952,7 +931,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               size="small"
               sx={{ width: '75%' }}
             >
-              Available to Clients Only
+              {clientsOnlyLabel}
             </Button>
           ) : isPublicView ? (
             <Button
@@ -969,7 +948,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               size="small"
               sx={{ width: '75%', alignSelf: 'center' }}
             >
-              {buyNowButtonText}
+              {resolvedBuyNowButtonText}
             </Button>
           ) : showCartButtons && onAddToCart ? (
             <Box
@@ -993,7 +972,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   overflow: 'hidden',
                 }}
               >
-                {addToCartButtonText}
+                {resolvedAddToCartButtonText}
               </Button>
               <Button
                 variant="contained"
@@ -1014,7 +993,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   overflow: 'hidden',
                 }}
               >
-                {buyNowButtonText}
+                {resolvedBuyNowButtonText}
               </Button>
             </Box>
           ) : (
@@ -1032,7 +1011,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               size="small"
               sx={{ width: '75%' }}
             >
-              {orderButtonText}
+              {resolvedOrderButtonText}
             </Button>
           )}
         </CardActions>
@@ -1048,6 +1027,8 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           quantity: 1,
         }}
         onClose={() => setAnonBuyNowOpen(false)}
+        primaryCtaLabel={resolvedBuyNowButtonText}
+        secondaryCtaLabel={resolvedLoginButtonText}
       />
 
       {/* Image lightbox */}

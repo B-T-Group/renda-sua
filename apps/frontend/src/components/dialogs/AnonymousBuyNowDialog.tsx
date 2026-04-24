@@ -14,10 +14,17 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
+import {
+  SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
+  SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
+  SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_OPEN,
+  SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 
 interface CheckoutItemSummary {
   title: string;
@@ -31,6 +38,10 @@ export interface AnonymousBuyNowDialogProps {
   inventoryItemId: string;
   item: CheckoutItemSummary;
   onClose: () => void;
+  /** Optional override for the primary CTA label (defaults to 'Continue'). */
+  primaryCtaLabel?: string;
+  /** Optional override for the cancel CTA label (defaults to 'Cancel'). */
+  secondaryCtaLabel?: string;
 }
 
 function isValidEmailFormat(email: string): boolean {
@@ -44,6 +55,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   inventoryItemId,
   item,
   onClose,
+  primaryCtaLabel,
+  secondaryCtaLabel,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -51,10 +64,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const apiClient = useApiClient();
   const navigate = useNavigate();
   const { loginWithRedirect } = useAuth0();
+  const { trackSiteEvent } = useTrackSiteEvent();
 
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const trackedOpenRef = useRef(false);
 
   const emailNormalized = useMemo(() => email.trim().toLowerCase(), [email]);
   const isEmailValid = useMemo(
@@ -71,6 +86,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const redirectToOtp = useCallback(
     async (screenHint: 'login' | 'signup') => {
       try {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
+          subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+          subjectId: inventoryItemId,
+          metadata: { screenHint, email: emailNormalized || null },
+        });
         await loginWithRedirect({
           authorizationParams: {
             connection: 'email',
@@ -88,10 +109,30 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [emailNormalized, loginWithRedirect, navigate, returnToPathWithAnon]
   );
 
+  useEffect(() => {
+    if (!open) {
+      trackedOpenRef.current = false;
+      return;
+    }
+    if (trackedOpenRef.current) return;
+    trackedOpenRef.current = true;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_OPEN,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: inventoryItemId,
+    });
+  }, [inventoryItemId, open, trackSiteEvent]);
+
   const handleContinue = useCallback(async () => {
     if (!isEmailValid || submitting) return;
     setSubmitting(true);
     setError(null);
+    void trackSiteEvent({
+      eventType: SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: inventoryItemId,
+      metadata: { email: emailNormalized || null },
+    });
     try {
       const availability = await apiClient.get<{ taken: boolean }>(
         '/auth/email-availability',
@@ -126,13 +167,32 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [apiClient, emailNormalized, isEmailValid, redirectToOtp, submitting, t]);
+  }, [
+    apiClient,
+    emailNormalized,
+    inventoryItemId,
+    isEmailValid,
+    redirectToOtp,
+    submitting,
+    t,
+    trackSiteEvent,
+  ]);
 
   const handleClose = useCallback(() => {
     if (submitting) return;
     setError(null);
     onClose();
   }, [onClose, submitting]);
+
+  const resolvedPrimaryCta = useMemo(
+    () => primaryCtaLabel ?? t('public.items.checkoutDialog.continue', 'Continue'),
+    [primaryCtaLabel, t]
+  );
+
+  const resolvedSecondaryCta = useMemo(
+    () => secondaryCtaLabel ?? t('common.cancel', 'Cancel'),
+    [secondaryCtaLabel, t]
+  );
 
   return (
     <Dialog
@@ -156,6 +216,29 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               'Enter your email to continue. We’ll use it for your receipt, order updates, and to create your account.'
             )}
           </Typography>
+
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              p: 1.25,
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+              {t(
+                'public.items.checkoutDialog.trustTitle',
+                'No password needed'
+              )}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t(
+                'public.items.checkoutDialog.trustBody',
+                'We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.'
+              )}
+            </Typography>
+          </Box>
 
           <Box
             sx={{
@@ -235,7 +318,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={handleClose} disabled={submitting} sx={{ borderRadius: 0 }}>
-          {t('common.cancel', 'Cancel')}
+          {resolvedSecondaryCta}
         </Button>
         <Button
           variant="contained"
@@ -245,7 +328,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         >
           {submitting
             ? t('common.loading', 'Loading...')
-            : t('public.items.checkoutDialog.continue', 'Continue')}
+            : resolvedPrimaryCta}
         </Button>
       </DialogActions>
     </Dialog>
