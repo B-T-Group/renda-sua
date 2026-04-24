@@ -90,6 +90,52 @@ export function useBusinessItemsPageData(businessId?: string) {
     }
   }, [businessId, apiClient, fetchDistanceMatrix]);
 
+  const mergeItemIntoList = useCallback((itemId: string, updates: any) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        return {
+          ...it,
+          ...updates,
+          estimated_delivery_time_text:
+            updates.estimated_delivery_time_text ??
+            it.estimated_delivery_time_text,
+          estimated_distance_text:
+            updates.estimated_distance_text ?? it.estimated_distance_text,
+          is_favorite: updates.is_favorite ?? it.is_favorite,
+        };
+      })
+    );
+  }, []);
+
+  const refreshListItem = useCallback(
+    async (itemId: string) => {
+      if (!businessId) return;
+      try {
+        const response = await apiClient.get<{
+          success: boolean;
+          data: { item: any };
+        }>(`/business-items/items/${itemId}`);
+        const fresh = response.data?.data?.item;
+        if (!fresh) return;
+        setItems((prev) =>
+          prev.map((it) => {
+            if (it.id !== itemId) return it;
+            return {
+              ...fresh,
+              is_favorite: it.is_favorite,
+              estimated_delivery_time_text: it.estimated_delivery_time_text,
+              estimated_distance_text: it.estimated_distance_text,
+            };
+          })
+        );
+      } catch (e) {
+        console.warn('refreshListItem: failed to fetch item', e);
+      }
+    },
+    [apiClient, businessId]
+  );
+
   useEffect(() => {
     if (businessId) {
       refetch();
@@ -107,5 +153,7 @@ export function useBusinessItemsPageData(businessId?: string) {
     loading,
     error,
     refetch,
+    mergeItemIntoList,
+    refreshListItem,
   };
 }

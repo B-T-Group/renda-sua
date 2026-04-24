@@ -151,6 +151,8 @@ const BusinessItemsPage: React.FC = () => {
     loading: pageDataLoading,
     error: pageDataError,
     refetch: refetchPageData,
+    mergeItemIntoList,
+    refreshListItem,
   } = useBusinessItemsPageData(profile?.business?.id);
 
   const {
@@ -337,7 +339,7 @@ const BusinessItemsPage: React.FC = () => {
         await apiClient.put(`/business-items/items/${row.id}/favorite`, {
           favorited,
         });
-        await refetchPageData();
+        mergeItemIntoList(row.id, { is_favorite: favorited });
         enqueueSnackbar(
           t('business.items.favoriteUpdated', 'Favorites updated'),
           { variant: 'success' }
@@ -352,14 +354,18 @@ const BusinessItemsPage: React.FC = () => {
         );
       }
     },
-    [apiClient, refetchPageData, enqueueSnackbar, t]
+    [apiClient, mergeItemIntoList, enqueueSnackbar, t]
   );
 
   const handleToggleItemActive = useCallback(
     async (row: Item, isActive: boolean) => {
       try {
-        await updateItem(row.id, { is_active: isActive });
-        await refetchPageData();
+        const updated = await updateItem(row.id, { is_active: isActive }, {
+          skipRefetch: true,
+        });
+        if (updated) {
+          mergeItemIntoList(row.id, updated);
+        }
         enqueueSnackbar(
           t('business.items.activeStatusUpdated', 'Listing status updated'),
           { variant: 'success' }
@@ -374,7 +380,7 @@ const BusinessItemsPage: React.FC = () => {
         );
       }
     },
-    [updateItem, refetchPageData, enqueueSnackbar, t]
+    [updateItem, mergeItemIntoList, enqueueSnackbar, t]
   );
 
   const itemMatchesSearchText = (item: Item, q: string): boolean => {
@@ -762,8 +768,9 @@ const BusinessItemsPage: React.FC = () => {
             : null
         }
         selectedInventory={updatingInventoryItem}
-        onInventoryUpdated={() => {
-          refetchPageData();
+        skipFetchInventory
+        onInventoryUpdated={(itemId) => {
+          void refreshListItem(itemId);
         }}
       />
 
@@ -777,7 +784,9 @@ const BusinessItemsPage: React.FC = () => {
         open={Boolean(promoteItem)}
         onClose={() => setPromoteItem(null)}
         item={promoteItem}
-        onSaved={() => void refetchPageData()}
+        onSaved={() => {
+          if (promoteItem?.id) void refreshListItem(promoteItem.id);
+        }}
       />
 
       <RefineItemWithAiDialog
@@ -786,8 +795,8 @@ const BusinessItemsPage: React.FC = () => {
         brands={brands}
         itemSubCategories={itemSubCategories}
         onClose={() => setRefineAiItem(null)}
-        onApplied={() => {
-          refetchPageData();
+        onApplied={(itemId) => {
+          void refreshListItem(itemId);
         }}
         updateItem={updateItem}
       />

@@ -307,12 +307,15 @@ export const useBusinessInventory = (
   }, [apiClient, businessId]);
 
   const addInventoryItem = useCallback(
-    async (itemData: AddInventoryItemData) => {
+    async (
+      itemData: AddInventoryItemData,
+      options?: { skipFetchInventory?: boolean }
+    ) => {
       try {
         await executeAddMutation({ itemData });
-
-        // Refresh inventory after adding item
-        await fetchInventory();
+        if (!options?.skipFetchInventory) {
+          await fetchInventory();
+        }
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to add inventory item'
@@ -323,12 +326,16 @@ export const useBusinessInventory = (
   );
 
   const updateInventoryItem = useCallback(
-    async (itemId: string, updates: Partial<UpdateInventoryItemData>) => {
+    async (
+      itemId: string,
+      updates: Partial<UpdateInventoryItemData>,
+      options?: { skipFetchInventory?: boolean }
+    ) => {
       try {
         await apiClient.patch(`/business-items/inventory/${itemId}`, updates);
-
-        // Refresh inventory after updating item
-        await fetchInventory();
+        if (!options?.skipFetchInventory) {
+          await fetchInventory();
+        }
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to update inventory item'

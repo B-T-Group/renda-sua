@@ -71,7 +71,7 @@ interface RefineItemWithAiDialogProps {
     item_category: { name: string };
   }>;
   onClose: () => void;
-  onApplied: () => void;
+  onApplied: (itemId: string) => void;
   updateItem: (
     id: string,
     data: Partial<Record<string, unknown>>,
@@ -308,7 +308,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
         t('business.items.itemUpdated', 'Item updated successfully'),
         { variant: 'success' }
       );
-      onApplied();
+      onApplied(item.id);
       onClose();
     } catch (e: any) {
       enqueueSnackbar(

@@ -1623,7 +1623,7 @@ export default function ItemViewPage() {
         item={item}
         selectedInventory={selectedInventory}
         onInventoryUpdated={() => {
-          fetchItemDetails(); // Refresh item details
+          void fetchItemDetails();
         }}
       />
 
@@ -1655,7 +1655,7 @@ export default function ItemViewPage() {
         itemSubCategories={itemSubCategories}
         onClose={() => setShowRefineAiDialog(false)}
         onApplied={() => {
-          fetchItemDetails();
+          void fetchItemDetails();
         }}
         updateItem={updateItem}
       />

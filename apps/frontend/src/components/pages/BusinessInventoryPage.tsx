@@ -288,7 +288,7 @@ const BusinessInventoryPage: React.FC = () => {
         item={null}
         selectedInventory={updatingInventoryItem}
         onInventoryUpdated={() => {
-          fetchInventory(); // Refresh inventory list
+          void fetchInventory();
         }}
       />
 

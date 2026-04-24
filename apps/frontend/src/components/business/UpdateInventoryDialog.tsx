@@ -26,7 +26,9 @@ interface UpdateInventoryDialogProps {
   onClose: () => void;
   item: Item | null;
   selectedInventory?: any; // Specific inventory record to edit (optional)
-  onInventoryUpdated?: () => void;
+  onInventoryUpdated?: (itemId: string) => void;
+  /** When set, avoid refetching full business inventory; caller refreshes their own list (e.g. items page) */
+  skipFetchInventory?: boolean;
 }
 
 export default function UpdateInventoryDialog({
@@ -35,6 +37,7 @@ export default function UpdateInventoryDialog({
   item,
   selectedInventory,
   onInventoryUpdated,
+  skipFetchInventory = false,
 }: UpdateInventoryDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
@@ -171,7 +174,9 @@ export default function UpdateInventoryDialog({
           reorder_quantity: formData.reorder_quantity,
           is_active: true,
         };
-        await updateInventoryItem(inventoryToUpdate.id, updateData);
+        await updateInventoryItem(inventoryToUpdate.id, updateData, {
+          skipFetchInventory,
+        });
       } else {
         // Add new inventory - include all required fields
         const addData = {
@@ -185,7 +190,7 @@ export default function UpdateInventoryDialog({
           reorder_quantity: formData.reorder_quantity,
           is_active: true,
         };
-        await addInventoryItem(addData);
+        await addInventoryItem(addData, { skipFetchInventory });
       }
 
       enqueueSnackbar(
@@ -195,9 +200,8 @@ export default function UpdateInventoryDialog({
         { variant: 'success' }
       );
 
-      // Refresh item data after successful inventory update
-      if (onInventoryUpdated) {
-        onInventoryUpdated();
+      if (onInventoryUpdated && item) {
+        onInventoryUpdated(item.id);
       }
 
       onClose();
