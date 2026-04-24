@@ -167,7 +167,7 @@ const ItemsCardsSkeleton: React.FC = () => {
 };
 
 const BusinessItemsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const {
     profile,
@@ -265,6 +265,7 @@ const BusinessItemsPage: React.FC = () => {
       webOrigin: environment.webAppOrigin,
       quantityToSell: 5,
       currencyCode: 'XAF',
+      productCategoryLanguage: i18n.language?.startsWith('fr') ? 'fr' : 'en',
       itemIds: selectedItemIds,
     });
 

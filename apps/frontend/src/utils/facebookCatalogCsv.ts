@@ -74,9 +74,12 @@ export type BusinessItemLike = {
   item_images?: ItemImageLike[] | null;
   item_tags?: ItemTagLike[] | null;
   business_inventories?: BusinessInventoryLike[] | null;
-  /** Google / Facebook taxonomy is stored on the sub category; joined rows expose the official path. */
+  /**
+   * Google / Facebook product category FKs and joined taxonomy rows live on
+   * `item_sub_category`. CSV export uses the FK ids first, then path fallbacks.
+   */
   item_sub_category?: {
-    google_product_category?: number | null;
+    google_product_category?: string | number | null;
     fb_product_category?: number | null;
     google_product_category_row?: {
       id?: string | number;
@@ -90,6 +93,58 @@ export type BusinessItemLike = {
     } | null;
   } | null;
 };
+
+/**
+ * `google_product_category` column: prefer `item_sub_category.google_product_category`
+ * (Google taxonomy id); if unset, use official path from `google_product_category_row`.
+ */
+function googleProductCategoryForExport(
+  sub: BusinessItemLike['item_sub_category'] | null | undefined
+): string {
+  if (!sub) {
+    return '';
+  }
+  if (sub.google_product_category != null) {
+    return String(sub.google_product_category);
+  }
+  const row = sub.google_product_category_row;
+  const a = row?.name_en?.trim();
+  if (a) {
+    return a;
+  }
+  const b = row?.name_fr?.trim();
+  if (b) {
+    return b;
+  }
+  return '';
+}
+
+/**
+ * `fb_product_category` column: prefer `item_sub_category.fb_product_category`
+ * (Meta category id); if unset, use path from `fb_product_category_row` (locale-aware), then
+ * the other language.
+ */
+function fbProductCategoryForExport(
+  sub: BusinessItemLike['item_sub_category'] | null | undefined,
+  language: 'en' | 'fr'
+): string {
+  if (!sub) {
+    return '';
+  }
+  if (sub.fb_product_category != null) {
+    return String(sub.fb_product_category);
+  }
+  const row = sub.fb_product_category_row;
+  const primary = language === 'fr' ? row?.name_fr?.trim() : row?.name_en?.trim();
+  if (primary) {
+    return primary;
+  }
+  const secondary = language === 'fr' ? row?.name_en?.trim() : row?.name_fr?.trim();
+  if (secondary) {
+    return secondary;
+  }
+  return '';
+}
 
 function csvEscape(value: unknown): string {
   const raw = value == null ? '' : String(value);
@@ -236,7 +291,11 @@ function buildRow(
   item: BusinessItemLike,
   inv: BusinessInventoryLike,
   origin: string,
-  opts: { quantityToSell: number; currencyCode: string }
+  opts: {
+    quantityToSell: number;
+    currencyCode: string;
+    productCategoryLanguage: 'en' | 'fr';
+  }
 ): FacebookCatalogRow {
   const title = item.name?.trim() ?? '';
   const description = item.description?.trim() ?? '';
@@ -250,10 +309,9 @@ function buildRow(
   const linkBase = origin.replace(/\/$/, '');
   const link = `${linkBase}/items/${inv.id}`;
 
-  const gPath =
-    item.item_sub_category?.google_product_category_row?.name_en?.trim() ?? '';
-  const fbPath =
-    item.item_sub_category?.fb_product_category_row?.name_en?.trim() ?? '';
+  const sub = item.item_sub_category;
+  const gPath = googleProductCategoryForExport(sub);
+  const fbPath = fbProductCategoryForExport(sub, opts.productCategoryLanguage);
 
   return {
     id: inv.id,
@@ -294,6 +352,8 @@ export function buildFacebookCatalogRowsFromBusinessItems(input: {
   webOrigin: string;
   quantityToSell?: number;
   currencyCode?: string;
+  /** For Facebook's `fb_product_category` path, prefer en or fr from taxonomy `name_en` / `name_fr`. */
+  productCategoryLanguage?: 'en' | 'fr';
   /** When set, only include catalog items whose `id` is in this set. */
   itemIds?: Set<string> | null;
 }): { headers: readonly FacebookCatalogHeader[]; rows: FacebookCatalogRow[] } {
@@ -301,6 +361,7 @@ export function buildFacebookCatalogRowsFromBusinessItems(input: {
   const currencyCode = input.currencyCode ?? 'XAF';
   const origin = input.webOrigin?.trim() || '';
   const filter = input.itemIds;
+  const productCategoryLanguage = input.productCategoryLanguage ?? 'en';
 
   const rows: FacebookCatalogRow[] = [];
   for (const item of input.items ?? []) {
@@ -314,6 +375,7 @@ export function buildFacebookCatalogRowsFromBusinessItems(input: {
         buildRow(item, inv, origin, {
           quantityToSell,
           currencyCode,
+          productCategoryLanguage,
         })
       );
     }
@@ -327,6 +389,7 @@ export function buildFacebookCatalogCsvFromBusinessItems(input: {
   webOrigin: string;
   quantityToSell?: number;
   currencyCode?: string;
+  productCategoryLanguage?: 'en' | 'fr';
   itemIds?: Set<string> | null;
 }): { filename: string; csv: string; rowCount: number } {
   const { headers, rows } = buildFacebookCatalogRowsFromBusinessItems(input);
