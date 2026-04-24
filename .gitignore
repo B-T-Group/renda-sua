@@ -11,6 +11,7 @@ apps/hasura/.env.hasura-cdk-parity
 .vscode/settings.json
 
 # Python
+tools/embed-product-taxonomy/.venv/
 __pycache__/
 *.py[cod]
 *$py.class
