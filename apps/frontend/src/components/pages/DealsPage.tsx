@@ -13,6 +13,10 @@ import { useCart } from '../../contexts/CartContext';
 import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import {
+  metaPixelContentCategoryFromItem,
+  metaPixelGoogleProductCategoryFromItem,
+} from '../../utils/metaPixelContentCategory';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 
@@ -83,6 +87,8 @@ const DealsPage: React.FC = () => {
       item.original_price > 0;
 
     const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+    const contentCategory = metaPixelContentCategoryFromItem(item.item);
+    const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
 
     trackAddToCart({
       content_type: 'product',
@@ -91,6 +97,8 @@ const DealsPage: React.FC = () => {
       value: unitPrice,
       currency: item.item.currency || 'USD',
       content_name: item.item.name,
+      ...(contentCategory && { content_category: contentCategory }),
+      ...(googleCategory && { google_product_category: googleCategory }),
     });
 
     addToCart({
@@ -102,6 +110,8 @@ const DealsPage: React.FC = () => {
         name: item.item.name,
         price: unitPrice,
         currency: item.item.currency,
+        ...(contentCategory && { contentCategory }),
+        ...(googleCategory && { googleProductCategory: googleCategory }),
         imageUrl: item.item.item_images?.[0]?.image_url,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,

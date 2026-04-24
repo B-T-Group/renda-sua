@@ -36,6 +36,28 @@ function buildMetaPixelPurchaseFromCart(
   orders: OrderResult[]
 ) {
   const value = orders.reduce((sum, o) => sum + o.total_amount, 0);
+  const categories = cartItems
+    .map((c) => c.itemData.contentCategory?.trim())
+    .filter((s): s is string => Boolean(s));
+  const unique = [...new Set(categories)];
+  const content_category =
+    unique.length === 0
+      ? undefined
+      : unique.length === 1
+        ? unique[0]
+        : unique.join('; ');
+
+  const gCategories = cartItems
+    .map((c) => c.itemData.googleProductCategory?.trim())
+    .filter((s): s is string => Boolean(s));
+  const gUnique = [...new Set(gCategories)];
+  const google_product_category =
+    gUnique.length === 0
+      ? undefined
+      : gUnique.length === 1
+        ? gUnique[0]
+        : gUnique.join('; ');
+
   return {
     content_type: 'product' as const,
     content_ids: cartItems.map((c) => c.inventoryItemId),
@@ -46,6 +68,8 @@ function buildMetaPixelPurchaseFromCart(
     })),
     value,
     currency: orders[0]?.currency ?? cartItems[0]?.itemData.currency ?? 'USD',
+    ...(content_category && { content_category }),
+    ...(google_product_category && { google_product_category }),
   };
 }
 

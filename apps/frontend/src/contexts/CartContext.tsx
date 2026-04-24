@@ -22,6 +22,10 @@ export interface CartItem {
     weight?: number;
     maxOrderQuantity?: number;
     minOrderQuantity?: number;
+    /** For Meta Pixel Purchase `content_category` (from item taxonomy when known). */
+    contentCategory?: string;
+    /** For Meta Pixel Purchase `google_product_category` when known. */
+    googleProductCategory?: string;
     originalPrice?: number;
     discountedPrice?: number;
     hasActiveDeal?: boolean;

@@ -59,6 +59,18 @@ export interface InventoryItem {
     item_sub_category: {
       id: number;
       name: string;
+      google_product_category?: string | number | null;
+      google_product_category_row?: {
+        id: string | number;
+        name_en?: string | null;
+        name_fr?: string | null;
+      } | null;
+      fb_product_category?: number | null;
+      fb_product_category_row?: {
+        id: number;
+        name_en?: string | null;
+        name_fr?: string | null;
+      } | null;
       item_category: {
         id: number;
         name: string;

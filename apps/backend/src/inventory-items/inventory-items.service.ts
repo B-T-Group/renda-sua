@@ -89,6 +89,18 @@ export interface InventoryItem {
     item_sub_category: {
       id: number;
       name: string;
+      google_product_category?: string | number | null;
+      google_product_category_row?: {
+        id: string | number;
+        name_en?: string | null;
+        name_fr?: string | null;
+      } | null;
+      fb_product_category?: number | null;
+      fb_product_category_row?: {
+        id: number;
+        name_en?: string | null;
+        name_fr?: string | null;
+      } | null;
       item_category: {
         id: number;
         name: string;
@@ -235,6 +247,18 @@ const CATALOG_INVENTORY_LIST_GQL = `
         item_sub_category {
           id
           name
+          google_product_category
+          fb_product_category
+          google_product_category_row {
+            id
+            name_en
+            name_fr
+          }
+          fb_product_category_row {
+            id
+            name_en
+            name_fr
+          }
           item_category {
             id
             name
@@ -1174,6 +1198,18 @@ export class InventoryItemsService {
             item_sub_category {
               id
               name
+              google_product_category
+              fb_product_category
+              google_product_category_row {
+                id
+                name_en
+                name_fr
+              }
+              fb_product_category_row {
+                id
+                name_en
+                name_fr
+              }
               item_category {
                 id
                 name
@@ -1367,7 +1403,23 @@ export class InventoryItemsService {
               is_active
               created_at
               updated_at
-              item_sub_category { id name item_category { id name } }
+              item_sub_category {
+                id
+                name
+                google_product_category
+                fb_product_category
+                google_product_category_row {
+                  id
+                  name_en
+                  name_fr
+                }
+                fb_product_category_row {
+                  id
+                  name_en
+                  name_fr
+                }
+                item_category { id name }
+              }
               item_images(order_by: { display_order: asc }) {
                 id
                 image_url

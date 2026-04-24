@@ -63,6 +63,10 @@ import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import {
+  metaPixelContentCategoryFromItem,
+  metaPixelGoogleProductCategoryFromItem,
+} from '../../utils/metaPixelContentCategory';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
@@ -745,6 +749,12 @@ const PlaceOrderPage: React.FC = () => {
       const unitPrice = hasDeal
         ? selectedItem.discounted_price!
         : selectedItem.selling_price;
+      const contentCategory = metaPixelContentCategoryFromItem(
+        selectedItem.item
+      );
+      const googleCategory = metaPixelGoogleProductCategoryFromItem(
+        selectedItem.item
+      );
       trackPurchase({
         content_type: 'product',
         content_ids: [selectedItem.id],
@@ -754,6 +764,8 @@ const PlaceOrderPage: React.FC = () => {
         value: order.total_amount,
         currency: order.currency || selectedItem.item.currency || 'USD',
         content_name: selectedItem.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
       });
 
       // Navigate to order confirmation page

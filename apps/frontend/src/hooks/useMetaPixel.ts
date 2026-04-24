@@ -22,6 +22,10 @@ export type MetaPixelProductEventParams = {
   value?: number;
   currency?: string;
   content_name?: string;
+  /** e.g. "Electronics > Phones" (Meta custom data). */
+  content_category?: string;
+  /** Google product taxonomy id or path (aligns with catalog `google_product_category`). */
+  google_product_category?: string;
 };
 
 export function useMetaPixel() {

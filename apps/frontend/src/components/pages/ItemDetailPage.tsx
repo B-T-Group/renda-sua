@@ -46,6 +46,10 @@ import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import {
+  metaPixelContentCategoryFromItem,
+  metaPixelGoogleProductCategoryFromItem,
+} from '../../utils/metaPixelContentCategory';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
@@ -489,6 +493,12 @@ export default function ItemDetailPage() {
       ? inventoryItem.discounted_price!
       : inventoryItem.selling_price;
 
+    const contentCategory = metaPixelContentCategoryFromItem(
+      inventoryItem.item
+    );
+    const googleCategory = metaPixelGoogleProductCategoryFromItem(
+      inventoryItem.item
+    );
     trackViewContent({
       content_type: 'product',
       content_ids: [inventoryItem.id],
@@ -496,6 +506,8 @@ export default function ItemDetailPage() {
       value: unitPrice,
       currency: inventoryItem.item.currency || 'USD',
       content_name: inventoryItem.item.name,
+      ...(contentCategory && { content_category: contentCategory }),
+      ...(googleCategory && { google_product_category: googleCategory }),
     });
   }, [inventoryItem, trackViewContent]);
 
@@ -567,6 +579,8 @@ export default function ItemDetailPage() {
       item.original_price > 0;
 
     const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+    const contentCategory = metaPixelContentCategoryFromItem(item.item);
+    const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
 
     trackAddToCart({
       content_type: 'product',
@@ -575,6 +589,8 @@ export default function ItemDetailPage() {
       value: unitPrice,
       currency: item.item.currency || 'USD',
       content_name: item.item.name,
+      ...(contentCategory && { content_category: contentCategory }),
+      ...(googleCategory && { google_product_category: googleCategory }),
     });
 
     addToCart({
@@ -586,6 +602,8 @@ export default function ItemDetailPage() {
         name: item.item.name,
         price: unitPrice,
         currency: item.item.currency,
+        ...(contentCategory && { contentCategory }),
+        ...(googleCategory && { googleProductCategory: googleCategory }),
         imageUrl: orderedItemImages(item.item.item_images)[0]?.image_url,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
