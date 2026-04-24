@@ -1,25 +1,15 @@
 table:
-  name: item_sub_categories
+  name: google_product_categories
   schema: public
-object_relationships:
-  - name: fb_product_category_row
-    using:
-      foreign_key_constraint_on: fb_product_category
-  - name: google_product_category_row
-    using:
-      foreign_key_constraint_on: google_product_category
-  - name: item_category
-    using:
-      foreign_key_constraint_on: item_category_id
 array_relationships:
-  - name: items
+  - name: item_sub_categories
     using:
       manual_configuration:
         column_mapping:
-          id: item_sub_category_id
+          id: google_product_category
         insertion_order: null
         remote_table:
-          name: items
+          name: item_sub_categories
           schema: public
 select_permissions:
   - role: agent
