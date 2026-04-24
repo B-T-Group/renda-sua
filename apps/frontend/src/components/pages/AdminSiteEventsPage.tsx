@@ -125,10 +125,6 @@ function SubjectCell({ row, t }: { row: AdminSiteEventRow; t: (a: string, b: str
   );
 }
 
-function formatViewer(row: AdminSiteEventRow): string {
-  return `${row.viewer_type}: ${truncate(row.viewer_id, 48)}`;
-}
-
 const AdminSiteEventsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
@@ -146,8 +142,10 @@ const AdminSiteEventsPage: React.FC = () => {
     groupBy: 'eventType',
     byEventType: [],
     byInventoryItem: [],
+    byEventAndSubject: [],
     inventoryEventTotal: 0,
     inventorySummaryTruncated: false,
+    eventSubjectSummaryTruncated: false,
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -296,7 +294,12 @@ const AdminSiteEventsPage: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               {summaryGroupBy === 'eventType'
                 ? t('admin.siteEvents.summary.caption', 'By event type.')
-                : t('admin.siteEvents.summary.captionByProduct', 'By inventory product (top 40).')}
+                : summaryGroupBy === 'inventoryItem'
+                  ? t('admin.siteEvents.summary.captionByProduct', 'By inventory product (top 40).')
+                  : t(
+                      'admin.siteEvents.summary.captionEventSubject',
+                      'By each CTA + subject pair (top 50), e.g. same product with different actions count separately.'
+                    )}
             </Typography>
           </Box>
           <Stack direction="row" alignItems="center" spacing={1}>
@@ -308,9 +311,13 @@ const AdminSiteEventsPage: React.FC = () => {
               value={summaryGroupBy}
               exclusive
               onChange={(_, v) => v && setSummaryGroupBy(v)}
+              sx={{ flexWrap: 'wrap' }}
             >
               <ToggleButton value="eventType">
                 {t('admin.siteEvents.aggregate.eventType', 'Event type')}
+              </ToggleButton>
+              <ToggleButton value="eventAndSubject">
+                {t('admin.siteEvents.aggregate.eventAndSubject', 'CTA + subject')}
               </ToggleButton>
               <ToggleButton value="inventoryItem">
                 {t('admin.siteEvents.aggregate.inventoryItem', 'Product')}
@@ -319,11 +326,11 @@ const AdminSiteEventsPage: React.FC = () => {
           </Stack>
         </Stack>
 
-        {summary.inventorySummaryTruncated && (
+        {(summary.inventorySummaryTruncated || summary.eventSubjectSummaryTruncated) && (
           <Alert severity="warning" sx={{ mb: 1 }}>
             {t(
               'admin.siteEvents.summary.truncatedWarning',
-              'Very large data volume: the product breakdown may be partial. Narrow the date range for a full count.'
+              'Very large data volume: the breakdown may be partial. Narrow the date range for a full count.'
             )}
           </Alert>
         )}
@@ -338,6 +345,20 @@ const AdminSiteEventsPage: React.FC = () => {
             spacing={2}
             alignItems="flex-start"
           >
+            {summary.total > 0 &&
+              summaryGroupBy === 'eventAndSubject' &&
+              summary.byEventAndSubject.length > 0 && (
+              <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
+                <SiteEventSummaryChart
+                  summary={summary}
+                  eventTypeLabel={eventTypeLabel}
+                  inventoryItemTitle={inventoryItemTitle}
+                />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center', mt: 0.5 }}>
+                  {t('admin.siteEvents.chart.captionEventSubject', 'Each slice: one CTA + one subject (e.g. one product).')}
+                </Typography>
+              </Box>
+            )}
             {summary.total > 0 && summaryGroupBy === 'eventType' && (
               <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
                 <SiteEventSummaryChart
@@ -380,7 +401,9 @@ const AdminSiteEventsPage: React.FC = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>
-                      {t('admin.siteEvents.summary.colMetric', 'Metric')}
+                      {summaryGroupBy === 'eventAndSubject'
+                        ? t('admin.siteEvents.summary.colEventSubject', 'CTA & subject')
+                        : t('admin.siteEvents.summary.colMetric', 'Metric')}
                     </TableCell>
                     <TableCell align="right">
                       {t('admin.siteEvents.summary.colCount', 'Count')}
@@ -466,6 +489,32 @@ const AdminSiteEventsPage: React.FC = () => {
                         <TableCell align="right">{row.count}</TableCell>
                       </TableRow>
                     ))}
+                  {summaryGroupBy === 'eventAndSubject' &&
+                    summary.byEventAndSubject.map((row) => {
+                      const subTitle =
+                        row.subjectDisplayName?.trim() ||
+                        [row.subjectType, row.subjectId].filter(Boolean).join(' ') ||
+                        '—';
+                      return (
+                        <TableRow
+                          key={`${row.eventType}-${row.subjectType ?? ''}-${row.subjectId ?? ''}`}
+                        >
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={truncate(row.eventType, 40)}
+                              color={eventTypeChipColor(row.eventType)}
+                              variant="outlined"
+                              sx={{ mb: 0.5, display: 'block', width: 'fit-content' }}
+                            />
+                            <Typography variant="body2" fontWeight={600} display="block">
+                              {subTitle}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">{row.count}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -554,25 +603,23 @@ const AdminSiteEventsPage: React.FC = () => {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>{t('admin.siteEvents.colTime', 'Time')}</TableCell>
+              <TableCell width={180}>{t('admin.siteEvents.colTime', 'Time')}</TableCell>
               <TableCell>{t('admin.siteEvents.colEvent', 'Event')}</TableCell>
-              <TableCell sx={{ minWidth: 200 }}>
+              <TableCell sx={{ minWidth: 220 }}>
                 {t('admin.siteEvents.colSubject', 'Subject')}
               </TableCell>
-              <TableCell>{t('admin.siteEvents.colViewer', 'Viewer')}</TableCell>
-              <TableCell>{t('admin.siteEvents.colMetadata', 'Metadata')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {listLoading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={3}>
                   {t('admin.siteEvents.empty', 'No events match these filters.')}
                 </TableCell>
               </TableRow>
@@ -588,25 +635,11 @@ const AdminSiteEventsPage: React.FC = () => {
                       label={truncate(row.event_type, 36)}
                       color={eventTypeChipColor(row.event_type)}
                       variant="outlined"
-                      sx={{ maxWidth: 280, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+                      sx={{ maxWidth: 320, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
                     />
                   </TableCell>
                   <TableCell>
                     <SubjectCell row={row} t={tBind} />
-                  </TableCell>
-                  <TableCell
-                    title={row.viewer_id}
-                    sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    <Typography variant="body2" fontSize="0.8rem">
-                      {formatViewer(row)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell
-                    title={JSON.stringify(row.metadata)}
-                    sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    {truncate(JSON.stringify(row.metadata ?? {}), 80)}
                   </TableCell>
                 </TableRow>
               ))

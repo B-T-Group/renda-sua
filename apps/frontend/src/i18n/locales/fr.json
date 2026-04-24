@@ -260,7 +260,8 @@
       "aggregateBy": "Agréger par",
       "aggregate": {
         "eventType": "Type d’événement",
-        "inventoryItem": "Produit"
+        "inventoryItem": "Produit",
+        "eventAndSubject": "CTA + sujet"
       },
       "filtersTitle": "Filtres et export",
       "inventoryEventTotal": "Événements liés à un produit (période) : {{n}}",
@@ -268,6 +269,8 @@
         "title": "Résumé d’activité",
         "caption": "Totaux par type d’action (CTA) sur la période. Tri par effectif (du plus fréquent au moins).",
         "captionByProduct": "Totaux par produit (ligne d’inventaire). Top 40 par volume. Seules les actions liées à un produit sont comptées.",
+        "captionEventSubject": "Totaux par couple CTA + sujet (ex. un même produit avec des actions différentes = lignes distinctes). Top 50.",
+        "colEventSubject": "CTA et sujet",
         "colMetric": "Indicateur",
         "colCount": "Nombre",
         "totalEvents": "Tous les événements (filtrés)",
@@ -281,7 +284,8 @@
         "total": "Tous les événements (filtrés)",
         "centerLabel": "Total des événements",
         "events": "Événements",
-        "caption": "Anneau : part de chaque segment. Barres : effectifs exacts."
+        "caption": "Anneau : part de chaque segment. Barres : effectifs exacts.",
+        "captionEventSubject": "Chaque part : un type de CTA et un sujet (ex. consultation sur un produit donné)."
       }
     },
     "businesses": {

@@ -260,7 +260,8 @@
       "aggregateBy": "Aggregate by",
       "aggregate": {
         "eventType": "Event type",
-        "inventoryItem": "Product"
+        "inventoryItem": "Product",
+        "eventAndSubject": "CTA + subject"
       },
       "filtersTitle": "Filters & export",
       "inventoryEventTotal": "Events on catalog products (in range): {{n}}",
@@ -268,6 +269,8 @@
         "title": "Activity summary",
         "caption": "Counts in the current date range and filters, grouped by CTA. Rows are ordered by count (highest first).",
         "captionByProduct": "Counts per catalog product (inventory item). Top 40 by volume. Only rows tied to a product are included.",
+        "captionEventSubject": "Counts each combination of CTA (event) and subject (e.g. one product). Top 50 pairs. Same product with different CTAs appears as separate rows.",
+        "colEventSubject": "CTA & subject",
         "colMetric": "Metric",
         "colCount": "Count",
         "totalEvents": "All events (filtered)",
@@ -281,7 +284,8 @@
         "total": "All events (filtered)",
         "centerLabel": "Total events",
         "events": "Events",
-        "caption": "Donut: share of each slice. Bar: exact counts."
+        "caption": "Donut: share of each slice. Bar: exact counts.",
+        "captionEventSubject": "Each slice: one CTA type and one subject together (e.g. browse on a given product)."
       }
     },
     "businesses": {

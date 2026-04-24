@@ -54,12 +54,12 @@ export class AdminSiteEventsController {
   @Get('summary')
   @ApiOperation({
     summary:
-      'Aggregated event counts: by event type or by inventory item (use summaryGroupBy)',
+      'Aggregated counts: summaryGroupBy=eventType (default), inventoryItem, or eventAndSubject',
   })
   @ApiResponse({
     status: 200,
     description:
-      'Total count, optional byEventType or byInventoryItem, truncation flags',
+      'Total, breakdown by groupBy, truncation flags (inventory / event+subject)',
   })
   async summary(@Query() query: AdminSiteEventsQueryDto) {
     this.assertDateRange(query);

@@ -16,22 +16,43 @@ type SiteEventSummaryChartProps = {
 
 type BuiltSeries = { titles: string[]; values: number[] };
 
+function trunc(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return `${s.slice(0, n - 1)}…`;
+}
+
 function buildSeries(
   summary: AdminSiteEventSummary,
   eventTypeLabel: (raw: string) => string,
   inventoryItemTitle: SiteEventSummaryChartProps['inventoryItemTitle'],
   t: (k: string, d: string) => string
 ): BuiltSeries {
+  if (summary.groupBy === 'eventType' && summary.byEventType.length > 0) {
+    return {
+      titles: summary.byEventType.map((r) => eventTypeLabel(r.eventType)),
+      values: summary.byEventType.map((r) => r.count),
+    };
+  }
   if (summary.groupBy === 'inventoryItem' && summary.byInventoryItem.length > 0) {
     return {
       titles: summary.byInventoryItem.map((r) => inventoryItemTitle(r)),
       values: summary.byInventoryItem.map((r) => r.count),
     };
   }
-  if (summary.byEventType.length > 0) {
+  if (
+    summary.groupBy === 'eventAndSubject' &&
+    summary.byEventAndSubject.length > 0
+  ) {
     return {
-      titles: summary.byEventType.map((r) => eventTypeLabel(r.eventType)),
-      values: summary.byEventType.map((r) => r.count),
+      titles: summary.byEventAndSubject.map((r) => {
+        const name =
+          r.subjectDisplayName ||
+          (r.subjectId
+            ? trunc(r.subjectId, 10)
+            : r.subjectType || '—');
+        return `${trunc(eventTypeLabel(r.eventType), 24)} · ${trunc(name, 20)}`;
+      }),
+      values: summary.byEventAndSubject.map((r) => r.count),
     };
   }
   if (summary.total > 0) {
@@ -82,7 +103,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
           donut: {
             labels: {
               show: true,
-              name: { fontSize: '13px' },
+              name: { fontSize: '12px' },
               value: { fontSize: '20px', fontWeight: 600 },
               total: {
                 show: true,
@@ -98,7 +119,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
       stroke: { width: 2, colors: [theme.palette.background.paper] },
       legend: {
         position: 'bottom',
-        fontSize: '11px',
+        fontSize: '10px',
         labels: { colors: theme.palette.text.secondary },
       },
       theme: { mode: theme.palette.mode },
@@ -121,9 +142,9 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
       dataLabels: { enabled: true, offsetX: 8, style: { fontSize: '11px' } },
       xaxis: {
         categories: titles,
-        labels: { style: { colors: theme.palette.text.secondary, fontSize: '10px' } },
+        labels: { style: { colors: theme.palette.text.secondary, fontSize: '9px' } },
       },
-      yaxis: { labels: { maxWidth: 220 } },
+      yaxis: { labels: { maxWidth: 240 } },
       colors: [theme.palette.primary.main],
       grid: { borderColor: theme.palette.divider },
       theme: { mode: theme.palette.mode },
@@ -151,7 +172,7 @@ const SiteEventSummaryChart: React.FC<SiteEventSummaryChartProps> = ({
           type="bar"
           options={barOptions}
           series={[{ name: t('admin.siteEvents.chart.events', 'Events'), data: values }]}
-          height={Math.max(200, 48 + values.length * 36)}
+          height={Math.max(200, 48 + values.length * 32)}
         />
       </Box>
     </Box>

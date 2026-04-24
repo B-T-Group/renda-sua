@@ -141,13 +141,23 @@ export type SiteEventSummaryByInventoryItem = {
   count: number;
 };
 
+export type SiteEventSummaryByEventAndSubject = {
+  eventType: string;
+  subjectType: string | null;
+  subjectId: string | null;
+  subjectDisplayName: string | null;
+  count: number;
+};
+
 export type AdminSiteEventsSummaryResult = {
   total: number;
-  groupBy: 'eventType' | 'inventoryItem';
+  groupBy: 'eventType' | 'inventoryItem' | 'eventAndSubject';
   byEventType: SiteEventSummaryByType[];
   byInventoryItem: SiteEventSummaryByInventoryItem[];
+  byEventAndSubject: SiteEventSummaryByEventAndSubject[];
   inventoryEventTotal: number;
   inventorySummaryTruncated: boolean;
+  eventSubjectSummaryTruncated: boolean;
 };
 
 const BATCH_SITE_EVENT_SUBJECT_IDS = `
@@ -162,6 +172,25 @@ const BATCH_SITE_EVENT_SUBJECT_IDS = `
       offset: $offset
       order_by: [{ created_at: asc }, { id: asc }]
     ) {
+      subject_id
+    }
+  }
+`;
+
+const BATCH_SITE_EVENTS_EVENT_SUBJECT = `
+  query BatchSiteEventsEventSubject(
+    $where: site_events_bool_exp!
+    $limit: Int!
+    $offset: Int!
+  ) {
+    site_events(
+      where: $where
+      limit: $limit
+      offset: $offset
+      order_by: [{ created_at: asc }, { id: asc }]
+    ) {
+      event_type
+      subject_type
       subject_id
     }
   }
@@ -410,6 +439,49 @@ export class SiteEventsService {
     return { counts, truncated };
   }
 
+  private static eventSubjectAggKey(
+    eventType: string,
+    subjectType: string | null,
+    subjectId: string | null
+  ): string {
+    return JSON.stringify([eventType, subjectType, subjectId]);
+  }
+
+  private async buildEventSubjectCountMap(
+    where: Record<string, unknown>
+  ): Promise<{ counts: Map<string, number>; truncated: boolean }> {
+    const counts = new Map<string, number>();
+    let truncated = false;
+    for (let b = 0; b < INVENTORY_AGG_MAX_BATCHES; b++) {
+      const offset = b * INVENTORY_AGG_BATCH;
+      const res = await this.hasuraSystemService.executeQuery<{
+        site_events: Array<{
+          event_type: string;
+          subject_type: string | null;
+          subject_id: string | null;
+        }>;
+      }>(BATCH_SITE_EVENTS_EVENT_SUBJECT, {
+        where,
+        limit: INVENTORY_AGG_BATCH,
+        offset,
+      });
+      const batch = res.site_events ?? [];
+      for (const row of batch) {
+        const k = SiteEventsService.eventSubjectAggKey(
+          row.event_type,
+          row.subject_type ?? null,
+          row.subject_id ?? null
+        );
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      if (batch.length < INVENTORY_AGG_BATCH) {
+        return { counts, truncated: false };
+      }
+    }
+    truncated = true;
+    return { counts, truncated };
+  }
+
   private withEventType(
     where: Record<string, unknown>,
     eventType: string
@@ -448,14 +520,74 @@ export class SiteEventsService {
       AdminSiteEventsListParams,
       'eventType' | 'subjectType' | 'subjectId' | 'from' | 'to'
     >,
-    groupBy: 'eventType' | 'inventoryItem'
+    groupBy: 'eventType' | 'inventoryItem' | 'eventAndSubject'
   ): Promise<AdminSiteEventsSummaryResult> {
     const where = this.adminWhere(p);
     const total = await this.countSiteEvents(where);
     if (groupBy === 'inventoryItem') {
       return this.summaryByInventoryItems(p, where, total);
     }
+    if (groupBy === 'eventAndSubject') {
+      return this.summaryByEventAndSubject(p, where, total);
+    }
     return this.summaryByEventType(p, where, total);
+  }
+
+  private async summaryByEventAndSubject(
+    _p: Pick<
+      AdminSiteEventsListParams,
+      'eventType' | 'subjectType' | 'subjectId' | 'from' | 'to'
+    >,
+    where: Record<string, unknown>,
+    total: number
+  ): Promise<AdminSiteEventsSummaryResult> {
+    const { counts, truncated } = await this.buildEventSubjectCountMap(where);
+    const sorted = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 50);
+    const invIds: string[] = [];
+    for (const [k] of sorted) {
+      const [, st, sid] = JSON.parse(k) as [
+        string,
+        string | null,
+        string | null
+      ];
+      if (st === SITE_EVENT_SUBJECT_INVENTORY_ITEM && sid) {
+        invIds.push(sid);
+      }
+    }
+    const names = await this.resolveInventoryNamesInChunks(invIds);
+    const byEventAndSubject: SiteEventSummaryByEventAndSubject[] = sorted.map(
+      ([k, count]) => {
+        const [eventType, subjectType, subjectId] = JSON.parse(k) as [
+          string,
+          string | null,
+          string | null
+        ];
+        let subjectDisplayName: string | null = null;
+        if (subjectType === SITE_EVENT_SUBJECT_INVENTORY_ITEM && subjectId) {
+          const n = names.get(subjectId);
+          subjectDisplayName = n && n.length > 0 ? n : null;
+        }
+        return {
+          eventType,
+          subjectType,
+          subjectId,
+          subjectDisplayName,
+          count,
+        };
+      }
+    );
+    return {
+      total,
+      groupBy: 'eventAndSubject',
+      byEventType: [],
+      byInventoryItem: [],
+      byEventAndSubject,
+      inventoryEventTotal: 0,
+      inventorySummaryTruncated: false,
+      eventSubjectSummaryTruncated: truncated,
+    };
   }
 
   private async summaryByInventoryItems(
@@ -486,8 +618,10 @@ export class SiteEventsService {
       groupBy: 'inventoryItem',
       byEventType: [],
       byInventoryItem,
+      byEventAndSubject: [],
       inventoryEventTotal,
       inventorySummaryTruncated: truncated,
+      eventSubjectSummaryTruncated: false,
     };
   }
 
@@ -505,8 +639,10 @@ export class SiteEventsService {
         groupBy: 'eventType',
         byEventType: [],
         byInventoryItem: [],
+        byEventAndSubject: [],
         inventoryEventTotal: 0,
         inventorySummaryTruncated: false,
+        eventSubjectSummaryTruncated: false,
       };
     }
     const v1Counts = await Promise.all(
@@ -532,8 +668,10 @@ export class SiteEventsService {
       groupBy: 'eventType',
       byEventType: byType,
       byInventoryItem: [],
+      byEventAndSubject: [],
       inventoryEventTotal: 0,
       inventorySummaryTruncated: false,
+      eventSubjectSummaryTruncated: false,
     };
   }
 

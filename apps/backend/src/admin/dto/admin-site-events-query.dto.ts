@@ -56,10 +56,10 @@ export class AdminSiteEventsQueryDto {
   to?: string;
 
   @ApiPropertyOptional({
-    enum: ['eventType', 'inventoryItem'],
+    enum: ['eventType', 'inventoryItem', 'eventAndSubject'],
     description: 'Summary grouping (summary endpoint only)',
   })
   @IsOptional()
-  @IsIn(['eventType', 'inventoryItem'])
-  summaryGroupBy?: 'eventType' | 'inventoryItem';
+  @IsIn(['eventType', 'inventoryItem', 'eventAndSubject'])
+  summaryGroupBy?: 'eventType' | 'inventoryItem' | 'eventAndSubject';
 }

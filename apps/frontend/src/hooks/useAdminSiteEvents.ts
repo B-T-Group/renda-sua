@@ -13,7 +13,7 @@ export interface AdminSiteEventRow {
   created_at: string;
 }
 
-export type SummaryGroupBy = 'eventType' | 'inventoryItem';
+export type SummaryGroupBy = 'eventType' | 'inventoryItem' | 'eventAndSubject';
 
 export interface AdminSiteEventSummary {
   total: number;
@@ -24,8 +24,16 @@ export interface AdminSiteEventSummary {
     itemName: string | null;
     count: number;
   }>;
+  byEventAndSubject: Array<{
+    eventType: string;
+    subjectType: string | null;
+    subjectId: string | null;
+    subjectDisplayName: string | null;
+    count: number;
+  }>;
   inventoryEventTotal: number;
   inventorySummaryTruncated: boolean;
+  eventSubjectSummaryTruncated: boolean;
 }
 
 export interface AdminSiteEventsListParams {
@@ -156,7 +164,9 @@ function emptySummary(groupBy: SummaryGroupBy): AdminSiteEventSummary {
     groupBy,
     byEventType: [],
     byInventoryItem: [],
+    byEventAndSubject: [],
     inventoryEventTotal: 0,
     inventorySummaryTruncated: false,
+    eventSubjectSummaryTruncated: false,
   };
 }
