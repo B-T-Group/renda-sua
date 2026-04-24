@@ -1503,6 +1503,12 @@
         "status": "Status",
         "specialListingLabel": "Spotlight",
         "sortBy": "Sort by",
+        "favoritesLabel": "Favorites",
+        "favoritesValue": {
+          "all": "All products",
+          "favorites": "Favorites only",
+          "not_favorites": "Not favorited"
+        },
         "sortByValue": {
           "default": "Default",
           "price_asc": "Price: low to high",
@@ -1545,6 +1551,10 @@
       "listingActive": "Listing active",
       "activeStatusUpdated": "Listing status updated",
       "activeStatusUpdateError": "Failed to update listing status",
+      "favoriteUpdated": "Favorites updated",
+      "favoriteUpdateError": "Failed to update favorites",
+      "favoriteToggleHint": "Mark as favorite for quick filtering and export",
+      "favoriteToggleAria": "Toggle favorite",
       "itemCreated": "Item created successfully",
       "itemDeleted": "Item deleted successfully",
       "itemUpdated": "Item updated successfully",

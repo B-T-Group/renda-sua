@@ -29,6 +29,8 @@ export interface Item {
   business_id: string;
   created_at: string;
   updated_at: string;
+  /** Business catalog favorite (from business-items page-data); business UI only. */
+  is_favorite?: boolean;
   business?: {
     id: string;
     name: string;

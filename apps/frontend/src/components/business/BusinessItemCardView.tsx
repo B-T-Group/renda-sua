@@ -8,7 +8,9 @@ import {
   Inventory as InventoryIcon,
   LocalOffer as DealIcon,
   LocationOn as LocationOnIcon,
-  TrendingUp as PromoteIcon,
+  TrendingUp as   PromoteIcon,
+  Star,
+  StarBorder,
   Visibility as ViewIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -99,6 +101,7 @@ interface Item {
   item_images?: ItemImage[];
   item_tags?: Array<{ tag: { id: string; name: string } }>;
   business_inventories?: BusinessInventory[];
+  is_favorite?: boolean;
 }
 
 interface BusinessItemCardViewProps {
@@ -111,6 +114,7 @@ interface BusinessItemCardViewProps {
   onPromoteItem?: (item: Item) => void;
   onRefineWithAi?: (item: Item) => void;
   onToggleItemActive?: (item: Item, isActive: boolean) => void | Promise<void>;
+  onToggleFavorite?: (item: Item, favorited: boolean) => void | Promise<void>;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -123,10 +127,12 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onPromoteItem,
   onRefineWithAi,
   onToggleItemActive,
+  onToggleFavorite,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const [togglingActive, setTogglingActive] = useState(false);
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   const galleryImages = useMemo(
     () => orderedCardGalleryImages(item.item_images),
@@ -230,6 +236,16 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
     }
   };
 
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onToggleFavorite || togglingFavorite) return;
+    const next = !item.is_favorite;
+    setTogglingFavorite(true);
+    void Promise.resolve(onToggleFavorite(item, next)).finally(() =>
+      setTogglingFavorite(false)
+    );
+  };
+
   return (
     <Card
       sx={{
@@ -248,6 +264,46 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         },
       }}
     >
+      {onToggleFavorite && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            zIndex: 2,
+          }}
+        >
+          <Tooltip
+            title={t(
+              'business.items.favoriteToggleHint',
+              'Mark as favorite for quick filtering and export'
+            )}
+          >
+            <span>
+              <IconButton
+                type="button"
+                size="small"
+                onClick={handleFavoriteClick}
+                disabled={togglingFavorite}
+                aria-pressed={Boolean(item.is_favorite)}
+                aria-label={t('business.items.favoriteToggleAria', 'Toggle favorite')}
+                sx={{
+                  bgcolor: 'rgba(255, 255, 255, 0.92)',
+                  boxShadow: 1,
+                  '&:hover': { bgcolor: 'common.white' },
+                }}
+              >
+                {item.is_favorite ? (
+                  <Star sx={{ color: 'warning.main', fontSize: 22 }} />
+                ) : (
+                  <StarBorder sx={{ color: 'text.secondary', fontSize: 22 }} />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Box>
+      )}
+
       {/* Status Badges - Top Right Corner */}
       <Box
         sx={{

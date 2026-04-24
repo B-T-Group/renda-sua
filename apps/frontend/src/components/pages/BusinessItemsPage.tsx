@@ -142,6 +142,7 @@ const BusinessItemsPage: React.FC = () => {
     stockFilter: 'all',
     specialListingFilter: 'all',
     sortBy: 'default',
+    favoritesFilter: 'all',
   });
 
   const apiClient = useApiClient();
@@ -330,6 +331,30 @@ const BusinessItemsPage: React.FC = () => {
     setPromoteItem(item);
   };
 
+  const handleToggleFavorite = useCallback(
+    async (row: Item, favorited: boolean) => {
+      try {
+        await apiClient.put(`/business-items/items/${row.id}/favorite`, {
+          favorited,
+        });
+        await refetchPageData();
+        enqueueSnackbar(
+          t('business.items.favoriteUpdated', 'Favorites updated'),
+          { variant: 'success' }
+        );
+      } catch (err: any) {
+        enqueueSnackbar(
+          t(
+            'business.items.favoriteUpdateError',
+            'Failed to update favorites'
+          ),
+          { variant: 'error' }
+        );
+      }
+    },
+    [apiClient, refetchPageData, enqueueSnackbar, t]
+  );
+
   const handleToggleItemActive = useCallback(
     async (row: Item, isActive: boolean) => {
       try {
@@ -412,13 +437,20 @@ const BusinessItemsPage: React.FC = () => {
           itemHasActiveDeal(item) || itemHasActivePromotion(item);
       }
 
+      const fav = Boolean(item.is_favorite);
+      const matchesFavorites =
+        filters.favoritesFilter === 'all' ||
+        (filters.favoritesFilter === 'favorites' && fav) ||
+        (filters.favoritesFilter === 'not_favorites' && !fav);
+
       return (
         matchesSearch &&
         matchesStatus &&
         matchesCategory &&
         matchesBrand &&
         matchesStock &&
-        matchesSpotlight
+        matchesSpotlight &&
+        matchesFavorites
       );
     }) || [];
 
@@ -710,6 +742,7 @@ const BusinessItemsPage: React.FC = () => {
                     onPromoteItem={handlePromoteItem}
                     onRefineWithAi={(i) => setRefineAiItem(i)}
                     onToggleItemActive={handleToggleItemActive}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 </Box>
               ))}
@@ -800,7 +833,7 @@ const BusinessItemsPage: React.FC = () => {
       <FacebookExportSelectDialog
         open={facebookExportSelectOpen}
         onClose={() => setFacebookExportSelectOpen(false)}
-        items={items ?? []}
+        items={sortedItems}
         onConfirm={handleConfirmFacebookExport}
       />
     </Container>

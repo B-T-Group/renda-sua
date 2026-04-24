@@ -40,6 +40,8 @@ export interface ItemsFilterState {
   /** all | deals | promotions | deals_or_promotions */
   specialListingFilter: string;
   sortBy: ItemsSortBy;
+  /** all | favorites | not_favorites */
+  favoritesFilter: string;
 }
 
 interface ItemsFilterBarProps {
@@ -80,6 +82,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
       stockFilter: 'all',
       specialListingFilter: 'all',
       sortBy: 'default',
+      favoritesFilter: 'all',
     });
   };
 
@@ -92,6 +95,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     if (filters.stockFilter !== 'all') count++;
     if (filters.specialListingFilter !== 'all') count++;
     if (filters.sortBy !== 'default') count++;
+    if (filters.favoritesFilter !== 'all') count++;
     return count;
   };
 
@@ -166,6 +170,16 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           filters.sortBy
         )}`,
         onDelete: () => handleFilterChange('sortBy', 'default'),
+      });
+    }
+
+    if (filters.favoritesFilter !== 'all') {
+      chips.push({
+        label: `${t('business.items.filters.favoritesLabel', 'Favorites')}: ${t(
+          `business.items.filters.favoritesValue.${filters.favoritesFilter}`,
+          filters.favoritesFilter
+        )}`,
+        onDelete: () => handleFilterChange('favoritesFilter', 'all'),
       });
     }
 
@@ -360,6 +374,35 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
             {t(
               'business.items.filters.sortByValue.created_asc',
               'Date created: oldest first'
+            )}
+          </MenuItem>
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth size="small">
+        <InputLabel>
+          {t('business.items.filters.favoritesLabel', 'Favorites')}
+        </InputLabel>
+        <Select
+          value={filters.favoritesFilter}
+          onChange={(e) =>
+            handleFilterChange('favoritesFilter', e.target.value)
+          }
+          label={t('business.items.filters.favoritesLabel', 'Favorites')}
+        >
+          <MenuItem value="all">
+            {t('business.items.filters.favoritesValue.all', 'All products')}
+          </MenuItem>
+          <MenuItem value="favorites">
+            {t(
+              'business.items.filters.favoritesValue.favorites',
+              'Favorites only'
+            )}
+          </MenuItem>
+          <MenuItem value="not_favorites">
+            {t(
+              'business.items.filters.favoritesValue.not_favorites',
+              'Not favorited'
             )}
           </MenuItem>
         </Select>
@@ -600,6 +643,35 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 </Select>
               </FormControl>
 
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>
+                  {t('business.items.filters.favoritesLabel', 'Favorites')}
+                </InputLabel>
+                <Select
+                  value={filters.favoritesFilter}
+                  onChange={(e) =>
+                    handleFilterChange('favoritesFilter', e.target.value)
+                  }
+                  label={t('business.items.filters.favoritesLabel', 'Favorites')}
+                >
+                  <MenuItem value="all">
+                    {t('business.items.filters.favoritesValue.all', 'All products')}
+                  </MenuItem>
+                  <MenuItem value="favorites">
+                    {t(
+                      'business.items.filters.favoritesValue.favorites',
+                      'Favorites only'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="not_favorites">
+                    {t(
+                      'business.items.filters.favoritesValue.not_favorites',
+                      'Not favorited'
+                    )}
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
               {activeFiltersCount > 0 && (
                 <Button
                   variant="outlined"
@@ -614,7 +686,8 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
             {/* Second Row - Active Filters & Results Count */}
             {(activeFiltersCount > 0 ||
               filteredItemsCount !== totalItems ||
-              filters.sortBy !== 'default') && (
+              filters.sortBy !== 'default' ||
+              filters.favoritesFilter !== 'all') && (
               <Stack
                 direction="row"
                 spacing={1}

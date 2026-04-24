@@ -1491,6 +1491,12 @@
         "showing": "Affichage",
         "status": "Statut",
         "specialListingLabel": "Visibilité",
+        "favoritesLabel": "Favoris",
+        "favoritesValue": {
+          "all": "Tous les produits",
+          "favorites": "Favoris uniquement",
+          "not_favorites": "Sans favori"
+        },
         "sortBy": "Trier par",
         "sortByValue": {
           "default": "Par défaut",
@@ -1534,6 +1540,10 @@
       "listingActive": "Annonce active",
       "activeStatusUpdated": "Statut de l’annonce mis à jour",
       "activeStatusUpdateError": "Échec de la mise à jour du statut de l’annonce",
+      "favoriteUpdated": "Favoris mis à jour",
+      "favoriteUpdateError": "Échec de la mise à jour des favoris",
+      "favoriteToggleHint": "Marquer comme favori pour filtrer et exporter plus vite",
+      "favoriteToggleAria": "Basculer favori",
       "itemCreated": "Article créé avec succès",
       "itemDeleted": "Article supprimé avec succès",
       "itemUpdated": "Article mis à jour avec succès",

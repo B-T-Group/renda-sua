@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -30,6 +31,7 @@ import { UpdateItemDealDto } from './dto/update-item-deal.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
+import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -428,6 +430,34 @@ export class BusinessItemsController {
       body
     );
     return { success: true, data: { item } };
+  }
+
+  @Put('items/:itemId/favorite')
+  @ApiOperation({
+    summary: 'Mark or unmark an item as a business favorite (catalog bookmark)',
+  })
+  @ApiResponse({ status: 200, description: 'Favorite status updated' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item not found for this business' })
+  @ApiBody({ type: SetItemFavoriteDto })
+  async setItemFavorite(
+    @Param('itemId') itemId: string,
+    @Body() body: SetItemFavoriteDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    await this.businessItemsService.setItemFavorite(
+      businessId,
+      itemId,
+      body.favorited
+    );
+    return { success: true };
   }
 
   @Delete(':id')

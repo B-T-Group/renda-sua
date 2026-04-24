@@ -528,6 +528,43 @@ const UPDATE_ITEM_STATUS = `
   }
 `;
 
+const GET_FAVORITE_ITEM_IDS = `
+  query GetFavoriteItemIds($businessId: uuid!) {
+    business_item_favorites(where: { business_id: { _eq: $businessId } }) {
+      item_id
+    }
+  }
+`;
+
+const INSERT_ITEM_FAVORITE = `
+  mutation InsertItemFavorite($businessId: uuid!, $itemId: uuid!) {
+    insert_business_item_favorites_one(
+      object: { business_id: $businessId, item_id: $itemId }
+    ) {
+      id
+    }
+  }
+`;
+
+const DELETE_ITEM_FAVORITE = `
+  mutation DeleteItemFavorite($businessId: uuid!, $itemId: uuid!) {
+    delete_business_item_favorites(
+      where: { business_id: { _eq: $businessId }, item_id: { _eq: $itemId } }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+const GET_ITEM_BUSINESS = `
+  query GetItemBusiness($id: uuid!) {
+    items_by_pk(id: $id) {
+      id
+      business_id
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessItemsService {
   private readonly logger = new Logger(BusinessItemsService.name);
@@ -817,12 +854,58 @@ export class BusinessItemsService {
    * Runs items, locations, and available-items queries in parallel.
    */
   async getPageData(businessId: string) {
-    const [items, business_locations, available_items] = await Promise.all([
-      this.getItems(businessId),
-      this.getBusinessLocations(businessId),
-      this.getAvailableItems(),
-    ]);
+    const [rawItems, business_locations, available_items, favoriteIds] =
+      await Promise.all([
+        this.getItems(businessId),
+        this.getBusinessLocations(businessId),
+        this.getAvailableItems(),
+        this.getFavoriteItemIds(businessId),
+      ]);
+    const items = rawItems.map((it: { id: string }) => ({
+      ...it,
+      is_favorite: favoriteIds.has(it.id),
+    }));
     return { items, business_locations, available_items };
+  }
+
+  async getFavoriteItemIds(businessId: string): Promise<Set<string>> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_item_favorites: { item_id: string }[];
+    }>(GET_FAVORITE_ITEM_IDS, { businessId });
+    return new Set(
+      (result.business_item_favorites ?? []).map((r) => r.item_id)
+    );
+  }
+
+  async setItemFavorite(
+    businessId: string,
+    itemId: string,
+    favorited: boolean
+  ): Promise<void> {
+    const check = await this.hasuraSystemService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BUSINESS, { id: itemId });
+    if (!check.items_by_pk || check.items_by_pk.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (favorited) {
+      await this.hasuraSystemService.executeMutation(DELETE_ITEM_FAVORITE, {
+        businessId,
+        itemId,
+      });
+      await this.hasuraSystemService.executeMutation(INSERT_ITEM_FAVORITE, {
+        businessId,
+        itemId,
+      });
+    } else {
+      await this.hasuraSystemService.executeMutation(DELETE_ITEM_FAVORITE, {
+        businessId,
+        itemId,
+      });
+    }
   }
 
   async getBusinessInventory(businessId: string) {
