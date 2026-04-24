@@ -4,23 +4,62 @@
     "accessibilityText": "We make our platform accessible to businesses of all sizes, from small local shops to larger enterprises, ensuring everyone can benefit from our services.",
     "community": "Community First",
     "communityText": "We believe in strengthening local communities by supporting local businesses and creating opportunities for economic growth.",
+    "companyIntro": "Rendasua is a Canadian-owned company, owned by <groupeLink>Groupe BT</groupeLink>. We were founded in 2023 and first launched in Gabon to make deliveries easier. Since 2025, we have expanded beyond deliveries to support online sales as well.",
     "contactText": "We would love to hear from you! Whether you are a business owner looking to join our platform, a delivery agent interested in opportunities, or a customer with feedback, please reach out to us.",
     "contactUs": "Contact Us",
     "email": "Email",
     "emailAddress": "contact@rendasua.com",
     "innovation": "Innovation",
     "innovationText": "We continuously innovate to provide cutting-edge solutions that make business operations more efficient and customer experiences more delightful.",
-    "lastUpdated": "Last updated: January 2025",
+    "lastUpdated": "Last updated: April 2026",
     "missionText": "At Rendasua, we are dedicated to empowering local businesses, delivery agents, and customers by creating a seamless, efficient marketplace that connects communities and drives economic growth.",
+    "offices": {
+      "addressLabel": "Address",
+      "headOfficeBadge": "Head office",
+      "intro": "Our teams work across Canada, Central Africa, and West Africa. Reach the location closest to you using the details below.",
+      "items": {
+        "applyProjectMontreal": {
+          "name": "ApplyProject Canada"
+        },
+        "canadaMontreal": {
+          "name": "B&T Canada, Montréal (QC) — Head office"
+        },
+        "canadaSudbury": {
+          "name": "B&T Canada — Sudbury (ON)"
+        },
+        "congo": {
+          "name": "B&T Congo (HQ)"
+        },
+        "coteIvoire": {
+          "name": "B&T Côte d'Ivoire"
+        },
+        "douala": {
+          "name": "B&T Douala — Cameroon"
+        },
+        "gabon": {
+          "name": "B&T Gabon"
+        },
+        "togo": {
+          "name": "B&T Togo"
+        },
+        "yaounde": {
+          "name": "B&T Yaoundé"
+        }
+      },
+      "phoneLabel": "Phone"
+    },
     "ourMission": "Our Mission",
+    "ourOffices": "Where to find us",
     "ourTeam": "Our Team",
     "ourValues": "Our Values",
+    "parentCompanyText": "Groupe B&T is a project and facilities management company focused on real estate and socioeconomic innovation.",
     "teamText": "Our team consists of passionate individuals who are committed to revolutionizing the way local businesses operate and serve their communities. We combine expertise in technology, business operations, and customer service to deliver exceptional results.",
     "title": "About Us",
     "transparency": "Transparency",
     "transparencyText": "We maintain transparency in all our operations, from pricing to delivery tracking, ensuring trust and reliability for all our users.",
     "whatWeDo": "What We Do",
-    "whatWeDoText": "Rendasua is a comprehensive platform that enables local businesses to showcase their products, manage inventory across multiple locations, and reach customers in their community. Our platform facilitates seamless order management, real-time delivery tracking, and efficient payment processing."
+    "whatWeDoText": "Rendasua is a comprehensive platform that enables local businesses to showcase their products, manage inventory across multiple locations, and reach customers in their community. Our platform facilitates seamless order management, real-time delivery tracking, and efficient payment processing.",
+    "whoWeAre": "Who we are"
   },
   "accounts": {
     "account": "Account",

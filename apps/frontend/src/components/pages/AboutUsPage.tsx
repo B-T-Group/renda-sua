@@ -1,6 +1,64 @@
-import { Box, Container, Paper, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  Chip,
+  Container,
+  Grid,
+  Link,
+  Paper,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import React from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
+import type { AboutUsOfficeEntry } from './aboutUsOfficesData';
+import { ABOUT_US_OFFICE_ENTRIES } from './aboutUsOfficesData';
+
+function OfficeLocationCard({ office }: { office: AboutUsOfficeEntry }) {
+  const { t } = useTranslation();
+  const name = t(`aboutUs.offices.items.${office.id}.name`, office.nameDefault);
+  const telHref = `tel:${office.phone.replace(/[^\d+]/g, '')}`;
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2.5,
+        height: '100%',
+        borderRadius: 2,
+        borderColor: 'divider',
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+        <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600 }}>
+          {name}
+        </Typography>
+        {office.isHeadOffice ? (
+          <Chip
+            size="small"
+            label={t('aboutUs.offices.headOfficeBadge', 'Head office')}
+            color="primary"
+            variant="outlined"
+          />
+        ) : null}
+      </Box>
+      <Typography variant="body2" color="text.secondary" paragraph sx={{ mb: 1 }}>
+        <strong>{t('aboutUs.offices.addressLabel', 'Address')}:</strong> {office.address}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" paragraph sx={{ mb: 1 }}>
+        <strong>{t('aboutUs.offices.phoneLabel', 'Phone')}:</strong>{' '}
+        <Link href={telHref} color="inherit" underline="hover">
+          {office.phone}
+        </Link>
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        <strong>{t('aboutUs.email', 'Email')}:</strong>{' '}
+        <Link href={`mailto:${office.email}`} underline="hover">
+          {office.email}
+        </Link>
+      </Typography>
+    </Paper>
+  );
+}
 
 const AboutUsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -14,7 +72,7 @@ const AboutUsPage: React.FC = () => {
         py: 4,
       }}
     >
-      <Container maxWidth="md">
+      <Container maxWidth="lg">
         <Paper
           elevation={0}
           sx={{
@@ -38,12 +96,34 @@ const AboutUsPage: React.FC = () => {
           </Typography>
 
           <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h5"
-              component="h2"
-              gutterBottom
-              sx={{ fontWeight: 600, mb: 2 }}
-            >
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+              {t('aboutUs.whoWeAre', 'Who we are')}
+            </Typography>
+            <Typography variant="body1" paragraph>
+              <Trans
+                i18nKey="aboutUs.companyIntro"
+                defaults="Rendasua is a Canadian-owned company, owned by <groupeLink>Groupe BT</groupeLink>. We were founded in 2023 and first launched in Gabon to make deliveries easier. Since 2025, we have expanded beyond deliveries to support online sales as well."
+                components={{
+                  groupeLink: (
+                    <Link
+                      href="https://www.groupe-bt.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  ),
+                }}
+              />
+            </Typography>
+            <Typography variant="body1" paragraph sx={{ mb: 0 }}>
+              {t(
+                'aboutUs.parentCompanyText',
+                'Groupe B&T is a project and facilities management company focused on real estate and socioeconomic innovation.'
+              )}
+            </Typography>
+          </Box>
+
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
               {t('aboutUs.ourMission', 'Our Mission')}
             </Typography>
             <Typography variant="body1" paragraph>
@@ -55,12 +135,7 @@ const AboutUsPage: React.FC = () => {
           </Box>
 
           <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h5"
-              component="h2"
-              gutterBottom
-              sx={{ fontWeight: 600, mb: 2 }}
-            >
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
               {t('aboutUs.whatWeDo', 'What We Do')}
             </Typography>
             <Typography variant="body1" paragraph>
@@ -72,12 +147,26 @@ const AboutUsPage: React.FC = () => {
           </Box>
 
           <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h5"
-              component="h2"
-              gutterBottom
-              sx={{ fontWeight: 600, mb: 2 }}
-            >
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+              {t('aboutUs.ourOffices', 'Where to find us')}
+            </Typography>
+            <Typography variant="body1" paragraph>
+              {t(
+                'aboutUs.offices.intro',
+                'Our teams work across Canada, Central Africa, and West Africa. Reach the location closest to you using the details below.'
+              )}
+            </Typography>
+            <Grid container spacing={2}>
+              {ABOUT_US_OFFICE_ENTRIES.map((office) => (
+                <Grid key={office.id} size={{ xs: 12, md: 6 }}>
+                  <OfficeLocationCard office={office} />
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
               {t('aboutUs.ourValues', 'Our Values')}
             </Typography>
             <Box component="ul" sx={{ pl: 2 }}>
@@ -113,12 +202,7 @@ const AboutUsPage: React.FC = () => {
           </Box>
 
           <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h5"
-              component="h2"
-              gutterBottom
-              sx={{ fontWeight: 600, mb: 2 }}
-            >
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
               {t('aboutUs.ourTeam', 'Our Team')}
             </Typography>
             <Typography variant="body1" paragraph>
@@ -130,12 +214,7 @@ const AboutUsPage: React.FC = () => {
           </Box>
 
           <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h5"
-              component="h2"
-              gutterBottom
-              sx={{ fontWeight: 600, mb: 2 }}
-            >
+            <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
               {t('aboutUs.contactUs', 'Contact Us')}
             </Typography>
             <Typography variant="body1" paragraph>
@@ -152,7 +231,7 @@ const AboutUsPage: React.FC = () => {
 
           <Box sx={{ textAlign: 'center', mt: 4 }}>
             <Typography variant="body2" color="text.secondary">
-              {t('aboutUs.lastUpdated', 'Last updated: January 2025')}
+              {t('aboutUs.lastUpdated', 'Last updated: April 2026')}
             </Typography>
           </Box>
         </Paper>

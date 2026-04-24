@@ -4,23 +4,62 @@
     "accessibilityText": "Nous rendons notre plateforme accessible aux entreprises de toutes tailles, des petits commerces locaux aux grandes entreprises, garantissant que tout le monde puisse bénéficier de nos services.",
     "community": "Communauté d'Abord",
     "communityText": "Nous croyons en renforcer les communautés locales en soutenant les entreprises locales et en créant des opportunités de croissance économique.",
+    "companyIntro": "Rendasua est une entreprise canadienne, détenue par <groupeLink>Groupe BT</groupeLink>. Nous avons été fondés en 2023 et avons d'abord été lancés au Gabon pour faciliter les livraisons. Depuis 2025, nous avons élargi notre offre au-delà des livraisons pour prendre en charge la vente en ligne.",
     "contactText": "Nous aimerions avoir de vos nouvelles ! Que vous soyez propriétaire d'entreprise cherchant à rejoindre notre plateforme, agent de livraison intéressé par des opportunités, ou client avec des commentaires, n'hésitez pas à nous contacter.",
     "contactUs": "Nous Contacter",
     "email": "Email",
     "emailAddress": "contact@rendasua.com",
     "innovation": "Innovation",
     "innovationText": "Nous innovons continuellement pour fournir des solutions de pointe qui rendent les opérations commerciales plus efficaces et les expériences clients plus agréables.",
-    "lastUpdated": "Dernière mise à jour : Janvier 2025",
+    "lastUpdated": "Dernière mise à jour : avril 2026",
     "missionText": "Chez Rendasua, nous nous consacrons à autonomiser les entreprises locales, les agents de livraison et les clients en créant un marché fluide et efficace qui connecte les communautés et stimule la croissance économique.",
+    "offices": {
+      "addressLabel": "Adresse",
+      "headOfficeBadge": "Siège social",
+      "intro": "Nos équipes travaillent au Canada, en Afrique centrale et en Afrique de l'Ouest. Contactez l'emplacement le plus proche grâce aux coordonnées ci-dessous.",
+      "items": {
+        "applyProjectMontreal": {
+          "name": "ApplyProject Canada"
+        },
+        "canadaMontreal": {
+          "name": "B&T Canada, Montréal (QC) — Siège social"
+        },
+        "canadaSudbury": {
+          "name": "B&T Canada — Sudbury (ON)"
+        },
+        "congo": {
+          "name": "B&T Congo (siège)"
+        },
+        "coteIvoire": {
+          "name": "B&T Côte d'Ivoire"
+        },
+        "douala": {
+          "name": "B&T Douala — Cameroun"
+        },
+        "gabon": {
+          "name": "B&T Gabon"
+        },
+        "togo": {
+          "name": "B&T Togo"
+        },
+        "yaounde": {
+          "name": "B&T Yaoundé"
+        }
+      },
+      "phoneLabel": "Téléphone"
+    },
     "ourMission": "Notre Mission",
+    "ourOffices": "Où nous trouver",
     "ourTeam": "Notre Équipe",
     "ourValues": "Nos Valeurs",
+    "parentCompanyText": "Groupe B&T est une entreprise de gestion de projets et d'installations axée sur l'immobilier et l'innovation socioéconomique.",
     "teamText": "Notre équipe se compose d'individus passionnés qui s'engagent à révolutionner la façon dont les entreprises locales opèrent et servent leurs communautés. Nous combinons l'expertise en technologie, opérations commerciales et service client pour livrer des résultats exceptionnels.",
     "title": "À Propos de Nous",
     "transparency": "Transparence",
     "transparencyText": "Nous maintenons la transparence dans toutes nos opérations, des prix au suivi des livraisons, garantissant la confiance et la fiabilité pour tous nos utilisateurs.",
     "whatWeDo": "Ce Que Nous Faisons",
-    "whatWeDoText": "Rendasua est une plateforme complète qui permet aux entreprises locales de présenter leurs produits, gérer l'inventaire dans plusieurs emplacements et atteindre les clients de leur communauté. Notre plateforme facilite la gestion des commandes, le suivi en temps réel des livraisons et le traitement efficace des paiements."
+    "whatWeDoText": "Rendasua est une plateforme complète qui permet aux entreprises locales de présenter leurs produits, gérer l'inventaire dans plusieurs emplacements et atteindre les clients de leur communauté. Notre plateforme facilite la gestion des commandes, le suivi en temps réel des livraisons et le traitement efficace des paiements.",
+    "whoWeAre": "Qui nous sommes"
   },
   "accounts": {
     "account": "Compte",
