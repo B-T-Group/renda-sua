@@ -1070,28 +1070,78 @@ export default function ItemDetailPage() {
               </Typography>
             )}
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              {hasDeal && (
-                <Typography
-                  component="span"
-                  variant="body1"
-                  sx={{ textDecoration: 'line-through' }}
-                  color="text.secondary"
-                >
-                  {formatCurrency(inventoryItem.original_price!, item.currency)}
+            {isMobile ? (
+              <Paper
+                variant="outlined"
+                elevation={0}
+                sx={(theme) => ({
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor: hasDeal ? 'secondary.main' : 'divider',
+                  borderWidth: hasDeal ? 2 : 1,
+                  bgcolor: alpha(theme.palette.background.paper, 0.98),
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1.5,
+                  flexWrap: 'wrap',
+                })}
+              >
+                <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
+                  {hasDeal ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        sx={{ textDecoration: 'line-through' }}
+                        color="text.secondary"
+                      >
+                        {formatCurrency(inventoryItem.original_price!, item.currency)}
+                      </Typography>
+                      <Typography variant="h6" color="primary.main" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                        {formatCurrency(checkoutUnitPrice, item.currency)}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography variant="h6" color="primary.main" fontWeight={700}>
+                      {formatCurrency(checkoutUnitPrice, item.currency)}
+                    </Typography>
+                  )}
+                </Box>
+                {dealDiscountPct != null && dealDiscountPct > 0 ? (
+                  <Chip
+                    size="small"
+                    color="secondary"
+                    label={`-${dealDiscountPct}%`}
+                    sx={{ fontWeight: 700, flexShrink: 0 }}
+                  />
+                ) : null}
+              </Paper>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {hasDeal && (
+                  <Typography
+                    component="span"
+                    variant="body1"
+                    sx={{ textDecoration: 'line-through' }}
+                    color="text.secondary"
+                  >
+                    {formatCurrency(inventoryItem.original_price!, item.currency)}
+                  </Typography>
+                )}
+                <Typography variant="h5" color="primary.main" fontWeight={600}>
+                  {formatCurrency(checkoutUnitPrice, item.currency)}
                 </Typography>
-              )}
-              <Typography variant="h5" color="primary.main" fontWeight={600}>
-                {formatCurrency(checkoutUnitPrice, item.currency)}
-              </Typography>
-              {dealDiscountPct != null && dealDiscountPct > 0 ? (
-                <Chip
-                  size="small"
-                  color="success"
-                  label={t('items.detail.savePct', '-{{pct}}%', { pct: dealDiscountPct })}
-                />
-              ) : null}
-            </Box>
+                {dealDiscountPct != null && dealDiscountPct > 0 ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={t('items.detail.savePct', '-{{pct}}%', { pct: dealDiscountPct })}
+                  />
+                ) : null}
+              </Box>
+            )}
 
             {hasDeal && inventoryItem.deal_end_at ? (
               <ItemDetailDealCountdown

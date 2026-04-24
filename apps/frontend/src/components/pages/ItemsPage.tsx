@@ -584,7 +584,7 @@ const ItemsPage: React.FC = () => {
         <Paper
           elevation={0}
           sx={(theme) => ({
-            borderRadius: 4,
+            borderRadius: 2,
             p: { xs: 2, sm: 3 },
             border: '1px solid',
             borderColor: alpha(theme.palette.divider, 0.9),
