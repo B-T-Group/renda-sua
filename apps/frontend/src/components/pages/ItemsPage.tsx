@@ -825,8 +825,9 @@ const ItemsPage: React.FC = () => {
           onSelect={handleSelectTopLocation}
         />
 
-        {/* Curated discovery sections (desktop only; mobile UX is better without these) */}
-        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+        {/* Curated discovery sections (desktop only; hidden when filters/search active) */}
+        {!hasActiveFilters && (
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
           <CatalogSection
             title={t('public.items.sections.dealsTitle', 'Deals near you')}
             subtitle={t(
@@ -886,7 +887,8 @@ const ItemsPage: React.FC = () => {
             addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
             buyNowButtonText={t('cart.buyNow', 'Buy Now')}
           />
-        </Box>
+          </Box>
+        )}
 
         {/* Full catalog grid (paginated) */}
         <Box
