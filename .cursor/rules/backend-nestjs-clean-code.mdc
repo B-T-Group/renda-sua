@@ -1,0 +1,43 @@
+---
+description: Clean TypeScript + NestJS patterns for the backend app
+globs: apps/backend/src/**/*.{ts,spec.ts}
+alwaysApply: false
+---
+
+# Backend (NestJS) clean code standards
+
+## TypeScript basics
+
+- Use **English** for identifiers and docs.
+- Prefer **explicit types** for exported/public APIs (DTOs, service methods, controller handlers). Avoid `any`.
+- Prefer **readonly** for immutable data and `as const` for stable literals.
+- Avoid magic numbers: extract constants with meaningful names.
+
+## Naming & structure
+
+- **PascalCase**: classes, DTOs, interfaces, types.
+- **camelCase**: variables, functions, methods.
+- **kebab-case**: file and folder names.
+- Boolean names must read like booleans: `is*`, `has*`, `can*`, `should*`.
+- Keep functions/methods **< 20 lines** and single-purpose. Use early returns to reduce nesting.
+- Prefer RO-RO for multi-parameter functions: accept a single object and return a typed object.
+
+## NestJS module design
+
+- Use **modular architecture**: one module per domain/route.
+- Put business logic in **services**, keep controllers thin (validation + orchestration only).
+- Inputs: DTOs validated via **`class-validator`**. Outputs: simple typed shapes (interfaces/types).
+- Add Swagger docs for new endpoints: `@ApiTags`, `@ApiOperation`, `@ApiResponse`, plus `@ApiBearerAuth` / `@ApiParam` / `@ApiQuery` / `@ApiBody` as applicable.
+
+## Error handling
+
+- Throw exceptions for unexpected failures; catch only to fix an expected issue or add context.
+- Repository convention: when you must read `error.message` in a catch, use **`catch (error: any)`** (TypeScript strict-mode compatibility in this repo).
+
+## Testing
+
+- Unit tests: Arrange–Act–Assert; E2E tests per module. Use clear variable names (`inputX`, `mockX`, `expectedX`, `actualX`).
+
+## Build hygiene (required)
+
+- After substantive backend changes, run `nx build backend` and remove unused imports/variables/dependencies.
