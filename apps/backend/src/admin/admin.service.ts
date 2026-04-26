@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { WithdrawalPinService } from './withdrawal-pin.service';
 
 const GET_AGENTS_QUERY = `
   query GetAgents {
@@ -177,6 +178,7 @@ const UPDATE_BUSINESS_MUTATION = `
       is_admin
       is_verified
       image_cleanup_enabled
+      withdrawal_pin_enabled
       updated_at
     }
   }
@@ -184,7 +186,10 @@ const UPDATE_BUSINESS_MUTATION = `
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly withdrawalPinService: WithdrawalPinService
+  ) {}
 
   private buildAgentWhere(search: string, unverifiedOnly?: boolean): any {
     const conditions: any[] = [];
@@ -330,7 +335,7 @@ export class AdminService {
     const query = `
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_admin is_verified image_cleanup_enabled created_at updated_at
+          id user_id name is_admin is_verified image_cleanup_enabled withdrawal_pin_enabled created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
@@ -435,6 +440,8 @@ export class AdminService {
       name?: string;
       is_admin?: boolean;
       image_cleanup_enabled?: boolean;
+      withdrawal_pin_enabled?: boolean;
+      withdrawal_pin_hashed?: string | null;
     }
   ) {
     const result = await this.hasuraSystemService.executeMutation(
@@ -525,6 +532,7 @@ export class AdminService {
       name?: string;
       is_admin?: boolean;
       image_cleanup_enabled?: boolean;
+      withdrawal_pin_enabled?: boolean;
     }
   ) {
     const userId = await this.getUserIdByEntity('business', businessId);
@@ -535,6 +543,21 @@ export class AdminService {
       ? await this.updateBusinessRecord(businessId, businessUpdates)
       : null;
     return { user: updatedUser, business: updatedBusiness };
+  }
+
+  async setBusinessWithdrawalPin(businessId: string, pin: string) {
+    const hash = this.withdrawalPinService.hashPin(businessId, pin);
+    return this.updateBusinessRecord(businessId, {
+      withdrawal_pin_hashed: hash,
+      withdrawal_pin_enabled: true,
+    });
+  }
+
+  async clearBusinessWithdrawalPin(businessId: string) {
+    return this.updateBusinessRecord(businessId, {
+      withdrawal_pin_hashed: null,
+      withdrawal_pin_enabled: false,
+    });
   }
 
   async getUserUploads(params: {

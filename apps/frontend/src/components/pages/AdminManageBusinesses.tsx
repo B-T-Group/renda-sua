@@ -35,10 +35,13 @@ const AdminManageBusinesses: React.FC = () => {
     error,
     fetchBusinesses,
     updateBusiness,
+    setWithdrawalPin,
+    clearWithdrawalPin,
   } = useAdminBusinesses();
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
+  const [withdrawalPin, setWithdrawalPinInput] = useState('');
 
   const current = useMemo(
     () => businesses.find((b) => b.id === editingId),
@@ -54,7 +57,9 @@ const AdminManageBusinesses: React.FC = () => {
       name: target?.name || '',
       is_admin: target?.is_admin || false,
       image_cleanup_enabled: target?.image_cleanup_enabled ?? false,
+      withdrawal_pin_enabled: target?.withdrawal_pin_enabled ?? false,
     });
+    setWithdrawalPinInput('');
     setEditingId(id);
   };
 
@@ -62,6 +67,18 @@ const AdminManageBusinesses: React.FC = () => {
     if (!editingId) return;
     await updateBusiness(editingId, form);
     setEditingId(null);
+  };
+
+  const handleSetPin = async () => {
+    if (!editingId) return;
+    await setWithdrawalPin(editingId, withdrawalPin);
+    setWithdrawalPinInput('');
+  };
+
+  const handleClearPin = async () => {
+    if (!editingId) return;
+    await clearWithdrawalPin(editingId);
+    setWithdrawalPinInput('');
   };
 
   return (
@@ -237,6 +254,51 @@ const AdminManageBusinesses: React.FC = () => {
                 )}
               </Typography>
             </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Switch
+                checked={!!form.withdrawal_pin_enabled}
+                onChange={(e) =>
+                  setForm((f: any) => ({
+                    ...f,
+                    withdrawal_pin_enabled: e.target.checked,
+                  }))
+                }
+              />
+              <Typography>
+                {t(
+                  'admin.businesses.withdrawalPinEnabled',
+                  'Require withdrawal PIN'
+                )}
+              </Typography>
+            </Box>
+            {form.withdrawal_pin_enabled ? (
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+                <TextField
+                  label={t('admin.businesses.withdrawalPin', 'Withdrawal PIN')}
+                  value={withdrawalPin}
+                  onChange={(e) =>
+                    setWithdrawalPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
+                  }
+                  type="password"
+                  inputProps={{ inputMode: 'numeric', maxLength: 4 }}
+                  helperText={t(
+                    'admin.businesses.withdrawalPinHelp',
+                    'Set a 4-digit PIN required for withdrawals.'
+                  )}
+                  fullWidth
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleSetPin}
+                  disabled={withdrawalPin.length !== 4}
+                >
+                  {t('admin.businesses.setWithdrawalPin', 'Set PIN')}
+                </Button>
+                <Button variant="text" color="error" onClick={handleClearPin}>
+                  {t('admin.businesses.clearWithdrawalPin', 'Clear PIN')}
+                </Button>
+              </Box>
+            ) : null}
             <TextField
               label="Owner First Name"
               value={form.first_name || ''}

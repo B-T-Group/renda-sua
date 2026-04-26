@@ -25,12 +25,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountById } from '../../hooks/useAccountInfo';
 import { useAirtelMoney } from '../../hooks/useAirtelMoney';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import TopUpModal from '../business/TopUpModal';
@@ -86,6 +87,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
 }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
+  const apiClient = useApiClient();
 
   // Use the new hook to fetch account data
   const { account, loading, error, subscriptionFailed } =
@@ -103,6 +105,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   // Confirmation message states
   const [showTopUpSuccess, setShowTopUpSuccess] = useState(false);
   const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
+  const [withdrawRequirePin, setWithdrawRequirePin] = useState(false);
 
   // Hooks for payment operations
   const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
@@ -114,6 +117,27 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const { execute: executeTransactionsQuery } = useGraphQLRequest(
     GET_ACCOUNT_TRANSACTIONS
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWithdrawalConfig() {
+      try {
+        if (!apiClient) return;
+        const { data } = await apiClient.get(
+          `/accounts/${accountId}/withdrawal-config`
+        );
+        if (cancelled) return;
+        setWithdrawRequirePin(!!data?.data?.requirePin);
+      } catch {
+        if (cancelled) return;
+        setWithdrawRequirePin(false);
+      }
+    }
+    loadWithdrawalConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiClient, accountId]);
 
   // If account is still loading or not found, show loading state
   if (loading || !account) {
@@ -301,7 +325,8 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const handleWithdrawConfirm = async (
     phoneNumber: string,
     amount: string,
-    paymentMethod: any
+    paymentMethod: any,
+    pin?: string
   ): Promise<boolean> => {
     try {
       await initiatePayment({
@@ -311,6 +336,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
         customerPhone: phoneNumber,
         accountId: account.id,
         transactionType: 'GIVE_CHANGE',
+        withdrawalPin: pin,
       });
       setShowWithdrawSuccess(true);
       return true;
@@ -508,6 +534,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
         availableBalance={account.available_balance}
         loading={mobilePaymentsLoading}
         onConfirm={handleWithdrawConfirm}
+        requirePin={withdrawRequirePin}
         withdrawalPhoneNote={
           account.business_location
             ? t('accounts.withdrawalPhoneNoteLocation', 'This is the phone number used for withdrawals from this location\'s account.')

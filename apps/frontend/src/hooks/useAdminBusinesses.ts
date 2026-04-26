@@ -19,6 +19,7 @@ export interface AdminBusiness {
   is_admin: boolean;
   is_verified: boolean;
   image_cleanup_enabled?: boolean;
+  withdrawal_pin_enabled?: boolean;
   created_at: string;
   updated_at: string;
   user: AdminBusinessUser;
@@ -32,6 +33,7 @@ export interface UpdateBusinessPayload {
   name?: string;
   is_admin?: boolean;
   image_cleanup_enabled?: boolean;
+  withdrawal_pin_enabled?: boolean;
 }
 
 export const useAdminBusinesses = () => {
@@ -97,6 +99,31 @@ export const useAdminBusinesses = () => {
     [apiClient, callWithLoading, ensureClient, fetchBusinesses]
   );
 
+  const setWithdrawalPin = useCallback(
+    async (id: string, pin: string) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () => client.post(`/admin/businesses/${id}/withdrawal-pin`, { pin }),
+        'admin.loading.setWithdrawalPin'
+      );
+      await fetchBusinesses();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchBusinesses]
+  );
+
+  const clearWithdrawalPin = useCallback(
+    async (id: string) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () =>
+          client.post(`/admin/businesses/${id}/withdrawal-pin`, { clearPin: true }),
+        'admin.loading.clearWithdrawalPin'
+      );
+      await fetchBusinesses();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchBusinesses]
+  );
+
   useEffect(() => {
     fetchBusinesses();
   }, [fetchBusinesses]);
@@ -115,6 +142,8 @@ export const useAdminBusinesses = () => {
       error,
       fetchBusinesses,
       updateBusiness,
+      setWithdrawalPin,
+      clearWithdrawalPin,
     }),
     [
       businesses,
@@ -126,6 +155,8 @@ export const useAdminBusinesses = () => {
       error,
       fetchBusinesses,
       updateBusiness,
+      setWithdrawalPin,
+      clearWithdrawalPin,
     ]
   );
 };

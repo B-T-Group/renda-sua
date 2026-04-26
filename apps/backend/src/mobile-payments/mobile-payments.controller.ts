@@ -13,6 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
 import {
   GiveChangePayoutService,
   type GiveChangeProvider,
@@ -37,6 +38,7 @@ export interface InitiatePaymentDto {
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
+  withdrawalPin?: string; // Required when business withdrawals require a PIN
 }
 
 export interface PaymentCallbackDto {
@@ -61,7 +63,8 @@ export class MobilePaymentsController {
     private readonly accountsService: AccountsService,
     private readonly giveChangePayoutService: GiveChangePayoutService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly callbackProcessor: MobilePaymentCallbackProcessor
+    private readonly callbackProcessor: MobilePaymentCallbackProcessor,
+    private readonly withdrawalPinService: WithdrawalPinService
   ) {}
 
   /**
@@ -224,6 +227,39 @@ export class MobilePaymentsController {
             },
             HttpStatus.BAD_REQUEST
           );
+        }
+
+        const pinState =
+          await this.accountsService.getBusinessWithdrawalPinStateByAccountId(
+            paymentRequest.accountId as string
+          );
+        if (pinState?.enabled) {
+          const providedPin = String(paymentRequest.withdrawalPin ?? '').trim();
+          if (!/^\d{4}$/.test(providedPin) || !pinState.hash) {
+            throw new HttpException(
+              {
+                success: false,
+                message: 'Withdrawal PIN is required',
+                error: 'WITHDRAWAL_PIN_REQUIRED',
+              },
+              HttpStatus.FORBIDDEN
+            );
+          }
+          const ok = this.withdrawalPinService.verifyPin(
+            pinState.businessId,
+            providedPin,
+            pinState.hash
+          );
+          if (!ok) {
+            throw new HttpException(
+              {
+                success: false,
+                message: 'Invalid withdrawal PIN',
+                error: 'INVALID_WITHDRAWAL_PIN',
+              },
+              HttpStatus.FORBIDDEN
+            );
+          }
         }
       }
 

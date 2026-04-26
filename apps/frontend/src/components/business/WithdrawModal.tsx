@@ -37,7 +37,8 @@ interface WithdrawModalProps {
   onConfirm: (
     phoneNumber: string,
     amount: string,
-    paymentMethod: PaymentMethod
+    paymentMethod: PaymentMethod,
+    pin?: string
   ) => Promise<boolean>;
   userPhoneNumber?: string;
   currency: string;
@@ -45,6 +46,7 @@ interface WithdrawModalProps {
   loading?: boolean;
   /** When set, shown as helper text under the phone field (e.g. for location account withdrawals). */
   withdrawalPhoneNote?: string;
+  requirePin?: boolean;
 }
 
 const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -56,10 +58,12 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   availableBalance,
   loading = false,
   withdrawalPhoneNote,
+  requirePin = false,
 }) => {
   const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [amount, setAmount] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
@@ -78,6 +82,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
       setSuccess('');
       setShowResult(false);
       setAmount('');
+      setPin('');
     }
   }, [open]);
 
@@ -127,11 +132,26 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
       return;
     }
 
+    if (requirePin && !/^\d{4}$/.test(pin.trim())) {
+      setError(
+        t(
+          'accounts.withdrawalPinRequired',
+          'A 4-digit withdrawal PIN is required.'
+        )
+      );
+      return;
+    }
+
     setError('');
     setSuccess('');
 
     try {
-      const ok = await onConfirm(phoneNumber, amount, paymentMethod);
+      const ok = await onConfirm(
+        phoneNumber,
+        amount,
+        paymentMethod,
+        requirePin ? pin.trim() : undefined
+      );
       if (ok) {
         setSuccess(t('accounts.withdrawRequestSent'));
         setShowResult(true);
@@ -167,10 +187,12 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     parsedAmount <= availableBalance;
   const balanceAllowsWithdraw = availableBalance >= MIN_WITHDRAW_AMOUNT;
   const phoneOk = phoneNumber.trim() && isCmOrGaPhone(phoneNumber);
+  const pinOk = !requirePin || /^\d{4}$/.test(pin.trim());
   const canSubmit =
     balanceAllowsWithdraw &&
     phoneOk &&
     amountOk &&
+    pinOk &&
     !loading &&
     !showResult;
 
@@ -262,6 +284,26 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               sx={{ mb: 2, mt: 1 }}
               disabled={loading || !balanceAllowsWithdraw}
             />
+
+            {requirePin ? (
+              <TextField
+                fullWidth
+                label={t('accounts.withdrawalPin', 'Withdrawal PIN')}
+                value={pin}
+                onChange={(e) =>
+                  setPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                }
+                type="password"
+                placeholder={t('accounts.withdrawalPinPlaceholder', '4 digits')}
+                helperText={t(
+                  'accounts.withdrawalPinHelper',
+                  'Enter the 4-digit PIN set by your admin.'
+                )}
+                inputProps={{ inputMode: 'numeric', maxLength: 4 }}
+                sx={{ mb: 2 }}
+                disabled={loading || !balanceAllowsWithdraw}
+              />
+            ) : null}
 
             {error && !amountFieldError && (
               <Alert severity="error" sx={{ mb: 2 }}>

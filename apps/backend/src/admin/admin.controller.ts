@@ -360,6 +360,7 @@ export class AdminController {
         name: { type: 'string' },
         is_admin: { type: 'boolean' },
         image_cleanup_enabled: { type: 'boolean' },
+        withdrawal_pin_enabled: { type: 'boolean' },
         first_name: { type: 'string' },
         last_name: { type: 'string' },
         phone_number: { type: 'string' },
@@ -375,6 +376,7 @@ export class AdminController {
       name?: string;
       is_admin?: boolean;
       image_cleanup_enabled?: boolean;
+      withdrawal_pin_enabled?: boolean;
       first_name?: string;
       last_name?: string;
       phone_number?: string;
@@ -395,11 +397,14 @@ export class AdminController {
         name?: string;
         is_admin?: boolean;
         image_cleanup_enabled?: boolean;
+        withdrawal_pin_enabled?: boolean;
       } = {};
       if (typeof body.name === 'string') businessUpdates.name = body.name;
       if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
       if (typeof body.image_cleanup_enabled === 'boolean')
         businessUpdates.image_cleanup_enabled = body.image_cleanup_enabled;
+      if (typeof body.withdrawal_pin_enabled === 'boolean')
+        businessUpdates.withdrawal_pin_enabled = body.withdrawal_pin_enabled;
 
       const result = await this.adminService.updateBusiness(
         businessId,
@@ -414,6 +419,47 @@ export class AdminController {
         error: error.message || 'Failed to update business',
       };
     }
+  }
+
+  @Post('businesses/:id/withdrawal-pin')
+  @ApiOperation({ summary: 'Set or clear a business withdrawal PIN (admin only)' })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pin: { type: 'string', description: '4-digit PIN' },
+        clearPin: { type: 'boolean', description: 'Clear the withdrawal PIN' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'PIN updated' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  async setBusinessWithdrawalPin(
+    @Param('id') businessId: string,
+    @Body() body: { pin?: string; clearPin?: boolean }
+  ) {
+    const clearPin = body?.clearPin === true;
+    const pin = String(body?.pin ?? '').trim();
+
+    if (clearPin) {
+      const business = await this.adminService.clearBusinessWithdrawalPin(businessId);
+      return { success: true, business };
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'pin must be a 4-digit string',
+          error: 'INVALID_PIN_FORMAT',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const business = await this.adminService.setBusinessWithdrawalPin(businessId, pin);
+    return { success: true, business };
   }
 
   @Get('users/:id/uploads')

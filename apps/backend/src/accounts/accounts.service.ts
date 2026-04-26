@@ -34,6 +34,54 @@ export interface TransactionResult {
 export class AccountsService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
+  async getBusinessWithdrawalPinStateByAccountId(accountId: string): Promise<{
+    businessId: string;
+    enabled: boolean;
+    hash: string | null;
+  } | null> {
+    const account = await this.getAccountById(accountId);
+    if (!account?.user_id) return null;
+
+    const query = `
+      query GetBusinessWithdrawalPinState($userId: uuid!) {
+        businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          withdrawal_pin_enabled
+          withdrawal_pin_hashed
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId: account.user_id,
+    });
+    const business = (result.businesses || [])[0];
+    if (!business?.id) return null;
+    return {
+      businessId: business.id,
+      enabled: business.withdrawal_pin_enabled === true,
+      hash: typeof business.withdrawal_pin_hashed === 'string' ? business.withdrawal_pin_hashed : null,
+    };
+  }
+
+  async getWithdrawalConfig(accountId: string): Promise<{ requirePin: boolean }> {
+    const account = await this.getAccountById(accountId);
+    if (!account?.user_id) return { requirePin: false };
+
+    const businessQuery = `
+      query GetBusinessWithdrawalPinEnabled($userId: uuid!) {
+        businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          withdrawal_pin_enabled
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(businessQuery, {
+      userId: account.user_id,
+    });
+    const business = (result.businesses || [])[0];
+    return { requirePin: business?.withdrawal_pin_enabled === true };
+  }
+
   /**
    * Register a transaction and update account balances based on transaction type
    */

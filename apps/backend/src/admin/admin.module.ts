@@ -12,6 +12,7 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { ConfigurationsController } from './configurations.controller';
 import { ConfigurationsService } from './configurations.service';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
+import { WithdrawalPinService } from './withdrawal-pin.service';
 
 @Module({
   imports: [AuthModule, HasuraModule, NotificationsModule, SiteEventsModule],
@@ -23,6 +24,7 @@ import { RentalListingModerationService } from './rental-listing-moderation.serv
     RentalListingModerationService,
     ApplicationSetupService,
     CountryOnboardingService,
+    WithdrawalPinService,
   ],
   exports: [
     AdminMessageService,
@@ -31,6 +33,7 @@ import { RentalListingModerationService } from './rental-listing-moderation.serv
     RentalListingModerationService,
     ApplicationSetupService,
     CountryOnboardingService,
+    WithdrawalPinService,
   ],
 })
 export class AdminModule {}

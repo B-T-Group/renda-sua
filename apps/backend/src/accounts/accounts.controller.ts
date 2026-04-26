@@ -161,6 +161,45 @@ export class AccountsController {
     }
   }
 
+  @Get(':accountId/withdrawal-config')
+  @ApiOperation({
+    summary: 'Get withdrawal config for an account',
+    description:
+      'For business-owned accounts, indicates whether a withdrawal PIN is required.',
+  })
+  @ApiParam({ name: 'accountId', format: 'uuid', description: 'Account id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Withdrawal config retrieved',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            requirePin: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  })
+  async getWithdrawalConfig(@Param('accountId') accountId: string) {
+    try {
+      const data = await this.accountsService.getWithdrawalConfig(accountId);
+      return { success: true, data };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch withdrawal config',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Get(':accountId')
   @ApiOperation({
     summary: 'Get a single account by ID for the current user',

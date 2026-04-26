@@ -13,6 +13,7 @@ export interface MobilePaymentRequest {
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
+  withdrawalPin?: string; // Required when business withdrawals require a PIN
 }
 
 export interface MobilePaymentResponse {
