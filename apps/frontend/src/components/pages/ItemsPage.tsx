@@ -825,66 +825,68 @@ const ItemsPage: React.FC = () => {
           onSelect={handleSelectTopLocation}
         />
 
-        {/* Curated discovery sections (before full catalog grid) */}
-        <CatalogSection
-          title={t('public.items.sections.dealsTitle', 'Deals near you')}
-          subtitle={t(
-            'public.items.sections.dealsSubtitle',
-            'Limited-time discounts from verified sellers'
-          )}
-          items={dealsItems}
-          loading={dealsLoading}
-          formatCurrency={formatCurrency}
-          onOrderClick={handleOrderClick}
-          onAddToCart={handleAddToCart}
-          isPublicView={!isAuthenticated}
-          canOrder={!isAuthenticated || isClientUser}
-          showCartButtons={isAuthenticated && isClientUser}
-          loginButtonText={t('public.items.login', 'Sign In to Order')}
-          orderButtonText={t('common.orderNow', 'Order Now')}
-          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-        />
+        {/* Curated discovery sections (desktop only; mobile UX is better without these) */}
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+          <CatalogSection
+            title={t('public.items.sections.dealsTitle', 'Deals near you')}
+            subtitle={t(
+              'public.items.sections.dealsSubtitle',
+              'Limited-time discounts from verified sellers'
+            )}
+            items={dealsItems}
+            loading={dealsLoading}
+            formatCurrency={formatCurrency}
+            onOrderClick={handleOrderClick}
+            onAddToCart={handleAddToCart}
+            isPublicView={!isAuthenticated}
+            canOrder={!isAuthenticated || isClientUser}
+            showCartButtons={isAuthenticated && isClientUser}
+            loginButtonText={t('public.items.login', 'Sign In to Order')}
+            orderButtonText={t('common.orderNow', 'Order Now')}
+            addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+            buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+          />
 
-        <CatalogSection
-          title={t('public.items.sections.topRatedTitle', 'Top rated')}
-          subtitle={t(
-            'public.items.sections.topRatedSubtitle',
-            'Products customers love'
-          )}
-          items={topRatedItems}
-          loading={topRatedLoading}
-          formatCurrency={formatCurrency}
-          onOrderClick={handleOrderClick}
-          onAddToCart={handleAddToCart}
-          isPublicView={!isAuthenticated}
-          canOrder={!isAuthenticated || isClientUser}
-          showCartButtons={isAuthenticated && isClientUser}
-          loginButtonText={t('public.items.login', 'Sign In to Order')}
-          orderButtonText={t('common.orderNow', 'Order Now')}
-          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-        />
+          <CatalogSection
+            title={t('public.items.sections.topRatedTitle', 'Top rated')}
+            subtitle={t(
+              'public.items.sections.topRatedSubtitle',
+              'Products customers love'
+            )}
+            items={topRatedItems}
+            loading={topRatedLoading}
+            formatCurrency={formatCurrency}
+            onOrderClick={handleOrderClick}
+            onAddToCart={handleAddToCart}
+            isPublicView={!isAuthenticated}
+            canOrder={!isAuthenticated || isClientUser}
+            showCartButtons={isAuthenticated && isClientUser}
+            loginButtonText={t('public.items.login', 'Sign In to Order')}
+            orderButtonText={t('common.orderNow', 'Order Now')}
+            addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+            buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+          />
 
-        <CatalogSection
-          title={t('public.items.sections.popularTitle', 'Popular picks')}
-          subtitle={t(
-            'public.items.sections.popularSubtitle',
-            'Recommended based on what people browse and buy'
-          )}
-          items={popularItems}
-          loading={popularLoading}
-          formatCurrency={formatCurrency}
-          onOrderClick={handleOrderClick}
-          onAddToCart={handleAddToCart}
-          isPublicView={!isAuthenticated}
-          canOrder={!isAuthenticated || isClientUser}
-          showCartButtons={isAuthenticated && isClientUser}
-          loginButtonText={t('public.items.login', 'Sign In to Order')}
-          orderButtonText={t('common.orderNow', 'Order Now')}
-          addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-          buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-        />
+          <CatalogSection
+            title={t('public.items.sections.popularTitle', 'Popular picks')}
+            subtitle={t(
+              'public.items.sections.popularSubtitle',
+              'Recommended based on what people browse and buy'
+            )}
+            items={popularItems}
+            loading={popularLoading}
+            formatCurrency={formatCurrency}
+            onOrderClick={handleOrderClick}
+            onAddToCart={handleAddToCart}
+            isPublicView={!isAuthenticated}
+            canOrder={!isAuthenticated || isClientUser}
+            showCartButtons={isAuthenticated && isClientUser}
+            loginButtonText={t('public.items.login', 'Sign In to Order')}
+            orderButtonText={t('common.orderNow', 'Order Now')}
+            addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+            buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+          />
+        </Box>
 
         {/* Full catalog grid (paginated) */}
         <Box
