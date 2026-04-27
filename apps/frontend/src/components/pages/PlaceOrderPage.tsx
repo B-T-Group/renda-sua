@@ -1,13 +1,10 @@
 import {
-  AccessTime,
   Add,
   ArrowBack,
-  CalendarToday,
   CheckCircle,
   LocalShipping,
   LocationOn,
   Phone,
-  Schedule,
   Security,
   ShoppingCart,
   Verified,
@@ -1324,7 +1321,7 @@ const PlaceOrderPage: React.FC = () => {
             )}
 
           {selectedAddress && (
-            <Card>
+            <Card sx={{ order: 2 }}>
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   {t(
@@ -1461,12 +1458,51 @@ const PlaceOrderPage: React.FC = () => {
                         {t('items.brand', 'Brand')}: {selectedItem.item.brand.name}
                       </Typography>
                     )}
-                    {selectedItem.item.sku?.trim() && (
-                      <Typography variant="caption" color="text.secondary">
-                        {t('items.sku', 'SKU')}: {selectedItem.item.sku}
-                      </Typography>
-                    )}
                   </Stack>
+
+                  {deliveryWindow && selectedAddress && (
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}
+                    >
+                      {slotsLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                          <CircularProgress size={18} />
+                        </Box>
+                      ) : selectedSlot ? (
+                        <Stack spacing={0.75}>
+                          <Typography variant="body2" color="text.secondary">
+                            {t(
+                              'orders.deliveryTimeWindow.reviewSummary',
+                              'We will deliver to {{address}} on {{date}} between {{start}} and {{end}}.',
+                              {
+                                address: `${selectedAddress.address_line_1}, ${selectedAddress.city}`,
+                                date: deliveryReviewDateLabel,
+                                start: selectedSlot.start_time,
+                                end: selectedSlot.end_time,
+                              }
+                            )}
+                          </Typography>
+                          {deliveryWindow.special_instructions && (
+                            <Typography variant="caption" color="text.secondary">
+                              {t(
+                                'orders.deliveryTimeWindow.specialInstructions',
+                                'Special Instructions'
+                              )}
+                              : {deliveryWindow.special_instructions}
+                            </Typography>
+                          )}
+                        </Stack>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          {t(
+                            'orders.deliveryTimeWindow.loading',
+                            'Loading delivery slot details...'
+                          )}
+                        </Typography>
+                      )}
+                    </Paper>
+                  )}
 
                   <Box>
                     <Box
@@ -1656,115 +1692,6 @@ const PlaceOrderPage: React.FC = () => {
                 </Stack>
               </CardContent>
             </Card>
-
-            {/* Delivery Time Window Details */}
-            {deliveryWindow && selectedAddress && (
-              <Card>
-                <CardContent sx={{ p: 2 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      mb: 1.5,
-                    }}
-                  >
-                    <Schedule color="primary" />
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      {t(
-                        'orders.deliveryTimeWindow.reviewSectionTitle',
-                        'Review your delivery schedule'
-                      )}
-                    </Typography>
-                  </Box>
-
-                  {slotsLoading ? (
-                    <Box
-                      sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
-                    >
-                      <CircularProgress size={24} />
-                    </Box>
-                  ) : selectedSlot ? (
-                    <Stack spacing={2}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t(
-                          'orders.deliveryTimeWindow.reviewSummary',
-                          'We will deliver to {{address}} on {{date}} between {{start}} and {{end}}.',
-                          {
-                            address: `${selectedAddress.address_line_1}, ${selectedAddress.city}`,
-                            date: deliveryReviewDateLabel,
-                            start: selectedSlot.start_time,
-                            end: selectedSlot.end_time,
-                          }
-                        )}
-                      </Typography>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                        }}
-                      >
-                        <CalendarToday fontSize="small" color="action" />
-                        <Typography variant="body2" color="text.secondary">
-                          {t(
-                            'orders.deliveryTimeWindow.preferredDate',
-                            'Preferred Date'
-                          )}
-                          :
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {deliveryReviewDateLabel}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                        }}
-                      >
-                        <AccessTime fontSize="small" color="action" />
-                        <Typography variant="body2" color="text.secondary">
-                          {t('orders.deliveryTimeWindow.timeSlot', 'Time Slot')}
-                          :
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {selectedSlot.start_time} - {selectedSlot.end_time}
-                        </Typography>
-                      </Box>
-
-                      {deliveryWindow.special_instructions && (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            gutterBottom
-                          >
-                            {t(
-                              'orders.deliveryTimeWindow.specialInstructions',
-                              'Special Instructions'
-                            )}
-                            :
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                            {deliveryWindow.special_instructions}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'orders.deliveryTimeWindow.loading',
-                        'Loading delivery slot details...'
-                      )}
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             <Card>
               <CardContent sx={{ p: 2 }}>
