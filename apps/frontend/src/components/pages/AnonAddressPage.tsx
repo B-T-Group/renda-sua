@@ -55,14 +55,25 @@ const AnonAddressPage: React.FC = () => {
       inventoryItem?.business_location?.address?.country?.trim() ?? '',
     [inventoryItem]
   );
+  const itemOriginState = useMemo(
+    () => inventoryItem?.business_location?.address?.state?.trim() ?? '',
+    [inventoryItem]
+  );
+  const itemOriginCity = useMemo(
+    () => inventoryItem?.business_location?.address?.city?.trim() ?? '',
+    [inventoryItem]
+  );
 
   useEffect(() => {
-    if (!itemOriginCountryIso) return;
     setAddressFormData((prev) => {
-      if (prev.country) return prev;
-      return { ...prev, country: itemOriginCountryIso };
+      return {
+        ...prev,
+        country: prev.country || itemOriginCountryIso,
+        state: prev.state || itemOriginState,
+        city: prev.city || itemOriginCity,
+      };
     });
-  }, [itemOriginCountryIso]);
+  }, [itemOriginCity, itemOriginCountryIso, itemOriginState]);
 
   const { addAddress } = useAddressManager({
     entityType: 'client',

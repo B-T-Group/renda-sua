@@ -38,10 +38,14 @@ interface PhoneInputProps {
   fullWidth?: boolean;
   placeholder?: string;
   defaultCountry?: string;
+  /** When set, forces the country selector value (ISO2, e.g. CM, GA). */
+  country?: string;
   margin?: 'none' | 'dense' | 'normal';
   onlyCountries?: string[];
   /** Fires when the country selector changes (ISO2, e.g. CM, GA) */
   onCountryChange?: (country?: string) => void;
+  /** Disable country selector interactions (use with `country` to lock it). */
+  disableCountrySelect?: boolean;
   /** In development, render a dropdown of DEV_PHONE_NUMBERS instead of free-form input (profile/signup) */
   useDevPhoneDropdown?: boolean;
   /** Optional start adornment (e.g. phone icon) for both dev dropdown and standard input */
@@ -61,9 +65,11 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   fullWidth = true,
   placeholder = '',
   defaultCountry = 'US',
+  country,
   margin = 'normal',
   onlyCountries,
   onCountryChange,
+  disableCountrySelect = false,
   useDevPhoneDropdown = false,
   startAdornment,
   squareEdges = false,
@@ -137,6 +143,9 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
       fontSize: '14px',
       color: 'rgba(0, 0, 0, 0.87)',
       cursor: 'pointer',
+      ...(disableCountrySelect
+        ? { pointerEvents: 'none', opacity: 0.8 }
+        : null),
       '&:focus': {
         outline: 'none',
       },
@@ -208,6 +217,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           <PhoneInputBase
             international
             defaultCountry={defaultCountry as any}
+            country={country as any}
             value={value || ''}
             onChange={onChange as any}
             onCountryChange={onCountryChange as any}
@@ -215,6 +225,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
             disabled={disabled}
             required={required}
             countries={onlyCountries as any}
+            countrySelectProps={{ disabled: disableCountrySelect }}
           />
         </Box>
       </Box>

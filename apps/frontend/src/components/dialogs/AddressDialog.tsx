@@ -10,7 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AddressForm from '../addresses/AddressForm';
 
@@ -73,6 +73,36 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   const { t } = useTranslation();
   const dialogTitle =
     title || t('addresses.addressDialog.defaultTitle', 'Address');
+
+  const isAddressReady = useMemo(() => {
+    const a = addressData;
+    if (!a) return false;
+    const hasCore =
+      !!a.address_line_1?.trim() &&
+      !!a.city?.trim() &&
+      !!a.country?.trim();
+    return hasCore;
+  }, [addressData]);
+
+  const [saveAttentionOn, setSaveAttentionOn] = useState(false);
+  const [wasReady, setWasReady] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setSaveAttentionOn(false);
+      setWasReady(false);
+      return;
+    }
+    if (!wasReady && isAddressReady) {
+      setSaveAttentionOn(true);
+      const timer = window.setTimeout(() => setSaveAttentionOn(false), 1800);
+      setWasReady(true);
+      return () => window.clearTimeout(timer);
+    }
+    if (!isAddressReady) {
+      setWasReady(false);
+    }
+  }, [open, isAddressReady, wasReady]);
 
   const handleClose = () => {
     if (!loading) {
@@ -178,6 +208,46 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             variant="contained"
             disabled={loading}
             startIcon={loading ? <CircularProgress size={16} /> : null}
+            sx={(theme) => ({
+              position: 'relative',
+              ...(saveAttentionOn
+                ? {
+                    animation: 'saveAttentionPulse 900ms ease-in-out 2',
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? `0 0 0 0 ${alpha(theme.palette.primary.main, 0.45)}`
+                        : `0 0 0 0 ${alpha(theme.palette.primary.main, 0.35)}`,
+                    '@keyframes saveAttentionPulse': {
+                      '0%': {
+                        transform: 'translateY(0)',
+                        boxShadow: `0 0 0 0 ${alpha(
+                          theme.palette.primary.main,
+                          0.35
+                        )}`,
+                      },
+                      '50%': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: `0 0 0 10px ${alpha(
+                          theme.palette.primary.main,
+                          0
+                        )}`,
+                      },
+                      '100%': {
+                        transform: 'translateY(0)',
+                        boxShadow: `0 0 0 0 ${alpha(
+                          theme.palette.primary.main,
+                          0
+                        )}`,
+                      },
+                    },
+                    '@media (prefers-reduced-motion: reduce)': {
+                      animation: 'none',
+                      boxShadow: 'none',
+                      transform: 'none',
+                    },
+                  }
+                : null),
+            })}
           >
             {loading
               ? t('addresses.addressDialog.saving', 'Saving...')

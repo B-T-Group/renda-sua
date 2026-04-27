@@ -205,6 +205,13 @@ const CompleteProfile: React.FC = () => {
   const [idDocumentTypeId, setIdDocumentTypeId] = useState<number | ''>('');
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const idDocumentInputRef = useRef<HTMLInputElement>(null);
+  const stepScrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollStepToTop = (behavior: ScrollBehavior = 'smooth') => {
+    const el = stepScrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior });
+  };
 
   const selectedPersonas = useMemo(
     () => personasFromSignupGoalIds(profileData.signup_goal_ids),
@@ -343,10 +350,12 @@ const CompleteProfile: React.FC = () => {
 
   const handleNext = () => {
     setActiveStep((prevStep) => prevStep + 1);
+    requestAnimationFrame(() => scrollStepToTop('smooth'));
   };
 
   const handleBack = () => {
     setActiveStep((prevStep) => prevStep - 1);
+    requestAnimationFrame(() => scrollStepToTop('smooth'));
   };
 
   const handleSubmit = async () => {
@@ -1294,6 +1303,7 @@ const CompleteProfile: React.FC = () => {
               px: 2,
               pb: 2,
             }}
+            ref={stepScrollContainerRef}
           >
             <Box sx={{ maxWidth: 600, mx: 'auto', width: '100%' }}>{stepContent}</Box>
           </Box>

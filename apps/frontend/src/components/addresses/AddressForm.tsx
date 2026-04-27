@@ -614,7 +614,11 @@ const AddressForm: React.FC<AddressFormProps> = ({
           </Select>
         </FormControl>
 
-        {!hidePostalCode && (
+        {(() => {
+          const effectiveCountry = (readOnlyCountry ?? addressData?.country ?? '').trim();
+          const hideForCountry = effectiveCountry === 'CM' || effectiveCountry === 'GA';
+          if (hidePostalCode || hideForCountry) return null;
+          return (
           <TextField
             fullWidth
             label={t(
@@ -625,7 +629,8 @@ const AddressForm: React.FC<AddressFormProps> = ({
             onChange={(e) => handleInputChange('postal_code', e.target.value)}
             disabled={loading}
           />
-        )}
+          );
+        })()}
 
         {showAddressType && (
           <FormControl fullWidth disabled={loading}>

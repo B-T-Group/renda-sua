@@ -41,11 +41,14 @@ import {
   StepButton,
   Stepper,
   Switch,
+  TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha, keyframes, Theme } from '@mui/material/styles';
 import { parsePhoneNumber } from 'libphonenumber-js';
+import { Country } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -72,9 +75,35 @@ import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
-import PhoneInput from '../common/PhoneInput';
+import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+
+const confirmOrderPulse = keyframes`
+  0%, 100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 var(--confirm-order-ring-color);
+  }
+  45% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 10px transparent;
+  }
+`;
+
+const getConfirmOrderAttentionSx = (enabled: boolean) => (theme: Theme) => ({
+  ...(enabled
+    ? {
+        '--confirm-order-ring-color': alpha(
+          theme.palette.primary.main,
+          theme.palette.mode === 'dark' ? 0.38 : 0.26
+        ),
+        animation: `${confirmOrderPulse} 2.8s ease-in-out infinite`,
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none',
+        },
+      }
+    : null),
+});
 
 // Loading Skeleton Component
 const OrderPageSkeleton: React.FC = () => {
@@ -447,16 +476,17 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
           startIcon={
             loading ? <CircularProgress size={20} /> : <ShoppingCart />
           }
-          sx={{
+          sx={(theme) => ({
             py: 1.5,
             fontSize: '1rem',
             fontWeight: 600,
             textTransform: 'none',
             boxShadow: 3,
+            ...getConfirmOrderAttentionSx(!disabled && !loading)(theme),
             '&:hover': {
               boxShadow: 6,
             },
-          }}
+          })}
         >
           {loading
             ? t('orders.placingOrder', 'Placing Order...')
@@ -504,6 +534,8 @@ const PlaceOrderPage: React.FC = () => {
   const [missingPhoneNumber, setMissingPhoneNumber] = useState('');
   const [missingPhoneSaving, setMissingPhoneSaving] = useState(false);
   const [missingPhoneError, setMissingPhoneError] = useState<string | null>(null);
+  const [missingPhoneCountry, setMissingPhoneCountry] = useState<string>('');
+  const [missingPhoneNationalNumber, setMissingPhoneNationalNumber] = useState('');
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
@@ -562,6 +594,16 @@ const PlaceOrderPage: React.FC = () => {
   /** ISO country of the selling location — default delivery address country for this item. */
   const itemOriginCountryIso = useMemo(
     () => selectedItem?.business_location?.address?.country?.trim() ?? '',
+    [selectedItem]
+  );
+
+  const itemOriginState = useMemo(
+    () => selectedItem?.business_location?.address?.state?.trim() ?? '',
+    [selectedItem]
+  );
+
+  const itemOriginCity = useMemo(
+    () => selectedItem?.business_location?.address?.city?.trim() ?? '',
     [selectedItem]
   );
 
@@ -664,8 +706,8 @@ const PlaceOrderPage: React.FC = () => {
     setAddressFormData({
       address_line_1: '',
       address_line_2: '',
-      city: '',
-      state: '',
+      city: itemOriginCity,
+      state: itemOriginState,
       postal_code: '',
       country: itemOriginCountryIso,
       address_type: 'home',
@@ -681,18 +723,23 @@ const PlaceOrderPage: React.FC = () => {
     isAnonFlow,
     isMobile,
     itemOriginCountryIso,
+    itemOriginCity,
+    itemOriginState,
     navigate,
   ]);
 
-  // If the item loads after the address dialog opens, default country when still empty
+  // If the item loads after the address dialog opens, default origin fields when still empty
   useEffect(() => {
     if (!addressDialogOpen) return;
-    if (!itemOriginCountryIso) return;
     setAddressFormData((prev) => {
-      if (prev.country) return prev;
-      return { ...prev, country: itemOriginCountryIso };
+      return {
+        ...prev,
+        country: prev.country || itemOriginCountryIso,
+        state: prev.state || itemOriginState,
+        city: prev.city || itemOriginCity,
+      };
     });
-  }, [addressDialogOpen, itemOriginCountryIso]);
+  }, [addressDialogOpen, itemOriginCity, itemOriginCountryIso, itemOriginState]);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -811,14 +858,35 @@ const PlaceOrderPage: React.FC = () => {
     if (!useDifferentPhone && !hasProfilePhone) {
       setMissingPhoneError(null);
       setMissingPhoneNumber('');
+      setMissingPhoneNationalNumber('');
+      const addrCountry = selectedAddress?.country?.trim() || '';
+      const locked = !!addrCountry && isCountrySupported(addrCountry);
+      const fallbackCountry = locked
+        ? addrCountry
+        : supportedCountries?.[0] || 'GA';
+      setMissingPhoneCountry(fallbackCountry);
       setMissingPhoneDialogOpen(true);
       return;
     }
     await handleSubmit();
-  }, [handleSubmit, profile?.phone_number, useDifferentPhone]);
+  }, [
+    handleSubmit,
+    isCountrySupported,
+    profile?.phone_number,
+    selectedAddress?.country,
+    supportedCountries,
+    useDifferentPhone,
+  ]);
 
   const handleSaveMissingPhone = useCallback(async () => {
-    const trimmed = missingPhoneNumber.trim();
+    const dialCode = String(
+      Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+    ).replace(/\D/g, '');
+    const national = missingPhoneNationalNumber.replace(/\D/g, '').trim();
+    const trimmed =
+      dialCode && national ? `+${dialCode}${national}` : missingPhoneNumber.trim();
+
+    setMissingPhoneNumber(trimmed);
     if (!trimmed) {
       setMissingPhoneError(
         t(
@@ -875,11 +943,60 @@ const PlaceOrderPage: React.FC = () => {
     handleSubmit,
     isCountrySupported,
     missingPhoneNumber,
+    missingPhoneCountry,
+    missingPhoneNationalNumber,
     profile?.first_name,
     profile?.last_name,
     refetchProfile,
     t,
   ]);
+
+  const missingPhoneFullE164 = useMemo(() => {
+    const dialCode = String(
+      Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+    ).replace(/\D/g, '');
+    const national = missingPhoneNationalNumber.replace(/\D/g, '').trim();
+    if (!dialCode || !national) return '';
+    return `+${dialCode}${national}`;
+  }, [missingPhoneCountry, missingPhoneNationalNumber]);
+
+  const missingPhoneValidation = useMemo(() => {
+    if (!missingPhoneCountry) {
+      return { isValid: false, message: t('orders.selectCountry', 'Select a country.') };
+    }
+    if (!missingPhoneFullE164) {
+      return {
+        isValid: false,
+        message: t('orders.enterPhoneNumber', 'Enter a phone number.'),
+      };
+    }
+    try {
+      const parsed = parsePhoneNumber(missingPhoneFullE164);
+      const isValid = !!parsed && parsed.isValid() && parsed.country === missingPhoneCountry;
+      return {
+        isValid,
+        message: isValid
+          ? null
+          : t('orders.invalidPhoneNumber', 'Invalid phone number format'),
+      };
+    } catch {
+      return {
+        isValid: false,
+        message: t('orders.invalidPhoneNumber', 'Invalid phone number format'),
+      };
+    }
+  }, [missingPhoneCountry, missingPhoneFullE164, t]);
+
+  const iso2ToFlag = (iso2: string): string => {
+    const code = String(iso2 || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code)) return '';
+    const A = 0x1f1e6;
+    const base = 'A'.charCodeAt(0);
+    return String.fromCodePoint(
+      A + (code.charCodeAt(0) - base),
+      A + (code.charCodeAt(1) - base)
+    );
+  };
 
   const handlePageBack = () => {
     navigate(-1);
@@ -890,9 +1007,12 @@ const PlaceOrderPage: React.FC = () => {
     setAddressFormData((prev) => ({
       ...prev,
       country: prev.country || itemOriginCountryIso,
+      state: prev.state || itemOriginState,
+      city: prev.city || itemOriginCity,
+      is_primary: true,
     }));
     setAddressDialogOpen(true);
-  }, [itemOriginCountryIso]);
+  }, [itemOriginCity, itemOriginCountryIso, itemOriginState]);
 
   const handleCloseAddressDialog = () => {
     setAddressDialogOpen(false);
@@ -2041,6 +2161,9 @@ const PlaceOrderPage: React.FC = () => {
                     startIcon={
                       loading ? <CircularProgress size={20} /> : <ShoppingCart />
                     }
+                    sx={getConfirmOrderAttentionSx(
+                      isStepValid(activeStep) && !loading
+                    )}
                   >
                     {loading
                       ? t('orders.placingOrder', 'Placing Order...')
@@ -2871,7 +2994,7 @@ const PlaceOrderPage: React.FC = () => {
         loading={loading}
         showAddressType={addressDialogMode !== 'anon'}
         showIsPrimary={addressDialogMode !== 'anon'}
-        hideAddressLine2={addressDialogMode === 'anon'}
+        hideAddressLine2={true}
         hidePostalCode={addressDialogMode === 'anon'}
         showCoordinates={false}
         fullScreen={isMobile}
@@ -2908,15 +3031,72 @@ const PlaceOrderPage: React.FC = () => {
 
             {missingPhoneError && <Alert severity="error">{missingPhoneError}</Alert>}
 
-            <PhoneInput
-              value={missingPhoneNumber}
-              onChange={(value) => setMissingPhoneNumber(value || '')}
-              label={t('accounts.phoneNumber', 'Phone Number')}
-              helperText={t(
-                'accounts.withdrawPhoneCmGaHint',
-                'Use a Cameroon (+237) or Gabon (+241) phone number.'
-              )}
-            />
+            {missingPhoneCountry === 'CM' ? <CmAcceptedPaymentLogos compact /> : null}
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' },
+                gap: 1.5,
+                alignItems: 'start',
+              }}
+            >
+              <FormControl fullWidth size="small">
+                <InputLabel id="missing-phone-country">
+                  {t('common.country', 'Country')}
+                </InputLabel>
+                <Select
+                  labelId="missing-phone-country"
+                  label={t('common.country', 'Country')}
+                  value={missingPhoneCountry || ''}
+                  onChange={(e) => {
+                    const next = String(e.target.value || '');
+                    setMissingPhoneCountry(next);
+                    setMissingPhoneNationalNumber('');
+                    setMissingPhoneNumber('');
+                  }}
+                  disabled={
+                    !!selectedAddress?.country?.trim() &&
+                    isCountrySupported(selectedAddress.country.trim())
+                  }
+                >
+                  {supportedCountries.map((iso2) => {
+                    const c = Country.getCountryByCode(iso2);
+                    const code = c?.phonecode ? `+${c.phonecode}` : '';
+                    return (
+                      <MenuItem key={iso2} value={iso2}>
+                        {iso2ToFlag(iso2)} {code}
+                      </MenuItem>
+                    );
+                  })}
+                </Select>
+              </FormControl>
+
+              <TextField
+                label={t('accounts.phoneNumber', 'Phone Number')}
+                value={missingPhoneNationalNumber}
+                onChange={(e) => {
+                  const digits = String(e.target.value || '').replace(/\D/g, '');
+                  setMissingPhoneNationalNumber(digits);
+                  const dial = String(
+                    Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+                  ).replace(/\D/g, '');
+                  setMissingPhoneNumber(dial ? `+${dial}${digits}` : digits);
+                }}
+                inputProps={{ inputMode: 'numeric' }}
+                placeholder={t('orders.phoneNumberPlaceholder', 'e.g. 6XXXXXXXX')}
+                error={!!missingPhoneNationalNumber && !missingPhoneValidation.isValid}
+                helperText={
+                  missingPhoneNationalNumber && !missingPhoneValidation.isValid
+                    ? missingPhoneValidation.message
+                    : t(
+                        'orders.phoneNumberDialCodeHint',
+                        'The country code is added automatically.'
+                      )
+                }
+                size="small"
+              />
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -2930,7 +3110,7 @@ const PlaceOrderPage: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSaveMissingPhone}
-            disabled={missingPhoneSaving}
+            disabled={missingPhoneSaving || !missingPhoneValidation.isValid}
             sx={{ borderRadius: 0 }}
             startIcon={
               missingPhoneSaving ? <CircularProgress size={18} /> : <Phone />
