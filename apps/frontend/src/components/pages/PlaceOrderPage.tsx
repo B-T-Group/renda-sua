@@ -678,6 +678,16 @@ const PlaceOrderPage: React.FC = () => {
     return deliverySlots.find((slot) => slot.id === deliveryWindow.slot_id);
   }, [deliveryWindow?.slot_id, deliverySlots]);
 
+  const deliveryReviewDateLabel = useMemo(() => {
+    if (!deliveryWindow?.preferred_date) return '';
+    return new Date(deliveryWindow.preferred_date).toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }, [deliveryWindow?.preferred_date]);
+
   // Set default address when addresses load
   useEffect(() => {
     if (addresses.length > 0 && !selectedAddressId) {
@@ -1002,6 +1012,14 @@ const PlaceOrderPage: React.FC = () => {
     navigate(-1);
   };
 
+  const handleCancelPurchase = () => {
+    navigate('/items');
+  };
+
+  const handleHeaderBackToItems = () => {
+    navigate('/items');
+  };
+
   // Address Dialog Handlers
   const handleOpenAddressDialog = useCallback(() => {
     setAddressFormData((prev) => ({
@@ -1231,191 +1249,62 @@ const PlaceOrderPage: React.FC = () => {
       return (
         <Stack spacing={2}>
           {/* Delivery Address (merged from former step 3) */}
-          <Card>
-            <CardContent sx={{ p: 2 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mb: 2,
-                }}
-              >
-                <LocationOn color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {t('orders.deliveryAddress', 'Delivery Address')}
-                </Typography>
-              </Box>
-
-              {addressesLoading ? (
+          {(addressesLoading || addresses.length === 0) && (
+            <Card>
+              <CardContent sx={{ p: 1.5 }}>
                 <Box
-                  sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 2,
+                  }}
                 >
-                  <CircularProgress />
+                  <LocationOn color="primary" />
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {t('orders.deliveryAddress', 'Delivery Address')}
+                  </Typography>
                 </Box>
-              ) : addresses.length === 0 ? (
-                <Paper
-                  variant="outlined"
-                  sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
-                >
-                  <LocationOn
-                    sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
-                  />
-                  <Typography variant="subtitle1" gutterBottom>
-                    {t('orders.noAddresses', 'No delivery address found')}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 2 }}
-                  >
-                    {t(
-                      'orders.noAddressesMessage',
-                      'Please add a delivery address to continue with your order'
-                    )}
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenAddressDialog}
-                    startIcon={<Add />}
-                  >
-                    {t('orders.addAddress', 'Add Delivery Address')}
-                  </Button>
-                </Paper>
-              ) : (
-                <>
-                  <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel>
-                      {t('orders.selectAddress', 'Select Delivery Address')}
-                    </InputLabel>
-                    <Select
-                      value={selectedAddressId}
-                      label={t(
-                        'orders.selectAddress',
-                        'Select Delivery Address'
-                      )}
-                      onChange={(e) => setSelectedAddressId(e.target.value)}
-                      disabled={loading}
-                    >
-                      {addresses.map((addressWrapper) => {
-                        const address = addressWrapper.address;
-                        return (
-                          <MenuItem key={address.id} value={address.id}>
-                            <Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                }}
-                              >
-                                <Typography variant="body2">
-                                  {address.address_line_1}, {address.city}
-                                </Typography>
-                                {address.is_primary && (
-                                  <Chip
-                                    label="Primary"
-                                    size="small"
-                                    color="primary"
-                                  />
-                                )}
-                              </Box>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {address.address_type}
-                              </Typography>
-                            </Box>
-                          </MenuItem>
-                        );
-                      })}
-                    </Select>
-                  </FormControl>
 
-                  {selectedAddressId &&
-                    (() => {
-                      const selectedAddressWrapper = addresses.find(
-                        (addr) => addr.address.id === selectedAddressId
-                      );
-                      if (!selectedAddressWrapper) return null;
-                      const address = selectedAddressWrapper.address;
-                      return (
-                        <Paper
-                          variant="outlined"
-                          sx={{ p: 2, bgcolor: 'grey.50' }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              mb: 1,
-                            }}
-                          >
-                            <CheckCircle color="success" fontSize="small" />
-                            <Typography
-                              variant="subtitle2"
-                              fontWeight="bold"
-                            >
-                              {t('orders.deliveryTo', 'Delivery to')}
-                            </Typography>
-                          </Box>
-                          {profile?.first_name && (
-                            <Typography
-                              variant="body2"
-                              fontWeight="medium"
-                              sx={{ mb: 0.75 }}
-                            >
-                              {profile.first_name}
-                            </Typography>
-                          )}
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {address.address_line_1}
-                            {address.address_line_2 &&
-                              `, ${address.address_line_2}`}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                          >
-                            {address.city}, {address.state}{' '}
-                            {address.postal_code}
-                          </Typography>
-                          {address.instructions?.trim() && (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ mt: 1 }}
-                            >
-                              <strong>
-                                {t(
-                                  'orders.deliveryInstructions',
-                                  'Delivery instructions'
-                                )}
-                                :
-                              </strong>{' '}
-                              {address.instructions}
-                            </Typography>
-                          )}
-                        </Paper>
-                      );
-                    })()}
-
-                  <Button
+                {addressesLoading ? (
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <Paper
                     variant="outlined"
-                    size="small"
-                    fullWidth
-                    onClick={handleOpenAddressDialog}
-                    startIcon={<Add />}
-                    sx={{ mt: 2 }}
+                    sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
                   >
-                    {t('orders.addAnotherAddress', 'Add Another Address')}
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                    <LocationOn
+                      sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
+                    />
+                    <Typography variant="subtitle1" gutterBottom>
+                      {t('orders.noAddresses', 'No delivery address found')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 2 }}
+                    >
+                      {t(
+                        'orders.noAddressesMessage',
+                        'Please add a delivery address to continue with your order'
+                      )}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenAddressDialog}
+                      startIcon={<Add />}
+                    >
+                      {t('orders.addAddress', 'Add Delivery Address')}
+                    </Button>
+                  </Paper>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Delivery Options: fast delivery + time slot (merged from former step 1) */}
           {fastDeliveryConfig &&
@@ -1439,8 +1328,8 @@ const PlaceOrderPage: React.FC = () => {
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   {t(
-                    'orders.deliveryTimeWindow.title',
-                    'When will you be available?'
+                    'orders.deliveryTimeWindow.availabilityTitle',
+                    'When are you available for delivery?'
                   )}
                 </Typography>
                 <DeliveryTimeWindowSelector
@@ -1783,8 +1672,8 @@ const PlaceOrderPage: React.FC = () => {
                     <Schedule color="primary" />
                     <Typography variant="subtitle1" fontWeight="bold">
                       {t(
-                        'orders.deliveryTimeWindow.title',
-                        'Delivery Time Window'
+                        'orders.deliveryTimeWindow.reviewSectionTitle',
+                        'Review your delivery schedule'
                       )}
                     </Typography>
                   </Box>
@@ -1797,6 +1686,18 @@ const PlaceOrderPage: React.FC = () => {
                     </Box>
                   ) : selectedSlot ? (
                     <Stack spacing={2}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'orders.deliveryTimeWindow.reviewSummary',
+                          'We will deliver to {{address}} on {{date}} between {{start}} and {{end}}.',
+                          {
+                            address: `${selectedAddress.address_line_1}, ${selectedAddress.city}`,
+                            date: deliveryReviewDateLabel,
+                            start: selectedSlot.start_time,
+                            end: selectedSlot.end_time,
+                          }
+                        )}
+                      </Typography>
                       <Box
                         sx={{
                           display: 'flex',
@@ -1813,14 +1714,7 @@ const PlaceOrderPage: React.FC = () => {
                           :
                         </Typography>
                         <Typography variant="body2" fontWeight="medium">
-                          {new Date(
-                            deliveryWindow.preferred_date
-                          ).toLocaleDateString(undefined, {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
+                          {deliveryReviewDateLabel}
                         </Typography>
                       </Box>
 
@@ -1840,17 +1734,6 @@ const PlaceOrderPage: React.FC = () => {
                           {selectedSlot.start_time} - {selectedSlot.end_time}
                         </Typography>
                       </Box>
-
-                      {selectedSlot.slot_name && (
-                        <Box>
-                          <Chip
-                            label={selectedSlot.slot_name}
-                            color="primary"
-                            size="small"
-                            variant="outlined"
-                          />
-                        </Box>
-                      )}
 
                       {deliveryWindow.special_instructions && (
                         <Box sx={{ mt: 1 }}>
@@ -2082,13 +1965,32 @@ const PlaceOrderPage: React.FC = () => {
             }}
           >
             {/* Compact header */}
-            <Box sx={{ flexShrink: 0, px: 2, pt: 2, pb: 1 }}>
+            <Box
+              sx={{
+                flexShrink: 0,
+                px: 2,
+                pt: 2,
+                pb: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
               <Button
-                onClick={handleBack}
+                onClick={handleHeaderBackToItems}
                 startIcon={<ArrowBack />}
                 size="small"
               >
                 {t('common.goBack', 'Go Back')}
+              </Button>
+              <Button
+                onClick={handleCancelPurchase}
+                size="small"
+                color="error"
+                sx={{ textTransform: 'none' }}
+              >
+                {t('orders.cancelPurchase', 'Cancel Purchase')}
               </Button>
             </Box>
 
@@ -2197,14 +2099,31 @@ const PlaceOrderPage: React.FC = () => {
           >
             {/* Header */}
             <Box sx={{ mb: 4 }}>
-              <Button
-                onClick={handlePageBack}
-                startIcon={<ArrowBack />}
-                size="small"
-                sx={{ mb: 2 }}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  mb: 2,
+                }}
               >
-                {t('common.goBack', 'Go Back')}
-              </Button>
+                <Button
+                  onClick={handlePageBack}
+                  startIcon={<ArrowBack />}
+                  size="small"
+                >
+                  {t('common.goBack', 'Go Back')}
+                </Button>
+                <Button
+                  onClick={handleCancelPurchase}
+                  size="small"
+                  color="error"
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('orders.cancelPurchase', 'Cancel Purchase')}
+                </Button>
+              </Box>
 
               <Typography
                 variant="h4"
@@ -2231,7 +2150,7 @@ const PlaceOrderPage: React.FC = () => {
             <Stack spacing={3}>
               {/* Product Card */}
               <Card>
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: 2 }}>
                   <Box
                     sx={{
                       display: 'flex',
@@ -2590,137 +2509,39 @@ const PlaceOrderPage: React.FC = () => {
                       </Button>
                     </Paper>
                   ) : (
-                    <>
-                      <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel>
-                          {t('orders.selectAddress', 'Select Delivery Address')}
-                        </InputLabel>
-                        <Select
-                          value={selectedAddressId}
-                          label={t(
-                            'orders.selectAddress',
-                            'Select Delivery Address'
-                          )}
-                          onChange={(e) => setSelectedAddressId(e.target.value)}
-                          disabled={loading}
-                        >
-                          {addresses.map((addressWrapper) => {
-                            const address = addressWrapper.address;
-                            return (
-                              <MenuItem key={address.id} value={address.id}>
-                                <Box>
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 1,
-                                    }}
-                                  >
-                                    <Typography variant="body2">
-                                      {address.address_line_1}, {address.city}
-                                    </Typography>
-                                    {address.is_primary && (
-                                      <Chip
-                                        label="Primary"
-                                        size="small"
-                                        color="primary"
-                                      />
-                                    )}
-                                  </Box>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    {address.address_type}
-                                  </Typography>
-                                </Box>
-                              </MenuItem>
-                            );
-                          })}
-                        </Select>
-                      </FormControl>
-
-                      {/* Selected Address Display */}
-                      {selectedAddressId &&
-                        (() => {
-                          const selectedAddressWrapper = addresses.find(
-                            (addr) => addr.address.id === selectedAddressId
-                          );
-                          if (!selectedAddressWrapper) return null;
-                          const address = selectedAddressWrapper.address;
-                          return (
-                            <Paper
-                              variant="outlined"
-                              sx={{ p: 2, bgcolor: 'grey.50' }}
-                            >
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  mb: 1,
-                                }}
-                              >
-                                <CheckCircle color="success" fontSize="small" />
-                                <Typography
-                                  variant="subtitle2"
-                                  fontWeight="bold"
-                                >
-                                  {t('orders.deliveryTo', 'Delivery to')}
-                                </Typography>
-                              </Box>
-                              {profile?.first_name && (
-                                <Typography
-                                  variant="body2"
-                                  fontWeight="medium"
-                                  sx={{ mb: 0.75 }}
-                                >
-                                  {profile.first_name}
-                                </Typography>
-                              )}
-                              <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                {address.address_line_1}
-                                {address.address_line_2 &&
-                                  `, ${address.address_line_2}`}
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                {address.city}, {address.state}{' '}
-                                {address.postal_code}
-                              </Typography>
-                              {address.instructions?.trim() && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{ mt: 1 }}
-                                >
-                                  <strong>
-                                    {t(
-                                      'orders.deliveryInstructions',
-                                      'Delivery instructions'
-                                    )}
-                                    :
-                                  </strong>{' '}
-                                  {address.instructions}
-                                </Typography>
-                              )}
-                            </Paper>
-                          );
-                        })()}
-
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                        onClick={handleOpenAddressDialog}
-                        startIcon={<Add />}
-                        sx={{ mt: 2 }}
-                      >
-                        {t('orders.addAnotherAddress', 'Add Another Address')}
-                      </Button>
-                    </>
+                    (() => {
+                      const selectedAddressWrapper =
+                        addresses.find((addr) => addr.address.id === selectedAddressId) ||
+                        addresses[0];
+                      if (!selectedAddressWrapper) return null;
+                      const address = selectedAddressWrapper.address;
+                      return (
+                        <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.75,
+                              mb: 0.5,
+                            }}
+                          >
+                            <CheckCircle color="success" fontSize="small" />
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {t('orders.selectedAddress', 'Selected Address')}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" sx={{ lineHeight: 1.45 }}>
+                            {address.address_line_1}
+                            {address.address_line_2
+                              ? `, ${address.address_line_2}`
+                              : ''}
+                            {`, ${address.city}`}
+                            {address.state ? `, ${address.state}` : ''}
+                            {address.postal_code ? ` ${address.postal_code}` : ''}
+                          </Typography>
+                        </Paper>
+                      );
+                    })()
                   )}
                 </CardContent>
               </Card>
@@ -2748,8 +2569,8 @@ const PlaceOrderPage: React.FC = () => {
                   <CardContent sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
                       {t(
-                        'orders.deliveryTimeWindow.title',
-                        'When will you be available?'
+                        'orders.deliveryTimeWindow.availabilityTitle',
+                        'When are you available for delivery?'
                       )}
                     </Typography>
                     <DeliveryTimeWindowSelector

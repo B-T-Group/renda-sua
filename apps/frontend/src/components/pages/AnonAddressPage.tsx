@@ -13,6 +13,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha, keyframes } from '@mui/material/styles';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -21,6 +22,17 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import AddressForm from '../addresses/AddressForm';
 import type { AddressFormData } from '../dialogs/AddressDialog';
+
+const saveAttentionPulse = keyframes`
+  0%, 100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 var(--save-button-ring-color);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 10px transparent;
+  }
+`;
 
 const AnonAddressPage: React.FC = () => {
   const { t } = useTranslation();
@@ -38,6 +50,7 @@ const AnonAddressPage: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasClickedSave, setHasClickedSave] = useState(false);
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     address_line_1: '',
     address_line_2: '',
@@ -82,6 +95,20 @@ const AnonAddressPage: React.FC = () => {
   });
 
   const canManageAddresses = Boolean(profile?.client?.id);
+  const isAddressReady = useMemo(() => {
+    const a = addressFormData;
+    return (
+      !!a.address_line_1?.trim() &&
+      !!a.city?.trim() &&
+      !!a.country?.trim()
+    );
+  }, [addressFormData]);
+
+  useEffect(() => {
+    if (!isAddressReady) {
+      setHasClickedSave(false);
+    }
+  }, [isAddressReady]);
 
   const backToPlaceOrder = useCallback(() => {
     const search = isAnonFlow ? '?anon=1&anonAddressDone=1' : '';
@@ -95,6 +122,7 @@ const AnonAddressPage: React.FC = () => {
   const handleSave = useCallback(async () => {
     if (saving) return;
     if (!canManageAddresses) return;
+    setHasClickedSave(true);
     setSaving(true);
     setError(null);
     try {
@@ -138,7 +166,22 @@ const AnonAddressPage: React.FC = () => {
             variant="contained"
             disabled={saving || !canManageAddresses}
             startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
+            sx={(theme) => ({
+              borderRadius: 2,
+              textTransform: 'none',
+              ...(!hasClickedSave && isAddressReady && !saving
+                ? {
+                    '--save-button-ring-color': alpha(
+                      theme.palette.primary.main,
+                      theme.palette.mode === 'dark' ? 0.4 : 0.28
+                    ),
+                    animation: `${saveAttentionPulse} 2.8s ease-in-out infinite`,
+                    '@media (prefers-reduced-motion: reduce)': {
+                      animation: 'none',
+                    },
+                  }
+                : null),
+            })}
           >
             {t('addresses.addressDialog.save', 'Save')}
           </Button>
