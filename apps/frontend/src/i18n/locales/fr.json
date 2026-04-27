@@ -2486,6 +2486,7 @@
       "availabilityTitle": "Quand êtes-vous disponible pour la livraison ?",
       "reviewSectionTitle": "Récapitulatif de votre livraison",
       "reviewSummary": "Nous livrerons à {{address}} le {{date}} entre {{start}} et {{end}}.",
+      "reviewSummaryWithEditableAddress": "Nous livrerons à <address>{{address}}</address> le {{date}} entre {{start}} et {{end}}.",
       "selectSlot": "Sélectionner un créneau horaire",
       "preferredDate": "Date de livraison préférée",
       "flexible": "Je suis flexible avec les horaires",

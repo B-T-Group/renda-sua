@@ -47,7 +47,7 @@ import { alpha, keyframes, Theme } from '@mui/material/styles';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import { Country } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   Link as RouterLink,
   useLocation,
@@ -562,6 +562,7 @@ const PlaceOrderPage: React.FC = () => {
   const [addressDialogMode, setAddressDialogMode] = useState<'normal' | 'anon'>(
     'normal'
   );
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [didAutoOpenAnonAddress, setDidAutoOpenAnonAddress] = useState(false);
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     address_line_1: '',
@@ -620,6 +621,7 @@ const PlaceOrderPage: React.FC = () => {
     addresses,
     loading: addressesLoading,
     addAddress,
+    updateAddress,
   } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
@@ -885,6 +887,17 @@ const PlaceOrderPage: React.FC = () => {
     useDifferentPhone,
   ]);
 
+  const openMissingPhoneDialog = useCallback(() => {
+    setMissingPhoneError(null);
+    setMissingPhoneNumber('');
+    setMissingPhoneNationalNumber('');
+    const addrCountry = selectedAddress?.country?.trim() || '';
+    const locked = !!addrCountry && isCountrySupported(addrCountry);
+    const fallbackCountry = locked ? addrCountry : supportedCountries?.[0] || 'GA';
+    setMissingPhoneCountry(fallbackCountry);
+    setMissingPhoneDialogOpen(true);
+  }, [isCountrySupported, selectedAddress?.country, supportedCountries]);
+
   const handleSaveMissingPhone = useCallback(async () => {
     const dialCode = String(
       Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
@@ -1019,19 +1032,46 @@ const PlaceOrderPage: React.FC = () => {
 
   // Address Dialog Handlers
   const handleOpenAddressDialog = useCallback(() => {
-    setAddressFormData((prev) => ({
-      ...prev,
-      country: prev.country || itemOriginCountryIso,
-      state: prev.state || itemOriginState,
-      city: prev.city || itemOriginCity,
-      is_primary: true,
-    }));
+    if (selectedAddress) {
+      setEditingAddressId(selectedAddress.id);
+      setAddressFormData({
+        address_line_1: selectedAddress.address_line_1 || '',
+        address_line_2: selectedAddress.address_line_2 || '',
+        city: selectedAddress.city || '',
+        state: selectedAddress.state || '',
+        postal_code: selectedAddress.postal_code || '',
+        country: selectedAddress.country || '',
+        address_type: selectedAddress.address_type || 'home',
+        is_primary: Boolean(selectedAddress.is_primary),
+        latitude: selectedAddress.latitude,
+        longitude: selectedAddress.longitude,
+        instructions: selectedAddress.instructions || '',
+      });
+    } else {
+      setEditingAddressId(null);
+      setAddressFormData({
+        address_line_1: '',
+        address_line_2: '',
+        city: itemOriginCity,
+        state: itemOriginState,
+        postal_code: '',
+        country: itemOriginCountryIso,
+        address_type: 'home',
+        is_primary: true,
+      });
+    }
     setAddressDialogOpen(true);
-  }, [itemOriginCity, itemOriginCountryIso, itemOriginState]);
+  }, [
+    selectedAddress,
+    itemOriginCity,
+    itemOriginCountryIso,
+    itemOriginState,
+  ]);
 
   const handleCloseAddressDialog = () => {
     setAddressDialogOpen(false);
     setAddressDialogMode('normal');
+    setEditingAddressId(null);
     // Reset form data
     setAddressFormData({
       address_line_1: '',
@@ -1062,8 +1102,14 @@ const PlaceOrderPage: React.FC = () => {
           addressDialogMode === 'anon' ? true : addressFormData.is_primary || false,
       };
 
-      // Add the address using the address manager
-      await addAddress(addressData);
+      // Update selected address when editing, otherwise add a new one.
+      const saveResult = editingAddressId
+        ? await updateAddress(editingAddressId, addressData)
+        : await addAddress(addressData);
+
+      if (saveResult?.address?.id) {
+        setSelectedAddressId(saveResult.address.id);
+      }
 
       // Close the dialog
       handleCloseAddressDialog();
@@ -1472,16 +1518,30 @@ const PlaceOrderPage: React.FC = () => {
                       ) : selectedSlot ? (
                         <Stack spacing={0.75}>
                           <Typography variant="body2" color="text.secondary">
-                            {t(
-                              'orders.deliveryTimeWindow.reviewSummary',
-                              'We will deliver to {{address}} on {{date}} between {{start}} and {{end}}.',
-                              {
+                            <Trans
+                              i18nKey="orders.deliveryTimeWindow.reviewSummaryWithEditableAddress"
+                              defaults="We will deliver to <address>{{address}}</address> on {{date}} between {{start}} and {{end}}."
+                              values={{
                                 address: `${selectedAddress.address_line_1}, ${selectedAddress.city}`,
                                 date: deliveryReviewDateLabel,
                                 start: selectedSlot.start_time,
                                 end: selectedSlot.end_time,
-                              }
-                            )}
+                              }}
+                              components={{
+                                address: (
+                                  <ButtonBase
+                                    onClick={handleOpenAddressDialog}
+                                    sx={{
+                                      color: 'primary.main',
+                                      fontWeight: 600,
+                                      textDecoration: 'underline',
+                                      textUnderlineOffset: '2px',
+                                      verticalAlign: 'baseline',
+                                    }}
+                                  />
+                                ),
+                              }}
+                            />
                           </Typography>
                           {deliveryWindow.special_instructions && (
                             <Typography variant="caption" color="text.secondary">
@@ -1735,7 +1795,7 @@ const PlaceOrderPage: React.FC = () => {
                     </Typography>
                     <Button
                       variant="contained"
-                      onClick={() => navigate('/profile')}
+                      onClick={openMissingPhoneDialog}
                       size="small"
                     >
                       {t('orders.addPhoneNumber', 'Add Phone Number')}
@@ -2555,7 +2615,7 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                       <Button
                         variant="contained"
-                        onClick={() => navigate('/profile')}
+                        onClick={openMissingPhoneDialog}
                         size="small"
                       >
                         {t('orders.addPhoneNumber', 'Add Phone Number')}

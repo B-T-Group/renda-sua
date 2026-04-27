@@ -2514,6 +2514,7 @@
       "availabilityTitle": "When are you available for delivery?",
       "reviewSectionTitle": "Review your delivery schedule",
       "reviewSummary": "We will deliver to {{address}} on {{date}} between {{start}} and {{end}}.",
+      "reviewSummaryWithEditableAddress": "We will deliver to <address>{{address}}</address> on {{date}} between {{start}} and {{end}}.",
       "selectSlot": "Select a time slot",
       "preferredDate": "Preferred delivery date",
       "flexible": "I'm flexible with timing",
