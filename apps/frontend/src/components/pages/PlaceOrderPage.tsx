@@ -2056,7 +2056,7 @@ const PlaceOrderPage: React.FC = () => {
                   >
                     {loading
                       ? t('orders.placingOrder', 'Placing Order...')
-                      : t('orders.confirmOrder', 'Confirm Order')}
+                      : t('orders.buy', 'Buy')}
                   </Button>
                 ) : (
                   <Button
@@ -2064,6 +2064,7 @@ const PlaceOrderPage: React.FC = () => {
                     variant="contained"
                     fullWidth
                     disabled={!isStepValid(activeStep)}
+                    sx={getConfirmOrderAttentionSx(isStepValid(activeStep))}
                   >
                     {t('common.next', 'Next')}
                   </Button>

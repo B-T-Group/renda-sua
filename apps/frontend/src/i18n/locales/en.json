@@ -2361,6 +2361,7 @@
     },
     "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
     "confirmOrder": "Confirm Order",
+    "buy": "Buy",
     "confirmOrderCompletion": "Confirm Order Completion",
     "completeDelivery": {
       "title": "Complete Delivery",

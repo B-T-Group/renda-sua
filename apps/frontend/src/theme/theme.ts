@@ -125,7 +125,7 @@ export const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 16, // More rounded for modern delivery app feel
+    borderRadius: 12, // Moderately rounded for a cleaner look
   },
   // Custom theme utilities
   custom: {
@@ -182,7 +182,7 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 22,
+          borderRadius: 14,
           padding: '8px 20px',
           fontSize: '0.875rem',
           fontWeight: 400,
@@ -223,7 +223,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-          borderRadius: 20,
+          borderRadius: 14,
           border: '1px solid rgba(0, 0, 0, 0.04)',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
@@ -244,7 +244,7 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
+          borderRadius: 12,
           backgroundImage: 'none',
         },
         elevation1: {
@@ -262,7 +262,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 12,
+            borderRadius: 10,
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover .MuiOutlinedInput-notchedOutline': {
               borderColor: '#1e40af',
@@ -281,7 +281,7 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 10,
           fontWeight: 600,
           fontSize: '0.75rem',
           letterSpacing: '0.025em',
@@ -311,12 +311,12 @@ export const theme = createTheme({
     MuiLinearProgress: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 6,
           backgroundColor: '#e2e8f0',
           height: 8,
         },
         bar: {
-          borderRadius: 8,
+          borderRadius: 6,
         },
       },
     },
@@ -349,7 +349,7 @@ export const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 20,
+          borderRadius: 14,
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
         },
       },
@@ -358,7 +358,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiSnackbarContent-root': {
-            borderRadius: 12,
+            borderRadius: 10,
           },
         },
       },

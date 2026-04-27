@@ -2350,6 +2350,7 @@
     },
     "refreshAfterHoldPayment": "Si vous avez confirmé le paiement de retenue, veuillez cliquer sur le bouton d'actualisation en haut pour mettre à jour le statut de la commande et le solde de votre compte.",
     "confirmOrder": "Confirmer la Commande",
+    "buy": "Acheter",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
     "refunds": {
       "requestButton": "Demander un remboursement",
