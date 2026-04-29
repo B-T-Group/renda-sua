@@ -70,6 +70,12 @@ export class OrdersController {
         verified_agent_delivery: { type: 'boolean' },
         phone_number: { type: 'string' },
         requires_fast_delivery: { type: 'boolean' },
+        payment_timing: {
+          type: 'string',
+          enum: ['pay_now', 'pay_at_delivery'],
+          description:
+            'Client-selected payment timing. pay_now preserves current behavior; pay_at_delivery defers mobile payment until delivery.',
+        },
         delivery_window: {
           type: 'object',
           properties: {
@@ -382,6 +388,66 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Invalid PIN, max attempts reached, or account suspended' })
   async completeDelivery(@Body() request: CompleteDeliveryRequest) {
     return this.ordersService.completeDelivery(request);
+  }
+
+  @Post(':id/initiate-pay-at-delivery-payment')
+  @ApiOperation({
+    summary: 'Initiate pay-at-delivery mobile payment (agent only)',
+    description:
+      'For pay-at-delivery orders, the assigned agent triggers a mobile payment request at the doorstep. On successful payment callback, the order is automatically settled and marked complete.',
+  })
+  @ApiResponse({ status: 200, description: 'Payment request initiated' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  async initiatePayAtDeliveryPayment(@Param('id') orderId: string) {
+    return this.ordersService.initiatePayAtDeliveryPayment(orderId);
+  }
+
+  @Post(':id/mark-paid-in-cash-exception')
+  @ApiOperation({
+    summary: 'Mark pay-at-delivery order as paid in cash (exception, agent only)',
+    description:
+      'Fallback when mobile payment fails at delivery. Marks the order complete operationally and flags it for business manual reconciliation.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        notes: { type: 'string' },
+      },
+    },
+  })
+  async markPaidInCashException(
+    @Param('id') orderId: string,
+    @Body() body: { notes?: string }
+  ) {
+    return this.ordersService.markPaidInCashException(orderId, body?.notes);
+  }
+
+  @Post(':id/reconcile-cash-exception')
+  @ApiOperation({
+    summary: 'Reconcile a cash-exception order (business only)',
+    description:
+      'Business records manual reconciliation reference/notes and marks the exception reconciled.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reference: { type: 'string' },
+        notes: { type: 'string' },
+      },
+    },
+  })
+  async reconcileCashException(
+    @Param('id') orderId: string,
+    @Body() body: { reference?: string; notes?: string }
+  ) {
+    return this.ordersService.reconcileCashException(
+      orderId,
+      body?.reference,
+      body?.notes
+    );
   }
 
   @Get(':id/delivery-pin')

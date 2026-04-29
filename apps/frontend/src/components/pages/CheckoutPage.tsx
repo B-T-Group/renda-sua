@@ -532,6 +532,7 @@ const CheckoutPage: React.FC = () => {
         undefined, // specialInstructions removed
         requiresFastDelivery,
         fastDeliveryFee,
+        'pay_now',
         deliveryWindow
           ? {
               slot_id: deliveryWindow.slot_id,

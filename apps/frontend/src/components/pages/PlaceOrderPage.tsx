@@ -4,7 +4,9 @@ import {
   CheckCircle,
   LocalShipping,
   LocationOn,
+  PaymentsOutlined,
   Phone,
+  ScheduleOutlined,
   Security,
   ShoppingCart,
   Verified,
@@ -38,6 +40,8 @@ import {
   StepButton,
   Stepper,
   Switch,
+  ToggleButton,
+  ToggleButtonGroup,
   TextField,
   Typography,
   useMediaQuery,
@@ -487,7 +491,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         >
           {loading
             ? t('orders.placingOrder', 'Placing Order...')
-            : t('orders.confirmOrder', 'Confirm Order')}
+            : t('orders.confirmOrder', 'Place order')}
         </Button>
       </Stack>
     </Paper>
@@ -536,6 +540,10 @@ const PlaceOrderPage: React.FC = () => {
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
+  const [paymentTiming, setPaymentTiming] = useState<
+    'pay_now' | 'pay_at_delivery'
+  >('pay_now');
+  const [paymentChoiceDialogOpen, setPaymentChoiceDialogOpen] = useState(false);
   
   // Wizard step state (mobile full-screen dialog only). Step 0 merges delivery options + address.
   const [activeStep, setActiveStep] = useState(0);
@@ -588,6 +596,14 @@ const PlaceOrderPage: React.FC = () => {
   // Get inventory item
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
     useInventoryItem(id || null);
+
+  const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
+
+  useEffect(() => {
+    if (!isPayAtDeliveryEligible && paymentTiming !== 'pay_now') {
+      setPaymentTiming('pay_now');
+    }
+  }, [isPayAtDeliveryEligible, paymentTiming]);
 
   /** ISO country of the selling location — default delivery address country for this item. */
   const itemOriginCountryIso = useMemo(
@@ -783,6 +799,7 @@ const PlaceOrderPage: React.FC = () => {
         ],
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
+        payment_timing: paymentTiming,
         requires_fast_delivery: requiresFastDelivery,
         delivery_window: deliveryWindow,
       };
@@ -861,7 +878,7 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
-  const handleSubmitWithPhoneGate = useCallback(async () => {
+  const submitWithPhoneGate = useCallback(async () => {
     // Only gate when using profile phone (not override) and it's missing
     const hasProfilePhone = Boolean(profile?.phone_number?.trim());
     if (!useDifferentPhone && !hasProfilePhone) {
@@ -886,6 +903,23 @@ const PlaceOrderPage: React.FC = () => {
     supportedCountries,
     useDifferentPhone,
   ]);
+
+  const handleSubmitWithPhoneGate = useCallback(async () => {
+    if (isPayAtDeliveryEligible) {
+      setPaymentChoiceDialogOpen(true);
+      return;
+    }
+    await submitWithPhoneGate();
+  }, [isPayAtDeliveryEligible, submitWithPhoneGate]);
+
+  const handleChoosePaymentTimingAndSubmit = useCallback(
+    async (timing: 'pay_now' | 'pay_at_delivery') => {
+      setPaymentTiming(timing);
+      setPaymentChoiceDialogOpen(false);
+      await submitWithPhoneGate();
+    },
+    [submitWithPhoneGate]
+  );
 
   const openMissingPhoneDialog = useCallback(() => {
     setMissingPhoneError(null);
@@ -1931,7 +1965,8 @@ const PlaceOrderPage: React.FC = () => {
   return (
     <>
       {isMobile ? (
-        <Dialog
+        <>
+          <Dialog
           fullScreen
           open
           PaperProps={{
@@ -2056,7 +2091,7 @@ const PlaceOrderPage: React.FC = () => {
                   >
                     {loading
                       ? t('orders.placingOrder', 'Placing Order...')
-                      : t('orders.buy', 'Buy')}
+                      : t('orders.confirmOrder', 'Place order')}
                   </Button>
                 ) : (
                   <Button
@@ -2072,7 +2107,8 @@ const PlaceOrderPage: React.FC = () => {
               </Stack>
             </Box>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </>
       ) : (
         <Box
           sx={{
@@ -2633,10 +2669,15 @@ const PlaceOrderPage: React.FC = () => {
                           {t('orders.mobilePayment', 'Mobile Money Payment')}
                         </Typography>
                         <Typography variant="body2">
-                          {t(
-                            'orders.paymentRequestMessage',
-                            'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-                          )}
+                          {paymentTiming === 'pay_at_delivery'
+                            ? t(
+                                'orders.payAtDelivery.info',
+                                'You will pay at delivery in the app when the agent arrives. Please keep your phone available to approve the payment request.'
+                              )
+                            : t(
+                                'orders.paymentRequestMessage',
+                                'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                              )}
                         </Typography>
                       </Alert>
 
@@ -2784,6 +2825,178 @@ const PlaceOrderPage: React.FC = () => {
       )}
 
       {/* Address Dialog */}
+      <Dialog
+        open={paymentChoiceDialogOpen}
+        onClose={() => setPaymentChoiceDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.paymentTiming.label', 'When do you want to pay?')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'orders.paymentTiming.choosePrompt',
+              'Choose how you want to pay for this order.'
+            )}
+          </Typography>
+
+          <Stack spacing={1.25}>
+            <ButtonBase
+              onClick={() => setPaymentTiming('pay_now')}
+              disabled={loading}
+              sx={{ width: '100%', textAlign: 'left', borderRadius: 2 }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{
+                  width: '100%',
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    paymentTiming === 'pay_now' ? 'primary.main' : 'divider',
+                  bgcolor:
+                    paymentTiming === 'pay_now' ? 'primary.50' : 'background.paper',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <PaymentsOutlined fontSize="small" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography fontWeight={700}>
+                      {t('orders.paymentTiming.payNow', 'Pay now')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {t(
+                        'orders.paymentTiming.payNowShort',
+                        'Approve the payment request right away.'
+                      )}
+                    </Typography>
+                  </Box>
+                  {paymentTiming === 'pay_now' ? (
+                    <CheckCircle color="primary" />
+                  ) : null}
+                </Stack>
+              </Paper>
+            </ButtonBase>
+
+            <ButtonBase
+              onClick={() => setPaymentTiming('pay_at_delivery')}
+              disabled={loading}
+              sx={{ width: '100%', textAlign: 'left', borderRadius: 2 }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{
+                  width: '100%',
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    paymentTiming === 'pay_at_delivery'
+                      ? 'primary.main'
+                      : 'divider',
+                  bgcolor:
+                    paymentTiming === 'pay_at_delivery'
+                      ? 'primary.50'
+                      : 'background.paper',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'secondary.main',
+                      color: 'secondary.contrastText',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ScheduleOutlined fontSize="small" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography fontWeight={700}>
+                      {t(
+                        'orders.paymentTiming.payAtDelivery',
+                        'Pay at delivery'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {t(
+                        'orders.paymentTiming.payAtDeliveryShort',
+                        'Pay in the app when the agent arrives.'
+                      )}
+                    </Typography>
+                  </Box>
+                  {paymentTiming === 'pay_at_delivery' ? (
+                    <CheckCircle color="primary" />
+                  ) : null}
+                </Stack>
+              </Paper>
+            </ButtonBase>
+          </Stack>
+
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2" fontWeight={700} gutterBottom>
+              {paymentTiming === 'pay_now'
+                ? t('orders.paymentTiming.payNow', 'Pay now')
+                : t(
+                    'orders.paymentTiming.payAtDelivery',
+                    'Pay at delivery'
+                  )}
+            </Typography>
+            <Typography variant="body2">
+              {paymentTiming === 'pay_now'
+                ? t(
+                    'orders.paymentTiming.payNowDescription',
+                    'We’ll send a payment request to your phone now. Approve it to place your order.'
+                  )
+                : t(
+                    'orders.paymentTiming.payAtDeliveryDescription',
+                    'You will place the order now and pay at delivery in the app when the agent arrives.'
+                  )}
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            onClick={() => handleChoosePaymentTimingAndSubmit(paymentTiming)}
+            disabled={loading}
+          >
+            {paymentTiming === 'pay_now'
+              ? t('orders.paymentTiming.payNow', 'Pay now')
+              : t(
+                  'orders.paymentTiming.payAtDelivery',
+                  'Pay at delivery'
+                )}
+          </Button>
+          <Button
+            onClick={() => setPaymentChoiceDialogOpen(false)}
+            disabled={loading}
+          >
+            {t('common.cancel', 'Cancel')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <AddressDialog
         open={addressDialogOpen}
         title={

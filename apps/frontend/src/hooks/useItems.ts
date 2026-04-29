@@ -9,6 +9,7 @@ export interface Item {
   name: string;
   description: string;
   item_sub_category_id: number;
+  pay_on_delivery_enabled?: boolean;
   weight: number | null;
   weight_unit: string | null;
   dimensions?: string | null;
@@ -119,6 +120,7 @@ export interface CreateItemData {
   min_order_quantity?: number;
   max_order_quantity?: number;
   is_active?: boolean;
+  pay_on_delivery_enabled?: boolean;
   business_id: string;
 }
 
@@ -188,6 +190,7 @@ export const useItems = (
         name
         description
         item_sub_category_id
+        pay_on_delivery_enabled
         weight
         weight_unit
         dimensions

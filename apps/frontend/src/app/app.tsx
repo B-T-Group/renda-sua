@@ -1,6 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import { FloatingWhatsApp } from '@digicroz/react-floating-whatsapp';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Navigate,
   Route,
@@ -92,6 +94,7 @@ import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 
 function App() {
+  const { t } = useTranslation();
   const { isLoading } = useAuth0();
   const { isAuthenticated, isCheckingProfile } = useAuthFlow();
   const location = useLocation();
@@ -131,6 +134,9 @@ function App() {
   const showAgentBottomNav = userType === 'agent' && isMobile;
   const showClientBottomNav = userType === 'client' && isMobile;
   const showGuestBottomNav = !isAuthenticated && isMobile;
+  const hasMobileBottomNav =
+    showAgentBottomNav || showClientBottomNav || showGuestBottomNav;
+  const whatsappBottomOffset = hasMobileBottomNav ? 92 : 24;
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -745,6 +751,25 @@ function App() {
 
       {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
       <GuestBottomNav />
+
+      <FloatingWhatsApp
+        phoneNumber="237690043293"
+        accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
+        statusMessage={t(
+          'support.whatsapp.statusMessage',
+          'Typically replies within 1 hour'
+        )}
+        chatMessage={t(
+          'support.whatsapp.chatMessage',
+          'Hello! How can we help you today?'
+        )}
+        placeholder={t('support.whatsapp.placeholder', 'Type a message...')}
+        allowClickAway={true}
+        allowEsc={true}
+        notification={false}
+        buttonStyle={{ bottom: `${whatsappBottomOffset}px`, right: '24px' }}
+        darkMode={false}
+      />
 
       {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
       <AgentOnboardingModal

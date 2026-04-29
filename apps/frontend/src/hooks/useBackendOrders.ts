@@ -113,6 +113,8 @@ export interface OrderDetails {
   preferred_delivery_time?: string;
   payment_method?: string;
   payment_status?: string;
+  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';
   created_at: string;
   updated_at: string;
   client?: any;
@@ -763,6 +765,90 @@ export const useBackendOrders = () => {
     });
   };
 
+  const initiatePayAtDeliveryPayment = async (
+    orderId: string
+  ): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(
+          `/orders/${orderId}/initiate-pay-at-delivery-payment`,
+          {}
+        );
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to initiate pay at delivery payment'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
+  const markPaidInCashException = async (
+    orderId: string,
+    notes?: string
+  ): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(
+          `/orders/${orderId}/mark-paid-in-cash-exception`,
+          { notes }
+        );
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to mark paid in cash'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
+  const reconcileCashException = async (
+    orderId: string,
+    reference?: string,
+    notes?: string
+  ): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(
+          `/orders/${orderId}/reconcile-cash-exception`,
+          { reference, notes }
+        );
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to reconcile cash exception'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
   const getDeliveryPin = async (
     orderId: string
   ): Promise<{ pin: string }> => {
@@ -832,6 +918,9 @@ export const useBackendOrders = () => {
 
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,
+    initiatePayAtDeliveryPayment,
+    markPaidInCashException,
+    reconcileCashException,
     getDeliveryPin,
     generateDeliveryOverwriteCode,
 

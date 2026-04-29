@@ -221,6 +221,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         id
         name
         description
+        pay_on_delivery_enabled
         price
         currency
         weight
@@ -1172,6 +1173,7 @@ export class InventoryItemsService {
             id
             name
             description
+            pay_on_delivery_enabled
             price
             currency
             weight

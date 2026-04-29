@@ -8,11 +8,13 @@ import {
   Box,
   Button,
   CircularProgress,
+  TextField,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Typography,
+  Alert,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,11 +63,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     completePreparation,
     refundOrder,
     generateDeliveryOverwriteCode,
+    reconcileCashException,
   } = useBackendOrders();
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
+  const [reconcileReference, setReconcileReference] = useState('');
+  const [reconcileNotes, setReconcileNotes] = useState('');
 
   const handlePrintLabel = async () => {
     try {
@@ -200,6 +206,39 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     }
   };
 
+  const handleReconcileCashException = async () => {
+    setLoading(true);
+    try {
+      await reconcileCashException(
+        order.id,
+        reconcileReference || undefined,
+        reconcileNotes || undefined
+      );
+      setReconcileDialogOpen(false);
+      setReconcileReference('');
+      setReconcileNotes('');
+      onShowNotification?.(
+        t(
+          'orders.reconciliation.reconciled',
+          'Cash exception reconciled successfully'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'orders.reconciliation.error',
+              'Failed to reconcile cash exception'
+            );
+      onShowNotification?.(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getAvailableActions = () => {
     const actions: Array<{
       label: string;
@@ -208,6 +247,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       icon: JSX.Element;
       isPrintLabel?: boolean;
     }> = [];
+
+    if (order.reconciliation_status === 'pending_manual_reconciliation') {
+      actions.push({
+        label: t('orders.reconciliation.button', 'Reconcile cash exception'),
+        action: () => setReconcileDialogOpen(true),
+        color: 'warning' as const,
+        icon: <RefundIcon />,
+      });
+    }
 
     switch (order.current_status) {
       case 'pending':
@@ -453,6 +501,57 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             }}
           >
             {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={reconcileDialogOpen}
+        onClose={() => setReconcileDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.reconciliation.title', 'Reconcile cash exception')}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              {t(
+                'orders.reconciliation.warning',
+                'This order was completed with a cash exception. Record your manual reconciliation details below.'
+              )}
+            </Typography>
+          </Alert>
+          <TextField
+            fullWidth
+            label={t('orders.reconciliation.reference', 'Reference (optional)')}
+            value={reconcileReference}
+            onChange={(e) => setReconcileReference(e.target.value)}
+            disabled={loading}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            label={t('orders.reconciliation.notes', 'Notes (optional)')}
+            value={reconcileNotes}
+            onChange={(e) => setReconcileNotes(e.target.value)}
+            disabled={loading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReconcileDialogOpen(false)} disabled={loading}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleReconcileCashException}
+            disabled={loading}
+          >
+            {t('orders.reconciliation.confirm', 'Mark reconciled')}
           </Button>
         </DialogActions>
       </Dialog>

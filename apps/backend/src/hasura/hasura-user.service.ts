@@ -31,6 +31,8 @@ export interface CreateOrderRequest {
   delivery_address_id: string;
   phone_number?: string;
   requires_fast_delivery?: boolean;
+  /** Client-selected payment timing. Defaults to pay_now when omitted. */
+  payment_timing?: 'pay_now' | 'pay_at_delivery';
   delivery_window?: {
     slot_id: string;
     preferred_date: string;

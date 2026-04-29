@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -20,6 +21,7 @@ import {
   type ClaimAvailabilityResult,
   useAgentOrders,
 } from '../../hooks/useAgentOrders';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
 import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
@@ -47,6 +49,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
   const agentOrders = useAgentOrders({ skipInitialListFetch: true });
+  const backendOrders = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
@@ -61,6 +64,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const [showFailDeliveryDialog, setShowFailDeliveryDialog] = useState(false);
   const [showCompleteDeliveryDialog, setShowCompleteDeliveryDialog] =
     useState(false);
+  const [showCashExceptionDialog, setShowCashExceptionDialog] = useState(false);
+  const [cashExceptionNotes, setCashExceptionNotes] = useState('');
   const [claimHoldAmount, setClaimHoldAmount] = useState(
     order.agent_hold_amount || 0
   );
@@ -418,6 +423,66 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     setConfirmationOpen(true);
   };
 
+  const handleInitiatePayAtDeliveryPayment = async () => {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setLoading(true);
+    try {
+      await backendOrders.initiatePayAtDeliveryPayment(order.id);
+      onShowNotification?.(
+        t(
+          'orderActions.payAtDeliveryPaymentInitiated',
+          'Payment request sent to the client'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t(
+            'orderActions.payAtDeliveryPaymentFailed',
+            'Failed to initiate payment'
+          ),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+      actionInFlightRef.current = false;
+    }
+  };
+
+  const handleSubmitCashException = async () => {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setLoading(true);
+    try {
+      await backendOrders.markPaidInCashException(order.id, cashExceptionNotes);
+      setShowCashExceptionDialog(false);
+      setCashExceptionNotes('');
+      onShowNotification?.(
+        t(
+          'orderActions.cashExceptionRecorded',
+          'Cash exception recorded. Business reconciliation required.'
+        ),
+        'warning'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t(
+            'orderActions.cashExceptionFailed',
+            'Failed to record cash exception'
+          ),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+      actionInFlightRef.current = false;
+    }
+  };
+
   const handleConfirmStatusUpdate = async () => {
     if (!pendingAction || !profile?.id) return;
 
@@ -571,12 +636,27 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         break;
 
       case 'out_for_delivery':
-        actions.push({
-          label: t('orderActions.completeDelivery', 'Complete delivery'),
-          action: () => setShowCompleteDeliveryDialog(true),
-          color: 'success' as const,
-          icon: <CheckCircle />,
-        });
+        if (order.payment_timing === 'pay_at_delivery') {
+          actions.push({
+            label: t('orderActions.requestPayment', 'Request payment'),
+            action: handleInitiatePayAtDeliveryPayment,
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+          actions.push({
+            label: t('orderActions.markPaidInCash', 'Mark paid in cash'),
+            action: () => setShowCashExceptionDialog(true),
+            color: 'warning' as const,
+            icon: <Cancel />,
+          });
+        } else {
+          actions.push({
+            label: t('orderActions.completeDelivery', 'Complete delivery'),
+            action: () => setShowCompleteDeliveryDialog(true),
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+        }
         actions.push({
           label: t('orderActions.markAsFailed', 'Mark as Failed'),
           action: () => handleStatusUpdate('failed'),
@@ -771,6 +851,52 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           onActionComplete?.();
         }}
       />
+
+      <Dialog
+        open={showCashExceptionDialog}
+        onClose={() => setShowCashExceptionDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orderActions.cashExceptionTitle', 'Cash exception')}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              {t(
+                'orderActions.cashExceptionWarning',
+                'Use this only if the client cannot complete mobile payment at delivery. The business will need to reconcile this manually.'
+              )}
+            </Typography>
+          </Alert>
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            label={t('orderActions.cashExceptionNotes', 'Notes (optional)')}
+            value={cashExceptionNotes}
+            onChange={(e) => setCashExceptionNotes(e.target.value)}
+            disabled={loading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setShowCashExceptionDialog(false)}
+            disabled={loading}
+          >
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleSubmitCashException}
+            disabled={loading}
+          >
+            {t('orderActions.markPaidInCash', 'Mark paid in cash')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

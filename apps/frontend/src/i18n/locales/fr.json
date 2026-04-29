@@ -1871,6 +1871,7 @@
     "closed": "Fermé",
     "confirm": "Confirmer",
     "continue": "Continuer",
+    "country": "Pays",
     "days": {
       "friday": "Vendredi",
       "monday": "Lundi",
@@ -2259,6 +2260,11 @@
     "completeOrder": "Terminer la Commande",
     "orderImages": "Images de la commande",
     "anonDeliveryAddressPrompt": "Où souhaitez-vous être livré pour cet article ?",
+    "phoneNumberPlaceholder": "ex. 6XXXXXXXX",
+    "phoneNumberDialCodeHint": "L’indicatif du pays est ajouté automatiquement.",
+    "unitSingular": "unité",
+    "unitsPlural": "unités",
+    "selectCountry": "Sélectionnez un pays.",
     "actions": {
       "cancel": "Annuler",
       "completeOrder": "Terminer la Commande",
@@ -2349,7 +2355,17 @@
       "cancelRequestFailed": "Échec de l'annulation de la demande de réclamation"
     },
     "refreshAfterHoldPayment": "Si vous avez confirmé le paiement de retenue, veuillez cliquer sur le bouton d'actualisation en haut pour mettre à jour le statut de la commande et le solde de votre compte.",
-    "confirmOrder": "Confirmer la Commande",
+    "confirmOrder": "Passer commande",
+    "paymentTiming": {
+      "label": "Quand souhaitez-vous payer ?",
+      "choosePrompt": "Choisissez comment vous souhaitez payer cette commande.",
+      "payNow": "Payer maintenant",
+      "payNowShort": "Validez la demande de paiement immédiatement.",
+      "payNowDescription": "Nous enverrons une demande de paiement sur votre téléphone maintenant. Validez-la pour passer la commande.",
+      "payAtDelivery": "Payer à la livraison",
+      "payAtDeliveryShort": "Payez dans l’app lorsque l’agent arrive.",
+      "payAtDeliveryDescription": "Vous passez la commande maintenant et vous payez à la livraison dans l’app lorsque l’agent arrive."
+    },
     "buy": "Acheter",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
     "refunds": {
@@ -3392,6 +3408,12 @@
   "support": {
     "description": "Description",
     "subtitle": "Nous sommes là pour vous aider à chaque étape",
+    "whatsapp": {
+      "accountName": "Support Rendasua",
+      "statusMessage": "Répond généralement en moins d'une heure",
+      "chatMessage": "Bonjour ! Comment pouvons-nous vous aider aujourd'hui ?",
+      "placeholder": "Tapez un message..."
+    },
     "descriptionPlaceholder": "Décrivez ce qui s'est passé...",
     "reportIssue": "Signaler un problème",
     "subject": "Sujet",

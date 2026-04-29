@@ -102,6 +102,7 @@ interface ItemFormData {
   is_fragile: boolean;
   is_perishable: boolean;
   requires_special_handling: boolean;
+  pay_on_delivery_enabled: boolean;
   min_order_quantity: number;
   max_order_quantity: number | null;
   item_sub_category_id: number | null;
@@ -138,6 +139,7 @@ const ItemFormPage: React.FC = () => {
     is_fragile: false,
     is_perishable: false,
     requires_special_handling: false,
+    pay_on_delivery_enabled: false,
     min_order_quantity: 1,
     max_order_quantity: null,
     item_sub_category_id: null,
@@ -248,6 +250,8 @@ const ItemFormPage: React.FC = () => {
               is_perishable: foundItem.is_perishable || false,
               requires_special_handling:
                 foundItem.requires_special_handling || false,
+              pay_on_delivery_enabled:
+                (foundItem as any).pay_on_delivery_enabled || false,
               min_order_quantity: foundItem.min_order_quantity || 1,
               max_order_quantity: foundItem.max_order_quantity || null,
               item_sub_category_id: foundItem.item_sub_category_id || null,
@@ -1407,6 +1411,25 @@ const ItemFormPage: React.FC = () => {
                     label={t(
                       'business.items.specialHandling',
                       'Requires Special Handling'
+                    )}
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.pay_on_delivery_enabled}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'pay_on_delivery_enabled',
+                            e.target.checked
+                          )
+                        }
+                        disabled={loading}
+                      />
+                    }
+                    label={t(
+                      'business.items.payOnDeliveryEnabled',
+                      'Allow pay at delivery'
                     )}
                   />
                 </Stack>

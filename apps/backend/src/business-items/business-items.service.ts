@@ -22,6 +22,7 @@ const GET_ITEMS = `
       name
       description
       item_sub_category_id
+      pay_on_delivery_enabled
       weight
       weight_unit
       dimensions
@@ -158,6 +159,7 @@ const GET_SINGLE_ITEM = `
       name
       description
       item_sub_category_id
+      pay_on_delivery_enabled
       weight
       weight_unit
       dimensions
@@ -273,6 +275,7 @@ const GET_AVAILABLE_ITEMS = `
       id
       name
       description
+      pay_on_delivery_enabled
       price
       currency
       weight
@@ -341,6 +344,7 @@ const INSERT_ITEM = `
       id
       name
       sku
+      pay_on_delivery_enabled
     }
   }
 `;
@@ -355,6 +359,7 @@ const UPDATE_ITEM = `
       name
       description
       item_sub_category_id
+      pay_on_delivery_enabled
       weight
       weight_unit
       dimensions

@@ -19,6 +19,7 @@ const GET_PUBLIC_ITEMS = `
       name
       description
       item_sub_category_id
+      pay_on_delivery_enabled
       weight
       weight_unit
       price

@@ -1579,7 +1579,13 @@ export class OrdersService {
         `Cannot pick up order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    await this.processOrderPayment(request.orderId);
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+    if (paymentTiming !== 'pay_at_delivery') {
+      await this.processOrderPayment(request.orderId);
+    }
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'picked_up'
@@ -2018,6 +2024,343 @@ export class OrdersService {
         agentId,
       });
     }
+  }
+
+  /**
+   * Pay-at-delivery: assigned agent triggers mobile payment request at doorstep.
+   */
+  async initiatePayAtDeliveryPayment(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can initiate delivery payments'
+    );
+    const agent = this.requireAgentRecord(user);
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.assigned_agent_id !== agent.id) {
+      throw new HttpException(
+        'Only the assigned agent can initiate delivery payment',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+    if (paymentTiming !== 'pay_at_delivery') {
+      throw new HttpException(
+        'Order is not configured for pay at delivery',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'out_for_delivery') {
+      throw new HttpException(
+        'Pay at delivery payment can only be initiated when order is out for delivery',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if ((order as any).payment_status === 'paid') {
+      return {
+        success: true,
+        message: 'Order is already paid',
+      };
+    }
+
+    const phoneNumber = order.client?.user?.phone_number || '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Client phone number is required to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getTransactionByReference(
+        order.order_number
+      );
+    if (existing && existing.status === 'pending') {
+      return {
+        success: true,
+        message: 'Payment request already pending',
+        payment_transaction: {
+          success: true,
+          transaction_id: existing.transaction_id ?? null,
+          message: 'Payment request already pending',
+          mode: 'mobile_money' as const,
+        },
+        database_transaction: {
+          id: existing.id,
+          reference: existing.reference,
+          status: existing.status,
+        },
+      };
+    }
+
+    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user.id,
+      order.currency
+    );
+
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: order.order_number,
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `order ${order.order_number} (pay at delivery)`,
+      provider,
+      payment_method: 'mobile_money',
+      customer_phone: phoneNumber,
+      customer_email: order.client.user.email,
+      account_id: account.id,
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order' as const,
+      entity_id: order.order_number,
+    });
+
+    const paymentRequest = {
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `Order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      provider,
+      ownerCharge: 'MERCHANT' as const,
+      transactionType: 'PAYMENT' as const,
+      payment_entity: 'order' as const,
+    };
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      paymentRequest,
+      order.order_number
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Payment request initiated',
+      payment_transaction: {
+        success: true,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: {
+        id: tx.id,
+        reference: tx.reference,
+        status: tx.status,
+      },
+    };
+  }
+
+  /**
+   * Cash-exception fallback: agent marks the order paid in cash.
+   * This completes the order operationally but flags it for business reconciliation.
+   */
+  async markPaidInCashException(orderId: string, notes?: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can mark cash exceptions'
+    );
+    const agent = this.requireAgentRecord(user);
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.assigned_agent_id !== agent.id) {
+      throw new HttpException(
+        'Only the assigned agent can mark a cash exception',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+    if (paymentTiming !== 'pay_at_delivery') {
+      throw new HttpException(
+        'Cash exception is only available for pay-at-delivery orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'out_for_delivery') {
+      throw new HttpException(
+        'Cash exception can only be reported when order is out for delivery',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if ((order as any).reconciliation_status === 'reconciled') {
+      return { success: true, message: 'Order is already reconciled' };
+    }
+
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation MarkCashException(
+        $orderId: uuid!
+        $agentId: uuid!
+        $at: timestamptz!
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            reconciliation_status: pending_manual_reconciliation
+            cash_exception_reported_by_agent_id: $agentId
+            cash_exception_reported_at: $at
+            reconciliation_notes: $notes
+            current_status: complete
+            completed_at: $at
+            updated_at: $at
+          }
+        ) {
+          id
+          current_status
+          reconciliation_status
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      agentId: agent.id,
+      at,
+      notes: notes?.trim() || null,
+    });
+
+    try {
+      await this.createStatusHistoryEntry(
+        orderId,
+        'complete',
+        'Completed with cash exception (manual reconciliation required)',
+        'agent',
+        user.id
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to write cash-exception status history: ${error.message}`
+      );
+    }
+    try {
+      await this.orderQueueService.sendOrderCompletedMessage(orderId);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send order.completed for cash exception: ${error.message}`
+      );
+    }
+
+    return { success: true, message: 'Cash exception recorded' };
+  }
+
+  /**
+   * Business reconciliation for cash-exception orders.
+   * Records reference/notes and marks the exception reconciled.
+   */
+  async reconcileCashException(
+    orderId: string,
+    reference?: string,
+    notes?: string
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can reconcile cash exceptions'
+    );
+    const business = this.requireBusinessRecord(user);
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.business_id !== business.id) {
+      throw new HttpException(
+        'You are not authorized to reconcile this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if ((order as any).reconciliation_status !== 'pending_manual_reconciliation') {
+      throw new HttpException(
+        'Order is not pending manual reconciliation',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation ReconcileCashException(
+        $orderId: uuid!
+        $businessId: uuid!
+        $at: timestamptz!
+        $reference: String
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            reconciliation_status: reconciled
+            reconciled_by_business_id: $businessId
+            reconciled_at: $at
+            reconciliation_reference: $reference
+            reconciliation_notes: $notes
+            payment_status: "paid"
+            updated_at: $at
+          }
+        ) {
+          id
+          reconciliation_status
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      businessId: business.id,
+      at,
+      reference: reference?.trim() || null,
+      notes: notes?.trim() || null,
+    });
+
+    try {
+      await this.createStatusHistoryEntry(
+        orderId,
+        'complete',
+        'Cash exception reconciled by business',
+        'business',
+        user.id
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to write reconciliation status history: ${error.message}`
+      );
+    }
+
+    return { success: true, message: 'Cash exception reconciled' };
   }
 
   /**
@@ -2532,6 +2875,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              phone_number
             }
           }
           business_location {
@@ -3784,6 +4128,11 @@ export class OrdersService {
           tax_amount
           total_amount
           currency
+          payment_method
+          payment_status
+          payment_source
+          payment_timing
+          reconciliation_status
           completed_at
           business_id
           client_id
@@ -3932,6 +4281,11 @@ export class OrdersService {
           tax_amount
           total_amount
           currency
+          payment_method
+          payment_status
+          payment_source
+          payment_timing
+          reconciliation_status
           estimated_delivery_time
           special_instructions
           business_id
@@ -3945,6 +4299,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              phone_number
               preferred_language
             }
           }
@@ -4086,6 +4441,19 @@ export class OrdersService {
   async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
       const order = await this.getOrderByNumber(transaction.reference);
+      const paymentTiming = (order as any).payment_timing as
+        | 'pay_now'
+        | 'pay_at_delivery'
+        | undefined;
+
+      if (paymentTiming === 'pay_at_delivery') {
+        await this.finalizePayAtDeliveryPaymentAndComplete(
+          order,
+          transaction.account_id
+        );
+        return;
+      }
+
       await this.finalizeClientOrderPayment(order, transaction.account_id);
     } catch (error) {
       this.logger.error(
@@ -4094,6 +4462,132 @@ export class OrdersService {
         }`
       );
       throw error;
+    }
+  }
+
+  /**
+   * Pay-at-delivery: once mobile payment succeeds, settle and complete the order.
+   *
+   * This runs in system context (callback), so it performs direct mutations and status history writes.
+   */
+  private async finalizePayAtDeliveryPaymentAndComplete(
+    order: Orders,
+    accountId: string
+  ): Promise<void> {
+    // 1) Place holds on the client's internal account (items + delivery fees)
+    await this.accountsService.registerTransaction({
+      accountId,
+      amount: order.subtotal,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number} (pay at delivery)`,
+      referenceId: order.id,
+    });
+
+    const totalDeliveryFees =
+      (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
+
+    await this.accountsService.registerTransaction({
+      accountId,
+      amount: totalDeliveryFees,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number} delivery fees (pay at delivery)`,
+      referenceId: order.id,
+    });
+
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: order.subtotal,
+      delivery_fees: totalDeliveryFees,
+    });
+
+    // 2) Mark order as paid and complete it (settlement is idempotent)
+    await this.updateOrderPaymentStatusOnly(order.id, 'paid');
+
+    await this.processOrderPayment(order.id);
+    await this.processOrderDeliveryPayment(order.id);
+
+    await this.setOrderCompleteSystem(order.id);
+
+    // 3) Completion side effects (best-effort)
+    try {
+      const orderWithDetails = await this.getOrderDetails(order.id);
+      const orderItems = orderWithDetails?.order_items || [];
+      await this.updateInventoryOnCompletion(orderItems);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update inventory after PoD completion: ${error.message}`
+      );
+    }
+    try {
+      await this.pdfService.generateReceipt(order.id, order.client.user_id);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to generate receipt after PoD completion: ${error.message}`
+      );
+    }
+    try {
+      await this.orderQueueService.sendOrderCompletedMessage(order.id);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send order.completed after PoD completion: ${error.message}`
+      );
+    }
+  }
+
+  private async updateOrderPaymentStatusOnly(
+    orderId: string,
+    paymentStatus: string
+  ): Promise<void> {
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation UpdateOrderPaymentStatus($orderId: uuid!, $paymentStatus: String!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { payment_status: $paymentStatus, updated_at: $at }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      paymentStatus,
+      at,
+    });
+  }
+
+  private async setOrderCompleteSystem(orderId: string): Promise<void> {
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation CompleteOrderSystem($orderId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { current_status: complete, completed_at: $at, updated_at: $at }
+        ) {
+          id
+          order_number
+          current_status
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, { orderId, at });
+    // Record status history in system context (use client user as actor for traceability)
+    try {
+      const order = await this.getOrderDetails(orderId);
+      const changedBy = order?.client?.user_id;
+      if (order && changedBy) {
+        await this.createStatusHistoryEntry(
+          orderId,
+          'complete',
+          'Order completed after pay-at-delivery payment confirmation',
+          'system',
+          changedBy
+        );
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to write PoD completion status history: ${error.message}`
+      );
     }
   }
 
@@ -4648,6 +5142,7 @@ export class OrdersService {
             id
             name
             description
+            pay_on_delivery_enabled
             currency
             weight
             max_order_quantity
@@ -4676,6 +5171,9 @@ export class OrdersService {
 
     const businessInventories =
       businessInventoryResult.business_inventory as any[];
+
+    const paymentTiming: 'pay_now' | 'pay_at_delivery' =
+      orderData.payment_timing === 'pay_at_delivery' ? 'pay_at_delivery' : 'pay_now';
 
     const dealsMap = await this.getActiveDealsByBusinessInventoryIds(
       businessInventoryIds,
@@ -4728,6 +5226,18 @@ export class OrdersService {
     // Use the first item's currency (all items should have the same currency from same business)
     const currency = businessInventories[0].item.currency;
 
+    if (paymentTiming === 'pay_at_delivery') {
+      const anyNotEligible = businessInventories.some(
+        (inv) => inv?.item?.pay_on_delivery_enabled !== true
+      );
+      if (anyNotEligible) {
+        throw new HttpException(
+          'Pay at delivery is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     // Calculate total weight for delivery fee calculation
     const totalWeight = businessInventories.reduce(
       (sum, inv, idx) =>
@@ -4760,12 +5270,24 @@ export class OrdersService {
 
     const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     const phoneNumber = orderData.phone_number || user.phone_number || '';
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
     const requiredAmountForHold = total_amount;
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
-    if (!isZeroOrNegativeOrder && availableBalance < 0) {
+    if (paymentTiming === 'pay_at_delivery' && !phoneNumber.trim()) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Phone number is required for pay at delivery',
+          error: 'PHONE_NUMBER_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+
+    if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
       throw new HttpException(
         `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
         HttpStatus.FORBIDDEN
@@ -4773,12 +5295,14 @@ export class OrdersService {
     }
 
     const canPayWithWallet =
-      !isZeroOrNegativeOrder && availableBalance >= requiredAmountForHold;
+      paymentTiming === 'pay_now' &&
+      !isZeroOrNegativeOrder &&
+      availableBalance >= requiredAmountForHold;
 
     let paymentTransaction: any = null;
     let transaction: any = null;
 
-    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+    if (paymentTiming === 'pay_now' && !canPayWithWallet && !isZeroOrNegativeOrder) {
       try {
         transaction =
           await this.mobilePaymentsDatabaseService.createTransaction({
@@ -4905,16 +5429,27 @@ export class OrdersService {
     const delivery_address_id = address.id;
     const subtotal = totalAmount;
     const tax_amount = 0;
-    const current_status = canPayWithWallet || isZeroOrNegativeOrder
-      ? 'pending'
-      : 'pending_payment';
+    const current_status =
+      paymentTiming === 'pay_at_delivery'
+        ? 'pending'
+        : canPayWithWallet || isZeroOrNegativeOrder
+          ? 'pending'
+          : 'pending_payment';
     const business_id = businessInventories[0].business_location.business_id;
-    const payment_method = 'online';
-    const payment_status = canPayWithWallet || isZeroOrNegativeOrder
-      ? 'paid'
-      : 'pending';
+    const payment_method =
+      paymentTiming === 'pay_at_delivery' ? 'pay_on_delivery' : 'online';
+    const payment_status =
+      paymentTiming === 'pay_at_delivery'
+        ? 'pending'
+        : canPayWithWallet || isZeroOrNegativeOrder
+          ? 'paid'
+          : 'pending';
     const payment_source: 'wallet' | 'mobile_payment' =
-      canPayWithWallet || isZeroOrNegativeOrder ? 'wallet' : 'mobile_payment';
+      paymentTiming === 'pay_at_delivery'
+        ? 'mobile_payment'
+        : canPayWithWallet || isZeroOrNegativeOrder
+          ? 'wallet'
+          : 'mobile_payment';
     const special_instructions = orderData.special_instructions || '';
     const estimated_delivery_time = null;
     const preferred_delivery_time = null;
@@ -4942,6 +5477,8 @@ export class OrdersService {
         $paymentMethod: String!,
         $paymentStatus: String!,
         $paymentSource: payment_source_enum!,
+        $paymentTiming: order_payment_timing_enum!,
+        $reconciliationStatus: order_reconciliation_status_enum!,
         $specialInstructions: String!,
         $estimatedDeliveryTime: timestamptz,
         $preferredDeliveryTime: timestamptz,
@@ -4962,6 +5499,8 @@ export class OrdersService {
           payment_method: $paymentMethod,
           payment_status: $paymentStatus,
           payment_source: $paymentSource,
+          payment_timing: $paymentTiming,
+          reconciliation_status: $reconciliationStatus,
           base_delivery_fee: $baseDeliveryFee,
           per_km_delivery_fee: $perKmDeliveryFee,
           subtotal: $subTotal,
@@ -4987,6 +5526,8 @@ export class OrdersService {
           payment_method
           payment_status
           payment_source
+          payment_timing
+          reconciliation_status
           base_delivery_fee
           per_km_delivery_fee
           subtotal
@@ -5060,6 +5601,8 @@ export class OrdersService {
         paymentMethod: payment_method,
         paymentStatus: payment_status,
         paymentSource: payment_source,
+        paymentTiming: paymentTiming,
+        reconciliationStatus: 'none',
         specialInstructions: special_instructions,
         estimatedDeliveryTime: estimated_delivery_time,
         preferredDeliveryTime: preferred_delivery_time,
@@ -5141,7 +5684,22 @@ export class OrdersService {
       );
     }
 
-    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+    if (paymentTiming === 'pay_at_delivery') {
+      return {
+        ...order,
+        total_amount: total_amount,
+        delivery_window: deliveryWindow,
+        payment_transaction: {
+          success: true,
+          transaction_id: null,
+          message: 'Pay at delivery selected',
+          mode: 'pay_at_delivery' as const,
+        },
+        database_transaction: null,
+      };
+    }
+
+    if (paymentTiming === 'pay_now' && !canPayWithWallet && !isZeroOrNegativeOrder) {
       // For mobile payments, schedule payment timeout
       try {
         await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
@@ -5444,7 +6002,14 @@ export class OrdersService {
       return;
     }
 
-    const itemStatuses = ['assigned_to_agent', 'picked_up'];
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+    const itemStatuses =
+      paymentTiming === 'pay_at_delivery'
+        ? ['assigned_to_agent', 'picked_up', 'out_for_delivery', 'complete']
+        : ['assigned_to_agent', 'picked_up'];
     if (!itemStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,

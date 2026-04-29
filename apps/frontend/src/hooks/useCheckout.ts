@@ -15,6 +15,7 @@ interface CreateOrderRequest {
   phone_number?: string;
   special_instructions?: string;
   requires_fast_delivery?: boolean;
+  payment_timing?: 'pay_now' | 'pay_at_delivery';
   delivery_window?: {
     slot_id: string;
     preferred_date: string;
@@ -103,6 +104,7 @@ export const useCheckout = () => {
       specialInstructions?: string,
       requiresFastDelivery?: boolean,
       fastDeliveryFee?: number,
+      paymentTiming: 'pay_now' | 'pay_at_delivery' = 'pay_now',
       deliveryWindow?: {
         slot_id: string;
         preferred_date: string;
@@ -136,6 +138,7 @@ export const useCheckout = () => {
             phone_number: phoneNumber,
             special_instructions: specialInstructions,
             requires_fast_delivery: requiresFastDelivery,
+            payment_timing: paymentTiming,
             delivery_window: deliveryWindow,
           };
 

@@ -29,6 +29,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
   const getAlertsForStatus = () => {
     const alerts = [];
     const orderTotal = getOrderTotal();
+    const isPayAtDelivery = order.payment_timing === 'pay_at_delivery';
 
     switch (order.current_status) {
       case 'pending':
@@ -40,6 +41,15 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
               '⏳ Your {{orderTotal}} order is awaiting business confirmation. They typically respond within 10-15 minutes. You\'ll be notified once confirmed!',
           }),
         });
+        if (isPayAtDelivery) {
+          alerts.push({
+            severity: 'info' as const,
+            message: t(
+              'client.orders.payAtDelivery.pendingInfo',
+              'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
+            ),
+          });
+        }
         break;
 
       case 'confirmed':
@@ -120,6 +130,15 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
             '🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!'
           ),
         });
+        if (isPayAtDelivery && order.payment_status === 'pending') {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'client.orders.payAtDelivery.outForDeliveryPaymentPending',
+              'Payment will be requested at delivery. Please keep your phone available to approve the mobile payment.'
+            ),
+          });
+        }
         break;
 
       case 'delivered':
@@ -190,6 +209,16 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
         message: t(
           'client.orders.paymentPendingNotice',
           'Payment is still pending for this order. Please ensure payment is completed.'
+        ),
+      });
+    }
+
+    if (order.reconciliation_status === 'pending_manual_reconciliation') {
+      alerts.push({
+        severity: 'warning' as const,
+        message: t(
+          'client.orders.reconciliationPending',
+          'This order was completed with a payment exception. The business will reconcile it manually.'
         ),
       });
     }

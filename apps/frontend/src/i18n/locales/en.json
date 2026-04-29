@@ -1883,6 +1883,7 @@
     "closed": "Closed",
     "confirm": "Confirm",
     "continue": "Continue",
+    "country": "Country",
     "days": {
       "friday": "Friday",
       "monday": "Monday",
@@ -2271,6 +2272,11 @@
     "completeOrder": "Complete Order",
     "orderImages": "Order Images",
     "anonDeliveryAddressPrompt": "Where do you want this item delivered?",
+    "phoneNumberPlaceholder": "e.g. 6XXXXXXXX",
+    "phoneNumberDialCodeHint": "The country code is added automatically.",
+    "unitSingular": "unit",
+    "unitsPlural": "units",
+    "selectCountry": "Select a country.",
     "actions": {
       "cancel": "Cancel",
       "completeOrder": "Complete Order",
@@ -2360,7 +2366,18 @@
       "cancelRequestFailed": "Failed to cancel claim request"
     },
     "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
-    "confirmOrder": "Confirm Order",
+    "confirmOrder": "Place order",
+    "paymentTiming": {
+      "label": "When do you want to pay?",
+      "choosePrompt": "Choose how you want to pay for this order.",
+      "payNow": "Pay now",
+      "payNowShort": "Approve the payment request right away.",
+      "payNowDescription": "We’ll send a payment request to your phone now. Approve it to place your order.",
+      "payAtDelivery": "Pay at delivery"
+      ,
+      "payAtDeliveryShort": "Pay in the app when the agent arrives.",
+      "payAtDeliveryDescription": "You will place the order now and pay at delivery in the app when the agent arrives."
+    },
     "buy": "Buy",
     "confirmOrderCompletion": "Confirm Order Completion",
     "completeDelivery": {
@@ -3429,6 +3446,12 @@
   "support": {
     "description": "Description",
     "subtitle": "We're here to help you every step of the way",
+    "whatsapp": {
+      "accountName": "Rendasua Support",
+      "statusMessage": "Typically replies within 1 hour",
+      "chatMessage": "Hello! How can we help you today?",
+      "placeholder": "Type a message..."
+    },
     "descriptionPlaceholder": "Describe what happened...",
     "reportIssue": "Report an issue",
     "subject": "Subject",
