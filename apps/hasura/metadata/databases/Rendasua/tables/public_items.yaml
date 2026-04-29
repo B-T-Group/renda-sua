@@ -86,6 +86,7 @@ insert_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - business_id
         - status
 select_permissions:
@@ -114,6 +115,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - created_at
         - updated_at
@@ -143,6 +145,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - created_at
         - updated_at
@@ -172,6 +175,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - created_at
         - updated_at
@@ -205,6 +209,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - created_at
         - updated_at
@@ -234,6 +239,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - created_at
         - updated_at
@@ -262,6 +268,7 @@ update_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - pay_on_delivery_enabled
         - status
         - updated_at
       filter:

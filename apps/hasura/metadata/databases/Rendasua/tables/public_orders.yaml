@@ -106,6 +106,14 @@ insert_permissions:
         - payment_method
         - payment_status
         - payment_source
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
         - base_delivery_fee
         - per_km_delivery_fee
         - subtotal
@@ -146,6 +154,14 @@ select_permissions:
         - payment_method
         - payment_status
         - payment_source
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
         - created_at
         - updated_at
         - completed_at
@@ -184,6 +200,14 @@ select_permissions:
         - payment_method
         - payment_status
         - payment_source
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
         - created_at
         - updated_at
         - completed_at
@@ -221,6 +245,14 @@ select_permissions:
         - payment_method
         - payment_status
         - payment_source
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
         - created_at
         - updated_at
         - completed_at
@@ -241,6 +273,14 @@ update_permissions:
         - actual_delivery_time
         - updated_at
         - verified_agent_delivery
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
       filter:
         assigned_agent:
           user:
@@ -255,6 +295,14 @@ update_permissions:
         - estimated_delivery_time
         - updated_at
         - verified_agent_delivery
+        - payment_timing
+        - reconciliation_status
+        - cash_exception_reported_by_agent_id
+        - cash_exception_reported_at
+        - reconciled_by_business_id
+        - reconciled_at
+        - reconciliation_reference
+        - reconciliation_notes
       filter:
         business:
           user:
@@ -270,6 +318,7 @@ update_permissions:
         - per_km_delivery_fee
         - updated_at
         - verified_agent_delivery
+        - payment_timing
       filter:
         client:
           user:
