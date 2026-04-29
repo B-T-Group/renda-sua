@@ -30,11 +30,9 @@ import {
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
-import { useTopInventoryLocations } from '../../hooks/useTopInventoryLocations';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
 import {
-  SITE_EVENT_INVENTORY_LOCATION_SELECT,
   SITE_EVENT_INVENTORY_SORT_SELECT,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
@@ -47,10 +45,10 @@ import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
-import TopLocationsStrip from '../common/TopLocationsStrip';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import SEOHead from '../seo/SEOHead';
+import deliveryPricingBanner from '../../assets/delivery-pricing-banner.png';
 
 // ItemCardSkeleton component for better loading UX
 const ItemCardSkeleton: React.FC = () => (
@@ -207,12 +205,6 @@ const ItemsPage: React.FC = () => {
   const itemsPerPage = 100;
 
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
-
-  const { locations: topLocations, loading: topLocationsLoading } =
-    useTopInventoryLocations({
-      limit: 3,
-      anonymousOrigin: browserGeo,
-    });
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
@@ -457,27 +449,6 @@ const ItemsPage: React.FC = () => {
       subcategory: '',
       brand: '',
       location: '',
-    });
-  };
-
-  const handleSelectTopLocation = (loc: {
-    id: string;
-    name: string;
-  }) => {
-    if (businessLocationId === loc.id) {
-      setBusinessLocationId(null);
-      setFilters((f) => ({ ...f, location: '' }));
-    } else {
-      setBusinessLocationId(loc.id);
-      setFilters((f) => ({ ...f, location: loc.name }));
-    }
-    void trackSiteEvent({
-      eventType: SITE_EVENT_INVENTORY_LOCATION_SELECT,
-      metadata: {
-        business_location_id: loc.id,
-        name: loc.name,
-        selected: businessLocationId !== loc.id,
-      },
     });
   };
 
@@ -818,12 +789,27 @@ const ItemsPage: React.FC = () => {
           })}
         </Box>
 
-        <TopLocationsStrip
-          locations={topLocations}
-          loading={topLocationsLoading}
-          selectedId={businessLocationId}
-          onSelect={handleSelectTopLocation}
-        />
+        <Box sx={{ mb: 2 }}>
+          <Box
+            component="img"
+            src={deliveryPricingBanner}
+            alt={t(
+              'public.items.deliveryPricingBannerAlt',
+              'RendaSua delivery fees from 700 to 2000 FCFA'
+            )}
+            sx={{
+              display: 'block',
+              width: { xs: '100%', md: '50%' },
+              maxWidth: '100%',
+              height: 'auto',
+              mx: 'auto',
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+            loading="lazy"
+          />
+        </Box>
 
         {/* Curated discovery sections (desktop only; hidden when filters/search active) */}
         {!hasActiveFilters && (

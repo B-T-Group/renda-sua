@@ -77,6 +77,7 @@ import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
+import deliveryPricingBanner from '../../assets/delivery-pricing-banner.png';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -892,6 +893,28 @@ export default function ItemDetailPage() {
             </Button>
           ) : null}
         </Stack>
+
+        <Box sx={{ mb: 2 }}>
+          <Box
+            component="img"
+            src={deliveryPricingBanner}
+            alt={t(
+              'items.detail.deliveryPricingBannerAlt',
+              'RendaSua delivery fees from 700 to 2000 FCFA'
+            )}
+            sx={{
+              display: 'block',
+              width: { xs: '100%', md: '50%' },
+              maxWidth: '100%',
+              height: 'auto',
+              mx: 'auto',
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+            loading="lazy"
+          />
+        </Box>
 
         <Box component="article" aria-labelledby="item-detail-heading">
           {/* Main content: image + details */}
