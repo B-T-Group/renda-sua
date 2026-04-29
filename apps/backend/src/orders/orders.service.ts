@@ -30,16 +30,11 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
-import { DeliveryPinService } from './delivery-pin.service';
-import { OrderRefundsService } from './order-refunds.service';
-import { OrderQueueService } from './order-queue.service';
-import { OrderStatusService } from './order-status.service';
-import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import type { PersonaId } from '../users/persona.types';
 import {
+  isActivePersona,
   resolveActivePersona,
   resolveActivePersonaWithDefault,
-  isActivePersona,
 } from '../users/persona.util';
 import {
   DEFAULT_USER_TIMEZONE,
@@ -47,6 +42,11 @@ import {
   parseCalendarDatePartsFromPreferredDate,
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
+import { DeliveryPinService } from './delivery-pin.service';
+import { OrderQueueService } from './order-queue.service';
+import { OrderRefundsService } from './order-refunds.service';
+import { OrderStatusService } from './order-status.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -2106,7 +2106,7 @@ export class OrdersService {
 
     const provider = this.mobilePaymentsService.getProvider(phoneNumber);
     const account = await this.hasuraSystemService.getAccount(
-      order.client.user.id,
+      order.client.user_id,
       order.currency
     );
 
@@ -4441,7 +4441,9 @@ export class OrdersService {
   }
 
   /**
-   * Finalize order after wallet/mobile incoming payment: holds, order_hold row, notifications.
+   * Finalize order after wallet/mobile incoming payment: holds (pay_now), order_hold row, notifications.
+   * Pay-at-delivery: mobile credit is already on the client wallet; settlement debits the client and
+   * distributes to business/agent via commission flows (no client hold/release).
    */
   async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
@@ -4452,10 +4454,7 @@ export class OrdersService {
         | undefined;
 
       if (paymentTiming === 'pay_at_delivery') {
-        await this.finalizePayAtDeliveryPaymentAndComplete(
-          order,
-          transaction.account_id
-        );
+        await this.finalizePayAtDeliveryPaymentAndComplete(order);
         return;
       }
 
@@ -4473,31 +4472,16 @@ export class OrdersService {
   /**
    * Pay-at-delivery: once mobile payment succeeds, settle and complete the order.
    *
+   * Incoming funds are credited to the client wallet in the callback; this path only records
+   * settlement amounts on order_holds and runs payment + commission distribution (no client holds).
+   *
    * This runs in system context (callback), so it performs direct mutations and status history writes.
    */
   private async finalizePayAtDeliveryPaymentAndComplete(
-    order: Orders,
-    accountId: string
+    order: Orders
   ): Promise<void> {
-    // 1) Place holds on the client's internal account (items + delivery fees)
-    await this.accountsService.registerTransaction({
-      accountId,
-      amount: order.subtotal,
-      transactionType: 'hold',
-      memo: `Hold for order ${order.order_number} (pay at delivery)`,
-      referenceId: order.id,
-    });
-
     const totalDeliveryFees =
       (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
-
-    await this.accountsService.registerTransaction({
-      accountId,
-      amount: totalDeliveryFees,
-      transactionType: 'hold',
-      memo: `Hold for order ${order.order_number} delivery fees (pay at delivery)`,
-      referenceId: order.id,
-    });
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
@@ -4505,7 +4489,7 @@ export class OrdersService {
       delivery_fees: totalDeliveryFees,
     });
 
-    // 2) Mark order as paid and complete it (settlement is idempotent)
+    // Mark order as paid and complete it (settlement is idempotent)
     await this.updateOrderPaymentStatusOnly(order.id, 'paid');
 
     await this.processOrderPayment(order.id);
@@ -4513,7 +4497,7 @@ export class OrdersService {
 
     await this.setOrderCompleteSystem(order.id);
 
-    // 3) Completion side effects (best-effort)
+    // Completion side effects (best-effort)
     try {
       const orderWithDetails = await this.getOrderDetails(order.id);
       const orderItems = orderWithDetails?.order_items || [];
@@ -6032,20 +6016,30 @@ export class OrdersService {
     }
 
     if (subtotalPortion > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: subtotalPortion,
-        transactionType: 'release',
-        memo: `Hold released for order ${order.order_number} (items)`,
-        referenceId: orderId,
-      });
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: subtotalPortion,
-        transactionType: 'payment',
-        memo: `Order item payment for order ${order.order_number}`,
-        referenceId: orderId,
-      });
+      if (paymentTiming === 'pay_at_delivery') {
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+          referenceId: orderId,
+        });
+      } else {
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'release',
+          memo: `Hold released for order ${order.order_number} (items)`,
+          referenceId: orderId,
+        });
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      }
     }
 
     try {
@@ -6092,6 +6086,11 @@ export class OrdersService {
       );
     }
 
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+
     const deliveryStatuses = ['out_for_delivery', 'complete'];
     if (!deliveryStatuses.includes(order.current_status)) {
       throw new HttpException(
@@ -6127,20 +6126,30 @@ export class OrdersService {
 
     const deliveryAmt = Number(orderHold.delivery_fees);
     if (deliveryAmt > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: deliveryAmt,
-        transactionType: 'release',
-        memo: `Hold released for order ${order.order_number} delivery fee`,
-        referenceId: orderId,
-      });
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: deliveryAmt,
-        transactionType: 'payment',
-        memo: `Order delivery payment for order ${order.order_number}`,
-        referenceId: orderId,
-      });
+      if (paymentTiming === 'pay_at_delivery') {
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'payment',
+          memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
+          referenceId: orderId,
+        });
+      } else {
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'release',
+          memo: `Hold released for order ${order.order_number} delivery fee`,
+          referenceId: orderId,
+        });
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'payment',
+          memo: `Order delivery payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      }
     }
 
     try {
@@ -6589,22 +6598,25 @@ export class OrdersService {
   ): Promise<{ baseFee: number; perKmFee: number; totalFee: number }> {
     try {
       // Get configurations from country_delivery_configs
-      const [baseFee, ratePerKm] = await Promise.all([
+      const [baseFee, ratePerKm, maxPerKmFee] = await Promise.all([
         requiresFastDelivery
           ? this.deliveryConfigService.getFastDeliveryBaseFee(countryCode)
           : this.deliveryConfigService.getNormalDeliveryBaseFee(countryCode),
         this.deliveryConfigService.getPerKmDeliveryFee(countryCode),
-        ]);
+        this.deliveryConfigService.getMaxPerKmDeliveryFee(countryCode),
+      ]);
 
       // Use fallback values if configurations are not found
       const finalBaseFee = baseFee || (requiresFastDelivery ? 1500 : 1000);
       const finalRatePerKm = ratePerKm || 200;
+      const finalMaxPerKmFee = maxPerKmFee || 0;
 
       this.logger.log(
-        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, distance=${distanceKm}km, fast=${requiresFastDelivery}`
+        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, maxPerKmFee=${finalMaxPerKmFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
       );
 
-      const perKmFee = distanceKm * finalRatePerKm;
+      const perKmCalculated = distanceKm * finalRatePerKm;
+      const perKmFee = Math.max(finalMaxPerKmFee, perKmCalculated);
       const calculatedFee = finalBaseFee + perKmFee;
       const totalFee = calculatedFee;
 
@@ -6619,13 +6631,16 @@ export class OrdersService {
         error
       );
 
+      const isCmOrGa = countryCode === 'CM' || countryCode === 'GA';
       // Fallback to hardcoded GA values if configuration lookup fails
       const fallbackConfig = {
         baseFee: requiresFastDelivery ? 1500 : 1000,
-        ratePerKm: 200,
+        ratePerKm: isCmOrGa ? 100 : 200,
+        maxPerKmFee: isCmOrGa ? 1500 : 0,
         minFee: 1000,
       };
-      const perKmFee = distanceKm * fallbackConfig.ratePerKm;
+      const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;
+      const perKmFee = Math.max(fallbackConfig.maxPerKmFee, perKmCalculated);
       const calculatedFee = fallbackConfig.baseFee + perKmFee;
       const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
 

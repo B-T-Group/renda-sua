@@ -17,6 +17,17 @@ export interface FastDeliveryConfig {
 @Injectable()
 export class DeliveryConfigService {
   private readonly logger = new Logger(DeliveryConfigService.name);
+  private static readonly PER_KM_DEFAULT_BY_COUNTRY: Record<string, number> = {
+    CM: 100,
+    GA: 100,
+  };
+  private static readonly MAX_PER_KM_FEE_DEFAULT_BY_COUNTRY: Record<
+    string,
+    number
+  > = {
+    CM: 1500,
+    GA: 1500,
+  };
 
   constructor(private readonly hasuraService: HasuraSystemService) {}
 
@@ -173,7 +184,27 @@ export class DeliveryConfigService {
       countryCode,
       'per_km_delivery_fee'
     );
-    return typeof value === 'number' ? value : 200; // Default fallback
+    if (typeof value === 'number') {
+      return value;
+    }
+    return DeliveryConfigService.PER_KM_DEFAULT_BY_COUNTRY[countryCode] ?? 200;
+  }
+
+  /**
+   * Get minimum per-kilometer fee component configured for a country.
+   * Despite the config name, this value is used as a floor via Math.max().
+   */
+  async getMaxPerKmDeliveryFee(countryCode: string): Promise<number> {
+    const value = await this.getDeliveryConfig(
+      countryCode,
+      'max_per_km_delivery_fee'
+    );
+    if (typeof value === 'number') {
+      return value;
+    }
+    return (
+      DeliveryConfigService.MAX_PER_KM_FEE_DEFAULT_BY_COUNTRY[countryCode] ?? 0
+    );
   }
 
   /**

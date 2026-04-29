@@ -649,7 +649,11 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Payment callback endpoint for MyPVIT
+   * Payment callback endpoint for MyPVIT.
+   *
+   * On success, credits the transaction account then finalizes the payment entity (e.g. orders).
+   * Pay-at-delivery orders: funds are credited to the client wallet, then settled to business and
+   * delivery parties via OrdersService without placing client holds.
    */
   @Public()
   @Post('callback/mypvit')
@@ -687,7 +691,11 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Payment callback endpoint for Freemopay (Cameroon)
+   * Payment callback endpoint for Freemopay (Cameroon).
+   *
+   * On success, credits the transaction account then finalizes the payment entity (e.g. orders).
+   * Pay-at-delivery orders: funds are credited to the client wallet, then settled to business and
+   * delivery parties via OrdersService without placing client holds.
    */
   @Public()
   @Post('callback/freemopay')
