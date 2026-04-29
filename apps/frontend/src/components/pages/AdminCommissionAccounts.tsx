@@ -1,6 +1,7 @@
 import {
   AccountBalance as AccountBalanceIcon,
   History as HistoryIcon,
+  Remove as RemoveIcon,
   Refresh as RefreshIcon,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
@@ -27,7 +28,17 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminAccountTransactions } from '../../hooks/useAdminAccountTransactions';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminCommissionAccounts } from '../../hooks/useAdminCommissionAccounts';
+import { useMobilePayments } from '../../hooks/useMobilePayments';
+import WithdrawModal from '../business/WithdrawModal';
+
+interface SelectedWithdrawAccount {
+  id: string;
+  currency: string;
+  availableBalance: number;
+  userPhoneNumber?: string;
+}
 
 const AdminCommissionAccounts: React.FC = () => {
   const {
@@ -45,6 +56,8 @@ const AdminCommissionAccounts: React.FC = () => {
     fetchTransactions,
   } = useAdminAccountTransactions();
   const { t } = useTranslation();
+  const apiClient = useApiClient();
+  const { initiatePayment, loading: withdrawLoading } = useMobilePayments();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null
   );
@@ -53,6 +66,10 @@ const AdminCommissionAccounts: React.FC = () => {
   >(null);
   const [transactionsDialogOpen, setTransactionsDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [selectedWithdrawAccount, setSelectedWithdrawAccount] =
+    useState<SelectedWithdrawAccount | null>(null);
+  const [withdrawRequirePin, setWithdrawRequirePin] = useState(false);
 
   const handleViewTransactions = (accountId: string, currency: string) => {
     setSelectedAccountId(accountId);
@@ -74,6 +91,54 @@ const AdminCommissionAccounts: React.FC = () => {
       setCurrentPage(newPage);
       fetchTransactions(selectedAccountId, newPage, 50);
     }
+  };
+
+  const handleOpenWithdrawModal = async (account: any, user: any) => {
+    setSelectedWithdrawAccount({
+      id: account.id,
+      currency: account.currency,
+      availableBalance: parseFloat(account.available_balance),
+      userPhoneNumber: user.phone_number || '',
+    });
+    setWithdrawRequirePin(false);
+    setWithdrawModalOpen(true);
+
+    if (!apiClient) return;
+    try {
+      const { data } = await apiClient.get(
+        `/accounts/${account.id}/withdrawal-config`
+      );
+      setWithdrawRequirePin(!!data?.data?.requirePin);
+    } catch {
+      setWithdrawRequirePin(false);
+    }
+  };
+
+  const handleCloseWithdrawModal = () => {
+    setWithdrawModalOpen(false);
+    setSelectedWithdrawAccount(null);
+    setWithdrawRequirePin(false);
+  };
+
+  const handleWithdrawConfirm = async (
+    phoneNumber: string,
+    amount: string,
+    _paymentMethod: any,
+    pin?: string
+  ): Promise<boolean> => {
+    if (!selectedWithdrawAccount) return false;
+    const result = await initiatePayment({
+      amount: parseFloat(amount),
+      currency: selectedWithdrawAccount.currency,
+      description: 'Withdrawal',
+      customerPhone: phoneNumber,
+      accountId: selectedWithdrawAccount.id,
+      transactionType: 'GIVE_CHANGE',
+      withdrawalPin: pin,
+    });
+    if (!result.success) return false;
+    await fetchCommissionUsers();
+    return true;
   };
 
   const formatCurrency = (amount: number, currency: string) => {
@@ -247,6 +312,19 @@ const AdminCommissionAccounts: React.FC = () => {
                     )}
                   </Button>
                 </Box>
+                {!isCompanyAccount && parseFloat(account.available_balance) > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="error"
+                      startIcon={<RemoveIcon />}
+                      onClick={() => handleOpenWithdrawModal(account, user)}
+                    >
+                      {t('accounts.withdraw', 'Withdraw')}
+                    </Button>
+                  </Box>
+                )}
                 <Box
                   sx={{
                     display: 'grid',
@@ -524,6 +602,20 @@ const AdminCommissionAccounts: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Partner Withdrawal Modal */}
+      {selectedWithdrawAccount && (
+        <WithdrawModal
+          open={withdrawModalOpen}
+          onClose={handleCloseWithdrawModal}
+          onConfirm={handleWithdrawConfirm}
+          userPhoneNumber={selectedWithdrawAccount.userPhoneNumber}
+          currency={selectedWithdrawAccount.currency}
+          availableBalance={selectedWithdrawAccount.availableBalance}
+          loading={withdrawLoading}
+          requirePin={withdrawRequirePin}
+        />
+      )}
     </Box>
   );
 };
