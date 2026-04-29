@@ -26,6 +26,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
 import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
+import RequestPayAtDeliveryPaymentDialog from '../dialogs/RequestPayAtDeliveryPaymentDialog';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
@@ -66,6 +67,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     useState(false);
   const [showCashExceptionDialog, setShowCashExceptionDialog] = useState(false);
   const [cashExceptionNotes, setCashExceptionNotes] = useState('');
+  const [showRequestPaymentDialog, setShowRequestPaymentDialog] = useState(false);
   const [claimHoldAmount, setClaimHoldAmount] = useState(
     order.agent_hold_amount || 0
   );
@@ -636,10 +638,13 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         break;
 
       case 'out_for_delivery':
-        if (order.payment_timing === 'pay_at_delivery') {
+        if (
+          order.payment_timing === 'pay_at_delivery' ||
+          order.payment_method === 'pay_on_delivery'
+        ) {
           actions.push({
             label: t('orderActions.requestPayment', 'Request payment'),
-            action: handleInitiatePayAtDeliveryPayment,
+            action: () => setShowRequestPaymentDialog(true),
             color: 'success' as const,
             icon: <CheckCircle />,
           });
@@ -846,6 +851,22 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onSuccess={() => {
           onShowNotification?.(
             t('messages.orderCompleted', 'Order completed successfully'),
+            'success'
+          );
+          onActionComplete?.();
+        }}
+      />
+
+      <RequestPayAtDeliveryPaymentDialog
+        open={showRequestPaymentDialog}
+        order={order}
+        onClose={() => setShowRequestPaymentDialog(false)}
+        onSuccess={() => {
+          onShowNotification?.(
+            t(
+              'orderActions.payAtDeliveryPaymentInitiated',
+              'Payment request sent to the client'
+            ),
             'success'
           );
           onActionComplete?.();

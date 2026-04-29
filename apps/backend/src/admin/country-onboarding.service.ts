@@ -46,6 +46,12 @@ interface CountryOnboardingQueryResult {
   supported_country_states: SupportedCountryStateRow[];
 }
 
+const PER_KM_DELIVERY_FEE_CONFIG_KEY = 'per_km_delivery_fee';
+const PER_KM_DELIVERY_FEE_MAX_XAF_BY_COUNTRY: Record<string, number> = {
+  CM: 1500,
+  GA: 1500,
+};
+
 @Injectable()
 export class CountryOnboardingService {
   private readonly logger = new Logger(CountryOnboardingService.name);
@@ -249,6 +255,11 @@ export class CountryOnboardingService {
       throw new Error('countryCode is required and must be a 2-letter ISO code');
     }
 
+    this.validatePerKmDeliveryFeeLimit(
+      config.countryCode,
+      config.countryDeliveryConfig
+    );
+
     config.deliveryTimeSlots.forEach((slot) => {
       if (!slot.slot_name || !slot.slot_type) {
         throw new Error('Each delivery time slot must have a name and type');
@@ -257,6 +268,29 @@ export class CountryOnboardingService {
         throw new Error('Each delivery time slot must have start and end times');
       }
     });
+  }
+
+  private validatePerKmDeliveryFeeLimit(
+    countryCode: string,
+    countryDeliveryConfig: CountryOnboardingCountryConfig | null
+  ): void {
+    const maxValue = PER_KM_DELIVERY_FEE_MAX_XAF_BY_COUNTRY[countryCode];
+    if (!maxValue || !countryDeliveryConfig) return;
+    const feeConfig = countryDeliveryConfig.configs.find(
+      (entry) => entry.config_key === PER_KM_DELIVERY_FEE_CONFIG_KEY
+    );
+    if (!feeConfig) return;
+    const parsedValue = Number(feeConfig.config_value);
+    if (Number.isNaN(parsedValue)) {
+      throw new Error(
+        `${PER_KM_DELIVERY_FEE_CONFIG_KEY} must be a valid number for ${countryCode}`
+      );
+    }
+    if (parsedValue > maxValue) {
+      throw new Error(
+        `${PER_KM_DELIVERY_FEE_CONFIG_KEY} cannot exceed ${maxValue} XAF for ${countryCode}`
+      );
+    }
   }
 
   private mapCountryConfigsToInsert(

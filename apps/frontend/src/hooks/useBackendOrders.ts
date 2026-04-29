@@ -766,7 +766,8 @@ export const useBackendOrders = () => {
   };
 
   const initiatePayAtDeliveryPayment = async (
-    orderId: string
+    orderId: string,
+    phoneNumberOverride?: string
   ): Promise<any> => {
     if (!apiClient) {
       throw new Error(
@@ -778,7 +779,9 @@ export const useBackendOrders = () => {
       try {
         const response = await apiClient.post(
           `/orders/${orderId}/initiate-pay-at-delivery-payment`,
-          {}
+          phoneNumberOverride?.trim()
+            ? { phone_number: phoneNumberOverride.trim() }
+            : {}
         );
         return response.data;
       } catch (err: any) {

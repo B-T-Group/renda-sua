@@ -2260,7 +2260,16 @@
     "pickUp": "Pick Up",
     "printLabel": "Print label",
     "refundOrder": "Refund Order",
-    "readyForPickup": "Set as ready"
+    "readyForPickup": "Set as ready",
+    "requestPayment": "Request payment",
+    "markPaidInCash": "Mark paid in cash",
+    "payAtDeliveryPaymentInitiated": "Payment request sent to the client",
+    "payAtDeliveryPaymentFailed": "Failed to initiate payment",
+    "cashExceptionTitle": "Cash exception",
+    "cashExceptionWarning": "Use this only if the client cannot complete mobile payment at delivery. The business will need to reconcile this manually.",
+    "cashExceptionNotes": "Notes (optional)",
+    "cashExceptionRecorded": "Cash exception recorded. Business reconciliation required.",
+    "cashExceptionFailed": "Failed to record cash exception"
   },
   "orderHistory": {
     "changedBy": "Changed by",
@@ -2277,6 +2286,18 @@
     "unitSingular": "unit",
     "unitsPlural": "units",
     "selectCountry": "Select a country.",
+    "payAtDelivery": {
+      "confirmationTitle": "Payment at delivery",
+      "confirmationMessage": "You chose pay at delivery. You will complete payment in the app when the agent arrives.",
+      "agentInitiateHelp": "Send a mobile payment request to the client. Once they approve it, the order will complete automatically.",
+      "agentInitiateSubtitle": "Payment is requested at the doorstep.",
+      "clientPhoneHint": "This is the client phone number on the order.",
+      "notEligible": "This order is not configured for pay at delivery.",
+      "step1": "Your order has been sent to the merchant.",
+      "step2": "When the agent arrives, you will receive a mobile payment request in the app.",
+      "step3": "You will receive updates on your order status via email and in-app notifications. Track progress in My Orders."
+    },
+    "trackInMyOrders": "Track progress in My Orders",
     "actions": {
       "cancel": "Cancel",
       "completeOrder": "Complete Order",

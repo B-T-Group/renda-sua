@@ -2029,7 +2029,7 @@ export class OrdersService {
   /**
    * Pay-at-delivery: assigned agent triggers mobile payment request at doorstep.
    */
-  async initiatePayAtDeliveryPayment(orderId: string) {
+  async initiatePayAtDeliveryPayment(orderId: string, phoneNumberOverride?: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -2073,7 +2073,8 @@ export class OrdersService {
       };
     }
 
-    const phoneNumber = order.client?.user?.phone_number || '';
+    const phoneNumber =
+      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -4141,6 +4142,10 @@ export class OrdersService {
             user_id
             user {
               timezone
+              first_name
+              last_name
+              email
+              phone_number
             }
           }
           business {

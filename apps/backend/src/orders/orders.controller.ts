@@ -399,8 +399,26 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: 'Payment request initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
-  async initiatePayAtDeliveryPayment(@Param('id') orderId: string) {
-    return this.ordersService.initiatePayAtDeliveryPayment(orderId);
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phone_number: {
+          type: 'string',
+          description:
+            'Optional override phone number to receive the payment request (E.164).',
+        },
+      },
+    },
+  })
+  async initiatePayAtDeliveryPayment(
+    @Param('id') orderId: string,
+    @Body() body: { phone_number?: string }
+  ) {
+    return this.ordersService.initiatePayAtDeliveryPayment(
+      orderId,
+      body?.phone_number
+    );
   }
 
   @Post(':id/mark-paid-in-cash-exception')

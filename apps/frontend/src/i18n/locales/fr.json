@@ -2237,6 +2237,7 @@
     "cancelOrder": "Annuler la Commande",
     "claimOrder": "Réclamer la Commande",
     "claiming": "Réclamation en cours...",
+    "completeDelivery": "Terminer la livraison",
     "completeOrder": "Terminer la Commande",
     "completePreparation": "Terminer la Préparation",
     "confirmOrder": "Confirmer la Commande",
@@ -2248,7 +2249,16 @@
     "pickUp": "Récupérer",
     "printLabel": "Imprimer l'étiquette",
     "refundOrder": "Rembourser la Commande",
-    "readyForPickup": "Marquer comme prêt"
+    "readyForPickup": "Marquer comme prêt",
+    "requestPayment": "Demander le paiement",
+    "markPaidInCash": "Marquer payé en espèces",
+    "payAtDeliveryPaymentInitiated": "Demande de paiement envoyée au client",
+    "payAtDeliveryPaymentFailed": "Impossible de lancer le paiement",
+    "cashExceptionTitle": "Exception espèces",
+    "cashExceptionWarning": "À utiliser uniquement si le client ne peut pas effectuer le paiement mobile à la livraison. L’entreprise devra le rapprocher manuellement.",
+    "cashExceptionNotes": "Notes (facultatif)",
+    "cashExceptionRecorded": "Exception espèces enregistrée. Rapprochement côté commerce requis.",
+    "cashExceptionFailed": "Impossible d’enregistrer l’exception espèces"
   },
   "orderHistory": {
     "changedBy": "Modifié par",
@@ -2265,6 +2275,18 @@
     "unitSingular": "unité",
     "unitsPlural": "unités",
     "selectCountry": "Sélectionnez un pays.",
+    "payAtDelivery": {
+      "confirmationTitle": "Paiement à la livraison",
+      "confirmationMessage": "Vous avez choisi de payer à la livraison. Vous terminerez le paiement dans l’app lorsque l’agent arrive.",
+      "agentInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois validée, la commande se terminera automatiquement.",
+      "agentInitiateSubtitle": "Le paiement est demandé au moment de la livraison.",
+      "clientPhoneHint": "C’est le numéro de téléphone du client sur la commande.",
+      "notEligible": "Cette commande n’est pas configurée pour le paiement à la livraison.",
+      "step1": "Votre commande a été transmise au commerçant.",
+      "step2": "Lorsque l’agent arrive, vous recevrez une demande de paiement mobile dans l’app.",
+      "step3": "Vous recevrez des mises à jour par e-mail et notifications dans l’app. Suivez l’avancement dans Mes commandes."
+    },
+    "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {
       "cancel": "Annuler",
       "completeOrder": "Terminer la Commande",

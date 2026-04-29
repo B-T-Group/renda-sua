@@ -64,5 +64,51 @@ describe('CountryOnboardingService', () => {
       'Each delivery time slot must have a name and type'
     );
   });
+
+  it('should reject per_km_delivery_fee above 1500 for GA', async () => {
+    const config: CountryOnboardingConfigDto = {
+      countryCode: 'GA',
+      countryDeliveryConfig: {
+        country_code: 'GA',
+        configs: [
+          {
+            config_key: 'per_km_delivery_fee',
+            config_value: '1600',
+            data_type: 'number',
+          },
+        ],
+      },
+      deliveryTimeSlots: [],
+      supportedStates: [],
+    };
+
+    await expect(
+      service.applyCountryOnboardingConfig(config)
+    ).rejects.toThrowError(
+      'per_km_delivery_fee cannot exceed 1500 XAF for GA'
+    );
+  });
+
+  it('should allow per_km_delivery_fee of 1500 for CM', async () => {
+    const config: CountryOnboardingConfigDto = {
+      countryCode: 'CM',
+      countryDeliveryConfig: {
+        country_code: 'CM',
+        configs: [
+          {
+            config_key: 'per_km_delivery_fee',
+            config_value: '1500',
+            data_type: 'number',
+          },
+        ],
+      },
+      deliveryTimeSlots: [],
+      supportedStates: [],
+    };
+
+    await expect(service.applyCountryOnboardingConfig(config)).resolves.toBe(
+      undefined
+    );
+  });
 });
 

@@ -21,6 +21,7 @@ export interface OrderData {
   special_instructions?: string;
   preferred_delivery_time?: string;
   requires_fast_delivery: boolean;
+  payment_method?: string;
   payment_status: string;
   payment_timing?: 'pay_now' | 'pay_at_delivery';
   reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';

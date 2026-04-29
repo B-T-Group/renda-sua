@@ -13,6 +13,7 @@ import {
   Chip,
   Container,
   Grid,
+  Stack,
   Typography,
 } from '@mui/material';
 import React from 'react';
@@ -34,6 +35,7 @@ interface OrderConfirmationData {
     current_status: string;
     created_at: string;
     payment_source?: PaymentSource;
+    payment_timing?: 'pay_now' | 'pay_at_delivery';
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -54,6 +56,7 @@ interface OrderConfirmationData {
     current_status: string;
     created_at: string;
     payment_source?: PaymentSource;
+    payment_timing?: 'pay_now' | 'pay_at_delivery';
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -109,9 +112,14 @@ const OrderConfirmationPage: React.FC = () => {
 
   // Wallet = paid from balance (no phone step). API uses mobile_money for MM; DB enum may use mobile_payment.
   const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
+  const hasPayAtDelivery = orders.some((o) => o.payment_timing === 'pay_at_delivery');
   const showMobilePaymentConfirmation = isMultipleOrders
-    ? orders.some((o) => !isWalletPayment(o.payment_source))
-    : !isWalletPayment(orders[0]?.payment_source);
+    ? orders.some(
+        (o) =>
+          o.payment_timing !== 'pay_at_delivery' && !isWalletPayment(o.payment_source)
+      )
+    : orders[0]?.payment_timing !== 'pay_at_delivery' &&
+      !isWalletPayment(orders[0]?.payment_source);
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');
@@ -169,9 +177,47 @@ const OrderConfirmationPage: React.FC = () => {
             </>
           )}
         </Typography>
+
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          flexWrap="wrap"
+          sx={{ mt: 2 }}
+        >
+          {hasPayAtDelivery ? (
+            <Chip
+              icon={<Schedule />}
+              label={t('orders.payAtDelivery.confirmationTitle', 'Payment at delivery')}
+              color="info"
+              variant="outlined"
+            />
+          ) : showMobilePaymentConfirmation ? (
+            <Chip
+              icon={<Phone />}
+              label={t(
+                'orders.paymentConfirmationRequired',
+                'Payment Confirmation Required'
+              )}
+              color="primary"
+              variant="outlined"
+            />
+          ) : (
+            <Chip
+              icon={<CheckCircle />}
+              label={t('orders.paidFromWalletTitle', 'Order confirmed and paid')}
+              color="success"
+              variant="outlined"
+            />
+          )}
+          <Chip
+            label={t('orders.trackInMyOrders', 'Track progress in My Orders')}
+            variant="outlined"
+          />
+        </Stack>
       </Box>
 
-      {/* Payment confirmation: wallet only for Rendasua balance; otherwise confirm on phone / provider */}
+      {/* Payment confirmation: pay-now mobile payments vs pay-at-delivery */}
       {showMobilePaymentConfirmation ? (
         <Card
           sx={{
@@ -236,6 +282,55 @@ const OrderConfirmationPage: React.FC = () => {
               {t(
                 'orders.paymentConfirmationDeadline',
                 'Your order will be transmitted to the merchant within 24 hours once payment is confirmed.'
+              )}
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : hasPayAtDelivery ? (
+        <Card
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            bgcolor: 'info.50',
+            border: '1px solid',
+            borderColor: 'info.main',
+            boxShadow: '0 4px 20px rgba(2, 136, 209, 0.12)',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                mb: 2,
+                flexDirection: { xs: 'column', sm: 'row' },
+                textAlign: { xs: 'center', sm: 'left' },
+              }}
+            >
+              <Schedule
+                sx={{
+                  mr: { xs: 0, sm: 1 },
+                  mb: { xs: 1, sm: 0 },
+                  color: 'info.main',
+                }}
+              />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: 'info.dark',
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                }}
+              >
+                {t(
+                  'orders.payAtDelivery.confirmationTitle',
+                  'Payment at delivery'
+                )}
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
+              {t(
+                'orders.payAtDelivery.confirmationMessage',
+                'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
               )}
             </Typography>
           </CardContent>
@@ -488,247 +583,6 @@ const OrderConfirmationPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Payment Transaction Details */}
-      <Card sx={{ mb: { xs: 3, sm: 4 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              mb: 3,
-              flexDirection: { xs: 'column', sm: 'row' },
-              textAlign: { xs: 'center', sm: 'left' },
-            }}
-          >
-            <Phone
-              sx={{
-                mr: { xs: 0, sm: 1 },
-                mb: { xs: 1, sm: 0 },
-                color: 'primary.main',
-              }}
-            />
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 'bold',
-                fontSize: { xs: '1.1rem', sm: '1.25rem' },
-              }}
-            >
-              {t('orders.paymentDetails', 'Payment Details')}
-            </Typography>
-          </Box>
-
-          {isMultipleOrders ? (
-            // Multiple Orders Payment Details
-            <Box>
-              {orders.map((order, index) => (
-                <Card key={order.id} variant="outlined" sx={{ mb: 2 }}>
-                  <CardContent sx={{ p: 2 }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ mb: 2, fontWeight: 'bold' }}
-                    >
-                      {t('orders.orderNumber', 'Order')} #{index + 1}:{' '}
-                      {order.order_number}
-                    </Typography>
-
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <Box sx={{ mb: 1 }}>
-                          <Typography
-                            variant="subtitle2"
-                            color="text.secondary"
-                          >
-                            {t('orders.transactionId', 'Transaction ID')}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontFamily: 'monospace',
-                              fontWeight: 'medium',
-                              wordBreak: 'break-all',
-                            }}
-                          >
-                            {order.payment_transaction?.transaction_id || 'N/A'}
-                          </Typography>
-                        </Box>
-
-                        <Box sx={{ mb: 1 }}>
-                          <Typography
-                            variant="subtitle2"
-                            color="text.secondary"
-                          >
-                            {t('orders.paymentStatus', 'Payment Status')}
-                          </Typography>
-                          <Chip
-                            label={
-                              order.payment_transaction?.success
-                                ? t(
-                                    'orders.paymentInitiated',
-                                    'Payment Initiated'
-                                  )
-                                : t('orders.paymentFailed', 'Payment Failed')
-                            }
-                            color={
-                              order.payment_transaction?.success
-                                ? 'success'
-                                : 'error'
-                            }
-                            size="small"
-                          />
-                        </Box>
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <Box sx={{ mb: 1 }}>
-                          <Typography
-                            variant="subtitle2"
-                            color="text.secondary"
-                          >
-                            {t(
-                              'orders.databaseTransactionId',
-                              'Database Transaction ID'
-                            )}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontFamily: 'monospace',
-                              fontWeight: 'medium',
-                              wordBreak: 'break-all',
-                            }}
-                          >
-                            {order.database_transaction?.id || 'N/A'}
-                          </Typography>
-                        </Box>
-
-                        <Box sx={{ mb: 1 }}>
-                          <Typography
-                            variant="subtitle2"
-                            color="text.secondary"
-                          >
-                            {t(
-                              'orders.databaseTransactionStatus',
-                              'Database Transaction Status'
-                            )}
-                          </Typography>
-                          <Chip
-                            label={order.database_transaction?.status || 'N/A'}
-                            color="info"
-                            size="small"
-                          />
-                        </Box>
-                      </Grid>
-                    </Grid>
-
-                    {order.payment_transaction?.message && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('orders.paymentMessage', 'Payment Message')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontStyle: 'italic' }}
-                        >
-                          {order.payment_transaction.message}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
-          ) : (
-            // Single Order Payment Details
-            <Grid container spacing={{ xs: 2, sm: 3 }}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {t('orders.transactionId', 'Transaction ID')}
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontFamily: 'monospace',
-                      fontWeight: 'medium',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {orders[0].payment_transaction?.transaction_id || 'N/A'}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {t('orders.paymentStatus', 'Payment Status')}
-                  </Typography>
-                  <Chip
-                    label={
-                      orders[0].payment_transaction?.success
-                        ? t('orders.paymentInitiated', 'Payment Initiated')
-                        : t('orders.paymentFailed', 'Payment Failed')
-                    }
-                    color={
-                      orders[0].payment_transaction?.success
-                        ? 'success'
-                        : 'error'
-                    }
-                    size="small"
-                  />
-                </Box>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {t(
-                      'orders.databaseTransactionId',
-                      'Database Transaction ID'
-                    )}
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontFamily: 'monospace',
-                      fontWeight: 'medium',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {orders[0].database_transaction?.id || 'N/A'}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {t(
-                      'orders.databaseTransactionStatus',
-                      'Database Transaction Status'
-                    )}
-                  </Typography>
-                  <Chip
-                    label={orders[0].database_transaction?.status || 'N/A'}
-                    color="info"
-                    size="small"
-                  />
-                </Box>
-              </Grid>
-            </Grid>
-          )}
-
-          {/* Show payment message for single order */}
-          {!isMultipleOrders && orders[0].payment_transaction?.message && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('orders.paymentMessage', 'Payment Message')}
-              </Typography>
-              <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                {orders[0].payment_transaction.message}
-              </Typography>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Next Steps: different copy for wallet vs mobile payment */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
@@ -774,6 +628,33 @@ const OrderConfirmationPage: React.FC = () => {
                 </Typography>
               </Box>
             </Box>
+          ) : hasPayAtDelivery ? (
+            <Box component="ol" sx={{ pl: 2 }}>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.payAtDelivery.step1',
+                    'Your order has been sent to the merchant.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.payAtDelivery.step2',
+                    'When the agent arrives, you will receive a mobile payment request in the app.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li">
+                <Typography variant="body1">
+                  {t(
+                    'orders.payAtDelivery.step3',
+                    'You will receive updates on your order status via email and in-app notifications. Track progress in My Orders.'
+                  )}
+                </Typography>
+              </Box>
+            </Box>
           ) : (
             <Box component="ol" sx={{ pl: 2 }}>
               <Box component="li" sx={{ mb: 2 }}>
@@ -808,8 +689,9 @@ const OrderConfirmationPage: React.FC = () => {
         }}
       >
         <Button
-          variant="outlined"
+          variant="contained"
           onClick={handleViewOrders}
+          startIcon={<Receipt />}
           size="large"
           sx={{
             maxWidth: { xs: '100%', sm: '200px' },
@@ -819,7 +701,7 @@ const OrderConfirmationPage: React.FC = () => {
           {t('orders.viewMyOrders', 'View My Orders')}
         </Button>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={handleGoToDashboard}
           startIcon={<Home />}
           size="large"
