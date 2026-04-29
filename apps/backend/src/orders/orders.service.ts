@@ -6616,7 +6616,7 @@ export class OrdersService {
       );
 
       const perKmCalculated = distanceKm * finalRatePerKm;
-      const perKmFee = Math.max(finalMaxPerKmFee, perKmCalculated);
+      const perKmFee = Math.min(finalMaxPerKmFee, perKmCalculated);
       const calculatedFee = finalBaseFee + perKmFee;
       const totalFee = calculatedFee;
 
@@ -6640,7 +6640,7 @@ export class OrdersService {
         minFee: 1000,
       };
       const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;
-      const perKmFee = Math.max(fallbackConfig.maxPerKmFee, perKmCalculated);
+      const perKmFee = Math.min(fallbackConfig.maxPerKmFee, perKmCalculated);
       const calculatedFee = fallbackConfig.baseFee + perKmFee;
       const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
 
