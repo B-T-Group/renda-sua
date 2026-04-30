@@ -1,0 +1,37 @@
+table:
+  name: order_discount_codes
+  schema: public
+object_relationships:
+  - name: created_for_client
+    using:
+      foreign_key_constraint_on: created_for_client_id
+  - name: created_for_order
+    using:
+      foreign_key_constraint_on: created_for_order_id
+array_relationships:
+  - name: orders_using_code
+    using:
+      manual_configuration:
+        column_mapping:
+          id: discount_code_id
+        insertion_order: null
+        remote_table:
+          name: orders
+          schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - code
+        - discount_type
+        - created_for_client_id
+        - created_for_order_id
+        - created_at
+        - updated_at
+      filter:
+        created_for_client:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+
