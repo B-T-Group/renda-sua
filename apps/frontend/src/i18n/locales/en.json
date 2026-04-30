@@ -1203,6 +1203,7 @@
     },
     "inventory": {
       "active": "Active",
+      "payOnDeliveryEnabled": "Allow payment at delivery",
       "addFirstLocation": "Add this item to your first location to start selling",
       "addImages": "Add Images",
       "addItem": "Add Item",
@@ -1626,6 +1627,8 @@
       "listingActive": "Listing active",
       "activeStatusUpdated": "Listing status updated",
       "activeStatusUpdateError": "Failed to update listing status",
+      "payOnDeliveryUpdated": "Payment at delivery setting updated",
+      "payOnDeliveryUpdateError": "Failed to update payment at delivery",
       "favoriteUpdated": "Favorites updated",
       "favoriteUpdateError": "Failed to update favorites",
       "favoriteToggleHint": "Mark as favorite for quick filtering and export",

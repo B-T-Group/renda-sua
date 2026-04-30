@@ -85,6 +85,7 @@ interface Item {
   currency: string;
   sku: string;
   is_active: boolean;
+  pay_on_delivery_enabled?: boolean;
   is_fragile?: boolean;
   is_perishable?: boolean;
   requires_special_handling?: boolean;
@@ -113,6 +114,10 @@ interface BusinessItemCardViewProps {
   onPromoteItem?: (item: Item) => void;
   onRefineWithAi?: (item: Item) => void;
   onToggleItemActive?: (item: Item, isActive: boolean) => void | Promise<void>;
+  onTogglePayOnDelivery?: (
+    item: Item,
+    enabled: boolean
+  ) => void | Promise<void>;
   onToggleFavorite?: (item: Item, favorited: boolean) => void | Promise<void>;
 }
 
@@ -126,11 +131,13 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onPromoteItem,
   onRefineWithAi,
   onToggleItemActive,
+  onTogglePayOnDelivery,
   onToggleFavorite,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const [togglingActive, setTogglingActive] = useState(false);
+  const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   const galleryImages = useMemo(
@@ -232,6 +239,16 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       await onToggleItemActive(item, checked);
     } finally {
       setTogglingActive(false);
+    }
+  };
+
+  const handlePayOnDeliveryChange = async (checked: boolean) => {
+    if (!onTogglePayOnDelivery) return;
+    setTogglingPayOnDelivery(true);
+    try {
+      await onTogglePayOnDelivery(item, checked);
+    } finally {
+      setTogglingPayOnDelivery(false);
     }
   };
 
@@ -662,7 +679,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             <Stack
               alignItems="flex-end"
               spacing={0.25}
-              sx={{ flexShrink: 0, maxWidth: 100 }}
+              sx={{ flexShrink: 0, maxWidth: 120 }}
             >
               <Switch
                 size="small"
@@ -679,6 +696,33 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
               >
                 {t('business.items.listingActive', 'Listing active')}
+              </Typography>
+            </Stack>
+          )}
+          {onTogglePayOnDelivery && (
+            <Stack
+              alignItems="flex-end"
+              spacing={0.25}
+              sx={{ flexShrink: 0, maxWidth: 120 }}
+            >
+              <Switch
+                size="small"
+                checked={!!item.pay_on_delivery_enabled}
+                disabled={togglingPayOnDelivery}
+                onChange={(_e, checked) => {
+                  void handlePayOnDeliveryChange(checked);
+                }}
+              />
+              <Typography
+                component="span"
+                variant="caption"
+                color="text.secondary"
+                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
+              >
+                {t(
+                  'business.inventory.payOnDeliveryEnabled',
+                  'Allow payment at delivery'
+                )}
               </Typography>
             </Stack>
           )}

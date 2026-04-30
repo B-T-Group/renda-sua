@@ -1192,6 +1192,7 @@
     },
     "inventory": {
       "active": "Actif",
+      "payOnDeliveryEnabled": "Autoriser le paiement à la livraison",
       "addFirstLocation": "Ajoutez cet article à votre premier emplacement pour commencer à vendre",
       "addImages": "Ajouter des Images",
       "addItem": "Ajouter un article",
@@ -1615,6 +1616,8 @@
       "listingActive": "Annonce active",
       "activeStatusUpdated": "Statut de l’annonce mis à jour",
       "activeStatusUpdateError": "Échec de la mise à jour du statut de l’annonce",
+      "payOnDeliveryUpdated": "Option paiement à la livraison mise à jour",
+      "payOnDeliveryUpdateError": "Échec de la mise à jour du paiement à la livraison",
       "favoriteUpdated": "Favoris mis à jour",
       "favoriteUpdateError": "Échec de la mise à jour des favoris",
       "favoriteToggleHint": "Marquer comme favori pour filtrer et exporter plus vite",

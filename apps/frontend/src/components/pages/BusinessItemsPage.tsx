@@ -436,6 +436,37 @@ const BusinessItemsPage: React.FC = () => {
     [updateItem, mergeItemIntoList, enqueueSnackbar, t]
   );
 
+  const handleTogglePayOnDelivery = useCallback(
+    async (row: Item, enabled: boolean) => {
+      try {
+        const updated = await updateItem(
+          row.id,
+          { pay_on_delivery_enabled: enabled },
+          { skipRefetch: true }
+        );
+        if (updated) {
+          mergeItemIntoList(row.id, updated);
+        }
+        enqueueSnackbar(
+          t(
+            'business.items.payOnDeliveryUpdated',
+            'Payment at delivery setting updated'
+          ),
+          { variant: 'success' }
+        );
+      } catch (err: any) {
+        enqueueSnackbar(
+          t(
+            'business.items.payOnDeliveryUpdateError',
+            'Failed to update payment at delivery'
+          ),
+          { variant: 'error' }
+        );
+      }
+    },
+    [updateItem, mergeItemIntoList, enqueueSnackbar, t]
+  );
+
   const itemMatchesSearchText = (item: Item, q: string): boolean => {
     const needle = q.toLowerCase();
     if (item.name.toLowerCase().includes(needle)) return true;
@@ -801,6 +832,7 @@ const BusinessItemsPage: React.FC = () => {
                     onPromoteItem={handlePromoteItem}
                     onRefineWithAi={(i) => setRefineAiItem(i)}
                     onToggleItemActive={handleToggleItemActive}
+                    onTogglePayOnDelivery={handleTogglePayOnDelivery}
                     onToggleFavorite={handleToggleFavorite}
                   />
                 </Box>

@@ -102,6 +102,7 @@ export default function EditItemDialog({
         min_order_quantity: item.min_order_quantity,
         max_order_quantity: item.max_order_quantity,
         is_active: item.is_active,
+        pay_on_delivery_enabled: item.pay_on_delivery_enabled ?? false,
       });
     }
   }, [item]);
@@ -626,17 +627,36 @@ export default function EditItemDialog({
               </Typography>
               <Divider sx={{ mb: 2 }} />
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.is_active ?? true}
-                    onChange={(e) =>
-                      handleInputChange('is_active', e.target.checked)
-                    }
-                  />
-                }
-                label={t('business.inventory.active')}
-              />
+              <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_active ?? true}
+                      onChange={(e) =>
+                        handleInputChange('is_active', e.target.checked)
+                      }
+                    />
+                  }
+                  label={t('business.inventory.active')}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.pay_on_delivery_enabled ?? false}
+                      onChange={(e) =>
+                        handleInputChange(
+                          'pay_on_delivery_enabled',
+                          e.target.checked
+                        )
+                      }
+                    />
+                  }
+                  label={t(
+                    'business.inventory.payOnDeliveryEnabled',
+                    'Allow payment at delivery'
+                  )}
+                />
+              </Stack>
             </Box>
           </Stack>
 
