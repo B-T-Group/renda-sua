@@ -364,6 +364,13 @@ export class OrdersService {
     return user.client;
   }
 
+  async getCurrentClientId(): Promise<string> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'client', 'Only clients can validate discount codes');
+    const client = this.requireClientRecord(user);
+    return client.id;
+  }
+
   private requireBusinessRecord(user: any) {
     if (!user.business?.id) {
       throw new HttpException(
@@ -5457,6 +5464,17 @@ export class OrdersService {
             success: false,
             message: 'Invalid or already used discount code',
             error: 'DISCOUNT_CODE_INVALID',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (validation.createdForClientId && validation.createdForClientId === client.id) {
+        throw new HttpException(
+          {
+            success: false,
+            message:
+              "You can't use a discount code you generated yourself. Share it with a friend or family member instead.",
+            error: 'DISCOUNT_CODE_SELF_USE_NOT_ALLOWED',
           },
           HttpStatus.BAD_REQUEST
         );

@@ -66,12 +66,23 @@ export class OrdersController {
     },
   })
   async validateDiscountCode(@Query('code') code: string) {
+    const clientId = await this.ordersService.getCurrentClientId();
+
     const result = await this.loyaltyService.validateDiscountCode(code || '');
     if (!result.valid || !result.percentage) {
       return {
         valid: false,
         discountPercentage: 0,
         message: 'Invalid or already used discount code',
+      };
+    }
+
+    if (clientId && result.createdForClientId === clientId) {
+      return {
+        valid: false,
+        discountPercentage: 0,
+        message:
+          "You can't use a discount code you generated yourself. Share it with a friend or family member instead.",
       };
     }
 

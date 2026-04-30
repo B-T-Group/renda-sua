@@ -126,7 +126,12 @@ export class LoyaltyService {
 
   async validateDiscountCode(
     code: string
-  ): Promise<{ valid: boolean; codeId?: string; percentage?: number }> {
+  ): Promise<{
+    valid: boolean;
+    codeId?: string;
+    percentage?: number;
+    createdForClientId?: string;
+  }> {
     const trimmed = code.trim();
     if (!trimmed) return { valid: false };
 
@@ -153,7 +158,12 @@ export class LoyaltyService {
     if (used) return { valid: false };
 
     const percentage = await this.getDiscountPercentage();
-    return { valid: true, codeId: row.id, percentage };
+    return {
+      valid: true,
+      codeId: row.id,
+      percentage,
+      createdForClientId: row.created_for_client_id,
+    };
   }
 
   async getCodeOwner(codeId: string): Promise<DiscountCodeOwner | null> {

@@ -2291,7 +2291,9 @@
     "discountCode": {
       "label": "Discount code",
       "placeholder": "Enter code",
+      "help": "Enter a discount code to apply it to this order.",
       "apply": "Apply",
+      "applyCta": "Have a discount code? Apply it",
       "applied": "Applied: {{code}} ({{pct}}% off)",
       "discount": "Discount",
       "singleOrderOnly": "Discount codes can only be applied when your cart contains items from a single business."

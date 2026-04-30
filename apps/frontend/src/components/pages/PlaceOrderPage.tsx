@@ -620,6 +620,7 @@ const PlaceOrderPage: React.FC = () => {
     clear: clearDiscountCode,
   } = useDiscountCode();
   const [discountCodeDraft, setDiscountCodeDraft] = useState('');
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
@@ -1842,6 +1843,80 @@ const PlaceOrderPage: React.FC = () => {
                         </Box>
                       )}
 
+                    <Box sx={{ mt: 2 }}>
+                      <ButtonBase
+                        onClick={() => setDiscountDialogOpen(true)}
+                        disabled={loading || discountLoading}
+                        sx={{
+                          color: 'primary.main',
+                          fontWeight: 600,
+                          textDecoration: 'underline',
+                          textUnderlineOffset: '3px',
+                          alignSelf: 'flex-start',
+                        }}
+                      >
+                        {appliedDiscountCode
+                          ? t(
+                              'orders.discountCode.applied',
+                              'Applied: {{code}} ({{pct}}% off)',
+                              { code: appliedDiscountCode, pct: discountPercentage }
+                            )
+                          : t(
+                              'orders.discountCode.applyCta',
+                              'Have a discount code? Apply it'
+                            )}
+                      </ButtonBase>
+                      {discountError && (
+                        <Typography variant="caption" color="error" display="block" sx={{ mt: 0.75 }}>
+                          {discountError}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    {appliedDiscountCode && discountPercentage > 0 && (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 1,
+                          mt: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="success.main">
+                          {t('orders.discountCode.discount', 'Discount')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="success.main"
+                          fontWeight="medium"
+                        >
+                          −
+                          {formatCurrency(
+                            (() => {
+                              const hasDeal =
+                                selectedItem.hasActiveDeal &&
+                                typeof selectedItem.original_price === 'number' &&
+                                typeof selectedItem.discounted_price === 'number' &&
+                                selectedItem.original_price > 0;
+                              const unitPrice = hasDeal
+                                ? selectedItem.discounted_price!
+                                : selectedItem.selling_price;
+                              const subtotal = unitPrice * quantity;
+                              const totalBeforeDiscount =
+                                subtotal + (deliveryFee?.deliveryFee || 0);
+                              return Number(
+                                (
+                                  (totalBeforeDiscount * discountPercentage) /
+                                  100
+                                ).toFixed(2)
+                              );
+                            })(),
+                            selectedItem.item.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
+
                     <Divider sx={{ my: 1.5 }} />
 
                     <Box
@@ -1870,7 +1945,18 @@ const PlaceOrderPage: React.FC = () => {
                               ? selectedItem.discounted_price!
                               : selectedItem.selling_price;
                             const subtotal = unitPrice * quantity;
-                            return subtotal + (deliveryFee?.deliveryFee || 0);
+                            const totalBeforeDiscount =
+                              subtotal + (deliveryFee?.deliveryFee || 0);
+                            if (!appliedDiscountCode || discountPercentage <= 0) {
+                              return totalBeforeDiscount;
+                            }
+                            const discountAmount = Number(
+                              (
+                                (totalBeforeDiscount * discountPercentage) /
+                                100
+                              ).toFixed(2)
+                            );
+                            return Math.max(0, totalBeforeDiscount - discountAmount);
                           })(),
                           selectedItem.item.currency
                         )}
@@ -3100,6 +3186,74 @@ const PlaceOrderPage: React.FC = () => {
             {t('common.cancel', 'Cancel')}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={discountDialogOpen}
+        onClose={() => setDiscountDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.discountCode.label', 'Discount code')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'orders.discountCode.help',
+              'Enter a discount code to apply it to this order.'
+            )}
+          </Typography>
+          <Stack spacing={1.25}>
+            <TextField
+              label={t('orders.discountCode.label', 'Discount code')}
+              value={discountCodeDraft}
+              onChange={(e) => setDiscountCodeDraft(e.target.value)}
+              disabled={discountLoading || loading}
+              placeholder={t('orders.discountCode.placeholder', 'Enter code')}
+              error={!!discountError}
+              helperText={discountError || ' '}
+              fullWidth
+            />
+            <Stack direction="row" spacing={1}>
+              {appliedDiscountCode ? (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    clearDiscountCode();
+                    setDiscountCodeDraft('');
+                  }}
+                  disabled={discountLoading || loading}
+                  fullWidth
+                >
+                  {t('common.clear', 'Clear')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={async () => {
+                    const res = await applyDiscountCode(discountCodeDraft);
+                    if (res.valid) setDiscountDialogOpen(false);
+                  }}
+                  disabled={!discountCodeDraft.trim() || discountLoading || loading}
+                  fullWidth
+                  startIcon={
+                    discountLoading ? <CircularProgress size={18} /> : undefined
+                  }
+                >
+                  {t('orders.discountCode.apply', 'Apply')}
+                </Button>
+              )}
+              <Button
+                variant="text"
+                onClick={() => setDiscountDialogOpen(false)}
+                disabled={discountLoading}
+              >
+                {t('common.close', 'Close')}
+              </Button>
+            </Stack>
+          </Stack>
+        </DialogContent>
       </Dialog>
 
       <AddressDialog

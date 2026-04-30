@@ -2280,7 +2280,9 @@
     "discountCode": {
       "label": "Code de réduction",
       "placeholder": "Saisir le code",
+      "help": "Saisissez un code de réduction pour l’appliquer à cette commande.",
       "apply": "Appliquer",
+      "applyCta": "Vous avez un code de réduction ? Appliquez-le",
       "applied": "Appliqué : {{code}} ({{pct}}% de réduction)",
       "discount": "Réduction",
       "singleOrderOnly": "Les codes de réduction ne peuvent être appliqués que si votre panier contient des articles d’une seule entreprise."
