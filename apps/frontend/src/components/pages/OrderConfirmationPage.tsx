@@ -183,7 +183,8 @@ const OrderConfirmationPage: React.FC = () => {
           spacing={1}
           justifyContent="center"
           flexWrap="wrap"
-          sx={{ mt: 2, my: 2 }}
+          useFlexGap
+          sx={{ mt: 2, my: 2, rowGap: 1, columnGap: 1 }}
         >
           {hasPayAtDelivery ? (
             <Chip
