@@ -67,6 +67,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const { trackSiteEvent } = useTrackSiteEvent();
 
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const trackedOpenRef = useRef(false);
@@ -76,6 +78,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     () => isValidEmailFormat(emailNormalized),
     [emailNormalized]
   );
+  const firstNameTrimmed = useMemo(() => firstName.trim(), [firstName]);
+  const lastNameTrimmed = useMemo(() => lastName.trim(), [lastName]);
 
   const returnToPathWithAnon = useMemo(
     () => `/items/${inventoryItemId}/place_order?anon=1`,
@@ -125,6 +129,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
 
   const handleContinue = useCallback(async () => {
     if (!isEmailValid || submitting) return;
+    if (!firstNameTrimmed || !lastNameTrimmed) return;
     setSubmitting(true);
     setError(null);
     void trackSiteEvent({
@@ -145,8 +150,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       }
 
       await apiClient.post('/auth/signup/start', {
-        first_name: '',
-        last_name: '',
+        first_name: firstNameTrimmed,
+        last_name: lastNameTrimmed,
         email: emailNormalized,
         phone_number: null,
         personas: ['client'],
@@ -170,8 +175,10 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   }, [
     apiClient,
     emailNormalized,
+    firstNameTrimmed,
     inventoryItemId,
     isEmailValid,
+    lastNameTrimmed,
     redirectToOtp,
     submitting,
     t,
@@ -181,6 +188,9 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const handleClose = useCallback(() => {
     if (submitting) return;
     setError(null);
+    setFirstName('');
+    setLastName('');
+    setEmail('');
     onClose();
   }, [onClose, submitting]);
 
@@ -213,7 +223,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           <Typography variant="body2" color="text.secondary">
             {t(
               'public.items.checkoutDialog.subtitle',
-              'Enter your email to continue. We’ll use it for your receipt, order updates, and to create your account.'
+              'Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.'
             )}
           </Typography>
 
@@ -296,6 +306,27 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             </Box>
           </Box>
 
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              fullWidth
+              label={t('public.items.checkoutDialog.firstNameLabel', 'First name')}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              autoComplete="given-name"
+              disabled={submitting}
+              error={firstName.length > 0 && !firstNameTrimmed}
+            />
+            <TextField
+              fullWidth
+              label={t('public.items.checkoutDialog.lastNameLabel', 'Last name')}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              autoComplete="family-name"
+              disabled={submitting}
+              error={lastName.length > 0 && !lastNameTrimmed}
+            />
+          </Stack>
+
           <TextField
             fullWidth
             label={t('public.items.checkoutDialog.emailLabel', 'Email address')}
@@ -323,7 +354,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         <Button
           variant="contained"
           onClick={handleContinue}
-          disabled={!isEmailValid || submitting}
+          disabled={!isEmailValid || !firstNameTrimmed || !lastNameTrimmed || submitting}
           sx={{ borderRadius: 0 }}
         >
           {submitting
