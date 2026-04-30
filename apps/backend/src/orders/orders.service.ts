@@ -5911,6 +5911,77 @@ export class OrdersService {
     }
 
     if (paymentTiming === 'pay_at_delivery') {
+      // Pay-at-delivery orders are not finalized at placement time, but we still want the
+      // "order placed" notifications to go out immediately.
+      try {
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
+        if (notificationsEnabled) {
+          const orderWithDetails = await this.getOrderByNumber(order.order_number);
+          if (
+            orderWithDetails?.business_location?.business?.name &&
+            orderWithDetails?.business_location?.business?.user?.email &&
+            orderWithDetails?.delivery_address
+          ) {
+            const notificationData: NotificationData = {
+              orderId: orderWithDetails.id,
+              orderNumber: orderWithDetails.order_number,
+              clientName: `${orderWithDetails.client?.user?.first_name || ''} ${
+                orderWithDetails.client?.user?.last_name || ''
+              }`.trim(),
+              clientEmail: orderWithDetails.client?.user?.email,
+              clientPreferredLanguage: (
+                orderWithDetails.client?.user as { preferred_language?: string }
+              )?.preferred_language,
+              businessName: orderWithDetails.business_location.business.name,
+              businessLocationName: orderWithDetails.business_location?.name || undefined,
+              businessEmail: orderWithDetails.business_location.business.user.email,
+              businessPreferredLanguage: (
+                orderWithDetails.business_location.business.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              businessVerified:
+                orderWithDetails.business_location.business.is_verified || false,
+              agentPreferredLanguage: (
+                orderWithDetails.assigned_agent?.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              orderStatus: 'pending',
+              orderItems:
+                orderWithDetails.order_items?.map((item: any) => ({
+                  name: item.item_name || 'Unknown Item',
+                  quantity: item.quantity || 0,
+                  unitPrice: item.unit_price || 0,
+                  totalPrice: item.total_price || 0,
+                })) || [],
+              subtotal: orderWithDetails.subtotal || 0,
+              deliveryFee:
+                (orderWithDetails.base_delivery_fee || 0) +
+                (orderWithDetails.per_km_delivery_fee || 0),
+              fastDeliveryFee: orderWithDetails.per_km_delivery_fee || 0,
+              taxAmount: orderWithDetails.tax_amount || 0,
+              totalAmount: orderWithDetails.total_amount || 0,
+              currency: orderWithDetails.currency || 'USD',
+              deliveryAddress: this.formatAddress(orderWithDetails.delivery_address),
+              estimatedDeliveryTime:
+                orderWithDetails.estimated_delivery_time || undefined,
+              specialInstructions: orderWithDetails.special_instructions || undefined,
+            };
+
+            await this.notificationsService.sendOrderCreatedNotifications(
+              notificationData
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to send pay-at-delivery order creation notifications: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       return {
         ...order,
         total_amount: total_amount,
