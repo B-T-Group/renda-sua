@@ -1,19 +1,26 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded';
+import EmailOutlined from '@mui/icons-material/EmailOutlined';
+import LockOutlined from '@mui/icons-material/LockOutlined';
+import PersonOutlined from '@mui/icons-material/PersonOutlined';
+import ShoppingBagOutlined from '@mui/icons-material/ShoppingBagOutlined';
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
+  IconButton,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -204,6 +211,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [secondaryCtaLabel, t]
   );
 
+  const canSubmit = isEmailValid && !!firstNameTrimmed && !!lastNameTrimmed && !submitting;
+
   return (
     <Dialog
       open={open}
@@ -211,45 +220,78 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       fullWidth
       maxWidth="xs"
       fullScreen={fullScreen}
-      slotProps={{ paper: { sx: { borderRadius: 0 } } }}
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: fullScreen ? 0 : 3,
+            overflow: 'hidden',
+          },
+        },
+      }}
     >
-      <DialogTitle sx={{ pb: 1.25 }}>
-        {t('public.items.checkoutDialog.title', 'Continue to checkout')}
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
-          {error && <Alert severity="error">{error}</Alert>}
+      {/* Branded header */}
+      <Box
+        sx={{
+          background: (th) =>
+            `linear-gradient(135deg, ${th.palette.primary.dark} 0%, ${th.palette.primary.main} 100%)`,
+          px: 3,
+          pt: 3,
+          pb: 2.5,
+          position: 'relative',
+        }}
+      >
+        <IconButton
+          onClick={handleClose}
+          disabled={submitting}
+          size="small"
+          sx={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            color: 'primary.contrastText',
+            opacity: 0.7,
+            '&:hover': { opacity: 1 },
+          }}
+        >
+          <CloseRounded fontSize="small" />
+        </IconButton>
 
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'public.items.checkoutDialog.subtitle',
-              'Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.'
-            )}
-          </Typography>
-
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
           <Box
             sx={{
-              border: '1px solid',
-              borderColor: 'divider',
+              width: 36,
+              height: 36,
               borderRadius: 2,
-              p: 1.25,
-              bgcolor: 'background.paper',
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
-              {t(
-                'public.items.checkoutDialog.trustTitle',
-                'No password needed'
-              )}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {t(
-                'public.items.checkoutDialog.trustBody',
-                'We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.'
-              )}
-            </Typography>
+            <ShoppingBagOutlined sx={{ color: 'primary.contrastText', fontSize: 20 }} />
           </Box>
+          <Typography variant="h6" fontWeight={700} color="primary.contrastText" lineHeight={1.2}>
+            {t('public.items.checkoutDialog.title', 'Continue to checkout')}
+          </Typography>
+        </Stack>
 
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)', maxWidth: 340 }}>
+          {t(
+            'public.items.checkoutDialog.subtitle',
+            'Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.'
+          )}
+        </Typography>
+      </Box>
+
+      <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
+        <Stack spacing={2}>
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          {/* Item card */}
           <Box
             sx={{
               display: 'flex',
@@ -257,15 +299,16 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               alignItems: 'center',
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: 2,
-              p: 1.25,
+              borderRadius: 2.5,
+              p: 1.5,
+              bgcolor: 'background.default',
             }}
           >
             <Box
               sx={{
-                width: 56,
-                height: 56,
-                borderRadius: 1.5,
+                width: 60,
+                height: 60,
+                borderRadius: 2,
                 overflow: 'hidden',
                 bgcolor: 'action.hover',
                 flexShrink: 0,
@@ -281,7 +324,9 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
                   alt={item.title}
                   sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
-              ) : null}
+              ) : (
+                <ShoppingBagOutlined sx={{ color: 'text.disabled', fontSize: 28 }} />
+              )}
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography variant="subtitle2" fontWeight={700} noWrap>
@@ -291,21 +336,22 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
                 direction="row"
                 spacing={1}
                 alignItems="center"
-                sx={{ mt: 0.25 }}
+                sx={{ mt: 0.5 }}
                 divider={<Divider orientation="vertical" flexItem />}
               >
-                <Typography variant="body2" fontWeight={700}>
+                <Typography variant="body2" fontWeight={700} color="primary.main">
                   {item.priceText}
                 </Typography>
                 {item.quantity != null && (
                   <Typography variant="body2" color="text.secondary">
-                    {t('orders.quantity', 'Quantity')}: {item.quantity}
+                    {t('orders.quantity', 'Qty')}: {item.quantity}
                   </Typography>
                 )}
               </Stack>
             </Box>
           </Box>
 
+          {/* Name fields */}
           <Stack direction="row" spacing={1.5}>
             <TextField
               fullWidth
@@ -315,6 +361,19 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               autoComplete="given-name"
               disabled={submitting}
               error={firstName.length > 0 && !firstNameTrimmed}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonOutlined
+                        fontSize="small"
+                        sx={{ color: firstNameTrimmed ? 'primary.main' : 'text.disabled' }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             />
             <TextField
               fullWidth
@@ -324,9 +383,23 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               autoComplete="family-name"
               disabled={submitting}
               error={lastName.length > 0 && !lastNameTrimmed}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonOutlined
+                        fontSize="small"
+                        sx={{ color: lastNameTrimmed ? 'primary.main' : 'text.disabled' }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             />
           </Stack>
 
+          {/* Email field */}
           <TextField
             fullWidth
             label={t('public.items.checkoutDialog.emailLabel', 'Email address')}
@@ -339,32 +412,99 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             helperText={
               email.length > 0 && !isEmailValid
                 ? t('signupPage.emailInvalid', 'Please enter a valid email.')
-                : t(
-                    'public.items.checkoutDialog.noPasswordHelper',
-                    'No password needed, we will send you a one time code.'
-                  )
+                : undefined
             }
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailOutlined
+                      fontSize="small"
+                      sx={{ color: isEmailValid ? 'primary.main' : 'text.disabled' }}
+                    />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           />
+
+          {/* Trust badge */}
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="flex-start"
+            sx={{
+              borderRadius: 2,
+              p: 1.5,
+              bgcolor: (th) =>
+                th.palette.mode === 'dark'
+                  ? 'rgba(255,255,255,0.04)'
+                  : 'rgba(0,0,0,0.03)',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <LockOutlined sx={{ fontSize: 16, color: 'success.main', mt: 0.25, flexShrink: 0 }} />
+            <Box>
+              <Typography variant="caption" fontWeight={700} display="block" color="text.primary">
+                {t('public.items.checkoutDialog.trustTitle', 'No password needed')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t(
+                  'public.items.checkoutDialog.trustBody',
+                  'We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.'
+                )}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {/* Primary CTA */}
+          <Button
+            fullWidth
+            variant="contained"
+            size="large"
+            onClick={handleContinue}
+            disabled={!canSubmit}
+            endIcon={
+              submitting ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <ArrowForwardRounded />
+              )
+            }
+            sx={{
+              borderRadius: 2,
+              py: 1.5,
+              fontWeight: 700,
+              fontSize: '0.9375rem',
+              textTransform: 'none',
+              boxShadow: canSubmit ? 4 : 0,
+              transition: 'box-shadow 0.2s',
+            }}
+          >
+            {submitting
+              ? t('common.loading', 'Loading...')
+              : resolvedPrimaryCta}
+          </Button>
+
+          <Button
+            fullWidth
+            onClick={handleClose}
+            disabled={submitting}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              color: 'text.secondary',
+              mb: 0.5,
+            }}
+          >
+            {resolvedSecondaryCta}
+          </Button>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} disabled={submitting} sx={{ borderRadius: 0 }}>
-          {resolvedSecondaryCta}
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleContinue}
-          disabled={!isEmailValid || !firstNameTrimmed || !lastNameTrimmed || submitting}
-          sx={{ borderRadius: 0 }}
-        >
-          {submitting
-            ? t('common.loading', 'Loading...')
-            : resolvedPrimaryCta}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 };
 
 export default AnonymousBuyNowDialog;
-
