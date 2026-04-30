@@ -88,6 +88,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const availableActions = getAvailableActions();
   const showPin =
     !hideDeliveryPin &&
+    order.payment_timing !== 'pay_at_delivery' &&
+    order.payment_method !== 'pay_on_delivery' &&
     [
       'pending',
       'confirmed',

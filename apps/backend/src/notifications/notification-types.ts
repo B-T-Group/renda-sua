@@ -81,3 +81,18 @@ export interface ClientRentalRequestRejectedEmailPayload {
   unavailableReasonCode: string;
   businessResponseNote?: string | null;
 }
+
+export interface FirstOrderCompletedEmailPayload {
+  to: string;
+  preferredLanguage?: string | null;
+  clientName: string;
+  discountCode: string;
+  orderUrl: string;
+}
+
+export interface ReferralRewardEmailPayload {
+  to: string;
+  preferredLanguage?: string | null;
+  clientName: string;
+  discountCode: string;
+}

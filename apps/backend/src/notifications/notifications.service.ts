@@ -17,7 +17,9 @@ import type {
   BusinessRentalBookingRequestEmailPayload,
   ClientRentalRequestAcceptedEmailPayload,
   ClientRentalRequestRejectedEmailPayload,
+  FirstOrderCompletedEmailPayload,
   NotificationData,
+  ReferralRewardEmailPayload,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
@@ -28,7 +30,9 @@ export type {
   BusinessRentalBookingRequestEmailPayload,
   ClientRentalRequestAcceptedEmailPayload,
   ClientRentalRequestRejectedEmailPayload,
+  FirstOrderCompletedEmailPayload,
   NotificationData,
+  ReferralRewardEmailPayload,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
@@ -196,6 +200,47 @@ export class NotificationsService {
       );
       throw error;
     }
+  }
+
+  async sendFirstOrderCompletedEmail(
+    payload: FirstOrderCompletedEmailPayload
+  ): Promise<void> {
+    const locale = normalizeLanguage(payload.preferredLanguage);
+    const name =
+      payload.clientName?.trim() ||
+      (locale === 'fr' ? 'votre compte' : 'there');
+
+    await this.sendEmail({
+      to: payload.to,
+      templateKey: this.mapKeyForLanguage(
+        'client_first_order_completed',
+        locale
+      ),
+      variables: {
+        recipientName: name,
+        discountCode: payload.discountCode,
+        orderUrl: payload.orderUrl,
+        referralDiscountPct: 5,
+        ownRewardPct: 5,
+      },
+    });
+  }
+
+  async sendReferralRewardEmail(payload: ReferralRewardEmailPayload): Promise<void> {
+    const locale = normalizeLanguage(payload.preferredLanguage);
+    const name =
+      payload.clientName?.trim() ||
+      (locale === 'fr' ? 'votre compte' : 'there');
+
+    await this.sendEmail({
+      to: payload.to,
+      templateKey: this.mapKeyForLanguage('client_referral_reward', locale),
+      variables: {
+        recipientName: name,
+        discountCode: payload.discountCode,
+        ownRewardPct: 5,
+      },
+    });
   }
 
   async sendRentalPeriodEndedEmails(

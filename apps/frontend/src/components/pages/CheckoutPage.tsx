@@ -31,6 +31,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckout } from '../../hooks/useCheckout';
+import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
@@ -80,6 +81,14 @@ interface OrderSummaryProps {
   fastDeliveryFee: number;
   requiresFastDelivery: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
+  discountCodeDraft: string;
+  onDiscountCodeDraftChange: (value: string) => void;
+  onApplyDiscountCode: () => void;
+  onClearDiscountCode: () => void;
+  appliedDiscountCode: string;
+  discountPercentage: number;
+  discountLoading: boolean;
+  discountError: string | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -88,6 +97,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   fastDeliveryFee,
   requiresFastDelivery,
   formatCurrency,
+  discountCodeDraft,
+  onDiscountCodeDraftChange,
+  onApplyDiscountCode,
+  onClearDiscountCode,
+  appliedDiscountCode,
+  discountPercentage,
+  discountLoading,
+  discountError,
 }) => {
   const { t } = useTranslation();
   const { getCartByBusiness } = useCart();
@@ -127,6 +144,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     (sum, business) => sum + business.orderTotal,
     0
   );
+  const canApplyDiscountCode = cartByBusiness.size === 1;
+  const discountAmount =
+    canApplyDiscountCode && appliedDiscountCode && discountPercentage > 0
+      ? Number(((grandTotal * discountPercentage) / 100).toFixed(2))
+      : 0;
+  const grandTotalAfterDiscount = Math.max(0, grandTotal - discountAmount);
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -287,8 +310,72 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {t('checkout.grandTotal', 'Grand Total')}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(grandTotal, currency)}
+              {formatCurrency(grandTotalAfterDiscount, currency)}
             </Typography>
+          </Box>
+          {discountAmount > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="body2" color="success.main">
+                {t('orders.discountCode.discount', 'Discount')}
+              </Typography>
+              <Typography variant="body2" color="success.main" fontWeight="medium">
+                −{formatCurrency(discountAmount, currency)}
+              </Typography>
+            </Box>
+          )}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              {t('orders.discountCode.label', 'Discount code')}
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                value={discountCodeDraft}
+                onChange={(e) => onDiscountCodeDraftChange(e.target.value)}
+                disabled={discountLoading || !canApplyDiscountCode}
+                placeholder={t('orders.discountCode.placeholder', 'Enter code')}
+                error={!!discountError}
+                helperText={
+                  !canApplyDiscountCode
+                    ? t(
+                        'orders.discountCode.singleOrderOnly',
+                        'Discount codes can only be applied when your cart contains items from a single business.'
+                      )
+                    : discountError
+                      ? discountError
+                      : appliedDiscountCode
+                        ? t(
+                            'orders.discountCode.applied',
+                            'Applied: {{code}} ({{pct}}% off)',
+                            { code: appliedDiscountCode, pct: discountPercentage }
+                          )
+                        : ' '
+                }
+              />
+              {appliedDiscountCode ? (
+                <Button
+                  variant="outlined"
+                  onClick={onClearDiscountCode}
+                  disabled={discountLoading || !canApplyDiscountCode}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('common.clear', 'Clear')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={onApplyDiscountCode}
+                  disabled={
+                    !discountCodeDraft.trim() || discountLoading || !canApplyDiscountCode
+                  }
+                  sx={{ whiteSpace: 'nowrap' }}
+                  startIcon={discountLoading ? <CircularProgress size={16} /> : undefined}
+                >
+                  {t('orders.discountCode.apply', 'Apply')}
+                </Button>
+              )}
+            </Stack>
           </Box>
           <Alert severity="info" sx={{ mt: 2 }}>
             {t(
@@ -297,6 +384,77 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               { count: cartByBusiness.size }
             )}
           </Alert>
+        </>
+      )}
+
+      {cartByBusiness.size === 1 && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          {discountAmount > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" color="success.main">
+                {t('orders.discountCode.discount', 'Discount')}
+              </Typography>
+              <Typography variant="body2" color="success.main" fontWeight="medium">
+                −{formatCurrency(discountAmount, currency)}
+              </Typography>
+            </Box>
+          )}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" fontWeight="bold">
+              {t('checkout.total', 'Total')}
+            </Typography>
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              {formatCurrency(grandTotalAfterDiscount, currency)}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              {t('orders.discountCode.label', 'Discount code')}
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                value={discountCodeDraft}
+                onChange={(e) => onDiscountCodeDraftChange(e.target.value)}
+                disabled={discountLoading}
+                placeholder={t('orders.discountCode.placeholder', 'Enter code')}
+                error={!!discountError}
+                helperText={
+                  discountError
+                    ? discountError
+                    : appliedDiscountCode
+                      ? t(
+                          'orders.discountCode.applied',
+                          'Applied: {{code}} ({{pct}}% off)',
+                          { code: appliedDiscountCode, pct: discountPercentage }
+                        )
+                      : ' '
+                }
+              />
+              {appliedDiscountCode ? (
+                <Button
+                  variant="outlined"
+                  onClick={onClearDiscountCode}
+                  disabled={discountLoading}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('common.clear', 'Clear')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={onApplyDiscountCode}
+                  disabled={!discountCodeDraft.trim() || discountLoading}
+                  sx={{ whiteSpace: 'nowrap' }}
+                  startIcon={discountLoading ? <CircularProgress size={16} /> : undefined}
+                >
+                  {t('orders.discountCode.apply', 'Apply')}
+                </Button>
+              )}
+            </Stack>
+          </Box>
         </>
       )}
     </Paper>
@@ -319,6 +477,15 @@ const CheckoutPage: React.FC = () => {
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
   const [isCheckoutInProgress, setIsCheckoutInProgress] = useState(false);
+  const {
+    appliedCode: appliedDiscountCode,
+    discountPercentage,
+    loading: discountLoading,
+    error: discountError,
+    applyCode: applyDiscountCode,
+    clear: clearDiscountCode,
+  } = useDiscountCode();
+  const [discountCodeDraft, setDiscountCodeDraft] = useState('');
 
   const handleDeliveryWindowChange = useCallback(
     (data: DeliveryWindowData | null) => {
@@ -524,12 +691,16 @@ const CheckoutPage: React.FC = () => {
       const fastDeliveryFee = requiresFastDelivery
         ? fastDeliveryConfig?.fee || 0
         : 0;
+      const uniqueBusinessCount = new Set(cartItems.map((c) => c.businessId)).size;
+      const discountCodeToApply =
+        uniqueBusinessCount === 1 ? appliedDiscountCode || undefined : undefined;
 
       const orders = await createOrdersFromCart(
         cartItems,
         selectedAddressId,
         phoneNumber,
         undefined, // specialInstructions removed
+        discountCodeToApply,
         requiresFastDelivery,
         fastDeliveryFee,
         'pay_now',
@@ -896,6 +1067,17 @@ const CheckoutPage: React.FC = () => {
             fastDeliveryFee={fastDeliveryFee}
             requiresFastDelivery={requiresFastDelivery}
             formatCurrency={formatCurrency}
+            discountCodeDraft={discountCodeDraft}
+            onDiscountCodeDraftChange={setDiscountCodeDraft}
+            onApplyDiscountCode={() => void applyDiscountCode(discountCodeDraft)}
+            onClearDiscountCode={() => {
+              clearDiscountCode();
+              setDiscountCodeDraft('');
+            }}
+            appliedDiscountCode={appliedDiscountCode}
+            discountPercentage={discountPercentage}
+            discountLoading={discountLoading}
+            discountError={discountError}
           />
 
           {/* Place Order Button */}

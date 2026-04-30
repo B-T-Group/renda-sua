@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Félicitations pour votre première commande - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 18px;
+        letter-spacing: 2px;
+        padding: 14px 16px;
+        background: #f1f3f5;
+        border: 1px dashed #adb5bd;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .button {
+        display: inline-block;
+        background: #007bff;
+        color: white !important;
+        padding: 12px 20px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: bold;
+      }
+      .small {
+        color: #666;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Félicitations&nbsp;!</h1>
+      <p>Votre première commande est terminée</p>
+    </div>
+    <div class="content">
+      <h2>Bonjour {{{recipientName}}},</h2>
+
+      <p>
+        Merci pour votre premier achat sur Rendasua. Nous sommes ravis de vous
+        compter parmi nous.
+      </p>
+
+      <div class="card">
+        <h3>Partagez ce code promo</h3>
+        <p>
+          Offrez ce code à un proche (ami ou membre de la famille). Il/elle
+          bénéficiera de <strong>{{{referralDiscountPct}}}%</strong> de réduction
+          sur sa prochaine commande.
+        </p>
+        <div class="code">{{{discountCode}}}</div>
+        <p class="small">
+          Ce code ne peut être utilisé qu’une seule fois. Après utilisation par
+          votre proche, vous recevrez <strong>{{{ownRewardPct}}}%</strong> de
+          réduction sur votre prochaine commande.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Un petit service&nbsp;?</h3>
+        <p>
+          Prenez un instant pour laisser un avis ou une note sur l’article
+          commandé. Cela aide les autres clients et soutient les entreprises
+          locales.
+        </p>
+        <p>
+          <a class="button" href="{{{orderUrl}}}">Noter votre commande</a>
+        </p>
+        <p class="small">Si le bouton ne fonctionne pas, ouvrez&nbsp;: {{{orderUrl}}}</p>
+      </div>
+
+      <p class="small">— L’équipe Rendasua</p>
+    </div>
+  </body>
+</html>
+

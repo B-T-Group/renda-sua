@@ -10,6 +10,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { DeliveryPinService } from './delivery-pin.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
@@ -27,6 +28,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     GoogleModule,
     forwardRef(() => MobilePaymentsModule),
     NotificationsModule,
+    LoyaltyModule,
     AdminModule,
     forwardRef(() => AgentsModule),
     DeliveryModule,

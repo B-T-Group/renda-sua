@@ -767,7 +767,9 @@ const ManageOrderPage: React.FC = () => {
               {/* eslint-enable @typescript-eslint/no-explicit-any */}
 
               {activePersona === 'client' &&
-                order.current_status === 'out_for_delivery' && (
+                order.current_status === 'out_for_delivery' &&
+                order.payment_timing !== 'pay_at_delivery' &&
+                order.payment_method !== 'pay_on_delivery' && (
                   <Stack spacing={2} sx={{ mb: 3 }}>
                     <DeliveryTrackingMap
                       orderId={order.id}

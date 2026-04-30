@@ -22,6 +22,7 @@ import { ConfigurationsService } from '../admin/configurations.service';
 import { Public } from '../auth/public.decorator';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
@@ -45,8 +46,41 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
     private readonly deliveryConfigService: DeliveryConfigService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly configurationsService: ConfigurationsService,
+    private readonly loyaltyService: LoyaltyService
   ) {}
+
+  @Get('discount-codes/validate')
+  @ApiOperation({ summary: 'Validate a discount code for checkout' })
+  @ApiQuery({ name: 'code', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Discount code validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        valid: { type: 'boolean' },
+        discountPercentage: { type: 'number' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async validateDiscountCode(@Query('code') code: string) {
+    const result = await this.loyaltyService.validateDiscountCode(code || '');
+    if (!result.valid || !result.percentage) {
+      return {
+        valid: false,
+        discountPercentage: 0,
+        message: 'Invalid or already used discount code',
+      };
+    }
+
+    return {
+      valid: true,
+      discountPercentage: result.percentage,
+      message: 'Discount code is valid',
+    };
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create order with multiple items' })

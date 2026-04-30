@@ -20,6 +20,7 @@ import {
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import {
   MobilePaymentIntegrationProvider,
@@ -325,7 +326,8 @@ export class OrdersService {
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryPinService: DeliveryPinService,
-    private readonly orderRefundsService: OrderRefundsService
+    private readonly orderRefundsService: OrderRefundsService,
+    private readonly loyaltyService: LoyaltyService
   ) {}
 
   private requireActivePersona(
@@ -1882,6 +1884,13 @@ export class OrdersService {
         `Failed to send order.completed message: ${error.message}`
       );
     }
+    try {
+      await this.handleOrderCompletionRewards(order.id);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle loyalty rewards after completion: ${error.message}`
+      );
+    }
 
     this.deliveryPinService.clearPinForOrder(order.id);
 
@@ -1907,6 +1916,167 @@ export class OrdersService {
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       at,
+    });
+  }
+
+  private async handleOrderCompletionRewards(orderId: string): Promise<void> {
+    try {
+      const order = await this.getOrderForLoyalty(orderId);
+      if (!order || order.current_status !== 'complete') return;
+
+      await this.maybeCreateFirstOrderCodeAndEmail(order);
+      await this.maybeRewardDiscountCodeOwner(order);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle loyalty rewards for order ${orderId}: ${error.message}`
+      );
+    }
+  }
+
+  private async getOrderForLoyalty(orderId: string): Promise<{
+    id: string;
+    client_id: string;
+    discount_code_id: string | null;
+    current_status: string;
+    client: {
+      user: {
+        email: string;
+        preferred_language: string | null;
+        first_name: string | null;
+        last_name: string | null;
+      } | null;
+    } | null;
+  } | null> {
+    const query = `
+      query GetOrderForLoyalty($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          client_id
+          discount_code_id
+          current_status
+          client {
+            user {
+              email
+              preferred_language
+              first_name
+              last_name
+            }
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: any | null;
+    }>(query, { orderId });
+    return res.orders_by_pk ?? null;
+  }
+
+  private async countCompletedOrdersForClient(clientId: string): Promise<number> {
+    const query = `
+      query CountCompletedOrdersForClient($clientId: uuid!) {
+        orders_aggregate(
+          where: { client_id: { _eq: $clientId }, current_status: { _eq: "complete" } }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_aggregate: { aggregate: { count: number } | null } | null;
+    }>(query, { clientId });
+    return res.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async hasDiscountCodeForClientAndOrder(
+    clientId: string,
+    orderId: string
+  ): Promise<boolean> {
+    const query = `
+      query HasDiscountCodeForClientAndOrder($clientId: uuid!, $orderId: uuid!) {
+        order_discount_codes_aggregate(
+          where: {
+            created_for_client_id: { _eq: $clientId },
+            created_for_order_id: { _eq: $orderId },
+            discount_type: { _eq: "first_order_discount_code" }
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      order_discount_codes_aggregate: { aggregate: { count: number } | null } | null;
+    }>(query, { clientId, orderId });
+    return (res.order_discount_codes_aggregate?.aggregate?.count ?? 0) > 0;
+  }
+
+  private async maybeCreateFirstOrderCodeAndEmail(order: {
+    id: string;
+    client_id: string;
+    client: {
+      user: {
+        email: string;
+        preferred_language: string | null;
+        first_name: string | null;
+        last_name: string | null;
+      } | null;
+    } | null;
+  }): Promise<void> {
+    const completedCount = await this.countCompletedOrdersForClient(order.client_id);
+    if (completedCount !== 1) return;
+
+    const alreadyCreated = await this.hasDiscountCodeForClientAndOrder(
+      order.client_id,
+      order.id
+    );
+    if (alreadyCreated) return;
+
+    const code = await this.loyaltyService.generateDiscountCode({
+      clientId: order.client_id,
+      orderId: order.id,
+    });
+
+    const publicWebAppUrl =
+      this.configService.get('publicWebAppUrl') || 'https://rendasua.com';
+    const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${order.id}`;
+    const user = order.client?.user;
+    if (!user?.email) return;
+
+    await this.notificationsService.sendFirstOrderCompletedEmail({
+      to: user.email,
+      preferredLanguage: user.preferred_language,
+      clientName: [user.first_name, user.last_name].filter(Boolean).join(' ').trim(),
+      discountCode: code.code,
+      orderUrl,
+    });
+  }
+
+  private async maybeRewardDiscountCodeOwner(order: {
+    id: string;
+    client_id: string;
+    discount_code_id: string | null;
+  }): Promise<void> {
+    if (!order.discount_code_id) return;
+
+    const owner = await this.loyaltyService.getCodeOwner(order.discount_code_id);
+    if (!owner || owner.clientId === order.client_id) return;
+
+    const alreadyCreated = await this.hasDiscountCodeForClientAndOrder(
+      owner.clientId,
+      order.id
+    );
+    if (alreadyCreated) return;
+
+    const rewardCode = await this.loyaltyService.generateDiscountCode({
+      clientId: owner.clientId,
+      orderId: order.id,
+    });
+
+    await this.notificationsService.sendReferralRewardEmail({
+      to: owner.email,
+      preferredLanguage: owner.preferredLanguage,
+      clientName: [owner.firstName, owner.lastName].filter(Boolean).join(' ').trim(),
+      discountCode: rewardCode.code,
     });
   }
 
@@ -2272,6 +2442,13 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to send order.completed for cash exception: ${error.message}`
+      );
+    }
+    try {
+      await this.handleOrderCompletionRewards(orderId);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle loyalty rewards for cash exception completion: ${error.message}`
       );
     }
 
@@ -4521,6 +4698,13 @@ export class OrdersService {
         `Failed to send order.completed after PoD completion: ${error.message}`
       );
     }
+    try {
+      await this.handleOrderCompletionRewards(order.id);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle loyalty rewards after PoD completion: ${error.message}`
+      );
+    }
   }
 
   private async updateOrderPaymentStatusOnly(
@@ -5257,7 +5441,34 @@ export class OrdersService {
       return sum + unitPrice * orderData.items[idx].quantity;
     }, 0);
 
-    const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
+    let total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
+    let discountCodeId: string | null = null;
+    let discountAmount: number | null = null;
+
+    const rawDiscountCode =
+      typeof orderData.discount_code === 'string' ? orderData.discount_code : '';
+    if (rawDiscountCode.trim()) {
+      const validation = await this.loyaltyService.validateDiscountCode(
+        rawDiscountCode
+      );
+      if (!validation.valid || !validation.codeId || !validation.percentage) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Invalid or already used discount code',
+            error: 'DISCOUNT_CODE_INVALID',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      discountCodeId = validation.codeId;
+      discountAmount = Number(
+        ((total_amount * validation.percentage) / 100).toFixed(2)
+      );
+      total_amount = Math.max(0, total_amount - discountAmount);
+    }
+
     const phoneNumber = orderData.phone_number || user.phone_number || '';
     const requiredAmountForHold = total_amount;
     const availableBalance = Number(account.available_balance ?? 0);
@@ -5462,6 +5673,8 @@ export class OrdersService {
         $baseDeliveryFee: numeric!,
         $perKmDeliveryFee: numeric!,
         $totalAmount: numeric!,
+        $discountCodeId: uuid,
+        $discountAmount: numeric,
         $currentStatus: order_status!,
         $paymentMethod: String!,
         $paymentStatus: String!,
@@ -5495,6 +5708,8 @@ export class OrdersService {
           subtotal: $subTotal,
           tax_amount: $taxAmount,
           total_amount: $totalAmount,
+          discount_code_id: $discountCodeId,
+          discount_amount: $discountAmount,
           special_instructions: $specialInstructions,
           actual_delivery_time: $actualDeliveryTime,
           estimated_delivery_time: $estimatedDeliveryTime,
@@ -5522,6 +5737,8 @@ export class OrdersService {
           subtotal
           tax_amount
           total_amount
+          discount_code_id
+          discount_amount
           special_instructions
           actual_delivery_time
           created_at
@@ -5586,6 +5803,8 @@ export class OrdersService {
         baseDeliveryFee: deliveryFeeInfo.baseDeliveryFee,
         perKmDeliveryFee: deliveryFeeInfo.perKmDeliveryFee,
         totalAmount: total_amount,
+        discountCodeId: discountCodeId,
+        discountAmount: discountAmount,
         currentStatus: current_status,
         paymentMethod: payment_method,
         paymentStatus: payment_status,

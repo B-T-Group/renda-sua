@@ -2277,6 +2277,14 @@
     "phoneNumberDialCodeHint": "L’indicatif du pays est ajouté automatiquement.",
     "unitSingular": "unité",
     "unitsPlural": "unités",
+    "discountCode": {
+      "label": "Code de réduction",
+      "placeholder": "Saisir le code",
+      "apply": "Appliquer",
+      "applied": "Appliqué : {{code}} ({{pct}}% de réduction)",
+      "discount": "Réduction",
+      "singleOrderOnly": "Les codes de réduction ne peuvent être appliqués que si votre panier contient des articles d’une seule entreprise."
+    },
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {
       "confirmationTitle": "Paiement à la livraison",

@@ -63,6 +63,7 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
+import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
@@ -193,6 +194,14 @@ interface OrderSummaryProps {
   deliveryFeeFullBeforeDiscount?: number;
   requiresFastDelivery: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
+  discountCodeDraft: string;
+  onDiscountCodeDraftChange: (value: string) => void;
+  onApplyDiscountCode: () => void;
+  onClearDiscountCode: () => void;
+  appliedDiscountCode: string;
+  discountPercentage: number;
+  discountLoading: boolean;
+  discountError: string | null;
   onSubmit: () => void;
   loading: boolean;
   disabled: boolean;
@@ -213,6 +222,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFeeFullBeforeDiscount,
   requiresFastDelivery,
   formatCurrency,
+  discountCodeDraft,
+  onDiscountCodeDraftChange,
+  onApplyDiscountCode,
+  onClearDiscountCode,
+  appliedDiscountCode,
+  discountPercentage,
+  discountLoading,
+  discountError,
   onSubmit,
   loading,
   disabled,
@@ -235,6 +252,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   const computedDeliveryFee = deliveryFee || 0;
   // Total = subtotal + delivery fee (fast delivery already included in deliveryFee from API)
   const total = subtotal + computedDeliveryFee;
+  const discountAmount =
+    appliedDiscountCode && discountPercentage > 0
+      ? Number(((total * discountPercentage) / 100).toFixed(2))
+      : 0;
+  const totalAfterDiscount = Math.max(0, total - discountAmount);
 
   return (
     <Paper
@@ -440,6 +462,68 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Box>
             )}
 
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              {t('orders.discountCode.label', 'Discount code')}
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                value={discountCodeDraft}
+                onChange={(e) => onDiscountCodeDraftChange(e.target.value)}
+                disabled={loading || discountLoading}
+                placeholder={t(
+                  'orders.discountCode.placeholder',
+                  'Enter code'
+                )}
+                error={!!discountError}
+                helperText={
+                  discountError
+                    ? discountError
+                    : appliedDiscountCode
+                      ? t(
+                          'orders.discountCode.applied',
+                          'Applied: {{code}} ({{pct}}% off)',
+                          { code: appliedDiscountCode, pct: discountPercentage }
+                        )
+                      : ' '
+                }
+              />
+              {appliedDiscountCode ? (
+                <Button
+                  variant="outlined"
+                  onClick={onClearDiscountCode}
+                  disabled={loading || discountLoading}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('common.clear', 'Clear')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={onApplyDiscountCode}
+                  disabled={!discountCodeDraft.trim() || loading || discountLoading}
+                  sx={{ whiteSpace: 'nowrap' }}
+                  startIcon={discountLoading ? <CircularProgress size={16} /> : undefined}
+                >
+                  {t('orders.discountCode.apply', 'Apply')}
+                </Button>
+              )}
+            </Stack>
+          </Box>
+
+          {discountAmount > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, mt: 1 }}>
+              <Typography variant="body2" color="success.main">
+                {t('orders.discountCode.discount', 'Discount')}
+              </Typography>
+              <Typography variant="body2" color="success.main" fontWeight="medium">
+                −{formatCurrency(discountAmount, selectedItem.item.currency)}
+              </Typography>
+            </Box>
+          )}
+
           <Divider sx={{ my: 1.5 }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
@@ -447,7 +531,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {t('orders.total', 'Total')}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(total, selectedItem.item.currency)}
+              {formatCurrency(totalAfterDiscount, selectedItem.item.currency)}
             </Typography>
           </Box>
         </Box>
@@ -527,6 +611,15 @@ const PlaceOrderPage: React.FC = () => {
   // State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const {
+    appliedCode: appliedDiscountCode,
+    discountPercentage,
+    loading: discountLoading,
+    error: discountError,
+    applyCode: applyDiscountCode,
+    clear: clearDiscountCode,
+  } = useDiscountCode();
+  const [discountCodeDraft, setDiscountCodeDraft] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
@@ -799,6 +892,7 @@ const PlaceOrderPage: React.FC = () => {
         ],
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
+        discount_code: appliedDiscountCode || undefined,
         payment_timing: paymentTiming,
         requires_fast_delivery: requiresFastDelivery,
         delivery_window: deliveryWindow,
@@ -2811,6 +2905,17 @@ const PlaceOrderPage: React.FC = () => {
               }
               requiresFastDelivery={requiresFastDelivery}
               formatCurrency={formatCurrency}
+              discountCodeDraft={discountCodeDraft}
+              onDiscountCodeDraftChange={setDiscountCodeDraft}
+              onApplyDiscountCode={() => void applyDiscountCode(discountCodeDraft)}
+              onClearDiscountCode={() => {
+                clearDiscountCode();
+                setDiscountCodeDraft('');
+              }}
+              appliedDiscountCode={appliedDiscountCode}
+              discountPercentage={discountPercentage}
+              discountLoading={discountLoading}
+              discountError={discountError}
               onSubmit={handleSubmitWithPhoneGate}
               loading={loading}
               disabled={!canPlaceOrder}

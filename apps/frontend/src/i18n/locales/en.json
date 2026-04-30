@@ -2288,6 +2288,14 @@
     "phoneNumberDialCodeHint": "The country code is added automatically.",
     "unitSingular": "unit",
     "unitsPlural": "units",
+    "discountCode": {
+      "label": "Discount code",
+      "placeholder": "Enter code",
+      "apply": "Apply",
+      "applied": "Applied: {{code}} ({{pct}}% off)",
+      "discount": "Discount",
+      "singleOrderOnly": "Discount codes can only be applied when your cart contains items from a single business."
+    },
     "selectCountry": "Select a country.",
     "payAtDelivery": {
       "confirmationTitle": "Payment at delivery",
