@@ -58,9 +58,11 @@ export interface UserProfile {
   id: string;
   identifier: string;
   email: string;
+  email_verified?: boolean | null;
   first_name: string;
   last_name: string;
   phone_number?: string;
+  phone_number_verified?: boolean | null;
   profile_picture_url?: string;
   preferred_language?: string;
   /** IANA timezone (e.g. Africa/Douala) */

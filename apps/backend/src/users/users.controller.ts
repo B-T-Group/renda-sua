@@ -185,6 +185,24 @@ export class UsersController {
   ) {
     try {
       const currentUser = await this.hasuraUserService.getUser();
+      const incomingPhone =
+        body.phoneNumber !== undefined
+          ? this.normalizePhoneForUpdate(body.phoneNumber)
+          : this.normalizePhoneForUpdate(currentUser.phone_number);
+      const currentPhone = this.normalizePhoneForUpdate(currentUser.phone_number);
+      const phoneChanged =
+        body.phoneNumber !== undefined && incomingPhone !== currentPhone;
+      if (phoneChanged && currentUser.phone_number_verified === true) {
+        throw new HttpException(
+          {
+            success: false,
+            error:
+              'Phone number is verified and cannot be changed from profile settings.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       const existingTz = currentUser.timezone ?? DEFAULT_USER_TIMEZONE;
       let timezoneToSave = existingTz;
       if (body.timezone !== undefined) {
@@ -202,16 +220,18 @@ export class UsersController {
         timezoneToSave = trimmed;
       }
       const mutation = `
-        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String, $preferred_language: String, $timezone: String!) {
+        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String, $phone_number_verified: Boolean, $preferred_language: String, $timezone: String!) {
           update_users_by_pk(
             pk_columns: { id: $id }
-            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, preferred_language: $preferred_language, timezone: $timezone }
+            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, phone_number_verified: $phone_number_verified, preferred_language: $preferred_language, timezone: $timezone }
           ) {
             id
             email
             first_name
             last_name
             phone_number
+            phone_number_verified
+            email_verified
             user_type_id
             profile_picture_url
             preferred_language
@@ -225,7 +245,8 @@ export class UsersController {
         id: currentUser.id,
         first_name: body.firstName,
         last_name: body.lastName,
-        phone_number: body.phoneNumber ?? null,
+        phone_number: incomingPhone || null,
+        phone_number_verified: phoneChanged ? false : currentUser.phone_number_verified,
         preferred_language:
           body.preferredLanguage !== undefined
             ? body.preferredLanguage
@@ -271,6 +292,15 @@ export class UsersController {
       const currentUser = await this.hasuraUserService.getUser();
       if (this.normalizeEmailForUpdate(currentUser.email) === email) {
         return { success: true, user: currentUser };
+      }
+      if (currentUser.email_verified === true) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Email is verified and cannot be changed from profile settings.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
       }
       const taken = await this.isEmailTakenByAnotherUser(
         email,
@@ -855,6 +885,10 @@ export class UsersController {
     return String(raw || '')
       .trim()
       .toLowerCase();
+  }
+
+  private normalizePhoneForUpdate(raw?: string | null): string {
+    return String(raw || '').trim();
   }
 
   private assertValidEmailOrThrow(email: string): void {

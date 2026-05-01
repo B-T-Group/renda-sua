@@ -2,8 +2,10 @@ import {
   Cancel as CancelIcon,
   CameraAlt as CameraAltIcon,
   ChevronRight as ChevronRightIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
   Description as DescriptionIcon,
   Edit as EditIcon,
+  ErrorOutline as ErrorOutlineIcon,
   LocationOn as LocationOnIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
@@ -15,6 +17,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Container,
   Dialog,
@@ -53,6 +56,19 @@ import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+function getApiErrorMessage(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const response = (err as { response?: { data?: { error?: string; message?: string } } })
+    .response;
+  return response?.data?.error || response?.data?.message;
+}
+
+function normalizeEmail(raw: string | undefined): string {
+  return String(raw || '')
+    .trim()
+    .toLowerCase();
+}
 
 function listIanaTimezones(): string[] {
   try {
@@ -129,6 +145,7 @@ const Profile: React.FC = () => {
   const [profileForm, setProfileForm] = useState({
     first_name: '',
     last_name: '',
+    email: '',
     phone_number: '',
     timezone: 'Africa/Douala',
   });
@@ -173,6 +190,10 @@ const Profile: React.FC = () => {
   const [personaConfirmTarget, setPersonaConfirmTarget] =
     useState<UserType | null>(null);
   const [missingEmailOpen, setMissingEmailOpen] = useState(false);
+  const [verifyComingSoonTarget, setVerifyComingSoonTarget] = useState<
+    'email' | 'phone' | null
+  >(null);
+  const [profileEditError, setProfileEditError] = useState<string | null>(null);
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -183,6 +204,7 @@ const Profile: React.FC = () => {
       setProfileForm({
         first_name: profile.first_name || '',
         last_name: profile.last_name || '',
+        email: profile.email || '',
         phone_number: profile.phone_number || '',
         timezone: profile.timezone || 'Africa/Douala',
       });
@@ -200,6 +222,38 @@ const Profile: React.FC = () => {
 
   const handleProfileSave = async () => {
     if (!profile) return;
+    setProfileEditError(null);
+
+    const nextEmail = normalizeEmail(profileForm.email);
+    const currentEmail = normalizeEmail(profile.email);
+    const emailChanged = nextEmail !== currentEmail;
+
+    if (emailChanged) {
+      if (isEmailVerified) {
+        setProfileEditError(
+          t(
+            'profile.emailVerifiedLocked',
+            'Your email is verified and cannot be changed.'
+          )
+        );
+        return;
+      }
+      if (!apiClient) {
+        setProfileEditError(
+          t('profile.updateFailed', 'Could not update your profile. Please try again.')
+        );
+        return;
+      }
+      try {
+        await apiClient.post('/users/me/update-email', { email: nextEmail });
+      } catch (error: unknown) {
+        setProfileEditError(
+          getApiErrorMessage(error) ||
+            t('profile.emailUpdateFailed', 'Could not update your email. Please try again.')
+        );
+        return;
+      }
+    }
 
     const success = await updateProfile(
       profile.id,
@@ -351,6 +405,10 @@ const Profile: React.FC = () => {
     profile && resolveAddressEntity(profile, activePersona);
   const accountEntityType =
     profile && accountEntityTypeForProfile(profile, activePersona);
+  const isEmailVerified = profile?.email_verified === true;
+  const isPhoneVerified = profile?.phone_number_verified === true;
+  const hasEmailValue = Boolean(profile?.email?.trim());
+  const hasPhoneValue = Boolean(profile?.phone_number?.trim());
 
   return (
     <Container
@@ -383,6 +441,12 @@ const Profile: React.FC = () => {
         </Alert>
       )}
 
+      {profileEditError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setProfileEditError(null)}>
+          {profileEditError}
+        </Alert>
+      )}
+
       {profile && !profile.email?.trim() && (
         <Box sx={{ mb: 2 }}>
           <MissingEmailBanner
@@ -396,6 +460,29 @@ const Profile: React.FC = () => {
         onSkip={handleSkipMissingEmail}
         onSaved={() => void handleSavedMissingEmail()}
       />
+      <Dialog
+        open={verifyComingSoonTarget !== null}
+        onClose={() => setVerifyComingSoonTarget(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {t('profile.verifyComingSoonTitle', 'Feature coming soon')}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t(
+              'profile.verifyComingSoonBody',
+              'Verification for this contact method is coming soon.'
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVerifyComingSoonTarget(null)}>
+            {t('common.ok', 'OK')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Typography
         variant="h5"
@@ -493,7 +580,10 @@ const Profile: React.FC = () => {
                 <Button
                   size="small"
                   startIcon={editingProfile ? <CancelIcon /> : <EditIcon />}
-                  onClick={() => setEditingProfile(!editingProfile)}
+                  onClick={() => {
+                    setProfileEditError(null);
+                    setEditingProfile(!editingProfile);
+                  }}
                   color={editingProfile ? 'inherit' : 'primary'}
                   sx={{ minHeight: 36 }}
                 >
@@ -521,16 +611,66 @@ const Profile: React.FC = () => {
                     }
                     size="small"
                   />
+                  <TextField
+                    fullWidth
+                    label={t('profile.email')}
+                    value={profileForm.email}
+                    onChange={(e) =>
+                      setProfileForm((prev) => ({ ...prev, email: e.target.value }))
+                    }
+                    size="small"
+                    type="email"
+                    disabled={isEmailVerified}
+                    helperText={
+                      isEmailVerified
+                        ? t(
+                            'profile.verifiedValueLocked',
+                            'This verified value cannot be edited.'
+                          )
+                        : t(
+                            'profile.unverifiedEditableHint',
+                            'This value is not verified yet and can be edited.'
+                          )
+                    }
+                  />
+                  {!isEmailVerified && hasEmailValue && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setVerifyComingSoonTarget('email')}
+                      sx={{ alignSelf: 'flex-start' }}
+                    >
+                      {t('profile.verifyEmailAction', 'Verify email')}
+                    </Button>
+                  )}
                   <PhoneInput
                     value={profileForm.phone_number}
                     onChange={(value) =>
                       setProfileForm((prev) => ({ ...prev, phone_number: value || '' }))
                     }
                     label={t('profile.phoneNumber')}
-                    helperText={t('profile.phoneNumberHelper')}
+                    helperText={
+                      isPhoneVerified
+                        ? t(
+                            'profile.verifiedValueLocked',
+                            'This verified value cannot be edited.'
+                          )
+                        : t('profile.phoneNumberHelper')
+                    }
                     margin="normal"
                     useDevPhoneDropdown
+                    disabled={isPhoneVerified}
                   />
+                  {!isPhoneVerified && hasPhoneValue && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setVerifyComingSoonTarget('phone')}
+                      sx={{ alignSelf: 'flex-start', mt: -1 }}
+                    >
+                      {t('profile.verifyPhoneAction', 'Verify phone number')}
+                    </Button>
+                  )}
                   <Autocomplete
                     size="small"
                     options={timezoneOptions}
@@ -570,13 +710,71 @@ const Profile: React.FC = () => {
                     <Typography variant="caption" color="text.secondary" display="block">
                       {t('profile.email')}
                     </Typography>
-                    <Typography variant="body2">{profile?.email || '—'}</Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                      <Typography variant="body2">{profile?.email || '—'}</Typography>
+                      {hasEmailValue && (
+                        <Chip
+                          size="small"
+                          icon={
+                            isEmailVerified ? (
+                              <CheckCircleOutlineIcon fontSize="small" />
+                            ) : (
+                              <ErrorOutlineIcon fontSize="small" />
+                            )
+                          }
+                          color={isEmailVerified ? 'success' : 'warning'}
+                          label={
+                            isEmailVerified
+                              ? t('profile.verifiedLabel', 'Verified')
+                              : t('profile.unverifiedLabel', 'Unverified')
+                          }
+                        />
+                      )}
+                      {!isEmailVerified && hasEmailValue && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setVerifyComingSoonTarget('email')}
+                        >
+                          {t('profile.verifyEmailAction', 'Verify email')}
+                        </Button>
+                      )}
+                    </Stack>
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {t('profile.phone')}
                     </Typography>
-                    <Typography variant="body2">{profile?.phone_number || '—'}</Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                      <Typography variant="body2">{profile?.phone_number || '—'}</Typography>
+                      {hasPhoneValue && (
+                        <Chip
+                          size="small"
+                          icon={
+                            isPhoneVerified ? (
+                              <CheckCircleOutlineIcon fontSize="small" />
+                            ) : (
+                              <ErrorOutlineIcon fontSize="small" />
+                            )
+                          }
+                          color={isPhoneVerified ? 'success' : 'warning'}
+                          label={
+                            isPhoneVerified
+                              ? t('profile.verifiedLabel', 'Verified')
+                              : t('profile.unverifiedLabel', 'Unverified')
+                          }
+                        />
+                      )}
+                      {!isPhoneVerified && hasPhoneValue && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setVerifyComingSoonTarget('phone')}
+                        >
+                          {t('profile.verifyPhoneAction', 'Verify phone number')}
+                        </Button>
+                      )}
+                    </Stack>
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block">
