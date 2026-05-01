@@ -2284,6 +2284,21 @@
       "success": "Réessai du paiement lancé. Veuillez vérifier votre téléphone pour valider.",
       "error": "Impossible de réessayer le paiement"
     },
+    "optionalEmail": {
+      "bannerTitle": "Ajoutez votre email pour les mises à jour de commande",
+      "bannerBody": "Nous vous recommandons d’ajouter un email afin de recevoir les reçus et les mises à jour de statut de vos commandes.",
+      "addEmail": "Ajouter un email",
+      "dialogTitle": "Ajoutez votre email",
+      "dialogIntro": "Ajouter un email est recommandé afin de recevoir les reçus et les mises à jour de statut de commande. Vous pouvez ignorer cette étape à tout moment.",
+      "optionalBadge": "Optionnel",
+      "closeAria": "Fermer",
+      "emailPlaceholder": "nom@exemple.com",
+      "privacyHint": "Nous utilisons votre email uniquement pour les reçus et les mises à jour de commande.",
+      "skipForNow": "Ignorer pour le moment",
+      "saveAndContinue": "Enregistrer et continuer",
+      "saving": "Enregistrement...",
+      "saveFailed": "Impossible d’enregistrer votre email. Veuillez réessayer."
+    },
     "completeOrder": "Terminer la Commande",
     "orderImages": "Images de la commande",
     "anonDeliveryAddressPrompt": "Où souhaitez-vous être livré pour cet article ?",

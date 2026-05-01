@@ -26,6 +26,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import CountryPhoneNumberInput from '../common/CountryPhoneNumberInput';
+import LoginMethodDialog from '../auth/LoginMethodDialog';
 import {
   getDialCodeForActiveCountry,
   isActivePhoneCountry,
@@ -56,6 +57,8 @@ export interface AnonymousBuyNowDialogProps {
   primaryCtaLabel?: string;
   /** Optional override for the cancel CTA label (defaults to 'Cancel'). */
   secondaryCtaLabel?: string;
+  /** Opens login method chooser when secondary CTA is clicked. */
+  openLoginDialogOnSecondaryCta?: boolean;
 }
 
 function isValidEmailFormat(email: string): boolean {
@@ -84,6 +87,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   onClose,
   primaryCtaLabel,
   secondaryCtaLabel,
+  openLoginDialogOnSecondaryCta = false,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -101,6 +105,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginMethodDialogOpen, setLoginMethodDialogOpen] = useState(false);
   const trackedOpenRef = useRef(false);
 
   const emailNormalized = useMemo(() => email.trim().toLowerCase(), [email]);
@@ -329,48 +334,58 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     !!lastNameTrimmed &&
     !submitting;
 
+  const handleSecondaryAction = useCallback(() => {
+    if (openLoginDialogOnSecondaryCta) {
+      setLoginMethodDialogOpen(true);
+      handleClose();
+      return;
+    }
+    handleClose();
+  }, [handleClose, openLoginDialogOnSecondaryCta]);
+
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="xs"
-      fullScreen={fullScreen}
-      slotProps={{
-        paper: {
-          sx: {
-            borderRadius: fullScreen ? 0 : 3,
-            overflow: 'hidden',
+    <>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth="xs"
+        fullScreen={fullScreen}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: fullScreen ? 0 : 3,
+              overflow: 'hidden',
+            },
           },
-        },
-      }}
-    >
-      {/* Branded header */}
-      <Box
-        sx={{
-          background: (th) =>
-            `linear-gradient(135deg, ${th.palette.primary.dark} 0%, ${th.palette.primary.main} 100%)`,
-          px: 3,
-          pt: 3,
-          pb: 2.5,
-          position: 'relative',
         }}
       >
-        <IconButton
-          onClick={handleClose}
-          disabled={submitting}
-          size="small"
+        {/* Branded header */}
+        <Box
           sx={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            color: 'primary.contrastText',
-            opacity: 0.7,
-            '&:hover': { opacity: 1 },
+            background: (th) =>
+              `linear-gradient(135deg, ${th.palette.primary.dark} 0%, ${th.palette.primary.main} 100%)`,
+            px: 3,
+            pt: 3,
+            pb: 2.5,
+            position: 'relative',
           }}
         >
-          <CloseRounded fontSize="small" />
-        </IconButton>
+          <IconButton
+            onClick={handleClose}
+            disabled={submitting}
+            size="small"
+            sx={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              color: 'primary.contrastText',
+              opacity: 0.7,
+              '&:hover': { opacity: 1 },
+            }}
+          >
+            <CloseRounded fontSize="small" />
+          </IconButton>
 
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
           <Box
@@ -403,8 +418,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         </Typography>
       </Box>
 
-      <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
-        <Stack spacing={2}>
+        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
+          <Stack spacing={2}>
           {error && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
               {error}
@@ -581,7 +596,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             }
             disabled={submitting}
             sx={{
-              alignSelf: 'flex-start',
+              alignSelf: 'center',
               textTransform: 'none',
               px: 0.25,
               minWidth: 0,
@@ -661,22 +676,27 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               : resolvedPrimaryCta}
           </Button>
 
-          <Button
-            fullWidth
-            onClick={handleClose}
-            disabled={submitting}
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              color: 'text.secondary',
-              mb: 0.5,
-            }}
-          >
-            {resolvedSecondaryCta}
-          </Button>
-        </Stack>
-      </DialogContent>
-    </Dialog>
+            <Button
+              fullWidth
+              onClick={handleSecondaryAction}
+              disabled={submitting}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                color: 'text.secondary',
+                mb: 0.5,
+              }}
+            >
+              {resolvedSecondaryCta}
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+      <LoginMethodDialog
+        open={loginMethodDialogOpen}
+        onClose={() => setLoginMethodDialogOpen(false)}
+      />
+    </>
   );
 };
 

@@ -8,6 +8,13 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AddressesService } from '../addresses/addresses.service';
 import { AwsService } from '../aws/aws.service';
@@ -32,6 +39,42 @@ const PROFILE_PICTURE_ACCEPTED_TYPES = [
   'image/webp',
 ];
 
+const GQL_EMAIL_TAKEN_BY_OTHER = `
+  query EmailTakenExclude($email: String!, $excludeId: uuid!) {
+    users(
+      where: {
+        _and: [{ email: { _eq: $email } }, { id: { _neq: $excludeId } }]
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
+const GQL_UPDATE_USER_EMAIL = `
+  mutation UpdateUserEmail($id: uuid!, $email: String!) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { email: $email, email_verified: false }
+    ) {
+      id
+      email
+      first_name
+      last_name
+      phone_number
+      user_type_id
+      email_verified
+      profile_picture_url
+      preferred_language
+      timezone
+      created_at
+      updated_at
+    }
+  }
+`;
+
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(
@@ -201,6 +244,51 @@ export class UsersController {
         {
           success: false,
           error: error.message || 'Failed to update user profile',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('me/update-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set or update the current user email (unverified save)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: { email: { type: 'string' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Email updated' })
+  @ApiResponse({ status: 400, description: 'Invalid email' })
+  @ApiResponse({ status: 409, description: 'Email already in use' })
+  async updateCurrentUserEmail(@Body() body: { email?: string }) {
+    try {
+      const email = this.normalizeEmailForUpdate(body?.email);
+      this.assertValidEmailOrThrow(email);
+      const currentUser = await this.hasuraUserService.getUser();
+      if (this.normalizeEmailForUpdate(currentUser.email) === email) {
+        return { success: true, user: currentUser };
+      }
+      const taken = await this.isEmailTakenByAnotherUser(
+        email,
+        currentUser.id
+      );
+      if (taken) {
+        throw new HttpException(
+          { success: false, error: 'Email is already taken' },
+          HttpStatus.CONFLICT
+        );
+      }
+      return await this.persistUserEmail(currentUser.id, email);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update email',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -761,6 +849,44 @@ export class UsersController {
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
+  }
+
+  private normalizeEmailForUpdate(raw?: string | null): string {
+    return String(raw || '')
+      .trim()
+      .toLowerCase();
+  }
+
+  private assertValidEmailOrThrow(email: string): void {
+    if (!email) {
+      throw new HttpException(
+        { success: false, error: 'Email is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) {
+      throw new HttpException(
+        { success: false, error: 'Invalid email address' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async isEmailTakenByAnotherUser(
+    email: string,
+    excludeUserId: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(GQL_EMAIL_TAKEN_BY_OTHER, { email, excludeId: excludeUserId });
+    return (result.users?.length || 0) > 0;
+  }
+
+  private async persistUserEmail(userId: string, email: string) {
+    const result = await this.hasuraUserService.executeMutation<{
+      update_users_by_pk: Record<string, unknown>;
+    }>(GQL_UPDATE_USER_EMAIL, { id: userId, email });
+    return { success: true, user: result.update_users_by_pk };
   }
 
   private async handleAgentReferralIfPresent(

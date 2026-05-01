@@ -34,7 +34,7 @@ import {
   Typography,
 } from '@mui/material';
 import axios from 'axios';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -47,7 +47,9 @@ import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
+import MissingEmailBanner from '../common/MissingEmailBanner';
 import PhoneInput from '../common/PhoneInput';
+import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -170,6 +172,7 @@ const Profile: React.FC = () => {
   >('sell_items');
   const [personaConfirmTarget, setPersonaConfirmTarget] =
     useState<UserType | null>(null);
+  const [missingEmailOpen, setMissingEmailOpen] = useState(false);
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -185,6 +188,15 @@ const Profile: React.FC = () => {
       });
     }
   }, [profile]);
+
+  const handleSkipMissingEmail = useCallback(() => {
+    setMissingEmailOpen(false);
+  }, []);
+
+  const handleSavedMissingEmail = useCallback(async () => {
+    setMissingEmailOpen(false);
+    await refetch();
+  }, [refetch]);
 
   const handleProfileSave = async () => {
     if (!profile) return;
@@ -370,6 +382,20 @@ const Profile: React.FC = () => {
           {personaError}
         </Alert>
       )}
+
+      {profile && !profile.email?.trim() && (
+        <Box sx={{ mb: 2 }}>
+          <MissingEmailBanner
+            onAddEmail={() => setMissingEmailOpen(true)}
+            severity="warning"
+          />
+        </Box>
+      )}
+      <MissingEmailDialog
+        open={missingEmailOpen}
+        onSkip={handleSkipMissingEmail}
+        onSaved={() => void handleSavedMissingEmail()}
+      />
 
       <Typography
         variant="h5"

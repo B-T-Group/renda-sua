@@ -2295,6 +2295,21 @@
       "success": "Payment retry started. Please check your phone to approve.",
       "error": "Failed to retry payment"
     },
+    "optionalEmail": {
+      "bannerTitle": "Add your email for order updates",
+      "bannerBody": "We recommend adding an email so you can receive receipts and status updates about your orders.",
+      "addEmail": "Add email",
+      "dialogTitle": "Add your email",
+      "dialogIntro": "Adding an email is recommended so we can send receipts and order status updates. You can skip this step anytime.",
+      "optionalBadge": "Optional",
+      "closeAria": "Close",
+      "emailPlaceholder": "name@example.com",
+      "privacyHint": "We only use your email for receipts and order updates.",
+      "skipForNow": "Skip for now",
+      "saveAndContinue": "Save and continue",
+      "saving": "Saving...",
+      "saveFailed": "Could not save your email. Please try again."
+    },
     "completeOrder": "Complete Order",
     "orderImages": "Order Images",
     "anonDeliveryAddressPrompt": "Where do you want this item delivered?",

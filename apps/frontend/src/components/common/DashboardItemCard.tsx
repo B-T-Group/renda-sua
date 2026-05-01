@@ -1029,6 +1029,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         onClose={() => setAnonBuyNowOpen(false)}
         primaryCtaLabel={resolvedBuyNowButtonText}
         secondaryCtaLabel={resolvedLoginButtonText}
+        openLoginDialogOnSecondaryCta
       />
 
       {/* Image lightbox */}

@@ -16,9 +16,12 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import MissingEmailBanner from '../common/MissingEmailBanner';
+import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
 type PaymentSource =
   | 'wallet'
@@ -76,6 +79,17 @@ const OrderConfirmationPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { profile, refetch: refetchProfile } = useUserProfileContext();
+  const [missingEmailOpen, setMissingEmailOpen] = useState(false);
+
+  const handleSkipMissingEmail = useCallback(() => {
+    setMissingEmailOpen(false);
+  }, []);
+
+  const handleSavedMissingEmail = useCallback(async () => {
+    setMissingEmailOpen(false);
+    await refetchProfile();
+  }, [refetchProfile]);
 
   // Get order data from navigation state
   const orderData = location.state as OrderConfirmationData;
@@ -129,8 +143,24 @@ const OrderConfirmationPage: React.FC = () => {
     navigate('/orders');
   };
 
+  const showMissingEmailBanner =
+    Boolean(profile) && !profile?.email?.trim();
+
   return (
     <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
+      {showMissingEmailBanner && (
+        <Box sx={{ mb: 2 }}>
+          <MissingEmailBanner
+            onAddEmail={() => setMissingEmailOpen(true)}
+            severity="info"
+          />
+        </Box>
+      )}
+      <MissingEmailDialog
+        open={missingEmailOpen}
+        onSkip={handleSkipMissingEmail}
+        onSaved={() => void handleSavedMissingEmail()}
+      />
       {/* Success Header */}
       <Box sx={{ textAlign: 'center', mb: { xs: 3, sm: 4 } }}>
         <CheckCircle

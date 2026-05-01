@@ -81,6 +81,7 @@ import DeliveryTimeWindowSelector, {
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
 const confirmOrderPulse = keyframes`
   0%, 100% {
@@ -629,6 +630,7 @@ const PlaceOrderPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [missingEmailDialogOpen, setMissingEmailDialogOpen] = useState(false);
   const [missingPhoneDialogOpen, setMissingPhoneDialogOpen] = useState(false);
   const [missingPhoneNumber, setMissingPhoneNumber] = useState('');
   const [missingPhoneSaving, setMissingPhoneSaving] = useState(false);
@@ -1078,21 +1080,41 @@ const PlaceOrderPage: React.FC = () => {
     useDifferentPhone,
   ]);
 
+  const submitWithEmailGate = useCallback(async () => {
+    const hasEmail = Boolean(profile?.email?.trim());
+    if (!hasEmail) {
+      setMissingEmailDialogOpen(true);
+      return;
+    }
+    await submitWithPhoneGate();
+  }, [profile?.email, submitWithPhoneGate]);
+
+  const handleSkipMissingEmail = useCallback(async () => {
+    setMissingEmailDialogOpen(false);
+    await submitWithPhoneGate();
+  }, [submitWithPhoneGate]);
+
+  const handleSavedMissingEmail = useCallback(async () => {
+    setMissingEmailDialogOpen(false);
+    await refetchProfile();
+    await submitWithPhoneGate();
+  }, [refetchProfile, submitWithPhoneGate]);
+
   const handleSubmitWithPhoneGate = useCallback(async () => {
     if (isPayAtDeliveryEligible) {
       setPaymentChoiceDialogOpen(true);
       return;
     }
-    await submitWithPhoneGate();
-  }, [isPayAtDeliveryEligible, submitWithPhoneGate]);
+    await submitWithEmailGate();
+  }, [isPayAtDeliveryEligible, submitWithEmailGate]);
 
   const handleChoosePaymentTimingAndSubmit = useCallback(
     async (timing: 'pay_now' | 'pay_at_delivery') => {
       setPaymentTiming(timing);
       setPaymentChoiceDialogOpen(false);
-      await submitWithPhoneGate();
+      await submitWithEmailGate();
     },
-    [submitWithPhoneGate]
+    [submitWithEmailGate]
   );
 
   const openMissingPhoneDialog = useCallback(() => {
@@ -3436,6 +3458,12 @@ const PlaceOrderPage: React.FC = () => {
           </Stack>
         </DialogContent>
       </Dialog>
+
+      <MissingEmailDialog
+        open={missingEmailDialogOpen}
+        onSkip={() => void handleSkipMissingEmail()}
+        onSaved={() => void handleSavedMissingEmail()}
+      />
 
       <AddressDialog
         open={addressDialogOpen}
