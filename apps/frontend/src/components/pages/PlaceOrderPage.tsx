@@ -1615,10 +1615,10 @@ const PlaceOrderPage: React.FC = () => {
 
                 <Stack spacing={2}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
-                    {selectedItem.item.item_images?.[0] && (
+                    {orderedSelectedItemImages[0] && (
                       <Box
                         component="img"
-                        src={selectedItem.item.item_images[0].image_url}
+                        src={orderedSelectedItemImages[0].image_url}
                         alt={selectedItem.item.name}
                         sx={{
                           width: 120,
