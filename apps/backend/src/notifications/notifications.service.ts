@@ -14,7 +14,9 @@ import {
   type EmailLocale,
 } from './email-template-data';
 import type {
+  AgentOrderPaymentFailedEmailPayload,
   BusinessRentalBookingRequestEmailPayload,
+  ClientOrderPaymentFailedEmailPayload,
   ClientRentalRequestAcceptedEmailPayload,
   ClientRentalRequestRejectedEmailPayload,
   FirstOrderCompletedEmailPayload,
@@ -27,7 +29,9 @@ import type {
 import twilio = require('twilio');
 
 export type {
+  AgentOrderPaymentFailedEmailPayload,
   BusinessRentalBookingRequestEmailPayload,
+  ClientOrderPaymentFailedEmailPayload,
   ClientRentalRequestAcceptedEmailPayload,
   ClientRentalRequestRejectedEmailPayload,
   FirstOrderCompletedEmailPayload,
@@ -239,6 +243,46 @@ export class NotificationsService {
         recipientName: name,
         discountCode: payload.discountCode,
         ownRewardPct: 5,
+      },
+    });
+  }
+
+  async sendClientOrderPaymentFailedEmail(
+    payload: ClientOrderPaymentFailedEmailPayload
+  ): Promise<void> {
+    const locale = normalizeLanguage(payload.preferredLanguage);
+    const name =
+      payload.clientName?.trim() || (locale === 'fr' ? 'votre compte' : 'there');
+
+    await this.sendEmail({
+      to: payload.to,
+      templateKey: this.mapKeyForLanguage('client_order_payment_failed', locale),
+      variables: {
+        recipientName: name,
+        orderNumber: payload.orderNumber,
+        orderUrl: payload.orderUrl,
+        failureMessage: payload.failureMessage,
+        currentYear: new Date().getFullYear(),
+      },
+    });
+  }
+
+  async sendAgentOrderPaymentFailedEmail(
+    payload: AgentOrderPaymentFailedEmailPayload
+  ): Promise<void> {
+    const locale = normalizeLanguage(payload.preferredLanguage);
+    const name =
+      payload.agentName?.trim() || (locale === 'fr' ? 'votre compte' : 'there');
+
+    await this.sendEmail({
+      to: payload.to,
+      templateKey: this.mapKeyForLanguage('agent_order_payment_failed', locale),
+      variables: {
+        recipientName: name,
+        orderNumber: payload.orderNumber,
+        orderUrl: payload.orderUrl,
+        failureMessage: payload.failureMessage,
+        currentYear: new Date().getFullYear(),
       },
     });
   }

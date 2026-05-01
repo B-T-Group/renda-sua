@@ -2270,6 +2270,12 @@
     "title": "Historique des Commandes"
   },
   "orders": {
+    "retryPayment": {
+      "cta": "Réessayer le paiement",
+      "helper": "Vous pouvez aussi annuler la commande si vous avez changé d’avis.",
+      "success": "Réessai du paiement lancé. Veuillez vérifier votre téléphone pour valider.",
+      "error": "Impossible de réessayer le paiement"
+    },
     "completeOrder": "Terminer la Commande",
     "orderImages": "Images de la commande",
     "anonDeliveryAddressPrompt": "Où souhaitez-vous être livré pour cet article ?",

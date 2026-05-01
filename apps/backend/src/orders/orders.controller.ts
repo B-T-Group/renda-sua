@@ -996,6 +996,19 @@ export class OrdersController {
     }
   }
 
+  @Post(':id/retry-payment')
+  @ApiOperation({
+    summary: 'Retry order payment (client only)',
+    description:
+      'Re-initiates a mobile money payment request for an existing order that is pending payment. This does not change the fulfillment status, but resets payment status to pending and creates a new mobile payment transaction.',
+  })
+  @ApiResponse({ status: 200, description: 'Payment retry initiated' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  async retryOrderPayment(@Param('id') orderId: string) {
+    return this.ordersService.retryOrderPayment(orderId);
+  }
+
   @Post('drop_order')
   async dropOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.dropOrder(request);

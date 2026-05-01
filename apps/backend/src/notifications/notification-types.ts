@@ -96,3 +96,21 @@ export interface ReferralRewardEmailPayload {
   clientName: string;
   discountCode: string;
 }
+
+export interface ClientOrderPaymentFailedEmailPayload {
+  to: string;
+  preferredLanguage?: string | null;
+  clientName: string;
+  orderNumber: string;
+  orderUrl: string;
+  failureMessage: string;
+}
+
+export interface AgentOrderPaymentFailedEmailPayload {
+  to: string;
+  preferredLanguage?: string | null;
+  agentName: string;
+  orderNumber: string;
+  orderUrl: string;
+  failureMessage: string;
+}

@@ -14,7 +14,10 @@ from rendasua_core_packages.hasura_client.mobile_payment_transactions_service im
     get_transaction_by_id,
     update_transaction_status,
 )
-from rendasua_core_packages.hasura_client.orders_service import cancel_order
+from rendasua_core_packages.hasura_client.orders_service import (
+    cancel_order,
+    get_order_payment_failure_state,
+)
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret
 
 
@@ -92,6 +95,68 @@ def _handle_order_created(
     return {"success": True, "event_type": "order.created", "order_id": order_id}
 
 
+def _handle_order_payment_failed(
+    payload: Dict[str, Any],
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    queue_url: Optional[str],
+    order_id: str,
+) -> Dict[str, Any]:
+    """
+    Cancel order only after the 3h grace period anchored on orders.payment_failed_at.
+    Skips if:
+      - order not found
+      - payment is already paid
+      - payment_failed_at missing
+      - less than 3h have elapsed since payment_failed_at
+    """
+    state = get_order_payment_failure_state(order_id, hasura_endpoint, hasura_admin_secret)
+    if not state:
+        log_error("Order not found for payment_failed handler", order_id=order_id)
+        return {"success": False, "error": "Order not found"}
+
+    if (state.get("payment_status") or "").lower() == "paid":
+        log_info("Order already paid, skipping grace cancel", order_id=order_id)
+        return {"success": True, "skipped": True, "reason": "already_paid"}
+
+    failed_at_raw = state.get("payment_failed_at")
+    if not failed_at_raw:
+        log_info("payment_failed_at missing, skipping grace cancel", order_id=order_id)
+        return {"success": True, "skipped": True, "reason": "missing_payment_failed_at"}
+
+    try:
+        # Hasura timestamptz is ISO string
+        failed_at = datetime.fromisoformat(str(failed_at_raw).replace("Z", "+00:00"))
+        now = datetime.now(tz=timezone.utc)
+        elapsed_seconds = (now - failed_at).total_seconds()
+        if elapsed_seconds < 3 * 60 * 60:
+            log_info(
+                "Grace period not yet elapsed, skipping cancel",
+                order_id=order_id,
+                payment_failed_at=failed_at_raw,
+                elapsed_seconds=elapsed_seconds,
+            )
+            return {"success": True, "skipped": True, "reason": "grace_not_elapsed"}
+    except Exception as e:
+        log_error("Failed to parse payment_failed_at", error=e, order_id=order_id, payment_failed_at=failed_at_raw)
+        return {"success": False, "error": "Invalid payment_failed_at"}
+
+    log_info("Grace period elapsed, cancelling order", order_id=order_id)
+    result = cancel_order(
+        order_id,
+        "Order cancelled due to payment failure (grace period elapsed)",
+        hasura_endpoint,
+        hasura_admin_secret,
+    )
+    if not result.get("success"):
+        return {"success": False, "error": result.get("error", "Failed to cancel order")}
+    if queue_url:
+        _send_order_cancelled_sqs(order_id, queue_url)
+    else:
+        log_info("ORDER_STATUS_QUEUE_URL not set, skipping SQS", order_id=order_id)
+    return {"success": True, "event_type": "order.payment_failed", "order_id": order_id}
+
+
 def _handle_order_claim_initiated(
     payload: Dict[str, Any],
     order_id: str,
@@ -133,13 +198,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         order_id = payload.get("order_id")
         transaction_id = payload.get("transaction_id")
-        if not order_id or not transaction_id:
-            log_error("Missing order_id or transaction_id in payload", payload=payload)
-            return {"success": False, "error": "Missing order_id or transaction_id"}
+        if not order_id:
+            log_error("Missing order_id in payload", payload=payload)
+            return {"success": False, "error": "Missing order_id"}
 
         environment = os.environ.get("ENVIRONMENT", "development")
         hasura_endpoint, hasura_admin_secret = _get_hasura_config(environment)
         queue_url = os.environ.get("ORDER_STATUS_QUEUE_URL")
+
+        if event_type == "order.payment_failed":
+            return _handle_order_payment_failed(
+                payload,
+                hasura_endpoint,
+                hasura_admin_secret,
+                queue_url,
+                order_id,
+            )
+
+        if not transaction_id:
+            log_error("Missing transaction_id in payload", payload=payload)
+            return {"success": False, "error": "Missing transaction_id"}
 
         tx = get_transaction_by_id(
             transaction_id, hasura_endpoint, hasura_admin_secret

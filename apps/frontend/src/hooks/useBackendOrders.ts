@@ -795,6 +795,28 @@ export const useBackendOrders = () => {
     });
   };
 
+  const retryOrderPayment = async (orderId: string): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(`/orders/${orderId}/retry-payment`, {});
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to retry payment'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
   const markPaidInCashException = async (
     orderId: string,
     notes?: string
@@ -922,6 +944,7 @@ export const useBackendOrders = () => {
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,
     initiatePayAtDeliveryPayment,
+    retryOrderPayment,
     markPaidInCashException,
     reconcileCashException,
     getDeliveryPin,

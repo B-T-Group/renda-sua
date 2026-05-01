@@ -9,7 +9,7 @@ import { Configuration } from '../config/configuration';
 
 export interface WaitExecutePayload {
   order_id: string;
-  transaction_id: string;
+  transaction_id?: string;
 }
 
 @Injectable()
@@ -45,7 +45,7 @@ export class WaitAndExecuteScheduleService {
    * On failure, logs only; does not throw.
    */
   async schedulePaymentTimeout(
-    eventType: 'order.created' | 'order.claim_initiated',
+    eventType: 'order.created' | 'order.claim_initiated' | 'order.payment_failed',
     payload: WaitExecutePayload,
     waitMinutes?: number
   ): Promise<void> {

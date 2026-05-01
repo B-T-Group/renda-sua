@@ -205,7 +205,7 @@ export class MobilePaymentCallbackProcessor {
       const order = await this.ordersService.getOrderByNumber(
         transaction.reference
       );
-      await this.ordersService.onOrderPaymentFailed(order.id);
+      await this.ordersService.onOrderPaymentFailed(order.id, 'Payment failed');
     } else if (transaction.payment_entity === 'claim_order') {
       this.logger.log(
         `Claim order payment failed for order ${transaction.reference}`
@@ -291,7 +291,9 @@ export class MobilePaymentCallbackProcessor {
       const order = await this.ordersService.getOrderByNumber(
         transaction.reference
       );
-      await this.ordersService.onOrderPaymentFailed(order.id);
+      const failureMessage =
+        callbackData.reason || callbackData.message || 'Payment failed';
+      await this.ordersService.onOrderPaymentFailed(order.id, failureMessage);
     } else if (transaction.payment_entity === 'claim_order') {
       this.logger.log(
         `Claim order payment failed for order ${transaction.reference}`

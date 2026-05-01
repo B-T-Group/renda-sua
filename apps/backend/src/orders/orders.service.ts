@@ -2354,6 +2354,179 @@ export class OrdersService {
   }
 
   /**
+   * Client: retry pay-now payment for an existing pending-payment order.
+   * Creates a new mobile payment transaction and re-initiates the payment request.
+   */
+  async retryOrderPayment(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'client',
+      'Only clients can retry an order payment'
+    );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.client?.user_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to retry payment for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | undefined;
+    if (paymentTiming !== 'pay_now') {
+      throw new HttpException(
+        'Payment retry is only available for pay-now orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'pending_payment') {
+      throw new HttpException(
+        'Payment retry is only available when order is pending payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if ((order as any).payment_status === 'paid') {
+      return { success: true, message: 'Order is already paid' };
+    }
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getTransactionByReference(
+        order.order_number
+      );
+    if (existing && existing.status === 'pending') {
+      return {
+        success: true,
+        message: 'Payment request already pending',
+        database_transaction: {
+          id: existing.id,
+          reference: existing.reference,
+          status: existing.status,
+        },
+      };
+    }
+
+    const phoneNumber = order.client?.user?.phone_number || '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Phone number is required to retry payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: order.order_number,
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `order ${order.order_number} (retry)`,
+      provider,
+      payment_method: 'mobile_money',
+      customer_phone: phoneNumber,
+      customer_email: order.client.user.email,
+      account_id: account.id,
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order' as const,
+      entity_id: order.order_number,
+    });
+
+    const paymentRequest = {
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `Order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      provider,
+      ownerCharge: 'MERCHANT' as const,
+      transactionType: 'PAYMENT' as const,
+      payment_entity: 'order' as const,
+    };
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      paymentRequest,
+      order.order_number
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+
+    // Clear previous failure markers and set payment back to pending
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation ResetPaymentFailure(
+        $orderId: uuid!
+        $paymentStatus: String!
+        $at: timestamptz!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            payment_status: $paymentStatus
+            payment_failed_at: null
+            payment_failure_message: null
+            updated_at: $at
+          }
+        ) {
+          id
+          payment_status
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      paymentStatus: 'pending',
+      at,
+    });
+
+    // Re-schedule the normal payment timeout for this new transaction
+    await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+      'order.created',
+      { order_id: order.id, transaction_id: tx.id }
+    );
+
+    return {
+      success: true,
+      message: 'Payment retry initiated',
+      payment_transaction: {
+        success: true,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: {
+        id: tx.id,
+        reference: tx.reference,
+        status: tx.status,
+      },
+    };
+  }
+
+  /**
    * Cash-exception fallback: agent marks the order paid in cash.
    * This completes the order operationally but flags it for business reconciliation.
    */
@@ -4317,6 +4490,8 @@ export class OrdersService {
           payment_status
           payment_source
           payment_timing
+          payment_failed_at
+          payment_failure_message
           reconciliation_status
           completed_at
           business_id
@@ -4351,6 +4526,13 @@ export class OrdersService {
             user_id
             is_verified
             status
+            user {
+              first_name
+              last_name
+              email
+              preferred_language
+              phone_number
+            }
           }
           delivery_pin_hash
           delivery_pin_attempts
@@ -4952,9 +5134,17 @@ export class OrdersService {
   }
 
   /**
-   * Handle order payment failure - cancel order and update reserved quantities
+   * Handle order payment failure.
+   *
+   * New behavior:
+   * - Do NOT cancel the order immediately.
+   * - Keep current fulfillment status as-is.
+   * - Mark payment_status as failed and persist payment_failed_at + failure message.
    */
-  async onOrderPaymentFailed(orderId: string): Promise<void> {
+  async onOrderPaymentFailed(
+    orderId: string,
+    failureMessage?: string | null
+  ): Promise<void> {
     try {
       // Get order details
       const order = await this.getOrderDetails(orderId);
@@ -4963,22 +5153,93 @@ export class OrdersService {
         throw new Error(`Order with ID ${orderId} not found`);
       }
 
-      // Update order status to cancelled (system context - no request user)
-      const updateStatusMutation = `
-        mutation UpdateOrderStatusCancelled($orderId: uuid!, $newStatus: order_status!) {
+      const msg = failureMessage?.trim() || 'Payment failed';
+
+      // Mark payment as failed (system context - no request user)
+      const mutation = `
+        mutation MarkOrderPaymentFailed(
+          $orderId: uuid!
+          $paymentStatus: String!
+          $paymentFailedAt: timestamptz!
+          $paymentFailureMessage: String!
+        ) {
           update_orders_by_pk(
             pk_columns: { id: $orderId }
-            _set: { current_status: $newStatus, updated_at: "now()" }
+            _set: {
+              payment_status: $paymentStatus
+              payment_failed_at: $paymentFailedAt
+              payment_failure_message: $paymentFailureMessage
+              updated_at: "now()"
+            }
           ) {
             id
-            current_status
+            payment_status
+            payment_failed_at
           }
         }
       `;
-      await this.hasuraSystemService.executeMutation(updateStatusMutation, {
+      await this.hasuraSystemService.executeMutation(mutation, {
         orderId,
-        newStatus: 'cancelled',
+        paymentStatus: 'failed',
+        paymentFailedAt: new Date().toISOString(),
+        paymentFailureMessage: msg,
       });
+
+      // Schedule grace-period auto-cancel (3h) anchored on payment_failed_at
+      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+        'order.payment_failed',
+        { order_id: orderId },
+        180
+      );
+
+      // Notify client (and agent for pay-at-delivery)
+      try {
+        const publicWebAppUrl =
+          this.configService.get('publicWebAppUrl') || 'https://rendasua.com';
+        const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${orderId}`;
+
+        const clientUser = order.client?.user;
+        if (clientUser?.email) {
+          await this.notificationsService.sendClientOrderPaymentFailedEmail({
+            to: clientUser.email,
+            preferredLanguage: (clientUser as any).preferred_language,
+            clientName: [clientUser.first_name, clientUser.last_name]
+              .filter(Boolean)
+              .join(' ')
+              .trim(),
+            orderNumber: order.order_number,
+            orderUrl,
+            failureMessage: msg,
+          });
+        }
+
+        const paymentTiming = (order as any).payment_timing as
+          | 'pay_now'
+          | 'pay_at_delivery'
+          | undefined;
+        if (paymentTiming === 'pay_at_delivery') {
+          const agentUser = (order as any).assigned_agent?.user;
+          if (agentUser?.email) {
+            await this.notificationsService.sendAgentOrderPaymentFailedEmail({
+              to: agentUser.email,
+              preferredLanguage: agentUser.preferred_language,
+              agentName: [agentUser.first_name, agentUser.last_name]
+                .filter(Boolean)
+                .join(' ')
+                .trim(),
+              orderNumber: order.order_number,
+              orderUrl,
+              failureMessage: msg,
+            });
+          }
+        }
+      } catch (notifyErr: any) {
+        this.logger.error(
+          `Failed to send payment-failed notifications for order ${orderId}: ${
+            notifyErr?.message ?? String(notifyErr)
+          }`
+        );
+      }
 
       // Get user ID from the order (client user)
       const userId = order.client.user_id;
@@ -4986,31 +5247,18 @@ export class OrdersService {
         throw new Error('Client user ID not found in order');
       }
 
-      // Create status history entry for payment failure
+      // Create status history entry for payment failure (no fulfillment status change)
       await this.createStatusHistoryEntry(
         orderId,
-        'cancelled',
-        'Order cancelled due to payment failure',
+        order.current_status,
+        'Payment failed',
         'client',
         userId,
-        'Payment failed - order automatically cancelled'
+        msg
       );
 
-      // Update reserved quantities - decrement since order is cancelled
-      try {
-        const orderItems = order.order_items || [];
-        await this.updateReservedQuantities(orderItems, 'decrement');
-      } catch (error) {
-        this.logger.error(
-          `Failed to update reserved quantities after payment failure: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-        // Don't fail the cancellation if reserved quantity update fails
-      }
-
       this.logger.log(
-        `Order ${order.order_number} cancelled due to payment failure`
+        `Marked order ${order.order_number} payment as failed (status kept: ${order.current_status})`
       );
     } catch (error) {
       this.logger.error(

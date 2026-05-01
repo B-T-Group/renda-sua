@@ -2281,6 +2281,12 @@
     "title": "Order History"
   },
   "orders": {
+    "retryPayment": {
+      "cta": "Retry payment",
+      "helper": "You can also cancel the order if you changed your mind.",
+      "success": "Payment retry started. Please check your phone to approve.",
+      "error": "Failed to retry payment"
+    },
     "completeOrder": "Complete Order",
     "orderImages": "Order Images",
     "anonDeliveryAddressPrompt": "Where do you want this item delivered?",

@@ -627,6 +627,37 @@ def cancel_order(
         return {"success": False, "error": str(e)}
 
 
+def get_order_payment_failure_state(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetch minimal order fields required to evaluate grace-period auto-cancel after payment failure.
+    Returns: { id, order_number, current_status, payment_status, payment_failed_at }
+    """
+    query = """
+    query GetOrderPaymentFailureState($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        id
+        order_number
+        current_status
+        payment_status
+        payment_failed_at
+      }
+    }
+    """
+    client = HasuraClient(
+        HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+    )
+    try:
+        data = client.execute(query, {"orderId": order_id})
+        return data.get("orders_by_pk")
+    except Exception as e:
+        log_error("get_order_payment_failure_state failed", error=e, order_id=order_id)
+        return None
+
+
 def get_order_business_location_country(
     order_id: str,
     hasura_endpoint: str,
