@@ -377,6 +377,52 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
+   * Get the latest pending order payment transaction by order number.
+   * Uses entity_id to support multiple retry attempts with unique references.
+   */
+  async getPendingOrderPaymentTransactionByOrderNumber(
+    orderNumber: string
+  ): Promise<MobilePaymentTransaction | null> {
+    const query = `
+      query GetPendingOrderPaymentTransactionByOrderNumber($orderNumber: String!) {
+        mobile_payment_transactions(
+          where: {
+            payment_entity: { _eq: order }
+            status: { _eq: "pending" }
+            entity_id: { _eq: $orderNumber }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) {
+          id
+          reference
+          amount
+          currency
+          description
+          provider
+          payment_method
+          status
+          transaction_id
+          customer_phone
+          customer_email
+          error_message
+          error_code
+          account_id
+          transaction_type
+          payment_entity
+          entity_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: MobilePaymentTransaction[];
+    }>(query, { orderNumber });
+    return response.mobile_payment_transactions?.[0] ?? null;
+  }
+
+  /**
    * Check if there is a pending rental_booking mobile payment for the given booking number.
    * Used to prevent duplicate booking confirmation payment initiation.
    */

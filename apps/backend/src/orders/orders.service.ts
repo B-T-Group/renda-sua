@@ -2261,7 +2261,7 @@ export class OrdersService {
     }
 
     const existing =
-      await this.mobilePaymentsDatabaseService.getTransactionByReference(
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
     if (existing && existing.status === 'pending') {
@@ -2288,8 +2288,11 @@ export class OrdersService {
       order.currency
     );
 
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
-      reference: order.order_number,
+      reference: paymentAttemptReference,
       amount: Number(order.total_amount),
       currency: order.currency,
       description: `order ${order.order_number} (pay at delivery)`,
@@ -2316,7 +2319,7 @@ export class OrdersService {
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      order.order_number
+      paymentAttemptReference
     );
 
     if (!paymentTransaction.success) {
@@ -2398,7 +2401,7 @@ export class OrdersService {
     }
 
     const existing =
-      await this.mobilePaymentsDatabaseService.getTransactionByReference(
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
     if (existing && existing.status === 'pending') {
@@ -2427,8 +2430,11 @@ export class OrdersService {
       order.currency
     );
 
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
-      reference: order.order_number,
+      reference: paymentAttemptReference,
       amount: Number(order.total_amount),
       currency: order.currency,
       description: `order ${order.order_number} (retry)`,
@@ -2455,7 +2461,7 @@ export class OrdersService {
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      order.order_number
+      paymentAttemptReference
     );
 
     if (!paymentTransaction.success) {
@@ -2525,6 +2531,11 @@ export class OrdersService {
         status: tx.status,
       },
     };
+  }
+
+  private buildOrderPaymentAttemptReference(orderNumber: string): string {
+    const nonce = Math.random().toString(36).slice(2, 8);
+    return `${orderNumber}-${Date.now()}-${nonce}`;
   }
 
   /**
@@ -4816,7 +4827,8 @@ export class OrdersService {
    */
   async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
-      const order = await this.getOrderByNumber(transaction.reference);
+      const orderNumber = transaction.entity_id || transaction.reference;
+      const order = await this.getOrderByNumber(orderNumber);
       const paymentTiming = (order as any).payment_timing as
         | 'pay_now'
         | 'pay_at_delivery'
