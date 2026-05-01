@@ -47,6 +47,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -295,6 +296,7 @@ const ManageOrderPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const { profile, userType: activePersona } = useUserProfileContext();
   const { accounts } = useAccountInfo();
+  const { enqueueSnackbar } = useSnackbar();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
@@ -308,6 +310,7 @@ const ManageOrderPage: React.FC = () => {
     cancelOrder,
     refundOrder,
     completeOrder,
+    retryOrderPayment,
     loading: actionLoading,
     error: actionError,
   } = useBackendOrders();
@@ -441,7 +444,7 @@ const ManageOrderPage: React.FC = () => {
       return;
     }
     setActiveTab(0);
-  }, [order?.id, order?.current_status, activePersona]);
+  }, [order, activePersona]);
 
   const handleBack = () => {
     // Navigate back to the smart orders route
@@ -1572,6 +1575,56 @@ const ManageOrderPage: React.FC = () => {
                       }
                     />
                   </Box>
+
+                  {activePersona === 'client' &&
+                    order.current_status === 'pending_payment' &&
+                    order.payment_timing === 'pay_now' &&
+                    order.payment_status !== 'paid' && (
+                      <Box sx={{ mb: 2 }}>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          onClick={async () => {
+                            try {
+                              await retryOrderPayment(order.id);
+                              enqueueSnackbar(
+                                t(
+                                  'orders.retryPayment.success',
+                                  'Payment retry started. Please check your phone to approve.'
+                                ),
+                                { variant: 'success' }
+                              );
+                              await refetch();
+                            } catch (e: unknown) {
+                              const message =
+                                e instanceof Error
+                                  ? e.message
+                                  : t(
+                                      'orders.retryPayment.error',
+                                      'Failed to retry payment'
+                                    );
+                              enqueueSnackbar(
+                                message,
+                                { variant: 'error' }
+                              );
+                            }
+                          }}
+                          sx={{ textTransform: 'none', borderRadius: 2 }}
+                        >
+                          {t('orders.retryPayment.cta', 'Retry payment')}
+                        </Button>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mt: 0.75 }}
+                        >
+                          {t(
+                            'orders.retryPayment.helper',
+                            'You can also cancel the order if you changed your mind.'
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
 
                   <Divider sx={{ my: 2 }} />
 

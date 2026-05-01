@@ -40,16 +40,14 @@ import {
   StepButton,
   Stepper,
   Switch,
-  ToggleButton,
-  ToggleButtonGroup,
   TextField,
   Typography,
   useMediaQuery,
-  useTheme,
+  useTheme
 } from '@mui/material';
 import { alpha, keyframes, Theme } from '@mui/material/styles';
-import { parsePhoneNumber } from 'libphonenumber-js';
 import { Country } from 'country-state-city';
+import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
@@ -66,18 +64,21 @@ import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
-import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
-import { useTrackItemView } from '../../hooks/useTrackItemView';
+import type { ImageType } from '../../types/image';
+import { orderedItemImages } from '../../utils/orderedItemImages';
+import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
+import PhoneInput from '../common/PhoneInput';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
-import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -177,7 +178,7 @@ interface OrderSummaryProps {
     item: {
       name: string;
       currency: string;
-      item_images?: Array<{ image_url: string }>;
+      item_images?: Array<{ image_url: string; image_type?: ImageType }>;
     };
   };
   quantity: number;
@@ -244,7 +245,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     selectedItem.original_price > 0;
 
   const unitPrice = hasDealPrices
-    ? selectedItem.discounted_price!
+    ? selectedItem.discounted_price ?? selectedItem.selling_price
     : selectedItem.selling_price;
 
   const subtotal = unitPrice * quantity;
@@ -314,10 +315,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       {/* Item Summary */}
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          {selectedItem.item.item_images?.[0] && (
+          {selectedItem.item.item_images?.length ? (
             <Box
               component="img"
-              src={selectedItem.item.item_images[0].image_url}
+              src={
+                selectedItem.item.item_images.find((img) => img.image_type === 'main')
+                  ?.image_url || selectedItem.item.item_images[0].image_url
+              }
               alt={selectedItem.item.name}
               sx={{
                 width: isMobile ? 60 : 120,
@@ -327,7 +331,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 objectFit: 'cover',
               }}
             />
-          )}
+          ) : null}
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" fontWeight="medium" noWrap>
               {selectedItem.item.name}
@@ -348,13 +352,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               sx={{ textDecoration: 'line-through' }}
             >
               {formatCurrency(
-                selectedItem.original_price!,
+                selectedItem.original_price ?? selectedItem.selling_price,
                 selectedItem.item.currency
               )}
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
               {formatCurrency(
-                selectedItem.discounted_price!,
+                selectedItem.discounted_price ?? selectedItem.selling_price,
                 selectedItem.item.currency
               )}
             </Typography>
@@ -691,6 +695,31 @@ const PlaceOrderPage: React.FC = () => {
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
     useInventoryItem(id || null);
 
+  const orderedSelectedItemImages = useMemo(() => {
+    type PlaceOrderItemImage = {
+      id?: string;
+      image_url: string;
+      image_type?: ImageType;
+      alt_text?: string;
+      caption?: string;
+      display_order?: number;
+    };
+
+    const imgs = (selectedItem?.item?.item_images ?? []) as PlaceOrderItemImage[];
+    const normalized: Array<PlaceOrderItemImage & { image_type: ImageType }> =
+      imgs.map((img) => ({
+        ...img,
+        image_type: img.image_type ?? 'gallery',
+      }));
+
+    return orderedItemImages(normalized);
+  }, [selectedItem?.item?.item_images]);
+
+  const [selectedItemImageIndex, setSelectedItemImageIndex] = useState(0);
+  useEffect(() => {
+    setSelectedItemImageIndex(0);
+  }, [selectedItem?.id]);
+
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
 
   useEffect(() => {
@@ -867,7 +896,13 @@ const PlaceOrderPage: React.FC = () => {
     }).format(amount);
   };
 
-  const handleSubmit = async () => {
+  type ApiErrorResponseData = {
+    message?: string;
+    error?: string;
+    data?: { error?: string };
+  };
+
+  const handleSubmit = useCallback(async () => {
     if (!selectedItem || !apiClient || !selectedAddressId) return;
 
     // Validate phone number if override is enabled
@@ -915,7 +950,7 @@ const PlaceOrderPage: React.FC = () => {
         typeof selectedItem.discounted_price === 'number' &&
         selectedItem.original_price > 0;
       const unitPrice = hasDeal
-        ? selectedItem.discounted_price!
+        ? selectedItem.discounted_price ?? selectedItem.selling_price
         : selectedItem.selling_price;
       const contentCategory = metaPixelContentCategoryFromItem(
         selectedItem.item
@@ -951,19 +986,17 @@ const PlaceOrderPage: React.FC = () => {
         'An error occurred while creating your order. Please try again.'
       );
 
-       if ((error as any)?.response?.data) {
-        // Check for API response error structure
-        const apiError = (error as any).response.data;
+      const apiError = (error as { response?: { data?: ApiErrorResponseData } })
+        ?.response?.data;
+      if (apiError) {
         errorMessage =
           apiError.message ||
           apiError.error ||
           apiError.data?.error ||
           errorMessage;
-      }
-      else if (error instanceof Error) {
+      } else if (error instanceof Error) {
         errorMessage = error.message;
-      }
-      else if (typeof error === 'string') {
+      } else if (typeof error === 'string') {
         errorMessage = error;
       }
 
@@ -971,7 +1004,21 @@ const PlaceOrderPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    apiClient,
+    appliedDiscountCode,
+    deliveryWindow,
+    navigate,
+    paymentTiming,
+    quantity,
+    requiresFastDelivery,
+    selectedAddressId,
+    selectedItem,
+    t,
+    trackPurchase,
+    useDifferentPhone,
+    overridePhoneNumber,
+  ]);
 
   const submitWithPhoneGate = useCallback(async () => {
     // Only gate when using profile phone (not override) and it's missing
@@ -1078,10 +1125,14 @@ const PlaceOrderPage: React.FC = () => {
       await refetchProfile();
       setMissingPhoneDialogOpen(false);
       await handleSubmit();
-    } catch (saveErr: any) {
+    } catch (saveErr: unknown) {
+      const data = (
+        saveErr as { response?: { data?: { error?: string; message?: string } } }
+      )?.response?.data;
       const msg =
-        saveErr?.response?.data?.error ||
-        saveErr?.response?.data?.message ||
+        data?.error ||
+        data?.message ||
+        (saveErr instanceof Error ? saveErr.message : null) ||
         t('accounts.withdrawFailed', 'Please try again.');
       setMissingPhoneError(msg);
     } finally {
@@ -1713,7 +1764,7 @@ const PlaceOrderPage: React.FC = () => {
                               typeof selectedItem.discounted_price === 'number' &&
                               selectedItem.original_price > 0;
                             const unitPrice = hasDeal
-                              ? selectedItem.discounted_price!
+                              ? selectedItem.discounted_price ?? selectedItem.selling_price
                               : selectedItem.selling_price;
                             return unitPrice * quantity;
                           })(),
@@ -1899,7 +1950,7 @@ const PlaceOrderPage: React.FC = () => {
                                 typeof selectedItem.discounted_price === 'number' &&
                                 selectedItem.original_price > 0;
                               const unitPrice = hasDeal
-                                ? selectedItem.discounted_price!
+                                ? selectedItem.discounted_price ?? selectedItem.selling_price
                                 : selectedItem.selling_price;
                               const subtotal = unitPrice * quantity;
                               const totalBeforeDiscount =
@@ -1942,7 +1993,7 @@ const PlaceOrderPage: React.FC = () => {
                               typeof selectedItem.discounted_price === 'number' &&
                               selectedItem.original_price > 0;
                             const unitPrice = hasDeal
-                              ? selectedItem.discounted_price!
+                              ? selectedItem.discounted_price ?? selectedItem.selling_price
                               : selectedItem.selling_price;
                             const subtotal = unitPrice * quantity;
                             const totalBeforeDiscount =
@@ -2145,8 +2196,7 @@ const PlaceOrderPage: React.FC = () => {
   return (
     <>
       {isMobile ? (
-        <>
-          <Dialog
+        <Dialog
           fullScreen
           open
           PaperProps={{
@@ -2287,8 +2337,7 @@ const PlaceOrderPage: React.FC = () => {
               </Stack>
             </Box>
           </DialogContent>
-          </Dialog>
-        </>
+        </Dialog>
       ) : (
         <Box
           sx={{
@@ -2371,7 +2420,7 @@ const PlaceOrderPage: React.FC = () => {
 
                   <Stack spacing={3}>
                     <Box sx={{ width: '100%' }}>
-                      {selectedItem.item.item_images?.[0] ? (
+                      {orderedSelectedItemImages[0] ? (
                         id ? (
                           <ButtonBase
                             component={RouterLink}
@@ -2386,7 +2435,10 @@ const PlaceOrderPage: React.FC = () => {
                           >
                             <CardMedia
                               component="img"
-                              image={selectedItem.item.item_images[0].image_url}
+                              image={
+                                orderedSelectedItemImages[selectedItemImageIndex]
+                                  ?.image_url ?? orderedSelectedItemImages[0].image_url
+                              }
                               alt={selectedItem.item.name}
                               sx={{
                                 width: '100%',
@@ -2399,7 +2451,10 @@ const PlaceOrderPage: React.FC = () => {
                         ) : (
                           <CardMedia
                             component="img"
-                            image={selectedItem.item.item_images[0].image_url}
+                            image={
+                              orderedSelectedItemImages[selectedItemImageIndex]
+                                ?.image_url ?? orderedSelectedItemImages[0].image_url
+                            }
                             alt={selectedItem.item.name}
                             sx={{
                               borderRadius: 2,
@@ -2428,6 +2483,50 @@ const PlaceOrderPage: React.FC = () => {
                         </Box>
                       )}
                     </Box>
+
+                    {orderedSelectedItemImages.length > 1 ? (
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 1 }}
+                      >
+                        {orderedSelectedItemImages.map((img, idx) => {
+                          const isSelected = idx === selectedItemImageIndex;
+                          return (
+                            <ButtonBase
+                              key={img.id ?? `${img.image_url}-${idx}`}
+                              onClick={() => setSelectedItemImageIndex(idx)}
+                              sx={{
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                border: '2px solid',
+                                borderColor: isSelected ? 'primary.main' : 'divider',
+                                width: 64,
+                                height: 64,
+                                flexShrink: 0,
+                              }}
+                              aria-label={t(
+                                'items.imageThumbnail',
+                                'View image {{index}}',
+                                { index: idx + 1 }
+                              )}
+                            >
+                              <Box
+                                component="img"
+                                src={img.image_url}
+                                alt={img.alt_text || selectedItem.item.name}
+                                sx={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                  display: 'block',
+                                }}
+                              />
+                            </ButtonBase>
+                          );
+                        })}
+                      </Stack>
+                    ) : null}
 
                     <Box sx={{ width: '100%' }}>
                       <Typography variant="h5" fontWeight="bold" gutterBottom>
