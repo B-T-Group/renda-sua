@@ -791,7 +791,7 @@ export class HasuraSystemService {
    * Single insert with nested client and/or agent and/or business (signup / complete profile).
    */
   async insertUserWithPersonas(params: {
-    email: string;
+    email?: string | null;
     first_name: string;
     last_name: string;
     phone_number?: string | null;
@@ -829,7 +829,7 @@ export class HasuraSystemService {
   }
 
   private buildMultiPersonaUserInsert(params: {
-    email: string;
+    email?: string | null;
     first_name: string;
     last_name: string;
     phone_number?: string | null;
@@ -841,7 +841,7 @@ export class HasuraSystemService {
   }): { mutation: string; variables: Record<string, unknown> } {
     const { personas } = params;
     const varDecls: string[] = [
-      '$email: String!',
+      '$email: String',
       '$first_name: String!',
       '$last_name: String!',
       '$phone_number: String',

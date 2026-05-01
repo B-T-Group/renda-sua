@@ -14,8 +14,8 @@ type SignupGoalId =
 interface SignupStartPayload {
   first_name: string;
   last_name: string;
-  email: string;
-  phone_number?: string;
+  email?: string | null;
+  phone_number?: string | null;
   /** @deprecated use `personas`; kept for backward compatibility */
   user_type_id?: 'client' | 'agent' | 'business';
   /** When set (1–3 values), creates all selected profiles in one user row */
@@ -36,7 +36,7 @@ interface SignupStartPayload {
 
 export interface SignupCreatedUser {
   id: string;
-  email: string;
+  email: string | null;
   first_name: string;
   last_name: string;
   user_type_id: string;
@@ -52,8 +52,14 @@ export class SignupService {
     private readonly addressesService: AddressesService
   ) {}
 
-  normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
+  normalizeEmail(email?: string | null): string {
+    return String(email || '')
+      .trim()
+      .toLowerCase();
+  }
+
+  normalizePhone(phone?: string | null): string {
+    return String(phone || '').trim();
   }
 
   async isEmailTaken(email: string): Promise<boolean> {
@@ -71,16 +77,57 @@ export class SignupService {
     return (result.users?.length || 0) > 0;
   }
 
+  async isPhoneTaken(phoneNumber: string): Promise<boolean> {
+    const phone = this.normalizePhone(phoneNumber);
+    const query = `
+      query PhoneTaken($phone: String!) {
+        users(where: { phone_number: { _eq: $phone } }, limit: 1) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(query, { phone });
+    return (result.users?.length || 0) > 0;
+  }
+
   async startSignup(payload: SignupStartPayload): Promise<{ user: SignupCreatedUser }> {
     const email = this.normalizeEmail(payload.email);
-    const taken = await this.isEmailTaken(email);
-    if (taken) {
+    const phoneNumber = this.normalizePhone(payload.phone_number);
+
+    if (!email && !phoneNumber) {
       throw new HttpException(
-        { success: false, error: 'Email is already taken' },
-        HttpStatus.CONFLICT
+        { success: false, error: 'Email or phone number is required' },
+        HttpStatus.BAD_REQUEST
       );
     }
-    const { user, entities } = await this.createPendingUser({ ...payload, email });
+
+    if (email) {
+      const emailTaken = await this.isEmailTaken(email);
+      if (emailTaken) {
+        throw new HttpException(
+          { success: false, error: 'Email is already taken' },
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+
+    if (phoneNumber) {
+      const phoneTaken = await this.isPhoneTaken(phoneNumber);
+      if (phoneTaken) {
+        throw new HttpException(
+          { success: false, error: 'Phone number is already taken' },
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+
+    const { user, entities } = await this.createPendingUser({
+      ...payload,
+      email: email || null,
+      phone_number: phoneNumber || null,
+    });
     if (payload.address && entities.length > 0) {
       const uid = user.id;
       for (const entity of entities) {
@@ -108,7 +155,7 @@ export class SignupService {
       );
     }
     const userById = await this.hasuraSystemService.executeQuery<{
-      users_by_pk: { id: string; email: string } | null;
+      users_by_pk: { id: string; email: string | null } | null;
     }>(
       `
       query GetUser($id: uuid!) {
@@ -127,7 +174,8 @@ export class SignupService {
         HttpStatus.NOT_FOUND
       );
     }
-    if (this.normalizeEmail(pendingUser.email) !== email) {
+    const pendingStored = this.normalizeEmail(pendingUser.email);
+    if (pendingStored && pendingStored !== email) {
       throw new HttpException(
         { success: false, error: 'Email mismatch for signup completion' },
         HttpStatus.CONFLICT
@@ -137,10 +185,10 @@ export class SignupService {
       update_users_by_pk: any;
     }>(
       `
-      mutation CompleteSignup($id: uuid!) {
+      mutation CompleteSignup($id: uuid!, $email: String!) {
         update_users_by_pk(
           pk_columns: { id: $id }
-          _set: { email_verified: true }
+          _set: { email: $email, email_verified: true }
         ) {
           id
           email
@@ -151,7 +199,7 @@ export class SignupService {
         }
       }
     `,
-      { id: userId }
+      { id: userId, email }
     );
     return { user: update.update_users_by_pk };
   }

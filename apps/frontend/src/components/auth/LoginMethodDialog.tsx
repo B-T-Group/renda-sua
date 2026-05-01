@@ -19,11 +19,11 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({ open, onClose }) 
   const { t } = useTranslation();
   const { loginWithRedirect } = useAuth0();
 
-  const handleEmailPasswordLogin = useCallback(async () => {
+  const handleOtpEmailLogin = useCallback(async () => {
     try {
       await loginWithRedirect({
         authorizationParams: {
-          screen_hint: 'login',
+          connection: 'email',
         },
         appState: { returnTo: '/app' },
       });
@@ -32,11 +32,24 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({ open, onClose }) 
     }
   }, [loginWithRedirect]);
 
-  const handleOtpLogin = useCallback(async () => {
+  const handleOtpPhoneLogin = useCallback(async () => {
     try {
       await loginWithRedirect({
         authorizationParams: {
-          connection: 'email',
+          connection: 'sms',
+        },
+        appState: { returnTo: '/app' },
+      });
+    } catch (err: any) {
+      console.error('loginWithRedirect failed:', err);
+    }
+  }, [loginWithRedirect]);
+
+  const handleEmailPasswordLogin = useCallback(async () => {
+    try {
+      await loginWithRedirect({
+        authorizationParams: {
+          screen_hint: 'login',
         },
         appState: { returnTo: '/app' },
       });
@@ -57,20 +70,42 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({ open, onClose }) 
     >
       <DialogTitle>{t('auth.chooseLoginMethod', 'Choose login method')}</DialogTitle>
       <DialogContent>
-        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+        <Stack spacing={1.5} sx={{ pt: 0.5, alignItems: 'center' }}>
           <Button
             variant="contained"
-            onClick={handleOtpLogin}
+            onClick={handleOtpPhoneLogin}
             fullWidth
-            sx={{ borderRadius: 0 }}
+            sx={{ borderRadius: 0, maxWidth: 360 }}
           >
-            {t('auth.loginWithOtp', 'Login with one-time password')}
+            {t('auth.loginWithOtpPhone', 'Login with one-time password (phone)')}
           </Button>
+
           <Button
-            variant="outlined"
+            variant="text"
+            onClick={handleOtpEmailLogin}
+            sx={{
+              alignSelf: 'flex-start',
+              textTransform: 'none',
+              textDecoration: 'underline',
+              textUnderlineOffset: '2px',
+              borderRadius: 0,
+              px: 0.25,
+            }}
+          >
+            {t('auth.loginWithOtpEmail', 'Login with one-time password (email)')}
+          </Button>
+
+          <Button
+            variant="text"
             onClick={handleEmailPasswordLogin}
-            fullWidth
-            sx={{ borderRadius: 0 }}
+            sx={{
+              alignSelf: 'flex-start',
+              textTransform: 'none',
+              textDecoration: 'underline',
+              textUnderlineOffset: '2px',
+              borderRadius: 0,
+              px: 0.25,
+            }}
           >
             {t('auth.loginWithEmailPassword', 'Login with email/password')}
           </Button>

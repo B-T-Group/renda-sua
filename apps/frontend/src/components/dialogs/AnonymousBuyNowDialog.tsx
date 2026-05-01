@@ -21,10 +21,17 @@ import {
   useTheme,
 } from '@mui/material';
 import CloseRounded from '@mui/icons-material/CloseRounded';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import CountryPhoneNumberInput from '../common/CountryPhoneNumberInput';
+import {
+  getDialCodeForActiveCountry,
+  isActivePhoneCountry,
+} from '../../constants/activeCountries';
 import { useApiClient } from '../../hooks/useApiClient';
+import { DETECTED_COUNTRY_STORAGE_KEY } from '../../hooks/useDetectedCountry';
 import {
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
@@ -57,6 +64,19 @@ function isValidEmailFormat(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(s);
 }
 
+function normalizeCountryCode(input: string | null | undefined): string {
+  return String(input || '')
+    .trim()
+    .toUpperCase();
+}
+
+function getApiErrorMessage(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const response = (err as { response?: { data?: { error?: string; message?: string } } })
+    .response;
+  return response?.data?.error || response?.data?.message;
+}
+
 const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   open,
   inventoryItemId,
@@ -73,7 +93,10 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const { loginWithRedirect } = useAuth0();
   const { trackSiteEvent } = useTrackSiteEvent();
 
+  const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
   const [email, setEmail] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState('US');
+  const [phoneNationalNumber, setPhoneNationalNumber] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +108,26 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     () => isValidEmailFormat(emailNormalized),
     [emailNormalized]
   );
+  const phoneDialCode = useMemo(() => {
+    const dial = getDialCodeForActiveCountry(phoneCountry);
+    return dial ? `+${dial}` : '';
+  }, [phoneCountry]);
+  const phoneNumberDigits = useMemo(
+    () => phoneNationalNumber.replace(/\D/g, ''),
+    [phoneNationalNumber]
+  );
+  const phoneE164 = useMemo(() => {
+    if (!phoneDialCode || !phoneNumberDigits) return '';
+    return `${phoneDialCode}${phoneNumberDigits}`;
+  }, [phoneDialCode, phoneNumberDigits]);
+  const isPhoneValid = useMemo(() => {
+    if (!phoneE164) return false;
+    try {
+      return isValidPhoneNumber(phoneE164);
+    } catch {
+      return false;
+    }
+  }, [phoneE164]);
   const firstNameTrimmed = useMemo(() => firstName.trim(), [firstName]);
   const lastNameTrimmed = useMemo(() => lastName.trim(), [lastName]);
 
@@ -93,31 +136,68 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [inventoryItemId]
   );
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const detected = normalizeCountryCode(
+      localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
+    );
+    if (isActivePhoneCountry(detected)) {
+      setPhoneCountry(detected);
+    }
+  }, []);
 
   const redirectToOtp = useCallback(
-    async (screenHint: 'login' | 'signup') => {
+    async (
+      screenHint: 'login' | 'signup',
+      loginHint: string,
+      connection: 'email' | 'sms'
+    ) => {
       try {
         void trackSiteEvent({
           eventType: SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
           subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
           subjectId: inventoryItemId,
-          metadata: { screenHint, email: emailNormalized || null },
+          metadata: {
+            screenHint,
+            contactMethod,
+            loginHint: loginHint || null,
+            email: emailNormalized || null,
+            phone: phoneE164 || null,
+          },
         });
         await loginWithRedirect({
           authorizationParams: {
-            connection: 'email',
-            login_hint: emailNormalized,
+            connection,
+            login_hint: loginHint,
             screen_hint: screenHint,
           },
           appState: { returnTo: returnToPathWithAnon },
         });
-      } catch (redirectErr: any) {
-        // Fallback: send to existing OTP page if Auth0 redirect fails
+      } catch (redirectErr: unknown) {
         console.error('loginWithRedirect failed:', redirectErr);
-        navigate('/auth/otp');
+        if (connection === 'email') {
+          navigate('/auth/otp');
+          return;
+        }
+        setError(
+          t(
+            'public.items.checkoutDialog.phoneAuthUnavailable',
+            'Phone sign-in is currently unavailable. Please use email instead.'
+          )
+        );
       }
     },
-    [emailNormalized, loginWithRedirect, navigate, returnToPathWithAnon]
+    [
+      contactMethod,
+      emailNormalized,
+      inventoryItemId,
+      loginWithRedirect,
+      navigate,
+      phoneE164,
+      returnToPathWithAnon,
+      t,
+      trackSiteEvent,
+    ]
   );
 
   useEffect(() => {
@@ -135,7 +215,9 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   }, [inventoryItemId, open, trackSiteEvent]);
 
   const handleContinue = useCallback(async () => {
-    if (!isEmailValid || submitting) return;
+    if (submitting) return;
+    if (contactMethod === 'email' && !isEmailValid) return;
+    if (contactMethod === 'phone' && !isPhoneValid) return;
     if (!firstNameTrimmed || !lastNameTrimmed) return;
     setSubmitting(true);
     setError(null);
@@ -143,16 +225,42 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       eventType: SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
       subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
       subjectId: inventoryItemId,
-      metadata: { email: emailNormalized || null },
+      metadata: {
+        contactMethod,
+        email: emailNormalized || null,
+        phone: phoneE164 || null,
+      },
     });
     try {
+      if (contactMethod === 'phone') {
+        const availability = await apiClient.get<{ taken: boolean }>(
+          '/auth/phone-availability',
+          { params: { phone_number: phoneE164 } }
+        );
+        if (availability.data?.taken) {
+          await redirectToOtp('login', phoneE164, 'sms');
+          return;
+        }
+        await apiClient.post('/auth/signup/start', {
+          first_name: firstNameTrimmed,
+          last_name: lastNameTrimmed,
+          email: null,
+          phone_number: phoneE164,
+          personas: ['client'],
+          user_type_id: 'client',
+          profile: {},
+        });
+        await redirectToOtp('signup', phoneE164, 'sms');
+        return;
+      }
+
       const availability = await apiClient.get<{ taken: boolean }>(
         '/auth/email-availability',
         { params: { email: emailNormalized } }
       );
 
       if (availability.data?.taken) {
-        await redirectToOtp('login');
+        await redirectToOtp('login', emailNormalized, 'email');
         return;
       }
 
@@ -160,17 +268,16 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         first_name: firstNameTrimmed,
         last_name: lastNameTrimmed,
         email: emailNormalized,
-        phone_number: null,
+        phone_number: phoneE164 || null,
         personas: ['client'],
         user_type_id: 'client',
         profile: {},
       });
 
-      await redirectToOtp('signup');
-    } catch (err: any) {
+      await redirectToOtp('signup', emailNormalized, 'email');
+    } catch (err: unknown) {
       const msg =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
+        getApiErrorMessage(err) ||
         t(
           'public.items.authCta.description',
           'Create an account to browse and order items.'
@@ -181,11 +288,14 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     }
   }, [
     apiClient,
+    contactMethod,
     emailNormalized,
     firstNameTrimmed,
     inventoryItemId,
     isEmailValid,
+    isPhoneValid,
     lastNameTrimmed,
+    phoneE164,
     redirectToOtp,
     submitting,
     t,
@@ -198,6 +308,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     setFirstName('');
     setLastName('');
     setEmail('');
+    setPhoneNationalNumber('');
+    setContactMethod('phone');
     onClose();
   }, [onClose, submitting]);
 
@@ -211,7 +323,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [secondaryCtaLabel, t]
   );
 
-  const canSubmit = isEmailValid && !!firstNameTrimmed && !!lastNameTrimmed && !submitting;
+  const canSubmit =
+    (contactMethod === 'email' ? isEmailValid : isPhoneValid) &&
+    !!firstNameTrimmed &&
+    !!lastNameTrimmed &&
+    !submitting;
 
   return (
     <Dialog
@@ -277,8 +393,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
 
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)', maxWidth: 340 }}>
           {t(
-            'public.items.checkoutDialog.subtitle',
-            'Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.'
+            contactMethod === 'phone'
+              ? 'public.items.checkoutDialog.subtitlePhone'
+              : 'public.items.checkoutDialog.subtitleEmail',
+            contactMethod === 'phone'
+              ? 'Enter your name and phone number to continue. We’ll use them for your receipt, order updates, and to create your account.'
+              : 'Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.'
           )}
         </Typography>
       </Box>
@@ -399,35 +519,84 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             />
           </Stack>
 
-          {/* Email field */}
-          <TextField
-            fullWidth
-            label={t('public.items.checkoutDialog.emailLabel', 'Email address')}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            disabled={submitting}
-            error={email.length > 0 && !isEmailValid}
-            helperText={
-              email.length > 0 && !isEmailValid
-                ? t('signupPage.emailInvalid', 'Please enter a valid email.')
-                : undefined
+          {contactMethod === 'phone' ? (
+            <Stack spacing={1.5}>
+              <CountryPhoneNumberInput
+                countryCode={phoneCountry}
+                onCountryCodeChange={setPhoneCountry}
+                nationalNumber={phoneNationalNumber}
+                onNationalNumberChange={setPhoneNationalNumber}
+                countryLabel={t('public.items.checkoutDialog.phoneCountryLabel', 'Country code')}
+                phoneLabel={t('public.items.checkoutDialog.phoneLabel', 'Phone number')}
+                invalidPhoneMessage={t(
+                  'public.items.checkoutDialog.phoneInvalid',
+                  'Please enter a valid phone number.'
+                )}
+                isPhoneValid={isPhoneValid}
+                disabled={submitting}
+              />
+              <Typography variant="caption" color="text.secondary">
+                {t(
+                  'public.items.checkoutDialog.phonePreview',
+                  'We will use {{phone}} for account verification and order updates.',
+                  { phone: phoneE164 || `${phoneDialCode}...` }
+                )}
+              </Typography>
+            </Stack>
+          ) : (
+            <TextField
+              fullWidth
+              label={t('public.items.checkoutDialog.emailLabel', 'Email address')}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              disabled={submitting}
+              error={email.length > 0 && !isEmailValid}
+              helperText={
+                email.length > 0 && !isEmailValid
+                  ? t('signupPage.emailInvalid', 'Please enter a valid email.')
+                  : undefined
+              }
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailOutlined
+                        fontSize="small"
+                        sx={{ color: isEmailValid ? 'primary.main' : 'text.disabled' }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            />
+          )}
+
+          <Button
+            variant="text"
+            onClick={() =>
+              setContactMethod((prev) => (prev === 'phone' ? 'email' : 'phone'))
             }
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailOutlined
-                      fontSize="small"
-                      sx={{ color: isEmailValid ? 'primary.main' : 'text.disabled' }}
-                    />
-                  </InputAdornment>
-                ),
-              },
+            disabled={submitting}
+            sx={{
+              alignSelf: 'flex-start',
+              textTransform: 'none',
+              px: 0.25,
+              minWidth: 0,
             }}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-          />
+          >
+            {contactMethod === 'phone'
+              ? t(
+                  'public.items.checkoutDialog.useEmailInstead',
+                  'Enter email instead'
+                )
+              : t(
+                  'public.items.checkoutDialog.usePhoneInstead',
+                  'Enter phone number instead'
+                )}
+          </Button>
 
           {/* Trust badge */}
           <Stack
@@ -452,8 +621,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {t(
-                  'public.items.checkoutDialog.trustBody',
-                  'We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.'
+                  contactMethod === 'phone'
+                    ? 'public.items.checkoutDialog.trustBodyPhone'
+                    : 'public.items.checkoutDialog.trustBodyEmail',
+                  contactMethod === 'phone'
+                    ? 'We’ll send a one-time code to your phone. You can pay with mobile money and track your order updates.'
+                    : 'We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.'
                 )}
               </Typography>
             </Box>

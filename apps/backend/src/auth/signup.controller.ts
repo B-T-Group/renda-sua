@@ -31,6 +31,21 @@ export class SignupController {
   }
 
   @Public()
+  @Get('phone-availability')
+  @ApiOperation({ summary: 'Check if phone number is already taken' })
+  @ApiQuery({ name: 'phone_number', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Phone availability status' })
+  async phoneAvailability(
+    @Query('phone_number') phoneNumber: string
+  ): Promise<{ taken: boolean }> {
+    if (!phoneNumber || !phoneNumber.trim()) {
+      return { taken: false };
+    }
+    const taken = await this.signupService.isPhoneTaken(phoneNumber);
+    return { taken };
+  }
+
+  @Public()
   @Post('signup/start')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create pending signup user' })

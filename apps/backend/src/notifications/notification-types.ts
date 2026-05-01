@@ -2,11 +2,12 @@ export interface NotificationData {
   orderId: string;
   orderNumber: string;
   clientName: string;
-  clientEmail: string;
+  /** Omit or null when the user has no email — email notifications are skipped for that recipient */
+  clientEmail?: string | null;
   businessName: string;
   /** Store or location name (e.g. Downtown Store), when available */
   businessLocationName?: string;
-  businessEmail: string;
+  businessEmail?: string | null;
   businessVerified?: boolean;
   agentName?: string;
   agentEmail?: string;

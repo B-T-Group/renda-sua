@@ -39,8 +39,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // Check if user's email is verified
-  if (user && !user.email_verified) {
+  // Only block when the user has an email and it is explicitly unverified.
+  if (user?.email && user.email_verified === false) {
     console.log(
       'User email is not verified, redirecting to email verification page',
       user

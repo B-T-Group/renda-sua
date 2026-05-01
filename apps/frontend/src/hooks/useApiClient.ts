@@ -25,6 +25,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/admin/site-events',
     '/users/me',
     '/auth/email-availability',
+    '/auth/phone-availability',
     '/pdf/shipping-labels',
     '/locations/',
     '/notifications/',

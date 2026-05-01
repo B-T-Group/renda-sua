@@ -644,6 +644,8 @@
     "signUp": "S'inscrire",
     "chooseLoginMethod": "Choisir le mode de connexion",
     "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
+    "loginWithOtpEmail": "Se connecter avec un mot de passe à usage unique (email)",
+    "loginWithOtpPhone": "Se connecter avec un mot de passe à usage unique (téléphone)",
     "loginWithEmailPassword": "Se connecter avec l'e-mail et le mot de passe"
   },
   "signupPage": {
@@ -3333,12 +3335,23 @@
       "checkoutDialog": {
         "title": "Continuer vers le paiement",
         "subtitle": "Entrez votre nom et votre email pour continuer. Nous les utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
+        "subtitleEmail": "Entrez votre nom et votre email pour continuer. Nous les utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
+        "subtitlePhone": "Entrez votre nom et votre numéro de téléphone pour continuer. Nous les utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
         "firstNameLabel": "Prénom",
         "lastNameLabel": "Nom de famille",
         "emailLabel": "Adresse email",
+        "phoneCountryLabel": "Indicatif pays",
+        "phoneLabel": "Numéro de téléphone",
+        "phoneInvalid": "Veuillez saisir un numéro de téléphone valide.",
+        "phonePreview": "Nous utiliserons {{phone}} pour la vérification du compte et les mises à jour de commande.",
+        "useEmailInstead": "Saisir un email à la place",
+        "usePhoneInstead": "Saisir un numéro de téléphone à la place",
+        "phoneAuthUnavailable": "La connexion par téléphone est actuellement indisponible. Veuillez utiliser l'email à la place.",
         "continue": "Continuer",
         "trustTitle": "Aucun mot de passe nécessaire",
         "trustBody": "Nous vous enverrons un code à usage unique par email. Vous pourrez payer par mobile money et suivre les mises à jour de votre commande.",
+        "trustBodyEmail": "Nous vous enverrons un code à usage unique par email. Vous pourrez payer par mobile money et suivre les mises à jour de votre commande.",
+        "trustBodyPhone": "Nous vous enverrons un code à usage unique par téléphone. Vous pourrez payer par mobile money et suivre les mises à jour de votre commande.",
         "noPasswordHelper": "Aucun mot de passe nécessaire, nous vous enverrons un code à usage unique."
       },
       "sort": {

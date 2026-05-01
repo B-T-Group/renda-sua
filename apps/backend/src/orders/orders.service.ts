@@ -1377,7 +1377,7 @@ export class OrdersService {
         provider: provider,
         payment_method: 'mobile_money',
         customer_phone: phoneNumber,
-        customer_email: user.email,
+        ...(user.email ? { customer_email: user.email } : {}),
         account_id: agentAccount.id,
         transaction_type: 'PAYMENT',
         payment_entity: 'claim_order' as const,
@@ -1519,8 +1519,8 @@ export class OrdersService {
     }
 
     const pendingClaimTransaction =
-      await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionByCustomerEmailAndOrderNumber(
-        user.email,
+      await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionForUserAndOrderNumber(
+        user.id,
         order.order_number
       );
 
@@ -2299,7 +2299,9 @@ export class OrdersService {
       provider,
       payment_method: 'mobile_money',
       customer_phone: phoneNumber,
-      customer_email: order.client.user.email,
+      ...(order.client.user.email
+        ? { customer_email: order.client.user.email }
+        : {}),
       account_id: account.id,
       transaction_type: 'PAYMENT',
       payment_entity: 'order' as const,
@@ -2441,7 +2443,9 @@ export class OrdersService {
       provider,
       payment_method: 'mobile_money',
       customer_phone: phoneNumber,
-      customer_email: order.client.user.email,
+      ...(order.client.user.email
+        ? { customer_email: order.client.user.email }
+        : {}),
       account_id: account.id,
       transaction_type: 'PAYMENT',
       payment_entity: 'order' as const,
@@ -3160,8 +3164,8 @@ export class OrdersService {
         );
       }
       const pendingClaimTransactions =
-        await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionsByCustomerEmail(
-          user.email
+        await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionsForUserId(
+          user.id
         );
       const pendingClaimOrderNumbers = pendingClaimTransactions
         .map((transaction) => transaction.entity_id)
@@ -5019,9 +5023,6 @@ export class OrdersService {
       if (!order.business_location?.business?.name) {
         throw new Error('Business name is undefined');
       }
-      if (!order.business_location?.business?.user?.email) {
-        throw new Error('Business email is undefined');
-      }
       if (!order.delivery_address) {
         throw new Error('Delivery address is undefined');
       }
@@ -5794,7 +5795,7 @@ export class OrdersService {
             provider,
             payment_method: 'mobile_money',
             customer_phone: phoneNumber,
-            customer_email: user.email,
+            ...(user.email ? { customer_email: user.email } : {}),
             account_id: account.id,
             transaction_type: 'PAYMENT',
             payment_entity: 'order' as const,

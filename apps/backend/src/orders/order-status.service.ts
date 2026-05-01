@@ -460,11 +460,13 @@ export class OrderStatusService {
             order.client.user.last_name || ''
           }`.trim() || 'Unknown Client'
         : 'Unknown Client';
-      const clientEmail = order.client?.user?.email || '';
+      const clientEmail =
+        order.client?.user?.email?.trim() || undefined;
 
       // Safely extract business information with null checks
       const businessName = order.business?.name || 'Unknown Business';
-      const businessEmail = order.business?.user?.email || '';
+      const businessEmail =
+        order.business?.user?.email?.trim() || undefined;
       const businessVerified = order.business?.is_verified || false;
 
       // Safely extract agent information with null checks

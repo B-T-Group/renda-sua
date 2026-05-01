@@ -551,6 +551,92 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
+   * Pending claim_order transactions for an agent user (via account.user_id).
+   * Prefer this when users.email may be null.
+   */
+  async getPendingClaimOrderTransactionsForUserId(
+    userId: string
+  ): Promise<PendingClaimOrderTransaction[]> {
+    try {
+      const query = `
+        query GetPendingClaimOrderTransactionsForUser($userId: uuid!) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              entity_id: { _is_null: false }
+              account: { user_id: { _eq: $userId } }
+            }
+            order_by: { created_at: desc }
+          ) {
+            id
+            entity_id
+            transaction_id
+            provider
+            status
+            created_at
+            account_id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: PendingClaimOrderTransaction[];
+      }>(query, { userId });
+      return response.mobile_payment_transactions ?? [];
+    } catch (error) {
+      this.logger.error(
+        'Failed to get pending claim order transactions for user:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  async getPendingClaimOrderTransactionForUserAndOrderNumber(
+    userId: string,
+    orderNumber: string
+  ): Promise<PendingClaimOrderTransaction | null> {
+    try {
+      const query = `
+        query GetPendingClaimForUserOrder(
+          $userId: uuid!
+          $orderNumber: String!
+        ) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              entity_id: { _eq: $orderNumber }
+              account: { user_id: { _eq: $userId } }
+            }
+            order_by: { created_at: desc }
+            limit: 1
+          ) {
+            id
+            entity_id
+            transaction_id
+            provider
+            status
+            created_at
+            account_id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: PendingClaimOrderTransaction[];
+      }>(query, { userId, orderNumber });
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows[0] ?? null;
+    } catch (error) {
+      this.logger.error(
+        'Failed to get pending claim order transaction for user and order:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get mobile payment transactions with filters
    */
   async getTransactions(filters?: {

@@ -655,6 +655,8 @@
     "signUp": "Sign up",
     "chooseLoginMethod": "Choose login method",
     "loginWithOtp": "Login with one-time password",
+    "loginWithOtpEmail": "Login with one-time password (email)",
+    "loginWithOtpPhone": "Login with one-time password (phone)",
     "loginWithEmailPassword": "Login with email/password"
   },
   "signupPage": {
@@ -3366,12 +3368,23 @@
       "checkoutDialog": {
         "title": "Continue to checkout",
         "subtitle": "Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.",
+        "subtitleEmail": "Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.",
+        "subtitlePhone": "Enter your name and phone number to continue. We’ll use them for your receipt, order updates, and to create your account.",
         "firstNameLabel": "First name",
         "lastNameLabel": "Last name",
         "emailLabel": "Email address",
+        "phoneCountryLabel": "Country code",
+        "phoneLabel": "Phone number",
+        "phoneInvalid": "Please enter a valid phone number.",
+        "phonePreview": "We will use {{phone}} for account verification and order updates.",
+        "useEmailInstead": "Enter email instead",
+        "usePhoneInstead": "Enter phone number instead",
+        "phoneAuthUnavailable": "Phone sign-in is currently unavailable. Please use email instead.",
         "continue": "Continue",
         "trustTitle": "No password needed",
         "trustBody": "We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.",
+        "trustBodyEmail": "We’ll send a one-time code to your email. You can pay with mobile money and track your order updates.",
+        "trustBodyPhone": "We’ll send a one-time code to your phone. You can pay with mobile money and track your order updates.",
         "noPasswordHelper": "No password needed, we will send you a one time code."
       },
       "sort": {

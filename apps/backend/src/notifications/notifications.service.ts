@@ -172,37 +172,68 @@ export class NotificationsService {
    * Send order creation notifications
    */
   async sendOrderCreatedNotifications(data: NotificationData): Promise<void> {
-    try {
-      const clientLocale = this.languageForRecipient(data, 'client');
-      const businessLocale = this.languageForRecipient(data, 'business');
-      await this.sendEmail({
-        to: data.clientEmail,
-        templateKey: this.mapKeyForLanguage('client_order_created', clientLocale),
-        variables: buildResendTemplateVariables(data, 'client', clientLocale),
-      });
-      await this.sendEmail({
-        to: data.businessEmail,
-        templateKey: this.mapKeyForLanguage(
-          'business_order_created',
-          businessLocale
-        ),
-        variables: buildResendTemplateVariables(
-          data,
-          'business',
-          businessLocale
-        ),
-      });
+    const clientLocale = this.languageForRecipient(data, 'client');
+    const businessLocale = this.languageForRecipient(data, 'business');
+    let sentAny = false;
 
+    const clientTo = data.clientEmail?.trim();
+    if (clientTo) {
+      try {
+        await this.sendEmail({
+          to: clientTo,
+          templateKey: this.mapKeyForLanguage(
+            'client_order_created',
+            clientLocale
+          ),
+          variables: buildResendTemplateVariables(data, 'client', clientLocale),
+        });
+        sentAny = true;
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Order created: failed client email for ${data.orderNumber}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Order created: skipped client email for order ${data.orderNumber} (no email)`
+      );
+    }
+
+    const businessTo = data.businessEmail?.trim();
+    if (businessTo) {
+      try {
+        await this.sendEmail({
+          to: businessTo,
+          templateKey: this.mapKeyForLanguage(
+            'business_order_created',
+            businessLocale
+          ),
+          variables: buildResendTemplateVariables(
+            data,
+            'business',
+            businessLocale
+          ),
+        });
+        sentAny = true;
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Order created: failed business email for ${data.orderNumber}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Order created: skipped business email for order ${data.orderNumber} (no email)`
+      );
+    }
+
+    if (sentAny) {
       this.logger.log(
-        `Order creation notifications sent for order ${data.orderNumber}`
+        `Order creation notification(s) processed for order ${data.orderNumber}`
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to send order creation notifications: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw error;
     }
   }
 
@@ -498,7 +529,7 @@ export class NotificationsService {
   }
 
   private async getUserRowForEmail(userId: string): Promise<{
-    email: string;
+    email: string | null;
     preferred_language?: string;
   } | null> {
     const q = `query U($id: uuid!) { users_by_pk(id: $id) { email preferred_language } }`;
@@ -521,6 +552,13 @@ export class NotificationsService {
       const recipients = this.getRecipientsForStatus(data.orderStatus, data);
 
       for (const recipient of recipients) {
+        const to = recipient.email?.trim();
+        if (!to) {
+          this.logger.warn(
+            `Skipped order status email (${recipient.type}) for order ${data.orderNumber}: no recipient email`
+          );
+          continue;
+        }
         const baseKey = `${recipient.type}_${templateKey}`;
         const locale = this.languageForRecipient(data, recipient.type);
         const mapKey = this.mapKeyForLanguage(baseKey, locale);
@@ -529,7 +567,7 @@ export class NotificationsService {
           templateKey === 'order_assigned' ? 'agentAssigned' : 'default';
         try {
           await this.sendEmail({
-            to: recipient.email,
+            to,
             templateKey: mapKey,
             variables: buildResendTemplateVariables(
               data,
@@ -1192,7 +1230,7 @@ export class NotificationsService {
     status: string,
     data: NotificationData
   ): Array<{
-    email: string;
+    email?: string | null;
     type: string;
   }> {
     const recipients = [];
@@ -1305,19 +1343,19 @@ export class NotificationsService {
 
     switch (status) {
       case 'confirmed':
-        email = data.clientEmail;
+        email = data.clientEmail ?? undefined;
         body = `Rendasua: Your order ${data.orderNumber} has been confirmed.`;
         break;
       case 'assigned_to_agent':
-        email = data.agentEmail;
+        email = data.agentEmail ?? undefined;
         body = `Rendasua: Order ${data.orderNumber} has been assigned to you.`;
         break;
       case 'out_for_delivery':
-        email = data.clientEmail;
+        email = data.clientEmail ?? undefined;
         body = `Rendasua: Order ${data.orderNumber} is out for delivery.`;
         break;
       case 'delivered':
-        email = data.clientEmail;
+        email = data.clientEmail ?? undefined;
         body = `Rendasua: Order ${data.orderNumber} has been delivered. Thank you!`;
         break;
       default:

@@ -1199,7 +1199,7 @@ export class RentalsService {
     userId: string,
     clientId: string,
     phoneNumber: string,
-    email: string
+    email: string | null | undefined
   ) {
     const bookingId = req.rental_booking?.id as string;
     const bookingNumber = req.rental_booking?.booking_number as string | undefined;
@@ -1256,7 +1256,7 @@ export class RentalsService {
     userId: string,
     clientId: string,
     phoneNumber: string,
-    email: string
+    email: string | null | undefined
   ) {
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
@@ -1359,7 +1359,7 @@ export class RentalsService {
     clientAccountId: string;
     userId: string;
     phoneNumber: string;
-    email: string;
+    email?: string | null;
     reference: string;
     paymentEntity: 'rental_booking';
   }): Promise<void> {
@@ -1393,7 +1393,7 @@ export class RentalsService {
       provider,
       payment_method: 'mobile_money',
       customer_phone: params.phoneNumber,
-      customer_email: params.email,
+      ...(params.email ? { customer_email: params.email } : {}),
       account_id: params.clientAccountId,
       transaction_type: 'PAYMENT',
       payment_entity: params.paymentEntity,
