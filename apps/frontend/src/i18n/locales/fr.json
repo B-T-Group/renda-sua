@@ -3326,7 +3326,9 @@
       },
       "checkoutDialog": {
         "title": "Continuer vers le paiement",
-        "subtitle": "Entrez votre email pour continuer. Nous l’utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
+        "subtitle": "Entrez votre nom et votre email pour continuer. Nous les utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
+        "firstNameLabel": "Prénom",
+        "lastNameLabel": "Nom de famille",
         "emailLabel": "Adresse email",
         "continue": "Continuer",
         "trustTitle": "Aucun mot de passe nécessaire",

@@ -2407,8 +2407,7 @@
       "payNow": "Pay now",
       "payNowShort": "Approve the payment request right away.",
       "payNowDescription": "We’ll send a payment request to your phone now. Approve it to place your order.",
-      "payAtDelivery": "Pay at delivery"
-      ,
+      "payAtDelivery": "Pay at delivery",
       "payAtDeliveryShort": "Pay in the app when the agent arrives.",
       "payAtDeliveryDescription": "You will place the order now and pay at delivery in the app when the agent arrives."
     },
@@ -2633,7 +2632,7 @@
     "item": "item",
     "itemNotFound": "Item not found",
     "itemNotFoundMessage": "The item you are looking for is no longer available.",
-    "items": "Items",
+    "items": "items",
     "loadingCancellationFee": "Loading cancellation fee...",
     "manageOrder": "Manage Order",
     "manageOrderDescription": "View and manage order details",
@@ -2767,9 +2766,6 @@
     "verifiedAgentDescription": "Only verified agents can deliver this order",
     "viewAndTakeAction": "View & Take Action",
     "viewDetails": "View Details",
-    "details": "Details",
-    "item": "item",
-    "items": "items",
     "cancelledByCustomer": "Cancelled by customer",
     "card": {
       "deliveryAddress": "Delivery address",
@@ -3363,7 +3359,9 @@
       },
       "checkoutDialog": {
         "title": "Continue to checkout",
-        "subtitle": "Enter your email to continue. We’ll use it for your receipt, order updates, and to create your account.",
+        "subtitle": "Enter your name and email to continue. We’ll use them for your receipt, order updates, and to create your account.",
+        "firstNameLabel": "First name",
+        "lastNameLabel": "Last name",
         "emailLabel": "Email address",
         "continue": "Continue",
         "trustTitle": "No password needed",

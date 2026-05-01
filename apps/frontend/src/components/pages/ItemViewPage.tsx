@@ -50,6 +50,11 @@ import {
 import { Item, useItems } from '../../hooks/useItems';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import { ItemImage } from '../../types/image';
+import {
+  getPrimaryOrFirstItemImage,
+  isPrimaryItemImageType,
+  orderedItemImages,
+} from '../../utils/orderedItemImages';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
@@ -283,17 +288,13 @@ export default function ItemViewPage() {
   }, [item?.business_inventories]);
 
   const sortedItemImages = useMemo(() => {
-    const imgs = item?.item_images ?? [];
-    return [...imgs].sort((a, b) => {
-      if (a.image_type === 'main') return -1;
-      if (b.image_type === 'main') return 1;
-      return (a.display_order ?? 0) - (b.display_order ?? 0);
-    });
+    return orderedItemImages(item?.item_images);
   }, [item?.item_images]);
 
-  const heroImage =
-    sortedItemImages.find((i) => i.image_type === 'main') ?? sortedItemImages[0];
-  const galleryThumbs = sortedItemImages.filter((i) => i.image_type !== 'main');
+  const heroImage = getPrimaryOrFirstItemImage(sortedItemImages);
+  const galleryThumbs = sortedItemImages.filter(
+    (i) => !isPrimaryItemImageType(i.image_type)
+  );
 
   const openImageLightbox = useCallback((index: number) => {
     setImageLightboxIndex(index);
@@ -1348,7 +1349,7 @@ export default function ItemViewPage() {
               {sortedItemImages.length > 0 ? (
                 <Grid container spacing={2}>
                   {sortedItemImages.map((image: ItemImage, idx: number) => {
-                    const isMain = image.image_type === 'main';
+                    const isMain = isPrimaryItemImageType(image.image_type);
                     const showSetPrimary = !isMain;
                     const showSetSecondary =
                       isMain && sortedItemImages.length > 1;
