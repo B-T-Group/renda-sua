@@ -135,6 +135,7 @@ export interface OrderWithDetails {
   preferred_delivery_time?: string;
   payment_method?: string;
   payment_status?: string;
+  payment_timing?: 'pay_now' | 'pay_at_delivery';
   verified_agent_delivery?: boolean;
   created_at: string;
   updated_at: string;
@@ -3721,6 +3722,7 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_timing
           verified_agent_delivery
           created_at
           updated_at
@@ -3906,6 +3908,7 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_timing
           verified_agent_delivery
           created_at
           updated_at

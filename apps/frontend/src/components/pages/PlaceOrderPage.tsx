@@ -716,9 +716,41 @@ const PlaceOrderPage: React.FC = () => {
   }, [selectedItem?.item?.item_images]);
 
   const [selectedItemImageIndex, setSelectedItemImageIndex] = useState(0);
+  const [itemImagePreviewOpen, setItemImagePreviewOpen] = useState(false);
   useEffect(() => {
     setSelectedItemImageIndex(0);
   }, [selectedItem?.id]);
+
+  const openSelectedItemImagePreview = useCallback(
+    (index = 0) => {
+      if (!orderedSelectedItemImages.length) return;
+      const safeIndex = Math.min(
+        Math.max(index, 0),
+        orderedSelectedItemImages.length - 1
+      );
+      setSelectedItemImageIndex(safeIndex);
+      setItemImagePreviewOpen(true);
+    },
+    [orderedSelectedItemImages]
+  );
+
+  const closeSelectedItemImagePreview = useCallback(() => {
+    setItemImagePreviewOpen(false);
+  }, []);
+
+  const showPreviousPreviewImage = useCallback(() => {
+    if (orderedSelectedItemImages.length < 2) return;
+    setSelectedItemImageIndex((prev) =>
+      prev === 0 ? orderedSelectedItemImages.length - 1 : prev - 1
+    );
+  }, [orderedSelectedItemImages.length]);
+
+  const showNextPreviewImage = useCallback(() => {
+    if (orderedSelectedItemImages.length < 2) return;
+    setSelectedItemImageIndex((prev) =>
+      prev === orderedSelectedItemImages.length - 1 ? 0 : prev + 1
+    );
+  }, [orderedSelectedItemImages.length]);
 
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
 
@@ -1616,18 +1648,31 @@ const PlaceOrderPage: React.FC = () => {
                 <Stack spacing={2}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     {orderedSelectedItemImages[0] && (
-                      <Box
-                        component="img"
-                        src={orderedSelectedItemImages[0].image_url}
-                        alt={selectedItem.item.name}
+                      <ButtonBase
+                        onClick={() => openSelectedItemImagePreview(0)}
+                        aria-label={t('items.viewAllImages', 'View item images')}
                         sx={{
                           width: 120,
                           height: 120,
                           flexShrink: 0,
                           borderRadius: 1,
-                          objectFit: 'cover',
+                          overflow: 'hidden',
+                          border: '1px solid',
+                          borderColor: 'divider',
                         }}
-                      />
+                      >
+                        <Box
+                          component="img"
+                          src={orderedSelectedItemImages[0].image_url}
+                          alt={selectedItem.item.name}
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                        />
+                      </ButtonBase>
                     )}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" fontWeight="medium" noWrap>
@@ -1646,6 +1691,43 @@ const PlaceOrderPage: React.FC = () => {
                       )}
                     </Box>
                   </Box>
+
+                  {orderedSelectedItemImages.length > 1 ? (
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+                      {orderedSelectedItemImages.map((img, idx) => (
+                        <ButtonBase
+                          key={img.id ?? `${img.image_url}-${idx}`}
+                          onClick={() => openSelectedItemImagePreview(idx)}
+                          aria-label={t(
+                            'items.imageThumbnail',
+                            'View image {{index}}',
+                            { index: idx + 1 }
+                          )}
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            border: '1px solid',
+                            borderColor:
+                              idx === selectedItemImageIndex ? 'primary.main' : 'divider',
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={img.image_url}
+                            alt={img.alt_text || selectedItem.item.name}
+                            sx={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                          />
+                        </ButtonBase>
+                      ))}
+                    </Stack>
+                  ) : null}
 
                   {selectedItem.item.description?.trim() && (
                     <Box>
@@ -3499,6 +3581,110 @@ const PlaceOrderPage: React.FC = () => {
             {missingPhoneSaving
               ? t('common.saving', 'Saving...')
               : t('common.continue', 'Continue')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={itemImagePreviewOpen}
+        onClose={closeSelectedItemImagePreview}
+        fullWidth
+        maxWidth="md"
+        fullScreen={isMobile}
+      >
+        <DialogTitle>{selectedItem?.item?.name}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {orderedSelectedItemImages[0] ? (
+              <Box
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  bgcolor: 'grey.50',
+                  borderRadius: 1.5,
+                  p: 1,
+                }}
+              >
+                <Box
+                  component="img"
+                  src={
+                    orderedSelectedItemImages[selectedItemImageIndex]?.image_url ??
+                    orderedSelectedItemImages[0].image_url
+                  }
+                  alt={selectedItem?.item?.name}
+                  sx={{
+                    width: '100%',
+                    maxHeight: isMobile ? '60vh' : '70vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    borderRadius: 1,
+                  }}
+                />
+              </Box>
+            ) : null}
+
+            {orderedSelectedItemImages.length > 1 ? (
+              <>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Button onClick={showPreviousPreviewImage}>
+                    {t('common.previous', 'Previous')}
+                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('items.imageCount', 'Image {{current}} of {{total}}', {
+                      current: selectedItemImageIndex + 1,
+                      total: orderedSelectedItemImages.length,
+                    })}
+                  </Typography>
+                  <Button onClick={showNextPreviewImage}>
+                    {t('common.next', 'Next')}
+                  </Button>
+                </Stack>
+
+                <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 0.5 }}>
+                  {orderedSelectedItemImages.map((img, idx) => {
+                    const isSelected = idx === selectedItemImageIndex;
+                    return (
+                      <ButtonBase
+                        key={img.id ?? `${img.image_url}-${idx}-preview`}
+                        onClick={() => setSelectedItemImageIndex(idx)}
+                        aria-label={t(
+                          'items.imageThumbnail',
+                          'View image {{index}}',
+                          { index: idx + 1 }
+                        )}
+                        sx={{
+                          width: 60,
+                          height: 60,
+                          flexShrink: 0,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          border: '2px solid',
+                          borderColor: isSelected ? 'primary.main' : 'divider',
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={img.image_url}
+                          alt={img.alt_text || selectedItem.item.name}
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                        />
+                      </ButtonBase>
+                    );
+                  })}
+                </Stack>
+              </>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeSelectedItemImagePreview}>
+            {t('common.close', 'Close')}
           </Button>
         </DialogActions>
       </Dialog>
