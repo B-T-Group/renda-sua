@@ -5,100 +5,38 @@
   "projectType": "application",
   "targets": {
     "build": {
-      "executor": "@nx/webpack:webpack",
+      "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "local",
       "options": {
-        "target": "web",
-        "compiler": "babel",
         "outputPath": "dist/apps/frontend",
-        "main": "apps/frontend/src/main.tsx",
         "tsConfig": "apps/frontend/tsconfig.app.json",
-        "index": "apps/frontend/src/index.html",
-        "baseHref": "/",
-        "assets": [
-          "apps/frontend/src/favicon.ico",
-          "apps/frontend/src/assets",
-          {
-            "input": "apps/frontend/public",
-            "glob": "**/*",
-            "output": "/"
-          }
-        ],
-        "styles": ["apps/frontend/src/styles.css"],
-        "isolatedConfig": true,
-        "webpackConfig": "apps/frontend/webpack.config.js"
+        "configFile": "apps/frontend/vite.config.ts"
       },
       "configurations": {
         "local": {
-          "optimization": false,
-          "extractLicenses": false,
-          "inspect": false,
-          "sourceMap": true,
-          "fileReplacements": [],
-          "outputHashing": "none"
+          "mode": "localdev",
+          "sourcemap": true,
+          "minify": false
         },
         "development": {
-          "optimization": false,
-          "extractLicenses": false,
-          "inspect": false,
-          "sourceMap": true,
-          "fileReplacements": [
-            {
-              "replace": "apps/frontend/src/config/environment.ts",
-              "with": "apps/frontend/src/config/environment.development.ts"
-            }
-          ],
-          "outputHashing": "none"
+          "mode": "development",
+          "sourcemap": true,
+          "minify": false
         },
         "production": {
-          "optimization": true,
-          "extractLicenses": true,
-          "inspect": false,
-          "sourceMap": false,
-          "fileReplacements": [
-            {
-              "replace": "apps/frontend/src/config/environment.ts",
-              "with": "apps/frontend/src/config/environment.production.ts"
-            }
-          ],
-          "outputHashing": "all"
+          "mode": "production",
+          "sourcemap": false,
+          "minify": true
         }
       }
     },
     "serve": {
-      "executor": "@nx/webpack:dev-server",
+      "executor": "@nx/vite:dev-server",
       "defaultConfiguration": "local",
       "options": {
         "buildTarget": "frontend:build",
-        "hmr": true,
-        "liveReload": true,
-        "open": true,
         "port": 4200
-      },
-      "configurations": {
-        "local": {
-          "buildTarget": "frontend:build:local",
-          "hmr": true,
-          "liveReload": true
-        },
-        "development": {
-          "buildTarget": "frontend:build:development",
-          "hmr": true,
-          "liveReload": true
-        },
-        "production": {
-          "buildTarget": "frontend:build:production",
-          "hmr": false,
-          "liveReload": false
-        }
-      }
-    },
-    "start": {
-      "executor": "@nx/webpack:dev-server",
-      "defaultConfiguration": "local",
-      "options": {
-        "buildTarget": "frontend:build"
       },
       "configurations": {
         "local": {
@@ -110,6 +48,33 @@
         "production": {
           "buildTarget": "frontend:build:production"
         }
+      }
+    },
+    "start": {
+      "executor": "@nx/vite:dev-server",
+      "defaultConfiguration": "local",
+      "options": {
+        "buildTarget": "frontend:build",
+        "port": 4200
+      },
+      "configurations": {
+        "local": {
+          "buildTarget": "frontend:build:local"
+        },
+        "development": {
+          "buildTarget": "frontend:build:development"
+        },
+        "production": {
+          "buildTarget": "frontend:build:production"
+        }
+      }
+    },
+    "preview": {
+      "executor": "@nx/vite:preview-server",
+      "defaultConfiguration": "production",
+      "options": {
+        "buildTarget": "frontend:build:production",
+        "port": 4200
       }
     },
     "test": {
@@ -135,9 +100,10 @@
       }
     },
     "typecheck": {
-      "executor": "@nx/js:tsc",
+      "executor": "nx:run-commands",
       "options": {
-        "tsConfig": "apps/frontend/tsconfig.app.json"
+        "cwd": "apps/frontend",
+        "command": "npx tsc --noEmit -p tsconfig.app.json"
       }
     },
     "e2e": {
@@ -167,8 +133,10 @@
     },
     "build-storybook": {
       "executor": "@nx/storybook:build",
+      "outputs": ["{options.outputDir}"],
       "options": {
-        "configDir": "apps/frontend/.storybook"
+        "configDir": "apps/frontend/.storybook",
+        "outputDir": "dist/storybook/frontend"
       }
     }
   },

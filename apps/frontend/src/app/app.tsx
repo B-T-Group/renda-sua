@@ -1,7 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { FloatingWhatsApp } from '@digicroz/react-floating-whatsapp';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
-import { useCallback, useEffect, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Navigate,
@@ -18,80 +17,13 @@ import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
 import GuestBottomNav from '../components/layout/GuestBottomNav';
 import Header from '../components/layout/Header';
-import AboutUsPage from '../components/pages/AboutUsPage';
-import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
-import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
-import AdminPendingMobilePaymentsPage from '../components/pages/AdminPendingMobilePaymentsPage';
-import AdminSiteEventsPage from '../components/pages/AdminSiteEventsPage';
-import AdminManageAgents from '../components/pages/AdminManageAgents';
-import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
-import AdminManageClients from '../components/pages/AdminManageClients';
-import AdminRentalListingsModerationPage from '../components/pages/AdminRentalListingsModerationPage';
-import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
-import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
-import CountryOnboardingPage from '../components/pages/CountryOnboardingPage';
-import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
-import AppRedirect from '../components/pages/AppRedirect';
-import BrandsManagementPage from '../components/pages/BrandsManagementPage';
-import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
-import BusinessRefundRequestsPage from '../components/pages/BusinessRefundRequestsPage';
-import BusinessImagesPage from '../components/pages/BusinessImagesPage';
-import BusinessItemsPage from '../components/pages/BusinessItemsPage';
-import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
-import BusinessRentalItemEditPage from '../components/pages/BusinessRentalItemEditPage';
-import BusinessRentalItemViewPage from '../components/pages/BusinessRentalItemViewPage';
-import BusinessRentalsCatalogPage from '../components/pages/BusinessRentalsCatalogPage';
-import BusinessRentalsPage from '../components/pages/BusinessRentalsPage';
-import BusinessRentalsRequestsPage from '../components/pages/BusinessRentalsRequestsPage';
-import BusinessRentalsSchedulePage from '../components/pages/BusinessRentalsSchedulePage';
-import RentalItemImagesPage from '../components/pages/RentalItemImagesPage';
-import CartPage from '../components/pages/CartPage';
-import ClientRentalRequestsPage from '../components/pages/ClientRentalRequestsPage';
-import RentalRequestSubmittedPage from '../components/pages/RentalRequestSubmittedPage';
-import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
-import CheckoutPage from '../components/pages/CheckoutPage';
-import CompleteProfile from '../components/pages/CompleteProfile';
-import SelectPersonaPage from '../components/pages/SelectPersonaPage';
-import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
-import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
-import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
-import AddSaleItemFromImagePage from '../components/pages/AddSaleItemFromImagePage';
-import FirstSaleItemOnboardingPage from '../components/pages/FirstSaleItemOnboardingPage';
-import ItemFormPage from '../components/pages/ItemFormPage';
-import OtpAuthPage from '../components/pages/OtpAuthPage';
-import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
-import TermsOfServicePage from '../components/pages/TermsOfServicePage';
-import SignupPage from '../components/pages/SignupPage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
-
-import AgentDashboard from '../components/pages/AgentDashboard';
-import FAQ from '../components/pages/FAQ';
-import ItemDetailPage from '../components/pages/ItemDetailPage';
-import ItemSeoShareRedirectPage from '../components/pages/ItemSeoShareRedirectPage';
-import RentalBookingDetailPage from '../components/pages/RentalBookingDetailPage';
-import RentalListingDetailPage from '../components/pages/RentalListingDetailPage';
-import RentalsPage from '../components/pages/RentalsPage';
-import ItemsPage from '../components/pages/ItemsPage';
-import ItemViewPage from '../components/pages/ItemViewPage';
-import DealsPage from '../components/pages/DealsPage';
-import LandingPage from '../components/pages/LandingPage';
-import ManageOrderPage from '../components/pages/ManageOrderPage';
-import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
-import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
-import AnonAddressPage from '../components/pages/AnonAddressPage';
-import PlaceOrderPage from '../components/pages/PlaceOrderPage';
-import Profile from '../components/pages/Profile';
-import SupportPage from '../components/pages/SupportPage';
-import SupportTicketsPage from '../components/pages/SupportTicketsPage';
-import SmartBatchOrders from '../components/routing/SmartBatchOrders';
-import SmartDashboard from '../components/routing/SmartDashboard';
-import SmartHome from '../components/routing/SmartHome';
-import SmartOrders from '../components/routing/SmartOrders';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import * as Lazy from './lazyPages';
 
 function App() {
   const { t } = useTranslation();
@@ -234,22 +166,34 @@ function App() {
                 : { xs: 1.5, sm: 2, md: 3 },
           }}
         >
-          <Routes>
-            <Route path="/" element={<SmartHome />} />
-            <Route path="/who-we-are" element={<LandingPage />} />
+          <Suspense
+            fallback={
+              <LoadingPage
+                message={t('common.loading', 'Loading...')}
+                subtitle={t(
+                  'common.loadingRoute',
+                  'Please wait while we load this page'
+                )}
+                showProgress={true}
+              />
+            }
+          >
+            <Routes>
+            <Route path="/" element={<Lazy.SmartHome />} />
+            <Route path="/who-we-are" element={<Lazy.LandingPage />} />
             <Route
               path="/auth/login"
               element={<Navigate to="/" replace />}
             />
-            <Route path="/auth/otp" element={<OtpAuthPage />} />
-            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/auth/otp" element={<Lazy.OtpAuthPage />} />
+            <Route path="/signup" element={<Lazy.SignupPage />} />
 
             {/* Public routes */}
             <Route
               path="/rentals/requests"
               element={
                 <ProtectedRoute>
-                  <ClientRentalRequestsPage />
+                  <Lazy.ClientRentalRequestsPage />
                 </ProtectedRoute>
               }
             />
@@ -257,7 +201,7 @@ function App() {
               path="/rentals/request-submitted"
               element={
                 <ProtectedRoute>
-                  <RentalRequestSubmittedPage />
+                  <Lazy.RentalRequestSubmittedPage />
                 </ProtectedRoute>
               }
             />
@@ -265,25 +209,25 @@ function App() {
               path="/rentals/bookings/:bookingId"
               element={
                 <ProtectedRoute>
-                  <RentalBookingDetailPage />
+                  <Lazy.RentalBookingDetailPage />
                 </ProtectedRoute>
               }
             />
-            <Route path="/rentals" element={<RentalsPage />} />
-            <Route path="/rentals/:listingId" element={<RentalListingDetailPage />} />
-            <Route path="/items" element={<ItemsPage />} />
-            <Route path="/deals" element={<DealsPage />} />
-            <Route path="/support" element={<SupportPage />} />
-            <Route path="/about" element={<AboutUsPage />} />
-            <Route path="/privacy" element={<PrivacyPolicyPage />} />
-            <Route path="/terms" element={<TermsOfServicePage />} />
+            <Route path="/rentals" element={<Lazy.RentalsPage />} />
+            <Route path="/rentals/:listingId" element={<Lazy.RentalListingDetailPage />} />
+            <Route path="/items" element={<Lazy.ItemsPage />} />
+            <Route path="/deals" element={<Lazy.DealsPage />} />
+            <Route path="/support" element={<Lazy.SupportPage />} />
+            <Route path="/about" element={<Lazy.AboutUsPage />} />
+            <Route path="/privacy" element={<Lazy.PrivacyPolicyPage />} />
+            <Route path="/terms" element={<Lazy.TermsOfServicePage />} />
 
             {/* Cart route */}
             <Route
               path="/cart"
               element={
                 <ProtectedRoute>
-                  <CartPage />
+                  <Lazy.CartPage />
                 </ProtectedRoute>
               }
             />
@@ -293,7 +237,7 @@ function App() {
               path="/checkout"
               element={
                 <ProtectedRoute>
-                  <CheckoutPage />
+                  <Lazy.CheckoutPage />
                 </ProtectedRoute>
               }
             />
@@ -303,7 +247,7 @@ function App() {
               path="/items/:id/place_order"
               element={
                 <ProtectedRoute>
-                  <PlaceOrderPage />
+                  <Lazy.PlaceOrderPage />
                 </ProtectedRoute>
               }
             />
@@ -311,23 +255,23 @@ function App() {
               path="/items/:id/place_order/anon-address"
               element={
                 <ProtectedRoute>
-                  <AnonAddressPage />
+                  <Lazy.AnonAddressPage />
                 </ProtectedRoute>
               }
             />
 
             {/* Share / OG landing path on web origin (proxy to API in production) */}
-            <Route path="/items/:id/seo" element={<ItemSeoShareRedirectPage />} />
+            <Route path="/items/:id/seo" element={<Lazy.ItemSeoShareRedirectPage />} />
 
             {/* Item detail (public) */}
-            <Route path="/items/:id" element={<ItemDetailPage />} />
+            <Route path="/items/:id" element={<Lazy.ItemDetailPage />} />
 
             {/* Order Confirmation route */}
             <Route
               path="/orders/confirmation"
               element={
                 <ProtectedRoute>
-                  <OrderConfirmationPage />
+                  <Lazy.OrderConfirmationPage />
                 </ProtectedRoute>
               }
             />
@@ -337,7 +281,7 @@ function App() {
               path="/app"
               element={
                 <ProtectedRoute>
-                  <AppRedirect />
+                  <Lazy.AppRedirect />
                 </ProtectedRoute>
               }
             />
@@ -347,7 +291,7 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <SmartDashboard />
+                  <Lazy.SmartDashboard />
                 </ProtectedRoute>
               }
             />
@@ -355,7 +299,7 @@ function App() {
               path="/admin/agents"
               element={
                 <ProtectedRoute>
-                  <AdminManageAgents />
+                  <Lazy.AdminManageAgents />
                 </ProtectedRoute>
               }
             />
@@ -363,7 +307,7 @@ function App() {
               path="/admin/clients"
               element={
                 <ProtectedRoute>
-                  <AdminManageClients />
+                  <Lazy.AdminManageClients />
                 </ProtectedRoute>
               }
             />
@@ -371,7 +315,7 @@ function App() {
               path="/admin/businesses"
               element={
                 <ProtectedRoute>
-                  <AdminManageBusinesses />
+                  <Lazy.AdminManageBusinesses />
                 </ProtectedRoute>
               }
             />
@@ -379,7 +323,7 @@ function App() {
               path="/admin/rental-listings/moderation"
               element={
                 <ProtectedRoute>
-                  <AdminRentalListingsModerationPage />
+                  <Lazy.AdminRentalListingsModerationPage />
                 </ProtectedRoute>
               }
             />
@@ -387,7 +331,7 @@ function App() {
               path="/admin/configurations"
               element={
                 <ProtectedRoute>
-                  <AdminConfigurationPage />
+                  <Lazy.AdminConfigurationPage />
                 </ProtectedRoute>
               }
             />
@@ -395,7 +339,7 @@ function App() {
               path="/admin/application-setup"
               element={
                 <ProtectedRoute>
-                  <ApplicationSetupPage />
+                  <Lazy.ApplicationSetupPage />
                 </ProtectedRoute>
               }
             />
@@ -403,7 +347,7 @@ function App() {
               path="/admin/country-onboarding"
               element={
                 <ProtectedRoute>
-                  <CountryOnboardingPage />
+                  <Lazy.CountryOnboardingPage />
                 </ProtectedRoute>
               }
             />
@@ -411,7 +355,7 @@ function App() {
               path="/admin/commission-accounts"
               element={
                 <ProtectedRoute>
-                  <AdminCommissionAccounts />
+                  <Lazy.AdminCommissionAccounts />
                 </ProtectedRoute>
               }
             />
@@ -419,7 +363,7 @@ function App() {
               path="/admin/pending-mobile-payments"
               element={
                 <ProtectedRoute>
-                  <AdminPendingMobilePaymentsPage />
+                  <Lazy.AdminPendingMobilePaymentsPage />
                 </ProtectedRoute>
               }
             />
@@ -427,7 +371,7 @@ function App() {
               path="/admin/site-events"
               element={
                 <ProtectedRoute>
-                  <AdminSiteEventsPage />
+                  <Lazy.AdminSiteEventsPage />
                 </ProtectedRoute>
               }
             />
@@ -437,7 +381,7 @@ function App() {
               path="/content-management/brands"
               element={
                 <ProtectedRoute>
-                  <BrandsManagementPage />
+                  <Lazy.BrandsManagementPage />
                 </ProtectedRoute>
               }
             />
@@ -445,7 +389,7 @@ function App() {
               path="/content-management/categories"
               element={
                 <ProtectedRoute>
-                  <CategoriesManagementPage />
+                  <Lazy.CategoriesManagementPage />
                 </ProtectedRoute>
               }
             />
@@ -455,7 +399,7 @@ function App() {
               path="/profile"
               element={
                 <ProtectedRoute>
-                  <Profile />
+                  <Lazy.Profile />
                 </ProtectedRoute>
               }
             />
@@ -463,7 +407,7 @@ function App() {
               path="/complete-profile"
               element={
                 <ProtectedRoute>
-                  <CompleteProfile />
+                  <Lazy.CompleteProfile />
                 </ProtectedRoute>
               }
             />
@@ -471,20 +415,20 @@ function App() {
               path="/select-persona"
               element={
                 <ProtectedRoute>
-                  <SelectPersonaPage />
+                  <Lazy.SelectPersonaPage />
                 </ProtectedRoute>
               }
             />
 
             {/* FAQ route */}
-            <Route path="/faq" element={<FAQ />} />
+            <Route path="/faq" element={<Lazy.FAQ />} />
 
             {/* Support tickets - user's own tickets */}
             <Route
               path="/support/tickets"
               element={
                 <ProtectedRoute>
-                  <SupportTicketsPage />
+                  <Lazy.SupportTicketsPage />
                 </ProtectedRoute>
               }
             />
@@ -494,7 +438,7 @@ function App() {
               path="/orders"
               element={
                 <ProtectedRoute>
-                  <SmartOrders />
+                  <Lazy.SmartOrders />
                 </ProtectedRoute>
               }
             />
@@ -504,7 +448,7 @@ function App() {
               path="/orders/batch"
               element={
                 <ProtectedRoute>
-                  <SmartBatchOrders />
+                  <Lazy.SmartBatchOrders />
                 </ProtectedRoute>
               }
             />
@@ -514,7 +458,7 @@ function App() {
               path="/orders/:orderId"
               element={
                 <ProtectedRoute>
-                  <ManageOrderPage />
+                  <Lazy.ManageOrderPage />
                 </ProtectedRoute>
               }
             />
@@ -524,7 +468,7 @@ function App() {
               path="/open-orders"
               element={
                 <ProtectedRoute>
-                  <AgentDashboard />
+                  <Lazy.AgentDashboard />
                 </ProtectedRoute>
               }
             />
@@ -534,7 +478,7 @@ function App() {
               path="/business/analytics"
               element={
                 <ProtectedRoute>
-                  <BusinessAnalyticsPage />
+                  <Lazy.BusinessAnalyticsPage />
                 </ProtectedRoute>
               }
             />
@@ -542,7 +486,7 @@ function App() {
               path="/business/refunds"
               element={
                 <ProtectedRoute>
-                  <BusinessRefundRequestsPage />
+                  <Lazy.BusinessRefundRequestsPage />
                 </ProtectedRoute>
               }
             />
@@ -550,7 +494,7 @@ function App() {
               path="/business/locations"
               element={
                 <ProtectedRoute>
-                  <BusinessLocationsPage />
+                  <Lazy.BusinessLocationsPage />
                 </ProtectedRoute>
               }
             />
@@ -558,7 +502,7 @@ function App() {
               path="/business/items"
               element={
                 <ProtectedRoute>
-                  <BusinessItemsPage />
+                  <Lazy.BusinessItemsPage />
                 </ProtectedRoute>
               }
             />
@@ -566,7 +510,7 @@ function App() {
               path="/business/items/add-from-image"
               element={
                 <ProtectedRoute>
-                  <AddSaleItemFromImagePage />
+                  <Lazy.AddSaleItemFromImagePage />
                 </ProtectedRoute>
               }
             />
@@ -574,7 +518,7 @@ function App() {
               path="/business/images"
               element={
                 <ProtectedRoute>
-                  <BusinessImagesPage />
+                  <Lazy.BusinessImagesPage />
                 </ProtectedRoute>
               }
             />
@@ -582,7 +526,7 @@ function App() {
               path="/business/onboarding/first-sale-item"
               element={
                 <ProtectedRoute>
-                  <FirstSaleItemOnboardingPage />
+                  <Lazy.FirstSaleItemOnboardingPage />
                 </ProtectedRoute>
               }
             />
@@ -590,7 +534,7 @@ function App() {
               path="/business/onboarding/add-rental-item"
               element={
                 <ProtectedRoute>
-                  <FirstRentalItemOnboardingPage />
+                  <Lazy.FirstRentalItemOnboardingPage />
                 </ProtectedRoute>
               }
             />
@@ -602,7 +546,7 @@ function App() {
               path="/business/rentals/catalog"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalsCatalogPage />
+                  <Lazy.BusinessRentalsCatalogPage />
                 </ProtectedRoute>
               }
             />
@@ -610,7 +554,7 @@ function App() {
               path="/business/rentals/requests"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalsRequestsPage />
+                  <Lazy.BusinessRentalsRequestsPage />
                 </ProtectedRoute>
               }
             />
@@ -618,7 +562,7 @@ function App() {
               path="/business/rentals/schedule"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalsSchedulePage />
+                  <Lazy.BusinessRentalsSchedulePage />
                 </ProtectedRoute>
               }
             />
@@ -626,7 +570,7 @@ function App() {
               path="/business/rentals/items/:itemId"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalItemViewPage />
+                  <Lazy.BusinessRentalItemViewPage />
                 </ProtectedRoute>
               }
             />
@@ -634,7 +578,7 @@ function App() {
               path="/business/rentals/items/:itemId/edit"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalItemEditPage />
+                  <Lazy.BusinessRentalItemEditPage />
                 </ProtectedRoute>
               }
             />
@@ -642,7 +586,7 @@ function App() {
               path="/business/rentals"
               element={
                 <ProtectedRoute>
-                  <BusinessRentalsPage />
+                  <Lazy.BusinessRentalsPage />
                 </ProtectedRoute>
               }
             />
@@ -650,7 +594,7 @@ function App() {
               path="/business/rental-images"
               element={
                 <ProtectedRoute>
-                  <RentalItemImagesPage />
+                  <Lazy.RentalItemImagesPage />
                 </ProtectedRoute>
               }
             />
@@ -658,7 +602,7 @@ function App() {
               path="/business/failed-deliveries"
               element={
                 <ProtectedRoute>
-                  <FailedDeliveriesPage />
+                  <Lazy.FailedDeliveriesPage />
                 </ProtectedRoute>
               }
             />
@@ -666,7 +610,7 @@ function App() {
               path="/business/failed-deliveries"
               element={
                 <ProtectedRoute>
-                  <FailedDeliveriesPage />
+                  <Lazy.FailedDeliveriesPage />
                 </ProtectedRoute>
               }
             />
@@ -676,7 +620,7 @@ function App() {
               path="/business/items/add"
               element={
                 <ProtectedRoute>
-                  <ItemFormPage />
+                  <Lazy.ItemFormPage />
                 </ProtectedRoute>
               }
             />
@@ -686,7 +630,7 @@ function App() {
               path="/business/items/edit/:itemId"
               element={
                 <ProtectedRoute>
-                  <ItemFormPage />
+                  <Lazy.ItemFormPage />
                 </ProtectedRoute>
               }
             />
@@ -696,7 +640,7 @@ function App() {
               path="/business/items/:itemId"
               element={
                 <ProtectedRoute>
-                  <ItemViewPage />
+                  <Lazy.ItemViewPage />
                 </ProtectedRoute>
               }
             />
@@ -706,7 +650,7 @@ function App() {
               path="/documents"
               element={
                 <ProtectedRoute>
-                  <DocumentManagementPage />
+                  <Lazy.DocumentManagementPage />
                 </ProtectedRoute>
               }
             />
@@ -716,7 +660,7 @@ function App() {
               path="/messages"
               element={
                 <ProtectedRoute>
-                  <MessagesCenterPage />
+                  <Lazy.MessagesCenterPage />
                 </ProtectedRoute>
               }
             />
@@ -726,7 +670,7 @@ function App() {
               path="/admin/:userType/:userId/documents"
               element={
                 <ProtectedRoute>
-                  <AdminUserDocumentsPage />
+                  <Lazy.AdminUserDocumentsPage />
                 </ProtectedRoute>
               }
             />
@@ -736,14 +680,15 @@ function App() {
               path="/admin/:userType/:userId/messages"
               element={
                 <ProtectedRoute>
-                  <AdminUserMessagesPage />
+                  <Lazy.AdminUserMessagesPage />
                 </ProtectedRoute>
               }
             />
 
             {/* Unknown paths: same persona rules as home */}
-            <Route path="*" element={<SmartHome />} />
+            <Route path="*" element={<Lazy.SmartHome />} />
           </Routes>
+          </Suspense>
         </Container>
       </Box>
 
@@ -759,24 +704,26 @@ function App() {
       <GuestBottomNav />
 
       {!shouldHideWhatsappWidget ? (
-        <FloatingWhatsApp
-          phoneNumber="237690043293"
-          accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
-          statusMessage={t(
-            'support.whatsapp.statusMessage',
-            'Typically replies within 1 hour'
-          )}
-          chatMessage={t(
-            'support.whatsapp.chatMessage',
-            'Hello! How can we help you today?'
-          )}
-          placeholder={t('support.whatsapp.placeholder', 'Type a message...')}
-          allowClickAway={true}
-          allowEsc={true}
-          notification={false}
-          buttonStyle={{ bottom: `${whatsappBottomOffset}px`, right: '24px' }}
-          darkMode={false}
-        />
+        <Suspense fallback={null}>
+          <Lazy.FloatingWhatsApp
+            phoneNumber="237690043293"
+            accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
+            statusMessage={t(
+              'support.whatsapp.statusMessage',
+              'Typically replies within 1 hour'
+            )}
+            chatMessage={t(
+              'support.whatsapp.chatMessage',
+              'Hello! How can we help you today?'
+            )}
+            placeholder={t('support.whatsapp.placeholder', 'Type a message...')}
+            allowClickAway={true}
+            allowEsc={true}
+            notification={false}
+            buttonStyle={{ bottom: `${whatsappBottomOffset}px`, right: '24px' }}
+            darkMode={false}
+          />
+        </Suspense>
       ) : null}
 
       {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
