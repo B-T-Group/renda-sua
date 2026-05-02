@@ -1,0 +1,189 @@
+table:
+  name: item_variants
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+array_relationships:
+  - name: item_variant_images
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_variant_id
+        insertion_order: null
+        remote_table:
+          name: item_variant_images
+          schema: public
+  - name: order_items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_variant_id
+        insertion_order: null
+        remote_table:
+          name: order_items
+          schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      columns:
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        is_active:
+          _eq: true
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        is_active:
+          _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        is_active:
+          _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_id
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        is_active:
+          _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - name
+        - sku
+        - price
+        - weight
+        - weight_unit
+        - dimensions
+        - color
+        - attributes
+        - is_default
+        - is_active
+        - sort_order
+        - updated_at
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

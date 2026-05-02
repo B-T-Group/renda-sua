@@ -57,6 +57,15 @@ array_relationships:
         remote_table:
           name: item_tags
           schema: public
+  - name: item_variants
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_id
+        insertion_order: null
+        remote_table:
+          name: item_variants
+          schema: public
 insert_permissions:
   - role: business
     permission:

@@ -1,0 +1,136 @@
+table:
+  name: item_variant_images
+  schema: public
+object_relationships:
+  - name: item_variant
+    using:
+      foreign_key_constraint_on: item_variant_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        item_variant:
+          item:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - created_at
+        - updated_at
+      filter:
+        item_variant:
+          is_active:
+            _eq: true
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - created_at
+        - updated_at
+      filter:
+        item_variant:
+          is_active:
+            _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - created_at
+        - updated_at
+      filter:
+        item_variant:
+          item:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - created_at
+        - updated_at
+      filter:
+        item_variant:
+          is_active:
+            _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_variant_id
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - created_at
+        - updated_at
+      filter:
+        item_variant:
+          is_active:
+            _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - image_url
+        - alt_text
+        - caption
+        - display_order
+        - is_primary
+        - updated_at
+      filter:
+        item_variant:
+          item:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item_variant:
+          item:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
