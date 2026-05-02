@@ -21,11 +21,8 @@ const getDevelopmentEnvironment = () => {
     isDevelopment: true,
     isProduction: false,
     isLocal: false,
-    /** Local Nest default; override for hosted dev (e.g. REACT_APP_API_URL=https://dev.api.rendasua.com/api). */
-    apiUrl:
-      process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
-    webAppOrigin:
-      process.env.REACT_APP_WEB_APP_ORIGIN || 'http://localhost:4200',
+    apiUrl: 'https://dev.api.rendasua.com/api',
+    webAppOrigin: 'https://dev.rendasua.com',
     googleMapsBrowserApiKey:
       process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
       'AIzaSyDpI80RcSNpjLNybedvZ62QFyV4485tiyI',

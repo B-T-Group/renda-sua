@@ -35,6 +35,16 @@
       }
     },
     {
+      "plugin": "@nx/webpack/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "previewTargetName": "preview",
+        "buildDepsTargetName": "build-deps",
+        "watchDepsTargetName": "watch-deps"
+      }
+    },
+    {
       "plugin": "@nx/eslint/plugin",
       "options": {
         "targetName": "lint"
@@ -93,7 +103,7 @@
         "babel": true,
         "style": "none",
         "linter": "eslint",
-        "bundler": "vite"
+        "bundler": "webpack"
       },
       "component": {
         "style": "none"
