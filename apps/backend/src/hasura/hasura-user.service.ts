@@ -22,6 +22,8 @@ const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
 export interface OrderItem {
   business_inventory_id: string;
   quantity: number;
+  /** Required when the catalog item has multiple active variants */
+  item_variant_id?: string;
 }
 
 export interface CreateOrderRequest {

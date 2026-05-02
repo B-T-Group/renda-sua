@@ -72,7 +72,13 @@ import {
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
 import type { ImageType } from '../../types/image';
+import {
+  effectiveVariantUnitPrice,
+  primaryVariantImageUrl,
+  unitPriceWithListingDeal,
+} from '../../types/itemVariant';
 import { orderedItemImages } from '../../utils/orderedItemImages';
+import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PhoneInput from '../common/PhoneInput';
 import DeliveryTimeWindowSelector, {
@@ -182,6 +188,15 @@ interface OrderSummaryProps {
       item_images?: Array<{ image_url: string; image_type?: ImageType }>;
     };
   };
+  /** Unit price after variant base + listing deal scaling (matches checkout total). */
+  resolvedPricing: {
+    unit: number;
+    strikeOriginal?: number;
+    hasDeal: boolean;
+  };
+  /** Thumbnail in summary (e.g. variant primary image). */
+  displayImageSrc?: string | null;
+  variantLabel?: string | null;
   quantity: number;
   /** Desktop: quantity dropdown lives in the summary panel (same pattern as mobile review). */
   onQuantityChange: (quantity: number) => void;
@@ -213,6 +228,9 @@ interface OrderSummaryProps {
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
   selectedItem,
+  resolvedPricing,
+  displayImageSrc,
+  variantLabel,
   quantity,
   onQuantityChange,
   maxOrderQuantity,
@@ -239,15 +257,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
-  const hasDealPrices =
-    selectedItem.hasActiveDeal &&
-    typeof selectedItem.original_price === 'number' &&
-    typeof selectedItem.discounted_price === 'number' &&
-    selectedItem.original_price > 0;
-
-  const unitPrice = hasDealPrices
-    ? selectedItem.discounted_price ?? selectedItem.selling_price
-    : selectedItem.selling_price;
+  const hasDealPrices = resolvedPricing.hasDeal;
+  const unitPrice = resolvedPricing.unit;
 
   const subtotal = unitPrice * quantity;
   // Delivery fee is the API delivery fee (already includes fast delivery charge if applicable)
@@ -316,12 +327,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       {/* Item Summary */}
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          {selectedItem.item.item_images?.length ? (
+          {displayImageSrc ||
+          selectedItem.item.item_images?.length ? (
             <Box
               component="img"
               src={
-                selectedItem.item.item_images.find((img) => img.image_type === 'main')
-                  ?.image_url || selectedItem.item.item_images[0].image_url
+                displayImageSrc ||
+                (selectedItem.item.item_images?.find((img) => img.image_type === 'main')
+                  ?.image_url ||
+                  selectedItem.item.item_images?.[0]?.image_url)
               }
               alt={selectedItem.item.name}
               sx={{
@@ -337,6 +351,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             <Typography variant="body2" fontWeight="medium" noWrap>
               {selectedItem.item.name}
             </Typography>
+            {variantLabel?.trim() ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                {variantLabel}
+              </Typography>
+            ) : null}
             {isMobile && (
               <Typography variant="caption" color="text.secondary" display="block">
                 {t('orders.quantity', 'Quantity')}: {quantity}
@@ -353,15 +372,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               sx={{ textDecoration: 'line-through' }}
             >
               {formatCurrency(
-                selectedItem.original_price ?? selectedItem.selling_price,
+                resolvedPricing.strikeOriginal ?? selectedItem.selling_price,
                 selectedItem.item.currency
               )}
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency(
-                selectedItem.discounted_price ?? selectedItem.selling_price,
-                selectedItem.item.currency
-              )}
+              {formatCurrency(unitPrice, selectedItem.item.currency)}
             </Typography>
             {selectedItem.deal_end_at && (
               <Typography
@@ -697,6 +713,89 @@ const PlaceOrderPage: React.FC = () => {
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
     useInventoryItem(id || null);
 
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+
+  const activeVariants = useMemo(() => {
+    const raw = selectedItem?.item?.item_variants ?? [];
+    return [...raw]
+      .filter((v) => v.is_active !== false)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }, [selectedItem]);
+
+  const variantIdsKey = useMemo(
+    () => activeVariants.map((v) => v.id).join(','),
+    [activeVariants]
+  );
+
+  useEffect(() => {
+    if (!selectedItem) return;
+    const variants = [...(selectedItem.item?.item_variants ?? [])]
+      .filter((v) => v.is_active !== false)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    if (variants.length === 0) {
+      setSelectedVariantId(null);
+      return;
+    }
+    if (variants.length === 1) {
+      setSelectedVariantId(variants[0].id);
+      return;
+    }
+    const def = variants.find((v) => v.is_default);
+    setSelectedVariantId(def?.id ?? variants[0].id);
+  }, [selectedItem?.id, variantIdsKey, selectedItem]);
+
+  const selectedVariant = useMemo(() => {
+    if (!selectedVariantId) return null;
+    return activeVariants.find((v) => v.id === selectedVariantId) ?? null;
+  }, [activeVariants, selectedVariantId]);
+
+  const listingUnitPricing = useMemo(() => {
+    if (!selectedItem) {
+      return {
+        unit: 0,
+        hasDeal: false,
+        strikeOriginal: undefined as number | undefined,
+      };
+    }
+    const base = effectiveVariantUnitPrice(selectedVariant, selectedItem.selling_price);
+    return unitPriceWithListingDeal(
+      base,
+      selectedItem.selling_price,
+      selectedItem.hasActiveDeal,
+      selectedItem.original_price,
+      selectedItem.discounted_price
+    );
+  }, [selectedItem, selectedVariant]);
+
+  const specWeightDisplay = useMemo(() => {
+    if (
+      selectedVariant?.weight != null &&
+      Number(selectedVariant.weight) > 0
+    ) {
+      return {
+        value: selectedVariant.weight,
+        unit:
+          selectedVariant.weight_unit ?? selectedItem?.item.weight_unit ?? '',
+      };
+    }
+    if (
+      selectedItem?.item.weight != null &&
+      selectedItem.item.weight > 0
+    ) {
+      return {
+        value: selectedItem.item.weight,
+        unit: selectedItem.item.weight_unit ?? '',
+      };
+    }
+    return null;
+  }, [selectedItem, selectedVariant]);
+
+  const specDimensionsDisplay = useMemo(() => {
+    const fromVariant = selectedVariant?.dimensions?.trim();
+    if (fromVariant) return fromVariant;
+    return selectedItem?.item.dimensions?.trim() ?? '';
+  }, [selectedItem, selectedVariant]);
+
   const orderedSelectedItemImages = useMemo(() => {
     type PlaceOrderItemImage = {
       id?: string;
@@ -722,6 +821,19 @@ const PlaceOrderPage: React.FC = () => {
   useEffect(() => {
     setSelectedItemImageIndex(0);
   }, [selectedItem?.id]);
+
+  const variantPrimaryImageUrl = useMemo(
+    () => primaryVariantImageUrl(selectedVariant),
+    [selectedVariant]
+  );
+
+  const heroDisplayUrl = useMemo(() => {
+    if (variantPrimaryImageUrl) return variantPrimaryImageUrl;
+    return (
+      orderedSelectedItemImages[selectedItemImageIndex]?.image_url ??
+      orderedSelectedItemImages[0]?.image_url
+    );
+  }, [variantPrimaryImageUrl, orderedSelectedItemImages, selectedItemImageIndex]);
 
   const openSelectedItemImagePreview = useCallback(
     (index = 0) => {
@@ -958,6 +1070,7 @@ const PlaceOrderPage: React.FC = () => {
           {
             business_inventory_id: selectedItem.id,
             quantity: quantity,
+            ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
           },
         ],
         delivery_address_id: selectedAddressId,
@@ -978,14 +1091,7 @@ const PlaceOrderPage: React.FC = () => {
       }
 
       const order = response.data.order;
-      const hasDeal =
-        selectedItem.hasActiveDeal &&
-        typeof selectedItem.original_price === 'number' &&
-        typeof selectedItem.discounted_price === 'number' &&
-        selectedItem.original_price > 0;
-      const unitPrice = hasDeal
-        ? selectedItem.discounted_price ?? selectedItem.selling_price
-        : selectedItem.selling_price;
+      const unitPrice = listingUnitPricing.unit;
       const contentCategory = metaPixelContentCategoryFromItem(
         selectedItem.item
       );
@@ -1042,12 +1148,14 @@ const PlaceOrderPage: React.FC = () => {
     apiClient,
     appliedDiscountCode,
     deliveryWindow,
+    listingUnitPricing.unit,
     navigate,
     paymentTiming,
     quantity,
     requiresFastDelivery,
     selectedAddressId,
     selectedItem,
+    selectedVariantId,
     t,
     trackPurchase,
     useDifferentPhone,
@@ -1462,12 +1570,15 @@ const PlaceOrderPage: React.FC = () => {
 
   // Calculate if order can be placed
   const hasProfilePhone = Boolean(profile?.phone_number?.trim());
+  const variantSelectionValid =
+    activeVariants.length < 2 || Boolean(selectedVariantId);
   const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&
     selectedAddressId &&
     addresses.length > 0;
   const canPlaceOrder =
+    variantSelectionValid &&
     (useDifferentPhone
       ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
       : !hasProfilePhone || phoneValidation.isValid) &&
@@ -1628,6 +1739,25 @@ const PlaceOrderPage: React.FC = () => {
       return null;
     }
 
+    const mobileUnitPriceCheckout = listingUnitPricing.unit;
+    const mobileReviewSubtotal = mobileUnitPriceCheckout * quantity;
+    const mobileReviewDelivery = deliveryFee?.deliveryFee || 0;
+    const mobileReviewTotalBeforeDiscount =
+      mobileReviewSubtotal + mobileReviewDelivery;
+    const mobileOrderDiscountAmount =
+      appliedDiscountCode && discountPercentage > 0
+        ? Number(
+            (
+              (mobileReviewTotalBeforeDiscount * discountPercentage) /
+              100
+            ).toFixed(2)
+          )
+        : 0;
+    const mobileOrderGrandTotal = Math.max(
+      0,
+      mobileReviewTotalBeforeDiscount - mobileOrderDiscountAmount
+    );
+
     return (
       <Stack spacing={2}>
             <Card>
@@ -1637,39 +1767,9 @@ const PlaceOrderPage: React.FC = () => {
                 </Typography>
                 <Divider sx={{ my: 2 }} />
 
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel id="place-order-review-quantity">
-                    {t('orders.quantity', 'Quantity')}
-                  </InputLabel>
-                  <Select
-                    labelId="place-order-review-quantity"
-                    value={quantity}
-                    label={t('orders.quantity', 'Quantity')}
-                    onChange={(e) => setQuantity(e.target.value as number)}
-                    disabled={loading}
-                  >
-                    {Array.from(
-                      {
-                        length: Math.min(
-                          selectedItem.computed_available_quantity,
-                          10
-                        ),
-                      },
-                      (_, i) => i + 1
-                    ).map((num) => (
-                      <MenuItem key={num} value={num}>
-                        {num}{' '}
-                        {num === 1
-                          ? t('orders.unitSingular', 'unit')
-                          : t('orders.unitsPlural', 'units')}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
                 <Stack spacing={2}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
-                    {orderedSelectedItemImages[0] && (
+                    {(heroDisplayUrl || orderedSelectedItemImages[0]) && (
                       <ButtonBase
                         onClick={() => openSelectedItemImagePreview(0)}
                         aria-label={t('items.viewAllImages', 'View item images')}
@@ -1685,7 +1785,10 @@ const PlaceOrderPage: React.FC = () => {
                       >
                         <Box
                           component="img"
-                          src={orderedSelectedItemImages[0].image_url}
+                          src={
+                            heroDisplayUrl ||
+                            orderedSelectedItemImages[0].image_url
+                          }
                           alt={selectedItem.item.name}
                           sx={{
                             width: '100%',
@@ -1700,6 +1803,11 @@ const PlaceOrderPage: React.FC = () => {
                       <Typography variant="body2" fontWeight="medium" noWrap>
                         {selectedItem.item.name}
                       </Typography>
+                      {selectedVariant?.name && (
+                        <Typography variant="caption" color="primary" display="block" fontWeight={600}>
+                          {selectedVariant.name}
+                        </Typography>
+                      )}
                       {(selectedItem.item.item_sub_category?.item_category?.name ||
                         selectedItem.item.item_sub_category?.name) && (
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
@@ -1772,15 +1880,15 @@ const PlaceOrderPage: React.FC = () => {
                   )}
 
                   <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ pt: 0.5 }}>
-                    {selectedItem.item.weight != null && selectedItem.item.weight > 0 && (
+                    {specWeightDisplay && (
                       <Typography variant="caption" color="text.secondary">
-                        {t('items.weight', 'Weight')}: {selectedItem.item.weight}{' '}
-                        {selectedItem.item.weight_unit || 'g'}
+                        {t('items.weight', 'Weight')}: {specWeightDisplay.value}{' '}
+                        {specWeightDisplay.unit || 'g'}
                       </Typography>
                     )}
-                    {selectedItem.item.dimensions?.trim() && (
+                    {!!specDimensionsDisplay && (
                       <Typography variant="caption" color="text.secondary">
-                        {t('items.dimensions', 'Dimensions')}: {selectedItem.item.dimensions}
+                        {t('items.dimensions', 'Dimensions')}: {specDimensionsDisplay}
                       </Typography>
                     )}
                     {selectedItem.item.brand?.name && (
@@ -1789,6 +1897,49 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                     )}
                   </Stack>
+
+                  <VariantSelector
+                    variants={activeVariants}
+                    value={selectedVariantId}
+                    onChange={setSelectedVariantId}
+                    listingSellingPrice={selectedItem.selling_price}
+                    hasActiveDeal={selectedItem.hasActiveDeal}
+                    originalPrice={selectedItem.original_price}
+                    discountedPrice={selectedItem.discounted_price}
+                    currency={selectedItem.item.currency}
+                    disabled={loading}
+                    formatCurrency={formatCurrency}
+                  />
+
+                  <FormControl fullWidth>
+                    <InputLabel id="place-order-review-quantity">
+                      {t('orders.quantity', 'Quantity')}
+                    </InputLabel>
+                    <Select
+                      labelId="place-order-review-quantity"
+                      value={quantity}
+                      label={t('orders.quantity', 'Quantity')}
+                      onChange={(e) => setQuantity(e.target.value as number)}
+                      disabled={loading}
+                    >
+                      {Array.from(
+                        {
+                          length: Math.min(
+                            selectedItem.computed_available_quantity,
+                            10
+                          ),
+                        },
+                        (_, i) => i + 1
+                      ).map((num) => (
+                        <MenuItem key={num} value={num}>
+                          {num}{' '}
+                          {num === 1
+                            ? t('orders.unitSingular', 'unit')
+                            : t('orders.unitsPlural', 'units')}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
                   {deliveryWindow && selectedAddress && (
                     <Paper
@@ -1861,17 +2012,7 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight="medium">
                         {formatCurrency(
-                          (() => {
-                            const hasDeal =
-                              selectedItem.hasActiveDeal &&
-                              typeof selectedItem.original_price === 'number' &&
-                              typeof selectedItem.discounted_price === 'number' &&
-                              selectedItem.original_price > 0;
-                            const unitPrice = hasDeal
-                              ? selectedItem.discounted_price ?? selectedItem.selling_price
-                              : selectedItem.selling_price;
-                            return unitPrice * quantity;
-                          })(),
+                          mobileReviewSubtotal,
                           selectedItem.item.currency
                         )}
                       </Typography>
@@ -1912,7 +2053,7 @@ const PlaceOrderPage: React.FC = () => {
                             {t('common.error', 'Error')}
                           </Typography>
                         ) : (() => {
-                            const pay = deliveryFee?.deliveryFee || 0;
+                            const pay = mobileReviewDelivery;
                             const fullBefore =
                               deliveryFee != null
                                 ? (Number(deliveryFee.baseDeliveryFeeBeforeDiscount) ||
@@ -2047,25 +2188,7 @@ const PlaceOrderPage: React.FC = () => {
                         >
                           −
                           {formatCurrency(
-                            (() => {
-                              const hasDeal =
-                                selectedItem.hasActiveDeal &&
-                                typeof selectedItem.original_price === 'number' &&
-                                typeof selectedItem.discounted_price === 'number' &&
-                                selectedItem.original_price > 0;
-                              const unitPrice = hasDeal
-                                ? selectedItem.discounted_price ?? selectedItem.selling_price
-                                : selectedItem.selling_price;
-                              const subtotal = unitPrice * quantity;
-                              const totalBeforeDiscount =
-                                subtotal + (deliveryFee?.deliveryFee || 0);
-                              return Number(
-                                (
-                                  (totalBeforeDiscount * discountPercentage) /
-                                  100
-                                ).toFixed(2)
-                              );
-                            })(),
+                            mobileOrderDiscountAmount,
                             selectedItem.item.currency
                           )}
                         </Typography>
@@ -2090,29 +2213,7 @@ const PlaceOrderPage: React.FC = () => {
                         color="primary"
                       >
                         {formatCurrency(
-                          (() => {
-                            const hasDeal =
-                              selectedItem.hasActiveDeal &&
-                              typeof selectedItem.original_price === 'number' &&
-                              typeof selectedItem.discounted_price === 'number' &&
-                              selectedItem.original_price > 0;
-                            const unitPrice = hasDeal
-                              ? selectedItem.discounted_price ?? selectedItem.selling_price
-                              : selectedItem.selling_price;
-                            const subtotal = unitPrice * quantity;
-                            const totalBeforeDiscount =
-                              subtotal + (deliveryFee?.deliveryFee || 0);
-                            if (!appliedDiscountCode || discountPercentage <= 0) {
-                              return totalBeforeDiscount;
-                            }
-                            const discountAmount = Number(
-                              (
-                                (totalBeforeDiscount * discountPercentage) /
-                                100
-                              ).toFixed(2)
-                            );
-                            return Math.max(0, totalBeforeDiscount - discountAmount);
-                          })(),
+                          mobileOrderGrandTotal,
                           selectedItem.item.currency
                         )}
                       </Typography>
@@ -2524,7 +2625,7 @@ const PlaceOrderPage: React.FC = () => {
 
                   <Stack spacing={3}>
                     <Box sx={{ width: '100%' }}>
-                      {orderedSelectedItemImages[0] ? (
+                      {heroDisplayUrl || orderedSelectedItemImages[0] ? (
                         id ? (
                           <ButtonBase
                             component={RouterLink}
@@ -2540,8 +2641,10 @@ const PlaceOrderPage: React.FC = () => {
                             <CardMedia
                               component="img"
                               image={
+                                heroDisplayUrl ??
                                 orderedSelectedItemImages[selectedItemImageIndex]
-                                  ?.image_url ?? orderedSelectedItemImages[0].image_url
+                                  ?.image_url ??
+                                orderedSelectedItemImages[0].image_url
                               }
                               alt={selectedItem.item.name}
                               sx={{
@@ -2556,8 +2659,10 @@ const PlaceOrderPage: React.FC = () => {
                           <CardMedia
                             component="img"
                             image={
+                              heroDisplayUrl ??
                               orderedSelectedItemImages[selectedItemImageIndex]
-                                ?.image_url ?? orderedSelectedItemImages[0].image_url
+                                ?.image_url ??
+                              orderedSelectedItemImages[0].image_url
                             }
                             alt={selectedItem.item.name}
                             sx={{
@@ -2665,6 +2770,19 @@ const PlaceOrderPage: React.FC = () => {
                         </Typography>
                       )}
 
+                      <VariantSelector
+                        variants={activeVariants}
+                        value={selectedVariantId}
+                        onChange={setSelectedVariantId}
+                        listingSellingPrice={selectedItem.selling_price}
+                        hasActiveDeal={selectedItem.hasActiveDeal}
+                        originalPrice={selectedItem.original_price}
+                        discountedPrice={selectedItem.discounted_price}
+                        currency={selectedItem.item.currency}
+                        disabled={loading}
+                        formatCurrency={formatCurrency}
+                      />
+
                       {/* Special Handling Tags */}
                       {(selectedItem.item.is_fragile ||
                         selectedItem.item.is_perishable ||
@@ -2704,7 +2822,7 @@ const PlaceOrderPage: React.FC = () => {
                         sx={{ p: 2, bgcolor: 'grey.50' }}
                       >
                         <Stack spacing={1}>
-                          {selectedItem.item.sku && (
+                          {(selectedVariant?.sku || selectedItem.item.sku) && (
                             <Box
                               sx={{
                                 display: 'flex',
@@ -2718,7 +2836,7 @@ const PlaceOrderPage: React.FC = () => {
                                 SKU
                               </Typography>
                               <Typography variant="caption" fontWeight="medium">
-                                {selectedItem.item.sku}
+                                {selectedVariant?.sku || selectedItem.item.sku}
                               </Typography>
                             </Box>
                           )}
@@ -2743,7 +2861,7 @@ const PlaceOrderPage: React.FC = () => {
                               {t('common.inStock', 'in stock')}
                             </Typography>
                           </Box>
-                          {(selectedItem.item.weight != null || selectedItem.item.dimensions) && (
+                          {(specWeightDisplay != null || !!specDimensionsDisplay) && (
                             <Box
                               sx={{
                                 display: 'flex',
@@ -2755,10 +2873,10 @@ const PlaceOrderPage: React.FC = () => {
                                 color="text.secondary"
                               >
                                 {[
-                                  selectedItem.item.weight != null
+                                  specWeightDisplay != null
                                     ? t('common.weight', 'Weight')
                                     : null,
-                                  selectedItem.item.dimensions
+                                  specDimensionsDisplay
                                     ? t('business.items.dimensions', 'Dimensions')
                                     : null,
                                 ]
@@ -2767,10 +2885,10 @@ const PlaceOrderPage: React.FC = () => {
                               </Typography>
                               <Typography variant="caption" fontWeight="medium">
                                 {[
-                                  selectedItem.item.weight != null
-                                    ? `${selectedItem.item.weight} ${selectedItem.item.weight_unit ?? ''}`.trim()
+                                  specWeightDisplay != null
+                                    ? `${specWeightDisplay.value} ${specWeightDisplay.unit ?? ''}`.trim()
                                     : null,
-                                  selectedItem.item.dimensions ?? null,
+                                  specDimensionsDisplay || null,
                                 ]
                                   .filter(Boolean)
                                   .join(' · ')}
@@ -3173,6 +3291,13 @@ const PlaceOrderPage: React.FC = () => {
           <Grid size={{ xs: 12, lg: 4 }}>
             <OrderSummary
               selectedItem={selectedItem}
+              resolvedPricing={{
+                unit: listingUnitPricing.unit,
+                strikeOriginal: listingUnitPricing.strikeOriginal,
+                hasDeal: listingUnitPricing.hasDeal,
+              }}
+              displayImageSrc={variantPrimaryImageUrl}
+              variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
               maxOrderQuantity={Math.min(
@@ -3637,6 +3762,7 @@ const PlaceOrderPage: React.FC = () => {
                 <Box
                   component="img"
                   src={
+                    heroDisplayUrl ??
                     orderedSelectedItemImages[selectedItemImageIndex]?.image_url ??
                     orderedSelectedItemImages[0].image_url
                   }

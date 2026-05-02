@@ -523,14 +523,18 @@ const OrderView: React.FC<OrderViewProps> = ({
                 {t('orders.orderItems', 'Order Items')}
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {order.order_items.map((item) => (
+                {order.order_items.map((item) => {
+                  const snapUrl = item.variant_snapshot?.image_url?.trim();
+                  const gallery0 = item.item?.item_images?.[0]?.image_url;
+                  const lineImage = snapUrl || gallery0;
+                  return (
                   <Paper key={item.id} variant="outlined" sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                       {/* Item Image */}
                       <Box sx={{ flexShrink: 0 }}>
-                        {item.item.item_images.length > 0 ? (
+                        {lineImage ? (
                           <Avatar
-                            src={item.item.item_images[0].image_url}
+                            src={lineImage}
                             alt={item.item_name}
                             sx={{
                               width: 100,
@@ -564,6 +568,16 @@ const OrderView: React.FC<OrderViewProps> = ({
                         <Typography variant="h6" gutterBottom>
                           {item.item_name}
                         </Typography>
+                        {item.variant_name?.trim() ? (
+                          <Typography
+                            variant="body2"
+                            color="primary"
+                            fontWeight={600}
+                            gutterBottom
+                          >
+                            {t('orders.variant.label', 'Option')}: {item.variant_name}
+                          </Typography>
+                        ) : null}
                         <Typography
                           variant="body2"
                           color="text.secondary"
@@ -573,7 +587,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                         </Typography>
 
                         <Grid container spacing={1}>
-                          {item.item.brand && (
+                          {item.item?.brand && (
                             <Grid>
                               <Typography
                                 variant="caption"
@@ -583,7 +597,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                               </Typography>
                             </Grid>
                           )}
-                          {item.item.model && (
+                          {item.item?.model && (
                             <Grid>
                               <Typography
                                 variant="caption"
@@ -593,7 +607,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                               </Typography>
                             </Grid>
                           )}
-                          {item.item.color && (
+                          {item.item?.color && (
                             <Grid>
                               <Typography
                                 variant="caption"
@@ -605,6 +619,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                           )}
                         </Grid>
 
+                        {item.item?.item_sub_category?.item_category?.name && (
                         <Typography
                           variant="body2"
                           color="text.secondary"
@@ -614,6 +629,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                           {item.item.item_sub_category.item_category.name} -{' '}
                           {item.item.item_sub_category.name}
                         </Typography>
+                        )}
                       </Box>
 
                       {/* Price and Quantity */}
@@ -660,7 +676,8 @@ const OrderView: React.FC<OrderViewProps> = ({
                       </Box>
                     )}
                   </Paper>
-                ))}
+                );
+                })}
               </Box>
             </CardContent>
           </Card>

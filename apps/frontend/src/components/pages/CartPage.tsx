@@ -20,6 +20,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { cartLineKey } from '../../contexts/cartLineKey';
 import { useCart } from '../../contexts/CartContext';
 
 const CartPage: React.FC = () => {
@@ -112,7 +113,10 @@ const CartPage: React.FC = () => {
               </Typography>
 
               {items.map((item) => (
-                <Card key={item.inventoryItemId} sx={{ mb: 2 }}>
+                <Card
+                  key={cartLineKey(item.inventoryItemId, item.variantId)}
+                  sx={{ mb: 2 }}
+                >
                   <CardContent>
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       {/* Item Image */}
@@ -125,16 +129,28 @@ const CartPage: React.FC = () => {
                           objectFit: 'cover',
                         }}
                         image={
-                          item.itemData.imageUrl || '/placeholder-item.jpg'
+                          item.itemData.variantImageUrl ||
+                          item.itemData.imageUrl ||
+                          '/placeholder-item.jpg'
                         }
                         alt={item.itemData.name}
                       />
 
                       {/* Item Details */}
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6" sx={{ mb: 1 }}>
-                          {item.itemData.name}
-                        </Typography>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="h6" component="div">
+                            {item.itemData.name}
+                          </Typography>
+                          {item.variantName ? (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {item.variantName}
+                            </Typography>
+                          ) : null}
+                        </Box>
                         {item.itemData.hasActiveDeal &&
                         typeof item.itemData.originalPrice === 'number' &&
                         typeof item.itemData.discountedPrice === 'number' &&
@@ -199,7 +215,8 @@ const CartPage: React.FC = () => {
                                 onClick={() =>
                                   updateQuantity(
                                     item.inventoryItemId,
-                                    item.quantity - 1
+                                    item.quantity - 1,
+                                    item.variantId
                                   )
                                 }
                                 disabled={item.quantity <= 1}
@@ -217,7 +234,8 @@ const CartPage: React.FC = () => {
                                 onClick={() =>
                                   updateQuantity(
                                     item.inventoryItemId,
-                                    item.quantity + 1
+                                    item.quantity + 1,
+                                    item.variantId
                                   )
                                 }
                                 disabled={
@@ -260,7 +278,10 @@ const CartPage: React.FC = () => {
                               <IconButton
                                 size="small"
                                 onClick={() =>
-                                  removeFromCart(item.inventoryItemId)
+                                  removeFromCart(
+                                    item.inventoryItemId,
+                                    item.variantId
+                                  )
                                 }
                                 color="error"
                               >

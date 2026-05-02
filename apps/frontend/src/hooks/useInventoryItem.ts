@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ImageType } from '../types/image';
+import type { ItemVariant } from '../types/itemVariant';
 import { useApiClient } from './useApiClient';
 
 export interface InventoryItem {
@@ -73,6 +74,7 @@ export interface InventoryItem {
       display_order: number;
     }>;
     tags?: Array<{ id: string; name: string }>;
+    item_variants?: ItemVariant[];
   };
   business_location: {
     id: string;

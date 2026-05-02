@@ -115,6 +115,27 @@ export interface InventoryItem {
       display_order: number;
     }>;
     tags?: Array<{ id: string; name: string }>;
+    item_variants?: Array<{
+      id: string;
+      name: string;
+      sku?: string | null;
+      price?: number | null;
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+      color?: string | null;
+      attributes?: Record<string, unknown> | null;
+      is_default?: boolean;
+      sort_order?: number;
+      item_variant_images: Array<{
+        id: string;
+        image_url: string;
+        alt_text?: string | null;
+        caption?: string | null;
+        display_order: number;
+        is_primary: boolean;
+      }>;
+    }>;
   };
   business_location: {
     id: string;
@@ -277,6 +298,30 @@ const CATALOG_INVENTORY_LIST_GQL = `
           tag {
             id
             name
+          }
+        }
+        item_variants(
+          where: { is_active: { _eq: true } }
+          order_by: { sort_order: asc }
+        ) {
+          id
+          name
+          sku
+          price
+          weight
+          weight_unit
+          dimensions
+          color
+          attributes
+          is_default
+          sort_order
+          item_variant_images(order_by: { display_order: asc }) {
+            id
+            image_url
+            alt_text
+            caption
+            display_order
+            is_primary
           }
         }
       }
@@ -1229,6 +1274,30 @@ export class InventoryItemsService {
               tag {
                 id
                 name
+              }
+            }
+            item_variants(
+              where: { is_active: { _eq: true } }
+              order_by: { sort_order: asc }
+            ) {
+              id
+              name
+              sku
+              price
+              weight
+              weight_unit
+              dimensions
+              color
+              attributes
+              is_default
+              sort_order
+              item_variant_images(order_by: { display_order: asc }) {
+                id
+                image_url
+                alt_text
+                caption
+                display_order
+                is_primary
               }
             }
           }

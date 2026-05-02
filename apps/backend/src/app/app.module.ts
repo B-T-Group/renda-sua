@@ -37,6 +37,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalsModule } from '../rentals/rentals.module';
+import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
 import { ServicesModule } from '../services/services.module';
@@ -97,6 +98,7 @@ import { AppService } from './app.service';
     RatingsModule,
     RentalsModule,
     RentalItemImagesModule,
+    ItemVariantsModule,
     ItemViewsModule,
     SiteEventsModule,
     AgentsModule,

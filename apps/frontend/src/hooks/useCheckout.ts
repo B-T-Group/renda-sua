@@ -10,6 +10,7 @@ interface CreateOrderRequest {
   items: Array<{
     business_inventory_id: string;
     quantity: number;
+    item_variant_id?: string;
   }>;
   delivery_address_id: string;
   phone_number?: string;
@@ -135,6 +136,7 @@ export const useCheckout = () => {
             items: items.map((item) => ({
               business_inventory_id: item.inventoryItemId,
               quantity: item.quantity,
+              ...(item.variantId && { item_variant_id: item.variantId }),
             })),
             delivery_address_id: deliveryAddressId,
             phone_number: phoneNumber,
@@ -199,7 +201,8 @@ export const useCheckout = () => {
         slot_id: string;
         preferred_date: string;
         special_instructions?: string;
-      }
+      },
+      itemVariantId?: string
     ): Promise<OrderResult> => {
       if (!apiClient) {
         throw new Error('API client not available');
@@ -214,6 +217,7 @@ export const useCheckout = () => {
             {
               business_inventory_id: inventoryItemId,
               quantity: quantity,
+              ...(itemVariantId && { item_variant_id: itemVariantId }),
             },
           ],
           delivery_address_id: deliveryAddressId,

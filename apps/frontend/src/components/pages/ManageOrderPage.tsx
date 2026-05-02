@@ -824,12 +824,24 @@ const ManageOrderPage: React.FC = () => {
                       </Typography>
                       <Stack spacing={2}>
                         {order.order_items?.map((item) => {
+                          const variantSnap = (
+                            item as {
+                              variant_snapshot?: { image_url?: string | null };
+                              variant_name?: string | null;
+                            }
+                          ).variant_snapshot;
+                          const variantName = (
+                            item as { variant_name?: string | null }
+                          ).variant_name;
+                          const variantImg = variantSnap?.image_url?.trim();
                           const categoryName =
                             item.item?.item_sub_category?.item_category?.name ||
                             item.item?.item_sub_category?.name;
                           const hasAgentRestrictedView =
                             !item.item?.item_images?.length &&
                             item.item?.name == null;
+                          const thumb =
+                            variantImg || item.item?.item_images?.[0]?.image_url;
                           return (
                             <Paper
                               key={item.id}
@@ -837,11 +849,11 @@ const ManageOrderPage: React.FC = () => {
                               sx={{ p: 2 }}
                             >
                               <Box sx={{ display: 'flex', gap: 2 }}>
-                                {item.item?.item_images?.[0]?.image_url && (
+                                {thumb && (
                                   <Box
                                     component="img"
-                                    src={item.item.item_images[0].image_url}
-                                    alt={item.item.name ?? ''}
+                                    src={thumb}
+                                    alt={item.item?.name ?? item.item_name ?? ''}
                                     sx={{
                                       width: 80,
                                       height: 80,
@@ -859,6 +871,16 @@ const ManageOrderPage: React.FC = () => {
                                       ? categoryName || t('orders.item', 'Item')
                                       : item.item?.name ?? item.item_name}
                                   </Typography>
+                                  {variantName?.trim() ? (
+                                    <Typography
+                                      variant="body2"
+                                      color="primary"
+                                      fontWeight={600}
+                                    >
+                                      {t('orders.variant.label', 'Option')}:{' '}
+                                      {variantName}
+                                    </Typography>
+                                  ) : null}
                                   <Typography
                                     variant="body2"
                                     color="text.secondary"

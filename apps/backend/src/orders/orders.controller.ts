@@ -106,6 +106,12 @@ export class OrdersController {
             properties: {
               business_inventory_id: { type: 'string', format: 'uuid' },
               quantity: { type: 'number', minimum: 1 },
+              item_variant_id: {
+                type: 'string',
+                format: 'uuid',
+                description:
+                  'Selected catalog variant when the item has multiple active variants',
+              },
             },
             required: ['business_inventory_id', 'quantity'],
           },

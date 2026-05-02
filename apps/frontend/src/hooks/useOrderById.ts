@@ -108,6 +108,16 @@ export interface OrderData {
     item_id?: string;
     item_name?: string;
     item_description?: string;
+    item_variant_id?: string | null;
+    variant_name?: string | null;
+    variant_snapshot?: {
+      price?: number | null;
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+      color?: string | null;
+      image_url?: string | null;
+    } | null;
     unit_price?: number; // Optional for agents
     quantity: number;
     total_price?: number; // Optional for agents

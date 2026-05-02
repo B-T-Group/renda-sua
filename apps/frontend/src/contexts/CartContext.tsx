@@ -8,9 +8,13 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cartLineKey } from './cartLineKey';
 
 export interface CartItem {
   inventoryItemId: string;
+  /** Catalog variant when chosen (distinct cart lines per variant). */
+  variantId?: string;
+  variantName?: string;
   quantity: number;
   businessId: string;
   businessLocationId: string;
@@ -19,6 +23,8 @@ export interface CartItem {
     price: number;
     currency: string;
     imageUrl?: string;
+    /** When listing shows a variant-specific photo */
+    variantImageUrl?: string;
     weight?: number;
     maxOrderQuantity?: number;
     minOrderQuantity?: number;
@@ -36,13 +42,17 @@ export interface CartItem {
 interface CartContextType {
   cartItems: CartItem[];
   addToCart: (item: CartItem) => void;
-  removeFromCart: (inventoryItemId: string) => void;
-  updateQuantity: (inventoryItemId: string, quantity: number) => void;
+  removeFromCart: (inventoryItemId: string, variantId?: string) => void;
+  updateQuantity: (
+    inventoryItemId: string,
+    quantity: number,
+    variantId?: string
+  ) => void;
   clearCart: () => void;
   getCartItemCount: () => number;
   getCartByBusiness: () => Map<string, CartItem[]>;
   getCartTotal: () => number;
-  isItemInCart: (inventoryItemId: string) => boolean;
+  isItemInCart: (inventoryItemId: string, variantId?: string) => boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -100,8 +110,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   const addToCart = useCallback(
     (item: CartItem) => {
       setCartItems((prevItems) => {
+        const lineKey = cartLineKey(item.inventoryItemId, item.variantId);
         const existingItemIndex = prevItems.findIndex(
-          (cartItem) => cartItem.inventoryItemId === item.inventoryItemId
+          (cartItem) =>
+            cartLineKey(cartItem.inventoryItemId, cartItem.variantId) ===
+            lineKey
         );
 
         if (existingItemIndex >= 0) {
@@ -165,10 +178,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const removeFromCart = useCallback(
-    (inventoryItemId: string) => {
+    (inventoryItemId: string, variantId?: string) => {
       setCartItems((prevItems) => {
+        const lineKey = cartLineKey(inventoryItemId, variantId);
         const updatedItems = prevItems.filter(
-          (item) => item.inventoryItemId !== inventoryItemId
+          (item) =>
+            cartLineKey(item.inventoryItemId, item.variantId) !== lineKey
         );
         enqueueSnackbar(t('cart.itemRemoved', 'Item removed from cart'), {
           variant: 'info',
@@ -180,12 +195,15 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const updateQuantity = useCallback(
-    (inventoryItemId: string, quantity: number) => {
+    (inventoryItemId: string, quantity: number, variantId?: string) => {
       setCartItems((prevItems) => {
         const nextItems: CartItem[] = [];
+        const lineKey = cartLineKey(inventoryItemId, variantId);
 
         prevItems.forEach((item) => {
-          if (item.inventoryItemId !== inventoryItemId) {
+          if (
+            cartLineKey(item.inventoryItemId, item.variantId) !== lineKey
+          ) {
             nextItems.push(item);
             return;
           }
@@ -261,8 +279,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   }, [cartItems]);
 
   const isItemInCart = useCallback(
-    (inventoryItemId: string) => {
-      return cartItems.some((item) => item.inventoryItemId === inventoryItemId);
+    (inventoryItemId: string, variantId?: string) => {
+      const lineKey = cartLineKey(inventoryItemId, variantId);
+      return cartItems.some(
+        (item) =>
+          cartLineKey(item.inventoryItemId, item.variantId) === lineKey
+      );
     },
     [cartItems]
   );

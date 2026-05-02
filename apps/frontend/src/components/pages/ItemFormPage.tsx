@@ -45,6 +45,7 @@ import {
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
+import VariantsManagerSection from '../business/variants/VariantsManagerSection';
 import SEOHead from '../seo/SEOHead';
 
 // Extended types for create options
@@ -1583,6 +1584,10 @@ const ItemFormPage: React.FC = () => {
                 </Box>
               </Collapse>
             </Box>
+
+            {isEditMode && itemId ? (
+              <VariantsManagerSection itemId={itemId} />
+            ) : null}
 
             {/* Error Display */}
             {error && <Alert severity="error">{error}</Alert>}

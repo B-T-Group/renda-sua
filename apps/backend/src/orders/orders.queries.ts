@@ -75,6 +75,9 @@ export const GET_ORDERS = gql`
       }
       order_items {
         id
+        item_variant_id
+        variant_name
+        variant_snapshot
         item_name
         item_description
         unit_price
@@ -260,6 +263,9 @@ export const GET_ORDER_BY_ID = gql`
         id
         business_inventory_id
         item_id
+        item_variant_id
+        variant_name
+        variant_snapshot
         item_name
         item_description
         unit_price

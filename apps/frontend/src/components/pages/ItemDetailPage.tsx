@@ -41,6 +41,7 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
 import {
   metaPixelContentCategoryFromItem,
@@ -74,6 +75,7 @@ import { MobileMoneyOrderIcon } from '../common/MobileMoneyOrderIcon';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
+import VariantSelector from '../common/VariantSelector';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
@@ -426,6 +428,7 @@ export default function ItemDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const variantSel = useListingVariantSelection(inventoryItem);
   const { stats: orderStats, loading: orderStatsLoading } = useItemOrderStats(
     inventoryItem?.id ?? null
   );
@@ -466,14 +469,7 @@ export default function ItemDetailPage() {
     if (lastPixelViewContentIdRef.current === inventoryItem.id) return;
     lastPixelViewContentIdRef.current = inventoryItem.id;
 
-    const hasDeal =
-      inventoryItem.hasActiveDeal &&
-      typeof inventoryItem.original_price === 'number' &&
-      typeof inventoryItem.discounted_price === 'number' &&
-      inventoryItem.original_price > 0;
-    const unitPrice = hasDeal
-      ? inventoryItem.discounted_price!
-      : inventoryItem.selling_price;
+    const unitPrice = variantSel.listingUnitPricing.unit;
 
     const contentCategory = metaPixelContentCategoryFromItem(
       inventoryItem.item
@@ -491,7 +487,7 @@ export default function ItemDetailPage() {
       ...(contentCategory && { content_category: contentCategory }),
       ...(googleCategory && { google_product_category: googleCategory }),
     });
-  }, [inventoryItem, trackViewContent]);
+  }, [inventoryItem, trackViewContent, variantSel.listingUnitPricing.unit]);
 
   const goPrevGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;
@@ -555,15 +551,11 @@ export default function ItemDetailPage() {
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    const hasDeal =
-      item.hasActiveDeal &&
-      typeof item.original_price === 'number' &&
-      typeof item.discounted_price === 'number' &&
-      item.original_price > 0;
-
-    const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+    const lp = variantSel.listingUnitPricing;
+    const unitPrice = lp.unit;
     const contentCategory = metaPixelContentCategoryFromItem(item.item);
     const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
+    const hasMetaDeal = lp.hasDeal;
 
     trackAddToCart({
       content_type: 'product',
@@ -579,6 +571,8 @@ export default function ItemDetailPage() {
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
+      variantId: variantSel.selectedVariant?.id,
+      variantName: variantSel.selectedVariant?.name,
       businessId: item.business_location.business_id,
       businessLocationId: item.business_location_id,
       itemData: {
@@ -588,13 +582,14 @@ export default function ItemDetailPage() {
         ...(contentCategory && { contentCategory }),
         ...(googleCategory && { googleProductCategory: googleCategory }),
         imageUrl: orderedItemImages(item.item.item_images)[0]?.image_url,
+        variantImageUrl: variantSel.variantImageUrl || undefined,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
-        originalPrice: hasDeal ? item.original_price! : undefined,
-        discountedPrice: hasDeal ? item.discounted_price! : undefined,
-        hasActiveDeal: hasDeal,
-        dealEndAt: hasDeal ? item.deal_end_at : undefined,
+        originalPrice: hasMetaDeal ? lp.strikeOriginal : undefined,
+        discountedPrice: hasMetaDeal ? lp.unit : undefined,
+        hasActiveDeal: hasMetaDeal,
+        dealEndAt: hasMetaDeal ? item.deal_end_at : undefined,
       },
     });
   };
@@ -740,7 +735,10 @@ export default function ItemDetailPage() {
 
   const item = inventoryItem.item;
   const images = galleryImages;
-  const primaryImage = images.length > 0 ? images[0].image_url : null;
+  const lp = variantSel.listingUnitPricing;
+  const primaryImage =
+    variantSel.variantImageUrl ??
+    (images.length > 0 ? images[0].image_url : null);
   const selectedImageUrl =
     images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
   const business = inventoryItem.business_location?.business;
@@ -749,14 +747,8 @@ export default function ItemDetailPage() {
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
   const canOrder =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
-  const hasDeal =
-    inventoryItem.hasActiveDeal &&
-    typeof inventoryItem.original_price === 'number' &&
-    typeof inventoryItem.discounted_price === 'number' &&
-    inventoryItem.original_price > 0;
-  const checkoutUnitPrice = hasDeal
-    ? inventoryItem.discounted_price!
-    : inventoryItem.selling_price;
+  const hasDeal = lp.hasDeal;
+  const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
   const showMobileStickyOrderBar = isMobile && canOrder;
   const showInlineOrderNow = !showMobileStickyOrderBar;
@@ -789,8 +781,8 @@ export default function ItemDetailPage() {
         );
 
   const dealDiscountPct =
-    hasDeal && inventoryItem.original_price > 0
-      ? Math.round((1 - checkoutUnitPrice / inventoryItem.original_price) * 100)
+    lp.hasDeal && lp.strikeOriginal != null && lp.strikeOriginal > 0
+      ? Math.round((1 - lp.unit / lp.strikeOriginal) * 100)
       : null;
 
   const scrollToReviews = () => {
@@ -1120,7 +1112,7 @@ export default function ItemDetailPage() {
                         sx={{ textDecoration: 'line-through' }}
                         color="text.secondary"
                       >
-                        {formatCurrency(inventoryItem.original_price!, item.currency)}
+                        {formatCurrency(lp.strikeOriginal ?? inventoryItem.original_price!, item.currency)}
                       </Typography>
                       <Typography variant="h6" color="primary.main" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                         {formatCurrency(checkoutUnitPrice, item.currency)}
@@ -1150,7 +1142,7 @@ export default function ItemDetailPage() {
                     sx={{ textDecoration: 'line-through' }}
                     color="text.secondary"
                   >
-                    {formatCurrency(inventoryItem.original_price!, item.currency)}
+                    {formatCurrency(lp.strikeOriginal ?? inventoryItem.original_price!, item.currency)}
                   </Typography>
                 )}
                 <Typography variant="h5" color="primary.main" fontWeight={600}>
@@ -1238,6 +1230,18 @@ export default function ItemDetailPage() {
                   </Button>
                 ) : (
                   <>
+                    <VariantSelector
+                      variants={variantSel.activeVariants}
+                      value={variantSel.selectedVariantId}
+                      onChange={variantSel.setSelectedVariantId}
+                      listingSellingPrice={inventoryItem.selling_price}
+                      hasActiveDeal={inventoryItem.hasActiveDeal}
+                      originalPrice={inventoryItem.original_price}
+                      discountedPrice={inventoryItem.discounted_price}
+                      currency={item.currency}
+                      disabled={false}
+                      formatCurrency={formatCurrency}
+                    />
                     {isClientUser && (
                       <Button
                         variant="outlined"
@@ -1603,6 +1607,20 @@ export default function ItemDetailPage() {
           priceText: checkoutPriceText,
           quantity: 1,
         }}
+        variantSlot={
+          <VariantSelector
+            variants={variantSel.activeVariants}
+            value={variantSel.selectedVariantId}
+            onChange={variantSel.setSelectedVariantId}
+            listingSellingPrice={inventoryItem.selling_price}
+            hasActiveDeal={inventoryItem.hasActiveDeal}
+            originalPrice={inventoryItem.original_price}
+            discountedPrice={inventoryItem.discounted_price}
+            currency={item.currency}
+            disabled={false}
+            formatCurrency={formatCurrency}
+          />
+        }
         onClose={() => setAnonBuyNowOpen(false)}
       />
       <Dialog

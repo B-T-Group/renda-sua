@@ -84,6 +84,28 @@ const GET_ITEMS = `
           name
         }
       }
+      item_variants(order_by: { sort_order: asc }) {
+        id
+        name
+        sku
+        price
+        weight
+        weight_unit
+        dimensions
+        color
+        attributes
+        is_default
+        is_active
+        sort_order
+        item_variant_images(order_by: { display_order: asc }) {
+          id
+          image_url
+          alt_text
+          caption
+          display_order
+          is_primary
+        }
+      }
       business_inventories {
         id
         item_id
@@ -219,6 +241,28 @@ const GET_SINGLE_ITEM = `
         tag {
           id
           name
+        }
+      }
+      item_variants(order_by: { sort_order: asc }) {
+        id
+        name
+        sku
+        price
+        weight
+        weight_unit
+        dimensions
+        color
+        attributes
+        is_default
+        is_active
+        sort_order
+        item_variant_images(order_by: { display_order: asc }) {
+          id
+          image_url
+          alt_text
+          caption
+          display_order
+          is_primary
         }
       }
       business_inventories {

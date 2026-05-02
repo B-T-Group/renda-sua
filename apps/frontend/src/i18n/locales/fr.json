@@ -1710,6 +1710,28 @@
       "weightUnit": "Unité de poids",
       "dimensions": "Dimensions (optionnel)"
     },
+    "variants": {
+      "sectionTitle": "Variantes",
+      "sectionHint": "Tailles ou conditionnements facultatifs. Le stock d’inventaire reste partagé entre les variantes.",
+      "add": "Ajouter une variante",
+      "addTitle": "Ajouter une variante",
+      "editTitle": "Modifier la variante",
+      "name": "Nom de la variante",
+      "sku": "SKU (facultatif)",
+      "priceOverride": "Prix spécifique (facultatif)",
+      "priceHelp": "Laisser vide pour utiliser le prix du catalogue (inventaire).",
+      "weight": "Poids",
+      "weightUnit": "Unité",
+      "color": "Couleur",
+      "active": "Actif",
+      "default": "Option par défaut",
+      "empty": "Aucune variante pour l’instant.",
+      "setDefault": "Définir par défaut",
+      "imagesTitle": "Images de la variante",
+      "uploadImage": "Téléverser une image",
+      "deleteTitle": "Supprimer la variante ?",
+      "deleteMessage": "Cette action est irréversible. Les commandes qui référencent cette variante conservent leur instantané."
+    },
     "locations": {
       "activate": "Activer",
       "active": "Actif",
@@ -2315,6 +2337,10 @@
       "applied": "Appliqué : {{code}} ({{pct}}% de réduction)",
       "discount": "Réduction",
       "singleOrderOnly": "Les codes de réduction ne peuvent être appliqués que si votre panier contient des articles d’une seule entreprise."
+    },
+    "variant": {
+      "selectLabel": "Option",
+      "label": "Option"
     },
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {

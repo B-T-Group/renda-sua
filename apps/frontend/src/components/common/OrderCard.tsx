@@ -53,6 +53,8 @@ interface ItemImageRow {
 interface OrderItem {
   id: string;
   item_name?: string;
+  variant_name?: string | null;
+  variant_snapshot?: { image_url?: string | null } | null;
   quantity: number;
   unit_price?: number;
   total_price?: number;
@@ -77,11 +79,17 @@ function pickBestItemImageUrl(
   return images[0]?.image_url ?? null;
 }
 
+function orderLineThumb(line: OrderItem): string | null {
+  const snap = line.variant_snapshot?.image_url?.trim();
+  if (snap) return snap;
+  return pickBestItemImageUrl(line.item?.item_images);
+}
+
 function heroImageFromOrder(order: {
   order_items?: OrderItem[];
 }): string | null {
   for (const line of order.order_items ?? []) {
-    const url = pickBestItemImageUrl(line.item?.item_images);
+    const url = orderLineThumb(line);
     if (url) return url;
   }
   return null;
@@ -861,7 +869,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
               <Collapse in={lineItemsOpen || lineItemCount === 1}>
                 <Stack spacing={1.5} sx={{ maxHeight: 320, overflow: 'auto', pr: 0.5 }}>
                   {(order.order_items ?? []).map((line: OrderItem) => {
-                    const thumb = pickBestItemImageUrl(line.item?.item_images);
+                    const thumb = orderLineThumb(line);
                     return (
                       <Stack key={line.id} direction="row" spacing={1.5} alignItems="center">
                         <Box
@@ -893,6 +901,11 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
                           <Typography variant="body2" fontWeight={600} sx={{ wordBreak: 'break-word' }}>
                             {line.item_name}
                           </Typography>
+                          {line.variant_name?.trim() ? (
+                            <Typography variant="caption" color="primary" fontWeight={600} display="block">
+                              {line.variant_name}
+                            </Typography>
+                          ) : null}
                           <Typography variant="caption" color="text.secondary" display="block">
                             {t('orders.card.sku', 'SKU')}: {line.item?.sku ?? '—'} · ×{line.quantity}
                           </Typography>

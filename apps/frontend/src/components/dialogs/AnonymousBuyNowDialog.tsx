@@ -52,6 +52,8 @@ export interface AnonymousBuyNowDialogProps {
   open: boolean;
   inventoryItemId: string;
   item: CheckoutItemSummary;
+  /** e.g. variant selector when the listing has multiple options */
+  variantSlot?: React.ReactNode;
   onClose: () => void;
   /** Optional override for the primary CTA label (defaults to 'Continue'). */
   primaryCtaLabel?: string;
@@ -84,6 +86,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   open,
   inventoryItemId,
   item,
+  variantSlot,
   onClose,
   primaryCtaLabel,
   secondaryCtaLabel,
@@ -485,6 +488,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
               </Stack>
             </Box>
           </Box>
+
+          {variantSlot}
 
           {/* Name fields */}
           <Stack direction="row" spacing={1.5}>

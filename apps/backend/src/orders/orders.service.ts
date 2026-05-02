@@ -382,11 +382,10 @@ export class OrdersService {
     return user.business;
   }
 
-  private computeUnitPriceFromInventory(
-    businessInventory: any,
+  private computeUnitPriceFromBase(
+    base: number,
     deal?: { discount_type: string; discount_value: number }
   ): number {
-    const base = businessInventory.selling_price;
     if (!deal) {
       return base;
     }
@@ -399,6 +398,79 @@ export class OrdersService {
       return discounted > 0 ? discounted : 0;
     }
     return base;
+  }
+
+  private computeUnitPriceFromVariantOrInventory(
+    businessInventory: any,
+    variant: any | null,
+    deal?: { discount_type: string; discount_value: number }
+  ): number {
+    const base =
+      variant != null && variant.price != null && variant.price !== ''
+        ? Number(variant.price)
+        : businessInventory.selling_price;
+    return this.computeUnitPriceFromBase(base, deal);
+  }
+
+  private primaryVariantImageUrl(variant: any): string | null {
+    const images = variant?.item_variant_images ?? [];
+    if (!Array.isArray(images) || images.length === 0) {
+      return null;
+    }
+    const primary =
+      images.find((im: any) => im?.is_primary === true) ?? images[0];
+    return typeof primary?.image_url === 'string' ? primary.image_url : null;
+  }
+
+  private buildVariantSnapshot(variant: any): Record<string, unknown> | null {
+    if (!variant) {
+      return null;
+    }
+    return {
+      price: variant.price ?? null,
+      weight: variant.weight ?? null,
+      weight_unit: variant.weight_unit ?? null,
+      dimensions: variant.dimensions ?? null,
+      color: variant.color ?? null,
+      image_url: this.primaryVariantImageUrl(variant),
+    };
+  }
+
+  private resolveVariantForOrderLine(
+    orderLine: OrderItem,
+    inventoryRow: any
+  ): any | null {
+    const activeVariants = inventoryRow.item?.item_variants ?? [];
+    if (!Array.isArray(activeVariants) || activeVariants.length === 0) {
+      return null;
+    }
+    if (activeVariants.length === 1) {
+      return activeVariants[0];
+    }
+    const requestedId = orderLine.item_variant_id;
+    if (!requestedId?.trim()) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'This product has multiple options; please select a variant before ordering.',
+          error: 'ITEM_VARIANT_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const match = activeVariants.find((v: any) => v?.id === requestedId);
+    if (!match) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Invalid or unavailable variant for this product.',
+          error: 'ITEM_VARIANT_INVALID',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return match;
   }
 
   private async getActiveDealsByBusinessInventoryIds(
@@ -5590,6 +5662,30 @@ export class OrdersService {
             currency
             weight
             max_order_quantity
+            item_variants(
+              where: { is_active: { _eq: true } }
+              order_by: { sort_order: asc }
+            ) {
+              id
+              name
+              sku
+              price
+              weight
+              weight_unit
+              dimensions
+              color
+              attributes
+              is_default
+              sort_order
+              item_variant_images(order_by: { display_order: asc }) {
+                id
+                image_url
+                alt_text
+                caption
+                is_primary
+                display_order
+              }
+            }
           }
         }
       }
@@ -5634,7 +5730,9 @@ export class OrdersService {
       throw new Error('All items must be from the same business');
     }
 
-    // Validate all items are active, respect max_order_quantity, and have sufficient quantity
+    // Validate all items are active, respect max_order_quantity, have sufficient quantity, and resolve variants
+    const lineContexts: Array<{ inventory: any; variant: any | null }> = [];
+
     for (let i = 0; i < orderData.items.length; i++) {
       const item = orderData.items[i];
       const businessInventory = businessInventories.find(
@@ -5665,6 +5763,9 @@ export class OrdersService {
           `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${item.quantity}`
         );
       }
+
+      const variant = this.resolveVariantForOrderLine(item, businessInventory);
+      lineContexts.push({ inventory: businessInventory, variant });
     }
 
     // Use the first item's currency (all items should have the same currency from same business)
@@ -5682,12 +5783,16 @@ export class OrdersService {
       }
     }
 
-    // Calculate total weight for delivery fee calculation
-    const totalWeight = businessInventories.reduce(
-      (sum, inv, idx) =>
-        sum + (inv.item.weight || 0) * orderData.items[idx].quantity,
-      0
-    );
+    // Calculate total weight for delivery fee calculation (variant weight overrides item weight)
+    const totalWeight = lineContexts.reduce((sum, ctx, idx) => {
+      const w =
+        ctx.variant != null &&
+        ctx.variant.weight != null &&
+        ctx.variant.weight !== ''
+          ? Number(ctx.variant.weight)
+          : ctx.inventory.item?.weight || 0;
+      return sum + w * orderData.items[idx].quantity;
+    }, 0);
 
     // Calculate delivery fee using the new structure
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
@@ -5706,9 +5811,13 @@ export class OrdersService {
     const orderNumber = this.createOrderNumber();
 
     // Calculate order amounts for all items
-    const totalAmount = businessInventories.reduce((sum, inv, idx) => {
-      const deal = dealsMap[inv.id];
-      const unitPrice = this.computeUnitPriceFromInventory(inv, deal);
+    const totalAmount = lineContexts.reduce((sum, ctx, idx) => {
+      const deal = dealsMap[ctx.inventory.id];
+      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
+        ctx.inventory,
+        ctx.variant,
+        deal
+      );
       return sum + unitPrice * orderData.items[idx].quantity;
     }, 0);
 
@@ -6040,6 +6149,9 @@ export class OrdersService {
             id
             business_inventory_id
             item_id
+            item_variant_id
+            variant_name
+            variant_snapshot
             item_name
             quantity
             unit_price
@@ -6050,14 +6162,17 @@ export class OrdersService {
     `;
 
     // Prepare order items data for all items
-    const orderItemsData = orderData.items.map((item: OrderItem) => {
-      const businessInventory = businessInventories.find(
-        (inv) => inv.id === item.business_inventory_id
+    const orderItemsData = orderData.items.map((item: OrderItem, idx: number) => {
+      const ctx = lineContexts[idx];
+      const businessInventory = ctx.inventory;
+      const variant = ctx.variant;
+      const deal = dealsMap[businessInventory.id];
+      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
+        businessInventory,
+        variant,
+        deal
       );
-      const deal = businessInventory ? dealsMap[businessInventory.id] : undefined;
-      const unitPrice = businessInventory
-        ? this.computeUnitPriceFromInventory(businessInventory, deal)
-        : 0;
+      const snapshot = this.buildVariantSnapshot(variant);
       return {
         business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,
@@ -6066,6 +6181,11 @@ export class OrdersService {
         quantity: item.quantity,
         unit_price: unitPrice,
         total_price: unitPrice * item.quantity,
+        ...(variant && {
+          item_variant_id: variant.id,
+          variant_name: variant.name,
+          ...(snapshot && { variant_snapshot: snapshot }),
+        }),
       };
     });
 

@@ -1721,6 +1721,28 @@
       "weightUnit": "Weight Unit",
       "dimensions": "Dimensions (Optional)"
     },
+    "variants": {
+      "sectionTitle": "Variants",
+      "sectionHint": "Optional sizes or packaging. Inventory stock stays shared across variants.",
+      "add": "Add variant",
+      "addTitle": "Add variant",
+      "editTitle": "Edit variant",
+      "name": "Variant name",
+      "sku": "SKU (optional)",
+      "priceOverride": "Price override (optional)",
+      "priceHelp": "Leave empty to use the listing price from inventory.",
+      "weight": "Weight",
+      "weightUnit": "Unit",
+      "color": "Color",
+      "active": "Active",
+      "default": "Default option",
+      "empty": "No variants yet.",
+      "setDefault": "Set default",
+      "imagesTitle": "Variant images",
+      "uploadImage": "Upload image",
+      "deleteTitle": "Delete variant?",
+      "deleteMessage": "This cannot be undone. Orders that reference this variant keep their snapshot."
+    },
     "locations": {
       "activate": "Activate",
       "active": "Active",
@@ -2326,6 +2348,10 @@
       "applied": "Applied: {{code}} ({{pct}}% off)",
       "discount": "Discount",
       "singleOrderOnly": "Discount codes can only be applied when your cart contains items from a single business."
+    },
+    "variant": {
+      "selectLabel": "Option",
+      "label": "Option"
     },
     "selectCountry": "Select a country.",
     "payAtDelivery": {
