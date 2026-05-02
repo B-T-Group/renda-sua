@@ -83,11 +83,11 @@ const OrderView: React.FC<OrderViewProps> = ({
     return parts.join(', ');
   };
 
-  const formatCurrency = (amount: number, currency = 'USD') => {
+  const formatCurrency = (amount?: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-    }).format(amount);
+    }).format(amount ?? 0);
   };
 
   const formatDate = (dateString: string) => {

@@ -137,6 +137,12 @@ function App() {
   const hasMobileBottomNav =
     showAgentBottomNav || showClientBottomNav || showGuestBottomNav;
   const whatsappBottomOffset = hasMobileBottomNav ? 92 : 24;
+  const isItemDetailPage = /^\/items\/[^/]+\/?$/.test(location.pathname);
+  const isPlaceOrderFlowPage = /^\/items\/[^/]+\/place_order(?:\/anon-address)?\/?$/.test(
+    location.pathname
+  );
+  const shouldHideWhatsappWidget =
+    isMobile && (isItemDetailPage || isPlaceOrderFlowPage);
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -752,24 +758,26 @@ function App() {
       {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
       <GuestBottomNav />
 
-      <FloatingWhatsApp
-        phoneNumber="237690043293"
-        accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
-        statusMessage={t(
-          'support.whatsapp.statusMessage',
-          'Typically replies within 1 hour'
-        )}
-        chatMessage={t(
-          'support.whatsapp.chatMessage',
-          'Hello! How can we help you today?'
-        )}
-        placeholder={t('support.whatsapp.placeholder', 'Type a message...')}
-        allowClickAway={true}
-        allowEsc={true}
-        notification={false}
-        buttonStyle={{ bottom: `${whatsappBottomOffset}px`, right: '24px' }}
-        darkMode={false}
-      />
+      {!shouldHideWhatsappWidget ? (
+        <FloatingWhatsApp
+          phoneNumber="237690043293"
+          accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
+          statusMessage={t(
+            'support.whatsapp.statusMessage',
+            'Typically replies within 1 hour'
+          )}
+          chatMessage={t(
+            'support.whatsapp.chatMessage',
+            'Hello! How can we help you today?'
+          )}
+          placeholder={t('support.whatsapp.placeholder', 'Type a message...')}
+          allowClickAway={true}
+          allowEsc={true}
+          notification={false}
+          buttonStyle={{ bottom: `${whatsappBottomOffset}px`, right: '24px' }}
+          darkMode={false}
+        />
+      ) : null}
 
       {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
       <AgentOnboardingModal

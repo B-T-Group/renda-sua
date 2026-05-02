@@ -210,7 +210,6 @@ type ItemDetailMobileOrderBarProps = {
   visible: boolean;
   priceText: string;
   orderLabel: string;
-  deliveryHint: string;
   topRow?: React.ReactNode;
   questionSlot?: React.ReactNode;
   onOrder: () => void;
@@ -220,7 +219,6 @@ function ItemDetailMobileOrderBar({
   visible,
   priceText,
   orderLabel,
-  deliveryHint,
   topRow,
   questionSlot,
   onOrder,
@@ -252,7 +250,7 @@ function ItemDetailMobileOrderBar({
   return (
     <Paper
       component="nav"
-      aria-label={`${orderLabel}. ${deliveryHint}`}
+      aria-label={orderLabel}
       elevation={12}
       ref={navRef}
       sx={{
@@ -354,23 +352,6 @@ function ItemDetailMobileOrderBar({
             {orderLabel}
           </Button>
         </Stack>
-        <Typography
-          variant="body2"
-          component="p"
-          sx={(theme) => ({
-            m: 0,
-            width: '100%',
-            textAlign: 'center',
-            lineHeight: 1.45,
-            fontWeight: 600,
-            letterSpacing: 0.01,
-            fontSize: { xs: '0.8rem', sm: '0.825rem' },
-            color: alpha(theme.palette.text.primary, 0.8),
-            fontStyle: 'italic',
-          })}
-        >
-          {deliveryHint}
-        </Typography>
         {questionSlot ? (
           <Box sx={{ display: 'flex', justifyContent: 'center' }}>{questionSlot}</Box>
         ) : null}
@@ -1200,6 +1181,25 @@ export default function ItemDetailPage() {
             />
 
             <ItemDetailHowItWorks />
+            {showMobileStickyOrderBar ? (
+              <Typography
+                variant="body2"
+                component="p"
+                sx={(theme) => ({
+                  m: 0,
+                  width: '100%',
+                  textAlign: 'center',
+                  lineHeight: 1.45,
+                  fontWeight: 600,
+                  letterSpacing: 0.01,
+                  fontSize: { xs: '0.8rem', sm: '0.825rem' },
+                  color: alpha(theme.palette.text.primary, 0.8),
+                  fontStyle: 'italic',
+                })}
+              >
+                {stickyDeliveryHint}
+              </Typography>
+            ) : null}
 
             {isCameroonBusiness ? <CmAcceptedPaymentLogos compact={isMobile} /> : null}
 
@@ -1535,34 +1535,16 @@ export default function ItemDetailPage() {
         visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
-        deliveryHint={stickyDeliveryHint}
         topRow={
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>
-            {stickyRatingLabel ? (
+          stickyRatingLabel ? (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>
               <Chip
                 label={stickyRatingLabel}
                 sx={{ minHeight: 32, fontWeight: 700 }}
                 variant="outlined"
               />
-            ) : null}
-            <Chip
-              label={t('items.detail.trust.mobileMoneySecure', 'MoMo secure')}
-              sx={{ minHeight: 32, fontWeight: 700 }}
-              variant="outlined"
-            />
-            <Chip
-              label={t('items.detail.trust.fastDelivery', 'Fast delivery')}
-              sx={{ minHeight: 32, fontWeight: 700 }}
-              variant="outlined"
-            />
-            {business?.is_verified ? (
-              <Chip
-                label={t('items.detail.trust.verifiedSeller', 'Verified seller')}
-                sx={{ minHeight: 32, fontWeight: 700 }}
-                variant="outlined"
-              />
-            ) : null}
-          </Stack>
+            </Stack>
+          ) : undefined
         }
         questionSlot={
           id ? (
