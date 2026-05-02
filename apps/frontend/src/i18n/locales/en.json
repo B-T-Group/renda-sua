@@ -2774,6 +2774,7 @@
     "selectAddress": "Select Delivery Address",
     "selectCancellationReason": "Please select a cancellation reason",
     "specialInstructionsPlaceholder": "Add any special instructions for this order (optional)",
+    "specialInstructionsHint": "Add any additional delivery details for the driver (optional).",
     "stats": {
       "active": "Active",
       "byStatus": "Orders by status",

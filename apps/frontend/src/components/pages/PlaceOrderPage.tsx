@@ -659,6 +659,7 @@ const PlaceOrderPage: React.FC = () => {
   const [paymentTiming, setPaymentTiming] = useState<
     'pay_now' | 'pay_at_delivery'
   >('pay_now');
+  const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentChoiceDialogOpen, setPaymentChoiceDialogOpen] = useState(false);
   
   // Wizard step state (mobile full-screen dialog only). Step 0 merges delivery options + address.
@@ -1075,6 +1076,7 @@ const PlaceOrderPage: React.FC = () => {
         ],
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
+        special_instructions: specialInstructions.trim() || undefined,
         discount_code: appliedDiscountCode || undefined,
         payment_timing: paymentTiming,
         requires_fast_delivery: requiresFastDelivery,
@@ -1153,6 +1155,7 @@ const PlaceOrderPage: React.FC = () => {
     paymentTiming,
     quantity,
     requiresFastDelivery,
+    specialInstructions,
     selectedAddressId,
     selectedItem,
     selectedVariantId,
@@ -1998,6 +2001,48 @@ const PlaceOrderPage: React.FC = () => {
                       )}
                     </Paper>
                   )}
+
+                  <Paper
+                    variant="outlined"
+                    sx={(theme) => ({
+                      p: 1.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1.5,
+                      borderColor:
+                        theme.palette.mode === 'dark'
+                          ? alpha(theme.palette.primary.light, 0.55)
+                          : alpha(theme.palette.primary.main, 0.35),
+                    })}
+                  >
+                    <Stack spacing={1}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {t('orders.specialInstructions', 'Special Instructions')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t(
+                          'orders.specialInstructionsHint',
+                          'Add any additional delivery details for the driver (optional).'
+                        )}
+                      </Typography>
+                      <TextField
+                        multiline
+                        minRows={3}
+                        maxRows={5}
+                        fullWidth
+                        value={specialInstructions}
+                        onChange={(e) => setSpecialInstructions(e.target.value)}
+                        disabled={loading}
+                        placeholder={t(
+                          'orders.specialInstructionsPlaceholder',
+                          'Add any special instructions for this order (optional)'
+                        )}
+                        inputProps={{ maxLength: 300 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'right' }}>
+                        {specialInstructions.length}/300
+                      </Typography>
+                    </Stack>
+                  </Paper>
 
                   <Box>
                     <Box

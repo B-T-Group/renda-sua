@@ -2743,6 +2743,7 @@
     "selectAddress": "Sélectionner une Adresse de Livraison",
     "selectCancellationReason": "Veuillez sélectionner une raison d'annulation",
     "specialInstructionsPlaceholder": "Ajoutez des instructions spéciales pour cette commande (optionnel)",
+    "specialInstructionsHint": "Ajoutez des détails de livraison supplémentaires pour le livreur (optionnel).",
     "stats": {
       "active": "Actif",
       "byStatus": "Commandes par statut",
