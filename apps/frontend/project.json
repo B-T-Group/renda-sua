@@ -140,6 +140,13 @@
         "tsConfig": "apps/frontend/tsconfig.app.json"
       }
     },
+    "analyze": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ANALYZE=true nx run frontend:build:production",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "e2e": {
       "executor": "@nx/cypress:cypress",
       "options": {

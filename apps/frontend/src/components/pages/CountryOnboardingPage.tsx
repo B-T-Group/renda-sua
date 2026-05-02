@@ -20,7 +20,6 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Country, State } from 'country-state-city';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -28,6 +27,7 @@ import {
   CountryOnboardingConfig,
   useCountryOnboardingConfig,
 } from '../../hooks/useCountryOnboardingConfig';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import {
   ServiceHoursEditor,
   type ServiceHoursValue,
@@ -37,6 +37,7 @@ import SEOHead from '../seo/SEOHead';
 
 const CountryOnboardingPage: React.FC = () => {
   const { t } = useTranslation();
+  const { module: countryStateCity } = useCountryStateCity();
   const { profile, loading, error } = useUserProfileContext();
   const {
     data,
@@ -62,16 +63,21 @@ const CountryOnboardingPage: React.FC = () => {
 
   const countries = useMemo(
     () =>
-      Country.getAllCountries().map((c) => ({
-        code: c.isoCode,
-        name: c.name,
-      })),
-    []
+      countryStateCity
+        ? countryStateCity.Country.getAllCountries().map((c) => ({
+            code: c.isoCode,
+            name: c.name,
+          }))
+        : [],
+    [countryStateCity]
   );
 
   const statesForCountry = useMemo(
-    () => State.getStatesOfCountry(countryCode).map((s) => s.name),
-    [countryCode]
+    () =>
+      countryStateCity
+        ? countryStateCity.State.getStatesOfCountry(countryCode).map((s) => s.name)
+        : [],
+    [countryStateCity, countryCode]
   );
 
   useEffect(() => {

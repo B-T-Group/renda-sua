@@ -1959,6 +1959,8 @@
     "item": "item",
     "items": "Items",
     "loading": "Loading...",
+    "loadingRoute": "Loading",
+    "loadingRouteSubtitle": "Please wait",
     "location": "Location",
     "locations": "Locations",
     "manage": "Manage",

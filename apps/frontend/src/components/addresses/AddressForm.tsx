@@ -11,11 +11,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { City, Country, State } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { environment } from '../../config/environment';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
+import { getCountryStateCity } from '../../utils/countryStateCityLoader';
 import { useGooglePlacesAutocomplete } from '../../hooks/useGooglePlacesAutocomplete';
 import { parseGooglePlaceAddress } from '../../utils/parseGooglePlaceAddress';
 import type { AddressFormData } from '../dialogs/AddressDialog';
@@ -115,8 +115,9 @@ const AddressForm: React.FC<AddressFormProps> = ({
   };
 
   // Helper function to find country code by name
-  const findCountryCode = (countryName: string): string => {
+  const findCountryCode = async (countryName: string): Promise<string> => {
     if (!countryName) return '';
+    const { Country } = await getCountryStateCity();
 
     // Try exact match first
     const exactMatch = Country.getAllCountries().find(
@@ -209,8 +210,12 @@ const AddressForm: React.FC<AddressFormProps> = ({
   };
 
   // Helper function to find state code by name and country code
-  const findStateCode = (stateName: string, countryCode: string): string => {
+  const findStateCode = async (
+    stateName: string,
+    countryCode: string
+  ): Promise<string> => {
     if (!stateName || !countryCode) return '';
+    const { State } = await getCountryStateCity();
     const stateList = State.getStatesOfCountry(countryCode);
     if (!stateList.length) return '';
 
@@ -247,47 +252,53 @@ const AddressForm: React.FC<AddressFormProps> = ({
     countryRestriction: restrictionCountry,
     enabled: Boolean(placesApiKey) && !loading,
     onPlaceSelected: (place) => {
-      const parsed = parseGooglePlaceAddress(place);
-      const finalCountry =
-        (readOnlyCountry && readOnlyCountry.trim()) ||
-        parsed.country ||
-        addressData?.country ||
-        '';
+      void (async () => {
+        const { State, City } = await getCountryStateCity();
+        const parsed = parseGooglePlaceAddress(place);
+        const finalCountry =
+          (readOnlyCountry && readOnlyCountry.trim()) ||
+          parsed.country ||
+          addressData?.country ||
+          '';
 
-      const matchedState =
-        finalCountry && parsed.state
-          ? findBestOptionLabel(
-              parsed.state,
-              State.getStatesOfCountry(finalCountry).map((s) => s.name)
-            )
-          : parsed.state;
+        const matchedState =
+          finalCountry && parsed.state
+            ? findBestOptionLabel(
+                parsed.state,
+                State.getStatesOfCountry(finalCountry).map((s) => s.name)
+              )
+            : parsed.state;
 
-      let matchedCity = parsed.city;
-      if (finalCountry && matchedState) {
-        const stateCodeForCities = findStateCode(matchedState, finalCountry);
-        if (stateCodeForCities) {
-          matchedCity = findBestOptionLabel(
-            parsed.city,
-            City.getCitiesOfState(finalCountry, stateCodeForCities).map(
-              (c) => c.name
-            )
+        let matchedCity = parsed.city;
+        if (finalCountry && matchedState) {
+          const stateCodeForCities = await findStateCode(
+            matchedState,
+            finalCountry
           );
+          if (stateCodeForCities) {
+            matchedCity = findBestOptionLabel(
+              parsed.city,
+              City.getCitiesOfState(finalCountry, stateCodeForCities).map(
+                (c) => c.name
+              )
+            );
+          }
         }
-      }
 
-      onAddressChange({
-        address_line_1: parsed.address_line_1,
-        address_line_2: addressData?.address_line_2 || '',
-        city: matchedCity,
-        state: matchedState,
-        postal_code: parsed.postal_code,
-        country: finalCountry,
-        address_type: addressData?.address_type || 'home',
-        is_primary: addressData?.is_primary || false,
-        latitude: parsed.latitude,
-        longitude: parsed.longitude,
-        instructions: addressData?.instructions,
-      });
+        onAddressChange({
+          address_line_1: parsed.address_line_1,
+          address_line_2: addressData?.address_line_2 || '',
+          city: matchedCity,
+          state: matchedState,
+          postal_code: parsed.postal_code,
+          country: finalCountry,
+          address_type: addressData?.address_type || 'home',
+          is_primary: addressData?.is_primary || false,
+          latitude: parsed.latitude,
+          longitude: parsed.longitude,
+          instructions: addressData?.instructions,
+        });
+      })();
     },
     onLoadError: (msg) => setPlacesLoadError(msg),
   });
@@ -301,7 +312,8 @@ const AddressForm: React.FC<AddressFormProps> = ({
       const location = await getCurrentLocation();
 
       if (location.address) {
-        const countryCode = findCountryCode(location.country || '');
+        const countryCode = await findCountryCode(location.country || '');
+        const { State, City } = await getCountryStateCity();
 
         const matchedState =
           countryCode && location.state
@@ -313,7 +325,10 @@ const AddressForm: React.FC<AddressFormProps> = ({
 
         let matchedCity = location.city || '';
         if (countryCode && matchedState) {
-          const stateCodeForCities = findStateCode(matchedState, countryCode);
+          const stateCodeForCities = await findStateCode(
+            matchedState,
+            countryCode
+          );
           if (stateCodeForCities) {
             matchedCity = findBestOptionLabel(
               location.city,
@@ -358,11 +373,29 @@ const AddressForm: React.FC<AddressFormProps> = ({
   };
 
   useEffect(() => {
-    setCountries(Country.getAllCountries());
+    let cancelled = false;
+    getCountryStateCity()
+      .then(({ Country }) => {
+        if (!cancelled) setCountries(Country.getAllCountries());
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load country list', error);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (addressData?.country) {
+    if (!addressData?.country) {
+      setStates([]);
+      setCities([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { State } = await getCountryStateCity();
+      if (cancelled) return;
       const newStates = State.getStatesOfCountry(addressData.country);
       setStates(newStates);
       if (
@@ -383,43 +416,54 @@ const AddressForm: React.FC<AddressFormProps> = ({
           instructions: addressData?.instructions,
         });
       }
-    } else {
-      setStates([]);
-      setCities([]);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressData?.country, addressData?.state]);
 
   useEffect(() => {
-    if (addressData?.country && addressData?.state) {
-      const stateCode = findStateCode(addressData.state, addressData.country);
-      if (stateCode) {
-        const newCities = City.getCitiesOfState(addressData.country, stateCode);
-        setCities(newCities);
-        if (
-          newCities.length > 0 &&
-          !newCities.find((city) => city.name === addressData.city)
-        ) {
-          onAddressChange({
-            address_line_1: addressData?.address_line_1 || '',
-            address_line_2: addressData?.address_line_2 || '',
-            city: '',
-            state: addressData?.state || '',
-            postal_code: addressData?.postal_code || '',
-            country: addressData?.country || '',
-            address_type: addressData?.address_type || 'home',
-            is_primary: addressData?.is_primary || false,
-            latitude: addressData?.latitude,
-            longitude: addressData?.longitude,
-            instructions: addressData?.instructions,
-          });
-        }
-      } else {
-        setCities([]);
-      }
-    } else {
+    if (!(addressData?.country && addressData?.state)) {
       setCities([]);
+      return;
     }
+    let cancelled = false;
+    void (async () => {
+      const { City } = await getCountryStateCity();
+      if (cancelled) return;
+      const stateCode = await findStateCode(
+        addressData.state,
+        addressData.country
+      );
+      if (!stateCode) {
+        setCities([]);
+        return;
+      }
+      const newCities = City.getCitiesOfState(addressData.country, stateCode);
+      setCities(newCities);
+      if (
+        newCities.length > 0 &&
+        !newCities.find((city) => city.name === addressData.city)
+      ) {
+        onAddressChange({
+          address_line_1: addressData?.address_line_1 || '',
+          address_line_2: addressData?.address_line_2 || '',
+          city: '',
+          state: addressData?.state || '',
+          postal_code: addressData?.postal_code || '',
+          country: addressData?.country || '',
+          address_type: addressData?.address_type || 'home',
+          is_primary: addressData?.is_primary || false,
+          latitude: addressData?.latitude,
+          longitude: addressData?.longitude,
+          instructions: addressData?.instructions,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressData?.country, addressData?.state, addressData?.city]);
 

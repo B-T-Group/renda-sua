@@ -16,7 +16,6 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { Country, State } from 'country-state-city';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -26,6 +25,7 @@ import {
   EntityType,
   useAddressManager,
 } from '../../hooks/useAddressManager';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import AddressDialog, {
   AddressFormData as DialogAddressFormData,
 } from '../dialogs/AddressDialog';
@@ -72,6 +72,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
   embedded = false,
 }) => {
   const { t } = useTranslation();
+  const { module: countryStateCity } = useCountryStateCity();
   const { refetch } = useUserProfileContext();
 
   // Address manager hook
@@ -208,15 +209,18 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     // Get country name from country code
     // Example: 'US' -> 'United States', 'CA' -> 'Canada'
     const countryName = address.country
-      ? Country.getCountryByCode(address.country)?.name || address.country
+      ? countryStateCity?.Country.getCountryByCode(address.country)?.name ||
+        address.country
       : '';
 
     // Get state name from state code and country code
     // Example: 'CA' + 'US' -> 'California', 'ON' + 'CA' -> 'Ontario'
     const stateName =
       address.state && address.country
-        ? State.getStateByCodeAndCountry(address.state, address.country)
-            ?.name || address.state
+        ? countryStateCity?.State.getStateByCodeAndCountry(
+            address.state,
+            address.country
+          )?.name || address.state
         : address.state || '';
 
     const parts = [

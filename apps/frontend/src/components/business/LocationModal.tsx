@@ -19,7 +19,6 @@ import {
   Typography,
 } from '@mui/material';
 import { Store as StoreIcon } from '@mui/icons-material';
-import { State } from 'country-state-city';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,8 +32,10 @@ import {
 } from '../../hooks/useBusinessLocations';
 import { presignUploadLibraryImage } from './onboarding/onboardingPresignedUpload';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import { getCountryStateCity } from '../../utils/countryStateCityLoader';
 
-function profileAddressToFormData(addr: Address): AddressFormData {
+async function profileAddressToFormData(addr: Address): Promise<AddressFormData> {
+  const { State } = await getCountryStateCity();
   const state = State.getStateByCodeAndCountry(addr.state, addr.country);
   return {
     address_line_1: addr.address_line_1,
@@ -135,21 +136,22 @@ const LocationModal: React.FC<LocationModalProps> = ({
         logo_url: location.logo_url ?? '',
       });
 
-      // Special case to account for legacy state values in the database not saved as state name but saved as state code
-      const state = State.getStateByCodeAndCountry(
-        location.address.state,
-        location.address.country
-      );
-
-      setAddressData({
-        address_line_1: location.address.address_line_1,
-        address_line_2: location.address.address_line_2 || '',
-        city: location.address.city,
-        state: state?.name ?? location.address.state,
-        postal_code: location.address.postal_code,
-        country: location.address.country,
-        instructions: location.address.instructions || '',
-      });
+      void (async () => {
+        const { State } = await getCountryStateCity();
+        const state = State.getStateByCodeAndCountry(
+          location.address.state,
+          location.address.country
+        );
+        setAddressData({
+          address_line_1: location.address.address_line_1,
+          address_line_2: location.address.address_line_2 || '',
+          city: location.address.city,
+          state: state?.name ?? location.address.state,
+          postal_code: location.address.postal_code,
+          country: location.address.country,
+          instructions: location.address.instructions || '',
+        });
+      })();
     } else {
       // Reset form for new location; country comes from business primary address
       setFormData({
@@ -297,7 +299,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
       ...prev,
       address_id: businessProfileAddress.id,
     }));
-    setAddressData(profileAddressToFormData(businessProfileAddress));
+    void profileAddressToFormData(businessProfileAddress).then(setAddressData);
   };
 
   const openCustomAddressDialog = () => {

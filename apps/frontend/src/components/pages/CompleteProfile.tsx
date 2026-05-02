@@ -32,12 +32,12 @@ import {
   useTheme,
 } from '@mui/material';
 import axios from 'axios';
-import { City, State } from 'country-state-city';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useAgentReferralLookup } from '../../hooks/useAgentReferralLookup';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 import { useDocumentUpload } from '../../hooks/useDocumentUpload';
@@ -174,6 +174,7 @@ const CompleteProfile: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { module: countryStateCity } = useCountryStateCity();
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   const apiClient = useApiClient();
@@ -252,8 +253,11 @@ const CompleteProfile: React.FC = () => {
   }, [steps.length, activeStep]);
 
   const addressStates = useMemo(
-    () => (profileData.address.country ? State.getStatesOfCountry(profileData.address.country) : []),
-    [profileData.address.country]
+    () =>
+      countryStateCity && profileData.address.country
+        ? countryStateCity.State.getStatesOfCountry(profileData.address.country)
+        : [],
+    [countryStateCity, profileData.address.country]
   );
 
   const selectedStateCode = useMemo(() => {
@@ -265,9 +269,18 @@ const CompleteProfile: React.FC = () => {
   }, [addressStates, profileData.address.state]);
 
   const addressCities = useMemo(() => {
-    if (!profileData.address.country || !selectedStateCode) return [];
-    return City.getCitiesOfState(profileData.address.country, selectedStateCode);
-  }, [profileData.address.country, selectedStateCode]);
+    if (
+      !countryStateCity ||
+      !profileData.address.country ||
+      !selectedStateCode
+    ) {
+      return [];
+    }
+    return countryStateCity.City.getCitiesOfState(
+      profileData.address.country,
+      selectedStateCode
+    );
+  }, [countryStateCity, profileData.address.country, selectedStateCode]);
 
   useEffect(() => {
     const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);

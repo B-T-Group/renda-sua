@@ -1,4 +1,4 @@
-import { City, Country, State } from 'country-state-city';
+import { getCountryStateCity } from './countryStateCityLoader';
 
 /** Same normalization as AddressDialog for fuzzy matching. */
 export function normalizeString(value: string): string {
@@ -13,23 +13,32 @@ export function normalizeString(value: string): string {
  * Pick the best label from `options` for a raw geocoder string (exact, then partial, else raw).
  * Same behavior as AddressDialog.
  */
-export function findBestOptionLabel(raw: string | undefined, options: string[]): string {
+export function findBestOptionLabel(
+  raw: string | undefined,
+  options: string[]
+): string {
   if (!raw) return '';
   const normalizedRaw = normalizeString(raw);
-  const exactMatch = options.find((option) => normalizeString(option) === normalizedRaw);
+  const exactMatch = options.find(
+    (option) => normalizeString(option) === normalizedRaw
+  );
   if (exactMatch) return exactMatch;
   const partialMatch = options.find((option) => {
     const normalizedOption = normalizeString(option);
     return (
-      normalizedOption.includes(normalizedRaw) || normalizedRaw.includes(normalizedOption)
+      normalizedOption.includes(normalizedRaw) ||
+      normalizedRaw.includes(normalizedOption)
     );
   });
   return partialMatch || raw;
 }
 
 /** Resolve geocoder country name to ISO code (same logic as AddressDialog, without console logs). */
-export function findCountryCodeFromGeocodeName(countryName: string): string {
+export async function findCountryCodeFromGeocodeName(
+  countryName: string
+): Promise<string> {
   if (!countryName) return '';
+  const { Country } = await getCountryStateCity();
 
   const exactMatch = Country.getAllCountries().find(
     (country) => country.name.toLowerCase() === countryName.toLowerCase()
@@ -121,11 +130,12 @@ export function findCountryCodeFromGeocodeName(countryName: string): string {
   return '';
 }
 
-export function findStateIsoCodeFromGeocodeName(
+export async function findStateIsoCodeFromGeocodeName(
   stateName: string,
   countryCode: string
-): string {
+): Promise<string> {
   if (!stateName || !countryCode) return '';
+  const { State } = await getCountryStateCity();
 
   const states = State.getStatesOfCountry(countryCode);
   if (!states.length) return '';
@@ -212,13 +222,14 @@ export function findStateIsoCodeFromGeocodeName(
 }
 
 /** Restrict to allowed signup country codes; fuzzy-match name if ISO is outside allowed list. */
-export function resolveSignupCountryCode(
+export async function resolveSignupCountryCode(
   geolocationCountry: string | undefined,
   allowedCodes: readonly string[]
-): string {
-  const iso = findCountryCodeFromGeocodeName(geolocationCountry || '');
+): Promise<string> {
+  const iso = await findCountryCodeFromGeocodeName(geolocationCountry || '');
   if (iso && allowedCodes.includes(iso)) return iso;
   if (!geolocationCountry?.trim()) return '';
+  const { Country } = await getCountryStateCity();
   const n = normalizeString(geolocationCountry);
   for (const code of allowedCodes) {
     const c = Country.getCountryByCode(code);
@@ -230,14 +241,15 @@ export function resolveSignupCountryCode(
 }
 
 /** State name that exists in the dropdown for the given country (fuzzy match). */
-export function findMatchedStateNameForCountry(
+export async function findMatchedStateNameForCountry(
   rawState: string | undefined,
   countryCode: string
-): string {
+): Promise<string> {
   if (!countryCode) return '';
+  const { State } = await getCountryStateCity();
   const states = State.getStatesOfCountry(countryCode);
   const stateNames = states.map((s) => s.name);
-  const iso = findStateIsoCodeFromGeocodeName(rawState || '', countryCode);
+  const iso = await findStateIsoCodeFromGeocodeName(rawState || '', countryCode);
   if (iso) {
     const byIso = states.find((s) => s.isoCode === iso);
     if (byIso) return byIso.name;
@@ -246,12 +258,13 @@ export function findMatchedStateNameForCountry(
   return stateNames.includes(fuzzy) ? fuzzy : '';
 }
 
-export function findMatchedCityName(
+export async function findMatchedCityName(
   rawCity: string | undefined,
   countryCode: string,
   stateIsoCode: string
-): string {
+): Promise<string> {
   if (!countryCode || !stateIsoCode) return rawCity || '';
+  const { City } = await getCountryStateCity();
   const cities = City.getCitiesOfState(countryCode, stateIsoCode);
   return findBestOptionLabel(rawCity || '', cities.map((c) => c.name));
 }

@@ -64,9 +64,19 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- Preconnect to external domains for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Warm connections for API, GraphQL, and Auth (prod + dev hosts) -->
+    <link rel="dns-prefetch" href="https://prod.api.rendasua.com" />
+    <link rel="dns-prefetch" href="https://dev.api.rendasua.com" />
+    <link rel="dns-prefetch" href="https://hasura.rendasua.com" />
+    <link rel="dns-prefetch" href="https://hasura-dev.rendasua.com" />
+    <link rel="dns-prefetch" href="https://rendasua-prod.ca.auth0.com" />
+    <link rel="dns-prefetch" href="https://rendasua.ca.auth0.com" />
+    <link rel="preconnect" href="https://prod.api.rendasua.com" crossorigin />
+    <link rel="preconnect" href="https://dev.api.rendasua.com" crossorigin />
+    <link rel="preconnect" href="https://hasura.rendasua.com" crossorigin />
+    <link rel="preconnect" href="https://hasura-dev.rendasua.com" crossorigin />
+    <link rel="preconnect" href="https://rendasua-prod.ca.auth0.com" crossorigin />
+    <link rel="preconnect" href="https://rendasua.ca.auth0.com" crossorigin />
 
     <!-- Structured Data -->
     <script type="application/ld+json">
@@ -88,7 +98,7 @@
         }
       }
     </script>
-<!-- Meta Pixel Code -->
+<!-- Meta Pixel Code (injected script tag sets async) -->
 <script>
 !function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?

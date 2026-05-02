@@ -10,11 +10,11 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import { Country } from 'country-state-city';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApplicationSetup } from '../../hooks/useApplicationSetup';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { ApplicationConfigurationsSection } from '../admin/ApplicationConfigurationsSection';
 import { CountryDeliveryConfigsSection } from '../admin/CountryDeliveryConfigsSection';
 import { DeliveryTimeSlotsSection } from '../admin/DeliveryTimeSlotsSection';
@@ -23,6 +23,7 @@ import SEOHead from '../seo/SEOHead';
 
 const ApplicationSetupPage: React.FC = () => {
   const { t } = useTranslation();
+  const { module: countryStateCity } = useCountryStateCity();
   const {
     profile,
     loading: profileLoading,
@@ -44,13 +45,14 @@ const ApplicationSetupPage: React.FC = () => {
 
   const countries = useMemo(() => {
     const allowed = ['GA', 'CM', 'CA'];
-    return Country.getAllCountries()
+    if (!countryStateCity) return [];
+    return countryStateCity.Country.getAllCountries()
       .filter((country) => allowed.includes(country.isoCode))
       .map((country) => ({
         code: country.isoCode,
         name: country.name,
       }));
-  }, []);
+  }, [countryStateCity]);
 
   const states = useMemo(() => {
     if (!setup) return [];

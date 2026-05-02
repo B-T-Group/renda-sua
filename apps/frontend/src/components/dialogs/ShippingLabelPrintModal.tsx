@@ -8,14 +8,15 @@ import {
   DialogTitle,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Document, Page, pdfjs } from 'react-pdf';
 
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+const ShippingLabelPdfPreview = lazy(() =>
+  import(
+    /* webpackChunkName: "vendor-pdf-preview" */
+    './ShippingLabelPdfPreview'
+  )
+);
 
 export interface ShippingLabelPrintModalProps {
   open: boolean;
@@ -28,21 +29,13 @@ export interface ShippingLabelPrintModalProps {
 const PRINT_DELAY_MS = 1000;
 const FILENAME = 'shipping-label.pdf';
 
-/**
- * Open a new window synchronously (blank), then navigate to blob URL.
- * Bypasses many popup blockers that block window.open(url) but allow
- * window.open('') followed by location assign.
- */
 function openBlobInNewWindow(url: string): Window | null {
-  const w = window.open('', '_blank',);
+  const w = window.open('', '_blank');
   if (!w) return null;
   w.location.href = url;
   return w;
 }
 
-/**
- * Trigger download of blob as PDF. Use when print popup is blocked.
- */
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -55,10 +48,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
-/**
- * Print PDF blob: open in new window and call print() there.
- * If popup is blocked, fall back to download and invoke onFallback.
- */
 function printBlob(blob: Blob, onFallback?: () => void): void {
   const url = URL.createObjectURL(blob);
   const w = openBlobInNewWindow(url);
@@ -108,25 +97,6 @@ const ShippingLabelPrintModal: React.FC<ShippingLabelPrintModalProps> = ({
     printBlob(pdfBlob, () => onPrintFallback?.(fallbackMsg));
   };
 
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const onDocumentLoadSuccess = ({ numPages: n }: { numPages: number }) => {
-    setNumPages(n);
-    setLoadError(null);
-  };
-
-  const onDocumentLoadError = (error: Error) => {
-    setLoadError(error?.message ?? 'Failed to load PDF');
-  };
-
-  useEffect(() => {
-    if (!previewUrl) {
-      setNumPages(null);
-      setLoadError(null);
-    }
-  }, [previewUrl]);
-
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -146,43 +116,15 @@ const ShippingLabelPrintModal: React.FC<ShippingLabelPrintModalProps> = ({
           }}
         >
           {previewUrl ? (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                py: 2,
-              }}
+            <Suspense
+              fallback={
+                <Box sx={{ py: 6 }}>
+                  <CircularProgress />
+                </Box>
+              }
             >
-              <Document
-                file={previewUrl}
-                onLoadSuccess={onDocumentLoadSuccess}
-                onLoadError={onDocumentLoadError}
-                loading={
-                  <Box sx={{ py: 6 }}>
-                    <CircularProgress />
-                  </Box>
-                }
-                error={
-                  loadError ? (
-                    <Typography color="error" sx={{ py: 3 }}>
-                      {loadError}
-                    </Typography>
-                  ) : null
-                }
-              >
-                {numPages != null &&
-                  Array.from(new Array(numPages), (_, i) => (
-                    <Page
-                      key={`page-${i + 1}`}
-                      pageNumber={i + 1}
-                      width={384}
-                      renderTextLayer
-                      renderAnnotationLayer
-                    />
-                  ))}
-              </Document>
-            </Box>
+              <ShippingLabelPdfPreview previewUrl={previewUrl} />
+            </Suspense>
           ) : null}
         </Box>
       </DialogContent>

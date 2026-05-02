@@ -46,7 +46,6 @@ import {
   useTheme
 } from '@mui/material';
 import { alpha, keyframes, Theme } from '@mui/material/styles';
-import { Country } from 'country-state-city';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -59,6 +58,7 @@ import {
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
@@ -609,6 +609,7 @@ const PlaceOrderPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const apiClient = useApiClient();
+  const { module: countryStateCity } = useCountryStateCity();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -1241,7 +1242,8 @@ const PlaceOrderPage: React.FC = () => {
 
   const handleSaveMissingPhone = useCallback(async () => {
     const dialCode = String(
-      Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+      countryStateCity?.Country.getCountryByCode(missingPhoneCountry)?.phonecode ||
+      ''
     ).replace(/\D/g, '');
     const national = missingPhoneNationalNumber.replace(/\D/g, '').trim();
     const trimmed =
@@ -1318,7 +1320,8 @@ const PlaceOrderPage: React.FC = () => {
 
   const missingPhoneFullE164 = useMemo(() => {
     const dialCode = String(
-      Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+      countryStateCity?.Country.getCountryByCode(missingPhoneCountry)?.phonecode ||
+      ''
     ).replace(/\D/g, '');
     const national = missingPhoneNationalNumber.replace(/\D/g, '').trim();
     if (!dialCode || !national) return '';
@@ -3721,7 +3724,7 @@ const PlaceOrderPage: React.FC = () => {
                   }
                 >
                   {supportedCountries.map((iso2) => {
-                    const c = Country.getCountryByCode(iso2);
+                    const c = countryStateCity?.Country.getCountryByCode(iso2);
                     const code = c?.phonecode ? `+${c.phonecode}` : '';
                     return (
                       <MenuItem key={iso2} value={iso2}>
@@ -3739,7 +3742,8 @@ const PlaceOrderPage: React.FC = () => {
                   const digits = String(e.target.value || '').replace(/\D/g, '');
                   setMissingPhoneNationalNumber(digits);
                   const dial = String(
-                    Country.getCountryByCode(missingPhoneCountry)?.phonecode || ''
+                    countryStateCity?.Country.getCountryByCode(missingPhoneCountry)?.phonecode ||
+      ''
                   ).replace(/\D/g, '');
                   setMissingPhoneNumber(dial ? `+${dial}${digits}` : digits);
                 }}

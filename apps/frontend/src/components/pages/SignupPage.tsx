@@ -36,12 +36,13 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { City, State } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
+import { getCountryStateCity } from '../../utils/countryStateCityLoader';
 import {
   findCountryCodeFromGeocodeName,
   findMatchedCityName,
@@ -144,6 +145,7 @@ const SignupPage: React.FC = () => {
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const { t } = useTranslation();
+  const { module: countryStateCity } = useCountryStateCity();
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const { loginWithRedirect, } = useAuth0();
@@ -314,8 +316,11 @@ const SignupPage: React.FC = () => {
   }, [activeStep]);
 
   const addressStates = useMemo(
-    () => (form.address.country ? State.getStatesOfCountry(form.address.country) : []),
-    [form.address.country]
+    () =>
+      countryStateCity && form.address.country
+        ? countryStateCity.State.getStatesOfCountry(form.address.country)
+        : [],
+    [countryStateCity, form.address.country]
   );
 
   const selectedStateCode = useMemo(() => {
@@ -325,9 +330,14 @@ const SignupPage: React.FC = () => {
   }, [addressStates, form.address.state]);
 
   const addressCities = useMemo(() => {
-    if (!form.address.country || !selectedStateCode) return [];
-    return City.getCitiesOfState(form.address.country, selectedStateCode);
-  }, [form.address.country, selectedStateCode]);
+    if (!countryStateCity || !form.address.country || !selectedStateCode) {
+      return [];
+    }
+    return countryStateCity.City.getCitiesOfState(
+      form.address.country,
+      selectedStateCode
+    );
+  }, [countryStateCity, form.address.country, selectedStateCode]);
 
   const handleGoalToggle = (goalId: SignupGoalId) => {
     setSelectedGoalIds((prev) => {
@@ -359,21 +369,24 @@ const SignupPage: React.FC = () => {
     try {
       const loc = await getCurrentLocation();
       if (loc.address) {
-        const countryCode = findCountryCodeFromGeocodeName(loc.country || '');
+        const countryCode = await findCountryCodeFromGeocodeName(
+          loc.country || ''
+        );
         const allowedCountry =
           countryCode && SIGNUP_COUNTRY_CODES.includes(countryCode as (typeof SIGNUP_COUNTRY_CODES)[number])
             ? countryCode
             : '';
         const stateName = allowedCountry
-          ? findMatchedStateNameForCountry(loc.state, allowedCountry)
+          ? await findMatchedStateNameForCountry(loc.state, allowedCountry)
           : '';
+        const { State } = await getCountryStateCity();
         const stateIso = allowedCountry
           ? State.getStatesOfCountry(allowedCountry).find((s) => s.name === stateName)
               ?.isoCode || ''
           : '';
         const cityName =
           allowedCountry && stateIso
-            ? findMatchedCityName(loc.city, allowedCountry, stateIso)
+            ? await findMatchedCityName(loc.city, allowedCountry, stateIso)
             : (loc.city || '').trim();
 
         setForm((prev) => ({

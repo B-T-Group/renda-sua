@@ -1,16 +1,21 @@
 import {
   Autocomplete,
   Box,
+  CircularProgress,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
 import type { DateClickArg, EventClickArg } from '@fullcalendar/interaction';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
@@ -21,6 +26,13 @@ import {
 import { dateKeyFromIso, formatDateTimeNoTimezone } from '../../utils/businessRentalsFormat';
 import BusinessRentalsStudioShell from '../rentals/BusinessRentalsStudioShell';
 import LoadingPage from '../common/LoadingPage';
+
+const ScheduleCalendar = lazy(() =>
+  import(
+    /* webpackChunkName: "vendor-calendar-schedule" */
+    './BusinessRentalsScheduleCalendar'
+  )
+);
 
 const BusinessRentalsSchedulePage: React.FC = () => {
   const { t } = useTranslation();
@@ -192,39 +204,25 @@ const BusinessRentalsSchedulePage: React.FC = () => {
         </Paper>
       ) : (
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1.5,
-              borderRadius: 2,
-              border: 1,
-              borderColor: 'divider',
-              flex: { xs: '1 1 auto', md: '0 0 58%' },
-              minWidth: 0,
-              '& .fc-daygrid-day.fc-day-selected': {
-                backgroundColor: 'action.selected',
-              },
-              '& .fc-daygrid-day-number': {
-                cursor: 'pointer',
-              },
-              '& .fc-daygrid-event': {
-                cursor: 'pointer',
-              },
-            }}
+          <Suspense
+            fallback={
+              <Box
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                minHeight={280}
+              >
+                <CircularProgress />
+              </Box>
+            }
           >
-            <FullCalendar
-              plugins={[dayGridPlugin, interactionPlugin]}
-              initialView="dayGridMonth"
-              height="auto"
-              events={scheduleEvents}
-              eventDisplay="block"
-              dateClick={handleCalendarDateClick}
-              eventClick={handleCalendarEventClick}
-              dayCellClassNames={(arg) =>
-                arg.dateStr === selectedScheduleDay ? ['fc-day-selected'] : []
-              }
+            <ScheduleCalendar
+              scheduleEvents={scheduleEvents}
+              selectedScheduleDay={selectedScheduleDay}
+              onDateClick={handleCalendarDateClick}
+              onEventClick={handleCalendarEventClick}
             />
-          </Paper>
+          </Suspense>
           <Paper
             elevation={0}
             sx={{

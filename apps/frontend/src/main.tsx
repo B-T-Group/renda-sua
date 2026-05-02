@@ -13,7 +13,7 @@ import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { SessionAuthProvider } from './contexts/SessionAuthContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
-import './i18n'; // Initialize i18n
+import { i18nInitPromise } from './i18n';
 import ApolloProvider from './providers/ApolloProvider';
 import { theme } from './theme/theme';
 
@@ -66,32 +66,36 @@ const Auth0ProviderWithNavigate: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-);
+async function bootstrap() {
+  await i18nInitPromise;
+  const root = ReactDOM.createRoot(
+    document.getElementById('root') as HTMLElement
+  );
+  root.render(
+    <StrictMode>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <BrowserRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <Auth0ProviderWithNavigate>
+            <AnalyticsInit />
+            <LoadingProvider>
+              <SessionAuthProvider>
+                <UserProfileProvider>
+                  <CartProvider>
+                    <ApolloProvider>
+                      <App />
+                    </ApolloProvider>
+                  </CartProvider>
+                </UserProfileProvider>
+              </SessionAuthProvider>
+            </LoadingProvider>
+          </Auth0ProviderWithNavigate>
+        </BrowserRouter>
+      </ThemeProvider>
+    </StrictMode>
+  );
+}
 
-root.render(
-  <StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <BrowserRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <Auth0ProviderWithNavigate>
-          <AnalyticsInit />
-          <LoadingProvider>
-            <SessionAuthProvider>
-              <UserProfileProvider>
-                <CartProvider>
-                  <ApolloProvider>
-                    <App />
-                  </ApolloProvider>
-                </CartProvider>
-              </UserProfileProvider>
-            </SessionAuthProvider>
-          </LoadingProvider>
-        </Auth0ProviderWithNavigate>
-      </BrowserRouter>
-    </ThemeProvider>
-  </StrictMode>
-);
+void bootstrap();

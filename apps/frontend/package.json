@@ -2,6 +2,21 @@
   "name": "@rendasua/frontend",
   "version": "0.0.1",
   "private": true,
+  "browserslist": {
+    "production": [
+      "last 2 Chrome versions",
+      "last 2 Edge versions",
+      "last 2 Firefox versions",
+      "last 2 Safari versions",
+      "last 2 iOS versions",
+      "not dead"
+    ],
+    "development": [
+      "last 1 Chrome version",
+      "last 1 Firefox version",
+      "last 1 Safari version"
+    ]
+  },
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@digicroz/react-floating-whatsapp": "^1.0.2",
@@ -16,6 +31,7 @@
     "graphql-ws": "^6.0.6",
     "i18next": "^25.2.1",
     "i18next-browser-languagedetector": "^8.2.0",
+    "i18next-http-backend": "^3.0.2",
     "notistack": "^3.0.2",
     "react-apexcharts": "^1.7.0",
     "react-i18next": "^15.5.3",
