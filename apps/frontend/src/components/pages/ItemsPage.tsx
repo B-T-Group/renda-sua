@@ -81,6 +81,11 @@ const ITEMS_CATALOG_GRID_SX = {
   minWidth: 0,
 } as const;
 
+/** Server page size for the main catalog grid (reduces payload and DOM). */
+const ITEMS_CATALOG_PAGE_SIZE = 25;
+/** Sample used only for filter dropdown options and top category chips (not the grid). */
+const INVENTORY_FACET_SAMPLE_LIMIT = 250;
+
 function CatalogSection({
   title,
   subtitle,
@@ -197,27 +202,45 @@ const ItemsPage: React.FC = () => {
     location: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
-  const itemsPerPage = 100;
 
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
 
-  // Backend applies search (name, description, SKU, brand, tags); client filter refines category/location etc.
-  const { inventoryItems, loading, error } = useInventoryItems({
+  const {
+    inventoryItems: facetInventoryItems,
+    loading: facetLoading,
+  } = useInventoryItems({
     page: 1,
-    limit: 1000,
+    limit: INVENTORY_FACET_SAMPLE_LIMIT,
+    is_active: true,
+    sort: 'relevance',
+    business_location_id: businessLocationId ?? undefined,
+    anonymousOrigin: browserGeo,
+  });
+
+  const {
+    inventoryItems,
+    loading,
+    error,
+    pagination,
+  } = useInventoryItems({
+    page: currentPage,
+    limit: ITEMS_CATALOG_PAGE_SIZE,
     is_active: true,
     sort,
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
     search: inventorySearch,
+    category: filters.category.trim() || undefined,
+    brand: filters.brand.trim() || undefined,
+    subcategory: filters.subcategory.trim() || undefined,
+    location_name: filters.location.trim() || undefined,
   });
 
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
@@ -250,22 +273,9 @@ const ItemsPage: React.FC = () => {
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
 
-  // Display items from ItemsPageFilter; when no filters applied, show inventoryItems until filter callback runs
-  const displayItems = useMemo(() => {
-    if (filteredItems.length > 0) return filteredItems;
-    const noFilters =
-      !searchTerm &&
-      !filters.category &&
-      !filters.subcategory &&
-      !filters.brand &&
-      !filters.location;
-    if (noFilters) return inventoryItems;
-    return [];
-  }, [filteredItems, inventoryItems, searchTerm, filters]);
-
   const topCategoryChips = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const inv of inventoryItems) {
+    for (const inv of facetInventoryItems) {
       const name = inv.item.item_sub_category?.item_category?.name?.trim();
       if (!name) continue;
       counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -274,18 +284,18 @@ const ItemsPage: React.FC = () => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([name]) => name);
-  }, [inventoryItems]);
+  }, [facetInventoryItems]);
 
   const resultsCountLabel = useMemo(() => {
-    const count = displayItems.length;
     if (loading) {
       return t('public.items.results.loading', 'Loading items…');
     }
-    if (count === 0) {
+    const total = pagination?.total ?? inventoryItems.length;
+    if (total === 0) {
       return t('public.items.results.none', 'No items to show');
     }
-    return t('public.items.results.count', '{{count}} items', { count });
-  }, [displayItems.length, loading, t]);
+    return t('public.items.results.count', '{{count}} items', { count: total });
+  }, [loading, pagination?.total, inventoryItems.length, t]);
 
   // Reset to first page when filters or sort change
   useEffect(() => {
@@ -300,12 +310,7 @@ const ItemsPage: React.FC = () => {
     businessLocationId,
   ]);
 
-  // Pagination
-  const totalPages = Math.ceil(displayItems.length / itemsPerPage);
-  const paginatedItems = displayItems.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const totalPages = pagination?.totalPages ?? 0;
 
   // Dashboard-specific logic for authenticated clients
   const isClient =
@@ -343,6 +348,12 @@ const ItemsPage: React.FC = () => {
     // Smooth scroll to top of page
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  /** Catalog list is server-paginated; filter panel only drives `filters` + API query. */
+  const handleCatalogFilterPanelItems = useCallback(
+    (_items: InventoryItem[]) => {},
+    []
+  );
 
   const handleLogin = () => {
     loginWithRedirect({
@@ -544,8 +555,8 @@ const ItemsPage: React.FC = () => {
               <Chip
                 size="small"
                 label={resultsCountLabel}
-                color={displayItems.length > 0 ? 'primary' : 'default'}
-                variant={displayItems.length > 0 ? 'filled' : 'outlined'}
+                color={(pagination?.total ?? 0) > 0 ? 'primary' : 'default'}
+                variant={(pagination?.total ?? 0) > 0 ? 'filled' : 'outlined'}
                 sx={{ fontWeight: 700 }}
               />
             </Box>
@@ -556,7 +567,7 @@ const ItemsPage: React.FC = () => {
 
           {/* Unified filter for all users (contains search bar) */}
           <ItemsPageFilter
-            items={inventoryItems}
+            items={facetInventoryItems}
             searchTerm={searchTerm}
             onSearchSubmit={setSearchTerm}
             suggestionsQuery={{
@@ -567,8 +578,8 @@ const ItemsPage: React.FC = () => {
             }}
             filters={filters}
             onFiltersChange={setFilters}
-            onFilterChange={setFilteredItems}
-            loading={loading}
+            onFilterChange={handleCatalogFilterPanelItems}
+            loading={loading || facetLoading}
             onLocationFilterChange={(name) => {
               if (!name) {
                 setBusinessLocationId(null);
@@ -905,11 +916,11 @@ const ItemsPage: React.FC = () => {
         {/* Items Grid */}
         {loading ? (
           <Box sx={ITEMS_CATALOG_GRID_SX}>
-            {Array.from(new Array(itemsPerPage)).map((_, index) => (
+            {Array.from(new Array(ITEMS_CATALOG_PAGE_SIZE)).map((_, index) => (
               <ItemCardSkeleton key={index} />
             ))}
           </Box>
-        ) : displayItems.length === 0 ? (
+        ) : inventoryItems.length === 0 ? (
           /* Enhanced Empty State */
           <Box
             sx={{
@@ -969,7 +980,7 @@ const ItemsPage: React.FC = () => {
         ) : (
           <>
             <Box sx={ITEMS_CATALOG_GRID_SX}>
-              {paginatedItems.map((inventoryItem) => (
+              {inventoryItems.map((inventoryItem) => (
                 <DashboardItemCard
                   key={inventoryItem.id}
                   item={inventoryItem}

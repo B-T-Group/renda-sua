@@ -25,6 +25,8 @@ interface GetInventoryItemsQueryParams {
   limit?: string;
   search?: string;
   category?: string;
+  subcategory?: string;
+  location_name?: string;
   brand?: string;
   min_price?: string;
   max_price?: string;
@@ -202,6 +204,18 @@ export class InventoryItemsController {
     description: 'Filter by brand name',
   })
   @ApiQuery({
+    name: 'subcategory',
+    required: false,
+    type: String,
+    description: 'Filter by subcategory name (exact match)',
+  })
+  @ApiQuery({
+    name: 'location_name',
+    required: false,
+    type: String,
+    description: 'Filter by business location display name (exact match)',
+  })
+  @ApiQuery({
     name: 'min_price',
     required: false,
     type: Number,
@@ -307,6 +321,8 @@ export class InventoryItemsController {
         limit: query.limit ? Number(query.limit) : undefined,
         search: query.search,
         category: query.category,
+        subcategory: query.subcategory,
+        location_name: query.location_name,
         brand: query.brand,
         min_price: query.min_price ? Number(query.min_price) : undefined,
         max_price: query.max_price ? Number(query.max_price) : undefined,
