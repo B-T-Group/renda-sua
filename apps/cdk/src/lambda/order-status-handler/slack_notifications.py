@@ -72,6 +72,20 @@ def _sleep_before_retry(attempt: int) -> None:
     time.sleep(_BASE_SLEEP_SEC * (2**attempt))
 
 
+def _environment_context_block() -> Dict[str, Any]:
+    """CDK sets ENVIRONMENT to development | production (and possibly staging)."""
+    raw = (os.environ.get("ENVIRONMENT") or "development").strip().lower()
+    display = _escape_mrkdwn(raw)
+    if raw == "production":
+        icon = "🟢"
+    elif raw == "staging":
+        icon = "🟠"
+    else:
+        icon = "🔵"
+    text = f"{icon} *Environment:* `{display}`"
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+
 def _title_block(event_kind: str) -> Dict[str, Any]:
     title = (
         "*🛒 New Order Received!*"
@@ -151,6 +165,7 @@ def _items_and_context_blocks(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 def build_order_slack_payload(event_kind: str, data: Dict[str, Any]) -> Dict[str, Any]:
     cur = str(data.get("currency") or "USD")
     blocks: List[Dict[str, Any]] = [
+        _environment_context_block(),
         _title_block(event_kind),
         _customer_order_fields(data, cur),
         _business_address_fields(data),
