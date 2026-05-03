@@ -72,6 +72,14 @@ def _sleep_before_retry(attempt: int) -> None:
     time.sleep(_BASE_SLEEP_SEC * (2**attempt))
 
 
+def _slack_posting_enabled() -> bool:
+    deploy = (os.environ.get("ENVIRONMENT") or "development").strip().lower()
+    if deploy != "development":
+        return True
+    flag = (os.environ.get("SLACK_ORDER_ALERTS_IN_DEVELOPMENT") or "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def _environment_context_block() -> Dict[str, Any]:
     """CDK sets ENVIRONMENT to development | production (and possibly staging)."""
     raw = (os.environ.get("ENVIRONMENT") or "development").strip().lower()
@@ -93,6 +101,27 @@ def _title_block(event_kind: str) -> Dict[str, Any]:
         else "*✅ Order Completed!*"
     )
     return {"type": "section", "text": {"type": "mrkdwn", "text": title}}
+
+
+def _manage_order_link_block(order_id: str) -> Optional[Dict[str, Any]]:
+    base = (os.environ.get("PUBLIC_WEB_APP_URL") or "").strip().rstrip("/")
+    if not base or not order_id:
+        return None
+    href = f"{base}/orders/{order_id}"
+    text = f"*Manage order:* <{href}|Open in dashboard>"
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+
+def _lifecycle_totals_block(totals: Dict[str, int]) -> Dict[str, Any]:
+    completed = int(totals.get("completedTotal", 0))
+    cancelled = int(totals.get("cancelledTotal", 0))
+    return {
+        "type": "section",
+        "fields": [
+            {"type": "mrkdwn", "text": f"*All-time completed orders:*\n{completed}"},
+            {"type": "mrkdwn", "text": f"*All-time cancelled orders:*\n{cancelled}"},
+        ],
+    }
 
 
 def _customer_order_fields(data: Dict[str, Any], cur: str) -> Dict[str, Any]:
@@ -162,16 +191,26 @@ def _items_and_context_blocks(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def build_order_slack_payload(event_kind: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def build_order_slack_payload(
+    event_kind: str,
+    data: Dict[str, Any],
+    lifecycle_totals: Optional[Dict[str, int]] = None,
+) -> Dict[str, Any]:
     cur = str(data.get("currency") or "USD")
+    oid = str(data.get("orderId") or "")
     blocks: List[Dict[str, Any]] = [
         _environment_context_block(),
         _title_block(event_kind),
-        _customer_order_fields(data, cur),
-        _business_address_fields(data),
-        _delivery_fee_fields(data, cur),
-        _payment_fields(data),
     ]
+    link = _manage_order_link_block(oid)
+    if link:
+        blocks.append(link)
+    blocks.append(_customer_order_fields(data, cur))
+    blocks.append(_business_address_fields(data))
+    blocks.append(_delivery_fee_fields(data, cur))
+    blocks.append(_payment_fields(data))
+    if event_kind == "order.completed" and lifecycle_totals is not None:
+        blocks.append(_lifecycle_totals_block(lifecycle_totals))
     blocks.extend(_items_and_context_blocks(data))
     return {"blocks": blocks}
 
@@ -233,7 +272,13 @@ def post_slack_order_alert(payload: Dict[str, Any], webhook_url: str) -> bool:
 def send_slack_for_order_event(
     event_kind: str,
     order_data: Optional[Dict[str, Any]],
+    lifecycle_totals: Optional[Dict[str, int]] = None,
 ) -> bool:
+    if not _slack_posting_enabled():
+        _slack_log_info(
+            "Slack skipped for development (set SLACK_ORDER_ALERTS_IN_DEVELOPMENT=true to enable)"
+        )
+        return False
     if not order_data:
         _slack_log_error("No order data for Slack notification", None)
         return False
@@ -241,5 +286,5 @@ def send_slack_for_order_event(
     if not webhook:
         _slack_log_info("SLACK_ORDER_WEBHOOK_URL unset; skipping Slack")
         return False
-    payload = build_order_slack_payload(event_kind, order_data)
+    payload = build_order_slack_payload(event_kind, order_data, lifecycle_totals)
     return post_slack_order_alert(payload, webhook)

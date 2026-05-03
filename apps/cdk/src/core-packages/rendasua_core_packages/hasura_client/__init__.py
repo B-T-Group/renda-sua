@@ -15,6 +15,7 @@ from .orders_service import (
     get_complete_order_details,
     get_order_details_for_notification,
     get_order_business_location_country,
+    get_platform_order_lifecycle_counts,
 )
 
 # Order hold-related functions
@@ -66,6 +67,7 @@ __all__ = [
     "get_complete_order_details",
     "get_order_details_for_notification",
     "get_order_business_location_country",
+    "get_platform_order_lifecycle_counts",
     # Order holds
     "get_or_create_order_hold",
     "update_order_hold_status",

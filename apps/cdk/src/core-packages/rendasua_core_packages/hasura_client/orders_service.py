@@ -474,6 +474,46 @@ def get_order_details_for_notification(
         return None
 
 
+def _aggregate_count(data: Dict[str, Any], alias: str) -> int:
+    node = data.get(alias) or {}
+    agg = node.get("aggregate") or {}
+    raw = agg.get("count")
+    return int(raw) if raw is not None else 0
+
+
+def get_platform_order_lifecycle_counts(
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> Optional[Dict[str, int]]:
+    """
+    All-time counts of orders in terminal states (platform-wide).
+    Used for Slack when an order completes.
+    """
+    query = """
+    query PlatformOrderLifecycleCounts {
+      complete: orders_aggregate(where: { current_status: { _eq: complete } }) {
+        aggregate { count }
+      }
+      cancelled: orders_aggregate(where: { current_status: { _eq: cancelled } }) {
+        aggregate { count }
+      }
+    }
+    """
+    client = HasuraClient(
+        HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+    )
+    log_info("Fetching platform order lifecycle counts")
+    try:
+        data = client.execute(query, {})
+        return {
+            "completedTotal": _aggregate_count(data, "complete"),
+            "cancelledTotal": _aggregate_count(data, "cancelled"),
+        }
+    except Exception as e:
+        log_error("Error fetching platform order lifecycle counts", error=e)
+        return None
+
+
 def get_order_items_for_reserved_restore(
     order_id: str,
     hasura_endpoint: str,

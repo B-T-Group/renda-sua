@@ -12,6 +12,7 @@ from rendasua_core_packages.hasura_client import (
     get_all_agent_locations,
     get_complete_order_details,
     get_order_details_for_notification,
+    get_platform_order_lifecycle_counts,
     get_or_create_order_hold,
     get_account_by_user_and_currency,
     register_account_transaction,
@@ -101,7 +102,12 @@ def _send_slack_order_alert_safe(order_id: str, event_kind: str, environment: st
         details = get_order_details_for_notification(
             order_id, hasura_endpoint, hasura_admin_secret
         )
-        send_slack_for_order_event(event_kind, details)
+        lifecycle_totals = None
+        if event_kind == "order.completed":
+            lifecycle_totals = get_platform_order_lifecycle_counts(
+                hasura_endpoint, hasura_admin_secret
+            )
+        send_slack_for_order_event(event_kind, details, lifecycle_totals)
     except Exception as exc:
         log_error(
             "Slack order alert failed (non-fatal)",
