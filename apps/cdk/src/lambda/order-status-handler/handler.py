@@ -91,7 +91,13 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
         return None
 
 
-def _send_slack_order_alert_safe(order_id: str, event_kind: str, environment: str) -> None:
+def _send_slack_order_alert_safe(
+    order_id: str,
+    event_kind: str,
+    environment: str,
+    cancellation_reason: Optional[str] = None,
+    cancelled_by: Optional[str] = None,
+) -> None:
     """Post Slack order alert; logs errors and never raises."""
     hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
     if not hasura_endpoint:
@@ -103,11 +109,17 @@ def _send_slack_order_alert_safe(order_id: str, event_kind: str, environment: st
             order_id, hasura_endpoint, hasura_admin_secret
         )
         lifecycle_totals = None
-        if event_kind == "order.completed":
+        if event_kind in ("order.completed", "order.cancelled"):
             lifecycle_totals = get_platform_order_lifecycle_counts(
                 hasura_endpoint, hasura_admin_secret
             )
-        send_slack_for_order_event(event_kind, details, lifecycle_totals)
+        send_slack_for_order_event(
+            event_kind,
+            details,
+            lifecycle_totals,
+            cancellation_reason,
+            cancelled_by,
+        )
     except Exception as exc:
         log_error(
             "Slack order alert failed (non-fatal)",
@@ -829,6 +841,14 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
     except ValueError as e:
         log_error("Failed to retrieve Hasura admin secret", error=e)
         return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
+
+    _send_slack_order_alert_safe(
+        message.orderId,
+        "order.cancelled",
+        environment,
+        message.cancellationReason,
+        message.cancelledBy,
+    )
     
     # Process cancellation financials
     financial_result = process_cancellation_financials(

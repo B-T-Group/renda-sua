@@ -1,4 +1,4 @@
-"""Slack webhook alerts for order.created and order.completed (async Lambda)."""
+"""Slack webhook alerts for order lifecycle events (async Lambda)."""
 from __future__ import annotations
 
 import json
@@ -95,11 +95,12 @@ def _environment_context_block() -> Dict[str, Any]:
 
 
 def _title_block(event_kind: str) -> Dict[str, Any]:
-    title = (
-        "*🛒 New Order Received!*"
-        if event_kind == "order.created"
-        else "*✅ Order Completed!*"
-    )
+    titles = {
+        "order.created": "*🛒 New Order Received!*",
+        "order.completed": "*✅ Order Completed!*",
+        "order.cancelled": "*🚫 Order Cancelled!*",
+    }
+    title = titles.get(event_kind, "*Order Updated*")
     return {"type": "section", "text": {"type": "mrkdwn", "text": title}}
 
 
@@ -182,6 +183,21 @@ def _payment_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _cancellation_fields(
+    cancellation_reason: Optional[str],
+    cancelled_by: Optional[str],
+) -> Dict[str, Any]:
+    reason = _escape_mrkdwn((cancellation_reason or "").strip() or "No reason provided")
+    actor = _escape_mrkdwn((cancelled_by or "").strip() or "Unknown")
+    return {
+        "type": "section",
+        "fields": [
+            {"type": "mrkdwn", "text": f"*Cancelled by:*\n{actor}"},
+            {"type": "mrkdwn", "text": f"*Cancellation reason:*\n{reason}"},
+        ],
+    }
+
+
 def _items_and_context_blocks(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     items_block = _build_items_preview(list(data.get("orderItems") or []))
     oid = _escape_mrkdwn(str(data.get("orderId") or ""))
@@ -195,6 +211,8 @@ def build_order_slack_payload(
     event_kind: str,
     data: Dict[str, Any],
     lifecycle_totals: Optional[Dict[str, int]] = None,
+    cancellation_reason: Optional[str] = None,
+    cancelled_by: Optional[str] = None,
 ) -> Dict[str, Any]:
     cur = str(data.get("currency") or "USD")
     oid = str(data.get("orderId") or "")
@@ -209,7 +227,9 @@ def build_order_slack_payload(
     blocks.append(_business_address_fields(data))
     blocks.append(_delivery_fee_fields(data, cur))
     blocks.append(_payment_fields(data))
-    if event_kind == "order.completed" and lifecycle_totals is not None:
+    if event_kind == "order.cancelled":
+        blocks.append(_cancellation_fields(cancellation_reason, cancelled_by))
+    if event_kind in ("order.completed", "order.cancelled") and lifecycle_totals is not None:
         blocks.append(_lifecycle_totals_block(lifecycle_totals))
     blocks.extend(_items_and_context_blocks(data))
     return {"blocks": blocks}
@@ -273,6 +293,8 @@ def send_slack_for_order_event(
     event_kind: str,
     order_data: Optional[Dict[str, Any]],
     lifecycle_totals: Optional[Dict[str, int]] = None,
+    cancellation_reason: Optional[str] = None,
+    cancelled_by: Optional[str] = None,
 ) -> bool:
     if not _slack_posting_enabled():
         _slack_log_info(
@@ -286,5 +308,11 @@ def send_slack_for_order_event(
     if not webhook:
         _slack_log_info("SLACK_ORDER_WEBHOOK_URL unset; skipping Slack")
         return False
-    payload = build_order_slack_payload(event_kind, order_data, lifecycle_totals)
+    payload = build_order_slack_payload(
+        event_kind,
+        order_data,
+        lifecycle_totals,
+        cancellation_reason,
+        cancelled_by,
+    )
     return post_slack_order_alert(payload, webhook)
