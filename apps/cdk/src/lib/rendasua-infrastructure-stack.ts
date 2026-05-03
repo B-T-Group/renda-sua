@@ -103,6 +103,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
+          SLACK_ORDER_WEBHOOK_URL: process.env.SLACK_ORDER_WEBHOOK_URL ?? '',
           PROXIMITY_RADIUS_KM: '20',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
             'dc4461e3-4cd2-485b-8c9c-755e36205f30',

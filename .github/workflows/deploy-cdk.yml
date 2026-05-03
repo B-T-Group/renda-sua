@@ -77,6 +77,8 @@ jobs:
         run: |
           cd apps/cdk
           cdk synth RendasuaInfrastructure-${{ env.CDK_ENVIRONMENT }} HasuraEc2InfrastructureDev --context environment=${{ env.CDK_ENVIRONMENT }} --context hasuraEnvironment=dev
+        env:
+          SLACK_ORDER_WEBHOOK_URL: ${{ secrets.SLACK_ORDER_WEBHOOK_URL }}
 
       - name: Deploy CDK infrastructure
         run: |
@@ -84,6 +86,7 @@ jobs:
           cdk deploy RendasuaInfrastructure-${{ env.CDK_ENVIRONMENT }} HasuraEc2InfrastructureDev --context environment=${{ env.CDK_ENVIRONMENT }} --context hasuraEnvironment=dev --require-approval never
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          SLACK_ORDER_WEBHOOK_URL: ${{ secrets.SLACK_ORDER_WEBHOOK_URL }}
 
       - name: Verify deployment
         run: |

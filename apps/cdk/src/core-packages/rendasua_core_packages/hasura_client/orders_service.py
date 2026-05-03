@@ -337,14 +337,20 @@ def get_order_details_for_notification(
         id
         order_number
         current_status
+        created_at
         subtotal
         base_delivery_fee
         per_km_delivery_fee
         tax_amount
         total_amount
         currency
+        payment_method
+        payment_status
         estimated_delivery_time
         special_instructions
+        business_location {
+          name
+        }
         client {
           user {
             first_name
@@ -430,12 +436,16 @@ def get_order_details_for_notification(
                 "totalPrice": float(item.get("total_price", 0)),
             })
         
+        bl_data = order_data.get("business_location") or {}
+        business_location_name = bl_data.get("name") or ""
+
         notification_data = {
             "orderId": order_data["id"],
             "orderNumber": order_data.get("order_number", "Unknown"),
             "clientName": client_name,
             "clientEmail": client_data.get("email"),
             "businessName": order_data.get("business", {}).get("name", "Unknown Business"),
+            "businessLocationName": business_location_name,
             "businessEmail": order_data.get("business", {}).get("user", {}).get("email"),
             "businessVerified": order_data.get("business", {}).get("is_verified", False),
             "agentName": agent_name,
@@ -448,6 +458,9 @@ def get_order_details_for_notification(
             "taxAmount": float(order_data.get("tax_amount", 0)),
             "totalAmount": float(order_data.get("total_amount", 0)),
             "currency": order_data.get("currency", "USD"),
+            "paymentMethod": order_data.get("payment_method"),
+            "paymentStatus": order_data.get("payment_status"),
+            "createdAt": order_data.get("created_at"),
             "deliveryAddress": delivery_address,
             "estimatedDeliveryTime": order_data.get("estimated_delivery_time"),
             "specialInstructions": order_data.get("special_instructions"),

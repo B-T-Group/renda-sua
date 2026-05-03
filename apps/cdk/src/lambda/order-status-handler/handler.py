@@ -11,6 +11,7 @@ from rendasua_core_packages.hasura_client import (
     get_order_with_location,
     get_all_agent_locations,
     get_complete_order_details,
+    get_order_details_for_notification,
     get_or_create_order_hold,
     get_account_by_user_and_currency,
     register_account_transaction,
@@ -20,6 +21,7 @@ from rendasua_core_packages.hasura_client import (
     register_cancellation_fee_transactions,
 )
 from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
+from slack_notifications import send_slack_for_order_event
 from rendasua_core_packages.commission_handler import distribute_commissions
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
@@ -86,6 +88,27 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
     except Exception as e:
         log_error("Error parsing SQS event message", error=e, body=record.get("body", ""))
         return None
+
+
+def _send_slack_order_alert_safe(order_id: str, event_kind: str, environment: str) -> None:
+    """Post Slack order alert; logs errors and never raises."""
+    hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+    if not hasura_endpoint:
+        log_error("GRAPHQL_ENDPOINT not configured; skipping Slack order alert")
+        return
+    try:
+        hasura_admin_secret = get_hasura_admin_secret(environment)
+        details = get_order_details_for_notification(
+            order_id, hasura_endpoint, hasura_admin_secret
+        )
+        send_slack_for_order_event(event_kind, details)
+    except Exception as exc:
+        log_error(
+            "Slack order alert failed (non-fatal)",
+            error=exc,
+            order_id=order_id,
+            event_kind=event_kind,
+        )
 
 
 def ready_for_pickup_handler(
@@ -315,6 +338,7 @@ def handle_order_created(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "Failed to parse event message"}
     
     environment = os.environ.get("ENVIRONMENT", "development")
+    _send_slack_order_alert_safe(message.orderId, "order.created", environment)
     # Order status will be fetched from the order in process_order_event
     return process_order_event(message.orderId, "order.created", environment, order_status=None)
 
@@ -522,6 +546,7 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "Failed to parse event message"}
 
     environment = os.environ.get("ENVIRONMENT", "development")
+    _send_slack_order_alert_safe(message.orderId, "order.completed", environment)
     # Settlement (item at pickup, delivery at complete) runs in NestJS; this handler only notifies.
     notification_result = process_order_event(message.orderId, "order.completed", environment, order_status=None)
 
