@@ -3,11 +3,25 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
+import { AddressesService } from '../addresses/addresses.service';
+import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
+import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
+import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PdfService } from '../pdf/pdf.service';
+import { DeliveryPinService } from './delivery-pin.service';
+import { OrderQueueService } from './order-queue.service';
+import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -137,6 +151,20 @@ describe('OrdersService', () => {
           provide: OrderStatusService,
           useValue: mockOrderStatusService,
         },
+        { provide: GoogleDistanceService, useValue: {} },
+        { provide: AddressesService, useValue: {} },
+        { provide: MobilePaymentsService, useValue: {} },
+        { provide: MobilePaymentsDatabaseService, useValue: {} },
+        { provide: NotificationsService, useValue: {} },
+        { provide: DeliveryConfigService, useValue: {} },
+        { provide: DeliveryWindowsService, useValue: {} },
+        { provide: CommissionsService, useValue: {} },
+        { provide: PdfService, useValue: {} },
+        { provide: OrderQueueService, useValue: {} },
+        { provide: WaitAndExecuteScheduleService, useValue: {} },
+        { provide: DeliveryPinService, useValue: {} },
+        { provide: OrderRefundsService, useValue: {} },
+        { provide: LoyaltyService, useValue: {} },
       ],
     }).compile();
 
@@ -1049,6 +1077,37 @@ describe('OrdersService', () => {
   });
 
   describe('helper methods', () => {
+    it('should aggregate duplicate inventory lines when updating reservations', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [
+            { id: 'inventory-123', reserved_quantity: 2, quantity: 10 },
+          ],
+        })
+        .mockResolvedValueOnce({
+          update_business_inventory_by_pk: {
+            id: 'inventory-123',
+            reserved_quantity: 7,
+            quantity: 10,
+          },
+        });
+
+      await service.updateReservedQuantities(
+        [
+          { business_inventory_id: 'inventory-123', quantity: 3 },
+          { business_inventory_id: 'inventory-123', quantity: 2 },
+        ],
+        'increment'
+      );
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledTimes(2);
+      expect(hasuraSystemService.executeQuery).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('mutation UpdateReservedQuantity'),
+        { id: 'inventory-123', reservedQuantity: 7 }
+      );
+    });
+
     it('should get order details correctly', async () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: mockOrder,
