@@ -2505,6 +2505,16 @@
       "generated": "Overwrite code generated. Share it with the agent.",
       "error": "Failed to generate overwrite code"
     },
+    "reconciliation": {
+      "button": "Reconcile cash exception",
+      "title": "Reconcile cash exception",
+      "warning": "This order was completed with a cash exception. Record your manual reconciliation details below.",
+      "reference": "Reference (optional)",
+      "notes": "Notes (optional)",
+      "confirm": "Mark reconciled",
+      "reconciled": "Cash exception reconciled successfully",
+      "error": "Failed to reconcile cash exception"
+    },
     "refunds": {
       "requestButton": "Request refund",
       "submitted": "Refund request submitted",

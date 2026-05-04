@@ -2473,6 +2473,38 @@
     },
     "buy": "Acheter",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
+    "completeDelivery": {
+      "title": "Finaliser la livraison",
+      "instruction": "Saisissez le code PIN à 4 chiffres communiqué par le client, ou le code de contournement fourni par l'entreprise.",
+      "pinLabel": "PIN de livraison (4 chiffres)",
+      "overwriteLabel": "Ou code de contournement",
+      "enterPinOrOverwrite": "Saisissez le PIN à 4 chiffres du client ou le code de contournement de l'entreprise.",
+      "enterOneOnly": "Saisissez le PIN ou le code de contournement, pas les deux.",
+      "submit": "Finaliser la livraison"
+    },
+    "deliveryPin": {
+      "title": "PIN de livraison",
+      "viewPin": "Voir le PIN de livraison",
+      "shareWithAgent": "Communiquez ce PIN à votre agent de livraison. Il le saisira pour finaliser la livraison.",
+      "unavailable": "Le PIN de livraison n'est plus disponible (déjà consulté ou expiré)."
+    },
+    "overwriteCode": {
+      "button": "Générer un code de contournement",
+      "title": "Code de contournement de livraison",
+      "shareWithAgent": "Communiquez ce code à l'agent de livraison pour qu'il puisse finaliser la commande sans le PIN du client.",
+      "generated": "Code de contournement généré. Communiquez-le à l'agent.",
+      "error": "Échec de la génération du code de contournement"
+    },
+    "reconciliation": {
+      "button": "Rapprocher l'exception espèces",
+      "title": "Rapprocher l'exception espèces",
+      "warning": "Cette commande a été finalisée avec une exception espèces. Saisissez ci-dessous les informations de votre rapprochement manuel.",
+      "reference": "Référence (facultatif)",
+      "notes": "Notes (facultatif)",
+      "confirm": "Marquer comme rapproché",
+      "reconciled": "Exception espèces rapprochée avec succès",
+      "error": "Échec du rapprochement de l'exception espèces"
+    },
     "refunds": {
       "requestButton": "Demander un remboursement",
       "submitted": "Demande de remboursement envoyée",
