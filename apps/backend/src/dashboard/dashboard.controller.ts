@@ -20,7 +20,7 @@ export class DashboardController {
   @ApiOperation({
     summary: 'Get dashboard aggregates',
     description:
-      'Returns lightweight counts for orders (by status), items, locations, inventory, failed deliveries. For business admins, also returns client count, agent (verified/unverified), business (verified/not verified) counts.',
+      'Returns lightweight counts for orders (by status), pending cash-exception reconciliations, items, locations, inventory, failed deliveries. For business admins, also returns client count, agent (verified/unverified), business (verified/not verified) counts.',
   })
   @ApiResponse({ status: 200, description: 'Aggregates for the dashboard' })
   @ApiResponse({ status: 403, description: 'Forbidden' })

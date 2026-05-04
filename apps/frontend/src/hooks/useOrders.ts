@@ -90,6 +90,7 @@ export interface Order {
   preferred_delivery_time?: string;
   requires_fast_delivery: boolean;
   payment_status?: string;
+  reconciliation_status?: string;
   is_claim_pending?: boolean;
   claim_transaction_id?: string;
   created_at: string;

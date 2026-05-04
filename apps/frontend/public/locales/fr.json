@@ -869,6 +869,8 @@
       "subtitleRentalFocused": "Votre tableau de bord met les locations en avant — catalogue, réservations et photothèque location en tête.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "cashReconciliationTitle": "Rapprochement espèces",
+      "cashReconciliationDescription": "Commandes payées à la livraison avec exception espèces : ouvrez la liste et encaissez le paiement mobile par commande.",
       "refundsTitle": "Demandes de remboursement",
       "refundsDescription": "Examiner et traiter les retours et remboursements clients",
       "verified": "Vérifié",
@@ -2303,6 +2305,9 @@
     "title": "Historique des Commandes"
   },
   "orders": {
+    "cashReconciliationViewBanner": "Affichage des commandes en attente de rapprochement espèces. Ouvrez une commande pour encaisser le paiement mobile et déclencher les versements.",
+    "cashReconciliationClearFilter": "Afficher toutes les commandes",
+    "noCashReconciliationOrders": "Aucune commande n'est en attente de rapprochement espèces pour le moment.",
     "retryPayment": {
       "cta": "Réessayer le paiement",
       "helper": "Vous pouvez aussi annuler la commande si vous avez changé d’avis.",

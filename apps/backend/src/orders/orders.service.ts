@@ -3471,11 +3471,24 @@ export class OrdersService {
       };
     }
 
+    if (
+      'reconciliation_status' in filters &&
+      typeof filters.reconciliation_status === 'string'
+    ) {
+      const { reconciliation_status, ...rest } = filters;
+      const normalizedRest =
+        Object.keys(rest).length > 0 ? this.normalizeFilters(rest) : {};
+      return {
+        ...normalizedRest,
+        reconciliation_status: { _eq: reconciliation_status },
+      };
+    }
+
     // Convert 'status' to 'current_status' if present
     if ('status' in filters && !('current_status' in filters)) {
       const { status, ...rest } = filters;
       return {
-        ...rest,
+        ...this.normalizeFilters(rest),
         current_status: typeof status === 'string' ? { _eq: status } : status,
       };
     }
@@ -3616,6 +3629,7 @@ export class OrdersService {
           payment_method
           payment_status
           payment_timing
+          reconciliation_status
           fulfillment_method
           created_at
           updated_at

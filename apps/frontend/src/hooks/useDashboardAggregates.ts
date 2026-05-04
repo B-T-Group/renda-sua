@@ -4,6 +4,7 @@ import { useApiClient } from './useApiClient';
 export interface DashboardAggregates {
   ordersTotal: number;
   ordersByStatus: Record<string, number>;
+  pendingCashReconciliationCount: number;
   itemCount: number;
   rentalItemCount: number;
   locationCount: number;

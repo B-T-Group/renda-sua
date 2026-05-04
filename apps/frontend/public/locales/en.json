@@ -880,6 +880,8 @@
       "subtitleRentalFocused": "Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
+      "cashReconciliationTitle": "Cash reconciliation",
+      "cashReconciliationDescription": "Pay-at-delivery orders with a cash exception—open the list and collect mobile payment per order.",
       "refundsTitle": "Refund requests",
       "refundsDescription": "Review and resolve client return and refund requests",
       "verified": "Verified",
@@ -2314,6 +2316,9 @@
     "title": "Order History"
   },
   "orders": {
+    "cashReconciliationViewBanner": "Showing only orders pending cash reconciliation. Open an order to collect mobile payment and settle payouts.",
+    "cashReconciliationClearFilter": "Show all orders",
+    "noCashReconciliationOrders": "No orders are waiting for cash reconciliation right now.",
     "retryPayment": {
       "cta": "Retry payment",
       "helper": "You can also cancel the order if you changed your mind.",

@@ -20,6 +20,7 @@ import {
   Payments as PaymentsIcon,
   Public as PublicIcon,
   MoneyOff as RefundsIcon,
+  AccountBalanceWallet as CashReconciliationIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -66,6 +67,8 @@ const BusinessDashboard: React.FC = () => {
   const locationCount = aggregates?.locationCount ?? 0;
   const inventoryCount = aggregates?.inventoryCount ?? 0;
   const pendingFailedDeliveriesCount = aggregates?.pendingFailedDeliveriesCount ?? 0;
+  const pendingCashReconciliationCount =
+    aggregates?.pendingCashReconciliationCount ?? 0;
 
   const mainInterest =
     profile?.business?.main_interest ?? 'sell_items';
@@ -84,6 +87,21 @@ const BusinessDashboard: React.FC = () => {
       color: '#1976d2',
       path: '/orders',
       orderCountByStatus,
+    },
+    {
+      title: t(
+        'business.dashboard.cashReconciliationTitle',
+        'Cash reconciliation'
+      ),
+      description: t(
+        'business.dashboard.cashReconciliationDescription',
+        'Orders completed with a cash exception—collect mobile payment to settle payouts.'
+      ),
+      icon: <CashReconciliationIcon sx={{ fontSize: 40 }} />,
+      count: pendingCashReconciliationCount,
+      color: '#ed6c02',
+      path: '/orders?cashReconciliation=pending',
+      showBadge: pendingCashReconciliationCount > 0,
     },
     {
       title: t('business.dashboard.batchOrdersTitle', 'Batch process orders'),

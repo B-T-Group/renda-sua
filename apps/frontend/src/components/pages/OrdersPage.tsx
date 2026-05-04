@@ -38,8 +38,9 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
 import AddressAlert from '../common/AddressAlert';
@@ -182,6 +183,33 @@ const OrdersPage: React.FC = () => {
 
   // Use unified orders hook that handles user type on backend
   const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const isCashReconciliationView =
+    isOrdersBusiness && searchParams.get('cashReconciliation') === 'pending';
+
+  useEffect(() => {
+    if (!isCashReconciliationView) {
+      return;
+    }
+    setShowCompletedOrders(true);
+    setSelectedTab('all');
+    void fetchOrders({
+      reconciliation_status: 'pending_manual_reconciliation',
+    });
+  }, [isCashReconciliationView, fetchOrders]);
+
+  const clearCashReconciliationFilter = () => {
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.delete('cashReconciliation');
+        return next;
+      },
+      { replace: true }
+    );
+    void fetchOrders({});
+  };
 
   const handleFilterChange = (newFilters: Partial<OrderFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
@@ -1018,6 +1046,30 @@ const OrdersPage: React.FC = () => {
           </Alert>
         )}
 
+        {isCashReconciliationView && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={clearCashReconciliationFilter}
+              >
+                {t(
+                  'orders.cashReconciliationClearFilter',
+                  'Show all orders'
+                )}
+              </Button>
+            }
+          >
+            {t(
+              'orders.cashReconciliationViewBanner',
+              'Showing only orders pending cash reconciliation. Open an order to collect mobile payment and settle payouts.'
+            )}
+          </Alert>
+        )}
+
         {/* Orders List */}
         {loading ? (
           <Box>
@@ -1040,18 +1092,23 @@ const OrdersPage: React.FC = () => {
               {t('orders.noOrdersFound', 'No Orders Yet')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              {selectedTab === 'all'
+              {isCashReconciliationView
                 ? t(
-                    'orders.noOrdersMessage',
-                    'When you place an order, it will appear here'
+                    'orders.noCashReconciliationOrders',
+                    'No orders are waiting for cash reconciliation right now.'
                   )
-                : t(
-                    'orders.noOrdersInTab',
-                    `No orders found in ${
-                      tabGroups[selectedTab as keyof typeof tabGroups]?.label ||
-                      'this category'
-                    }`
-                  )}
+                : selectedTab === 'all'
+                  ? t(
+                      'orders.noOrdersMessage',
+                      'When you place an order, it will appear here'
+                    )
+                  : t(
+                      'orders.noOrdersInTab',
+                      `No orders found in ${
+                        tabGroups[selectedTab as keyof typeof tabGroups]?.label ||
+                        'this category'
+                      }`
+                    )}
             </Typography>
             {selectedTab !== 'all' && (
               <Button
