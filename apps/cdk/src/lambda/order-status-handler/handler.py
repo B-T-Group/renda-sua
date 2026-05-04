@@ -652,9 +652,11 @@ def process_cancellation_financials(
                 "Item settlement already applied; releasing only remaining held amounts",
                 order_id=order_id,
             )
+        release_failures = []
         
         # Release agent hold if agent is assigned
-        if order.assigned_agent and order.assigned_agent.user_id:
+        agent_hold_amount = order_hold.agent_hold_amount
+        if order.assigned_agent and order.assigned_agent.user_id and agent_hold_amount > 0:
             agent_user_id = order.assigned_agent.user_id
             agent_account = get_account_by_user_and_currency(
                 agent_user_id,
@@ -664,23 +666,23 @@ def process_cancellation_financials(
             )
             
             if agent_account:
-                agent_hold_amount = order_hold.agent_hold_amount
-                if agent_hold_amount > 0:
-                    log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
-                    transaction_id = register_account_transaction(
-                        agent_account.id,
-                        agent_hold_amount,
-                        "release",
-                        f"Hold released for order {order.order_number}",
-                        order_id,
-                        hasura_endpoint,
-                        hasura_admin_secret
-                    )
-                    if transaction_id:
-                        log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
-                    else:
-                        log_error("Failed to release agent hold", order_id=order_id)
+                log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
+                transaction_id = register_account_transaction(
+                    agent_account.id,
+                    agent_hold_amount,
+                    "release",
+                    f"Hold released for order {order.order_number}",
+                    order_id,
+                    hasura_endpoint,
+                    hasura_admin_secret
+                )
+                if transaction_id:
+                    log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
+                else:
+                    release_failures.append("agent hold")
+                    log_error("Failed to release agent hold", order_id=order_id)
             else:
+                release_failures.append("agent hold")
                 log_error("Agent account not found", order_id=order_id, agent_user_id=agent_user_id)
         
         # Get client account
@@ -771,6 +773,7 @@ def process_cancellation_financials(
             if transaction_id:
                 log_info("Client hold released successfully", order_id=order_id, transaction_id=transaction_id)
             else:
+                release_failures.append("client hold")
                 log_error("Failed to release client hold", order_id=order_id)
         
         # Release delivery fees hold
@@ -789,8 +792,14 @@ def process_cancellation_financials(
             if transaction_id:
                 log_info("Delivery fees hold released successfully", order_id=order_id, transaction_id=transaction_id)
             else:
+                release_failures.append("delivery fees hold")
                 log_error("Failed to release delivery fees hold", order_id=order_id)
         
+        if release_failures:
+            failed_releases = ", ".join(release_failures)
+            log_error("Failed to release all cancellation holds", order_id=order_id, failed_releases=failed_releases)
+            return {"success": False, "error": f"Failed to release: {failed_releases}"}
+
         # Update order hold status to cancelled
         success = update_order_hold_status(
             order_hold.id,
