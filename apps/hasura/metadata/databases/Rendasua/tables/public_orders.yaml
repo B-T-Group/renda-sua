@@ -134,6 +134,7 @@ insert_permissions:
         - business_location_id
         - client_id
         - delivery_address_id
+        - fulfillment_method
         - requires_fast_delivery
         - verified_agent_delivery
 select_permissions:
@@ -147,6 +148,7 @@ select_permissions:
         - business_location_id
         - assigned_agent_id
         - delivery_address_id
+        - fulfillment_method
         - tax_amount
         - currency
         - current_status
@@ -191,6 +193,7 @@ select_permissions:
         - business_location_id
         - assigned_agent_id
         - delivery_address_id
+        - fulfillment_method
         - subtotal
         - base_delivery_fee
         - per_km_delivery_fee
@@ -238,6 +241,7 @@ select_permissions:
         - business_location_id
         - assigned_agent_id
         - delivery_address_id
+        - fulfillment_method
         - subtotal
         - base_delivery_fee
         - per_km_delivery_fee
