@@ -69,8 +69,34 @@ export class MobilePaymentCallbackProcessor {
       callbackData
     );
 
-    await this.applyMypvitStatusUpdate(tx, callbackData);
-    await this.applyMypvitSuccessCredit(tx, callbackData);
+    const isCashRecSuccess =
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'order_cash_reconciliation';
+
+    if (isCashRecSuccess) {
+      try {
+        await this.ordersService.finalizeCashExceptionReconciliationAfterMobilePayment(
+          tx
+        );
+        await this.databaseService.updateTransaction(tx.id, {
+          status: 'success',
+          transaction_id: callbackData.transactionId,
+        });
+        this.logger.log(
+          `Cash reconciliation settled for mobile tx ${tx.id}`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Cash reconciliation finalize failed for ${tx.id}: ${
+            error?.message || error
+          }`
+        );
+        throw error;
+      }
+    } else {
+      await this.applyMypvitStatusUpdate(tx, callbackData);
+      await this.applyMypvitSuccessCredit(tx, callbackData);
+    }
     await this.applyMypvitFailureSideEffects(tx, callbackData);
 
     return {
@@ -104,8 +130,35 @@ export class MobilePaymentCallbackProcessor {
     }
 
     await this.databaseService.logCallback(tx.id, callbackData);
-    await this.applyFreemopayStatusUpdate(tx, callbackData);
-    await this.applyFreemopaySuccessCredit(tx, callbackData);
+
+    const isCashRecSuccess =
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'order_cash_reconciliation';
+
+    if (isCashRecSuccess) {
+      try {
+        await this.ordersService.finalizeCashExceptionReconciliationAfterMobilePayment(
+          tx
+        );
+        await this.databaseService.updateTransaction(tx.id, {
+          status: 'success',
+          transaction_id: callbackData.reference,
+        });
+        this.logger.log(
+          `Cash reconciliation settled for mobile tx ${tx.id}`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Cash reconciliation finalize failed for ${tx.id}: ${
+            error?.message || error
+          }`
+        );
+        throw error;
+      }
+    } else {
+      await this.applyFreemopayStatusUpdate(tx, callbackData);
+      await this.applyFreemopaySuccessCredit(tx, callbackData);
+    }
     await this.applyFreemopayFailureSideEffects(tx, callbackData);
 
     return { received: true, reference: callbackData.reference };
@@ -201,6 +254,14 @@ export class MobilePaymentCallbackProcessor {
     if (callbackData.status !== 'FAILED') {
       return;
     }
+    if (transaction.payment_entity === 'order_cash_reconciliation') {
+      this.logger.log(
+        `Cash exception reconciliation payment failed for order ${
+          transaction.entity_id || transaction.reference || 'unknown'
+        }`
+      );
+      return;
+    }
     if (transaction.payment_entity === 'order') {
       const orderNumber = transaction.entity_id || transaction.reference;
       const order = await this.ordersService.getOrderByNumber(
@@ -286,6 +347,14 @@ export class MobilePaymentCallbackProcessor {
     callbackData: FreemopayCallbackDto
   ): Promise<void> {
     if (callbackData.status !== 'FAILED') {
+      return;
+    }
+    if (transaction.payment_entity === 'order_cash_reconciliation') {
+      this.logger.log(
+        `Cash exception reconciliation payment failed for order ${
+          transaction.entity_id || transaction.reference || 'unknown'
+        }`
+      );
       return;
     }
     if (transaction.payment_entity === 'order') {

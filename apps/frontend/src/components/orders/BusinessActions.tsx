@@ -16,8 +16,14 @@ import {
   DialogTitle,
   Typography,
   Alert,
+  Stack,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import type { Country } from 'react-phone-number-input';
+import {
+  getCountryCallingCode,
+  parsePhoneNumber,
+} from 'react-phone-number-input';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,6 +35,59 @@ import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
+
+/** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
+function resolveOrderPhoneCountryIso2(order: OrderData): string {
+  const raw =
+    order.delivery_address?.country?.trim() ||
+    order.business_location?.address?.country?.trim() ||
+    '';
+  if (/^[A-Za-z]{2}$/.test(raw)) {
+    return raw.toUpperCase();
+  }
+  return 'GA';
+}
+
+function iso2ToFlagEmoji(iso2: string): string {
+  return iso2
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+}
+
+function resolveReconcilePhoneRegion(order: OrderData): {
+  iso2: Country;
+  dial: string;
+} {
+  const raw = resolveOrderPhoneCountryIso2(order);
+  try {
+    const iso2 = raw.toUpperCase() as Country;
+    const dial = getCountryCallingCode(iso2);
+    return { iso2, dial };
+  } catch {
+    const iso2: Country = 'GA';
+    return { iso2, dial: getCountryCallingCode(iso2) };
+  }
+}
+
+function nationalDigitsToE164(
+  iso2: Country,
+  dial: string,
+  nationalDigits: string
+): string | undefined {
+  const digits = nationalDigits.replace(/\D/g, '');
+  if (!digits) {
+    return undefined;
+  }
+  try {
+    const parsed = parsePhoneNumber(`+${dial}${digits}`, iso2);
+    if (!parsed?.isValid()) {
+      return undefined;
+    }
+    return parsed.number;
+  } catch {
+    return undefined;
+  }
+}
 
 const PRINT_LABEL_STATUSES = [
   'confirmed',
@@ -72,8 +131,13 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
+  const [reconcileNationalDigits, setReconcileNationalDigits] = useState('');
   const [reconcileReference, setReconcileReference] = useState('');
   const [reconcileNotes, setReconcileNotes] = useState('');
+  const reconcilePhoneRegion = useMemo(
+    () => resolveReconcilePhoneRegion(order),
+    [order]
+  );
 
   const handlePrintLabel = async () => {
     try {
@@ -210,14 +274,31 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   };
 
   const handleReconcileCashException = async () => {
+    const phone = nationalDigitsToE164(
+      reconcilePhoneRegion.iso2,
+      reconcilePhoneRegion.dial,
+      reconcileNationalDigits
+    );
+    if (!phone) {
+      onShowNotification?.(
+        t(
+          'orders.reconciliation.phoneRequired',
+          'Enter a valid national phone number (without country code) for the country shown.'
+        ),
+        'error'
+      );
+      return;
+    }
     setLoading(true);
     try {
       await reconcileCashException(
         order.id,
+        phone,
         reconcileReference || undefined,
         reconcileNotes || undefined
       );
       setReconcileDialogOpen(false);
+      setReconcileNationalDigits('');
       setReconcileReference('');
       setReconcileNotes('');
       onShowNotification?.(
@@ -556,10 +637,48 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             <Typography variant="body2">
               {t(
                 'orders.reconciliation.warning',
-                'This order was completed with a cash exception. Record your manual reconciliation details below.'
+                'This order was completed with a cash exception. Enter the mobile money number to charge for the order total. When payment succeeds, payouts run without using the client in-app wallet.'
               )}
             </Typography>
           </Alert>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="flex-start"
+            sx={{ mb: 2 }}
+          >
+            <TextField
+              label={t('orders.reconciliation.countryCode', 'Country code')}
+              value={`${iso2ToFlagEmoji(reconcilePhoneRegion.iso2)} +${
+                reconcilePhoneRegion.dial
+              } (${reconcilePhoneRegion.iso2})`}
+              InputProps={{ readOnly: true }}
+              disabled={loading}
+              sx={{
+                width: { xs: 150, sm: 180 },
+                flexShrink: 0,
+                '& .MuiInputBase-input': { cursor: 'default' },
+              }}
+            />
+            <TextField
+              fullWidth
+              required
+              label={t(
+                'orders.reconciliation.nationalNumber',
+                'Phone number'
+              )}
+              value={reconcileNationalDigits}
+              onChange={(e) =>
+                setReconcileNationalDigits(e.target.value.replace(/\D/g, ''))
+              }
+              disabled={loading}
+              autoComplete="tel-national"
+              placeholder={t(
+                'orders.reconciliation.nationalNumberPlaceholder',
+                'National number without country code'
+              )}
+            />
+          </Stack>
           <TextField
             fullWidth
             label={t('orders.reconciliation.reference', 'Reference (optional)')}

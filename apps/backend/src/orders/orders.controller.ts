@@ -529,14 +529,19 @@ export class OrdersController {
 
   @Post(':id/reconcile-cash-exception')
   @ApiOperation({
-    summary: 'Reconcile a cash-exception order (business only)',
+    summary: 'Reconcile a cash-exception order via mobile payment (business only)',
     description:
-      'Business records manual reconciliation reference/notes and marks the exception reconciled.',
+      'Starts mobile money collection from the given payer phone. On success, the payment callback settles business/agent/rendasua shares without posting to the client wallet.',
   })
   @ApiBody({
     schema: {
       type: 'object',
+      required: ['customerPhone'],
       properties: {
+        customerPhone: {
+          type: 'string',
+          description: 'MSISDN to charge (external payer; not recorded on client account)',
+        },
         reference: { type: 'string' },
         notes: { type: 'string' },
       },
@@ -544,10 +549,11 @@ export class OrdersController {
   })
   async reconcileCashException(
     @Param('id') orderId: string,
-    @Body() body: { reference?: string; notes?: string }
+    @Body() body: { customerPhone: string; reference?: string; notes?: string }
   ) {
     return this.ordersService.reconcileCashException(
       orderId,
+      body.customerPhone,
       body?.reference,
       body?.notes
     );

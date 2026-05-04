@@ -2508,11 +2508,16 @@
     "reconciliation": {
       "button": "Reconcile cash exception",
       "title": "Reconcile cash exception",
-      "warning": "This order was completed with a cash exception. Record your manual reconciliation details below.",
+      "warning": "This order was completed with a cash exception. Enter the mobile money number to charge for the order total. When payment succeeds, payouts run without using the client's in-app wallet.",
+      "payerPhone": "Payer phone number",
+      "countryCode": "Country code",
+      "nationalNumber": "Phone number",
+      "nationalNumberPlaceholder": "National number only",
+      "phoneRequired": "Enter a valid national phone number (no country code) for the country shown.",
       "reference": "Reference (optional)",
       "notes": "Notes (optional)",
-      "confirm": "Mark reconciled",
-      "reconciled": "Cash exception reconciled successfully",
+      "confirm": "Send payment request",
+      "reconciled": "Payment request sent. The order reconciles automatically when payment succeeds.",
       "error": "Failed to reconcile cash exception"
     },
     "refunds": {

@@ -2498,11 +2498,16 @@
     "reconciliation": {
       "button": "Rapprocher l'exception espèces",
       "title": "Rapprocher l'exception espèces",
-      "warning": "Cette commande a été finalisée avec une exception espèces. Saisissez ci-dessous les informations de votre rapprochement manuel.",
+      "warning": "Cette commande a été finalisée avec une exception espèces. Saisissez le numéro mobile money à débiter pour le montant total de la commande. Après paiement, les versements sont effectués sans passer par le portefeuille in-app du client.",
+      "payerPhone": "Numéro du payeur",
+      "countryCode": "Indicatif pays",
+      "nationalNumber": "Numéro de téléphone",
+      "nationalNumberPlaceholder": "Numéro national uniquement",
+      "phoneRequired": "Saisissez un numéro national valide (sans indicatif) pour le pays affiché.",
       "reference": "Référence (facultatif)",
       "notes": "Notes (facultatif)",
-      "confirm": "Marquer comme rapproché",
-      "reconciled": "Exception espèces rapprochée avec succès",
+      "confirm": "Envoyer la demande de paiement",
+      "reconciled": "Demande de paiement envoyée. La commande sera rapprochée automatiquement après succès du paiement.",
       "error": "Échec du rapprochement de l'exception espèces"
     },
     "refunds": {

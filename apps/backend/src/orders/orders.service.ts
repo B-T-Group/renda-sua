@@ -21,7 +21,10 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
-import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
+import {
+  MobilePaymentsDatabaseService,
+  type MobilePaymentTransaction,
+} from '../mobile-payments/mobile-payments-database.service';
 import {
   MobilePaymentIntegrationProvider,
   MobilePaymentsService,
@@ -2933,11 +2936,12 @@ export class OrdersService {
   }
 
   /**
-   * Business reconciliation for cash-exception orders.
-   * Records reference/notes and marks the exception reconciled.
+   * Business: start mobile collection to reconcile a cash-exception order.
+   * On provider callback success, settlement runs without client wallet movements.
    */
   async reconcileCashException(
     orderId: string,
+    customerPhone: string,
     reference?: string,
     notes?: string
   ) {
@@ -2965,12 +2969,55 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
+    const paymentTiming = (order as any).payment_timing as string | undefined;
+    if (paymentTiming !== 'pay_at_delivery') {
+      throw new HttpException(
+        'Cash exception mobile reconciliation is only for pay-at-delivery orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if ((order as any).payment_status === 'paid') {
+      throw new HttpException(
+        'Order is already marked paid',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const phone = customerPhone?.trim() || '';
+    if (!phone) {
+      throw new HttpException(
+        'Payer phone number is required to collect reconciliation payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const pending =
+      await this.mobilePaymentsDatabaseService.getPendingCashReconciliationTransactionByOrderNumber(
+        order.order_number
+      );
+    if (pending?.status === 'pending') {
+      return {
+        success: true,
+        message: 'Reconciliation payment request already pending',
+        payment_transaction: {
+          success: true,
+          transaction_id: pending.transaction_id ?? null,
+          message: 'Payment request already pending',
+          mode: 'mobile_money' as const,
+        },
+        database_transaction: {
+          id: pending.id,
+          reference: pending.reference,
+          status: pending.status,
+        },
+      };
+    }
 
     const at = new Date().toISOString();
-    const mutation = `
-      mutation ReconcileCashException(
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation SetCashReconciliationMeta(
         $orderId: uuid!
-        $businessId: uuid!
         $at: timestamptz!
         $reference: String
         $notes: String
@@ -2978,44 +3025,91 @@ export class OrdersService {
         update_orders_by_pk(
           pk_columns: { id: $orderId }
           _set: {
-            reconciliation_status: reconciled
-            reconciled_by_business_id: $businessId
-            reconciled_at: $at
             reconciliation_reference: $reference
             reconciliation_notes: $notes
-            payment_status: "paid"
             updated_at: $at
           }
         ) {
           id
-          reconciliation_status
         }
       }
-    `;
+    `,
+      {
+        orderId,
+        at,
+        reference: reference?.trim() || null,
+        notes: notes?.trim() || null,
+      }
+    );
 
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      businessId: business.id,
-      at,
-      reference: reference?.trim() || null,
-      notes: notes?.trim() || null,
+    const provider = this.mobilePaymentsService.getProvider(phone);
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: paymentAttemptReference,
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `order ${order.order_number} (cash exception reconciliation)`,
+      provider,
+      payment_method: 'mobile_money',
+      customer_phone: phone,
+      ...(order.client?.user?.email
+        ? { customer_email: order.client.user.email }
+        : {}),
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order_cash_reconciliation',
+      entity_id: order.order_number,
     });
 
-    try {
-      await this.createStatusHistoryEntry(
-        orderId,
-        'complete',
-        'Cash exception reconciled by business',
-        'business',
-        user.id
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to write reconciliation status history: ${error.message}`
+    const paymentRequest = {
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `Order ${order.order_number} reconciliation`,
+      customerPhone: phone,
+      provider,
+      ownerCharge: 'MERCHANT' as const,
+      transactionType: 'PAYMENT' as const,
+    };
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      paymentRequest,
+      paymentAttemptReference
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
       );
     }
 
-    return { success: true, message: 'Cash exception reconciled' };
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Reconciliation payment request sent; order reconciles when payment succeeds',
+      payment_transaction: {
+        success: true,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: {
+        id: tx.id,
+        reference: tx.reference,
+        status: tx.status,
+      },
+    };
   }
 
   /**
@@ -5156,6 +5250,96 @@ export class OrdersService {
   }
 
   /**
+   * After successful mobile collection for cash-exception reconciliation: settle parties
+   * without crediting or debiting the order client's wallet (external payer / off-ledger).
+   */
+  async finalizeCashExceptionReconciliationAfterMobilePayment(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    const orderNumber = String(
+      transaction.entity_id || transaction.reference || ''
+    ).trim();
+    if (!orderNumber) {
+      this.logger.warn('Cash reconciliation: missing order number on transaction');
+      return;
+    }
+    const snapshot = await this.getOrderDetailsByNumber(orderNumber);
+    if (!snapshot) {
+      this.logger.error(`Cash reconciliation: order not found ${orderNumber}`);
+      return;
+    }
+    const recStatus = (snapshot as any).reconciliation_status as string | undefined;
+    if (recStatus === 'reconciled') {
+      return;
+    }
+    if (recStatus !== 'pending_manual_reconciliation') {
+      this.logger.warn(
+        `Cash reconciliation: unexpected status ${recStatus} for ${orderNumber}`
+      );
+      return;
+    }
+    const paymentTiming = (snapshot as any).payment_timing as string | undefined;
+    if (paymentTiming !== 'pay_at_delivery') {
+      this.logger.warn(
+        `Cash reconciliation: order ${orderNumber} is not pay_at_delivery`
+      );
+      return;
+    }
+    const orderId = snapshot.id;
+    const subtotal = Number((snapshot as any).subtotal || 0);
+    const baseDel = Number((snapshot as any).base_delivery_fee || 0);
+    const perKm = Number((snapshot as any).per_km_delivery_fee || 0);
+    const feesTotal = baseDel + perKm;
+    const orderHold = await this.getOrCreateOrderHold(orderId);
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: subtotal,
+      delivery_fees: feesTotal,
+    });
+    await this.updateOrderPaymentStatusOnly(orderId, 'paid');
+    const ledgerOpts = { skipClientLedgerMovements: true };
+    await this.processOrderPayment(orderId, ledgerOpts);
+    await this.processOrderDeliveryPayment(orderId, ledgerOpts);
+    const at = new Date().toISOString();
+    const businessId = (snapshot as any).business_id as string;
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation FinalizeCashReconciliation($orderId: uuid!, $businessId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            reconciliation_status: reconciled
+            reconciled_by_business_id: $businessId
+            reconciled_at: $at
+            updated_at: $at
+          }
+        ) {
+          id
+        }
+      }
+    `,
+      { orderId, businessId, at }
+    );
+    const actor = (snapshot as any).business_location?.business?.user?.id as
+      | string
+      | undefined;
+    if (actor) {
+      try {
+        await this.createStatusHistoryEntry(
+          orderId,
+          'complete',
+          'Cash exception reconciled via mobile payment (external payer)',
+          'business',
+          actor
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Cash reconciliation status history failed: ${error.message}`
+        );
+      }
+    }
+  }
+
+  /**
    * Pay-at-delivery: once mobile payment succeeds, settle and complete the order.
    *
    * Incoming funds are credited to the client wallet in the callback; this path only records
@@ -6993,7 +7177,10 @@ export class OrdersService {
    * Release item/subtotal client hold, record item payment, distribute item/business commissions.
    * Idempotent via order_holds.item_settlement_completed_at. Call while status is assigned_to_agent (pickup) or picked_up (retry).
    */
-  async processOrderPayment(orderId: string): Promise<void> {
+  async processOrderPayment(
+    orderId: string,
+    options?: { skipClientLedgerMovements?: boolean }
+  ): Promise<void> {
     const order = await this.getOrderDetails(orderId);
     if (
       !order ||
@@ -7031,27 +7218,40 @@ export class OrdersService {
     }
 
     const subtotalPortion = Number(orderHold.client_hold_amount);
-    const clientAccount = await this.hasuraSystemService.getAccount(
-      order.client.user_id,
-      order.currency
-    );
-    if (!clientAccount) {
-      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
-    }
+    const skipClient = options?.skipClientLedgerMovements === true;
 
     if (subtotalPortion > 0) {
       if (
         paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup'
       ) {
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'payment',
-          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
+        if (!skipClient) {
+          const clientAccount = await this.hasuraSystemService.getAccount(
+            order.client.user_id,
+            order.currency
+          );
+          if (!clientAccount) {
+            throw new HttpException(
+              'Client account not found',
+              HttpStatus.NOT_FOUND
+            );
+          }
+          await this.accountsService.registerTransaction({
+            accountId: clientAccount.id,
+            amount: subtotalPortion,
+            transactionType: 'payment',
+            memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+            referenceId: orderId,
+          });
+        }
       } else {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+        }
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: subtotalPortion,
@@ -7087,7 +7287,10 @@ export class OrdersService {
    * Release agent hold and delivery client hold, record delivery payment, distribute delivery commissions.
    * Idempotent via order_holds.delivery_settlement_completed_at. Call while out_for_delivery (before complete) or complete (retry).
    */
-  async processOrderDeliveryPayment(orderId: string): Promise<void> {
+  async processOrderDeliveryPayment(
+    orderId: string,
+    options?: { skipClientLedgerMovements?: boolean }
+  ): Promise<void> {
     const order = await this.getOrderDetails(orderId);
     if (
       !order ||
@@ -7147,13 +7350,7 @@ export class OrdersService {
       }
     }
 
-    const clientAccount = await this.hasuraSystemService.getAccount(
-      order.client.user_id,
-      order.currency
-    );
-    if (!clientAccount) {
-      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
-    }
+    const skipClient = options?.skipClientLedgerMovements === true;
 
     const deliveryAmt = Number(orderHold.delivery_fees);
     if (deliveryAmt > 0) {
@@ -7161,14 +7358,33 @@ export class OrdersService {
         paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup'
       ) {
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: deliveryAmt,
-          transactionType: 'payment',
-          memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
+        if (!skipClient) {
+          const clientAccount = await this.hasuraSystemService.getAccount(
+            order.client.user_id,
+            order.currency
+          );
+          if (!clientAccount) {
+            throw new HttpException(
+              'Client account not found',
+              HttpStatus.NOT_FOUND
+            );
+          }
+          await this.accountsService.registerTransaction({
+            accountId: clientAccount.id,
+            amount: deliveryAmt,
+            transactionType: 'payment',
+            memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
+            referenceId: orderId,
+          });
+        }
       } else {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+        }
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: deliveryAmt,

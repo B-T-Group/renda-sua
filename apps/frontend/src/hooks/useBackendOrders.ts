@@ -878,6 +878,7 @@ export const useBackendOrders = () => {
 
   const reconcileCashException = async (
     orderId: string,
+    customerPhone: string,
     reference?: string,
     notes?: string
   ): Promise<any> => {
@@ -891,7 +892,7 @@ export const useBackendOrders = () => {
       try {
         const response = await apiClient.post(
           `/orders/${orderId}/reconcile-cash-exception`,
-          { reference, notes }
+          { customerPhone, reference, notes }
         );
         return response.data;
       } catch (err: any) {
