@@ -4,6 +4,7 @@ import {
   Phone,
   Receipt,
   Schedule,
+  StorefrontOutlined,
 } from '@mui/icons-material';
 import {
   Box,
@@ -38,7 +39,7 @@ interface OrderConfirmationData {
     current_status: string;
     created_at: string;
     payment_source?: PaymentSource;
-    payment_timing?: 'pay_now' | 'pay_at_delivery';
+    payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -59,7 +60,7 @@ interface OrderConfirmationData {
     current_status: string;
     created_at: string;
     payment_source?: PaymentSource;
-    payment_timing?: 'pay_now' | 'pay_at_delivery';
+    payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -127,12 +128,16 @@ const OrderConfirmationPage: React.FC = () => {
   // Wallet = paid from balance (no phone step). API uses mobile_money for MM; DB enum may use mobile_payment.
   const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
   const hasPayAtDelivery = orders.some((o) => o.payment_timing === 'pay_at_delivery');
+  const hasPayAtPickup = orders.some((o) => o.payment_timing === 'pay_at_pickup');
   const showMobilePaymentConfirmation = isMultipleOrders
     ? orders.some(
         (o) =>
-          o.payment_timing !== 'pay_at_delivery' && !isWalletPayment(o.payment_source)
+          o.payment_timing !== 'pay_at_delivery' &&
+          o.payment_timing !== 'pay_at_pickup' &&
+          !isWalletPayment(o.payment_source)
       )
     : orders[0]?.payment_timing !== 'pay_at_delivery' &&
+      orders[0]?.payment_timing !== 'pay_at_pickup' &&
       !isWalletPayment(orders[0]?.payment_source);
 
   const handleGoToDashboard = () => {
@@ -220,6 +225,13 @@ const OrderConfirmationPage: React.FC = () => {
             <Chip
               icon={<Schedule />}
               label={t('orders.payAtDelivery.confirmationTitle', 'Payment at delivery')}
+              color="info"
+              variant="outlined"
+            />
+          ) : hasPayAtPickup ? (
+            <Chip
+              icon={<StorefrontOutlined />}
+              label={t('orders.pickup.payAtPickupShort', 'Pay at pickup')}
               color="info"
               variant="outlined"
             />
@@ -362,6 +374,55 @@ const OrderConfirmationPage: React.FC = () => {
               {t(
                 'orders.payAtDelivery.confirmationMessage',
                 'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
+              )}
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : hasPayAtPickup ? (
+        <Card
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            bgcolor: 'info.50',
+            border: '1px solid',
+            borderColor: 'info.main',
+            boxShadow: '0 4px 20px rgba(2, 136, 209, 0.12)',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                mb: 2,
+                flexDirection: { xs: 'column', sm: 'row' },
+                textAlign: { xs: 'center', sm: 'left' },
+              }}
+            >
+              <StorefrontOutlined
+                sx={{
+                  mr: { xs: 0, sm: 1 },
+                  mb: { xs: 1, sm: 0 },
+                  color: 'info.main',
+                }}
+              />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: 'info.dark',
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                }}
+              >
+                {t(
+                  'orders.pickup.confirmationCardTitle',
+                  'Pay when you pick up'
+                )}
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
+              {t(
+                'orders.pickup.clientPaymentHint',
+                'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
               )}
             </Typography>
           </CardContent>
@@ -674,6 +735,33 @@ const OrderConfirmationPage: React.FC = () => {
                   {t(
                     'orders.payAtDelivery.step2',
                     'When the agent arrives, you will receive a mobile payment request in the app.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li">
+                <Typography variant="body1">
+                  {t(
+                    'orders.payAtDelivery.step3',
+                    'You will receive updates on your order status via email and in-app notifications. Track progress in My Orders.'
+                  )}
+                </Typography>
+              </Box>
+            </Box>
+          ) : hasPayAtPickup ? (
+            <Box component="ol" sx={{ pl: 2 }}>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.payAtDelivery.step1',
+                    'Your order has been sent to the merchant.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.pickup.clientPaymentHint',
+                    'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
                   )}
                 </Typography>
               </Box>

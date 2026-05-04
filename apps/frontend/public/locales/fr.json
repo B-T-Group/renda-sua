@@ -2286,6 +2286,7 @@
     "refundOrder": "Rembourser la Commande",
     "readyForPickup": "Marquer comme prêt",
     "requestPayment": "Demander le paiement",
+    "requestPickupPayment": "Demander le paiement au retrait",
     "markPaidInCash": "Marquer payé en espèces",
     "payAtDeliveryPaymentInitiated": "Demande de paiement envoyée au client",
     "payAtDeliveryPaymentFailed": "Impossible de lancer le paiement",
@@ -2355,6 +2356,18 @@
       "step1": "Votre commande a été transmise au commerçant.",
       "step2": "Lorsque l’agent arrive, vous recevrez une demande de paiement mobile dans l’app.",
       "step3": "Vous recevrez des mises à jour par e-mail et notifications dans l’app. Suivez l’avancement dans Mes commandes."
+    },
+    "pickup": {
+      "confirmationCardTitle": "Paiement au retrait",
+      "storePickupTitle": "Retrait au magasin (sans frais de livraison)",
+      "payAtPickupHint": "Vous paierez sur place ; le commerce vous enverra une demande de paiement sur votre téléphone.",
+      "clientPaymentHint": "Le magasin vous enverra une demande de paiement mobile lorsque votre commande sera prête au retrait. Veuillez la valider pour finaliser la commande.",
+      "requestPaymentTitle": "Demander le paiement au retrait",
+      "notEligibleForPaymentRequest": "Cette commande n’est pas configurée pour le paiement au retrait.",
+      "businessInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois qu’il l’aura acceptée, la commande se terminera automatiquement.",
+      "payAtPickupShort": "Paiement au retrait",
+      "businessInitiateSubtitle": "Le paiement est encaissé lorsque le client retire sa commande.",
+      "paymentRequestSent": "Demande de paiement envoyée au client."
     },
     "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {
@@ -2565,6 +2578,7 @@
     "deliveryAgent": "Agent de Livraison",
     "internalAgent": "Agent interne",
     "deliveryFee": "Frais de Livraison",
+    "deliveryFeeWaived": "Offerts",
     "deliveryFeeAddressRequired": "Ajoutez une adresse de livraison pour calculer les frais d'expédition et finaliser votre commande.",
     "firstDeliveryDiscount": "Réduction première livraison",
     "deliveryCommission": "Commission de Livraison",
@@ -2865,6 +2879,7 @@
     "viewProduct": "Voir le produit",
     "viewImage": "Voir l'image",
     "imageThumbnail": "Voir l'image {{index}}",
+    "imageCount": "Image {{current}} sur {{total}}",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Délai de livraison estimé",
     "fragile": "Fragile",

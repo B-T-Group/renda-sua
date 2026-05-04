@@ -102,6 +102,16 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     return null;
   }, [order]);
 
+  const windowAddress = useMemo(
+    () =>
+      order?.delivery_address ??
+      order?.business_location?.address ??
+      null,
+    [order]
+  );
+  const windowCountryCode = windowAddress?.country?.trim() || 'GA';
+  const windowStateCode = windowAddress?.state?.trim() || '';
+
   // Reset state when modal opens/closes
   useEffect(() => {
     if (open) {
@@ -495,8 +505,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   </Typography>
 
                   <DeliveryTimeWindowSelector
-                    countryCode={order.delivery_address.country}
-                    stateCode={order.delivery_address.state}
+                    countryCode={windowCountryCode}
+                    stateCode={windowStateCode}
                     onChange={handleNewWindowChange}
                     isFastDelivery={order.requires_fast_delivery}
                     loading={loading}

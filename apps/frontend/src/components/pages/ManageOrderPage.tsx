@@ -1722,7 +1722,7 @@ const ManageOrderPage: React.FC = () => {
                                 color="success.main"
                                 fontWeight={600}
                               >
-                                {t('orders.pickup.deliveryWaived', 'Waived')}
+                                {t('orders.deliveryFeeWaived', 'Waived')}
                               </Typography>
                             ) : (
                               <Typography variant="body2">

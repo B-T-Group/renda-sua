@@ -526,7 +526,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                   component="span"
                   color="success.main"
                 >
-                  {t('orders.pickup.deliveryWaived', 'Waived')}
+                  {t('orders.deliveryFeeWaived', 'Waived')}
                 </Typography>
               ) : (
                 <Typography variant="body2" fontWeight="medium" component="span">
@@ -2281,7 +2281,7 @@ const PlaceOrderPage: React.FC = () => {
                             component="span"
                             color="success.main"
                           >
-                            {t('orders.pickup.deliveryWaived', 'Waived')}
+                            {t('orders.deliveryFeeWaived', 'Waived')}
                           </Typography>
                         ) : (() => {
                             const pay = mobileReviewDelivery;

@@ -2297,6 +2297,7 @@
     "refundOrder": "Refund Order",
     "readyForPickup": "Set as ready",
     "requestPayment": "Request payment",
+    "requestPickupPayment": "Request pickup payment",
     "markPaidInCash": "Mark paid in cash",
     "payAtDeliveryPaymentInitiated": "Payment request sent to the client",
     "payAtDeliveryPaymentFailed": "Failed to initiate payment",
@@ -2366,6 +2367,18 @@
       "step1": "Your order has been sent to the merchant.",
       "step2": "When the agent arrives, you will receive a mobile payment request in the app.",
       "step3": "You will receive updates on your order status via email and in-app notifications. Track progress in My Orders."
+    },
+    "pickup": {
+      "confirmationCardTitle": "Pay when you pick up",
+      "storePickupTitle": "Pick up at the store (no delivery fee)",
+      "payAtPickupHint": "You will pay when you arrive; the business will send a payment request to your phone.",
+      "clientPaymentHint": "The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.",
+      "requestPaymentTitle": "Request pickup payment",
+      "notEligibleForPaymentRequest": "This order is not configured for pay at pickup.",
+      "businessInitiateHelp": "Send a mobile payment request to the client. When they approve it, the order will complete automatically.",
+      "payAtPickupShort": "Pay at pickup",
+      "businessInitiateSubtitle": "Payment is collected when the customer picks up the order.",
+      "paymentRequestSent": "Payment request sent to the client."
     },
     "trackInMyOrders": "Track progress in My Orders",
     "actions": {
@@ -2592,6 +2605,7 @@
     "deliveryAgent": "Delivery Agent",
     "internalAgent": "Internal agent",
     "deliveryFee": "Delivery Fee",
+    "deliveryFeeWaived": "Waived",
     "deliveryFeeAddressRequired": "Add a delivery address to calculate shipping and complete your order.",
     "firstDeliveryDiscount": "First delivery discount",
     "deliveryCommission": "Delivery Commission",
@@ -2898,6 +2912,7 @@
     "viewProduct": "View product",
     "viewImage": "View image",
     "imageThumbnail": "View image {{index}}",
+    "imageCount": "Image {{current}} of {{total}}",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Est. delivery time",
     "fragile": "Fragile",
