@@ -86,6 +86,7 @@ interface Item {
   sku: string;
   is_active: boolean;
   pay_on_delivery_enabled?: boolean;
+  pay_at_pickup_enabled?: boolean;
   is_fragile?: boolean;
   is_perishable?: boolean;
   requires_special_handling?: boolean;
@@ -118,6 +119,10 @@ interface BusinessItemCardViewProps {
     item: Item,
     enabled: boolean
   ) => void | Promise<void>;
+  onTogglePayAtPickup?: (
+    item: Item,
+    enabled: boolean
+  ) => void | Promise<void>;
   onToggleFavorite?: (item: Item, favorited: boolean) => void | Promise<void>;
 }
 
@@ -132,12 +137,14 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onRefineWithAi,
   onToggleItemActive,
   onTogglePayOnDelivery,
+  onTogglePayAtPickup,
   onToggleFavorite,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const [togglingActive, setTogglingActive] = useState(false);
   const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
+  const [togglingPayAtPickup, setTogglingPayAtPickup] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   const galleryImages = useMemo(
@@ -249,6 +256,16 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       await onTogglePayOnDelivery(item, checked);
     } finally {
       setTogglingPayOnDelivery(false);
+    }
+  };
+
+  const handlePayAtPickupChange = async (checked: boolean) => {
+    if (!onTogglePayAtPickup) return;
+    setTogglingPayAtPickup(true);
+    try {
+      await onTogglePayAtPickup(item, checked);
+    } finally {
+      setTogglingPayAtPickup(false);
     }
   };
 
@@ -722,6 +739,33 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 {t(
                   'business.inventory.payOnDeliveryEnabled',
                   'Allow payment at delivery'
+                )}
+              </Typography>
+            </Stack>
+          )}
+          {onTogglePayAtPickup && (
+            <Stack
+              alignItems="flex-end"
+              spacing={0.25}
+              sx={{ flexShrink: 0, maxWidth: 120 }}
+            >
+              <Switch
+                size="small"
+                checked={!!item.pay_at_pickup_enabled}
+                disabled={togglingPayAtPickup}
+                onChange={(_e, checked) => {
+                  void handlePayAtPickupChange(checked);
+                }}
+              />
+              <Typography
+                component="span"
+                variant="caption"
+                color="text.secondary"
+                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
+              >
+                {t(
+                  'business.inventory.payAtPickupEnabled',
+                  'Allow store pickup (pay at pickup)'
                 )}
               </Typography>
             </Stack>

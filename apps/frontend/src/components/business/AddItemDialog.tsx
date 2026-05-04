@@ -88,6 +88,7 @@ export default function AddItemDialog({
     business_id: businessId,
     is_active: true,
     pay_on_delivery_enabled: false,
+    pay_at_pickup_enabled: false,
     min_order_quantity: 1,
     max_order_quantity: 1,
   });
@@ -276,6 +277,7 @@ export default function AddItemDialog({
           business_id: businessId,
           is_active: true,
           pay_on_delivery_enabled: false,
+          pay_at_pickup_enabled: false,
           min_order_quantity: 1,
         });
         setTabValue(0);
@@ -833,6 +835,23 @@ export default function AddItemDialog({
                 label={t(
                   'business.inventory.payOnDeliveryEnabled',
                   'Allow payment at delivery'
+                )}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newItemData.pay_at_pickup_enabled ?? false}
+                    onChange={(e) =>
+                      setNewItemData({
+                        ...newItemData,
+                        pay_at_pickup_enabled: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={t(
+                  'business.inventory.payAtPickupEnabled',
+                  'Allow store pickup (pay at pickup)'
                 )}
               />
             </Stack>

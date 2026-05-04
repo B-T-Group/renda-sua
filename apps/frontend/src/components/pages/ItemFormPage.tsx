@@ -104,6 +104,7 @@ interface ItemFormData {
   is_perishable: boolean;
   requires_special_handling: boolean;
   pay_on_delivery_enabled: boolean;
+  pay_at_pickup_enabled: boolean;
   min_order_quantity: number;
   max_order_quantity: number | null;
   item_sub_category_id: number | null;
@@ -141,6 +142,7 @@ const ItemFormPage: React.FC = () => {
     is_perishable: false,
     requires_special_handling: false,
     pay_on_delivery_enabled: false,
+    pay_at_pickup_enabled: false,
     min_order_quantity: 1,
     max_order_quantity: null,
     item_sub_category_id: null,
@@ -253,6 +255,8 @@ const ItemFormPage: React.FC = () => {
                 foundItem.requires_special_handling || false,
               pay_on_delivery_enabled:
                 (foundItem as any).pay_on_delivery_enabled || false,
+              pay_at_pickup_enabled:
+                (foundItem as any).pay_at_pickup_enabled || false,
               min_order_quantity: foundItem.min_order_quantity || 1,
               max_order_quantity: foundItem.max_order_quantity || null,
               item_sub_category_id: foundItem.item_sub_category_id || null,
@@ -1431,6 +1435,25 @@ const ItemFormPage: React.FC = () => {
                     label={t(
                       'business.items.payOnDeliveryEnabled',
                       'Allow pay at delivery'
+                    )}
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.pay_at_pickup_enabled}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'pay_at_pickup_enabled',
+                            e.target.checked
+                          )
+                        }
+                        disabled={loading}
+                      />
+                    }
+                    label={t(
+                      'business.items.payAtPickupEnabled',
+                      'Allow store pickup (pay at pickup)'
                     )}
                   />
                 </Stack>

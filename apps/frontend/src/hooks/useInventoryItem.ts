@@ -22,6 +22,7 @@ export interface InventoryItem {
     name: string;
     description: string;
     pay_on_delivery_enabled?: boolean;
+    pay_at_pickup_enabled?: boolean;
     price: number;
     currency: string;
     weight: number;

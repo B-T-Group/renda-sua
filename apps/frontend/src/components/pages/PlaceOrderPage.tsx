@@ -19,6 +19,7 @@ import {
   Card,
   CardContent,
   CardMedia,
+  Checkbox,
   Chip,
   CircularProgress,
   Container,
@@ -205,6 +206,10 @@ interface OrderSummaryProps {
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
+  pickupEligible?: boolean;
+  pickupSelected?: boolean;
+  onPickupChange?: (checked: boolean) => void;
+  pickupLocationLabel?: string;
   /** True when addresses finished loading but none is selected (e.g. user must add one). */
   deliveryAddressMissing?: boolean;
   firstOrderBaseDeliveryDiscountAmount?: number;
@@ -237,6 +242,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
+  pickupEligible = false,
+  pickupSelected = false,
+  onPickupChange,
+  pickupLocationLabel,
   deliveryAddressMissing = false,
   firstOrderBaseDeliveryDiscountAmount = 0,
   deliveryFeeFullBeforeDiscount,
@@ -274,7 +283,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   return (
     <Paper
       elevation={isMobile ? 0 : 2}
-      sx={{
+      sx={(theme) => ({
         p: 3,
         position: isMobile ? 'fixed' : 'sticky',
         top: isMobile ? 'auto' : 100,
@@ -282,7 +291,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         bottom: isMobile ? '80px' : 'auto',
         left: isMobile ? 0 : 'auto',
         right: isMobile ? 0 : 'auto',
-        zIndex: isMobile ? 999 : 'auto', // Below bottom nav (1000) but above content
+        zIndex: isMobile ? theme.zIndex.modal + 2 : 'auto',
         bgcolor: 'background.paper',
         borderRadius: isMobile ? 0 : 2,
         borderTop: isMobile ? 1 : 0,
@@ -290,7 +299,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         boxShadow: isMobile ? '0 -4px 12px rgba(0,0,0,0.1)' : 2,
         // Safe area padding for devices with notches
         paddingBottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom, 0))' : 3,
-      }}
+      })}
     >
       <Typography variant="h6" gutterBottom fontWeight="bold">
         {t('orders.orderSummary', 'Order Summary')}
@@ -411,6 +420,59 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Typography>
           </Box>
 
+          {pickupEligible && onPickupChange && (
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                mb: 2,
+                borderColor: pickupSelected ? 'primary.main' : 'divider',
+                bgcolor: pickupSelected ? 'primary.50' : 'background.paper',
+              }}
+            >
+              <FormControlLabel
+                sx={{ alignItems: 'flex-start', m: 0 }}
+                control={
+                  <Checkbox
+                    checked={pickupSelected}
+                    onChange={(e) => onPickupChange(e.target.checked)}
+                    disabled={loading}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      {t(
+                        'orders.pickup.storePickupTitle',
+                        'Pick up at the store (no delivery fee)'
+                      )}
+                    </Typography>
+                    {pickupLocationLabel ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.5, lineHeight: 1.4 }}
+                      >
+                        {pickupLocationLabel}
+                      </Typography>
+                    ) : null}
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 0.75 }}
+                    >
+                      {t(
+                        'orders.pickup.payAtPickupHint',
+                        'You will pay when you arrive; the business will send a payment request to your phone.'
+                      )}
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Paper>
+          )}
+
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {t('orders.deliveryFee', 'Delivery Fee')}
@@ -457,6 +519,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                     )}
                   </Typography>
                 </>
+              ) : pickupSelected && computedDeliveryFee === 0 ? (
+                <Typography
+                  variant="body2"
+                  fontWeight="medium"
+                  component="span"
+                  color="success.main"
+                >
+                  {t('orders.pickup.deliveryWaived', 'Waived')}
+                </Typography>
               ) : (
                 <Typography variant="body2" fontWeight="medium" component="span">
                   {formatCurrency(computedDeliveryFee, selectedItem.item.currency)}
@@ -658,8 +729,9 @@ const PlaceOrderPage: React.FC = () => {
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
   const [paymentTiming, setPaymentTiming] = useState<
-    'pay_now' | 'pay_at_delivery'
+    'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'
   >('pay_now');
+  const [pickupAtStore, setPickupAtStore] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentChoiceDialogOpen, setPaymentChoiceDialogOpen] = useState(false);
   
@@ -869,12 +941,35 @@ const PlaceOrderPage: React.FC = () => {
   }, [orderedSelectedItemImages.length]);
 
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
+  const isPickupEligible = !!selectedItem?.item?.pay_at_pickup_enabled;
 
   useEffect(() => {
-    if (!isPayAtDeliveryEligible && paymentTiming !== 'pay_now') {
+    if (!isPayAtDeliveryEligible && paymentTiming === 'pay_at_delivery') {
       setPaymentTiming('pay_now');
     }
   }, [isPayAtDeliveryEligible, paymentTiming]);
+
+  useEffect(() => {
+    if (pickupAtStore && isPickupEligible) {
+      setPaymentTiming('pay_at_pickup');
+      setRequiresFastDelivery(false);
+      setDeliveryWindow(null);
+    }
+  }, [pickupAtStore, isPickupEligible]);
+
+  useEffect(() => {
+    if (!pickupAtStore && paymentTiming === 'pay_at_pickup') {
+      setPaymentTiming('pay_now');
+    }
+  }, [pickupAtStore, paymentTiming]);
+
+  useEffect(() => {
+    if (!isPickupEligible && pickupAtStore) {
+      setPickupAtStore(false);
+    }
+  }, [isPickupEligible, pickupAtStore]);
+
+  const isPickupOrder = pickupAtStore && isPickupEligible;
 
   /** ISO country of the selling location — default delivery address country for this item. */
   const itemOriginCountryIso = useMemo(
@@ -892,13 +987,27 @@ const PlaceOrderPage: React.FC = () => {
     [selectedItem]
   );
 
+  const pickupLocationSummary = useMemo(() => {
+    const addr = selectedItem?.business_location?.address;
+    if (!addr) return '';
+    const parts = [
+      addr.address_line_1,
+      addr.address_line_2,
+      addr.city,
+      addr.state,
+      addr.postal_code,
+      addr.country,
+    ].filter((p) => !!p && String(p).trim() !== '');
+    return parts.join(', ');
+  }, [selectedItem]);
+
   // Get delivery fee for the selected item
   const {
     deliveryFee,
     loading: deliveryFeeLoading,
     error: deliveryFeeError,
   } = useDeliveryFee(
-    selectedItem?.id || null,
+    isPickupOrder ? null : selectedItem?.id || null,
     selectedAddressId,
     requiresFastDelivery
   );
@@ -920,7 +1029,7 @@ const PlaceOrderPage: React.FC = () => {
     (addr) => addr.address.id === selectedAddressId
   )?.address;
   const deliveryAddressMissing =
-    !addressesLoading && !selectedAddressId;
+    !isPickupOrder && !addressesLoading && !selectedAddressId;
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
   const userCountry = selectedAddress?.country?.trim() ?? '';
@@ -991,6 +1100,7 @@ const PlaceOrderPage: React.FC = () => {
     if (addressesLoading) return;
     if (didAutoOpenAnonAddress) return;
     if (addresses.length > 0) return;
+    if (isPickupOrder) return;
 
     setDidAutoOpenAnonAddress(true);
     if (isMobile) {
@@ -1021,6 +1131,7 @@ const PlaceOrderPage: React.FC = () => {
     itemOriginCountryIso,
     itemOriginCity,
     itemOriginState,
+    isPickupOrder,
     navigate,
   ]);
 
@@ -1051,7 +1162,8 @@ const PlaceOrderPage: React.FC = () => {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!selectedItem || !apiClient || !selectedAddressId) return;
+    if (!selectedItem || !apiClient) return;
+    if (!isPickupOrder && !selectedAddressId) return;
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -1075,13 +1187,21 @@ const PlaceOrderPage: React.FC = () => {
             ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
           },
         ],
-        delivery_address_id: selectedAddressId,
+        ...(isPickupOrder
+          ? {
+              fulfillment_method: 'pickup' as const,
+              payment_timing: 'pay_at_pickup' as const,
+              requires_fast_delivery: false,
+            }
+          : {
+              delivery_address_id: selectedAddressId,
+              payment_timing: paymentTiming,
+              requires_fast_delivery: requiresFastDelivery,
+              delivery_window: deliveryWindow,
+            }),
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         special_instructions: specialInstructions.trim() || undefined,
         discount_code: appliedDiscountCode || undefined,
-        payment_timing: paymentTiming,
-        requires_fast_delivery: requiresFastDelivery,
-        delivery_window: deliveryWindow,
       };
 
       const response = await apiClient.post('/orders', orderData);
@@ -1151,6 +1271,7 @@ const PlaceOrderPage: React.FC = () => {
     apiClient,
     appliedDiscountCode,
     deliveryWindow,
+    isPickupOrder,
     listingUnitPricing.unit,
     navigate,
     paymentTiming,
@@ -1173,7 +1294,9 @@ const PlaceOrderPage: React.FC = () => {
       setMissingPhoneError(null);
       setMissingPhoneNumber('');
       setMissingPhoneNationalNumber('');
-      const addrCountry = selectedAddress?.country?.trim() || '';
+      const addrCountry =
+        (isPickupOrder ? itemOriginCountryIso : selectedAddress?.country)?.trim() ||
+        '';
       const locked = !!addrCountry && isCountrySupported(addrCountry);
       const fallbackCountry = locked
         ? addrCountry
@@ -1186,6 +1309,8 @@ const PlaceOrderPage: React.FC = () => {
   }, [
     handleSubmit,
     isCountrySupported,
+    isPickupOrder,
+    itemOriginCountryIso,
     profile?.phone_number,
     selectedAddress?.country,
     supportedCountries,
@@ -1213,15 +1338,20 @@ const PlaceOrderPage: React.FC = () => {
   }, [refetchProfile, submitWithPhoneGate]);
 
   const handleSubmitWithPhoneGate = useCallback(async () => {
+    if (isPickupOrder) {
+      await submitWithEmailGate();
+      return;
+    }
     if (isPayAtDeliveryEligible) {
       setPaymentChoiceDialogOpen(true);
       return;
     }
     await submitWithEmailGate();
-  }, [isPayAtDeliveryEligible, submitWithEmailGate]);
+  }, [isPayAtDeliveryEligible, isPickupOrder, submitWithEmailGate]);
 
   const handleChoosePaymentTimingAndSubmit = useCallback(
-    async (timing: 'pay_now' | 'pay_at_delivery') => {
+    async (timing: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup') => {
+      if (timing === 'pay_at_pickup') return;
       setPaymentTiming(timing);
       setPaymentChoiceDialogOpen(false);
       await submitWithEmailGate();
@@ -1233,12 +1363,20 @@ const PlaceOrderPage: React.FC = () => {
     setMissingPhoneError(null);
     setMissingPhoneNumber('');
     setMissingPhoneNationalNumber('');
-    const addrCountry = selectedAddress?.country?.trim() || '';
+    const addrCountry =
+      (isPickupOrder ? itemOriginCountryIso : selectedAddress?.country)?.trim() ||
+      '';
     const locked = !!addrCountry && isCountrySupported(addrCountry);
     const fallbackCountry = locked ? addrCountry : supportedCountries?.[0] || 'GA';
     setMissingPhoneCountry(fallbackCountry);
     setMissingPhoneDialogOpen(true);
-  }, [isCountrySupported, selectedAddress?.country, supportedCountries]);
+  }, [
+    isCountrySupported,
+    isPickupOrder,
+    itemOriginCountryIso,
+    selectedAddress?.country,
+    supportedCountries,
+  ]);
 
   const handleSaveMissingPhone = useCallback(async () => {
     const dialCode = String(
@@ -1581,8 +1719,7 @@ const PlaceOrderPage: React.FC = () => {
   const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&
-    selectedAddressId &&
-    addresses.length > 0;
+    (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
   const canPlaceOrder =
     variantSelectionValid &&
     (useDifferentPhone
@@ -1595,7 +1732,7 @@ const PlaceOrderPage: React.FC = () => {
     if (isMobile) {
       switch (step) {
         case 0: // Delivery Options & Address (merged)
-          return !!selectedAddressId && addresses.length > 0;
+          return isPickupOrder || (!!selectedAddressId && addresses.length > 0);
         case 1: // Review & Place Order (includes quantity)
           return quantity >= 1 && !!canPlaceOrder;
         default:
@@ -1606,7 +1743,7 @@ const PlaceOrderPage: React.FC = () => {
       case 0: // Delivery Options
         return true; // Optional fields
       case 1: // Delivery Address
-        return !!selectedAddressId && addresses.length > 0;
+        return isPickupOrder || (!!selectedAddressId && addresses.length > 0);
       case 2: // Review & Place Order (includes quantity)
         return quantity >= 1 && !!canPlaceOrder;
       default:
@@ -1642,8 +1779,44 @@ const PlaceOrderPage: React.FC = () => {
     if (isMobile && step === 0) {
       return (
         <Stack spacing={2}>
+          {isPickupOrder && selectedItem.business_location && (
+            <Card>
+              <CardContent sx={{ p: 1.5 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 2,
+                  }}
+                >
+                  <LocalShipping color="primary" />
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {t('orders.pickup.storePickupTitle', 'Pick up at the store (no delivery fee)')}
+                  </Typography>
+                </Box>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    {selectedItem.business_location.name}
+                  </Typography>
+                  {selectedItem.business_location.address && pickupLocationSummary ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {pickupLocationSummary}
+                    </Typography>
+                  ) : null}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+                    {t(
+                      'orders.pickup.payAtPickupHint',
+                      'You will pay when you arrive; the business will send a payment request to your phone.'
+                    )}
+                  </Typography>
+                </Paper>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Delivery Address (merged from former step 3) */}
-          {(addressesLoading || addresses.length === 0) && (
+          {!isPickupOrder && (addressesLoading || addresses.length === 0) && (
             <Card>
               <CardContent sx={{ p: 1.5 }}>
                 <Box
@@ -1701,7 +1874,8 @@ const PlaceOrderPage: React.FC = () => {
           )}
 
           {/* Delivery Options: fast delivery + time slot (merged from former step 1) */}
-          {fastDeliveryConfig &&
+          {!isPickupOrder &&
+            fastDeliveryConfig &&
             isEnabledForLocation(userCountry, userState) && (
               <Card>
                 <CardContent sx={{ p: 2 }}>
@@ -1717,7 +1891,7 @@ const PlaceOrderPage: React.FC = () => {
               </Card>
             )}
 
-          {selectedAddress && (
+          {!isPickupOrder && selectedAddress && (
             <Card sx={{ order: 2 }}>
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -1747,7 +1921,7 @@ const PlaceOrderPage: React.FC = () => {
 
     const mobileUnitPriceCheckout = listingUnitPricing.unit;
     const mobileReviewSubtotal = mobileUnitPriceCheckout * quantity;
-    const mobileReviewDelivery = deliveryFee?.deliveryFee || 0;
+    const mobileReviewDelivery = isPickupOrder ? 0 : deliveryFee?.deliveryFee || 0;
     const mobileReviewTotalBeforeDiscount =
       mobileReviewSubtotal + mobileReviewDelivery;
     const mobileOrderDiscountAmount =
@@ -1947,7 +2121,7 @@ const PlaceOrderPage: React.FC = () => {
                     </Select>
                   </FormControl>
 
-                  {deliveryWindow && selectedAddress && (
+                  {!isPickupOrder && deliveryWindow && selectedAddress && (
                     <Paper
                       variant="outlined"
                       sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}
@@ -2100,6 +2274,15 @@ const PlaceOrderPage: React.FC = () => {
                           <Typography variant="body2" color="error">
                             {t('common.error', 'Error')}
                           </Typography>
+                        ) : isPickupOrder && mobileReviewDelivery === 0 ? (
+                          <Typography
+                            variant="body2"
+                            fontWeight="medium"
+                            component="span"
+                            color="success.main"
+                          >
+                            {t('orders.pickup.deliveryWaived', 'Waived')}
+                          </Typography>
                         ) : (() => {
                             const pay = mobileReviewDelivery;
                             const fullBefore =
@@ -2154,7 +2337,8 @@ const PlaceOrderPage: React.FC = () => {
                       </Box>
                     </Box>
 
-                    {!deliveryFeeLoading &&
+                    {!isPickupOrder &&
+                      !deliveryFeeLoading &&
                       !deliveryAddressMissing &&
                       !deliveryFeeError &&
                       (deliveryFee?.firstOrderBaseDeliveryDiscountAmount ?? 0) >
@@ -2330,10 +2514,15 @@ const PlaceOrderPage: React.FC = () => {
                         {t('orders.mobilePayment', 'Mobile Money Payment')}
                       </Typography>
                       <Typography variant="body2">
-                        {t(
-                          'orders.paymentRequestMessage',
-                          'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-                        )}
+                        {isPickupOrder
+                          ? t(
+                              'orders.pickup.clientPaymentHint',
+                              'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                            )
+                          : t(
+                              'orders.paymentRequestMessage',
+                              'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                            )}
                       </Typography>
                     </Alert>
 
@@ -2537,6 +2726,58 @@ const PlaceOrderPage: React.FC = () => {
             >
               {renderStepContent(activeStep)}
             </Box>
+
+            <OrderSummary
+              selectedItem={selectedItem}
+              resolvedPricing={{
+                unit: listingUnitPricing.unit,
+                strikeOriginal: listingUnitPricing.strikeOriginal,
+                hasDeal: listingUnitPricing.hasDeal,
+              }}
+              displayImageSrc={variantPrimaryImageUrl}
+              variantLabel={selectedVariant?.name ?? null}
+              quantity={quantity}
+              onQuantityChange={setQuantity}
+              maxOrderQuantity={Math.min(
+                selectedItem.computed_available_quantity,
+                10
+              )}
+              deliveryFee={deliveryFee?.deliveryFee || null}
+              deliveryFeeLoading={deliveryFeeLoading}
+              deliveryFeeError={deliveryFeeError}
+              pickupEligible={isPickupEligible}
+              pickupSelected={pickupAtStore}
+              onPickupChange={setPickupAtStore}
+              pickupLocationLabel={pickupLocationSummary || undefined}
+              deliveryAddressMissing={deliveryAddressMissing}
+              firstOrderBaseDeliveryDiscountAmount={
+                deliveryFee?.firstOrderBaseDeliveryDiscountAmount
+              }
+              deliveryFeeFullBeforeDiscount={
+                deliveryFee != null
+                  ? (Number(deliveryFee.baseDeliveryFeeBeforeDiscount) || 0) +
+                    (Number(deliveryFee.perKmDeliveryFee) || 0)
+                  : undefined
+              }
+              requiresFastDelivery={requiresFastDelivery}
+              formatCurrency={formatCurrency}
+              discountCodeDraft={discountCodeDraft}
+              onDiscountCodeDraftChange={setDiscountCodeDraft}
+              onApplyDiscountCode={() => void applyDiscountCode(discountCodeDraft)}
+              onClearDiscountCode={() => {
+                clearDiscountCode();
+                setDiscountCodeDraft('');
+              }}
+              appliedDiscountCode={appliedDiscountCode}
+              discountPercentage={discountPercentage}
+              discountLoading={discountLoading}
+              discountError={discountError}
+              onSubmit={handleSubmitWithPhoneGate}
+              loading={loading}
+              disabled={!canPlaceOrder}
+              isMobile
+              error={error}
+            />
 
             {/* Fixed bottom nav */}
             <Box
@@ -2950,8 +3191,8 @@ const PlaceOrderPage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              {/* Pickup Location Card */}
-              {selectedItem.business_location && (
+              {/* Pickup Location Card (pickup checkout only) */}
+              {isPickupOrder && selectedItem.business_location && (
                 <Card>
                   <CardContent sx={{ p: 3 }}>
                     <Box
@@ -3030,6 +3271,7 @@ const PlaceOrderPage: React.FC = () => {
               )}
 
               {/* Delivery Address Card */}
+              {!isPickupOrder && (
               <Card>
                 <CardContent sx={{ p: 3 }}>
                   <Box
@@ -3118,9 +3360,11 @@ const PlaceOrderPage: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
+              )}
 
               {/* Fast Delivery Option Card */}
-              {fastDeliveryConfig &&
+              {!isPickupOrder &&
+                fastDeliveryConfig &&
                 isEnabledForLocation(userCountry, userState) && (
                   <Card>
                     <CardContent sx={{ p: 3 }}>
@@ -3137,7 +3381,7 @@ const PlaceOrderPage: React.FC = () => {
                 )}
 
               {/* Delivery Time Window Selection Card */}
-              {selectedAddress && (
+              {!isPickupOrder && selectedAddress && (
                 <Card>
                   <CardContent sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
@@ -3223,10 +3467,15 @@ const PlaceOrderPage: React.FC = () => {
                                 'orders.payAtDelivery.info',
                                 'You will pay at delivery in the app when the agent arrives. Please keep your phone available to approve the payment request.'
                               )
-                            : t(
-                                'orders.paymentRequestMessage',
-                                'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-                              )}
+                            : paymentTiming === 'pay_at_pickup'
+                              ? t(
+                                  'orders.pickup.clientPaymentHint',
+                                  'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                                )
+                              : t(
+                                  'orders.paymentRequestMessage',
+                                  'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                                )}
                         </Typography>
                       </Alert>
 
@@ -3355,6 +3604,10 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
+              pickupEligible={isPickupEligible}
+              pickupSelected={pickupAtStore}
+              onPickupChange={setPickupAtStore}
+              pickupLocationLabel={pickupLocationSummary || undefined}
               deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={
                 deliveryFee?.firstOrderBaseDeliveryDiscountAmount
@@ -3719,8 +3972,19 @@ const PlaceOrderPage: React.FC = () => {
                     setMissingPhoneNumber('');
                   }}
                   disabled={
-                    !!selectedAddress?.country?.trim() &&
-                    isCountrySupported(selectedAddress.country.trim())
+                    !!(
+                      (isPickupOrder
+                        ? itemOriginCountryIso
+                        : selectedAddress?.country
+                      )?.trim() || ''
+                    ) &&
+                    isCountrySupported(
+                      String(
+                        isPickupOrder
+                          ? itemOriginCountryIso
+                          : selectedAddress?.country || ''
+                      ).trim()
+                    )
                   }
                 >
                   {supportedCountries.map((iso2) => {

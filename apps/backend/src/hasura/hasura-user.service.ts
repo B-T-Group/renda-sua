@@ -30,12 +30,15 @@ export interface CreateOrderRequest {
   items: OrderItem[];
   special_instructions?: string;
   verified_agent_delivery?: boolean;
-  delivery_address_id: string;
+  /** Required for delivery orders; omitted when fulfillment_method is pickup. */
+  delivery_address_id?: string;
+  /** Defaults to delivery when omitted. */
+  fulfillment_method?: 'delivery' | 'pickup';
   phone_number?: string;
   requires_fast_delivery?: boolean;
   discount_code?: string;
   /** Client-selected payment timing. Defaults to pay_now when omitted. */
-  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   delivery_window?: {
     slot_id: string;
     preferred_date: string;

@@ -20,5 +20,6 @@ export class UpdateItemDto {
   max_order_quantity?: number | null;
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
+  pay_at_pickup_enabled?: boolean;
 }
 

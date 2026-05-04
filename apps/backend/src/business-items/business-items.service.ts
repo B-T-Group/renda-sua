@@ -23,6 +23,7 @@ const GET_ITEMS = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      pay_at_pickup_enabled
       weight
       weight_unit
       dimensions
@@ -182,6 +183,7 @@ const GET_SINGLE_ITEM = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      pay_at_pickup_enabled
       weight
       weight_unit
       dimensions
@@ -320,6 +322,7 @@ const GET_AVAILABLE_ITEMS = `
       name
       description
       pay_on_delivery_enabled
+      pay_at_pickup_enabled
       price
       currency
       weight
@@ -389,6 +392,7 @@ const INSERT_ITEM = `
       name
       sku
       pay_on_delivery_enabled
+      pay_at_pickup_enabled
     }
   }
 `;
@@ -404,6 +408,7 @@ const UPDATE_ITEM = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      pay_at_pickup_enabled
       weight
       weight_unit
       dimensions
@@ -1119,6 +1124,7 @@ export class BusinessItemsService {
       max_order_quantity?: number | null;
       is_active?: boolean;
       pay_on_delivery_enabled?: boolean;
+      pay_at_pickup_enabled?: boolean;
     }
   ) {
     const result = await this.hasuraUserService.executeQuery<{

@@ -135,7 +135,7 @@ export interface OrderWithDetails {
   preferred_delivery_time?: string;
   payment_method?: string;
   payment_status?: string;
-  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   verified_agent_delivery?: boolean;
   created_at: string;
   updated_at: string;
@@ -1253,6 +1253,17 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
+    if ((order as any).fulfillment_method === 'pickup') {
+      throw new HttpException(
+        {
+          message:
+            'This order is for customer pickup at the store and cannot be claimed for delivery.',
+          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
       throw new HttpException(
@@ -1369,6 +1380,17 @@ export class OrdersService {
         `Cannot claim order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+
+    if ((order as any).fulfillment_method === 'pickup') {
+      throw new HttpException(
+        {
+          message:
+            'This order is for customer pickup at the store and cannot be claimed for delivery.',
+          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
@@ -1664,8 +1686,12 @@ export class OrdersService {
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'
       | 'pay_at_delivery'
+      | 'pay_at_pickup'
       | undefined;
-    if (paymentTiming !== 'pay_at_delivery') {
+    if (
+      paymentTiming !== 'pay_at_delivery' &&
+      paymentTiming !== 'pay_at_pickup'
+    ) {
       await this.processOrderPayment(request.orderId);
     }
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
@@ -2368,6 +2394,165 @@ export class OrdersService {
       amount: Number(order.total_amount),
       currency: order.currency,
       description: `order ${order.order_number} (pay at delivery)`,
+      provider,
+      payment_method: 'mobile_money',
+      customer_phone: phoneNumber,
+      ...(order.client.user.email
+        ? { customer_email: order.client.user.email }
+        : {}),
+      account_id: account.id,
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order' as const,
+      entity_id: order.order_number,
+    });
+
+    const paymentRequest = {
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `Order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      provider,
+      ownerCharge: 'MERCHANT' as const,
+      transactionType: 'PAYMENT' as const,
+      payment_entity: 'order' as const,
+    };
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      paymentRequest,
+      paymentAttemptReference
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Payment request initiated',
+      payment_transaction: {
+        success: true,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: {
+        id: tx.id,
+        reference: tx.reference,
+        status: tx.status,
+      },
+    };
+  }
+
+  /**
+   * Pay-at-pickup: business triggers mobile payment when order is ready for pickup.
+   */
+  async initiatePayAtPickupPayment(
+    orderId: string,
+    phoneNumberOverride?: string
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can initiate pickup payments'
+    );
+    const business = this.requireBusinessRecord(user);
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.business_id !== business.id) {
+      throw new HttpException(
+        'You are not authorized to initiate payment for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | 'pay_at_pickup'
+      | undefined;
+    if (paymentTiming !== 'pay_at_pickup') {
+      throw new HttpException(
+        'Order is not configured for pay at pickup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        'Pay at pickup payment can only be initiated when the order is ready for pickup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if ((order as any).payment_status === 'paid') {
+      return {
+        success: true,
+        message: 'Order is already paid',
+      };
+    }
+
+    const phoneNumber =
+      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Client phone number is required to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
+        order.order_number
+      );
+    if (existing && existing.status === 'pending') {
+      return {
+        success: true,
+        message: 'Payment request already pending',
+        payment_transaction: {
+          success: true,
+          transaction_id: existing.transaction_id ?? null,
+          message: 'Payment request already pending',
+          mode: 'mobile_money' as const,
+        },
+        database_transaction: {
+          id: existing.id,
+          reference: existing.reference,
+          status: existing.status,
+        },
+      };
+    }
+
+    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: paymentAttemptReference,
+      amount: Number(order.total_amount),
+      currency: order.currency,
+      description: `order ${order.order_number} (pay at pickup)`,
       provider,
       payment_method: 'mobile_money',
       customer_phone: phoneNumber,
@@ -3530,7 +3715,7 @@ export class OrdersService {
     // order_holds, and order item prices are excluded.
     const query = `
       query OpenOrders {
-        orders(where: {current_status: {_eq: "ready_for_pickup"}, assigned_agent_id: {_is_null: true}}) {
+        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_neq: pickup}}]}) {
           id
           order_number
           subtotal
@@ -3669,6 +3854,13 @@ export class OrdersService {
       return this.createClaimAvailabilityFailure(
         holdAmount,
         'This order is no longer open for claim.'
+      );
+    }
+
+    if ((order as any).fulfillment_method === 'pickup') {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'This order is for customer pickup at the store and is not available to claim for delivery.'
       );
     }
 
@@ -4587,6 +4779,7 @@ export class OrdersService {
           business_id
           client_id
           delivery_address_id
+          fulfillment_method
           client {
             user_id
             user {
@@ -4752,6 +4945,7 @@ export class OrdersService {
           business_id
           client_id
           delivery_address_id
+          fulfillment_method
           requires_fast_delivery
           client {
             user_id
@@ -4908,9 +5102,13 @@ export class OrdersService {
       const paymentTiming = (order as any).payment_timing as
         | 'pay_now'
         | 'pay_at_delivery'
+        | 'pay_at_pickup'
         | undefined;
 
-      if (paymentTiming === 'pay_at_delivery') {
+      if (
+        paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup'
+      ) {
         await this.finalizePayAtDeliveryPaymentAndComplete(order);
         return;
       }
@@ -5507,6 +5705,7 @@ export class OrdersService {
           currency
           business_id
           verified_agent_delivery
+          fulfillment_method
           business {
             user_id
           }
@@ -5596,34 +5795,67 @@ export class OrdersService {
     }
   }
 
+  private zeroPickupDeliveryFee(currency: string): {
+    deliveryFee: number;
+    method: 'distance_based' | 'flat_fee';
+    currency: string;
+    country: string;
+    baseDeliveryFee: number;
+    perKmDeliveryFee: number;
+    isFirstOrderClient: boolean;
+    firstOrderDeliveryFeePromo: boolean;
+    firstOrderBaseDeliveryDiscountAmount: number;
+    baseDeliveryFeeBeforeDiscount: number;
+  } {
+    return {
+      deliveryFee: 0,
+      method: 'flat_fee',
+      currency,
+      country: '',
+      baseDeliveryFee: 0,
+      perKmDeliveryFee: 0,
+      isFirstOrderClient: false,
+      firstOrderDeliveryFeePromo: false,
+      firstOrderBaseDeliveryDiscountAmount: 0,
+      baseDeliveryFeeBeforeDiscount: 0,
+    };
+  }
+
   /**
    * Create a new order with validation and fund withholding
    */
-  async createOrder(
-    orderData: any,
-    client_delivery_address_id: string
-  ): Promise<any> {
+  async createOrder(orderData: any): Promise<any> {
     // Get the current user
     const user = await this.hasuraUserService.getUser();
 
     this.requireActivePersona(user, 'client', 'Only clients can create orders');
     const client = this.requireClientRecord(user);
 
-    // Validate delivery address ID
-    if (!client_delivery_address_id) {
-      throw new HttpException(
-        'Delivery address ID is required',
-        HttpStatus.BAD_REQUEST
+    const fulfillmentMethod: 'delivery' | 'pickup' =
+      orderData.fulfillment_method === 'pickup' ||
+      orderData.payment_timing === 'pay_at_pickup'
+        ? 'pickup'
+        : 'delivery';
+
+    const clientDeliveryAddressId =
+      typeof orderData.delivery_address_id === 'string'
+        ? orderData.delivery_address_id.trim()
+        : '';
+
+    let address: { id: string } | null = null;
+    if (fulfillmentMethod === 'delivery') {
+      if (!clientDeliveryAddressId) {
+        throw new HttpException(
+          'Delivery address ID is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      address = await this.hasuraUserService.getUserAddressById(
+        clientDeliveryAddressId
       );
-    }
-
-    // Get the specified delivery address
-    const address = await this.hasuraUserService.getUserAddressById(
-      client_delivery_address_id
-    );
-
-    if (!address) {
-      throw new Error('Delivery address not found');
+      if (!address) {
+        throw new Error('Delivery address not found');
+      }
     }
 
     // Validate that we have items
@@ -5659,6 +5891,7 @@ export class OrdersService {
             name
             description
             pay_on_delivery_enabled
+            pay_at_pickup_enabled
             currency
             weight
             max_order_quantity
@@ -5712,8 +5945,25 @@ export class OrdersService {
     const businessInventories =
       businessInventoryResult.business_inventory as any[];
 
-    const paymentTiming: 'pay_now' | 'pay_at_delivery' =
-      orderData.payment_timing === 'pay_at_delivery' ? 'pay_at_delivery' : 'pay_now';
+    const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
+      orderData.payment_timing === 'pay_at_delivery'
+        ? 'pay_at_delivery'
+        : orderData.payment_timing === 'pay_at_pickup'
+          ? 'pay_at_pickup'
+          : 'pay_now';
+
+    if (fulfillmentMethod === 'pickup' && paymentTiming !== 'pay_at_pickup') {
+      throw new HttpException(
+        'Pickup orders must use pay_at_pickup payment timing',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (paymentTiming === 'pay_at_pickup' && fulfillmentMethod !== 'pickup') {
+      throw new HttpException(
+        'pay_at_pickup requires fulfillment_method pickup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     const dealsMap = await this.getActiveDealsByBusinessInventoryIds(
       businessInventoryIds,
@@ -5783,6 +6033,18 @@ export class OrdersService {
       }
     }
 
+    if (paymentTiming === 'pay_at_pickup') {
+      const anyNotPickup = businessInventories.some(
+        (inv) => inv?.item?.pay_at_pickup_enabled !== true
+      );
+      if (anyNotPickup) {
+        throw new HttpException(
+          'Pickup checkout is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     // Calculate total weight for delivery fee calculation (variant weight overrides item weight)
     const totalWeight = lineContexts.reduce((sum, ctx, idx) => {
       const w =
@@ -5794,13 +6056,16 @@ export class OrdersService {
       return sum + w * orderData.items[idx].quantity;
     }, 0);
 
-    // Calculate delivery fee using the new structure
-    const deliveryFeeInfo = await this.calculateItemDeliveryFee(
-      orderData.items[0].business_inventory_id,
-      client_delivery_address_id,
-      orderData.requires_fast_delivery,
-      totalWeight
-    );
+    // Calculate delivery fee (waived for pickup)
+    const deliveryFeeInfo =
+      fulfillmentMethod === 'pickup'
+        ? this.zeroPickupDeliveryFee(currency)
+        : await this.calculateItemDeliveryFee(
+            orderData.items[0].business_inventory_id,
+            clientDeliveryAddressId,
+            orderData.requires_fast_delivery,
+            totalWeight
+          );
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
     const account = await this.hasuraSystemService.getAccount(
@@ -5865,11 +6130,18 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
-    if (paymentTiming === 'pay_at_delivery' && !phoneNumber.trim()) {
+    if (
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup') &&
+      !phoneNumber.trim()
+    ) {
       throw new HttpException(
         {
           success: false,
-          message: 'Phone number is required for pay at delivery',
+          message:
+            paymentTiming === 'pay_at_pickup'
+              ? 'Phone number is required for pay at pickup'
+              : 'Phone number is required for pay at delivery',
           error: 'PHONE_NUMBER_REQUIRED',
         },
         HttpStatus.BAD_REQUEST
@@ -6017,26 +6289,30 @@ export class OrdersService {
     }
 
     const business_location_id = businessInventories[0].business_location_id;
-    const delivery_address_id = address.id;
+    const delivery_address_id = address?.id ?? null;
     const subtotal = totalAmount;
     const tax_amount = 0;
     const current_status =
-      paymentTiming === 'pay_at_delivery'
+      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
         ? 'pending'
         : canPayWithWallet || isZeroOrNegativeOrder
           ? 'pending'
           : 'pending_payment';
     const business_id = businessInventories[0].business_location.business_id;
     const payment_method =
-      paymentTiming === 'pay_at_delivery' ? 'pay_on_delivery' : 'online';
-    const payment_status =
       paymentTiming === 'pay_at_delivery'
+        ? 'pay_on_delivery'
+        : paymentTiming === 'pay_at_pickup'
+          ? 'pay_at_pickup'
+          : 'online';
+    const payment_status =
+      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
         ? 'pending'
         : canPayWithWallet || isZeroOrNegativeOrder
           ? 'paid'
           : 'pending';
     const payment_source: 'wallet' | 'mobile_payment' =
-      paymentTiming === 'pay_at_delivery'
+      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
         ? 'mobile_payment'
         : canPayWithWallet || isZeroOrNegativeOrder
           ? 'wallet'
@@ -6047,7 +6323,8 @@ export class OrdersService {
     const actual_delivery_time = null;
     const assigned_agent_id = null;
     const verified_agent_delivery = !!orderData.verified_agent_delivery;
-    const requires_fast_delivery = !!orderData.requires_fast_delivery;
+    const requires_fast_delivery =
+      fulfillmentMethod === 'pickup' ? false : !!orderData.requires_fast_delivery;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -6055,7 +6332,8 @@ export class OrdersService {
         $clientId: uuid!,
         $businessId: uuid!,
         $businessLocationId: uuid!,
-        $deliveryAddressId: uuid!,
+        $deliveryAddressId: uuid,
+        $fulfillmentMethod: order_fulfillment_method_enum!,
         $orderNumber: String!,
         $orderItems: [order_items_insert_input!]!,
         $currency: String!,
@@ -6087,6 +6365,7 @@ export class OrdersService {
           business_id: $businessId,
           business_location_id: $businessLocationId,
           delivery_address_id: $deliveryAddressId,
+          fulfillment_method: $fulfillmentMethod,
           currency: $currency,
           order_number: $orderNumber,
           payment_method: $paymentMethod,
@@ -6197,6 +6476,7 @@ export class OrdersService {
         businessId: business_id,
         businessLocationId: business_location_id,
         deliveryAddressId: delivery_address_id,
+        fulfillmentMethod: fulfillmentMethod,
         orderNumber: orderNumber,
         orderItems: orderItemsData,
         currency: currency,
@@ -6262,7 +6542,7 @@ export class OrdersService {
 
     // Create delivery window if provided
     let deliveryWindow = null;
-    if (orderData.delivery_window) {
+    if (orderData.delivery_window && fulfillmentMethod === 'delivery') {
       try {
         deliveryWindow = await this.deliveryWindowsService.createDeliveryWindow(
           {
@@ -6294,18 +6574,24 @@ export class OrdersService {
       );
     }
 
-    if (paymentTiming === 'pay_at_delivery') {
-      // Pay-at-delivery orders are not finalized at placement time, but we still want the
+    if (
+      paymentTiming === 'pay_at_delivery' ||
+      paymentTiming === 'pay_at_pickup'
+    ) {
+      // Deferred-payment orders are not finalized at placement time, but we still want the
       // "order placed" notifications to go out immediately.
       try {
         const notificationsEnabled =
           this.configService.get('notification').orderStatusChangeEnabled;
         if (notificationsEnabled) {
           const orderWithDetails = await this.getOrderByNumber(order.order_number);
+          const notifyAddress =
+            orderWithDetails?.delivery_address ||
+            (orderWithDetails as any)?.business_location?.address;
           if (
             orderWithDetails?.business_location?.business?.name &&
             orderWithDetails?.business_location?.business?.user?.email &&
-            orderWithDetails?.delivery_address
+            notifyAddress
           ) {
             const notificationData: NotificationData = {
               orderId: orderWithDetails.id,
@@ -6348,7 +6634,7 @@ export class OrdersService {
               taxAmount: orderWithDetails.tax_amount || 0,
               totalAmount: orderWithDetails.total_amount || 0,
               currency: orderWithDetails.currency || 'USD',
-              deliveryAddress: this.formatAddress(orderWithDetails.delivery_address),
+              deliveryAddress: this.formatAddress(notifyAddress as Addresses),
               estimatedDeliveryTime:
                 orderWithDetails.estimated_delivery_time || undefined,
               specialInstructions: orderWithDetails.special_instructions || undefined,
@@ -6361,7 +6647,7 @@ export class OrdersService {
         }
       } catch (error) {
         this.logger.error(
-          `Failed to send pay-at-delivery order creation notifications: ${
+          `Failed to send deferred-payment order creation notifications: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
@@ -6373,8 +6659,14 @@ export class OrdersService {
         payment_transaction: {
           success: true,
           transaction_id: null,
-          message: 'Pay at delivery selected',
-          mode: 'pay_at_delivery' as const,
+          message:
+            paymentTiming === 'pay_at_pickup'
+              ? 'Pay at pickup selected'
+              : 'Pay at delivery selected',
+          mode:
+            paymentTiming === 'pay_at_pickup'
+              ? ('pay_at_pickup' as const)
+              : ('pay_at_delivery' as const),
         },
         database_transaction: null,
       };
@@ -6686,11 +6978,14 @@ export class OrdersService {
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'
       | 'pay_at_delivery'
+      | 'pay_at_pickup'
       | undefined;
     const itemStatuses =
       paymentTiming === 'pay_at_delivery'
         ? ['assigned_to_agent', 'picked_up', 'out_for_delivery', 'complete']
-        : ['assigned_to_agent', 'picked_up'];
+        : paymentTiming === 'pay_at_pickup'
+          ? ['ready_for_pickup', 'complete']
+          : ['assigned_to_agent', 'picked_up'];
     if (!itemStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
@@ -6708,7 +7003,10 @@ export class OrdersService {
     }
 
     if (subtotalPortion > 0) {
-      if (paymentTiming === 'pay_at_delivery') {
+      if (
+        paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup'
+      ) {
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: subtotalPortion,
@@ -6781,9 +7079,13 @@ export class OrdersService {
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'
       | 'pay_at_delivery'
+      | 'pay_at_pickup'
       | undefined;
 
-    const deliveryStatuses = ['out_for_delivery', 'complete'];
+    const deliveryStatuses =
+      paymentTiming === 'pay_at_pickup'
+        ? ['ready_for_pickup', 'complete']
+        : ['out_for_delivery', 'complete'];
     if (!deliveryStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Delivery settlement requires out_for_delivery or complete; got ${order.current_status}`,
@@ -6818,7 +7120,10 @@ export class OrdersService {
 
     const deliveryAmt = Number(orderHold.delivery_fees);
     if (deliveryAmt > 0) {
-      if (paymentTiming === 'pay_at_delivery') {
+      if (
+        paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup'
+      ) {
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: deliveryAmt,
@@ -7154,9 +7459,20 @@ export class OrdersService {
         );
       }
 
+      if (
+        (order as any).fulfillment_method === 'pickup' ||
+        !order.delivery_address_id
+      ) {
+        return {
+          deliveryFee: 0,
+          method: 'flat_fee',
+          currency: order.currency,
+        };
+      }
+
       // Order may reference addresses later soft-deleted; still use snapshot IDs for distance
       const clientAddresses = await this.addressesService.getAddressesByIds(
-        [order.delivery_address_id],
+        [order.delivery_address_id as string],
         { includeInactive: true }
       );
       const clientAddress = clientAddresses[0];

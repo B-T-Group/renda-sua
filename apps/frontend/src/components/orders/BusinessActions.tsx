@@ -3,6 +3,7 @@ import {
   CheckCircle,
   AttachMoney as RefundIcon,
   LocalShipping,
+  PaymentsOutlined,
 } from '@mui/icons-material';
 import {
   Box,
@@ -27,6 +28,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 
 const PRINT_LABEL_STATUSES = [
   'confirmed',
@@ -181,6 +183,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
   const [overwriteCodeDialogOpen, setOverwriteCodeDialogOpen] = useState(false);
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
+  const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
 
   const handleGenerateOverwriteCode = async () => {
     setLoading(true);
@@ -310,6 +313,24 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           color: 'primary' as const,
           icon: <CheckCircle />,
         });
+        break;
+
+      case 'ready_for_pickup':
+        if (
+          order.fulfillment_method === 'pickup' &&
+          order.payment_timing === 'pay_at_pickup' &&
+          order.payment_status === 'pending'
+        ) {
+          actions.push({
+            label: t(
+              'orderActions.requestPickupPayment',
+              'Request pickup payment'
+            ),
+            action: () => setPickupPaymentDialogOpen(true),
+            color: 'primary' as const,
+            icon: <PaymentsOutlined />,
+          });
+        }
         break;
 
       case 'delivered':
@@ -504,6 +525,22 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <RequestPayAtPickupPaymentDialog
+        open={pickupPaymentDialogOpen}
+        order={order}
+        onClose={() => setPickupPaymentDialogOpen(false)}
+        onSuccess={() => {
+          onShowNotification?.(
+            t(
+              'orders.pickup.paymentRequestSent',
+              'Payment request sent to the client.'
+            ),
+            'success'
+          );
+          onActionComplete?.();
+        }}
+      />
 
       <Dialog
         open={reconcileDialogOpen}

@@ -559,6 +559,7 @@ const ManageOrderPage: React.FC = () => {
   const hideFulfillmentProgress = ['cancelled', 'failed'].includes(
     order.current_status
   );
+  const isPickupFulfillment = order.fulfillment_method === 'pickup';
 
   return (
     <>
@@ -777,7 +778,7 @@ const ManageOrderPage: React.FC = () => {
                     <DeliveryTrackingMap
                       orderId={order.id}
                       pickupAddress={order.business_location?.address}
-                      deliveryAddress={order.delivery_address}
+                      deliveryAddress={order.delivery_address ?? undefined}
                     />
                     <ClientDeliveryPinButton
                       orderId={order.id}
@@ -1204,11 +1205,12 @@ const ManageOrderPage: React.FC = () => {
                     )}
 
                     {/* Delivery Information */}
-                    {(order.preferred_delivery_time ||
-                      order.requires_fast_delivery ||
-                      order.special_instructions ||
-                      order.estimated_delivery_time ||
-                      order.actual_delivery_time) && (
+                    {(order.special_instructions ||
+                      (!isPickupFulfillment &&
+                        (order.preferred_delivery_time ||
+                          order.requires_fast_delivery ||
+                          order.estimated_delivery_time ||
+                          order.actual_delivery_time))) && (
                       <Box sx={{ mb: 4 }}>
                         <Typography variant="h6" fontWeight="bold" gutterBottom>
                           {t('orders.deliveryInfo', 'Delivery Information')}
@@ -1408,7 +1410,7 @@ const ManageOrderPage: React.FC = () => {
                         <DeliveryTrackingMap
                           orderId={order.id}
                           pickupAddress={order.business_location?.address}
-                          deliveryAddress={order.delivery_address}
+                          deliveryAddress={order.delivery_address ?? undefined}
                         />
                       )}
 
@@ -1711,13 +1713,26 @@ const ManageOrderPage: React.FC = () => {
                             <Typography variant="body2" color="text.secondary">
                               {t('orders.deliveryFee', 'Delivery Fee')}
                             </Typography>
-                            <Typography variant="body2">
-                              {formatCurrency(
-                                (order.base_delivery_fee || 0) +
-                                  (order.per_km_delivery_fee || 0),
-                                order.currency
-                              )}
-                            </Typography>
+                            {isPickupFulfillment &&
+                            (order.base_delivery_fee || 0) +
+                              (order.per_km_delivery_fee || 0) ===
+                              0 ? (
+                              <Typography
+                                variant="body2"
+                                color="success.main"
+                                fontWeight={600}
+                              >
+                                {t('orders.pickup.deliveryWaived', 'Waived')}
+                              </Typography>
+                            ) : (
+                              <Typography variant="body2">
+                                {formatCurrency(
+                                  (order.base_delivery_fee || 0) +
+                                    (order.per_km_delivery_fee || 0),
+                                  order.currency
+                                )}
+                              </Typography>
+                            )}
                           </Box>
                         )}
                       </>

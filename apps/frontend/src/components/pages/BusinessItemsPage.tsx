@@ -467,6 +467,37 @@ const BusinessItemsPage: React.FC = () => {
     [updateItem, mergeItemIntoList, enqueueSnackbar, t]
   );
 
+  const handleTogglePayAtPickup = useCallback(
+    async (row: Item, enabled: boolean) => {
+      try {
+        const updated = await updateItem(
+          row.id,
+          { pay_at_pickup_enabled: enabled },
+          { skipRefetch: true }
+        );
+        if (updated) {
+          mergeItemIntoList(row.id, updated);
+        }
+        enqueueSnackbar(
+          t(
+            'business.items.payAtPickupUpdated',
+            'Store pickup setting updated'
+          ),
+          { variant: 'success' }
+        );
+      } catch (err: any) {
+        enqueueSnackbar(
+          t(
+            'business.items.payAtPickupUpdateError',
+            'Failed to update store pickup'
+          ),
+          { variant: 'error' }
+        );
+      }
+    },
+    [updateItem, mergeItemIntoList, enqueueSnackbar, t]
+  );
+
   const itemMatchesSearchText = (item: Item, q: string): boolean => {
     const needle = q.toLowerCase();
     if (item.name.toLowerCase().includes(needle)) return true;
@@ -833,6 +864,7 @@ const BusinessItemsPage: React.FC = () => {
                     onRefineWithAi={(i) => setRefineAiItem(i)}
                     onToggleItemActive={handleToggleItemActive}
                     onTogglePayOnDelivery={handleTogglePayOnDelivery}
+                    onTogglePayAtPickup={handleTogglePayAtPickup}
                     onToggleFavorite={handleToggleFavorite}
                   />
                 </Box>

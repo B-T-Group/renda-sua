@@ -100,7 +100,8 @@ export interface OrderDetails {
   business_id: string;
   business_location_id: string;
   assigned_agent_id?: string;
-  delivery_address_id: string;
+  delivery_address_id?: string | null;
+  fulfillment_method?: 'delivery' | 'pickup';
   subtotal: number;
   base_delivery_fee: number;
   tax_amount: number;
@@ -113,7 +114,7 @@ export interface OrderDetails {
   preferred_delivery_time?: string;
   payment_method?: string;
   payment_status?: string;
-  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';
   created_at: string;
   updated_at: string;
@@ -795,6 +796,36 @@ export const useBackendOrders = () => {
     });
   };
 
+  const initiatePayAtPickupPayment = async (
+    orderId: string,
+    phoneNumberOverride?: string
+  ): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(
+          `/orders/${orderId}/initiate-pay-at-pickup-payment`,
+          phoneNumberOverride?.trim()
+            ? { phone_number: phoneNumberOverride.trim() }
+            : {}
+        );
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to initiate pay at pickup payment'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
   const retryOrderPayment = async (orderId: string): Promise<any> => {
     if (!apiClient) {
       throw new Error(
@@ -944,6 +975,7 @@ export const useBackendOrders = () => {
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,
     initiatePayAtDeliveryPayment,
+    initiatePayAtPickupPayment,
     retryOrderPayment,
     markPaidInCashException,
     reconcileCashException,

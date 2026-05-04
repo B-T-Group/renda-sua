@@ -103,6 +103,7 @@ export default function EditItemDialog({
         max_order_quantity: item.max_order_quantity,
         is_active: item.is_active,
         pay_on_delivery_enabled: item.pay_on_delivery_enabled ?? false,
+        pay_at_pickup_enabled: item.pay_at_pickup_enabled ?? false,
       });
     }
   }, [item]);
@@ -651,12 +652,29 @@ export default function EditItemDialog({
                       }
                     />
                   }
-                  label={t(
-                    'business.inventory.payOnDeliveryEnabled',
-                    'Allow payment at delivery'
-                  )}
-                />
-              </Stack>
+                    label={t(
+                      'business.inventory.payOnDeliveryEnabled',
+                      'Allow payment at delivery'
+                    )}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.pay_at_pickup_enabled ?? false}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'pay_at_pickup_enabled',
+                            e.target.checked
+                          )
+                        }
+                      />
+                    }
+                    label={t(
+                      'business.inventory.payAtPickupEnabled',
+                      'Allow store pickup (pay at pickup)'
+                    )}
+                  />
+                </Stack>
             </Box>
           </Stack>
 

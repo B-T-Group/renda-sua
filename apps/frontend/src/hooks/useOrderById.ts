@@ -8,7 +8,8 @@ export interface OrderData {
   business_id: string;
   business_location_id: string;
   assigned_agent_id?: string;
-  delivery_address_id: string;
+  delivery_address_id?: string | null;
+  fulfillment_method?: 'delivery' | 'pickup';
   subtotal?: number; // Optional for agents
   base_delivery_fee?: number; // Optional for agents
   per_km_delivery_fee?: number; // Optional for agents
@@ -23,7 +24,7 @@ export interface OrderData {
   requires_fast_delivery: boolean;
   payment_method?: string;
   payment_status: string;
-  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';
   verified_agent_delivery: boolean;
   created_at: string;
@@ -75,7 +76,7 @@ export interface OrderData {
       instructions?: string;
     };
   };
-  delivery_address: {
+  delivery_address?: {
     id: string;
     address_line_1: string;
     address_line_2?: string;
@@ -86,7 +87,7 @@ export interface OrderData {
     latitude?: number;
     longitude?: number;
     instructions?: string;
-  };
+  } | null;
   assigned_agent?: {
     id: string;
     user_id: string;

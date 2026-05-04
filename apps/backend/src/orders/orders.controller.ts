@@ -117,15 +117,21 @@ export class OrdersController {
           },
         },
         delivery_address_id: { type: 'string', format: 'uuid' },
+        fulfillment_method: {
+          type: 'string',
+          enum: ['delivery', 'pickup'],
+          description:
+            'delivery (default): ship to delivery_address_id; pickup: collect at business location, no delivery fee, requires pay_at_pickup.',
+        },
         special_instructions: { type: 'string' },
         verified_agent_delivery: { type: 'boolean' },
         phone_number: { type: 'string' },
         requires_fast_delivery: { type: 'boolean' },
         payment_timing: {
           type: 'string',
-          enum: ['pay_now', 'pay_at_delivery'],
+          enum: ['pay_now', 'pay_at_delivery', 'pay_at_pickup'],
           description:
-            'Client-selected payment timing. pay_now preserves current behavior; pay_at_delivery defers mobile payment until delivery.',
+            'Client-selected payment timing. pay_now preserves current behavior; pay_at_delivery defers mobile payment until delivery; pay_at_pickup defers payment until business initiates at pickup.',
         },
         delivery_window: {
           type: 'object',
@@ -136,7 +142,7 @@ export class OrdersController {
           },
         },
       },
-      required: ['items', 'delivery_address_id'],
+      required: ['items'],
     },
   })
   @ApiResponse({
@@ -175,18 +181,15 @@ export class OrdersController {
   })
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
-      // Validate required fields
-      if (!orderData.delivery_address_id) {
+      const isPickup = orderData.fulfillment_method === 'pickup';
+      if (!isPickup && !orderData.delivery_address_id) {
         throw new HttpException(
-          'Delivery address ID is required',
+          'Delivery address ID is required for delivery orders',
           HttpStatus.BAD_REQUEST
         );
       }
 
-      const order = await this.ordersService.createOrder(
-        orderData,
-        orderData.delivery_address_id
-      );
+      const order = await this.ordersService.createOrder(orderData);
 
       return {
         success: true,
@@ -467,6 +470,37 @@ export class OrdersController {
     @Body() body: { phone_number?: string }
   ) {
     return this.ordersService.initiatePayAtDeliveryPayment(
+      orderId,
+      body?.phone_number
+    );
+  }
+
+  @Post(':id/initiate-pay-at-pickup-payment')
+  @ApiOperation({
+    summary: 'Initiate pay-at-pickup mobile payment (business only)',
+    description:
+      'For pay-at-pickup orders in ready_for_pickup, the business triggers a mobile payment request to the client. On successful payment callback, the order is settled and marked complete.',
+  })
+  @ApiResponse({ status: 200, description: 'Payment request initiated' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phone_number: {
+          type: 'string',
+          description:
+            'Optional override phone number to receive the payment request (E.164).',
+        },
+      },
+    },
+  })
+  async initiatePayAtPickupPayment(
+    @Param('id') orderId: string,
+    @Body() body: { phone_number?: string }
+  ) {
+    return this.ordersService.initiatePayAtPickupPayment(
       orderId,
       body?.phone_number
     );
