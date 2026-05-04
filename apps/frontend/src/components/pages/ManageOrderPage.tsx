@@ -1067,32 +1067,28 @@ const ManageOrderPage: React.FC = () => {
                               >
                                 {order.client.user.email}
                               </Typography>
-                              {activePersona === 'agent' &&
-                                profile?.agent?.id &&
-                                order.assigned_agent_id &&
-                                order.assigned_agent_id === profile.agent.id &&
-                                order.client.user.phone_number && (
-                                  <Box
+                              {order.client.user.phone_number?.trim() && (
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  <Phone fontSize="small" color="action" />
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
                                     sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 0.5,
-                                      mt: 0.5,
+                                      wordBreak: 'break-word',
+                                      overflowWrap: 'anywhere',
                                     }}
                                   >
-                                    <Phone fontSize="small" color="action" />
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
-                                      sx={{
-                                        wordBreak: 'break-word',
-                                        overflowWrap: 'anywhere',
-                                      }}
-                                    >
-                                      {order.client.user.phone_number}
-                                    </Typography>
-                                  </Box>
-                                )}
+                                    {order.client.user.phone_number}
+                                  </Typography>
+                                </Box>
+                              )}
                             </Box>
                           </Box>
                         </Paper>

@@ -189,6 +189,16 @@ export interface MtnSmsConfig {
   senderAddress?: string;
 }
 
+/** Orange SMS API (api.orange.com) — OAuth client credentials + SMS messaging. */
+export interface OrangeSmsConfig {
+  clientId: string;
+  clientSecret: string;
+  /** E.164 or `tel:+...` URI; default `tel:+717445`. */
+  senderNumber: string;
+  senderName: string;
+  baseUrl: string;
+}
+
 export interface PdfEndpointConfig {
   apiToken: string;
   sandbox: boolean;
@@ -224,6 +234,7 @@ export interface Configuration {
   push: PushConfig;
   sms: SmsConfig;
   mtnSms: MtnSmsConfig;
+  orangeSms: OrangeSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
 }
 
@@ -442,6 +453,23 @@ export default (): Configuration => {
       serviceCode: process.env.MTN_SMS_SERVICE_CODE ?? '',
       baseUrl: process.env.MTN_SMS_BASE_URL ?? 'https://api.mtn.com',
       senderAddress: process.env.MTN_SMS_SENDER_ADDRESS,
+    },
+    orangeSms: {
+      clientId:
+        process.env.ORANGE_SMS_CLIENT_ID ?? process.env.ORANGE_CLIENT_ID ?? '',
+      clientSecret:
+        process.env.ORANGE_SMS_CLIENT_SECRET ??
+        process.env.ORANGE_CLIENT_SECRET ??
+        '',
+      senderNumber:
+        process.env.ORANGE_SENDER_NUMBER ??
+        process.env.ORANGE_SMS_SENDER_NUMBER ??
+        'tel:+717445',
+      senderName:
+        process.env.ORANGE_SENDER_NAME ??
+        process.env.ORANGE_SMS_SENDER_NAME ??
+        'Rendasua',
+      baseUrl: process.env.ORANGE_SMS_BASE_URL ?? 'https://api.orange.com',
     },
     pdfEndpoint: {
       apiToken: process.env.PDF_ENDPOINT_TOKEN || '',

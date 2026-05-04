@@ -6,6 +6,7 @@ import {
   FlashOn,
   LocalShipping as LocalShippingIcon,
   LocationOn,
+  PaymentsOutlined,
   Person,
   Phone,
   Scale,
@@ -42,6 +43,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import ClientActions from '../orders/ClientActions';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
+import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import AgentActions from '../orders/AgentActions';
 
 interface ItemImageRow {
@@ -204,6 +206,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
 
   // Print label only before order is picked up (no longer available after picked_up)
   const PRINT_LABEL_STATUSES = [
@@ -481,6 +484,23 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
           onClick: handleCompleteOrder,
           color: 'success',
           loading: loadingAction === 'completeOrder',
+        });
+      }
+      if (
+        currentStatus === 'ready_for_pickup' &&
+        order.fulfillment_method === 'pickup' &&
+        order.payment_timing === 'pay_at_pickup' &&
+        order.payment_status === 'pending'
+      ) {
+        actions.push({
+          label: t(
+            'orderActions.requestPickupPayment',
+            'Request pickup payment'
+          ),
+          onClick: () => setPickupPaymentDialogOpen(true),
+          color: 'primary',
+          loading: false,
+          icon: <PaymentsOutlined fontSize="small" />,
         });
       }
       if (PRINT_LABEL_STATUSES.includes(currentStatus)) {
@@ -1335,6 +1355,21 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
         onClose={() => setConfirmModalOpen(false)}
         onConfirm={handleConfirmOrderSuccess}
         loading={loadingAction === 'confirm'}
+      />
+      <RequestPayAtPickupPaymentDialog
+        open={pickupPaymentDialogOpen}
+        order={order as OrderData}
+        onClose={() => setPickupPaymentDialogOpen(false)}
+        onSuccess={() => {
+          enqueueSnackbar(
+            t(
+              'orders.pickup.paymentRequestSent',
+              'Payment request sent to the client.'
+            ),
+            { variant: 'success' }
+          );
+          onActionComplete?.();
+        }}
       />
     </Card>
   );

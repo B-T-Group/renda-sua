@@ -359,10 +359,12 @@ export class OrderStatusService {
             special_instructions
             delivery_time_window_id
             client {
+              id
               user {
                 first_name
                 last_name
                 email
+                phone_number
                 preferred_language
               }
             }
@@ -462,6 +464,8 @@ export class OrderStatusService {
         : 'Unknown Client';
       const clientEmail =
         order.client?.user?.email?.trim() || undefined;
+      const clientPhone =
+        order.client?.user?.phone_number?.trim() || undefined;
 
       // Safely extract business information with null checks
       const businessName = order.business?.name || 'Unknown Business';
@@ -479,9 +483,11 @@ export class OrderStatusService {
 
       return {
         orderId: order.id,
+        clientId: order.client?.id,
         orderNumber: order.order_number,
         clientName,
         clientEmail,
+        clientPhone,
         clientPreferredLanguage: order.client?.user?.preferred_language,
         businessName,
         businessEmail,

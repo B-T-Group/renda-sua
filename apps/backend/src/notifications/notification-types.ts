@@ -1,9 +1,13 @@
 export interface NotificationData {
   orderId: string;
+  /** Client profile id (orders.client_id) for SMS dedupe / lookups */
+  clientId?: string;
   orderNumber: string;
   clientName: string;
   /** Omit or null when the user has no email — email notifications are skipped for that recipient */
   clientEmail?: string | null;
+  /** Client phone for SMS fallback when email is absent */
+  clientPhone?: string | null;
   businessName: string;
   /** Store or location name (e.g. Downtown Store), when available */
   businessLocationName?: string;

@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { MtnSmsService } from './providers/mtn-sms.service';
+import { OrangeSmsService } from './providers/orange-sms.service';
 import type { SendSmsParams, SmsSendResult } from './sms-provider.interface';
 
 @Injectable()
 export class SmsService {
-  constructor(private readonly mtnSms: MtnSmsService) {}
+  constructor(private readonly orangeSms: OrangeSmsService) {}
 
   async sendSms(params: SendSmsParams): Promise<SmsSendResult> {
-    return this.mtnSms.sendSms(params);
+    return this.orangeSms.sendSms(params);
   }
 }

@@ -122,6 +122,7 @@ export interface OrderWithDetails {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id: string;
+  fulfillment_method?: 'delivery' | 'pickup';
   subtotal: number;
   base_delivery_fee: number;
   per_km_delivery_fee: number;
@@ -2041,12 +2042,14 @@ export class OrdersService {
 
   private async getOrderForLoyalty(orderId: string): Promise<{
     id: string;
+    order_number: string;
     client_id: string;
     discount_code_id: string | null;
     current_status: string;
     client: {
       user: {
-        email: string;
+        email?: string | null;
+        phone_number?: string | null;
         preferred_language: string | null;
         first_name: string | null;
         last_name: string | null;
@@ -2057,12 +2060,14 @@ export class OrdersService {
       query GetOrderForLoyalty($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
           id
+          order_number
           client_id
           discount_code_id
           current_status
           client {
             user {
               email
+              phone_number
               preferred_language
               first_name
               last_name
@@ -2118,10 +2123,12 @@ export class OrdersService {
 
   private async maybeCreateFirstOrderCodeAndEmail(order: {
     id: string;
+    order_number: string;
     client_id: string;
     client: {
       user: {
-        email: string;
+        email?: string | null;
+        phone_number?: string | null;
         preferred_language: string | null;
         first_name: string | null;
         last_name: string | null;
@@ -2146,15 +2153,32 @@ export class OrdersService {
       this.configService.get('publicWebAppUrl') || 'https://rendasua.com';
     const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${order.id}`;
     const user = order.client?.user;
-    if (!user?.email) return;
+    if (!user) return;
 
-    await this.notificationsService.sendFirstOrderCompletedEmail({
-      to: user.email,
-      preferredLanguage: user.preferred_language,
-      clientName: [user.first_name, user.last_name].filter(Boolean).join(' ').trim(),
-      discountCode: code.code,
-      orderUrl,
-    });
+    const clientName = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const email = user.email?.trim();
+    if (email) {
+      await this.notificationsService.sendFirstOrderCompletedEmail({
+        to: email,
+        preferredLanguage: user.preferred_language,
+        clientName,
+        discountCode: code.code,
+        orderUrl,
+      });
+      return;
+    }
+    const phone = user.phone_number?.trim();
+    if (phone) {
+      await this.notificationsService.sendFirstOrderCompletedSms({
+        to: phone,
+        preferredLanguage: user.preferred_language,
+        orderNumber: order.order_number,
+        discountCode: code.code,
+      });
+    }
   }
 
   private async maybeRewardDiscountCodeOwner(order: {
@@ -3497,6 +3521,8 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_timing
+          fulfillment_method
           created_at
           updated_at
           client {
@@ -3988,6 +4014,7 @@ export class OrdersService {
           business_location_id
           assigned_agent_id
           delivery_address_id
+          fulfillment_method
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -4172,6 +4199,7 @@ export class OrdersService {
           business_location_id
           assigned_agent_id
           delivery_address_id
+          fulfillment_method
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -4788,6 +4816,7 @@ export class OrdersService {
               last_name
               email
               phone_number
+              preferred_language
             }
           }
           business {
@@ -5485,10 +5514,10 @@ export class OrdersService {
         const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${orderId}`;
 
         const clientUser = order.client?.user;
-        if (clientUser?.email) {
+        if (clientUser?.email?.trim()) {
           await this.notificationsService.sendClientOrderPaymentFailedEmail({
-            to: clientUser.email,
-            preferredLanguage: (clientUser as any).preferred_language,
+            to: clientUser.email.trim(),
+            preferredLanguage: clientUser.preferred_language,
             clientName: [clientUser.first_name, clientUser.last_name]
               .filter(Boolean)
               .join(' ')
@@ -5496,6 +5525,12 @@ export class OrdersService {
             orderNumber: order.order_number,
             orderUrl,
             failureMessage: msg,
+          });
+        } else if (clientUser?.phone_number?.trim()) {
+          await this.notificationsService.sendClientPaymentFailedSms({
+            to: clientUser.phone_number.trim(),
+            preferredLanguage: clientUser.preferred_language,
+            orderNumber: order.order_number,
           });
         }
 

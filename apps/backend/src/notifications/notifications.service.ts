@@ -26,7 +26,14 @@ import type {
   RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
 } from './notification-types';
-import twilio = require('twilio');
+import {
+  smsFirstOrderShareCode,
+  smsOrderCancelled,
+  smsOrderComplete,
+  smsOrderDelivered,
+  smsPaymentFailed,
+} from './order-notification-sms.messages';
+import { SmsService } from '../sms/sms.service';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -103,7 +110,8 @@ export class NotificationsService {
 
   constructor(
     private readonly configService: ConfigService<Configuration>,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly smsService: SmsService
   ) {
     this.loadResendTemplateIds();
   }
@@ -551,7 +559,18 @@ export class NotificationsService {
       const templateKey = this.getTemplateKey(data.orderStatus);
       const recipients = this.getRecipientsForStatus(data.orderStatus, data);
 
+      const itemsVariant =
+        templateKey === 'order_assigned' ? 'agentAssigned' : 'default';
+
       for (const recipient of recipients) {
+        if (recipient.type === 'client') {
+          await this.notifyClientOrderStatusEmailOrSms(
+            data,
+            templateKey,
+            itemsVariant
+          );
+          continue;
+        }
         const to = recipient.email?.trim();
         if (!to) {
           this.logger.warn(
@@ -563,8 +582,6 @@ export class NotificationsService {
         const locale = this.languageForRecipient(data, recipient.type);
         const mapKey = this.mapKeyForLanguage(baseKey, locale);
         if (!this.resendTemplateIds[mapKey]) continue;
-        const itemsVariant =
-          templateKey === 'order_assigned' ? 'agentAssigned' : 'default';
         try {
           await this.sendEmail({
             to,
@@ -583,10 +600,7 @@ export class NotificationsService {
         }
       }
 
-      // Send push notifications for key statuses
       await this.sendPushForOrderStatus(data);
-      // Send SMS for critical statuses when enabled
-      await this.sendSmsForOrderStatus(data);
 
       this.logger.log(
         `Order status change notifications sent for order ${data.orderNumber} (${previousStatus} → ${data.orderStatus})`
@@ -1215,6 +1229,7 @@ export class NotificationsService {
       in_transit: 'order_in_transit',
       out_for_delivery: 'order_out_for_delivery',
       delivered: 'order_delivered',
+      complete: 'order_complete',
       cancelled: 'order_cancelled',
       failed: 'order_failed',
       refunded: 'order_refunded',
@@ -1301,6 +1316,15 @@ export class NotificationsService {
           recipients.push({ email: data.agentEmail, type: 'agent' });
         }
         break;
+      case 'complete':
+        recipients.push(
+          { email: data.clientEmail, type: 'client' },
+          { email: data.businessEmail, type: 'business' }
+        );
+        if (data.agentEmail) {
+          recipients.push({ email: data.agentEmail, type: 'agent' });
+        }
+        break;
       case 'cancelled':
         recipients.push(
           { email: data.clientEmail, type: 'client' },
@@ -1330,82 +1354,181 @@ export class NotificationsService {
     return recipients;
   }
 
-  /**
-   * Send SMS for critical order statuses (when SMS enabled)
-   */
-  private async sendSmsForOrderStatus(data: NotificationData): Promise<void> {
-    const smsConfig = this.configService.get<Configuration['sms']>('sms');
-    if (!smsConfig?.enabled || !smsConfig.twilioAccountSid || !smsConfig.twilioAuthToken) return;
+  private isClientOrderStatusSmsEvent(status: string): boolean {
+    return status === 'delivered' || status === 'complete' || status === 'cancelled';
+  }
 
-    const status = data.orderStatus;
-    let email: string | undefined;
-    let body: string;
+  private smsNotificationsEnabled(): boolean {
+    const sms = this.configService.get<Configuration['sms']>('sms');
+    return sms?.enabled === true;
+  }
 
-    switch (status) {
-      case 'confirmed':
-        email = data.clientEmail ?? undefined;
-        body = `Rendasua: Your order ${data.orderNumber} has been confirmed.`;
-        break;
-      case 'assigned_to_agent':
-        email = data.agentEmail ?? undefined;
-        body = `Rendasua: Order ${data.orderNumber} has been assigned to you.`;
-        break;
-      case 'out_for_delivery':
-        email = data.clientEmail ?? undefined;
-        body = `Rendasua: Order ${data.orderNumber} is out for delivery.`;
-        break;
-      case 'delivered':
-        email = data.clientEmail ?? undefined;
-        body = `Rendasua: Order ${data.orderNumber} has been delivered. Thank you!`;
-        break;
-      default:
+  private async notifyClientOrderStatusEmailOrSms(
+    data: NotificationData,
+    templateKey: string,
+    itemsVariant: 'default' | 'agentAssigned'
+  ): Promise<void> {
+    const clientEmail = data.clientEmail?.trim();
+    if (clientEmail) {
+      const baseKey = `client_${templateKey}`;
+      const locale = this.languageForRecipient(data, 'client');
+      const mapKey = this.mapKeyForLanguage(baseKey, locale);
+      if (!this.resendTemplateIds[mapKey]) {
+        this.logger.warn(
+          `No Resend template for ${mapKey}; skipping client email for order ${data.orderNumber}`
+        );
         return;
+      }
+      try {
+        await this.sendEmail({
+          to: clientEmail,
+          templateKey: mapKey,
+          variables: buildResendTemplateVariables(data, 'client', locale, {
+            orderItemsVariant: itemsVariant,
+          }),
+        });
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Failed to send order status email to client for order ${data.orderNumber}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+      return;
     }
+    this.logger.warn(
+      `Skipped order status email (client) for order ${data.orderNumber}: no recipient email`
+    );
+    await this.maybeSendClientOrderStatusSms(data);
+  }
 
-    if (!email) return;
+  private async maybeSendClientOrderStatusSms(data: NotificationData): Promise<void> {
+    if (!this.smsNotificationsEnabled()) return;
+    const status = data.orderStatus;
+    if (!this.isClientOrderStatusSmsEvent(status)) return;
+    const phone = data.clientPhone?.trim();
+    if (!phone) return;
+    if (await this.shouldDeferCompleteSmsToFirstOrderLoyalty(data)) return;
+    const locale = this.languageForRecipient(data, 'client');
+    const body = this.buildClientOrderStatusSmsBody(data, locale);
+    if (!body) return;
+    await this.sendOrangeSmsQuiet(phone, body);
+  }
 
-    try {
-      const userQuery = `
-        query GetUserPhoneByEmail($email: String!) {
-          users(where: { email: { _eq: $email } }, limit: 1) {
-            phone_number
-          }
+  private buildClientOrderStatusSmsBody(
+    data: NotificationData,
+    locale: EmailLocale
+  ): string | null {
+    const n = data.orderNumber;
+    switch (data.orderStatus) {
+      case 'delivered':
+        return smsOrderDelivered(n, locale);
+      case 'complete':
+        return smsOrderComplete(n, locale);
+      case 'cancelled':
+        return smsOrderCancelled(n, locale);
+      default:
+        return null;
+    }
+  }
+
+  private async shouldDeferCompleteSmsToFirstOrderLoyalty(
+    data: NotificationData
+  ): Promise<boolean> {
+    if (data.orderStatus !== 'complete') return false;
+    if (!data.clientId) return false;
+    const count = await this.countCompletedOrdersForClient(data.clientId);
+    if (count !== 1) return false;
+    const hasCode = await this.hasFirstOrderDiscountCodeForClientOrder(
+      data.clientId,
+      data.orderId
+    );
+    return !hasCode;
+  }
+
+  private async countCompletedOrdersForClient(clientId: string): Promise<number> {
+    const query = `
+      query CountCompletedForSms($clientId: uuid!) {
+        orders_aggregate(
+          where: { client_id: { _eq: $clientId }, current_status: { _eq: "complete" } }
+        ) {
+          aggregate { count }
         }
-      `;
-      const userResult = await this.hasuraSystemService.executeQuery(userQuery, { email });
-      const users = (userResult?.users as { phone_number?: string | null }[]) ?? [];
-      if (users.length === 0 || !users[0].phone_number) return;
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_aggregate: { aggregate: { count: number } | null } | null;
+    }>(query, { clientId });
+    return res.orders_aggregate?.aggregate?.count ?? 0;
+  }
 
-      const to = users[0].phone_number.trim();
-      if (!to) return;
+  private async hasFirstOrderDiscountCodeForClientOrder(
+    clientId: string,
+    orderId: string
+  ): Promise<boolean> {
+    const query = `
+      query HasFirstOrderCodeSms($clientId: uuid!, $orderId: uuid!) {
+        order_discount_codes_aggregate(
+          where: {
+            created_for_client_id: { _eq: $clientId },
+            created_for_order_id: { _eq: $orderId },
+            discount_type: { _eq: "first_order_discount_code" }
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      order_discount_codes_aggregate: { aggregate: { count: number } | null } | null;
+    }>(query, { clientId, orderId });
+    return (res.order_discount_codes_aggregate?.aggregate?.count ?? 0) > 0;
+  }
 
-      await this.sendSms(to, body);
-    } catch (err) {
+  private async sendOrangeSmsQuiet(to: string, body: string): Promise<void> {
+    try {
+      const result = await this.smsService.sendSms({ to, message: body });
+      if (result.success) {
+        this.logger.log(`Order SMS sent via Orange to ${to}`);
+      } else {
+        this.logger.warn(`Order SMS failed: ${result.error ?? 'unknown'}`);
+      }
+    } catch (err: unknown) {
       this.logger.warn(
-        `SMS for order status failed: ${err instanceof Error ? err.message : String(err)}`
+        `Order SMS error: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
 
-  /**
-   * Send SMS via Twilio
-   */
-  private async sendSms(to: string, body: string): Promise<void> {
-    const smsConfig = this.configService.get<Configuration['sms']>('sms');
-    if (!smsConfig?.twilioAccountSid || !smsConfig?.twilioAuthToken || !smsConfig?.twilioPhoneNumber) return;
+  async sendFirstOrderCompletedSms(params: {
+    to: string;
+    preferredLanguage?: string | null;
+    orderNumber: string;
+    discountCode: string;
+  }): Promise<void> {
+    if (!this.smsNotificationsEnabled()) return;
+    const phone = params.to.trim();
+    if (!phone) return;
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const body = smsFirstOrderShareCode(
+      params.orderNumber,
+      params.discountCode,
+      locale
+    );
+    await this.sendOrangeSmsQuiet(phone, body);
+  }
 
-    try {
-      const client = twilio(smsConfig.twilioAccountSid, smsConfig.twilioAuthToken);
-      await client.messages.create({
-        body,
-        from: smsConfig.twilioPhoneNumber,
-        to: to.startsWith('+') ? to : `+${to}`,
-      });
-      this.logger.log(`SMS sent to ${to}`);
-    } catch (err) {
-      this.logger.error(`Failed to send SMS to ${to}: ${err instanceof Error ? err.message : String(err)}`);
-      throw err;
-    }
+  async sendClientPaymentFailedSms(params: {
+    to: string;
+    preferredLanguage?: string | null;
+    orderNumber: string;
+  }): Promise<void> {
+    if (!this.smsNotificationsEnabled()) return;
+    const phone = params.to.trim();
+    if (!phone) return;
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const body = smsPaymentFailed(params.orderNumber, locale);
+    await this.sendOrangeSmsQuiet(phone, body);
   }
 
   /**
