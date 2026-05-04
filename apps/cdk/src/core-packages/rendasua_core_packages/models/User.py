@@ -19,7 +19,7 @@ class User(BaseModel):
     business: Optional[Business] | None = None
     client: Optional[Client] | None = None
     created_at: datetime.datetime
-    email: str
+    email: Optional[str] = None
     email_verified: Optional[bool] | None = None
     first_name: str
     id: str

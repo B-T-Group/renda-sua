@@ -10,7 +10,10 @@ from rendasua_core_packages.models import AgentLocation, Order
 from rendasua_core_packages.secrets_manager import get_resend_api_key
 from rendasua_core_packages.utilities import format_full_address
 
+from .nest_sms_client import send_sms_via_nest_api
 from .resend_client import send_resend_template_email
+
+_SMS_BODY_MAX = 480
 
 
 def log_info(message: str, **kwargs: object) -> None:
@@ -89,50 +92,64 @@ def send_proximity_notification(
         order_id=order.id,
         distance_km=round(distance_km, 2),
     )
-    if not resend_api_key or not ((template_id_en or "").strip() or (template_id_fr or "").strip()):
-        log_error("Resend API key or proximity template id missing")
-        return False
     agent_user = agent_location.agent.user if agent_location.agent else None
     if not agent_user:
         log_error("Agent user missing", agent_id=agent_location.agent_id)
         return False
-    agent_email = agent_user.email
-    if not agent_email:
-        log_error("No agent email", agent_id=agent_location.agent_id)
-        return False
-    agent_name = f"{agent_user.first_name} {agent_user.last_name}".strip() or "Agent"
+    agent_email = (agent_user.email or "").strip() if agent_user.email else ""
+    agent_phone = (getattr(agent_user, "phone_number", None) or "").strip()
     locale = _normalize_language(getattr(agent_user, "preferred_language", None))
-    tid = _pick_template_id(locale, template_id_en, template_id_fr)
     distance_str = _distance_label(distance_km, locale)
-    bl = order.business_location
-    business_name = bl.name if bl else "N/A"
-    if bl and bl.address:
-        try:
-            business_address = format_full_address(bl.address)
-        except (AttributeError, KeyError):
+
+    if agent_email:
+        if not resend_api_key or not (
+            (template_id_en or "").strip() or (template_id_fr or "").strip()
+        ):
+            log_error("Resend API key or proximity template id missing")
+            return False
+        agent_name = f"{agent_user.first_name} {agent_user.last_name}".strip() or "Agent"
+        tid = _pick_template_id(locale, template_id_en, template_id_fr)
+        bl = order.business_location
+        business_name = bl.name if bl else "N/A"
+        if bl and bl.address:
+            try:
+                business_address = format_full_address(bl.address)
+            except (AttributeError, KeyError):
+                business_address = "NA"
+        else:
             business_address = "NA"
-    else:
-        business_address = "NA"
-    variables = {
-        "recipientName": agent_name,
-        "message": _proximity_message(distance_str, locale),
-        "orderNumber": order.order_number,
-        "orderId": order.id,
-        "businessName": business_name,
-        "businessAddress": business_address,
-        "currentYear": datetime.now().year,
-    }
-    ok, err = send_resend_template_email(
-        resend_api_key,
-        _from_email(),
-        agent_email,
-        tid,
-        variables,
-    )
-    if ok:
-        log_info("Proximity email sent", agent_email=agent_email)
-        return True
-    log_error("Resend proximity send failed", error=None, detail=err)
+        variables = {
+            "recipientName": agent_name,
+            "message": _proximity_message(distance_str, locale),
+            "orderNumber": order.order_number,
+            "orderId": order.id,
+            "businessName": business_name,
+            "businessAddress": business_address,
+            "currentYear": datetime.now().year,
+        }
+        ok, err = send_resend_template_email(
+            resend_api_key,
+            _from_email(),
+            agent_email,
+            tid,
+            variables,
+        )
+        if ok:
+            log_info("Proximity email sent", agent_email=agent_email)
+            return True
+        log_error("Resend proximity send failed", error=None, detail=err)
+        return False
+
+    if agent_phone:
+        body = (f"Rendasua — {_proximity_message(distance_str, locale)}")[:_SMS_BODY_MAX]
+        ok, err = send_sms_via_nest_api(agent_phone, body)
+        if ok:
+            log_info("Proximity SMS sent via Nest", agent_id=agent_location.agent_id)
+            return True
+        log_error("Proximity SMS via Nest failed", error=None, detail=err)
+        return False
+
+    log_error("No agent email or phone", agent_id=agent_location.agent_id)
     return False
 
 
@@ -149,10 +166,12 @@ def send_notifications_to_nearby_agents(
         total=len(agent_locations),
         order_id=order.id,
     )
-    api_key = get_resend_api_key(environment)
+    api_key = get_resend_api_key(environment) or ""
     if not api_key:
-        log_error("Resend API key not available", environment=environment)
-        return 0
+        log_info(
+            "Resend API key not available — email sends skipped; SMS-only agents may still notify",
+            environment=environment,
+        )
     sent = 0
     for agent_location, dist in zip(agent_locations, distances):
         if send_proximity_notification(
@@ -177,35 +196,55 @@ def send_aggregated_proximity_notification(
     template_id_en: str,
     template_id_fr: str,
 ) -> bool:
-    if not resend_api_key or not (template_id_en or template_id_fr):
-        log_error("Resend key or summary template ids missing")
+    if not (template_id_en or template_id_fr):
+        log_error("Summary template ids missing")
         return False
     agent_user = agent_location.agent.user if agent_location.agent else None
-    if not agent_user or not agent_user.email:
-        log_error("Agent email missing", agent_id=agent_location.agent_id)
+    if not agent_user:
+        log_error("Agent user missing", agent_id=agent_location.agent_id)
         return False
+    agent_email = (agent_user.email or "").strip() if agent_user.email else ""
+    agent_phone = (getattr(agent_user, "phone_number", None) or "").strip()
     locale = _normalize_language(getattr(agent_user, "preferred_language", None))
-    tid = _pick_template_id(locale, template_id_en, template_id_fr)
-    agent_name = f"{agent_user.first_name} {agent_user.last_name}".strip() or "Agent"
     if proximity_radius_km < 1:
         radius_str = f"{proximity_radius_km * 1000:.0f} m"
     else:
         radius_str = f"{proximity_radius_km:.0f} km"
-    variables = {
-        "recipientName": agent_name,
-        "message": _aggregated_message(order_count, radius_str, locale),
-        "currentYear": datetime.now().year,
-    }
-    ok, err = send_resend_template_email(
-        resend_api_key,
-        _from_email(),
-        agent_user.email,
-        tid,
-        variables,
-    )
-    if ok:
-        return True
-    log_error("Aggregated send failed", error=None, detail=err)
+    agg_line = _aggregated_message(order_count, radius_str, locale)
+
+    if agent_email:
+        if not resend_api_key:
+            log_error("Resend key missing for aggregated email")
+            return False
+        tid = _pick_template_id(locale, template_id_en, template_id_fr)
+        agent_name = f"{agent_user.first_name} {agent_user.last_name}".strip() or "Agent"
+        variables = {
+            "recipientName": agent_name,
+            "message": agg_line,
+            "currentYear": datetime.now().year,
+        }
+        ok, err = send_resend_template_email(
+            resend_api_key,
+            _from_email(),
+            agent_email,
+            tid,
+            variables,
+        )
+        if ok:
+            return True
+        log_error("Aggregated send failed", error=None, detail=err)
+        return False
+
+    if agent_phone:
+        body = (f"Rendasua — {agg_line}")[:_SMS_BODY_MAX]
+        ok, err = send_sms_via_nest_api(agent_phone, body)
+        if ok:
+            log_info("Aggregated proximity SMS sent via Nest", agent_id=agent_location.agent_id)
+            return True
+        log_error("Aggregated SMS via Nest failed", error=None, detail=err)
+        return False
+
+    log_error("No agent email or phone", agent_id=agent_location.agent_id)
     return False
 
 
@@ -218,10 +257,12 @@ def send_aggregated_notifications_to_agents(
     template_id_fr: str,
 ) -> int:
     log_info("Aggregated batch", agents=len(agent_locations))
-    api_key = get_resend_api_key(environment)
+    api_key = get_resend_api_key(environment) or ""
     if not api_key:
-        log_error("Resend API key not available", environment=environment)
-        return 0
+        log_info(
+            "Resend API key not available — aggregated emails skipped; SMS-only agents may still notify",
+            environment=environment,
+        )
     if not template_id_en and not template_id_fr:
         log_error("Summary template ids not configured; skipping aggregated sends")
         return 0

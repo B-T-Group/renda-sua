@@ -41,6 +41,7 @@ def get_all_agent_locations(
           user {
             id
             email
+            phone_number
             first_name
             last_name
             identifier
@@ -78,7 +79,8 @@ def get_all_agent_locations(
                 if user_data:
                     user_model = User.model_construct(
                         id=user_data["id"],
-                        email=user_data["email"],
+                        email=user_data.get("email"),
+                        phone_number=user_data.get("phone_number"),
                         first_name=user_data["first_name"],
                         last_name=user_data["last_name"],
                         identifier=user_data["identifier"],

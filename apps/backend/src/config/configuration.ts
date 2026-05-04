@@ -165,6 +165,11 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+/** Shared secret for Lambda → Nest internal notification routes (e.g. SMS). */
+export interface NotificationsInternalConfig {
+  apiKey: string;
+}
+
 export interface PushConfig {
   vapidPublicKey: string;
   vapidPrivateKey: string;
@@ -231,6 +236,7 @@ export interface Configuration {
   openai: OpenAIConfig;
   deepseek: DeepseekConfig;
   notification: NotificationConfig;
+  notificationsInternal: NotificationsInternalConfig;
   push: PushConfig;
   sms: SmsConfig;
   mtnSms: MtnSmsConfig;
@@ -434,6 +440,9 @@ export default (): Configuration => {
     notification: {
       orderStatusChangeEnabled:
         process.env.ORDER_STATUS_NOTIFICATIONS_ENABLED !== 'false',
+    },
+    notificationsInternal: {
+      apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

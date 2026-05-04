@@ -1363,6 +1363,24 @@ export class NotificationsService {
     return sms?.enabled === true;
   }
 
+  /**
+   * Trusted internal callers (e.g. notify-agents Lambda) send SMS through the same Orange path.
+   */
+  async sendInternalSms(
+    to: string,
+    message: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.smsNotificationsEnabled()) {
+      return { success: false, error: 'SMS notifications are disabled (SMS_ENABLED)' };
+    }
+    const trimmedTo = to?.trim();
+    const trimmedMsg = message?.trim();
+    if (!trimmedTo || !trimmedMsg) {
+      return { success: false, error: 'Missing recipient or message' };
+    }
+    return this.smsService.sendSms({ to: trimmedTo, message: trimmedMsg });
+  }
+
   private async notifyClientOrderStatusEmailOrSms(
     data: NotificationData,
     templateKey: string,

@@ -1,7 +1,19 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { Public } from '../auth/public.decorator';
+import type { Configuration } from '../config/configuration';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
@@ -15,7 +27,8 @@ interface RequestWithUser extends Request {
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   @Get('vapid-public-key')
@@ -152,5 +165,36 @@ export class NotificationsController {
       data.previousStatus
     );
     return { success: true, message: 'Test notifications sent successfully' };
+  }
+
+  @Public()
+  @Post('internal/sms')
+  @ApiOperation({
+    summary: 'Internal: send SMS (trusted callers such as notify-agents Lambda)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['to', 'message'],
+      properties: {
+        to: { type: 'string', description: 'E.164 or local phone' },
+        message: { type: 'string', description: 'SMS body (keep short)' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'SMS send attempted' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  async internalSendSms(
+    @Body() body: { to?: string; message?: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const expected =
+      this.configService.get<Configuration['notificationsInternal']>(
+        'notificationsInternal'
+      )?.apiKey ?? '';
+    if (!expected || internalKey !== expected) {
+      throw new UnauthorizedException();
+    }
+    return this.notificationsService.sendInternalSms(body?.to ?? '', body?.message ?? '');
   }
 }

@@ -88,6 +88,11 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         ? 'https://rendasua-prod.hasura.app/v1/graphql'
         : 'https://healthy-mackerel-72.hasura.app/v1/graphql';
 
+    const backendInternalApiBaseUrl =
+      environment === 'production'
+        ? 'https://api.rendasua.com'
+        : 'https://dev.api.rendasua.com';
+
     // Create Lambda function for order status handler
     const orderStatusHandlerFunction = new lambda.Function(
       this,
@@ -249,6 +254,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY: '',
           PROXIMITY_RADIUS_KM: '20',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
             'dc4461e3-4cd2-485b-8c9c-755e36205f30',
