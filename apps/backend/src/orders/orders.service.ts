@@ -4029,6 +4029,7 @@ export class OrdersService {
           payment_method
           payment_status
           payment_timing
+          reconciliation_status
           verified_agent_delivery
           created_at
           updated_at
@@ -4216,6 +4217,7 @@ export class OrdersService {
           payment_method
           payment_status
           payment_timing
+          reconciliation_status
           verified_agent_delivery
           created_at
           updated_at
