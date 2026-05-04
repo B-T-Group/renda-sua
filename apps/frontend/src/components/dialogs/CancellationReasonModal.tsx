@@ -32,6 +32,7 @@ import {
   useCancellationReasons,
 } from '../../hooks';
 import type { OrderData } from '../../hooks/useOrderById';
+import { businessMayCancelOrder } from '../../utils/orderUtils';
 
 export interface CancellationReasonModalProps {
   open: boolean;
@@ -73,13 +74,17 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
     order.current_status
   );
 
-  // Check if order can be cancelled at all
-  const canCancel = ![
+  const agentHandoffBlockedStatuses = [
     'assigned_to_agent',
     'out_for_delivery',
     'in_transit',
     'picked_up',
-  ].includes(order.current_status);
+  ];
+
+  const canCancel =
+    persona === 'business'
+      ? businessMayCancelOrder(order)
+      : !agentHandoffBlockedStatuses.includes(order.current_status);
 
   // Fetch cancellation fee when modal opens and order can be cancelled
   useEffect(() => {

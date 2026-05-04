@@ -3317,6 +3317,38 @@ export class OrdersService {
     };
   }
 
+  private businessMayCancelDeferredUncollectedOrder(order: Orders): boolean {
+    const timing = (
+      order as Orders & { payment_timing?: string | null }
+    ).payment_timing;
+    if (timing !== 'pay_at_delivery' && timing !== 'pay_at_pickup')
+      return false;
+    const ps = order.payment_status;
+    if (ps !== 'pending' && ps !== 'pending_payment') return false;
+    const terminal = new Set([
+      'cancelled',
+      'refunded',
+      'complete',
+      'refund_requested',
+      'refund_approved_full',
+      'refund_approved_partial',
+      'refund_approved_replace',
+      'refund_rejected',
+    ]);
+    return !terminal.has(order.current_status);
+  }
+
+  private businessMayCancelOrder(order: Orders): boolean {
+    const early = [
+      'pending_payment',
+      'pending',
+      'confirmed',
+      'preparing',
+    ];
+    if (early.includes(order.current_status)) return true;
+    return this.businessMayCancelDeferredUncollectedOrder(order);
+  }
+
   async cancelOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
 
@@ -3352,27 +3384,18 @@ export class OrdersService {
       );
     }
 
-    // Business can cancel orders in more statuses than clients
-    let cancellableStatuses: string[];
-    if (isBusinessOwner) {
-      cancellableStatuses = [
-        'pending_payment',
-        'pending',
-        'confirmed',
-        'preparing',
-      ];
-    } else {
-      // Clients can cancel orders before they are picked up by delivery agent
-      cancellableStatuses = [
-        'pending_payment',
-        'pending',
-        'confirmed',
-        'preparing',
-        'ready_for_pickup',
-      ];
-    }
+    const clientCancellableStatuses = [
+      'pending_payment',
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+    ];
+    const mayCancel = isBusinessOwner
+      ? this.businessMayCancelOrder(order)
+      : clientCancellableStatuses.includes(order.current_status);
 
-    if (!cancellableStatuses.includes(order.current_status))
+    if (!mayCancel)
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status. Orders can only be cancelled before pickup by delivery agent.`,
         HttpStatus.BAD_REQUEST

@@ -31,6 +31,7 @@ import {
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import { businessMayCancelDeferredUncollectedOrder } from '../../utils/orderUtils';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
@@ -489,6 +490,19 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           });
         }
         break;
+    }
+
+    const hasCancelAction = actions.some((a) => a.action === handleCancelClick);
+    if (
+      businessMayCancelDeferredUncollectedOrder(order) &&
+      !hasCancelAction
+    ) {
+      actions.push({
+        label: t('orderActions.cancelOrder', 'Cancel Order'),
+        action: handleCancelClick,
+        color: 'error' as const,
+        icon: <Cancel />,
+      });
     }
 
     if (canPrintLabel) {

@@ -1,5 +1,48 @@
 import type { OrderData } from '../hooks/useOrderById';
 
+const BUSINESS_EARLY_CANCEL_STATUSES = [
+  'pending_payment',
+  'pending',
+  'confirmed',
+  'preparing',
+] as const;
+
+const BUSINESS_DEFERRED_CANCEL_TERMINAL_STATUSES = [
+  'cancelled',
+  'refunded',
+  'complete',
+  'refund_requested',
+  'refund_approved_full',
+  'refund_approved_partial',
+  'refund_approved_replace',
+  'refund_rejected',
+] as const;
+
+/** pay_at_delivery / pay_at_pickup with no successful collection yet */
+export function businessMayCancelDeferredUncollectedOrder(
+  order: Pick<OrderData, 'current_status' | 'payment_timing' | 'payment_status'>
+): boolean {
+  const timing = order.payment_timing;
+  if (timing !== 'pay_at_delivery' && timing !== 'pay_at_pickup') return false;
+  const ps = order.payment_status;
+  if (ps !== 'pending' && ps !== 'pending_payment') return false;
+  return !BUSINESS_DEFERRED_CANCEL_TERMINAL_STATUSES.includes(
+    order.current_status as (typeof BUSINESS_DEFERRED_CANCEL_TERMINAL_STATUSES)[number]
+  );
+}
+
+/** Matches backend business cancel rules (including deferred payment at any pre-completion stage). */
+export function businessMayCancelOrder(order: OrderData): boolean {
+  if (
+    BUSINESS_EARLY_CANCEL_STATUSES.includes(
+      order.current_status as (typeof BUSINESS_EARLY_CANCEL_STATUSES)[number]
+    )
+  ) {
+    return true;
+  }
+  return businessMayCancelDeferredUncollectedOrder(order);
+}
+
 /**
  * Check if an order has been in pending payment status for more than the specified duration
  * @param order - The order to check
