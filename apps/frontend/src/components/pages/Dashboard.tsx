@@ -137,12 +137,14 @@ const Dashboard: React.FC = () => {
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    const unitPrice =
+    const hasDeal =
       item.hasActiveDeal &&
       typeof item.original_price === 'number' &&
       typeof item.discounted_price === 'number' &&
-      item.original_price > 0
-        ? item.discounted_price!
+      item.original_price > 0;
+    const unitPrice =
+      hasDeal && typeof item.discounted_price === 'number'
+        ? item.discounted_price
         : item.selling_price;
     const contentCategory = metaPixelContentCategoryFromItem(item.item);
     const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
@@ -174,31 +176,14 @@ const Dashboard: React.FC = () => {
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
         originalPrice:
-          item.hasActiveDeal &&
-          typeof item.original_price === 'number' &&
-          typeof item.discounted_price === 'number' &&
-          item.original_price > 0
-            ? item.original_price!
-            : undefined,
+          hasDeal && typeof item.original_price === 'number' ? item.original_price : undefined,
         discountedPrice:
-          item.hasActiveDeal &&
-          typeof item.original_price === 'number' &&
-          typeof item.discounted_price === 'number' &&
-          item.original_price > 0
-            ? item.discounted_price!
+          hasDeal && typeof item.discounted_price === 'number'
+            ? item.discounted_price
             : undefined,
-        hasActiveDeal:
-          item.hasActiveDeal &&
-          typeof item.original_price === 'number' &&
-          typeof item.discounted_price === 'number' &&
-          item.original_price > 0,
+        hasActiveDeal: hasDeal,
         dealEndAt:
-          item.hasActiveDeal &&
-          typeof item.original_price === 'number' &&
-          typeof item.discounted_price === 'number' &&
-          item.original_price > 0
-            ? item.deal_end_at
-            : undefined,
+          hasDeal ? item.deal_end_at : undefined,
       },
     });
   };
@@ -273,7 +258,7 @@ const Dashboard: React.FC = () => {
               fontSize: { xs: '1.75rem', sm: '2.125rem' },
             }}
           >
-            Client Dashboard
+            {t('client.dashboard.title', 'Client Dashboard')}
           </Typography>
           {user?.email_verified && <StatusBadge type="verified" />}
         </Box>
@@ -282,10 +267,16 @@ const Dashboard: React.FC = () => {
           color="text.secondary"
           sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
         >
-          Welcome back,{' '}
-          {`${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
-            user?.email}
-          ! Browse available items and manage your orders.
+          {t(
+            'client.dashboard.welcome',
+            'Welcome back, {{name}}! Browse available items and manage your orders.',
+            {
+              name:
+                `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+                user?.email ||
+                '',
+            }
+          )}
         </Typography>
       </Box>
 

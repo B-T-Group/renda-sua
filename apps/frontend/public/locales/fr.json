@@ -1922,6 +1922,7 @@
     "edit": "Modifier",
     "error": "Erreur",
     "errorLoadingData": "Erreur lors du chargement des données",
+    "notAuthenticated": "Veuillez vous connecter pour continuer.",
     "filter": "Filtre",
     "filters": "Filtres",
     "goBack": "Retour",
@@ -2308,6 +2309,14 @@
     "cashReconciliationViewBanner": "Affichage des commandes en attente de rapprochement espèces. Ouvrez une commande pour encaisser le paiement mobile et déclencher les versements.",
     "cashReconciliationClearFilter": "Afficher toutes les commandes",
     "noCashReconciliationOrders": "Aucune commande n'est en attente de rapprochement espèces pour le moment.",
+    "trackYourOrder": {
+      "cta": "Suivre ma commande",
+      "goToOrder": "Voir la commande",
+      "helper": "Suivez votre livreur sur la carte en temps réel.",
+      "noLocation": "La localisation en direct n’est pas encore disponible. Réessayez dans quelques instants.",
+      "note": "Votre commande est en route.",
+      "title": "Suivre ma commande"
+    },
     "retryPayment": {
       "cta": "Réessayer le paiement",
       "helper": "Vous pouvez aussi annuler la commande si vous avez changé d’avis.",

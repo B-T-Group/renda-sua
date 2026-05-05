@@ -2,6 +2,8 @@ import { useAuth0 } from '@auth0/auth0-react';
 import {
     Assignment,
     Inventory,
+    LocalShipping,
+    Map as MapIcon,
     Search as SearchIcon,
 } from '@mui/icons-material';
 import {
@@ -14,6 +16,7 @@ import {
     Container,
     Pagination,
     Paper,
+    Stack,
     Skeleton,
     Typography,
 } from '@mui/material';
@@ -47,6 +50,7 @@ import ItemsPageFilter, {
 } from '../common/ItemsPageFilter';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
+import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
 import deliveryPricingBanner from '../../assets/delivery-pricing-banner.png';
 
@@ -206,6 +210,7 @@ const ItemsPage: React.FC = () => {
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
+  const [trackOrderOpen, setTrackOrderOpen] = useState(false);
 
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
 
@@ -342,6 +347,16 @@ const ItemsPage: React.FC = () => {
       }
     });
   }, [orders, profile?.user_type_id]);
+
+  const activeDeliveryOrder = React.useMemo(() => {
+    if (!isClient || !orders) return null;
+    const delivering = new Set(['picked_up', 'in_transit', 'out_for_delivery']);
+    return (
+      orders.find(
+        (o) => delivering.has(o.current_status) && Boolean(o.assigned_agent_id)
+      ) ?? null
+    );
+  }, [isClient, orders]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setCurrentPage(value);
@@ -565,6 +580,58 @@ const ItemsPage: React.FC = () => {
           {/* Address Alert - Only for authenticated clients */}
           {isClient && <AddressAlert />}
 
+          {activeDeliveryOrder && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mt: 1.5,
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: (theme) =>
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.primary.main, 0.12)
+                    : alpha(theme.palette.primary.main, 0.06),
+                borderColor: (theme) => alpha(theme.palette.primary.main, 0.35),
+              }}
+            >
+              <Stack direction="row" spacing={1.25} alignItems="center">
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 2,
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  <LocalShipping color="primary" />
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+                    {t('orders.trackYourOrder.note', 'Your order is on its way.')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t(
+                      'orders.trackYourOrder.helper',
+                      'Track your delivery agent on the map in real time.'
+                    )}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="contained"
+                  startIcon={<MapIcon />}
+                  onClick={() => setTrackOrderOpen(true)}
+                  sx={{ fontWeight: 900, whiteSpace: 'nowrap' }}
+                >
+                  {t('orders.trackYourOrder.cta', 'Track your order')}
+                </Button>
+              </Stack>
+            </Paper>
+          )}
+
           {/* Unified filter for all users (contains search bar) */}
           <ItemsPageFilter
             items={facetInventoryItems}
@@ -717,6 +784,14 @@ const ItemsPage: React.FC = () => {
           </Paper>
         )}
       </Box>
+
+      {activeDeliveryOrder && (
+        <TrackOrderModal
+          open={trackOrderOpen}
+          orderId={activeDeliveryOrder.id}
+          onClose={() => setTrackOrderOpen(false)}
+        />
+      )}
 
       {/* Items Section */}
       <Paper sx={{ p: { xs: 1, sm: 2 } }}>

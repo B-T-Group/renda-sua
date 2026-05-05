@@ -1934,6 +1934,7 @@
     "edit": "Edit",
     "error": "Error",
     "errorLoadingData": "Error loading data",
+    "notAuthenticated": "Please sign in to continue.",
     "filter": "Filter",
     "filters": "Filters",
     "goBack": "Go Back",
@@ -2319,6 +2320,14 @@
     "cashReconciliationViewBanner": "Showing only orders pending cash reconciliation. Open an order to collect mobile payment and settle payouts.",
     "cashReconciliationClearFilter": "Show all orders",
     "noCashReconciliationOrders": "No orders are waiting for cash reconciliation right now.",
+    "trackYourOrder": {
+      "cta": "Track your order",
+      "goToOrder": "Go to order",
+      "helper": "Track your delivery agent on the map in real time.",
+      "noLocation": "Live location is not available yet. Please try again shortly.",
+      "note": "Your order is on its way.",
+      "title": "Track your order"
+    },
     "retryPayment": {
       "cta": "Retry payment",
       "helper": "You can also cancel the order if you changed your mind.",
