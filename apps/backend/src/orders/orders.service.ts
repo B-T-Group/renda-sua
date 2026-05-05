@@ -116,6 +116,11 @@ type OrderHoldWithSettlement = Order_Holds & {
   delivery_settlement_completed_at?: string | null;
 };
 
+type InventoryQuantityRequest = {
+  business_inventory_id?: string;
+  quantity?: number;
+};
+
 // Custom interface for complex order data with all relationships
 export interface OrderWithDetails {
   id: string;
@@ -402,6 +407,20 @@ export class OrdersService {
       return discounted > 0 ? discounted : 0;
     }
     return base;
+  }
+
+  private getRequestedQuantitiesByInventory(
+    items: InventoryQuantityRequest[]
+  ): Map<string, number> {
+    const quantitiesByInventory = new Map<string, number>();
+    for (const item of items) {
+      if (!item.business_inventory_id || !item.quantity) {
+        continue;
+      }
+      const current = quantitiesByInventory.get(item.business_inventory_id) ?? 0;
+      quantitiesByInventory.set(item.business_inventory_id, current + item.quantity);
+    }
+    return quantitiesByInventory;
   }
 
   private computeUnitPriceFromVariantOrInventory(
@@ -6238,8 +6257,12 @@ export class OrdersService {
       throw new Error('All items must be from the same business');
     }
 
+    const requestedQuantityByInventoryId =
+      this.getRequestedQuantitiesByInventory(orderData.items);
+
     // Validate all items are active, respect max_order_quantity, have sufficient quantity, and resolve variants
     const lineContexts: Array<{ inventory: any; variant: any | null }> = [];
+    const validatedInventoryIds = new Set<string>();
 
     for (let i = 0; i < orderData.items.length; i++) {
       const item = orderData.items[i];
@@ -6266,11 +6289,17 @@ export class OrdersService {
         );
       }
 
-      if (item.quantity > businessInventory.computed_available_quantity) {
+      const requestedQuantity =
+        requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
+      if (
+        !validatedInventoryIds.has(item.business_inventory_id) &&
+        requestedQuantity > businessInventory.computed_available_quantity
+      ) {
         throw new Error(
-          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${item.quantity}`
+          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${requestedQuantity}`
         );
       }
+      validatedInventoryIds.add(item.business_inventory_id);
 
       const variant = this.resolveVariantForOrderLine(item, businessInventory);
       lineContexts.push({ inventory: businessInventory, variant });
@@ -8030,10 +8059,8 @@ export class OrdersService {
         );
       }
 
-      // Collect all business inventory IDs
-      const businessInventoryIds = validItems.map(
-        (item) => item.business_inventory_id
-      );
+      const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
+      const businessInventoryIds = [...quantityChanges.keys()];
 
       // Batch read: Get all current reserved quantities in a single query
       const getCurrentQuantitiesQuery = `
@@ -8058,28 +8085,28 @@ export class OrdersService {
       });
 
       // Calculate all new reserved quantities
-      const updates = validItems.map((item) => {
-        const businessInventoryId = item.business_inventory_id;
-        const quantity = item.quantity;
-        const currentReservedQuantity =
-          quantityMap.get(businessInventoryId) || 0;
+      const updates = [...quantityChanges.entries()].map(
+        ([businessInventoryId, quantity]) => {
+          const currentReservedQuantity =
+            quantityMap.get(businessInventoryId) || 0;
 
-        // Calculate new reserved quantity
-        const newReservedQuantity =
-          operation === 'increment'
-            ? currentReservedQuantity + quantity
-            : currentReservedQuantity - quantity;
+          // Calculate new reserved quantity
+          const newReservedQuantity =
+            operation === 'increment'
+              ? currentReservedQuantity + quantity
+              : currentReservedQuantity - quantity;
 
-        // Ensure reserved quantity doesn't go below 0
-        const finalReservedQuantity = Math.max(0, newReservedQuantity);
+          // Ensure reserved quantity doesn't go below 0
+          const finalReservedQuantity = Math.max(0, newReservedQuantity);
 
-        return {
-          id: businessInventoryId,
-          currentReservedQuantity,
-          finalReservedQuantity,
-          quantity,
-        };
-      });
+          return {
+            id: businessInventoryId,
+            currentReservedQuantity,
+            finalReservedQuantity,
+            quantity,
+          };
+        }
+      );
 
       // Batch update: Execute all updates in parallel
       const updatePromises = updates.map((update) => {
