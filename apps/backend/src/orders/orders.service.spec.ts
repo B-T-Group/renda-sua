@@ -822,6 +822,65 @@ describe('OrdersService', () => {
       );
     });
 
+    it('should allow business to cancel deferred uncollected order after handoff', async () => {
+      const deferredOrder = {
+        ...mockOrder,
+        current_status: 'out_for_delivery',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_delivery',
+        assigned_agent_id: 'agent-123',
+      };
+
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: deferredOrder,
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...deferredOrder,
+        current_status: 'cancelled',
+      });
+
+      const result = await service.cancelOrder({
+        orderId: 'order-123',
+        notes: 'Customer did not pay at delivery',
+      });
+
+      expect(result.success).toBe(true);
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'order-123',
+        'cancelled'
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          status: 'cancelled',
+          changedByType: 'business',
+        })
+      );
+    });
+
+    it('should not allow business to cancel late orders after payment collection', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...mockOrder,
+          current_status: 'out_for_delivery',
+          payment_status: 'paid',
+          payment_timing: 'pay_at_delivery',
+        },
+      });
+
+      await expect(
+        service.cancelOrder({ orderId: 'order-123' })
+      ).rejects.toThrow(
+        new HttpException(
+          'Cannot cancel order in out_for_delivery status. Orders can only be cancelled before pickup by delivery agent.',
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
     it('should allow client to cancel their own order in pending status', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.executeQuery.mockResolvedValue({
