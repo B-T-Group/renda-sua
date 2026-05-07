@@ -5,6 +5,7 @@ const zlib = require('zlib');
 const { InjectManifest } = require('workbox-webpack-plugin');
 
 const isProd = process.env['NODE_ENV'] === 'production';
+const isServe = process.env['WEBPACK_SERVE'] === 'true';
 
 const compressionPlugins = isProd
   ? (() => {
@@ -163,11 +164,15 @@ module.exports = {
       optimization: process.env['NODE_ENV'] === 'production',
     }),
     new NxReactWebpackPlugin({}),
-    new InjectManifest({
-      swSrc: join(__dirname, 'src/pwa/service-worker.js'),
-      swDest: 'service-worker.js',
-      maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-    }),
+    ...(isProd && !isServe
+      ? [
+          new InjectManifest({
+            swSrc: join(__dirname, 'src/pwa/service-worker.js'),
+            swDest: 'service-worker.js',
+            maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          }),
+        ]
+      : []),
     ...compressionPlugins,
     ...analyzerPlugins,
   ],

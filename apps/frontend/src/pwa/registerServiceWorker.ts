@@ -1,3 +1,5 @@
+import { environment } from '../config/environment';
+
 type RegisterCallbacks = {
   onUpdateReady?: () => void;
   onSuccess?: () => void;
@@ -5,6 +7,7 @@ type RegisterCallbacks = {
 
 export function registerServiceWorker(callbacks: RegisterCallbacks = {}) {
   if (!('serviceWorker' in navigator)) return;
+  if (!environment.isProduction) return;
 
   window.addEventListener('load', () => {
     navigator.serviceWorker
