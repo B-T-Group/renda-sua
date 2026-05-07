@@ -30,6 +30,7 @@ import SmartOrders from '../components/routing/SmartOrders';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 
 function RouteSuspenseFallback() {
@@ -59,6 +60,9 @@ function App() {
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // “Swipe down to refresh” on touch devices (best-effort; especially useful in installed PWAs)
+  usePullToRefresh({ enabled: isMobile, thresholdPx: 90 });
 
   // Check if agent needs to complete onboarding (global check)
   const agentNeedsOnboarding = useMemo((): boolean => {

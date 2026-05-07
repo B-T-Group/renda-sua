@@ -4,10 +4,18 @@
   "sourceRoot": "apps/frontend/src",
   "projectType": "application",
   "targets": {
+    "generate-pwa-icons": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node apps/frontend/tools/generate-pwa-icons.mjs",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "build": {
       "executor": "@nx/webpack:webpack",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "local",
+      "dependsOn": ["generate-pwa-icons"],
       "options": {
         "target": "web",
         "compiler": "babel",

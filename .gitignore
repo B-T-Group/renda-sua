@@ -59,6 +59,13 @@ Thumbs.db
 
 test-output
 
+# PWA icons generated from src/assets/rendasua.svg
+apps/frontend/src/assets/pwa/android-chrome-192x192.png
+apps/frontend/src/assets/pwa/android-chrome-512x512.png
+apps/frontend/src/assets/pwa/apple-touch-icon.png
+apps/frontend/src/assets/pwa/favicon-16x16.png
+apps/frontend/src/assets/pwa/favicon-32x32.png
+
 # Playwright
 /test-results/
 /playwright-report/

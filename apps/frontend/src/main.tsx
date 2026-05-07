@@ -16,20 +16,21 @@ import { UserProfileProvider } from './contexts/UserProfileContext';
 import { i18nInitPromise } from './i18n';
 import ApolloProvider from './providers/ApolloProvider';
 import { theme } from './theme/theme';
+import {
+  registerServiceWorker,
+  skipWaitingAndReload,
+} from './pwa/registerServiceWorker';
 
-// Register service worker for background location tracking
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then((registration) => {
-        console.log('Service Worker registered:', registration.scope);
-      })
-      .catch((error) => {
-        console.error('Service Worker registration failed:', error);
-      });
-  });
-}
+registerServiceWorker({
+  onUpdateReady: () => {
+    const shouldReload = window.confirm(
+      'A new version of Rendasua is available. Reload to update now?'
+    );
+    if (shouldReload) {
+      void skipWaitingAndReload();
+    }
+  },
+});
 
 // Create auth0 config from environment
 const auth0Config = {
