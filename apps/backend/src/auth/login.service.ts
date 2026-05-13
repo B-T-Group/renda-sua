@@ -28,6 +28,10 @@ export class LoginService {
     return email.trim().toLowerCase();
   }
 
+  private normalizePhone(phone: string): string {
+    return String(phone || '').trim();
+  }
+
   private decodeClaimsFromIdToken(idToken: string): Auth0IdTokenClaims {
     const decoded = jwt.decode(idToken) as Auth0IdTokenClaims | null;
     if (!decoded?.sub) {
@@ -65,14 +69,73 @@ export class LoginService {
     return result.users?.[0] || null;
   }
 
-  async startLoginOtp(rawEmail: string): Promise<void> {
-    const email = this.normalizeEmail(rawEmail || '');
-    if (!email) {
+  private async getUserByPhoneNumber(phoneNumber: string): Promise<{
+    id: string;
+    email: string;
+    phone_number: string | null;
+    email_verified: boolean | null;
+    phone_number_verified: boolean | null;
+  } | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{
+        id: string;
+        email: string;
+        phone_number: string | null;
+        email_verified: boolean | null;
+        phone_number_verified: boolean | null;
+      }>;
+    }>(
+      `
+      query UserByPhone($phone: String!) {
+        users(where: { phone_number: { _eq: $phone } }, limit: 1) {
+          id
+          email
+          phone_number
+          email_verified
+          phone_number_verified
+        }
+      }
+    `,
+      { phone: phoneNumber }
+    );
+    return result.users?.[0] || null;
+  }
+
+  async startLoginOtp(body: {
+    email?: string;
+    phone_number?: string;
+  }): Promise<void> {
+    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
+    const phone = body.phone_number?.trim()
+      ? this.normalizePhone(body.phone_number)
+      : '';
+    if (email && phone) {
       throw new HttpException(
-        { success: false, error: 'Email is required' },
+        {
+          success: false,
+          error: 'Provide either email or phone_number, not both',
+        },
         HttpStatus.BAD_REQUEST
       );
     }
+    if (email) {
+      await this.startLoginOtpWithEmail(email);
+      return;
+    }
+    if (phone) {
+      await this.startLoginOtpWithPhone(phone);
+      return;
+    }
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Email or phone_number is required',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async startLoginOtpWithEmail(email: string): Promise<void> {
     const user = await this.getUserByEmail(email);
     if (!user) {
       throw new HttpException(
@@ -81,6 +144,17 @@ export class LoginService {
       );
     }
     await this.auth0Service.startEmailOtp(email);
+  }
+
+  private async startLoginOtpWithPhone(phoneNumber: string): Promise<void> {
+    const user = await this.getUserByPhoneNumber(phoneNumber);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.auth0Service.startSmsOtp(phoneNumber);
   }
 
   private async markEmailVerifiedIfNeeded(
@@ -103,20 +177,103 @@ export class LoginService {
     );
   }
 
-  async verifyLoginOtp(rawEmail: string, otp: string): Promise<TokenData> {
-    const email = this.normalizeEmail(rawEmail || '');
-    if (!email || !otp?.trim()) {
+  private async markPhoneVerifiedIfNeeded(
+    userId: string,
+    shouldVerifyPhone: boolean
+  ): Promise<void> {
+    if (!shouldVerifyPhone) return;
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation VerifyLoginPhone($id: uuid!) {
+        update_users_by_pk(
+          pk_columns: { id: $id }
+          _set: { phone_number_verified: true }
+        ) {
+          id
+        }
+      }
+    `,
+      { id: userId }
+    );
+  }
+
+  async verifyLoginOtp(body: {
+    email?: string;
+    phone_number?: string;
+    otp: string;
+  }): Promise<TokenData> {
+    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
+    const phone = body.phone_number?.trim()
+      ? this.normalizePhone(body.phone_number)
+      : '';
+    const otp = body.otp?.trim() || '';
+    if ((email && phone) || (!email && !phone)) {
       throw new HttpException(
-        { success: false, error: 'Email and OTP are required' },
+        {
+          success: false,
+          error: 'Provide exactly one of email or phone_number with otp',
+        },
         HttpStatus.BAD_REQUEST
       );
     }
+    if (!otp) {
+      throw new HttpException(
+        { success: false, error: 'OTP is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (email) {
+      return this.verifyLoginOtpWithEmail(email, otp);
+    }
+    return this.verifyLoginOtpWithPhone(phone, otp);
+  }
 
+  private async verifyLoginOtpWithEmail(
+    email: string,
+    otp: string
+  ): Promise<TokenData> {
     const tokenData = (await this.auth0Service.verifyEmailOtp(
       email,
-      otp.trim()
+      otp
     )) as TokenData;
+    this.assertTokenPayload(tokenData);
+    this.decodeClaimsFromIdToken(tokenData.id_token!);
+    const user = await this.getUserByEmail(email);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.markEmailVerifiedIfNeeded(user.id, user.email_verified !== true);
+    return tokenData;
+  }
 
+  private async verifyLoginOtpWithPhone(
+    phoneNumber: string,
+    otp: string
+  ): Promise<TokenData> {
+    const tokenData = (await this.auth0Service.verifySmsOtp(
+      phoneNumber,
+      otp
+    )) as TokenData;
+    this.assertTokenPayload(tokenData);
+    this.decodeClaimsFromIdToken(tokenData.id_token!);
+    const user = await this.getUserByPhoneNumber(phoneNumber);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.markPhoneVerifiedIfNeeded(
+      user.id,
+      user.phone_number_verified !== true
+    );
+    return tokenData;
+  }
+
+  private assertTokenPayload(tokenData: TokenData): void {
     if (!tokenData?.access_token) {
       throw new HttpException(
         { success: false, error: 'Auth0 did not return an access token' },
@@ -129,21 +286,6 @@ export class LoginService {
         HttpStatus.BAD_GATEWAY
       );
     }
-
-    this.decodeClaimsFromIdToken(tokenData.id_token);
-
-    const user = await this.getUserByEmail(email);
-    if (!user) {
-      throw new HttpException(
-        { success: false, error: 'User not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    const shouldVerifyEmail = user.email_verified !== true;
-    await this.markEmailVerifiedIfNeeded(user.id, shouldVerifyEmail);
-
-    return tokenData;
   }
 }
 

@@ -44,7 +44,25 @@ export class Auth0Service {
     });
   }
 
-  async verifyEmailOtp(email: string, otp: string): Promise<{
+  async startSmsOtp(phoneNumber: string): Promise<void> {
+    const auth0 = this.configService.get('auth0');
+    const clientId = auth0?.managementClientId;
+    if (!auth0?.domain || !clientId) {
+      throw new Error('Auth0 passwordless configuration is missing');
+    }
+    await axios.post(`https://${auth0.domain}/passwordless/start`, {
+      client_id: clientId,
+      connection: 'sms',
+      phone_number: phoneNumber,
+      send: 'code',
+    });
+  }
+
+  private async exchangePasswordlessOtp(
+    username: string,
+    otp: string,
+    realm: 'email' | 'sms'
+  ): Promise<{
     access_token: string;
     id_token?: string;
     refresh_token?: string;
@@ -62,12 +80,20 @@ export class Auth0Service {
       grant_type: 'http://auth0.com/oauth/grant-type/passwordless/otp',
       client_id: clientId,
       client_secret: clientSecret,
-      username: email,
+      username,
       otp,
-      realm: 'email',
+      realm,
       audience,
       scope: 'openid profile email offline_access',
     });
     return data;
+  }
+
+  async verifyEmailOtp(email: string, otp: string) {
+    return this.exchangePasswordlessOtp(email, otp, 'email');
+  }
+
+  async verifySmsOtp(phoneNumber: string, otp: string) {
+    return this.exchangePasswordlessOtp(phoneNumber, otp, 'sms');
   }
 }
