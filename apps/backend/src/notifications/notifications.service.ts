@@ -915,6 +915,59 @@ export class NotificationsService {
   }
 
   /**
+   * Whether the user has any stored Expo tokens, and optionally whether a given token is stored.
+   */
+  async getExpoPushRegistrationStatus(
+    userId: string,
+    expoPushToken?: string
+  ): Promise<{
+    success: boolean;
+    hasRegisteredTokens?: boolean;
+    validTokenCount?: number;
+    currentTokenRegistered?: boolean;
+    error?: string;
+  }> {
+    try {
+      const query = `
+        query GetMobilePushTokensForStatus($userId: uuid!) {
+          mobile_push_tokens(where: { user_id: { _eq: $userId } }) {
+            expo_push_token
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery<{
+        mobile_push_tokens: Array<{ expo_push_token: string }>;
+      }>(query, { userId });
+      const rows = result?.mobile_push_tokens ?? [];
+      const validTokens = rows
+        .map((r) => r.expo_push_token)
+        .filter((t) => Expo.isExpoPushToken(t));
+      const trimmed = expoPushToken?.trim();
+      const status: {
+        success: boolean;
+        hasRegisteredTokens?: boolean;
+        validTokenCount?: number;
+        currentTokenRegistered?: boolean;
+        error?: string;
+      } = {
+        success: true,
+        hasRegisteredTokens: validTokens.length > 0,
+        validTokenCount: validTokens.length,
+      };
+      if (trimmed && Expo.isExpoPushToken(trimmed)) {
+        status.currentTokenRegistered = validTokens.includes(trimmed);
+      }
+      return status;
+    } catch (err: any) {
+      this.logger.error('Failed to get Expo push registration status', err);
+      return {
+        success: false,
+        error: err?.message ?? 'Failed to load push token status',
+      };
+    }
+  }
+
+  /**
    * Send a test push notification to web and/or mobile subscriptions for the current user.
    */
   async sendTestPushNotification(

@@ -254,10 +254,9 @@ export default (): Configuration => {
     GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY || '',
     GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
     GOOGLE_CACHE_TTL: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
-    publicWebAppUrl: (process.env.PUBLIC_WEB_APP_URL || 'https://rendasua.com').replace(
-      /\/$/,
-      ''
-    ),
+    publicWebAppUrl: (
+      process.env.PUBLIC_WEB_APP_URL || 'https://rendasua.com'
+    ).replace(/\/$/, ''),
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??
@@ -400,7 +399,10 @@ export default (): Configuration => {
       callbackUrl:
         process.env.ORANGE_MOMO_CALLBACK_URL ||
         (process.env.API_BASE_URL
-          ? `${process.env.API_BASE_URL.replace(/\/$/, '')}/api/orange-momo/webhook`
+          ? `${process.env.API_BASE_URL.replace(
+              /\/$/,
+              ''
+            )}/api/orange-momo/webhook`
           : ''),
       channelPin: process.env.ORANGE_MOMO_CHANNEL_PIN || '2222',
     },
@@ -420,8 +422,10 @@ export default (): Configuration => {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
       audience:
         process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
-      clientId: process.env.AUTH0_CLIENT_ID || '',
-      clientSecret: process.env.AUTH0_CLIENT_SECRET || '',
+      clientId:
+        process.env.AUTH0_CLIENT_ID,
+      clientSecret:
+        process.env.AUTH0_CLIENT_SECRET,
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
     },

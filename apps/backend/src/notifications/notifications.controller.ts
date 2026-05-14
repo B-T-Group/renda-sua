@@ -4,12 +4,20 @@ import {
   Get,
   Headers,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { Public } from '../auth/public.decorator';
@@ -95,6 +103,35 @@ export class NotificationsController {
     return this.notificationsService.saveMobilePushToken(
       userId,
       body.expoPushToken
+    );
+  }
+
+  @Get('push-token/status')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Check Expo push registration for the current user (any tokens; optional current device token)',
+  })
+  @ApiQuery({
+    name: 'expoPushToken',
+    required: false,
+    description:
+      'If set to the device Expo token, response includes currentTokenRegistered (true when already stored)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Registration flags and optional per-token match',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPushTokenStatus(@Query('expoPushToken') expoPushToken: string | undefined) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
+      return { success: false, error: 'Unauthorized' };
+    }
+    return this.notificationsService.getExpoPushRegistrationStatus(
+      userId,
+      expoPushToken
     );
   }
 

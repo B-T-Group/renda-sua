@@ -30,32 +30,35 @@ export class Auth0Service {
     await client.jobs.verifyEmail({ user_id: userId });
   }
 
-  async startEmailOtp(email: string): Promise<void> {
+  private async postPasswordlessStart(
+    connection: 'email' | 'sms',
+    recipient: { email: string } | { phone_number: string }
+  ): Promise<void> {
     const auth0 = this.configService.get('auth0');
-    const clientId = auth0?.managementClientId;
-    if (!auth0?.domain || !clientId) {
+    const domain = auth0?.domain;
+    const clientId = auth0?.clientId || auth0?.managementClientId;
+    const clientSecret = auth0?.clientSecret || auth0?.managementClientSecret;
+    if (!domain || !clientId) {
       throw new Error('Auth0 passwordless configuration is missing');
     }
-    await axios.post(`https://${auth0.domain}/passwordless/start`, {
+    const body: Record<string, unknown> = {
       client_id: clientId,
-      connection: 'email',
-      email,
+      connection,
       send: 'code',
-    });
+      ...recipient,
+    };
+    if (clientSecret) {
+      body.client_secret = clientSecret;
+    }
+    await axios.post(`https://${domain}/passwordless/start`, body);
+  }
+
+  async startEmailOtp(email: string): Promise<void> {
+    await this.postPasswordlessStart('email', { email });
   }
 
   async startSmsOtp(phoneNumber: string): Promise<void> {
-    const auth0 = this.configService.get('auth0');
-    const clientId = auth0?.managementClientId;
-    if (!auth0?.domain || !clientId) {
-      throw new Error('Auth0 passwordless configuration is missing');
-    }
-    await axios.post(`https://${auth0.domain}/passwordless/start`, {
-      client_id: clientId,
-      connection: 'sms',
-      phone_number: phoneNumber,
-      send: 'code',
-    });
+    await this.postPasswordlessStart('sms', { phone_number: phoneNumber });
   }
 
   private async exchangePasswordlessOtp(
