@@ -389,7 +389,7 @@ export class AddressesService {
           addressLine2: addressData.address_line_2,
           city: addressData.city,
           state: addressData.state,
-          postalCode: addressData.postal_code,
+          postalCode: addressData.postal_code || '',
           country: addressData.country,
           isPrimary: addressData.is_primary || false,
           addressType: addressData.address_type || 'home',
