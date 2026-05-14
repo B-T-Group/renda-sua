@@ -74,6 +74,42 @@ const GQL_UPDATE_USER_EMAIL = `
   }
 `;
 
+const GQL_PHONE_TAKEN_BY_OTHER = `
+  query PhoneTakenExclude($phone: String!, $excludeId: uuid!) {
+    users(
+      where: {
+        _and: [{ phone_number: { _eq: $phone } }, { id: { _neq: $excludeId } }]
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
+const GQL_UPDATE_USER_PHONE = `
+  mutation UpdateUserPhone($id: uuid!, $phone_number: String!, $phone_number_verified: Boolean!) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { phone_number: $phone_number, phone_number_verified: $phone_number_verified }
+    ) {
+      id
+      email
+      first_name
+      last_name
+      phone_number
+      phone_number_verified
+      email_verified
+      user_type_id
+      profile_picture_url
+      preferred_language
+      timezone
+      created_at
+      updated_at
+    }
+  }
+`;
+
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
@@ -319,6 +355,69 @@ export class UsersController {
         {
           success: false,
           error: error.message || 'Failed to update email',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('me/phone')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Set or update the current user phone number (profile)',
+    description:
+      'Stores the phone on the user record for payments and notifications. If the number changes, phone_number_verified is reset to false. Verified numbers cannot be changed via this endpoint.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['phoneNumber'],
+      properties: { phoneNumber: { type: 'string', description: 'E.164 or normalized string' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Phone updated' })
+  @ApiResponse({ status: 400, description: 'Invalid or missing phone, or verified number locked' })
+  @ApiResponse({ status: 409, description: 'Phone number already in use by another account' })
+  async updateCurrentUserPhone(@Body() body: { phoneNumber?: string }) {
+    try {
+      const phone = this.normalizePhoneForUpdate(body?.phoneNumber);
+      if (!phone) {
+        throw new HttpException(
+          { success: false, error: 'Phone number is required' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const currentUser = await this.hasuraUserService.getUser();
+      const currentPhone = this.normalizePhoneForUpdate(currentUser.phone_number);
+      const phoneChanged = phone !== currentPhone;
+      if (!phoneChanged) {
+        return { success: true, user: currentUser };
+      }
+      if (currentUser.phone_number_verified === true) {
+        throw new HttpException(
+          {
+            success: false,
+            error:
+              'Phone number is verified and cannot be changed from profile settings.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const taken = await this.isPhoneTakenByAnotherUser(phone, currentUser.id);
+      if (taken) {
+        throw new HttpException(
+          { success: false, error: 'Phone number is already in use' },
+          HttpStatus.CONFLICT
+        );
+      }
+      return await this.persistUserPhone(currentUser.id, phone, false);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update phone number',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -914,6 +1013,31 @@ export class UsersController {
       users: Array<{ id: string }>;
     }>(GQL_EMAIL_TAKEN_BY_OTHER, { email, excludeId: excludeUserId });
     return (result.users?.length || 0) > 0;
+  }
+
+  private async isPhoneTakenByAnotherUser(
+    phone: string,
+    excludeUserId: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(GQL_PHONE_TAKEN_BY_OTHER, { phone, excludeId: excludeUserId });
+    return (result.users?.length || 0) > 0;
+  }
+
+  private async persistUserPhone(
+    userId: string,
+    phone: string,
+    phoneVerified: boolean
+  ) {
+    const result = await this.hasuraUserService.executeMutation<{
+      update_users_by_pk: Record<string, unknown>;
+    }>(GQL_UPDATE_USER_PHONE, {
+      id: userId,
+      phone_number: phone,
+      phone_number_verified: phoneVerified,
+    });
+    return { success: true, user: result.update_users_by_pk };
   }
 
   private async persistUserEmail(userId: string, email: string) {

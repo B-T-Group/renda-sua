@@ -99,6 +99,89 @@ describe('UsersController', () => {
     });
   });
 
+  describe('updateCurrentUserPhone', () => {
+    it('blocks changing a verified phone number', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        phone_number_verified: true,
+      });
+
+      await expect(
+        controller.updateCurrentUserPhone({ phoneNumber: '+237600000002' })
+      ).rejects.toThrow(
+        new HttpException(
+          {
+            success: false,
+            error:
+              'Phone number is verified and cannot be changed from profile settings.',
+          },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('returns current user when phone is unchanged', async () => {
+      await expect(
+        controller.updateCurrentUserPhone({ phoneNumber: ' +237600000001 ' })
+      ).resolves.toEqual({ success: true, user: currentUser });
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+      expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('persists phone when unverified and number changes', async () => {
+      const updatedUser = {
+        ...currentUser,
+        phone_number: '+237600000002',
+        phone_number_verified: false,
+      };
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      hasuraUserService.executeMutation.mockResolvedValue({
+        update_users_by_pk: updatedUser,
+      });
+
+      await expect(
+        controller.updateCurrentUserPhone({ phoneNumber: '+237600000002' })
+      ).resolves.toEqual({ success: true, user: updatedUser });
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('PhoneTakenExclude'),
+        { phone: '+237600000002', excludeId: currentUser.id }
+      );
+      expect(hasuraUserService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation UpdateUserPhone'),
+        expect.objectContaining({
+          phone_number: '+237600000002',
+          phone_number_verified: false,
+        })
+      );
+    });
+
+    it('rejects when phone is already used by another user', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ id: 'other-user' }],
+      });
+
+      await expect(
+        controller.updateCurrentUserPhone({ phoneNumber: '+237699999999' })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Phone number is already in use' },
+          HttpStatus.CONFLICT
+        )
+      );
+      expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects empty phone', async () => {
+      await expect(controller.updateCurrentUserPhone({ phoneNumber: '  ' })).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Phone number is required' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+    });
+  });
+
   describe('updateCurrentUserEmail', () => {
     it('normalizes and persists an available email as unverified', async () => {
       const updatedUser = {
