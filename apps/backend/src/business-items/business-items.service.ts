@@ -8,6 +8,7 @@ import { BusinessImagesService } from '../business-images/business-images.servic
 import { AiService } from '../ai/ai.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
@@ -781,7 +782,7 @@ export class BusinessItemsService {
         addressLine2: data.address.address_line_2 ?? null,
         city: data.address.city,
         state: data.address.state,
-        postalCode: data.address.postal_code ?? '',
+        postalCode: postalCodeForStorage(data.address.postal_code),
         country,
       });
       addressId = addressResult.insert_addresses_one?.id ?? '';

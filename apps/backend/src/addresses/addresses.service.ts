@@ -12,6 +12,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { PersonaId } from '../users/persona.types';
 import { getActivePersonaOrThrow } from '../users/persona.util';
 import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
+import { postalCodeForStorage } from './postal-code.util';
 
 export interface CreateAddressDto {
   address_line_1: string;
@@ -389,7 +390,7 @@ export class AddressesService {
           addressLine2: addressData.address_line_2,
           city: addressData.city,
           state: addressData.state,
-          postalCode: addressData.postal_code || '',
+          postalCode: postalCodeForStorage(addressData.postal_code),
           country: addressData.country,
           isPrimary: addressData.is_primary || false,
           addressType: addressData.address_type || 'home',
@@ -797,7 +798,8 @@ export class AddressesService {
             addressData.state !== existingAddress.state
           ? true
           : addressData.postal_code !== undefined &&
-            addressData.postal_code !== existingAddress.postal_code
+            postalCodeForStorage(addressData.postal_code) !==
+              postalCodeForStorage(existingAddress.postal_code)
           ? true
           : addressData.country !== undefined &&
             addressData.country !== existingAddress.country
@@ -819,7 +821,10 @@ export class AddressesService {
               undefined,
             city: addressData.city ?? existingAddress.city,
             state: addressData.state ?? existingAddress.state,
-            postal_code: addressData.postal_code ?? existingAddress.postal_code,
+            postal_code:
+              addressData.postal_code !== undefined
+                ? postalCodeForStorage(addressData.postal_code)
+                : postalCodeForStorage(existingAddress.postal_code),
             country: addressData.country ?? existingAddress.country,
           };
 
@@ -864,7 +869,7 @@ export class AddressesService {
         updateData.state = addressData.state;
       }
       if (addressData.postal_code !== undefined) {
-        updateData.postal_code = addressData.postal_code;
+        updateData.postal_code = postalCodeForStorage(addressData.postal_code);
       }
       if (addressData.country !== undefined) {
         updateData.country = addressData.country;
@@ -1252,7 +1257,7 @@ export class AddressesService {
         addressLine2: addressData.address_line_2,
         city: addressData.city,
         state: addressData.state,
-        postalCode: addressData.postal_code,
+        postalCode: postalCodeForStorage(addressData.postal_code),
         country: addressData.country,
         addressType: addressData.address_type || 'store',
         latitude: coordinates?.latitude,
@@ -1364,7 +1369,8 @@ export class AddressesService {
           addressData.state !== location.state
         ? true
         : addressData.postal_code !== undefined &&
-          addressData.postal_code !== location.postal_code
+          postalCodeForStorage(addressData.postal_code) !==
+            postalCodeForStorage(location.postal_code)
         ? true
         : addressData.country !== undefined && countryToUse !== location.country
         ? true
@@ -1382,7 +1388,10 @@ export class AddressesService {
             addressData.address_line_2 ?? location.address_line_2 ?? undefined,
           city: addressData.city ?? location.city,
           state: addressData.state ?? location.state,
-          postal_code: addressData.postal_code ?? location.postal_code,
+          postal_code:
+            addressData.postal_code !== undefined
+              ? postalCodeForStorage(addressData.postal_code)
+              : postalCodeForStorage(location.postal_code),
           country: countryToUse,
         };
 
@@ -1413,7 +1422,7 @@ export class AddressesService {
       updateData.state = addressData.state;
     }
     if (addressData.postal_code !== undefined) {
-      updateData.postal_code = addressData.postal_code;
+      updateData.postal_code = postalCodeForStorage(addressData.postal_code);
     }
     if (addressData.country !== undefined) {
       updateData.country = countryToUse;
