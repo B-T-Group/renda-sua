@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Expo } from 'expo-server-sdk';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { Expo } from 'expo-server-sdk';
 import { Resend } from 'resend';
 import * as webPush from 'web-push';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { SmsService } from '../sms/sms.service';
 import {
   buildProximityVariables,
   buildResendTemplateVariables,
@@ -38,7 +39,6 @@ import {
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
-import { SmsService } from '../sms/sms.service';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -51,7 +51,7 @@ export type {
   ReferralRewardEmailPayload,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
-  RentalPeriodEndedEmailPayload,
+  RentalPeriodEndedEmailPayload
 } from './notification-types';
 
 function escapeHtmlForEmail(text: string): string {
@@ -727,12 +727,24 @@ export class NotificationsService {
       );
       for (const recipient of recipients) {
         if (recipient.userId?.trim()) {
-          await this.sendPushNotificationByUserId(
+          const { webSent, expoSent } = await this.sendPushNotificationByUserId(
             recipient.userId.trim(),
             title,
             body,
             pushPayload
           );
+          if (
+            webSent + expoSent === 0 &&
+            recipient.email?.trim()
+          ) {
+            await this.sendPushNotificationByEmail(
+              recipient.email.trim(),
+              title,
+              body,
+              pushPayload,
+              { skipIfUserId: recipient.userId.trim() }
+            );
+          }
         } else if (recipient.email?.trim()) {
           await this.sendPushNotificationByEmail(
             recipient.email.trim(),
@@ -964,7 +976,12 @@ export class NotificationsService {
       const validTokens = rows
         .map((r) => r.expo_push_token)
         .filter((t) => Expo.isExpoPushToken(t));
-      if (validTokens.length === 0) return 0;
+      if (validTokens.length === 0) { 
+
+        if(rows.length > 0) 
+          this.logger.warn(`No valid Expo push tokens found for user ${userId}`); 
+        return 0; 
+      }
       const expo = this.getExpoClient();
       if (!expo) {
         if (pushConfig?.enabled) {
@@ -1068,8 +1085,14 @@ export class NotificationsService {
         return { success: false, error: 'User not found' };
       }
       const mutation = `
-        mutation InsertMobilePushToken($object: mobile_push_tokens_insert_input!) {
-          insert_mobile_push_tokens_one(object: $object) {
+        mutation UpsertMobilePushToken($object: mobile_push_tokens_insert_input!) {
+          insert_mobile_push_tokens_one(
+            object: $object
+            on_conflict: {
+              constraint: uq_mobile_push_tokens_user_id
+              update_columns: [expo_push_token, created_at]
+            }
+          ) {
             id
           }
         }
@@ -1078,6 +1101,7 @@ export class NotificationsService {
         object: {
           user_id: userId,
           expo_push_token: expoPushToken.trim(),
+          created_at: new Date().toISOString(),
         },
       });
       return { success: true };
@@ -1257,7 +1281,8 @@ export class NotificationsService {
     email: string,
     title: string,
     body: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    options?: { skipIfUserId?: string }
   ): Promise<void> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     if (!pushConfig?.enabled) return;
@@ -1276,7 +1301,11 @@ export class NotificationsService {
       );
       const users = (userResult?.users as { id: string }[]) ?? [];
       if (users.length === 0) return;
-      await this.sendPushNotificationByUserId(users[0].id, title, body, data);
+      const resolvedId = users[0].id;
+      if (options?.skipIfUserId && resolvedId === options.skipIfUserId) {
+        return;
+      }
+      await this.sendPushNotificationByUserId(resolvedId, title, body, data);
     } catch (err) {
       this.logger.warn(
         `sendPushNotificationByEmail failed: ${err instanceof Error ? err.message : String(err)}`

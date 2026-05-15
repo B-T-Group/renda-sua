@@ -15677,8 +15677,8 @@ export type Mobile_Push_Tokens_Bool_Exp = {
 export enum Mobile_Push_Tokens_Constraint {
   /** unique or primary key constraint on columns "id" */
   MobilePushTokensPkey = 'mobile_push_tokens_pkey',
-  /** unique or primary key constraint on columns "user_id", "expo_push_token" */
-  UqMobilePushTokensUserToken = 'uq_mobile_push_tokens_user_token'
+  /** unique or primary key constraint on columns "user_id" */
+  UqMobilePushTokensUserId = 'uq_mobile_push_tokens_user_id'
 }
 
 /** input type for inserting data into table "mobile_push_tokens" */
