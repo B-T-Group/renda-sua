@@ -1001,7 +1001,12 @@ export class NotificationsService {
       let sent = 0;
       for (const chunk of chunks) {
         try {
-          await expo.sendPushNotificationsAsync(chunk);
+          const res = await expo.sendPushNotificationsAsync(chunk);
+          if (res.length > 0 && res[0].status === 'error') {
+            this.logger.warn(
+              `Expo push chunk failed: ${res.map((e) => e.status).join(', ')}`
+            );
+          }
           sent += chunk.length;
           this.logPushSent(userId, 'expo', data, chunk.length);
         } catch (sendErr) {
