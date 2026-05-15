@@ -80,7 +80,7 @@ jobs:
           cdk diff RendasuaInfrastructure-production HasuraEc2InfrastructureProd --context environment=production --context hasuraEnvironment=prod
         env:
           SLACK_ORDER_WEBHOOK_URL: ${{ secrets.SLACK_ORDER_WEBHOOK_URL }}
-
+          NOTIFICATIONS_INTERNAL_API_KEY: ${{ secrets.NOTIFICATIONS_INTERNAL_API_KEY }}
       - name: Deploy CDK infrastructure to production
         run: |
           cd apps/cdk
@@ -89,6 +89,7 @@ jobs:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           SLACK_ORDER_WEBHOOK_URL: ${{ secrets.SLACK_ORDER_WEBHOOK_URL }}
+          NOTIFICATIONS_INTERNAL_API_KEY: ${{ secrets.NOTIFICATIONS_INTERNAL_API_KEY }}
 
       - name: Verify production deployment
         run: |
