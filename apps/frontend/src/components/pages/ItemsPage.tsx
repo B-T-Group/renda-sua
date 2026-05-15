@@ -594,37 +594,40 @@ const ItemsPage: React.FC = () => {
                 borderColor: (theme) => alpha(theme.palette.primary.main, 0.35),
               }}
             >
-              <Stack direction="row" spacing={1.25} alignItems="center">
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 2,
-                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flex: '0 0 auto',
-                  }}
-                >
-                  <LocalShipping color="primary" />
-                </Box>
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
-                    {t('orders.trackYourOrder.note', 'Your order is on its way.')}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {t(
-                      'orders.trackYourOrder.helper',
-                      'Track your delivery agent on the map in real time.'
-                    )}
-                  </Typography>
-                </Box>
+              <Stack direction="column" spacing={1.5} alignItems="stretch">
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 2,
+                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flex: '0 0 auto',
+                    }}
+                  >
+                    <LocalShipping color="primary" />
+                  </Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+                      {t('orders.trackYourOrder.note', 'Your order is on its way.')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t(
+                        'orders.trackYourOrder.helper',
+                        'Track your delivery agent on the map in real time.'
+                      )}
+                    </Typography>
+                  </Box>
+                </Stack>
                 <Button
+                  fullWidth
                   variant="contained"
                   startIcon={<MapIcon />}
                   onClick={() => setTrackOrderOpen(true)}
-                  sx={{ fontWeight: 900, whiteSpace: 'nowrap' }}
+                  sx={{ fontWeight: 900 }}
                 >
                   {t('orders.trackYourOrder.cta', 'Track your order')}
                 </Button>
