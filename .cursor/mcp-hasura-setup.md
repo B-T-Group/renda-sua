@@ -12,8 +12,8 @@ This guide explains how to configure the Hasura GraphQL Server MCP in Cursor to 
 
 Based on your project configuration:
 
-- **Development**: `https://healthy-mackerel-72.hasura.app/v1/graphql`
-- **Production**: `https://rendasua-prod.hasura.app/v1/graphql`
+- **Development**: `https://hasura-dev.rendasua.com/v1/graphql`
+- **Production**: `https://hasura.rendasua.com/v1/graphql`
 - **Local**: `http://localhost:8080/v1/graphql`
 
 **Admin Secret**: `myadminsecretkey`
@@ -56,7 +56,7 @@ Based on your project configuration:
 
    **Environment Variables** (optional - defaults are set in the script):
 
-   - `HASURA_GRAPHQL_ENDPOINT`: `https://healthy-mackerel-72.hasura.app/v1/graphql`
+   - `HASURA_GRAPHQL_ENDPOINT`: `https://hasura-dev.rendasua.com/v1/graphql`
    - `HASURA_GRAPHQL_ADMIN_SECRET`: `myadminsecretkey`
 
 ### Step 3: Alternative Configuration (Using Environment Variables)
@@ -67,7 +67,7 @@ If you prefer to use environment variables, create a wrapper script:
 
 ```bash
 #!/bin/bash
-export HASURA_GRAPHQL_ENDPOINT="https://healthy-mackerel-72.hasura.app/v1/graphql"
+export HASURA_GRAPHQL_ENDPOINT="https://hasura-dev.rendasua.com/v1/graphql"
 export HASURA_GRAPHQL_ADMIN_SECRET="myadminsecretkey"
 npx -y @modelcontextprotocol/server-hasura-graphql "$HASURA_GRAPHQL_ENDPOINT" --admin-secret "$HASURA_GRAPHQL_ADMIN_SECRET"
 ```
@@ -80,7 +80,7 @@ Then use:
 
 ```batch
 @echo off
-set HASURA_GRAPHQL_ENDPOINT=https://healthy-mackerel-72.hasura.app/v1/graphql
+set HASURA_GRAPHQL_ENDPOINT=https://hasura-dev.rendasua.com/v1/graphql
 set HASURA_GRAPHQL_ADMIN_SECRET=myadminsecretkey
 npx -y @modelcontextprotocol/server-hasura-graphql %HASURA_GRAPHQL_ENDPOINT% --admin-secret %HASURA_GRAPHQL_ADMIN_SECRET%
 ```
@@ -140,13 +140,13 @@ If tools don't appear:
 ### Development Environment
 
 ```bash
-npx -y @modelcontextprotocol/server-hasura-graphql https://healthy-mackerel-72.hasura.app/v1/graphql --admin-secret myadminsecretkey
+npx -y @modelcontextprotocol/server-hasura-graphql https://hasura-dev.rendasua.com/v1/graphql --admin-secret myadminsecretkey
 ```
 
 ### Production Environment
 
 ```bash
-npx -y @modelcontextprotocol/server-hasura-graphql https://rendasua-prod.hasura.app/v1/graphql --admin-secret <production-admin-secret>
+npx -y @modelcontextprotocol/server-hasura-graphql https://hasura.rendasua.com/v1/graphql --admin-secret <production-admin-secret>
 ```
 
 ### Local Development
