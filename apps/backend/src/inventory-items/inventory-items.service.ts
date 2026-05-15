@@ -173,6 +173,8 @@ export interface GetInventoryItemsQuery {
   subcategory?: string;
   /** Exact match on `business_location.name` (trimmed). */
   location_name?: string;
+  /** Exact match on `business_location.business.name` (trimmed). */
+  business_name?: string;
   brand?: string;
   min_price?: number;
   max_price?: number;
@@ -443,6 +445,7 @@ export class InventoryItemsService {
     category?: string;
     subcategory?: string;
     location_name?: string;
+    business_name?: string;
     brand?: string;
     min_price?: number;
     max_price?: number;
@@ -458,6 +461,7 @@ export class InventoryItemsService {
       category,
       subcategory,
       location_name,
+      business_name,
       brand,
       min_price,
       max_price,
@@ -516,6 +520,13 @@ export class InventoryItemsService {
     if (location_name?.trim()) {
       whereConditions.push({
         business_location: { name: { _eq: location_name.trim() } },
+      });
+    }
+    if (business_name?.trim()) {
+      whereConditions.push({
+        business_location: {
+          business: { name: { _eq: business_name.trim() } },
+        },
       });
     }
     if (brand) {
@@ -790,6 +801,7 @@ export class InventoryItemsService {
       category,
       subcategory,
       location_name,
+      business_name,
       brand,
       min_price,
       max_price,
@@ -810,6 +822,7 @@ export class InventoryItemsService {
       category,
       subcategory,
       location_name,
+      business_name,
       brand,
       min_price,
       max_price,

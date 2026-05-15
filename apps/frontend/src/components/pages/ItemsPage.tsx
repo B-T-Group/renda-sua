@@ -203,7 +203,7 @@ const ItemsPage: React.FC = () => {
     category: '',
     subcategory: '',
     brand: '',
-    location: '',
+    business: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
@@ -245,7 +245,7 @@ const ItemsPage: React.FC = () => {
     category: filters.category.trim() || undefined,
     brand: filters.brand.trim() || undefined,
     subcategory: filters.subcategory.trim() || undefined,
-    location_name: filters.location.trim() || undefined,
+    business_name: filters.business.trim() || undefined,
   });
 
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
@@ -310,7 +310,7 @@ const ItemsPage: React.FC = () => {
     filters.category,
     filters.subcategory,
     filters.brand,
-    filters.location,
+    filters.business,
     sort,
     businessLocationId,
   ]);
@@ -463,7 +463,7 @@ const ItemsPage: React.FC = () => {
       filters.category ||
       filters.subcategory ||
       filters.brand ||
-      filters.location ||
+      filters.business ||
       businessLocationId
   );
 
@@ -474,7 +474,7 @@ const ItemsPage: React.FC = () => {
       category: '',
       subcategory: '',
       brand: '',
-      location: '',
+      business: '',
     });
   };
 
@@ -650,7 +650,7 @@ const ItemsPage: React.FC = () => {
             onFiltersChange={setFilters}
             onFilterChange={handleCatalogFilterPanelItems}
             loading={loading || facetLoading}
-            onLocationFilterChange={(name) => {
+            onBusinessFilterChange={(name) => {
               if (!name) {
                 setBusinessLocationId(null);
               }

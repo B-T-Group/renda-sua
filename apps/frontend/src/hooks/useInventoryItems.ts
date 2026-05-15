@@ -123,7 +123,7 @@ export interface GetInventoryItemsQuery {
   search?: string;
   category?: string;
   subcategory?: string;
-  location_name?: string;
+  business_name?: string;
   brand?: string;
   min_price?: number;
   max_price?: number;
@@ -207,13 +207,13 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.search && { search: query.search }),
           ...(query.category && { category: query.category }),
           ...(query.subcategory && { subcategory: query.subcategory }),
-          ...(query.location_name && { location_name: query.location_name }),
+          ...(query.business_name && { business_name: query.business_name }),
           ...(query.brand && { brand: query.brand }),
           ...(query.min_price && { min_price: query.min_price }),
           ...(query.max_price && { max_price: query.max_price }),
           ...(query.currency && { currency: query.currency }),
-          ...(country_code && { country_code }),
-          ...(state && { state }),
+          ...(country_code ? { country_code } : {}),
+          ...(state ? { state } : {}),
           ...(query.sort && { sort: query.sort }),
           ...(query.include_unavailable !== undefined && {
             include_unavailable: query.include_unavailable,
@@ -273,7 +273,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.search,
     query.category,
     query.subcategory,
-    query.location_name,
+    query.business_name,
     query.brand,
     query.min_price,
     query.max_price,

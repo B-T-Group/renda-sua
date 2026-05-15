@@ -51,8 +51,8 @@ export interface ItemsPageFilterState {
   category: string;
   subcategory: string;
   brand: string;
-  /** Business location display name (`business_location.name`) */
-  location: string;
+  /** Business (seller) display name — matches GET /inventory-items?business_name= */
+  business: string;
 }
 
 interface ItemsPageFilterProps {
@@ -73,8 +73,8 @@ interface ItemsPageFilterProps {
   onFiltersChange: (filters: ItemsPageFilterState) => void;
   onFilterChange: (filteredItems: InventoryItem[]) => void;
   loading?: boolean;
-  /** When the location dropdown changes (e.g. cleared), sync backend location filter. */
-  onLocationFilterChange?: (locationName: string) => void;
+  /** When the business dropdown changes (e.g. cleared), sync related catalog scope (e.g. top-location UUID). */
+  onBusinessFilterChange?: (businessName: string) => void;
   /** Called when user clears all filters from this panel. */
   onClearFilters?: () => void;
 }
@@ -88,7 +88,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   onFiltersChange,
   onFilterChange,
   loading = false,
-  onLocationFilterChange,
+  onBusinessFilterChange,
   onClearFilters,
 }) => {
   const { t } = useTranslation();
@@ -172,15 +172,15 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       )
     ).sort();
 
-    const locations = Array.from(
+    const businesses = Array.from(
       new Set(
         items
-          .map((item) => item.business_location?.name?.trim())
+          .map((item) => item.business_location?.business?.name?.trim())
           .filter(Boolean) as string[]
       )
     ).sort((a, b) => a.localeCompare(b));
 
-    return { categories, subcategories, brands, locations };
+    return { categories, subcategories, brands, businesses };
   }, [items, filters.category]);
 
   const filteredItems = useMemo(() => {
@@ -220,8 +220,8 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       }
 
       if (
-        filters.location &&
-        item.business_location?.name !== filters.location
+        filters.business &&
+        item.business_location?.business?.name !== filters.business
       ) {
         return false;
       }
@@ -240,8 +240,8 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       [field]: value,
       ...(field === 'category' ? { subcategory: '' } : {}),
     });
-    if (field === 'location') {
-      onLocationFilterChange?.(value);
+    if (field === 'business') {
+      onBusinessFilterChange?.(value);
     }
     void trackSiteEvent({
       eventType: SITE_EVENT_INVENTORY_FILTER_CHANGE,
@@ -255,7 +255,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       category: '',
       subcategory: '',
       brand: '',
-      location: '',
+      business: '',
     });
     onClearFilters?.();
     void trackSiteEvent({
@@ -268,7 +268,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     filters.category,
     filters.subcategory,
     filters.brand,
-    filters.location,
+    filters.business,
   ].filter(Boolean).length;
 
   const getActiveFilterChips = () => {
@@ -297,10 +297,10 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         onDelete: () => handleFilterChange('brand', ''),
       });
     }
-    if (filters.location) {
+    if (filters.business) {
       chips.push({
-        label: `${t('common.location', 'Location')}: ${filters.location}`,
-        onDelete: () => handleFilterChange('location', ''),
+        label: `${t('public.items.businessFilter', 'Business')}: ${filters.business}`,
+        onDelete: () => handleFilterChange('business', ''),
       });
     }
     return chips;
@@ -358,16 +358,16 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       </FormControl>
 
       <FormControl fullWidth size="small">
-        <InputLabel>{t('common.location', 'Location')}</InputLabel>
+        <InputLabel>{t('public.items.businessFilter', 'Business')}</InputLabel>
         <Select
-          value={filters.location}
-          onChange={(e) => handleFilterChange('location', e.target.value)}
-          label={t('common.location', 'Location')}
+          value={filters.business}
+          onChange={(e) => handleFilterChange('business', e.target.value)}
+          label={t('public.items.businessFilter', 'Business')}
         >
           <MenuItem value="">{t('common.all', 'All')}</MenuItem>
-          {filterOptions.locations.map((loc) => (
-            <MenuItem key={loc} value={loc}>
-              {loc}
+          {filterOptions.businesses.map((b) => (
+            <MenuItem key={b} value={b}>
+              {b}
             </MenuItem>
           ))}
         </Select>
@@ -793,18 +793,18 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>{t('common.location', 'Location')}</InputLabel>
+                <InputLabel>{t('public.items.businessFilter', 'Business')}</InputLabel>
                 <Select
-                  value={filters.location}
+                  value={filters.business}
                   onChange={(e) =>
-                    handleFilterChange('location', e.target.value)
+                    handleFilterChange('business', e.target.value)
                   }
-                  label={t('common.location', 'Location')}
+                  label={t('public.items.businessFilter', 'Business')}
                 >
                   <MenuItem value="">{t('common.all', 'All')}</MenuItem>
-                  {filterOptions.locations.map((loc) => (
-                    <MenuItem key={loc} value={loc}>
-                      {loc}
+                  {filterOptions.businesses.map((b) => (
+                    <MenuItem key={b} value={b}>
+                      {b}
                     </MenuItem>
                   ))}
                 </Select>
