@@ -85,8 +85,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     // GraphQL endpoint based on environment
     const graphqlEndpoint =
       environment === 'production'
-        ? 'https://rendasua-prod.hasura.app/v1/graphql'
-        : 'https://healthy-mackerel-72.hasura.app/v1/graphql';
+        ? 'https://hasura.rendasua.com/v1/graphql'
+        : 'https://hasura-dev.rendasua.com/v1/graphql';
 
     const backendInternalApiBaseUrl =
       environment === 'production'
