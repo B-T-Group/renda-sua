@@ -204,6 +204,65 @@ export class LocationsService {
   }
 
   /**
+   * Upsert the single agent_locations row for an agent (Hasura unique on agent_id).
+   */
+  async upsertMyAgentLocation(
+    agentId: string,
+    latitude: number,
+    longitude: number
+  ): Promise<{
+    agentId: string;
+    id: string;
+    latitude: number;
+    longitude: number;
+    createdAt: string;
+    updatedAt: string;
+  } | null> {
+    const mutation = `
+      mutation UpsertMyAgentLocation($agent_id: uuid!, $latitude: numeric!, $longitude: numeric!) {
+        insert_agent_locations_one(
+          object: { agent_id: $agent_id, latitude: $latitude, longitude: $longitude }
+          on_conflict: {
+            constraint: agent_locations_agent_id_key
+            update_columns: [longitude, latitude]
+          }
+        ) {
+          agent_id
+          id
+          latitude
+          longitude
+          created_at
+          updated_at
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeMutation<{
+      insert_agent_locations_one: {
+        agent_id: string;
+        id: string;
+        latitude: unknown;
+        longitude: unknown;
+        created_at: string;
+        updated_at: string;
+      } | null;
+    }>(mutation, {
+      agent_id: agentId,
+      latitude: latitude.toString(),
+      longitude: longitude.toString(),
+    });
+    const row = result.insert_agent_locations_one;
+    if (!row) return null;
+    return {
+      agentId: row.agent_id,
+      id: row.id,
+      latitude: parseFloat(String(row.latitude)),
+      longitude: parseFloat(String(row.longitude)),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
    * Find all agents within specified radius of business location
    */
   async findAgentsWithinRadius(

@@ -10,7 +10,6 @@ const SYNC_TAG = 'agent-location-update';
 const STORAGE_KEY = 'agent_last_location';
 
 export interface LastAgentLocation {
-  agentId: string;
   latitude: number;
   longitude: number;
 }
@@ -55,12 +54,10 @@ export const registerBackgroundSync = async (
  * Store the last known location for background sync
  */
 export const storeLastLocation = async (
-  agentId: string,
   latitude: number,
   longitude: number
 ): Promise<void> => {
   const location: LastAgentLocation = {
-    agentId,
     latitude,
     longitude,
   };

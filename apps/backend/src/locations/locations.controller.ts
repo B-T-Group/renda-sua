@@ -1,14 +1,26 @@
 import {
+    Body,
     Controller,
     Get,
+    HttpCode,
     HttpException,
     HttpStatus,
     Logger,
     Param,
+    Post,
     Query,
     Req,
+    UsePipes,
+    ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+    ApiBearerAuth,
+    ApiBody,
+    ApiOperation,
+    ApiQuery,
+    ApiResponse,
+    ApiTags,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import {
     DeliveryConfigService,
@@ -16,6 +28,7 @@ import {
 } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
 import { LocationsService } from './locations.service';
 
 interface RequestWithUser extends Request {
@@ -591,6 +604,55 @@ export class LocationsController {
     }
   }
 
+  @Post('agent/me')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Upsert current user agent location',
+    description:
+      'Resolves agent id from the authenticated user (JWT). Inserts or updates agent_locations for that agent.',
+  })
+  @ApiBody({ type: UpdateMyAgentLocationDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Location saved',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        location: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', format: 'uuid' },
+            latitude: { type: 'number' },
+            longitude: { type: 'number' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'User has no agent profile' })
+  async updateMyAgentLocation(@Body() body: UpdateMyAgentLocationDto) {
+    this.ensureAuthenticatedForLocation();
+    const user = await this.hasuraUserService.getUser();
+    const agentId = this.requireAgentIdFromUser(user);
+    const row = await this.locationsService.upsertMyAgentLocation(
+      agentId,
+      body.latitude,
+      body.longitude
+    );
+    if (!row) {
+      throw new HttpException(
+        { success: false, error: 'Failed to save agent location' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return this.successAgentLocationPayload(row);
+  }
+
   @Get('orders/:orderId/agent-location')
   @ApiOperation({
     summary: 'Get agent location for an order (client only)',
@@ -731,5 +793,43 @@ export class LocationsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private ensureAuthenticatedForLocation(): void {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
+      throw new HttpException(
+        { success: false, error: 'Unauthorized' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+  }
+
+  private requireAgentIdFromUser(user: { agent?: { id?: string } }): string {
+    const agentId = user.agent?.id;
+    if (!agentId) {
+      throw new HttpException(
+        { success: false, error: 'No agent profile for this user' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return agentId;
+  }
+
+  private successAgentLocationPayload(row: {
+    agentId: string;
+    latitude: number;
+    longitude: number;
+    updatedAt: string;
+  }) {
+    return {
+      success: true as const,
+      location: {
+        agentId: row.agentId,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        updatedAt: row.updatedAt,
+      },
+    };
   }
 }
