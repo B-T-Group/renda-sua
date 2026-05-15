@@ -17,7 +17,7 @@ import {
     registerBackgroundSync,
     storeLastLocation,
 } from '../utils/backgroundLocationSync';
-import { useGraphQLRequest } from './useGraphQLRequest';
+import { useApiClient } from './useApiClient';
 
 // Default update interval: 20 minutes (1200000 ms)
 const DEFAULT_UPDATE_INTERVAL = 20 * 60 * 1000;
@@ -30,19 +30,6 @@ const MIN_DISTANCE_CHANGE = 100; // 100 meters
 
 // During active delivery, trigger update if agent moved at least 50m
 const MIN_DISTANCE_CHANGE_ACTIVE = 50;
-
-const UPSERT_AGENT_LOCATION = `
-  mutation UpsertAgentLocation($locationData: agent_locations_insert_input!, $onConflict: agent_locations_on_conflict!) {
-    insert_agent_locations_one(object: $locationData, on_conflict: $onConflict) {
-      id
-      agent_id
-      latitude
-      longitude
-      created_at
-      updated_at
-    }
-  }
-`;
 
 interface UseAgentLocationTrackerOptions {
   /** Update interval in milliseconds (default: 20 minutes) */
@@ -110,7 +97,7 @@ export const useAgentLocationTracker = (
 
   const { isAuthenticated } = useAuth0();
   const { profile, userType } = useUserProfileContext();
-  const { execute: upsertLocation } = useGraphQLRequest(UPSERT_AGENT_LOCATION);
+  const apiClient = useApiClient();
 
   const [isTracking, setIsTracking] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
@@ -209,26 +196,14 @@ export const useAgentLocationTracker = (
 
       // If background sync is enabled and supported, store the location
       if (enableBackgroundSync && isBackgroundSyncSupported()) {
-        await storeLastLocation(
-          profile.agent.id,
-          coordinates.latitude,
-          coordinates.longitude
-        );
+        await storeLastLocation(coordinates.latitude, coordinates.longitude);
 
         // Also try to register background sync
         await registerBackgroundSync();
       } else {
-        // Direct update via GraphQL upsert
-        await upsertLocation({
-          locationData: {
-            agent_id: profile.agent.id,
-            latitude: coordinates.latitude.toString(),
-            longitude: coordinates.longitude.toString(),
-          },
-          onConflict: {
-            constraint: 'idx_agent_locations_agent_id_unique',
-            update_columns: ['latitude', 'longitude'],
-          },
+        await apiClient.post('/locations/agent/me', {
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
         });
 
         // Clear stored location since we just successfully updated directly
@@ -253,7 +228,7 @@ export const useAgentLocationTracker = (
     isAgent,
     profile,
     getCurrentCoordinates,
-    upsertLocation,
+    apiClient,
     enableBackgroundSync,
     minDistanceChange,
   ]);
@@ -354,11 +329,7 @@ export const useAgentLocationTracker = (
               return;
             }
 
-            const currentAgentId = profile?.agent?.id;
-            if (!currentAgentId || currentAgentId !== location.agentId) {
-              console.warn(
-                'Stored location has stale or invalid agent id; clearing to avoid FK violation'
-              );
+            if (!profile?.agent?.id) {
               clearLastLocation();
               return;
             }
@@ -372,7 +343,7 @@ export const useAgentLocationTracker = (
                 type: 'LOCATION_SYNC_DATA',
                 location,
                 authToken: token,
-                hasuraUrl: environment.hasuraUrl,
+                apiUrl: environment.apiUrl,
               });
             }
           } catch (error) {

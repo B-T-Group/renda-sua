@@ -111,8 +111,8 @@ self.addEventListener('message', (event) => {
   }
 
   if (event.data?.type === 'LOCATION_SYNC_DATA') {
-    const { location, authToken, hasuraUrl } = event.data;
-    executeLocationUpdate(location, authToken, hasuraUrl).catch(() => undefined);
+    const { location, authToken, apiUrl } = event.data;
+    executeLocationUpdate(location, authToken, apiUrl).catch(() => undefined);
     return;
   }
 
@@ -171,36 +171,19 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-async function executeLocationUpdate(location, authToken, hasuraUrl) {
+async function executeLocationUpdate(location, authToken, apiUrl) {
   try {
-    const mutation = `
-      mutation insert_agent_locations_one($object: agent_locations_insert_input = {}) {
-        insert_agent_locations_one(object: $object, on_conflict: {constraint: agent_locations_agent_id_key, update_columns: [latitude, longitude]}) {
-          agent_id
-          id
-          latitude
-          longitude
-          updated_at
-          created_at
-        }
-      }
-    `;
-
-    const variables = {
-      object: {
-        agent_id: location.agentId,
-        latitude: location.latitude.toString(),
-        longitude: location.longitude.toString(),
-      },
-    };
-
-    const response = await fetch(hasuraUrl, {
+    const base = (apiUrl || '').replace(/\/$/, '');
+    const response = await fetch(`${base}/locations/agent/me`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ query: mutation, variables }),
+      body: JSON.stringify({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      }),
     });
 
     if (!response.ok) {
@@ -208,9 +191,9 @@ async function executeLocationUpdate(location, authToken, hasuraUrl) {
     }
 
     const result = await response.json();
-    if (result.errors) {
-      const msg = result.errors[0]?.message || '';
-      throw new Error(msg);
+    if (result.success === false) {
+      const msg = result.error || result.message || 'Update failed';
+      throw new Error(typeof msg === 'string' ? msg : 'Update failed');
     }
 
     return true;
