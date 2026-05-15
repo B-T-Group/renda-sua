@@ -10,6 +10,7 @@ from rendasua_core_packages.models import AgentLocation, Order
 from rendasua_core_packages.secrets_manager import get_resend_api_key
 from rendasua_core_packages.utilities import format_full_address
 
+from .nest_push_client import send_push_via_nest_api
 from .nest_sms_client import send_sms_via_nest_api
 from .resend_client import send_resend_template_email
 
@@ -101,12 +102,33 @@ def send_proximity_notification(
     locale = _normalize_language(getattr(agent_user, "preferred_language", None))
     distance_str = _distance_label(distance_km, locale)
 
+    user_push_id = (getattr(agent_user, "id", None) or "").strip()
+    push_sent = False
+    if user_push_id:
+        push_title = (
+            "Nouvelle commande à proximité" if locale == "fr" else "New order nearby"
+        )
+        push_body = _proximity_message(distance_str, locale)
+        push_data = {
+            "orderId": order.id,
+            "orderNumber": str(order.order_number),
+            "url": f"/orders/{order.id}",
+        }
+        ok_push, err_push = send_push_via_nest_api(
+            user_push_id, push_title, push_body, push_data
+        )
+        push_sent = ok_push
+        if ok_push:
+            log_info("Proximity push sent via Nest", user_id=user_push_id)
+        else:
+            log_error("Proximity push via Nest failed", error=None, detail=err_push)
+
     if agent_email:
         if not resend_api_key or not (
             (template_id_en or "").strip() or (template_id_fr or "").strip()
         ):
             log_error("Resend API key or proximity template id missing")
-            return False
+            return push_sent
         agent_name = f"{agent_user.first_name} {agent_user.last_name}".strip() or "Agent"
         tid = _pick_template_id(locale, template_id_en, template_id_fr)
         bl = order.business_location
@@ -138,7 +160,7 @@ def send_proximity_notification(
             log_info("Proximity email sent", agent_email=agent_email)
             return True
         log_error("Resend proximity send failed", error=None, detail=err)
-        return False
+        return push_sent
 
     if agent_phone:
         body = (f"Rendasua — {_proximity_message(distance_str, locale)}")[:_SMS_BODY_MAX]
@@ -147,10 +169,10 @@ def send_proximity_notification(
             log_info("Proximity SMS sent via Nest", agent_id=agent_location.agent_id)
             return True
         log_error("Proximity SMS via Nest failed", error=None, detail=err)
-        return False
+        return push_sent
 
     log_error("No agent email or phone", agent_id=agent_location.agent_id)
-    return False
+    return push_sent
 
 
 def send_notifications_to_nearby_agents(

@@ -1621,6 +1621,60 @@ export class NotificationsService {
     return this.smsService.sendSms({ to: trimmedTo, message: trimmedMsg });
   }
 
+  private stringifyPushDataForExpo(data?: Record<string, unknown>): Record<string, unknown> {
+    if (!data) return {};
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v === undefined || v === null) continue;
+      out[k] = typeof v === 'string' ? v : String(v);
+    }
+    return out;
+  }
+
+  /**
+   * Trusted internal callers (e.g. notify-agents Lambda) send Expo + web push by Hasura users.id.
+   */
+  async sendInternalPushByUserId(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>
+  ): Promise<{ success: boolean; webSent: number; expoSent: number; error?: string }> {
+    const pushCfg = this.configService.get<Configuration['push']>('push');
+    if (!pushCfg?.enabled) return { success: true, webSent: 0, expoSent: 0 };
+    const uid = userId?.trim();
+    if (!uid) {
+      return { success: false, webSent: 0, expoSent: 0, error: 'userId is required' };
+    }
+    return this.runInternalPushDelivery(uid, title, body, data);
+  }
+
+  private async runInternalPushDelivery(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>
+  ): Promise<{ success: boolean; webSent: number; expoSent: number; error?: string }> {
+    try {
+      const normalized = this.stringifyPushDataForExpo(data);
+      const { webSent, expoSent } = await this.sendPushNotificationByUserId(
+        userId,
+        title.trim() || 'Rendasua',
+        body.trim(),
+        normalized
+      );
+      return { success: true, webSent, expoSent };
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        webSent: 0,
+        expoSent: 0,
+        error: err,
+      };
+    }
+  }
+
   private async notifyClientOrderStatusEmailOrSms(
     data: NotificationData,
     templateKey: string,

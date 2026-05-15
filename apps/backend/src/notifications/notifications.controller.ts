@@ -313,4 +313,58 @@ export class NotificationsController {
     }
     return this.notificationsService.sendInternalSms(body?.to ?? '', body?.message ?? '');
   }
+
+  @Public()
+  @Post('internal/push-by-user')
+  @ApiOperation({
+    summary:
+      'Internal: send Expo + web push to a user by Hasura users.id (trusted callers e.g. notify-agents Lambda)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['userId', 'title', 'body'],
+      properties: {
+        userId: { type: 'string', format: 'uuid' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        data: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Optional payload; stringified for Expo Android',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Push send attempted' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  async internalPushByUser(
+    @Body()
+    body: {
+      userId?: string;
+      title?: string;
+      body?: string;
+      data?: Record<string, unknown>;
+    },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ): Promise<{
+    success: boolean;
+    webSent?: number;
+    expoSent?: number;
+    error?: string;
+  }> {
+    const expected =
+      this.configService.get<Configuration['notificationsInternal']>(
+        'notificationsInternal'
+      )?.apiKey ?? '';
+    if (!expected || internalKey !== expected) {
+      throw new UnauthorizedException();
+    }
+    return this.notificationsService.sendInternalPushByUserId(
+      body?.userId ?? '',
+      body?.title ?? '',
+      body?.body ?? '',
+      body?.data
+    );
+  }
 }
