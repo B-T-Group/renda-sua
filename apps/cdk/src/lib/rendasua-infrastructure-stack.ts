@@ -108,6 +108,9 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
           SLACK_ORDER_WEBHOOK_URL: process.env.SLACK_ORDER_WEBHOOK_URL ?? '',
           PUBLIC_WEB_APP_URL:
             process.env.PUBLIC_WEB_APP_URL ??
@@ -255,7 +258,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
-          NOTIFICATIONS_INTERNAL_API_KEY: '',
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
           PROXIMITY_RADIUS_KM: '20',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
             'dc4461e3-4cd2-485b-8c9c-755e36205f30',

@@ -5937,25 +5937,16 @@ export class OrdersService {
         order.client.user_id
       );
 
-      // Send order status change notifications (email, push via webPush, SMS)
       try {
-        const notificationsEnabled =
-          this.configService.get('notification').orderStatusChangeEnabled;
-        if (notificationsEnabled) {
-          const orderDetails =
-            await this.orderStatusService.getOrderDetailsForNotification(
-              orderId
-            );
-          if (orderDetails) {
-            await this.notificationsService.sendOrderStatusChangeNotifications(
-              orderDetails,
-              'pending_payment'
-            );
-          }
-        }
+        await this.orderQueueService.sendOrderStatusUpdatedMessage(
+          orderId,
+          'pending_payment',
+          newStatus,
+          order.client.user_id
+        );
       } catch (notifError) {
         this.logger.error(
-          `Failed to send order status change notifications: ${
+          `Failed to enqueue order status notifications: ${
             notifError instanceof Error ? notifError.message : String(notifError)
           }`
         );

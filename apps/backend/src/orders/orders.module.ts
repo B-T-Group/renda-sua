@@ -27,7 +27,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
   imports: [
     GoogleModule,
     forwardRef(() => MobilePaymentsModule),
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
     LoyaltyModule,
     AdminModule,
     forwardRef(() => AgentsModule),

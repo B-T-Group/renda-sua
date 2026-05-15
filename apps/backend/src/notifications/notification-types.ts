@@ -2,6 +2,12 @@ export interface NotificationData {
   orderId: string;
   /** Client profile id (orders.client_id) for SMS dedupe / lookups */
   clientId?: string;
+  /** users.id for the order's client (exclude actor from notifications) */
+  clientUserId?: string;
+  /** users.id for the order's business owner */
+  businessUserId?: string;
+  /** users.id for the assigned delivery agent */
+  assignedAgentUserId?: string;
   orderNumber: string;
   clientName: string;
   /** Omit or null when the user has no email — email notifications are skipped for that recipient */

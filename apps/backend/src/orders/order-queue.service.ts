@@ -82,23 +82,29 @@ export class OrderQueueService {
   }
 
   /**
-   * Send order.status.updated message to SQS queue
+   * Send order.status.updated message to SQS queue (processed asynchronously by Lambda).
    */
   async sendOrderStatusUpdatedMessage(
     orderId: string,
-    newStatus: string
+    previousStatus: string,
+    newStatus: string,
+    actorUserId?: string | null
   ): Promise<void> {
     if (!this.queueUrl) {
       this.logger.debug('Skipping SQS message - queue URL not configured');
       return;
     }
 
-    const message = {
+    const message: Record<string, unknown> = {
       eventType: 'order.status.updated',
       orderId,
       timestamp: new Date().toISOString(),
       status: newStatus,
+      previousStatus,
     };
+    if (actorUserId != null && String(actorUserId).trim() !== '') {
+      message.actorUserId = String(actorUserId).trim();
+    }
 
     await this.sendMessage(message);
   }

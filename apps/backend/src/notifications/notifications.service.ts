@@ -33,6 +33,10 @@ import {
   smsOrderDelivered,
   smsPaymentFailed,
 } from './order-notification-sms.messages';
+import {
+  excludeActorFromOrderStatusRecipients,
+  type OrderStatusRecipient,
+} from './order-status-recipients.util';
 import { SmsService } from '../sms/sms.service';
 
 export type {
@@ -553,11 +557,15 @@ export class NotificationsService {
    */
   async sendOrderStatusChangeNotifications(
     data: NotificationData,
-    previousStatus: string
+    previousStatus: string,
+    options?: { actorUserId?: string | null }
   ): Promise<void> {
     try {
       const templateKey = this.getTemplateKey(data.orderStatus);
-      const recipients = this.getRecipientsForStatus(data.orderStatus, data);
+      const recipients = excludeActorFromOrderStatusRecipients(
+        this.getRecipientsForStatus(data.orderStatus, data),
+        options?.actorUserId
+      );
 
       const itemsVariant =
         templateKey === 'order_assigned' ? 'agentAssigned' : 'default';
@@ -600,7 +608,7 @@ export class NotificationsService {
         }
       }
 
-      await this.sendPushForOrderStatus(data);
+      await this.sendPushForOrderStatus(data, options?.actorUserId);
 
       this.logger.log(
         `Order status change notifications sent for order ${data.orderNumber} (${previousStatus} → ${data.orderStatus})`
@@ -619,7 +627,10 @@ export class NotificationsService {
    * Send push notifications for every order status change using webPush.sendNotification.
    * Recipients are determined by getRecipientsForStatus; each gets a status-appropriate message.
    */
-  private async sendPushForOrderStatus(data: NotificationData): Promise<void> {
+  private async sendPushForOrderStatus(
+    data: NotificationData,
+    actorUserId?: string | null
+  ): Promise<void> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     if (!pushConfig?.enabled) return;
 
@@ -637,7 +648,10 @@ export class NotificationsService {
     };
 
     try {
-      const recipients = this.getRecipientsForStatus(status, data);
+      const recipients = excludeActorFromOrderStatusRecipients(
+        this.getRecipientsForStatus(status, data),
+        actorUserId
+      );
       for (const recipient of recipients) {
         if (recipient.email) {
           await this.sendPushNotificationByEmail(
@@ -1297,109 +1311,141 @@ export class NotificationsService {
   private getRecipientsForStatus(
     status: string,
     data: NotificationData
-  ): Array<{
-    email?: string | null;
-    type: string;
-  }> {
-    const recipients = [];
+  ): OrderStatusRecipient[] {
+    const recipients: OrderStatusRecipient[] = [];
+    const cuid = data.clientUserId;
+    const buid = data.businessUserId;
+    const auid = data.assignedAgentUserId;
 
     switch (status) {
       case 'pending':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         break;
       case 'confirmed':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         break;
       case 'preparing':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         break;
       case 'ready_for_pickup':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         break;
       case 'assigned_to_agent':
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'picked_up':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'in_transit':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'out_for_delivery':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'delivered':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'complete':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'cancelled':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'failed':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         if (data.agentEmail) {
-          recipients.push({ email: data.agentEmail, type: 'agent' });
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
         }
         break;
       case 'refunded':
         recipients.push(
-          { email: data.clientEmail, type: 'client' },
-          { email: data.businessEmail, type: 'business' }
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
         );
         break;
     }

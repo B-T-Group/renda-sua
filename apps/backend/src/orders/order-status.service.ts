@@ -4,14 +4,9 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import {
-  NotificationData,
-  NotificationsService,
-} from '../notifications/notifications.service';
+import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
 import { isActivePersona } from '../users/persona.util';
 
@@ -22,8 +17,6 @@ export class OrderStatusService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly notificationsService: NotificationsService,
-    private readonly configService: ConfigService<Configuration>,
     private readonly orderQueueService: OrderQueueService
   ) {}
 
@@ -145,50 +138,19 @@ export class OrderStatusService {
     );
     const updatedRow = batch.returning[0];
 
-    // Send status change notifications
     try {
-      const orderDetails = await this.getOrderDetailsForNotification(orderId);
-
-      if (orderDetails) {
-        // Check if notifications are enabled
-        const notificationsEnabled =
-          this.configService.get('notification').orderStatusChangeEnabled;
-
-        if (notificationsEnabled) {
-          await this.notificationsService.sendOrderStatusChangeNotifications(
-            orderDetails,
-            previousStatus
-          );
-        } else {
-          this.logger.log(
-            `Order status change notifications disabled for order ${orderId} (${previousStatus} → ${newStatus})`
-          );
-        }
-      }
+      await this.orderQueueService.sendOrderStatusUpdatedMessage(
+        orderId,
+        previousStatus,
+        newStatus,
+        user.id
+      );
     } catch (error) {
       this.logger.error(
-        `Failed to send status change notifications: ${
+        `Failed to send order.status.updated message to SQS: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
-      // Don't fail the status update if notifications fail
-    }
-
-    // Send order.status.updated message to SQS queue (except when changing to complete)
-    if (newStatus !== 'complete') {
-      try {
-        await this.orderQueueService.sendOrderStatusUpdatedMessage(
-          orderId,
-          newStatus
-        );
-      } catch (error) {
-        // Log but don't throw - status update should succeed
-        this.logger.error(
-          `Failed to send order.status.updated message to SQS: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
     }
 
     return updatedRow;
@@ -361,6 +323,7 @@ export class OrderStatusService {
             client {
               id
               user {
+                id
                 first_name
                 last_name
                 email
@@ -372,12 +335,14 @@ export class OrderStatusService {
               name
               is_verified
               user {
+                id
                 email
                 preferred_language
               }
             }
             assigned_agent {
               user {
+                id
                 first_name
                 last_name
                 email
@@ -484,6 +449,9 @@ export class OrderStatusService {
       return {
         orderId: order.id,
         clientId: order.client?.id,
+        clientUserId: order.client?.user?.id ?? undefined,
+        businessUserId: order.business?.user?.id ?? undefined,
+        assignedAgentUserId: order.assigned_agent?.user?.id ?? undefined,
         orderNumber: order.order_number,
         clientName,
         clientEmail,

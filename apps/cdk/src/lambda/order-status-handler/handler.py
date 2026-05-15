@@ -34,9 +34,10 @@ class SQSEventMessage:
     orderId: str
     timestamp: str
     status: Optional[str] = None  # Only for order.status.updated
+    previousStatus: Optional[str] = None  # order.status.updated + order.cancelled
+    actorUserId: Optional[str] = None  # Only for order.status.updated
     cancelledBy: Optional[str] = None  # Only for order.cancelled
     cancellationReason: Optional[str] = None  # Only for order.cancelled
-    previousStatus: Optional[str] = None  # Only for order.cancelled
     orderStatus: Optional[str] = None  # Only for order.cancelled
 
 def log_info(message: str, **kwargs):
@@ -73,9 +74,10 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
             orderId=body.get("orderId"),
             timestamp=body.get("timestamp"),
             status=body.get("status"),
+            previousStatus=body.get("previousStatus"),
+            actorUserId=body.get("actorUserId"),
             cancelledBy=body.get("cancelledBy"),
             cancellationReason=body.get("cancellationReason"),
-            previousStatus=body.get("previousStatus"),
             orderStatus=body.get("orderStatus"),
         )
         log_info(
@@ -577,19 +579,54 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
 def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     """Handle order.status.updated event."""
     log_info("Handling order.status.updated event")
-    
+
     record = event.get("Records", [{}])[0]
     message = parse_sqs_event_message(record)
-    
+
     if not message:
         log_error("Failed to parse event message in handle_order_status_updated")
         return {"success": False, "error": "Failed to parse event message"}
-    
+
     environment = os.environ.get("ENVIRONMENT", "development")
     event_type = f"order.status.updated.{message.status}" if message.status else "order.status.updated"
     log_info("Processing status update event", status=message.status, event_type=event_type)
-    # Pass the status from the message to process_order_event
-    return process_order_event(message.orderId, event_type, environment, order_status=message.status)
+    process_result = process_order_event(
+        message.orderId, event_type, environment, order_status=message.status
+    )
+
+    nest_notify_ok = True
+    nest_notify_detail = ""
+    prev = (message.previousStatus or "").strip()
+    if message.orderId and prev and message.status:
+        from rendasua_core_packages.notification_handler.nest_order_status_notifications_client import (
+            notify_order_status_change_via_nest_api,
+        )
+
+        ok, detail = notify_order_status_change_via_nest_api(
+            message.orderId,
+            prev,
+            message.actorUserId,
+        )
+        nest_notify_ok = ok
+        nest_notify_detail = detail
+        if not ok:
+            log_error(
+                "Nest order status notify failed",
+                detail=detail,
+                order_id=message.orderId,
+            )
+    else:
+        log_info(
+            "Skipping Nest order status notify (missing previousStatus or status)",
+            order_id=message.orderId,
+            previous_status=message.previousStatus,
+            status=message.status,
+        )
+
+    out: Dict[str, Any] = {**process_result, "nest_notify_ok": nest_notify_ok}
+    if nest_notify_detail:
+        out["nest_notify_detail"] = nest_notify_detail
+    return out
 
 
 def process_cancellation_financials(
