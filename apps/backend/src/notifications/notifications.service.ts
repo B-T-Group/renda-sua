@@ -37,6 +37,7 @@ import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
+import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import { SmsService } from '../sms/sms.service';
 
 export type {
@@ -552,6 +553,75 @@ export class NotificationsService {
     return r.users_by_pk ?? null;
   }
 
+  private logPushSent(
+    userId: string,
+    channel: 'web' | 'expo',
+    data?: Record<string, unknown>,
+    messageCount?: number
+  ): void {
+    const orderId = data?.orderId ?? data?.order_id;
+    const orderNumber = data?.orderNumber ?? data?.order_number;
+    const countPart =
+      messageCount != null && messageCount > 0 ? ` messageCount=${messageCount}` : '';
+    this.logger.log(
+      `Push sent channel=${channel} userId=${userId} orderId=${String(orderId ?? 'n/a')} orderNumber=${String(orderNumber ?? 'n/a')}${countPart}`
+    );
+  }
+
+  private async userHasValidExpoTokens(userId: string): Promise<boolean> {
+    const q = `
+      query PushTokensExist($userId: uuid!) {
+        mobile_push_tokens(where: { user_id: { _eq: $userId } }, limit: 20) {
+          expo_push_token
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      mobile_push_tokens: Array<{ expo_push_token: string }>;
+    }>(q, { userId });
+    const rows = result?.mobile_push_tokens ?? [];
+    return rows.some((r) => Expo.isExpoPushToken(r.expo_push_token));
+  }
+
+  private async countWebPushSubscriptionsForUser(userId: string): Promise<number> {
+    const q = `
+      query WebPushCount($userId: uuid!) {
+        push_subscriptions_aggregate(where: { user_id: { _eq: $userId } }) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      push_subscriptions_aggregate: { aggregate: { count: number } | null };
+    }>(q, { userId });
+    return result?.push_subscriptions_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async userHasRegisteredPushDelivery(userId: string): Promise<boolean> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    const enabled = !!pushConfig?.enabled;
+    const hasExpo = await this.userHasValidExpoTokens(userId);
+    const vapidConfigured = !!(
+      pushConfig?.vapidPublicKey && pushConfig?.vapidPrivateKey
+    );
+    const webCount = vapidConfigured
+      ? await this.countWebPushSubscriptionsForUser(userId)
+      : 0;
+    return userHasRegisteredPushChannels(
+      enabled,
+      hasExpo,
+      webCount,
+      vapidConfigured
+    );
+  }
+
+  private async shouldUsePushOnlyForUser(
+    userId: string | undefined
+  ): Promise<boolean> {
+    if (!userId?.trim()) return false;
+    return this.userHasRegisteredPushDelivery(userId.trim());
+  }
+
   /**
    * Send order status change notifications
    */
@@ -577,6 +647,9 @@ export class NotificationsService {
             templateKey,
             itemsVariant
           );
+          continue;
+        }
+        if (await this.shouldUsePushOnlyForUser(recipient.userId)) {
           continue;
         }
         const to = recipient.email?.trim();
@@ -653,9 +726,16 @@ export class NotificationsService {
         actorUserId
       );
       for (const recipient of recipients) {
-        if (recipient.email) {
+        if (recipient.userId?.trim()) {
+          await this.sendPushNotificationByUserId(
+            recipient.userId.trim(),
+            title,
+            body,
+            pushPayload
+          );
+        } else if (recipient.email?.trim()) {
           await this.sendPushNotificationByEmail(
-            recipient.email,
+            recipient.email.trim(),
             title,
             body,
             pushPayload
@@ -786,6 +866,78 @@ export class NotificationsService {
     }
   }
 
+  private async deliverWebPushForUser(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>
+  ): Promise<number> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig?.vapidPrivateKey || !pushConfig?.vapidPublicKey) return 0;
+    this.initializeWebPush();
+    const subQuery = `
+      query GetPushSubscriptions($userId: uuid!) {
+        push_subscriptions(where: { user_id: { _eq: $userId } }) {
+          id
+          endpoint
+          p256dh_key
+          auth_key
+        }
+      }
+    `;
+    const subResult = await this.hasuraSystemService.executeQuery(
+      subQuery,
+      { userId }
+    );
+    const subs = (subResult?.push_subscriptions as Array<{
+      endpoint: string;
+      p256dh_key: string;
+      auth_key: string;
+    }>) ?? [];
+    const payload = JSON.stringify({ title, body, ...data });
+    let sent = 0;
+    for (const sub of subs) {
+      try {
+        await webPush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh_key, auth: sub.auth_key },
+          },
+          payload,
+          { TTL: 86400 }
+        );
+        sent += 1;
+        this.logPushSent(userId, 'web', data);
+      } catch (sendErr) {
+        this.logger.warn(
+          `Push send failed for subscription ${sub.endpoint}: ${sendErr}`
+        );
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * Web + Expo push for a user (by Hasura users.id).
+   */
+  private async sendPushNotificationByUserId(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>
+  ): Promise<{ webSent: number; expoSent: number }> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig?.enabled) return { webSent: 0, expoSent: 0 };
+    const webSent = await this.deliverWebPushForUser(userId, title, body, data);
+    const expoSent = await this.sendPushToExpoTokens(
+      userId,
+      title,
+      body,
+      data
+    );
+    return { webSent, expoSent };
+  }
+
   /**
    * Send push to all Expo tokens for a user (by user id)
    */
@@ -794,9 +946,8 @@ export class NotificationsService {
     title: string,
     body: string,
     data?: Record<string, unknown>
-  ): Promise<void> {
-    const expo = this.getExpoClient();
-    if (!expo) return;
+  ): Promise<number> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
     const tokenQuery = `
       query GetMobilePushTokens($userId: uuid!) {
         mobile_push_tokens(where: { user_id: { _eq: $userId } }) {
@@ -813,7 +964,16 @@ export class NotificationsService {
       const validTokens = rows
         .map((r) => r.expo_push_token)
         .filter((t) => Expo.isExpoPushToken(t));
-      if (validTokens.length === 0) return;
+      if (validTokens.length === 0) return 0;
+      const expo = this.getExpoClient();
+      if (!expo) {
+        if (pushConfig?.enabled) {
+          this.logger.warn(
+            `Expo push skipped: ${validTokens.length} valid token(s) for user ${userId} but Expo client is unavailable (check EXPO_ACCESS_TOKEN / SDK).`
+          );
+        }
+        return 0;
+      }
       const messages = validTokens.map((token) => ({
         to: token,
         title,
@@ -821,19 +981,24 @@ export class NotificationsService {
         data: data ?? {},
       }));
       const chunks = expo.chunkPushNotifications(messages);
+      let sent = 0;
       for (const chunk of chunks) {
         try {
           await expo.sendPushNotificationsAsync(chunk);
+          sent += chunk.length;
+          this.logPushSent(userId, 'expo', data, chunk.length);
         } catch (sendErr) {
           this.logger.warn(
             `Expo push chunk failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`
           );
         }
       }
+      return sent;
     } catch (err) {
       this.logger.warn(
         `sendPushToExpoTokens failed: ${err instanceof Error ? err.message : String(err)}`
       );
+      return 0;
     }
   }
 
@@ -1058,59 +1223,13 @@ export class NotificationsService {
         type: 'test',
         orderId: `test-${Date.now()}`,
       };
-      let webSent = 0;
-      let mobileSent = 0;
-
-      if (subs.length > 0 && pushConfig.vapidPublicKey && pushConfig.vapidPrivateKey) {
-        this.initializeWebPush();
-        const payload = JSON.stringify({
-          title: payloadTitle,
-          body: payloadBody,
-          ...payloadData,
-        });
-        for (const sub of subs) {
-          try {
-            await webPush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: { p256dh: sub.p256dh_key, auth: sub.auth_key },
-              },
-              payload,
-              { TTL: 86400 }
-            );
-            webSent += 1;
-          } catch (sendErr) {
-            this.logger.warn(
-              `Test push failed for subscription ${sub.endpoint}: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`
-            );
-          }
-        }
-      }
-
-      if (mobileTokens.length > 0) {
-        const expo = this.getExpoClient();
-        if (expo) {
-          const messages = mobileTokens.map((token) => ({
-            to: token,
-            title: payloadTitle,
-            body: payloadBody,
-            data: payloadData,
-          }));
-          const chunks = expo.chunkPushNotifications(messages);
-          for (const chunk of chunks) {
-            try {
-              await expo.sendPushNotificationsAsync(chunk);
-              mobileSent += chunk.length;
-            } catch (sendErr) {
-              this.logger.warn(
-                `Test Expo push failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`
-              );
-            }
-          }
-        }
-      }
-
-      const sentCount = webSent + mobileSent;
+      const { webSent, expoSent } = await this.sendPushNotificationByUserId(
+        userId,
+        payloadTitle,
+        payloadBody,
+        payloadData
+      );
+      const sentCount = webSent + expoSent;
       return {
         sent: sentCount > 0,
         subscriptionsCount: totalSubs,
@@ -1157,52 +1276,7 @@ export class NotificationsService {
       );
       const users = (userResult?.users as { id: string }[]) ?? [];
       if (users.length === 0) return;
-      const userId = users[0].id;
-
-      if (pushConfig.vapidPrivateKey) {
-        this.initializeWebPush();
-        const subQuery = `
-          query GetPushSubscriptions($userId: uuid!) {
-            push_subscriptions(where: { user_id: { _eq: $userId } }) {
-              id
-              endpoint
-              p256dh_key
-              auth_key
-            }
-          }
-        `;
-        const subResult = await this.hasuraSystemService.executeQuery(
-          subQuery,
-          { userId }
-        );
-        const subs = (subResult?.push_subscriptions as Array<{
-          endpoint: string;
-          p256dh_key: string;
-          auth_key: string;
-        }>) ?? [];
-        const payload = JSON.stringify({ title, body, ...data });
-        for (const sub of subs) {
-          try {
-            await webPush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: {
-                  p256dh: sub.p256dh_key,
-                  auth: sub.auth_key,
-                },
-              },
-              payload,
-              { TTL: 86400 }
-            );
-          } catch (sendErr) {
-            this.logger.warn(
-              `Push send failed for subscription ${sub.endpoint}: ${sendErr}`
-            );
-          }
-        }
-      }
-
-      await this.sendPushToExpoTokens(userId, title, body, data);
+      await this.sendPushNotificationByUserId(users[0].id, title, body, data);
     } catch (err) {
       this.logger.warn(
         `sendPushNotificationByEmail failed: ${err instanceof Error ? err.message : String(err)}`
@@ -1485,6 +1559,9 @@ export class NotificationsService {
     templateKey: string,
     itemsVariant: 'default' | 'agentAssigned'
   ): Promise<void> {
+    if (await this.shouldUsePushOnlyForUser(data.clientUserId)) {
+      return;
+    }
     const clientEmail = data.clientEmail?.trim();
     if (clientEmail) {
       const baseKey = `client_${templateKey}`;

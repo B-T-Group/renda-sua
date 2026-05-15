@@ -93,6 +93,12 @@ Notifications are automatically sent when:
 
 The acting user is omitted from email/push recipient lists when their `users.id` matches `actorUserId` (e.g. assigned agent after pickup).
 
+**Order status push (in Nest, after Lambda invokes internal route):** Push is sent per recipient using **`users.id`** when available (Expo tokens from `mobile_push_tokens` and/or web `push_subscriptions` with VAPID). A recipient **does not need an email** on the payload to receive push if `clientUserId` / `businessUserId` / `assignedAgentUserId` is present on the loaded `NotificationData`.
+
+**Push-only channel:** When **`push.enabled`** and Hasura shows that user has at least one valid Expo token or at least one web subscription (with VAPID configured), **Resend order-status emails and client Orange SMS** for that user are skipped for that event; only push is used.
+
+**Observability:** Each successful web push subscription send and each successful Expo chunk logs a line (`Push sent channel=web|expo userId=… orderId=…`). If valid Expo tokens exist but the Expo SDK client cannot be created while push is enabled, a **warning** is logged and Expo sends are skipped for that user (web push may still run).
+
 **Pay-by-link / payment confirmation**: When `OrdersService` moves an order from `pending_payment` to `pending` after payment, it enqueues the same `order.status.updated` message with `previousStatus: pending_payment` and `actorUserId` set to the client’s user id.
 
 **Requirements for Lambda → Nest**: Set `BACKEND_INTERNAL_API_BASE_URL` and `NOTIFICATIONS_INTERNAL_API_KEY` on the **order-status-handler** Lambda (CDK passes base URL; key via `process.env.NOTIFICATIONS_INTERNAL_API_KEY` at synth/deploy or AWS console). These must match Nest `NOTIFICATIONS_INTERNAL_API_KEY`.
