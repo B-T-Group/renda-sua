@@ -5756,6 +5756,12 @@ export class OrdersService {
         const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${orderId}`;
 
         const clientUser = order.client?.user;
+        await this.notificationsService.sendOrderPaymentFailedPush({
+          userId: order.client?.user_id,
+          orderId,
+          orderNumber: order.order_number,
+          failureMessage: msg,
+        });
         if (clientUser?.email?.trim()) {
           await this.notificationsService.sendClientOrderPaymentFailedEmail({
             to: clientUser.email.trim(),
@@ -5781,7 +5787,14 @@ export class OrdersService {
           | 'pay_at_delivery'
           | undefined;
         if (paymentTiming === 'pay_at_delivery') {
-          const agentUser = (order as any).assigned_agent?.user;
+          const assignedAgent = order.assigned_agent;
+          await this.notificationsService.sendOrderPaymentFailedPush({
+            userId: assignedAgent?.user_id,
+            orderId,
+            orderNumber: order.order_number,
+            failureMessage: msg,
+          });
+          const agentUser = assignedAgent?.user;
           if (agentUser?.email) {
             await this.notificationsService.sendAgentOrderPaymentFailedEmail({
               to: agentUser.email,

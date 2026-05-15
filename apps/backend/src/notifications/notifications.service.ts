@@ -331,6 +331,39 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Expo + web push when an order payment fails (in addition to email/SMS).
+   */
+  async sendOrderPaymentFailedPush(params: {
+    userId: string | undefined | null;
+    orderId: string;
+    orderNumber: string;
+    failureMessage: string;
+  }): Promise<void> {
+    const uid = params.userId?.trim();
+    if (!uid) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      const r = (params.failureMessage || 'Payment failed').trim();
+      const snip = r.length > 100 ? `${r.slice(0, 97)}...` : r;
+      await this.sendPushNotificationByUserId(
+        uid,
+        'Payment failed',
+        `Order ${params.orderNumber}: ${snip}`,
+        {
+          url: `/orders/${params.orderId}`,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          event: 'payment_failed',
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderPaymentFailedPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   async sendRentalPeriodEndedEmails(
     payload: RentalPeriodEndedEmailPayload
   ): Promise<void> {
