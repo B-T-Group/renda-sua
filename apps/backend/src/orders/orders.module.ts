@@ -1,5 +1,4 @@
 import { Global, Module, forwardRef } from '@nestjs/common';
-import { AdminModule } from '../admin/admin.module';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { AgentsModule } from '../agents/agents.module';
 import { CommissionsModule } from '../commissions/commissions.module';
@@ -7,7 +6,6 @@ import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.modul
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
 import { LocationsModule } from '../locations/locations.module';
-import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
@@ -26,16 +24,22 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 @Module({
   imports: [
     GoogleModule,
-    forwardRef(() => MobilePaymentsModule),
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../mobile-payments/mobile-payments.module').MobilePaymentsModule;
+    }),
     forwardRef(() => NotificationsModule),
     LoyaltyModule,
-    AdminModule,
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../admin/admin.module').AdminModule;
+    }),
     forwardRef(() => AgentsModule),
     DeliveryModule,
     DeliveryConfigModule,
     forwardRef(() => CommissionsModule),
     PdfModule,
-    LocationsModule,
+    forwardRef(() => LocationsModule),
   ],
   controllers: [OrderRefundsController, OrdersController, FailedDeliveriesController],
   providers: [

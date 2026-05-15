@@ -1,10 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { AdminModule } from '../admin/admin.module';
-import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
-import { RentalsModule } from '../rentals/rentals.module';
 import { AdminMobilePaymentsController } from './admin-mobile-payments.controller';
 import { GiveChangePayoutService } from './give-change-payout.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
@@ -16,12 +13,21 @@ import { MyPVitService } from './providers/mypvit.service';
 
 @Module({
   imports: [
-    forwardRef(() => RentalsModule),
+    HasuraModule,
     MtnMomoModule,
     OrangeMomoModule,
-    AdminModule,
-    AuthModule,
-    HasuraModule,
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../admin/admin.module').AdminModule;
+    }),
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../auth/auth.module').AuthModule;
+    }),
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../rentals/rentals.module').RentalsModule;
+    }),
   ],
   controllers: [MobilePaymentsController, AdminMobilePaymentsController],
   providers: [

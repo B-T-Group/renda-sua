@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
@@ -10,7 +10,7 @@ import { LocationsService } from './locations.service';
   imports: [
     HasuraModule,
     GoogleModule,
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
     DeliveryConfigModule,
   ],
   controllers: [LocationsController],

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -51,6 +51,7 @@ export class LocationsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly googleDistanceService: GoogleDistanceService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService
   ) {}
 

@@ -1,7 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HasuraModule } from '../hasura/hasura.module';
-import { OrdersModule } from '../orders/orders.module';
 import { SmsModule } from '../sms/sms.module';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
@@ -11,7 +10,10 @@ import { NotificationsService } from './notifications.service';
     ConfigModule,
     HasuraModule,
     SmsModule,
-    forwardRef(() => OrdersModule),
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../orders/orders.module').OrdersModule;
+    }),
   ],
   providers: [NotificationsService],
   controllers: [NotificationsController],

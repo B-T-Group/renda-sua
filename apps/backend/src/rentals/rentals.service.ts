@@ -1,6 +1,8 @@
 import {
+  forwardRef,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -224,9 +226,13 @@ export class RentalsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly accountsService: AccountsService,
+    @Inject(forwardRef(() => MobilePaymentsService))
     private readonly mobilePaymentsService: MobilePaymentsService,
+    @Inject(forwardRef(() => MobilePaymentsDatabaseService))
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
+    @Inject(forwardRef(() => DeliveryPinService))
     private readonly deliveryPinService: DeliveryPinService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly inventoryItemsService: InventoryItemsService,
     private readonly addressesService: AddressesService,
