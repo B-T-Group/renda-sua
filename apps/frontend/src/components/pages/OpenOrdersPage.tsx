@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentHasIdDocument } from '../../hooks/useAgentHasIdDocument';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { orderModifiedAtMs } from '../../utils/orderListSort';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
 import SEOHead from '../seo/SEOHead';
@@ -103,7 +104,7 @@ const OpenOrdersPage: React.FC = () => {
 
         // If both have same fast delivery status, sort by creation date (newest first)
         return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          orderModifiedAtMs(b) - orderModifiedAtMs(a)
         );
       });
 
@@ -119,7 +120,7 @@ const OpenOrdersPage: React.FC = () => {
 
         // If both have same fast delivery status, sort by creation date (newest first)
         return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          orderModifiedAtMs(b) - orderModifiedAtMs(a)
         );
       });
 

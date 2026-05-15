@@ -1,9 +1,6 @@
 import {
-  Cancel,
   CheckCircle,
   Close,
-  ExpandLess,
-  ExpandMore,
   FilterList,
   HourglassEmpty,
   LocalShipping,
@@ -19,7 +16,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Collapse,
   Container,
   Drawer,
   FormControl,
@@ -43,6 +39,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
+import { sortOrdersByModifiedDesc } from '../../utils/orderListSort';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
 
@@ -177,7 +174,6 @@ const OrdersPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
   });
-  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<string>('all');
 
@@ -192,7 +188,6 @@ const OrdersPage: React.FC = () => {
     if (!isCashReconciliationView) {
       return;
     }
-    setShowCompletedOrders(true);
     setSelectedTab('all');
     void fetchOrders({
       reconciliation_status: 'pending_manual_reconciliation',
@@ -250,85 +245,6 @@ const OrdersPage: React.FC = () => {
     []
   );
 
-  const groupedByStatus = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const buckets: Record<string, any[]> = {};
-    (orders || []).forEach((o) => {
-      const s = o.current_status || 'unknown';
-      if (!buckets[s]) buckets[s] = [];
-      buckets[s].push(o);
-    });
-
-    // Sort orders within each status bucket to prioritize fast delivery orders
-    Object.keys(buckets).forEach((status) => {
-      buckets[status].sort((a, b) => {
-        // Fast delivery orders first
-        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
-        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
-
-        // If both have same fast delivery status, sort by creation date (newest first)
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
-    });
-
-    return buckets;
-  }, [orders]);
-
-  // Separate active and completed/cancelled orders
-  const { activeStatuses, completedStatuses } = useMemo(() => {
-    const seen = Array.from(
-      new Set((orders || []).map((o) => o.current_status || 'unknown'))
-    );
-
-    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
-
-    const active = seen.filter(
-      (status) => !completedStatusTypes.includes(status)
-    );
-    const completed = seen.filter((status) =>
-      completedStatusTypes.includes(status)
-    );
-
-    const sortStatuses = (statuses: string[]) => {
-      if (isOrdersAgent) {
-        return [...statuses].sort(
-          (a, b) =>
-            (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-            (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      if (isOrdersClient) {
-        return [...statuses].sort(
-          (a, b) =>
-            (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-            (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      return [...statuses].sort((a, b) => {
-        const ia = statusOrder.indexOf(a);
-        const ib = statusOrder.indexOf(b);
-        const va = ia === -1 ? 999 : ia;
-        const vb = ib === -1 ? 999 : ib;
-        return va - vb;
-      });
-    };
-
-    return {
-      activeStatuses: sortStatuses(active),
-      completedStatuses: sortStatuses(completed),
-    };
-  }, [orders, statusOrder, isOrdersAgent, isOrdersClient]);
-
-  // Count completed orders for the collapsible header
-  const completedOrdersCount = useMemo(() => {
-    return completedStatuses.reduce((count, status) => {
-      return count + (groupedByStatus[status]?.length || 0);
-    }, 0);
-  }, [completedStatuses, groupedByStatus]);
-
-  // Define tab groups for order statuses
   const tabGroups = useMemo(
     () => ({
       all: {
@@ -363,7 +279,6 @@ const OrdersPage: React.FC = () => {
     [statusOrder, t]
   );
 
-  // Filter orders based on selected tab
   const filteredOrdersByTab = useMemo(() => {
     if (selectedTab === 'all') {
       return orders || [];
@@ -376,130 +291,10 @@ const OrdersPage: React.FC = () => {
     );
   }, [orders, selectedTab, tabGroups]);
 
-  // Group filtered orders by status
-  const filteredGroupedByStatus = useMemo(() => {
-    const buckets: Record<string, typeof orders> = {};
-    filteredOrdersByTab.forEach((o) => {
-      const s = o.current_status || 'unknown';
-      if (!buckets[s]) buckets[s] = [];
-      buckets[s].push(o);
-    });
-
-    // Sort orders within each status bucket to prioritize fast delivery orders
-    Object.keys(buckets).forEach((status) => {
-      buckets[status].sort((a, b) => {
-        // Fast delivery orders first
-        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
-        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
-
-        // If both have same fast delivery status, sort by creation date (newest first)
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
-    });
-
-    return buckets;
-  }, [filteredOrdersByTab]);
-
-  // Get statuses for the selected tab
-  const tabActiveStatuses = useMemo(() => {
-    if (selectedTab === 'all') {
-      return activeStatuses;
-    }
-
-    const tabStatuses =
-      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
-    const seen = Array.from(
-      new Set(filteredOrdersByTab.map((o) => o.current_status || 'unknown'))
-    );
-
-    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
-    const active = seen.filter(
-      (status) =>
-        !completedStatusTypes.includes(status) && tabStatuses.includes(status)
-    );
-
-    return active.sort((a, b) => {
-      if (isOrdersAgent) {
-        return (
-          (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-          (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      if (isOrdersClient) {
-        return (
-          (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-          (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      const ia = statusOrder.indexOf(a);
-      const ib = statusOrder.indexOf(b);
-      const va = ia === -1 ? 999 : ia;
-      const vb = ib === -1 ? 999 : ib;
-      return va - vb;
-    });
-  }, [
-    selectedTab,
-    filteredOrdersByTab,
-    tabGroups,
-    activeStatuses,
-    statusOrder,
-    isOrdersAgent,
-    isOrdersClient,
-  ]);
-
-  const tabCompletedStatuses = useMemo(() => {
-    if (selectedTab === 'all') {
-      return completedStatuses;
-    }
-
-    const tabStatuses =
-      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
-    const seen = Array.from(
-      new Set(filteredOrdersByTab.map((o) => o.current_status || 'unknown'))
-    );
-
-    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
-    const completed = seen.filter(
-      (status) =>
-        completedStatusTypes.includes(status) && tabStatuses.includes(status)
-    );
-
-    return completed.sort((a, b) => {
-      if (isOrdersAgent) {
-        return (
-          (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-          (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      if (isOrdersClient) {
-        return (
-          (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
-          (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-        );
-      }
-      const ia = statusOrder.indexOf(a);
-      const ib = statusOrder.indexOf(b);
-      const va = ia === -1 ? 999 : ia;
-      const vb = ib === -1 ? 999 : ib;
-      return va - vb;
-    });
-  }, [
-    selectedTab,
-    filteredOrdersByTab,
-    tabGroups,
-    completedStatuses,
-    statusOrder,
-    isOrdersAgent,
-    isOrdersClient,
-  ]);
-
-  const tabCompletedOrdersCount = useMemo(() => {
-    return tabCompletedStatuses.reduce((count, status) => {
-      return count + (filteredGroupedByStatus[status]?.length || 0);
-    }, 0);
-  }, [tabCompletedStatuses, filteredGroupedByStatus]);
+  const sortedOrdersForList = useMemo(
+    () => sortOrdersByModifiedDesc(filteredOrdersByTab),
+    [filteredOrdersByTab]
+  );
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
     setSelectedTab(newValue);
@@ -1122,128 +917,14 @@ const OrdersPage: React.FC = () => {
             )}
           </Paper>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Active Orders */}
-            {tabActiveStatuses.map((statusKey) => (
-              <Box key={statusKey} sx={{ width: '100%' }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    bgcolor: 'primary.50',
-                    borderLeft: 4,
-                    borderColor: 'primary.main',
-                  }}
-                >
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    {t(`common.orderStatus.${statusKey}`, statusKey)}
-                    <Chip
-                      label={filteredGroupedByStatus[statusKey]?.length || 0}
-                      size="small"
-                      color="primary"
-                      sx={{ ml: 1 }}
-                    />
-                  </Typography>
-                </Paper>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {(filteredGroupedByStatus[statusKey] || []).map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      onActionComplete={refreshOrders}
-                    />
-                  ))}
-                </Box>
-              </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {sortedOrdersForList.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onActionComplete={refreshOrders}
+              />
             ))}
-
-            {/* Completed/Cancelled Orders - Collapsible */}
-            {tabCompletedOrdersCount > 0 && (
-              <Paper
-                sx={{
-                  mt: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  overflow: 'hidden',
-                }}
-              >
-                <Button
-                  fullWidth
-                  onClick={() => setShowCompletedOrders(!showCompletedOrders)}
-                  sx={{
-                    p: 2.5,
-                    justifyContent: 'space-between',
-                    textTransform: 'none',
-                    bgcolor: 'grey.50',
-                    '&:hover': {
-                      bgcolor: 'grey.100',
-                    },
-                  }}
-                  endIcon={
-                    showCompletedOrders ? <ExpandLess /> : <ExpandMore />
-                  }
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Cancel color="action" />
-                    <Typography variant="h6" fontWeight="bold">
-                      {t(
-                        'orders.completedAndCancelled',
-                        'Completed & Cancelled Orders'
-                      )}
-                    </Typography>
-                    <Chip
-                      label={tabCompletedOrdersCount}
-                      size="small"
-                      color="default"
-                    />
-                  </Box>
-                </Button>
-                <Collapse in={showCompletedOrders}>
-                  <Box sx={{ p: 3 }}>
-                    {tabCompletedStatuses.map((statusKey) => (
-                      <Box key={statusKey} sx={{ width: '100%', mb: 3 }}>
-                        <Paper
-                          variant="outlined"
-                          sx={{
-                            p: 1.5,
-                            mb: 2,
-                            bgcolor: 'grey.50',
-                          }}
-                        >
-                          <Typography variant="subtitle1" fontWeight="medium">
-                            {t(`common.orderStatus.${statusKey}`, statusKey)}
-                            <Chip
-                              label={
-                                filteredGroupedByStatus[statusKey]?.length || 0
-                              }
-                              size="small"
-                              sx={{ ml: 1 }}
-                            />
-                          </Typography>
-                        </Paper>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 2,
-                          }}
-                        >
-                          {(filteredGroupedByStatus[statusKey] || []).map(
-                            (order) => (
-                              <OrderCard
-                                key={order.id}
-                                order={order}
-                                onActionComplete={refreshOrders}
-                              />
-                            )
-                          )}
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                </Collapse>
-              </Paper>
-            )}
           </Box>
         )}
       </Container>

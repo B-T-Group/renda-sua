@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBatchOrderActions, useOrders } from '../../hooks';
 import type { Order } from '../../hooks';
+import { sortOrdersByModifiedDesc } from '../../utils/orderListSort';
 import SEOHead from '../seo/SEOHead';
 
 type BatchAction =
@@ -82,6 +83,11 @@ const BatchOrdersPage: React.FC = () => {
       canApplyActionToOrder(order, selectedAction)
     );
   }, [orders, selectedAction]);
+
+  const displayedOrders = useMemo(
+    () => sortOrdersByModifiedDesc(filteredOrders),
+    [filteredOrders]
+  );
 
   const toggleSelection = (orderId: string) => {
     setSelection((prev) => ({ ...prev, [orderId]: !prev[orderId] }));
@@ -419,7 +425,7 @@ const BatchOrdersPage: React.FC = () => {
             </Typography>
           ) : (
             <Stack spacing={1}>
-              {filteredOrders.map((order) => {
+              {displayedOrders.map((order) => {
                 const orderResult = results[order.id];
                 const statusLabel = t(
                   `common.orderStatus.${order.current_status}`,
