@@ -2,11 +2,13 @@ import {
   Alert,
   AlertTitle,
   Box,
+  Button,
   Container,
   Typography,
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
@@ -21,10 +23,15 @@ import StatusBadge from '../common/StatusBadge';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
+const DASHBOARD_ACCOUNT_PREVIEW_LIMIT = 2;
+
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const { accounts } = useAccountInfo();
+  const previewAccounts = accounts.slice(0, DASHBOARD_ACCOUNT_PREVIEW_LIMIT);
+  const hasMoreAccounts = accounts.length > DASHBOARD_ACCOUNT_PREVIEW_LIMIT;
   const {
     aggregates,
     loading: aggregatesLoading,
@@ -113,7 +120,7 @@ const BusinessDashboard: React.FC = () => {
             {t('accounts.accountInformation')}
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {accounts.map((account) => (
+            {previewAccounts.map((account) => (
               <UserAccount
                 key={account.id}
                 accountId={account.id}
@@ -122,6 +129,18 @@ const BusinessDashboard: React.FC = () => {
               />
             ))}
           </Box>
+          {hasMoreAccounts && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => navigate('/business/accounts')}
+              sx={{ mt: 1.5 }}
+            >
+              {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
+                count: accounts.length,
+              })}
+            </Button>
+          )}
         </Box>
       )}
 

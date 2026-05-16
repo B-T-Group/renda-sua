@@ -503,6 +503,14 @@ function App() {
 
             {/* Business routes */}
             <Route
+              path="/business/accounts"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessAccountsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/dashboard/more"
               element={
                 <ProtectedRoute>

@@ -85,6 +85,10 @@
     "insufficientFunds": "Fonds insuffisants dans le compte",
     "loadMore": "Charger plus",
     "noAccounts": "Aucun compte trouvé",
+    "viewAllAccounts": "Voir les {{count}} comptes",
+    "businessPageSubtitle": "Soldes, recharges, retraits et transactions récentes pour chaque compte.",
+    "businessPageSeoTitle": "Comptes entreprise",
+    "businessPageSeoDescription": "Consultez les soldes, rechargez, retirez et l'historique des transactions de tous vos comptes.",
     "noDescription": "Aucune description",
     "noTransactions": "Aucune transaction trouvée",
     "paymentMessages": {
@@ -2765,6 +2769,11 @@
       "active": "Actives",
       "delivered": "Livrées",
       "cancelled": "Annulées"
+    },
+    "sections": {
+      "activeOrders": "Commandes actives",
+      "completedOrders": "Commandes terminées",
+      "cancelledOrders": "Commandes annulées"
     },
     "noOrdersInTab": "Aucune commande trouvée dans {{category}}",
     "viewAllOrders": "Voir Toutes les Commandes",

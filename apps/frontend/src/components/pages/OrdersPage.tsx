@@ -42,6 +42,7 @@ import { useOrders, type OrderFilters } from '../../hooks';
 import { sortOrdersByModifiedDesc } from '../../utils/orderListSort';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
+import OrdersGroupedList from '../orders/OrdersGroupedList';
 
 import SEOHead from '../seo/SEOHead';
 
@@ -295,6 +296,9 @@ const OrdersPage: React.FC = () => {
     () => sortOrdersByModifiedDesc(filteredOrdersByTab),
     [filteredOrdersByTab]
   );
+
+  const useGroupedOrdersList =
+    selectedTab === 'all' && !isCashReconciliationView && !filters.status;
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
     setSelectedTab(newValue);
@@ -916,6 +920,11 @@ const OrdersPage: React.FC = () => {
               </Button>
             )}
           </Paper>
+        ) : useGroupedOrdersList ? (
+          <OrdersGroupedList
+            orders={sortedOrdersForList}
+            onActionComplete={refreshOrders}
+          />
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {sortedOrdersForList.map((order) => (

@@ -85,6 +85,10 @@
     "insufficientFunds": "Insufficient funds",
     "loadMore": "Load More",
     "noAccounts": "No accounts found",
+    "viewAllAccounts": "View all {{count}} accounts",
+    "businessPageSubtitle": "Balances, top-ups, withdrawals, and recent transactions for each account.",
+    "businessPageSeoTitle": "Business accounts",
+    "businessPageSeoDescription": "View balances, top up, withdraw, and transaction history for all your business accounts.",
     "noDescription": "No description",
     "noTransactions": "No transactions found",
     "paymentMessages": {
@@ -2770,6 +2774,11 @@
       "active": "Active",
       "delivered": "Delivered",
       "cancelled": "Cancelled"
+    },
+    "sections": {
+      "activeOrders": "Active orders",
+      "completedOrders": "Completed orders",
+      "cancelledOrders": "Cancelled orders"
     },
     "noOrdersInTab": "No orders found in {{category}}",
     "viewAllOrders": "View All Orders",
