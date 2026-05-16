@@ -18,12 +18,10 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Grid,
+  Divider,
   Paper,
   Skeleton,
   Stack,
-  Tab,
-  Tabs,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -76,11 +74,13 @@ function sortBusinessItemsBy(list: Item[], sortBy: ItemsSortBy): Item[] {
 // Skeleton loading components
 const ItemsCardsSkeleton: React.FC = () => {
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'stretch' }}>
       {Array.from(new Array(6)).map((_, index) => (
         <Box
           key={index}
           sx={{
+            display: 'flex',
+            flexDirection: 'column',
             flex: {
               xs: '1 1 100%',
               sm: '1 1 calc(50% - 12px)',
@@ -91,13 +91,14 @@ const ItemsCardsSkeleton: React.FC = () => {
           <Card
             sx={{
               height: '100%',
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
             }}
           >
             <Box
               sx={{
-                height: 200,
+                height: 280,
                 width: '100%',
                 display: 'flex',
                 flexDirection: 'column',
@@ -251,25 +252,6 @@ const BusinessItemsPage: React.FC = () => {
     }
   }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
 
-  // Refresh page data when window regains focus or becomes visible
-  useEffect(() => {
-    const handleFocus = () => {
-      if (profile?.business?.id) refetchPageData();
-    };
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden && profile?.business?.id) refetchPageData();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [profile?.business?.id, refetchPageData]);
-
   const handleEditItem = (item: any) => {
     // Navigate to the edit page instead of opening dialog
     navigate(`/business/items/edit/${item.id}`);
@@ -336,9 +318,8 @@ const BusinessItemsPage: React.FC = () => {
     }
   };
 
-  const handleViewItem = (item: any) => {
-    // Navigate to the view page
-    navigate(`/business/items/${item.id}`);
+  const handleViewItem = (item: Item) => {
+    navigate(`/business/items/${item.id}`, { state: { item } });
   };
 
   const handleDeleteItem = (item: any) => {
@@ -357,7 +338,7 @@ const BusinessItemsPage: React.FC = () => {
       });
       setShowDeleteConfirm(false);
       setItemToDelete(null);
-      await refetchPageData();
+      await refetchPageData(true);
     } catch (err: any) {
       const message =
         err?.response?.data?.error ?? t('business.items.deleteError');
@@ -609,19 +590,9 @@ const BusinessItemsPage: React.FC = () => {
   );
   // Stats: total count and per-category count (for display at top)
   const totalItemCount = items?.length ?? 0;
-  const categoryCountMap = (items || []).reduce<Record<string, number>>(
-    (acc, item) => {
-      const key =
-        item.item_sub_category?.name ?? '_no_category';
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    },
-    {}
-  );
-  const categoryCountEntries = Object.entries(categoryCountMap).sort(
-    ([a], [b]) => a.localeCompare(b)
-  );
-  const categoryCount = categoryCountEntries.length;
+  const categoryCount = new Set(
+    (items ?? []).map((item) => item.item_sub_category?.name ?? '_no_category')
+  ).size;
 
   // Inventory stats for stat cards
   const { inStockCount, lowStockCount } = (items || []).reduce(
@@ -699,31 +670,31 @@ const BusinessItemsPage: React.FC = () => {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
         gap={1}
-        sx={{ mb: 2 }}
+        sx={{ mb: 1.5 }}
       >
-        <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h5" fontWeight={600} sx={{ lineHeight: 1.25 }}>
             {t('business.items.title').split(' ').slice(0, -1).join(' ')}{' '}
             <Box component="span" color="error.main">
               {t('business.items.title').split(' ').slice(-1)[0]}
             </Box>
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="caption" color="text.secondary">
             {t('business.items.subtitle', {
               count: totalItemCount,
               categories: categoryCount,
             })}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
           <Button
             variant="outlined"
             color="error"
             startIcon={<AddPhotoAlternateIcon />}
             onClick={() => navigate('/business/items/add-from-image')}
-            size="medium"
+            size="small"
             sx={{ borderRadius: 0 }}
           >
             {t('business.items.addFromImage', 'Add from image')}
@@ -733,7 +704,7 @@ const BusinessItemsPage: React.FC = () => {
             color="primary"
             startIcon={<DownloadIcon />}
             onClick={handleOpenFacebookExportSelect}
-            size="medium"
+            size="small"
             sx={{ borderRadius: 0 }}
             disabled={loading || (items?.length ?? 0) === 0}
           >
@@ -745,68 +716,81 @@ const BusinessItemsPage: React.FC = () => {
         </Stack>
       </Stack>
 
-      {/* Stat cards */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                <Box>
-                  <Typography variant="overline" color="text.secondary">
-                    {t('business.items.stats.totalItems')}
-                  </Typography>
-                  <Typography variant="h4">{totalItemCount}</Typography>
-                </Box>
-                <InventoryIcon sx={{ color: 'warning.main', fontSize: 28 }} />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                <Box>
-                  <Typography variant="overline" color="text.secondary">
-                    {t('business.items.stats.inStock')}
-                  </Typography>
-                  <Typography variant="h4">{inStockCount}</Typography>
+      <Paper
+        variant="outlined"
+        sx={{
+          mb: 1.5,
+          borderRadius: 0,
+          px: { xs: 1.5, sm: 2 },
+          py: 1,
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={{ xs: 1, sm: 0 }}
+          divider={
+            <Divider
+              flexItem
+              orientation="vertical"
+              sx={{ display: { xs: 'none', sm: 'block' }, mx: 1 }}
+            />
+          }
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+            <InventoryIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                {t('business.items.stats.totalItems')}
+              </Typography>
+              <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+                {totalItemCount}
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+            <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                {t('business.items.stats.inStock')}
+              </Typography>
+              <Stack direction="row" alignItems="baseline" spacing={0.75} flexWrap="wrap">
+                <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+                  {inStockCount}
+                </Typography>
+                {totalItemCount > 0 && (
                   <Typography variant="caption" color="success.main">
-                    {totalItemCount > 0
-                      ? `^ ${((100 * inStockCount) / totalItemCount).toFixed(1)}% ${t('business.items.stats.ofCatalogue')}`
-                      : ''}
+                    {((100 * inStockCount) / totalItemCount).toFixed(1)}%{' '}
+                    {t('business.items.stats.ofCatalogue')}
                   </Typography>
-                </Box>
-                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 28 }} />
+                )}
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                <Box>
-                  <Typography variant="overline" color="text.secondary">
-                    {t('business.items.stats.lowStock')}
-                  </Typography>
-                  <Typography variant="h4">{lowStockCount}</Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+            <WarningIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                {t('business.items.stats.lowStock')}
+              </Typography>
+              <Stack direction="row" alignItems="baseline" spacing={0.75} flexWrap="wrap">
+                <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+                  {lowStockCount}
+                </Typography>
+                {lowStockCount > 0 && (
                   <Typography variant="caption" color="warning.main">
-                    {lowStockCount > 0 ? `v ${t('business.items.stats.needsRestocking')}` : ''}
+                    {t('business.items.stats.needsRestocking')}
                   </Typography>
-                </Box>
-                <WarningIcon sx={{ color: 'warning.main', fontSize: 28 }} />
+                )}
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </Box>
+          </Stack>
+        </Stack>
+      </Paper>
 
-      {/* Low stock alert banner */}
       {lowStockCount > 0 && (
         <Alert
           severity="warning"
-          sx={{ mb: 2, borderRadius: 0 }}
+          sx={{ mb: 1.5, borderRadius: 0, py: 0.25 }}
           action={
             <Button
               color="inherit"
@@ -821,29 +805,8 @@ const BusinessItemsPage: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ width: '100%', mb: 0.5 }} elevation={0}>
-        {/* Category filter tabs */}
-        <Tabs
-          value={filters.categoryFilter}
-          onChange={(_e, v) => setFilters((f) => ({ ...f, categoryFilter: v }))}
-          variant="scrollable"
-          scrollButtons="auto"
-          indicatorColor="primary"
-          textColor="primary"
-          aria-label="category tabs"
-          sx={{ px: 0, minHeight: 40, borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab label={`${t('business.items.allItems')} ${totalItemCount}`} value="all" />
-          {categoryCountEntries.map(([key, count]) => (
-            <Tab
-              key={key}
-              label={`${key === '_no_category' ? t('business.items.filters.noCategory') : key} ${count}`}
-              value={key}
-            />
-          ))}
-        </Tabs>
-
-        <Box sx={{ mb: 3 }}>
+      <Paper sx={{ width: '100%' }} elevation={0}>
+        <Box sx={{ pt: 0.5, pb: 0.5 }}>
           <ItemsFilterBar
             filters={filters}
             onFiltersChange={setFilters}
@@ -860,11 +823,20 @@ const BusinessItemsPage: React.FC = () => {
           ) : !filteredItems || filteredItems.length === 0 ? (
             <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
           ) : (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                alignItems: 'stretch',
+              }}
+            >
               {sortedItems.map((item) => (
                 <Box
                   key={item.id}
                   sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
                     flex: {
                       xs: '1 1 100%',
                       sm: '1 1 calc(50% - 12px)',

@@ -39,7 +39,7 @@ import axios from 'axios';
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAws } from '../../hooks/useAws';
@@ -84,11 +84,15 @@ export default function ItemViewPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { itemId } = useParams<{ itemId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const listItem = (location.state as { item?: Item } | null)?.item;
 
-  const [item, setItem] = useState<Item | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [item, setItem] = useState<Item | null>(
+    listItem?.id === itemId ? listItem : null
+  );
+  const [loading, setLoading] = useState(!listItem || listItem.id !== itemId);
   const [error, setError] = useState<string | null>(null);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
@@ -134,34 +138,39 @@ export default function ItemViewPage() {
   } = useItems(profile?.business?.id);
   const { fetchBusinessLocations } = useBusinessInventory();
 
-  const fetchItemDetails = useCallback(async () => {
-    if (!itemId) return;
+  const fetchItemDetails = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!itemId) return;
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const foundItem = await fetchSingleItem(itemId);
-
-      if (foundItem) {
-        setItem(foundItem);
-      } else {
-        setError(t('business.inventory.itemNotFound'));
+      if (!options?.silent) {
+        setLoading(true);
       }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch item details'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [itemId, fetchSingleItem, t]);
+      setError(null);
+
+      try {
+        const foundItem = await fetchSingleItem(itemId);
+
+        if (foundItem) {
+          setItem(foundItem);
+        } else {
+          setError(t('business.inventory.itemNotFound'));
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch item details'
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [itemId, fetchSingleItem, t]
+  );
 
   useEffect(() => {
-    if (itemId) {
-      fetchItemDetails();
-    }
-  }, [itemId, fetchItemDetails]);
+    if (!itemId) return;
+    const hasListPreview = listItem?.id === itemId;
+    void fetchItemDetails({ silent: hasListPreview });
+  }, [itemId, listItem?.id, fetchItemDetails]);
 
   useEffect(() => {
     if (profile?.business?.id) {

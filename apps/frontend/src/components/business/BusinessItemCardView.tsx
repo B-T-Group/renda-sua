@@ -303,6 +303,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       sx={{
         height: '100%',
         width: '100%',
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
@@ -414,7 +415,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       {/* Image gallery (thumbnails + click / arrows when multiple) */}
       <Box
         sx={{
-          height: 200,
+          height: 280,
           position: 'relative',
           bgcolor: 'grey.100',
           display: 'flex',
@@ -475,8 +476,8 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                   alt={displayImage.alt_text || item.name}
                   sx={{
                     width: '100%',
-                    height: hasMultipleImages ? '100%' : 200,
-                    minHeight: hasMultipleImages ? 0 : 200,
+                    height: hasMultipleImages ? '100%' : 280,
+                    minHeight: hasMultipleImages ? 0 : 280,
                     objectFit: 'contain',
                     objectPosition: 'center',
                     display: 'block',
@@ -775,67 +776,49 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
 
       <CardContent
         sx={{
-          flexGrow: 1,
-          p: 2,
+          flex: 1,
+          p: 1.5,
+          pt: 1.25,
           display: 'flex',
           flexDirection: 'column',
-          height: '100%',
+          gap: 1,
+          minHeight: 0,
         }}
       >
-        <Box
-          sx={{
-            mb: 2,
-            flexGrow: 1,
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 1.5,
-          }}
-        >
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="subtitle1"
+            noWrap
+            sx={{ fontWeight: 600, lineHeight: 1.3, mb: 0.25 }}
+          >
+            {item.name}
+          </Typography>
+          {item.description ? (
             <Typography
-              variant="h6"
-              gutterBottom
-              noWrap
-              sx={{
-                fontWeight: 600,
-                fontSize: '1.1rem',
-              }}
-            >
-              {item.name}
-            </Typography>
-            <Typography
-              variant="body2"
+              variant="caption"
               color="text.secondary"
               sx={{
-                mb: 1.5,
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
-                minHeight: 40,
+                lineHeight: 1.35,
+                mb: 0.5,
               }}
             >
-              {item.description ||
-                t('business.items.noDescription', 'No description')}
+              {item.description}
             </Typography>
-
-            <Typography
-              variant="h6"
-              color="primary"
-              sx={{
-                fontWeight: 700,
-                fontSize: '1.25rem',
-              }}
-            >
-              {formatCurrency(item.price, item.currency)}
-            </Typography>
-          </Box>
+          ) : null}
+          <Typography
+            variant="subtitle1"
+            color="primary"
+            sx={{ fontWeight: 700, lineHeight: 1.2 }}
+          >
+            {formatCurrency(item.price, item.currency)}
+          </Typography>
         </Box>
 
-        {/* Item Metadata */}
-        <Stack spacing={1} sx={{ mb: 2 }}>
+        <Stack spacing={0.75}>
           {/* SKU and Brand */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Chip
@@ -919,15 +902,12 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           )}
         </Stack>
 
-        {/* Location and Status Indicators */}
         <Box
           sx={{
             display: 'flex',
-            gap: 2,
-            mb: 2,
-            pb: 2,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
+            gap: 1.25,
+            flexWrap: 'wrap',
+            alignItems: 'center',
           }}
         >
           {/* Locations Count */}
@@ -942,7 +922,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 fontSize="small"
                 color={locationCount > 0 ? 'primary' : 'disabled'}
               />
-              <Typography variant="body2" fontWeight="medium">
+              <Typography variant="caption" fontWeight={600}>
                 {locationCount}
               </Typography>
             </Box>
@@ -955,7 +935,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 fontSize="small"
                 color={hasImages ? 'primary' : 'disabled'}
               />
-              <Typography variant="body2" fontWeight="medium">
+              <Typography variant="caption" fontWeight={600}>
                 {item.item_images?.length || 0}
               </Typography>
             </Box>
@@ -987,8 +967,15 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           )}
         </Box>
 
-        {/* Actions — two rows */}
-        <Stack spacing={0.75} sx={{ mt: 'auto' }}>
+        <Stack
+          spacing={0.5}
+          sx={{
+            pt: 0.75,
+            mt: 'auto',
+            borderTop: 1,
+            borderColor: 'divider',
+          }}
+        >
           <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           <Tooltip title={t('business.items.viewItem', 'View Item')}>
             <IconButton

@@ -19,7 +19,7 @@ export interface CollectionSuggestion {
   slug: string;
   name_en: string;
   name_fr: string;
-  source: 'rule' | 'ai';
+  source: 'ai';
   reason?: string;
 }
 

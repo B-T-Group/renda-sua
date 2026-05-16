@@ -103,7 +103,7 @@ export function ManageItemCollectionsDialog({
                       key={s.collectionId}
                       label={labelFor(s)}
                       size="small"
-                      color={s.source === 'ai' ? 'secondary' : 'default'}
+                      color="secondary"
                       variant="outlined"
                     />
                   ))}

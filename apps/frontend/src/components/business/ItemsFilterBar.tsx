@@ -446,12 +446,12 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
       {!isMobile ? (
         <Paper
           sx={{
-            p: 2,
-            mb: 2,
+            p: 1.5,
+            mb: 1,
             '& .MuiOutlinedInput-root': { borderRadius: 0 },
           }}
         >
-          <Stack spacing={2}>
+          <Stack spacing={1}>
             <Stack
               direction="row"
               spacing={2}
@@ -547,12 +547,12 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         <>
           <Paper
             sx={{
-              p: 2,
-              mb: 2,
+              p: 1.5,
+              mb: 1,
               '& .MuiOutlinedInput-root': { borderRadius: 0 },
             }}
           >
-            <Stack spacing={2}>
+            <Stack spacing={1}>
               {/* Search Bar */}
               <TextField
                 fullWidth

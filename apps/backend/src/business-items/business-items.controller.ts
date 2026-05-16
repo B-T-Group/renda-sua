@@ -666,7 +666,7 @@ export class BusinessItemsController {
   }
 
   @Get('items/:itemId/collection-suggestions')
-  @ApiOperation({ summary: 'Suggested collections for an item (rules + AI)' })
+  @ApiOperation({ summary: 'Suggested collections for an item (AI)' })
   @ApiResponse({ status: 200, description: 'Suggestions retrieved' })
   async getItemCollectionSuggestions(@Param('itemId') itemId: string) {
     const user = await this.hasuraUserService.getUser();

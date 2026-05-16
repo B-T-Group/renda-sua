@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 
@@ -8,6 +8,9 @@ export interface BusinessItemsPageData {
   available_items: any[];
 }
 
+/** Avoid refetching full page-data when returning from item view within this window. */
+const PAGE_DATA_STALE_MS = 2 * 60 * 1000;
+
 export function useBusinessItemsPageData(businessId?: string) {
   const apiClient = useApiClient();
   const { fetchDistanceMatrix } = useDistanceMatrix();
@@ -16,9 +19,22 @@ export function useBusinessItemsPageData(businessId?: string) {
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchRef = useRef<{ businessId: string; at: number } | null>(null);
+  const hasCachedDataRef = useRef(false);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (force = false) => {
     if (!businessId) return;
+
+    const now = Date.now();
+    const last = lastFetchRef.current;
+    if (
+      !force &&
+      last?.businessId === businessId &&
+      now - last.at < PAGE_DATA_STALE_MS &&
+      hasCachedDataRef.current
+    ) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -80,11 +96,15 @@ export function useBusinessItemsPageData(businessId?: string) {
         };
       });
       setItems(updatedItems);
+      hasCachedDataRef.current = updatedItems.length > 0;
+      lastFetchRef.current = { businessId, at: Date.now() };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch page data');
       setItems([]);
       setBusinessLocations([]);
       setAvailableItems([]);
+      hasCachedDataRef.current = false;
+      lastFetchRef.current = null;
     } finally {
       setLoading(false);
     }
@@ -138,11 +158,13 @@ export function useBusinessItemsPageData(businessId?: string) {
 
   useEffect(() => {
     if (businessId) {
-      refetch();
+      void refetch();
     } else {
       setItems([]);
       setBusinessLocations([]);
       setAvailableItems([]);
+      lastFetchRef.current = null;
+      hasCachedDataRef.current = false;
     }
   }, [businessId, refetch]);
 

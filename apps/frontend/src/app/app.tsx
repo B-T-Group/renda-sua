@@ -96,6 +96,7 @@ function App() {
   );
   const shouldHideWhatsappWidget =
     isMobile && (isItemDetailPage || isPlaceOrderFlowPage);
+  const isBusinessItemsCatalog = location.pathname.startsWith('/business/items');
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -169,12 +170,14 @@ function App() {
       <Box
         sx={{
           flex: 1,
-          py: 4,
+          py: isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4,
           // Add bottom padding when any bottom nav is visible to prevent content overlap
           paddingBottom:
             showAgentBottomNav || showClientBottomNav || showGuestBottomNav
-              ? { xs: '80px', md: 4 }
-              : 4,
+              ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
+              : isBusinessItemsCatalog
+                ? { xs: 1, sm: 1.5 }
+                : 4,
         }}
       >
         <Container
@@ -182,7 +185,8 @@ function App() {
           sx={{
             px:
               location.pathname === '/items' ||
-              location.pathname.startsWith('/items/')
+              location.pathname.startsWith('/items/') ||
+              isBusinessItemsCatalog
                 ? { xs: 0.5, sm: 1 }
                 : { xs: 1.5, sm: 2, md: 3 },
           }}

@@ -1832,7 +1832,7 @@ export class BusinessItemsService {
       slug: string;
       name_en: string;
       name_fr: string;
-      source: 'rule' | 'ai';
+      source: 'ai';
       reason?: string;
     }>
   > {
@@ -1840,57 +1840,6 @@ export class BusinessItemsService {
     const assigned = new Set(
       (item.item_collections ?? []).map((ic: { collection_id: string }) => ic.collection_id)
     );
-    const subCategoryId = item.item_sub_category_id as number;
-    const categoryId = item.item_sub_category?.item_category?.id as number | undefined;
-    const mappingWhere: Record<string, unknown> = {
-      _or: [{ item_sub_category_id: { _eq: subCategoryId } }],
-    };
-    if (categoryId) {
-      (mappingWhere._or as unknown[]).push({
-        item_category_id: { _eq: categoryId },
-      });
-    }
-    const rulesResult = await this.hasuraSystemService.executeQuery<{
-      collection_category_mappings: Array<{
-        priority: number;
-        collection: {
-          id: string;
-          slug: string;
-          name_en: string;
-          name_fr: string;
-        };
-      }>;
-    }>(
-      `query RuleMappings($where: collection_category_mappings_bool_exp!) {
-        collection_category_mappings(where: $where, order_by: { priority: desc }) {
-          priority
-          collection { id slug name_en name_fr }
-        }
-      }`,
-      { where: mappingWhere }
-    );
-    const seen = new Set<string>();
-    const out: Array<{
-      collectionId: string;
-      slug: string;
-      name_en: string;
-      name_fr: string;
-      source: 'rule' | 'ai';
-      reason?: string;
-    }> = [];
-    for (const row of rulesResult.collection_category_mappings ?? []) {
-      const c = row.collection;
-      if (!c || assigned.has(c.id) || seen.has(c.id)) continue;
-      seen.add(c.id);
-      out.push({
-        collectionId: c.id,
-        slug: c.slug,
-        name_en: c.name_en,
-        name_fr: c.name_fr,
-        source: 'rule',
-        reason: 'Matched product category',
-      });
-    }
     try {
       const allCollections = await this.listAllCollections();
       const imageUrls = (item.item_images ?? [])
@@ -1911,16 +1860,15 @@ export class BusinessItemsService {
           name_fr: c.name_fr,
         })),
       });
-      for (const s of aiRows) {
-        if (assigned.has(s.collectionId) || seen.has(s.collectionId)) continue;
-        seen.add(s.collectionId);
-        out.push({ ...s, source: 'ai' });
-      }
+      return aiRows
+        .filter((s) => !assigned.has(s.collectionId))
+        .slice(0, 8)
+        .map((s) => ({ ...s, source: 'ai' as const }));
     } catch (error: any) {
       this.logger.warn(
         `AI collection suggestions skipped for item ${itemId}: ${error?.message}`
       );
+      return [];
     }
-    return out.slice(0, 8);
   }
 }
