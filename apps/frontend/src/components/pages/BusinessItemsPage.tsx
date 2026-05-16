@@ -121,25 +121,40 @@ const ItemsCardsSkeleton: React.FC = () => {
               </Box>
               <Box
                 sx={{
-                  flex: '1 1 0',
+                  flex: 1,
                   minHeight: 0,
+                  position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'stretch',
-                  justifyContent: 'center',
                 }}
               >
                 <Skeleton
                   variant="rectangular"
                   sx={{
                     width: '100%',
-                    height: '100%',
-                    minHeight: 0,
                     flex: 1,
+                    minHeight: 0,
                     display: 'block',
                     transform: 'none',
                   }}
                 />
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    px: 1,
+                    py: 0.75,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.75,
+                  }}
+                  aria-hidden
+                >
+                  <Skeleton variant="rounded" height={28} width="100%" />
+                  <Skeleton variant="rounded" height={28} width="72%" />
+                </Box>
               </Box>
             </Box>
             <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
@@ -147,18 +162,18 @@ const ItemsCardsSkeleton: React.FC = () => {
               <Skeleton variant="text" height={20} sx={{ mb: 1 }} />
               <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
               <Skeleton variant="text" width={160} height={32} sx={{ mb: 2 }} />
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <Skeleton variant="rectangular" width={80} height={32} />
-                <Box display="flex" gap={1}>
-                  <Skeleton variant="circular" width={40} height={40} />
-                  <Skeleton variant="circular" width={40} height={40} />
-                  <Skeleton variant="circular" width={40} height={40} />
+              <Stack spacing={0.75} sx={{ mt: 'auto' }}>
+                <Box display="flex" gap={1} flexWrap="wrap">
+                  <Skeleton variant="circular" width={34} height={34} />
+                  <Skeleton variant="circular" width={34} height={34} />
+                  <Skeleton variant="circular" width={34} height={34} />
+                  <Skeleton variant="circular" width={34} height={34} />
                 </Box>
-              </Box>
+                <Box display="flex" gap={1}>
+                  <Skeleton variant="circular" width={34} height={34} />
+                  <Skeleton variant="circular" width={34} height={34} />
+                </Box>
+              </Stack>
             </CardContent>
           </Card>
         </Box>

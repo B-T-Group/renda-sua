@@ -11,7 +11,6 @@ import {
   TrendingUp as PromoteIcon,
   Star,
   StarBorder,
-  MoreVert as MoreVertIcon,
   Category as CategoryIcon,
   Visibility as ViewIcon,
   Warning as WarningIcon,
@@ -25,10 +24,7 @@ import {
   Chip,
   Dialog,
   DialogContent,
-  FormControlLabel,
   IconButton,
-  Menu,
-  MenuItem,
   Stack,
   Switch,
   Tooltip,
@@ -157,7 +153,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const [settingsAnchor, setSettingsAnchor] = useState<null | HTMLElement>(null);
   const [togglingActive, setTogglingActive] = useState(false);
   const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
   const [togglingPayAtPickup, setTogglingPayAtPickup] = useState(false);
@@ -258,9 +253,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       label: isFr ? ic.collection.name_fr : ic.collection.name_en,
     }));
   }, [item.item_collections, i18n.language]);
-
-  const showListingSettingsMenu =
-    onToggleItemActive || onTogglePayOnDelivery || onTogglePayAtPickup;
 
   const hasActiveDeal = itemHasActiveDeal(item);
   const hasActivePromotion = itemHasActivePromotion(item);
@@ -616,6 +608,127 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             </Typography>
           </Box>
         )}
+        {(onToggleItemActive ||
+          onTogglePayOnDelivery ||
+          onTogglePayAtPickup) && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 2,
+              bgcolor: 'rgba(0, 0, 0, 0.72)',
+              px: 1,
+              py: 0.75,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              flexWrap="wrap"
+              gap={0.5}
+            >
+              {onToggleItemActive && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.25,
+                    flex: '1 1 48%',
+                    minWidth: 0,
+                  }}
+                >
+                  <Switch
+                    size="small"
+                    checked={item.is_active}
+                    disabled={togglingActive}
+                    onChange={(_e, checked) => {
+                      void handleListingActiveChange(checked);
+                    }}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'common.white',
+                      lineHeight: 1.2,
+                      fontSize: '0.65rem',
+                    }}
+                  >
+                    {t('business.items.listingActive', 'Listing active')}
+                  </Typography>
+                </Box>
+              )}
+              {onTogglePayOnDelivery && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.25,
+                    flex: '1 1 48%',
+                    minWidth: 0,
+                  }}
+                >
+                  <Switch
+                    size="small"
+                    checked={!!item.pay_on_delivery_enabled}
+                    disabled={togglingPayOnDelivery}
+                    onChange={(_e, checked) => {
+                      void handlePayOnDeliveryChange(checked);
+                    }}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'common.white',
+                      lineHeight: 1.2,
+                      fontSize: '0.65rem',
+                    }}
+                  >
+                    {t(
+                      'business.inventory.payOnDeliveryShort',
+                      'Pay at delivery'
+                    )}
+                  </Typography>
+                </Box>
+              )}
+            </Stack>
+            {onTogglePayAtPickup && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.25,
+                  width: '100%',
+                }}
+              >
+                <Switch
+                  size="small"
+                  checked={!!item.pay_at_pickup_enabled}
+                  disabled={togglingPayAtPickup}
+                  onChange={(_e, checked) => {
+                    void handlePayAtPickupChange(checked);
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'common.white',
+                    lineHeight: 1.2,
+                    fontSize: '0.65rem',
+                  }}
+                >
+                  {t('business.inventory.payAtPickupShort', 'Store pickup')}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
 
       {(hasActiveDeal || hasActivePromotion) && (
@@ -874,8 +987,9 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           )}
         </Box>
 
-        {/* Actions */}
-        <Stack direction="row" spacing={0.5} sx={{ mt: 'auto' }}>
+        {/* Actions — two rows */}
+        <Stack spacing={0.75} sx={{ mt: 'auto' }}>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           <Tooltip title={t('business.items.viewItem', 'View Item')}>
             <IconButton
               size="small"
@@ -987,6 +1101,8 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               </span>
             </Tooltip>
           )}
+          </Stack>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {onManageCollections && (
             <Tooltip
               title={t(
@@ -1006,107 +1122,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               </IconButton>
             </Tooltip>
           )}
-          {showListingSettingsMenu && (
-            <>
-              <Tooltip
-                title={t(
-                  'business.items.listingSettings',
-                  'Listing & payment options'
-                )}
-              >
-                <IconButton
-                  size="small"
-                  onClick={(e) => setSettingsAnchor(e.currentTarget)}
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  <MoreVertIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Menu
-                anchorEl={settingsAnchor}
-                open={Boolean(settingsAnchor)}
-                onClose={() => setSettingsAnchor(null)}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              >
-                {onToggleItemActive && (
-                  <MenuItem
-                    dense
-                    disableRipple
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <FormControlLabel
-                      sx={{ m: 0, width: '100%' }}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={item.is_active}
-                          disabled={togglingActive}
-                          onChange={(_e, checked) => {
-                            void handleListingActiveChange(checked);
-                          }}
-                        />
-                      }
-                      label={t('business.items.listingActive', 'Listing active')}
-                    />
-                  </MenuItem>
-                )}
-                {onTogglePayOnDelivery && (
-                  <MenuItem
-                    dense
-                    disableRipple
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <FormControlLabel
-                      sx={{ m: 0, width: '100%' }}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={!!item.pay_on_delivery_enabled}
-                          disabled={togglingPayOnDelivery}
-                          onChange={(_e, checked) => {
-                            void handlePayOnDeliveryChange(checked);
-                          }}
-                        />
-                      }
-                      label={t(
-                        'business.inventory.payOnDeliveryEnabled',
-                        'Allow payment at delivery'
-                      )}
-                    />
-                  </MenuItem>
-                )}
-                {onTogglePayAtPickup && (
-                  <MenuItem
-                    dense
-                    disableRipple
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <FormControlLabel
-                      sx={{ m: 0, width: '100%' }}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={!!item.pay_at_pickup_enabled}
-                          disabled={togglingPayAtPickup}
-                          onChange={(_e, checked) => {
-                            void handlePayAtPickupChange(checked);
-                          }}
-                        />
-                      }
-                      label={t(
-                        'business.inventory.payAtPickupEnabled',
-                        'Allow store pickup (pay at pickup)'
-                      )}
-                    />
-                  </MenuItem>
-                )}
-              </Menu>
-            </>
-          )}
           <Tooltip title={t('business.items.deleteItem', 'Delete Item')}>
             <IconButton
               size="small"
@@ -1122,6 +1137,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          </Stack>
         </Stack>
       </CardContent>
 
