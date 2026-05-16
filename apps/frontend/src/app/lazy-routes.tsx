@@ -46,6 +46,15 @@ export const BrandsManagementPage = lazy(() =>
 export const BusinessAnalyticsPage = lazy(() =>
   import('../components/pages/BusinessAnalyticsPage')
 );
+export const BusinessDashboardMorePage = lazy(() =>
+  import('../components/pages/BusinessDashboardMorePage')
+);
+export const BusinessDashboardCatalogMenuPage = lazy(() =>
+  import('../components/pages/BusinessDashboardCatalogMenuPage')
+);
+export const BusinessDashboardAdminPage = lazy(() =>
+  import('../components/pages/BusinessDashboardAdminPage')
+);
 export const BusinessRefundRequestsPage = lazy(() =>
   import('../components/pages/BusinessRefundRequestsPage')
 );
