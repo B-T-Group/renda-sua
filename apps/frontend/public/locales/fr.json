@@ -1893,6 +1893,7 @@
   },
   "collections": {
     "browseTitle": "Collections",
+    "browseSubtitle": "Groupes sélectionnés — touchez une collection pour voir les articles",
     "viewAll": "Voir tout",
     "filter": "Collection",
     "indexTitle": "Collections",

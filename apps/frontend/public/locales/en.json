@@ -1905,6 +1905,7 @@
   },
   "collections": {
     "browseTitle": "Collections",
+    "browseSubtitle": "Curated groups — tap a collection to browse items",
     "viewAll": "View all",
     "filter": "Collection",
     "indexTitle": "Collections",

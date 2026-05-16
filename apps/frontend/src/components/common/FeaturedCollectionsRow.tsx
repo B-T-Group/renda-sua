@@ -1,8 +1,10 @@
 import {
   Box,
+  Button,
   Card,
   CardActionArea,
   CircularProgress,
+  Paper,
   Typography,
 } from '@mui/material';
 import React, { useMemo } from 'react';
@@ -10,10 +12,13 @@ import { useTranslation } from 'react-i18next';
 import type { CollectionSummary } from '../../hooks/useCollections';
 import { CollectionPreviewMosaic } from './CollectionPreviewMosaic';
 
-/** Matches mobile catalog collection chip width (~1.5× compact size). */
 export const COLLECTION_BROWSE_CARD_WIDTH = 252;
 
-const TITLE_MIN_HEIGHT = 57;
+const CARD_PADDING = 12;
+
+const TITLE_MIN_HEIGHT = 48;
+
+export const COLLECTION_CARD_GRID_SIZE = COLLECTION_BROWSE_CARD_WIDTH - CARD_PADDING * 2;
 
 export interface CollectionBrowseCardProps {
   collection: CollectionSummary;
@@ -24,46 +29,28 @@ export function CollectionBrowseCard({
   collection,
   onClick,
 }: CollectionBrowseCardProps) {
-  const previewUrls = useMemo(
-    () =>
-      (collection.preview_image_urls ?? [])
-        .map((url) => url?.trim())
-        .filter((url): url is string => Boolean(url))
-        .slice(0, 4),
-    [collection.preview_image_urls]
-  );
-
-  const preview = useMemo(() => {
-    if (previewUrls.length > 0) {
-      return <CollectionPreviewMosaic imageUrls={previewUrls} />;
+  const previewUrls = useMemo(() => {
+    const fromApi = (collection.preview_image_urls ?? [])
+      .map((url) => url?.trim())
+      .filter((url): url is string => Boolean(url))
+      .slice(0, 4);
+    if (fromApi.length > 0) return fromApi;
+    if (collection.image_url?.trim()) {
+      return Array.from({ length: 4 }, () => collection.image_url!.trim());
     }
-    if (collection.image_url) {
-      return (
-        <Box
-          component="img"
-          src={collection.image_url}
-          alt=""
-          sx={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-        />
-      );
-    }
-    return <CollectionPreviewMosaic imageUrls={[]} />;
-  }, [collection.image_url, previewUrls]);
+    return [];
+  }, [collection.image_url, collection.preview_image_urls]);
 
   return (
     <Card
       variant="outlined"
+      elevation={0}
       sx={{
         width: COLLECTION_BROWSE_CARD_WIDTH,
         flexShrink: 0,
         scrollSnapAlign: 'start',
         borderColor: 'divider',
-        boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+        boxShadow: 1,
         overflow: 'hidden',
       }}
     >
@@ -72,32 +59,15 @@ export function CollectionBrowseCard({
         aria-label={collection.name}
         sx={{ display: 'block' }}
       >
-        <Box
-          sx={{
-            width: '100%',
-            aspectRatio: '1 / 1',
-            bgcolor: 'divider',
-            overflow: 'hidden',
-          }}
-        >
-          {preview}
-        </Box>
-        <Box
-          sx={{
-            minHeight: TITLE_MIN_HEIGHT,
-            px: 1.5,
-            py: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <Box sx={{ p: `${CARD_PADDING}px` }}>
+          <CollectionPreviewMosaic imageUrls={previewUrls} gap={12} tileBorderRadius={12} />
           <Typography
-            variant="body1"
-            fontWeight={600}
+            variant="subtitle2"
+            fontWeight={800}
             textAlign="center"
             sx={{
-              fontSize: '0.9375rem',
+              mt: 1.5,
+              minHeight: TITLE_MIN_HEIGHT - 8,
               lineHeight: 1.3,
               display: '-webkit-box',
               WebkitLineClamp: 2,
@@ -118,6 +88,7 @@ export interface FeaturedCollectionsRowProps {
   loading?: boolean;
   showTitle?: boolean;
   onCollectionClick: (slug: string) => void;
+  onSeeAllCollections?: () => void;
 }
 
 export function FeaturedCollectionsRow({
@@ -125,42 +96,80 @@ export function FeaturedCollectionsRow({
   loading = false,
   showTitle = true,
   onCollectionClick,
+  onSeeAllCollections,
 }: FeaturedCollectionsRowProps) {
   const { t } = useTranslation();
 
   if (!loading && collections.length === 0) return null;
 
+  const scrollContent = loading ? (
+    <CircularProgress size={22} />
+  ) : (
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 1.5,
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        pb: 0.5,
+        scrollSnapType: collections.length > 1 ? 'x mandatory' : undefined,
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'thin',
+      }}
+    >
+      {collections.map((collection) => (
+        <CollectionBrowseCard
+          key={collection.id}
+          collection={collection}
+          onClick={onCollectionClick}
+        />
+      ))}
+    </Box>
+  );
+
+  if (!showTitle) {
+    return <Box sx={{ mb: 1.5 }}>{scrollContent}</Box>;
+  }
+
   return (
-    <Box sx={{ mb: 1.5 }}>
-      {showTitle ? (
-        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-          {t('collections.browseTitle', 'Collections')}
-        </Typography>
-      ) : null}
-      {loading ? (
-        <CircularProgress size={22} />
-      ) : (
+    <Paper
+      variant="outlined"
+      elevation={0}
+      sx={{
+        mb: 2,
+        mt: 2,
+        borderRadius: 2,
+        borderColor: 'divider',
+        boxShadow: 1,
+        overflow: 'hidden',
+      }}
+    >
+      <Box sx={{ p: 2 }}>
         <Box
           sx={{
             display: 'flex',
-            gap: 1.5,
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            pb: 0.5,
-            scrollSnapType: collections.length > 1 ? 'x mandatory' : undefined,
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'thin',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 1,
           }}
         >
-          {collections.map((collection) => (
-            <CollectionBrowseCard
-              key={collection.id}
-              collection={collection}
-              onClick={onCollectionClick}
-            />
-          ))}
+          <Typography variant="h6" fontWeight={800} sx={{ flex: 1, minWidth: 0 }}>
+            {t('collections.browseTitle', 'Collections')}
+          </Typography>
+          {onSeeAllCollections ? (
+            <Button size="small" onClick={onSeeAllCollections} sx={{ mt: -0.5, mr: -1 }}>
+              {t('collections.viewAll', 'View all')}
+            </Button>
+          ) : null}
         </Box>
-      )}
-    </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+          {t(
+            'collections.browseSubtitle',
+            'Curated groups — tap a collection to browse items'
+          )}
+        </Typography>
+        {scrollContent}
+      </Box>
+    </Paper>
   );
 }

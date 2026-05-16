@@ -954,6 +954,7 @@ const ItemsPage: React.FC = () => {
               collections={featuredCollections}
               loading={collectionsLoading}
               onCollectionClick={(slug) => navigate(`/collections/${slug}`)}
+              onSeeAllCollections={() => navigate('/collections')}
             />
           </Box>
         ) : null}
