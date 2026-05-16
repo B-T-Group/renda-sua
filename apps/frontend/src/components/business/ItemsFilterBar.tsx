@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   Drawer,
   FormControl,
   IconButton,
@@ -65,6 +66,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [desktopFiltersExpanded, setDesktopFiltersExpanded] = useState(false);
 
   const handleFilterChange = (field: keyof ItemsFilterState, value: string) => {
     onFiltersChange({
@@ -100,6 +102,9 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
   };
 
   const activeFiltersCount = getActiveFiltersCount();
+  const advancedFiltersCount = filters.searchText
+    ? activeFiltersCount - 1
+    : activeFiltersCount;
 
   const getActiveFilterChips = () => {
     const chips: { label: string; onDelete: () => void }[] = [];
@@ -188,28 +193,16 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
 
   const inputSharpSx = { '& .MuiOutlinedInput-root': { borderRadius: 0 } };
 
-  const FiltersContent = () => (
-    <Stack spacing={2} sx={inputSharpSx}>
-      {/* Search */}
-      <TextField
-        fullWidth
-        placeholder={t(
-          'business.items.filters.search',
-          'Search by name, SKU, description, or tags...'
-        )}
-        variant="outlined"
-        size="small"
-        value={filters.searchText}
-        onChange={(e) => handleFilterChange('searchText', e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-          ),
-        }}
-      />
-
-      {/* Status Filter */}
-      <FormControl fullWidth size="small">
+  const AdvancedFilterFields = ({ inline = false }: { inline?: boolean }) => (
+    <Stack
+      direction={inline ? 'row' : 'column'}
+      spacing={2}
+      useFlexGap
+      flexWrap={inline ? 'wrap' : undefined}
+      alignItems={inline ? 'center' : 'stretch'}
+      sx={inputSharpSx}
+    >
+      <FormControl fullWidth={!inline} size="small" sx={inline ? { minWidth: 130 } : undefined}>
         <InputLabel>{t('business.items.filters.status', 'Status')}</InputLabel>
         <Select
           value={filters.statusFilter}
@@ -228,8 +221,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      {/* Stock Filter */}
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 140 } : undefined}
+      >
         <InputLabel>
           {t('business.inventory.stockStatus', 'Stock Status')}
         </InputLabel>
@@ -256,7 +252,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 168 } : undefined}
+      >
         <InputLabel>
           {t('business.items.filters.specialListingLabel', 'Spotlight')}
         </InputLabel>
@@ -294,8 +294,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      {/* Category Filter */}
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 140 } : undefined}
+      >
         <InputLabel>{t('business.items.category', 'Category')}</InputLabel>
         <Select
           value={filters.categoryFilter}
@@ -316,8 +319,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      {/* Brand Filter */}
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 130 } : undefined}
+      >
         <InputLabel>{t('business.items.brand', 'Brand')}</InputLabel>
         <Select
           value={filters.brandFilter}
@@ -338,7 +344,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 200 } : undefined}
+      >
         <InputLabel>
           {t('business.items.filters.sortBy', 'Sort by')}
         </InputLabel>
@@ -379,7 +389,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
-      <FormControl fullWidth size="small">
+      <FormControl
+        fullWidth={!inline}
+        size="small"
+        sx={inline ? { minWidth: 160 } : undefined}
+      >
         <InputLabel>
           {t('business.items.filters.favoritesLabel', 'Favorites')}
         </InputLabel>
@@ -407,8 +421,12 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           </MenuItem>
         </Select>
       </FormControl>
+    </Stack>
+  );
 
-      {/* Clear Filters Button */}
+  const FiltersContent = () => (
+    <Stack spacing={2} sx={inputSharpSx}>
+      <AdvancedFilterFields />
       {activeFiltersCount > 0 && (
         <Button
           fullWidth
@@ -434,7 +452,6 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           }}
         >
           <Stack spacing={2}>
-            {/* First Row - Search and Main Filters */}
             <Stack
               direction="row"
               spacing={2}
@@ -453,7 +470,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 onChange={(e) =>
                   handleFilterChange('searchText', e.target.value)
                 }
-                sx={{ minWidth: 250, maxWidth: 400, flex: 1 }}
+                sx={{ minWidth: 200, flex: 1 }}
                 InputProps={{
                   startAdornment: (
                     <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
@@ -461,216 +478,23 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 }}
               />
 
-              <FormControl size="small" sx={{ minWidth: 130 }}>
-                <InputLabel>
-                  {t('business.items.filters.status', 'Status')}
-                </InputLabel>
-                <Select
-                  value={filters.statusFilter}
-                  onChange={(e) =>
-                    handleFilterChange('statusFilter', e.target.value)
+              <Badge
+                badgeContent={advancedFiltersCount}
+                color="primary"
+                invisible={advancedFiltersCount === 0}
+              >
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<FilterListIcon />}
+                  onClick={() =>
+                    setDesktopFiltersExpanded((open) => !open)
                   }
-                  label={t('business.items.filters.status', 'Status')}
+                  aria-expanded={desktopFiltersExpanded}
                 >
-                  <MenuItem value="all">
-                    {t('business.items.filters.allStatuses', 'All Statuses')}
-                  </MenuItem>
-                  <MenuItem value="active">
-                    {t('business.items.active', 'Active')}
-                  </MenuItem>
-                  <MenuItem value="inactive">
-                    {t('business.items.inactive', 'Inactive')}
-                  </MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>
-                  {t('business.inventory.stockStatus', 'Stock Status')}
-                </InputLabel>
-                <Select
-                  value={filters.stockFilter}
-                  onChange={(e) =>
-                    handleFilterChange('stockFilter', e.target.value)
-                  }
-                  label={t('business.inventory.stockStatus', 'Stock Status')}
-                >
-                  <MenuItem value="all">
-                    {t('business.inventory.allStock', 'All Stock')}
-                  </MenuItem>
-                  <MenuItem value="inStock">
-                    {t('business.inventory.status.inStock', 'In Stock')}
-                  </MenuItem>
-                  <MenuItem value="lowStock">
-                    {t('business.inventory.status.lowStock', 'Low Stock')}
-                  </MenuItem>
-                  <MenuItem value="outOfStock">
-                    {t('business.inventory.status.outOfStock', 'Out of Stock')}
-                  </MenuItem>
-                  <MenuItem value="noInventory">
-                    {t('business.inventory.noInventory', 'No Inventory')}
-                  </MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>
-                  {t('business.items.category', 'Category')}
-                </InputLabel>
-                <Select
-                  value={filters.categoryFilter}
-                  onChange={(e) =>
-                    handleFilterChange('categoryFilter', e.target.value)
-                  }
-                  label={t('business.items.category', 'Category')}
-                >
-                  <MenuItem value="all">
-                    {t('business.items.filters.allCategories', 'All Categories')}
-                  </MenuItem>
-                  <MenuItem value="_no_category">
-                    {t('business.items.filters.noCategory', 'No category')}
-                  </MenuItem>
-                  {categories.map((category) => (
-                    <MenuItem key={category} value={category}>
-                      {category}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 130 }}>
-                <InputLabel>{t('business.items.brand', 'Brand')}</InputLabel>
-                <Select
-                  value={filters.brandFilter}
-                  onChange={(e) =>
-                    handleFilterChange('brandFilter', e.target.value)
-                  }
-                  label={t('business.items.brand', 'Brand')}
-                >
-                  <MenuItem value="all">
-                    {t('common.allBrands', 'All Brands')}
-                  </MenuItem>
-                  <MenuItem value="_no_brand">
-                    {t('business.items.filters.noBrand', 'No brand')}
-                  </MenuItem>
-                  {brands.map((brand) => (
-                    <MenuItem key={brand} value={brand}>
-                      {brand}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 168 }}>
-                <InputLabel>
-                  {t('business.items.filters.specialListingLabel', 'Spotlight')}
-                </InputLabel>
-                <Select
-                  value={filters.specialListingFilter}
-                  onChange={(e) =>
-                    handleFilterChange('specialListingFilter', e.target.value)
-                  }
-                  label={t(
-                    'business.items.filters.specialListingLabel',
-                    'Spotlight'
-                  )}
-                >
-                  <MenuItem value="all">
-                    {t(
-                      'business.items.filters.specialListingValue.all',
-                      'All listings'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="deals">
-                    {t(
-                      'business.items.filters.specialListingValue.deals',
-                      'Active deals'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="promotions">
-                    {t(
-                      'business.items.filters.specialListingValue.promotions',
-                      'Promoted'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="deals_or_promotions">
-                    {t(
-                      'business.items.filters.specialListingValue.deals_or_promotions',
-                      'Deals or promoted'
-                    )}
-                  </MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>
-                  {t('business.items.filters.sortBy', 'Sort by')}
-                </InputLabel>
-                <Select
-                  value={filters.sortBy}
-                  onChange={(e) =>
-                    handleFilterChange('sortBy', e.target.value as ItemsSortBy)
-                  }
-                  label={t('business.items.filters.sortBy', 'Sort by')}
-                >
-                  <MenuItem value="default">
-                    {t('business.items.filters.sortByValue.default', 'Default')}
-                  </MenuItem>
-                  <MenuItem value="price_asc">
-                    {t(
-                      'business.items.filters.sortByValue.price_asc',
-                      'Price: low to high'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="price_desc">
-                    {t(
-                      'business.items.filters.sortByValue.price_desc',
-                      'Price: high to low'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="created_desc">
-                    {t(
-                      'business.items.filters.sortByValue.created_desc',
-                      'Date created: newest first'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="created_asc">
-                    {t(
-                      'business.items.filters.sortByValue.created_asc',
-                      'Date created: oldest first'
-                    )}
-                  </MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel>
-                  {t('business.items.filters.favoritesLabel', 'Favorites')}
-                </InputLabel>
-                <Select
-                  value={filters.favoritesFilter}
-                  onChange={(e) =>
-                    handleFilterChange('favoritesFilter', e.target.value)
-                  }
-                  label={t('business.items.filters.favoritesLabel', 'Favorites')}
-                >
-                  <MenuItem value="all">
-                    {t('business.items.filters.favoritesValue.all', 'All products')}
-                  </MenuItem>
-                  <MenuItem value="favorites">
-                    {t(
-                      'business.items.filters.favoritesValue.favorites',
-                      'Favorites only'
-                    )}
-                  </MenuItem>
-                  <MenuItem value="not_favorites">
-                    {t(
-                      'business.items.filters.favoritesValue.not_favorites',
-                      'Not favorited'
-                    )}
-                  </MenuItem>
-                </Select>
-              </FormControl>
+                  {t('common.filters', 'Filters')}
+                </Button>
+              </Badge>
 
               {activeFiltersCount > 0 && (
                 <Button
@@ -681,13 +505,22 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                   {t('common.clearFilters', 'Clear')}
                 </Button>
               )}
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ ml: 'auto' }}
+              >
+                {filteredItemsCount} {t('common.of', 'of')} {totalItems}{' '}
+                {t('business.items.items', 'items')}
+              </Typography>
             </Stack>
 
-            {/* Second Row - Active Filters & Results Count */}
-            {(activeFiltersCount > 0 ||
-              filteredItemsCount !== totalItems ||
-              filters.sortBy !== 'default' ||
-              filters.favoritesFilter !== 'all') && (
+            <Collapse in={desktopFiltersExpanded}>
+              <AdvancedFilterFields inline />
+            </Collapse>
+
+            {activeFiltersCount > 0 && (
               <Stack
                 direction="row"
                 spacing={1}
@@ -695,7 +528,6 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 flexWrap="wrap"
                 sx={{ gap: 1 }}
               >
-                {/* Active Filter Chips */}
                 {getActiveFilterChips().map((chip, index) => (
                   <Chip
                     key={index}
@@ -706,17 +538,6 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                     variant="outlined"
                   />
                 ))}
-
-                {/* Results Count */}
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ ml: 'auto' }}
-                >
-                  {t('common.showing', 'Showing')} {filteredItemsCount}{' '}
-                  {t('common.of', 'of')} {totalItems}{' '}
-                  {t('business.items.items', 'items')}
-                </Typography>
               </Stack>
             )}
           </Stack>
@@ -758,7 +579,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 justifyContent="space-between"
                 alignItems="center"
               >
-                <Badge badgeContent={activeFiltersCount} color="primary">
+                <Badge
+                  badgeContent={advancedFiltersCount}
+                  color="primary"
+                  invisible={advancedFiltersCount === 0}
+                >
                   <Button
                     variant="outlined"
                     startIcon={<FilterListIcon />}

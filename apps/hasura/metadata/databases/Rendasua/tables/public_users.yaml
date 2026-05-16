@@ -217,6 +217,7 @@ select_permissions:
         - profile_picture_url
         - preferred_language
         - timezone
+        - last_login_at
         - created_at
         - updated_at
       filter:
@@ -236,6 +237,7 @@ select_permissions:
         - profile_picture_url
         - preferred_language
         - timezone
+        - last_login_at
         - created_at
         - updated_at
       filter:
@@ -255,6 +257,7 @@ select_permissions:
         - profile_picture_url
         - preferred_language
         - timezone
+        - last_login_at
         - created_at
         - updated_at
       filter:
@@ -274,6 +277,7 @@ select_permissions:
         - profile_picture_url
         - preferred_language
         - timezone
+        - last_login_at
         - created_at
         - updated_at
       filter:
@@ -293,6 +297,7 @@ select_permissions:
         - profile_picture_url
         - preferred_language
         - timezone
+        - last_login_at
         - created_at
         - updated_at
       filter:
