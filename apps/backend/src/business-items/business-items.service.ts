@@ -86,6 +86,15 @@ const GET_ITEMS = `
           name
         }
       }
+      item_collections {
+        collection_id
+        collection {
+          id
+          slug
+          name_en
+          name_fr
+        }
+      }
       item_variants(order_by: { sort_order: asc }) {
         id
         name
@@ -244,6 +253,15 @@ const GET_SINGLE_ITEM = `
         tag {
           id
           name
+        }
+      }
+      item_collections {
+        collection_id
+        collection {
+          id
+          slug
+          name_en
+          name_fr
         }
       }
       item_variants(order_by: { sort_order: asc }) {
@@ -1744,5 +1762,165 @@ export class BusinessItemsService {
       );
     }
     return brand.id;
+  }
+
+  async listAllCollections(itemId?: string, businessId?: string) {
+    const collectionsResult = await this.hasuraSystemService.executeQuery<{
+      collections: Array<{
+        id: string;
+        slug: string;
+        name_en: string;
+        name_fr: string;
+        description_en: string | null;
+        description_fr: string | null;
+        image_url: string | null;
+        is_featured: boolean;
+        sort_order: number;
+      }>;
+    }>(`
+      query AllCollections {
+        collections(order_by: [{ sort_order: asc }, { name_en: asc }]) {
+          id slug name_en name_fr description_en description_fr image_url is_featured sort_order
+        }
+      }
+    `);
+    let assignedIds = new Set<string>();
+    if (itemId && businessId) {
+      const item = await this.getSingleItem(businessId, itemId);
+      assignedIds = new Set(
+        (item.item_collections ?? []).map((ic: { collection_id: string }) => ic.collection_id)
+      );
+    }
+    return (collectionsResult.collections ?? []).map((c) => ({
+      ...c,
+      assigned: assignedIds.has(c.id),
+    }));
+  }
+
+  async setItemCollections(
+    businessId: string,
+    itemId: string,
+    collectionIds: string[]
+  ): Promise<void> {
+    await this.getSingleItem(businessId, itemId);
+    await this.hasuraUserService.executeMutation(
+      `mutation DeleteItemCollections($itemId: uuid!) {
+        delete_item_collections(where: { item_id: { _eq: $itemId } }) { affected_rows }
+      }`,
+      { itemId }
+    );
+    if (!collectionIds.length) return;
+    await this.hasuraUserService.executeMutation(
+      `mutation InsertItemCollections($objects: [item_collections_insert_input!]!) {
+        insert_item_collections(objects: $objects) { affected_rows }
+      }`,
+      {
+        objects: collectionIds.map((collectionId) => ({
+          item_id: itemId,
+          collection_id: collectionId,
+        })),
+      }
+    );
+  }
+
+  async getItemCollectionSuggestions(
+    businessId: string,
+    itemId: string
+  ): Promise<
+    Array<{
+      collectionId: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+      source: 'rule' | 'ai';
+      reason?: string;
+    }>
+  > {
+    const item = await this.getSingleItem(businessId, itemId);
+    const assigned = new Set(
+      (item.item_collections ?? []).map((ic: { collection_id: string }) => ic.collection_id)
+    );
+    const subCategoryId = item.item_sub_category_id as number;
+    const categoryId = item.item_sub_category?.item_category?.id as number | undefined;
+    const mappingWhere: Record<string, unknown> = {
+      _or: [{ item_sub_category_id: { _eq: subCategoryId } }],
+    };
+    if (categoryId) {
+      (mappingWhere._or as unknown[]).push({
+        item_category_id: { _eq: categoryId },
+      });
+    }
+    const rulesResult = await this.hasuraSystemService.executeQuery<{
+      collection_category_mappings: Array<{
+        priority: number;
+        collection: {
+          id: string;
+          slug: string;
+          name_en: string;
+          name_fr: string;
+        };
+      }>;
+    }>(
+      `query RuleMappings($where: collection_category_mappings_bool_exp!) {
+        collection_category_mappings(where: $where, order_by: { priority: desc }) {
+          priority
+          collection { id slug name_en name_fr }
+        }
+      }`,
+      { where: mappingWhere }
+    );
+    const seen = new Set<string>();
+    const out: Array<{
+      collectionId: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+      source: 'rule' | 'ai';
+      reason?: string;
+    }> = [];
+    for (const row of rulesResult.collection_category_mappings ?? []) {
+      const c = row.collection;
+      if (!c || assigned.has(c.id) || seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push({
+        collectionId: c.id,
+        slug: c.slug,
+        name_en: c.name_en,
+        name_fr: c.name_fr,
+        source: 'rule',
+        reason: 'Matched product category',
+      });
+    }
+    try {
+      const allCollections = await this.listAllCollections();
+      const imageUrls = (item.item_images ?? [])
+        .filter((img: { image_type: string }) => img.image_type === 'main')
+        .map((img: { image_url: string }) => img.image_url)
+        .slice(0, 2);
+      const aiRows = await this.aiService.generateCollectionSuggestions({
+        itemName: item.name,
+        description: item.description,
+        subCategoryName: item.item_sub_category?.name,
+        categoryName: item.item_sub_category?.item_category?.name,
+        brandName: item.brand?.name,
+        imageUrls,
+        availableCollections: allCollections.map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          name_en: c.name_en,
+          name_fr: c.name_fr,
+        })),
+      });
+      for (const s of aiRows) {
+        if (assigned.has(s.collectionId) || seen.has(s.collectionId)) continue;
+        seen.add(s.collectionId);
+        out.push({ ...s, source: 'ai' });
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `AI collection suggestions skipped for item ${itemId}: ${error?.message}`
+      );
+    }
+    return out.slice(0, 8);
   }
 }

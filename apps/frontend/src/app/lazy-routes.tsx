@@ -172,6 +172,12 @@ export const ItemViewPage = lazy(() =>
 export const DealsPage = lazy(() =>
   import('../components/pages/DealsPage')
 );
+export const CollectionsIndexPage = lazy(() =>
+  import('../components/pages/CollectionsIndexPage')
+);
+export const CollectionLandingPage = lazy(() =>
+  import('../components/pages/CollectionLandingPage')
+);
 export const LandingPage = lazy(() =>
   import('../components/pages/LandingPage')
 );

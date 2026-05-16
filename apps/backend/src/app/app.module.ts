@@ -18,6 +18,7 @@ import { BusinessAgentsModule } from '../business-agents/business-agents.module'
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { CollectionsModule } from '../collections/collections.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
@@ -87,6 +88,7 @@ import { AppService } from './app.service';
     AuthModule,
     HasuraModule,
     InventoryItemsModule,
+    CollectionsModule,
     LocationsModule,
     MessagesModule,
     ServicesModule,

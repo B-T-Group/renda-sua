@@ -45,6 +45,8 @@ import {
 } from '../../utils/metaPixelContentCategory';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
+import { CollectionProductCarouselSection } from '../common/CollectionProductCarouselSection';
+import { useCollections } from '../../hooks/useCollections';
 import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
@@ -199,12 +201,45 @@ const ItemsPage: React.FC = () => {
   const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
-  const [filters, setFilters] = useState<ItemsPageFilterState>({
+  const collectionSlug = useMemo(() => {
+    return new URLSearchParams(location.search).get('collection') ?? '';
+  }, [location.search]);
+
+  const [filters, setFilters] = useState<ItemsPageFilterState>(() => ({
     category: '',
     subcategory: '',
     brand: '',
     business: '',
-  });
+    collection:
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('collection') ?? ''
+        : '',
+  }));
+
+  useEffect(() => {
+    if (collectionSlug !== filters.collection) {
+      setFilters((f) => ({ ...f, collection: collectionSlug }));
+    }
+  }, [collectionSlug]);
+
+  const handleFiltersChange = useCallback(
+    (next: ItemsPageFilterState) => {
+      setFilters(next);
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next.collection.trim()) {
+            params.set('collection', next.collection.trim());
+          } else {
+            params.delete('collection');
+          }
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
@@ -246,6 +281,8 @@ const ItemsPage: React.FC = () => {
     brand: filters.brand.trim() || undefined,
     subcategory: filters.subcategory.trim() || undefined,
     business_name: filters.business.trim() || undefined,
+    collection:
+      filters.collection.trim() || collectionSlug.trim() || undefined,
   });
 
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
@@ -274,6 +311,12 @@ const ItemsPage: React.FC = () => {
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
   });
+
+  const { collections: featuredCollections } = useCollections({
+      featured: true,
+      anonymousOrigin: browserGeo,
+      enabled: !collectionSlug && !searchTerm.trim(),
+    });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
@@ -464,17 +507,20 @@ const ItemsPage: React.FC = () => {
       filters.subcategory ||
       filters.brand ||
       filters.business ||
+      filters.collection ||
+      collectionSlug ||
       businessLocationId
   );
 
   const handleClearAllFilters = () => {
     setSearchTerm('');
     setBusinessLocationId(null);
-    setFilters({
+    handleFiltersChange({
       category: '',
       subcategory: '',
       brand: '',
       business: '',
+      collection: '',
     });
   };
 
@@ -647,7 +693,7 @@ const ItemsPage: React.FC = () => {
               origin_lng: browserGeo?.lng ?? undefined,
             }}
             filters={filters}
-            onFiltersChange={setFilters}
+            onFiltersChange={handleFiltersChange}
             onFilterChange={handleCatalogFilterPanelItems}
             loading={loading || facetLoading}
             onBusinessFilterChange={(name) => {
@@ -899,6 +945,30 @@ const ItemsPage: React.FC = () => {
             loading="lazy"
           />
         </Box>
+
+        {/* Featured collections */}
+        {!hasActiveFilters && featuredCollections.length > 0 ? (
+          <Box sx={{ px: { xs: 1, sm: 2 }, mb: 1 }}>
+            {featuredCollections.map((col) => (
+              <CollectionProductCarouselSection
+                key={col.id}
+                collection={col}
+                businessLocationId={businessLocationId}
+                anonymousOrigin={browserGeo}
+                formatCurrency={formatCurrency}
+                onOrderClick={handleOrderClick}
+                onAddToCart={handleAddToCart}
+                isPublicView={!isAuthenticated}
+                canOrder={!isAuthenticated || isClientUser}
+                showCartButtons={isAuthenticated && isClientUser}
+                loginButtonText={t('public.items.login', 'Sign In to Order')}
+                orderButtonText={t('common.orderNow', 'Order Now')}
+                addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+              />
+            ))}
+          </Box>
+        ) : null}
 
         {/* Curated discovery sections (desktop only; hidden when filters/search active) */}
         {!hasActiveFilters && (

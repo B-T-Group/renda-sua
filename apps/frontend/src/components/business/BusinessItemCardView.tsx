@@ -8,9 +8,11 @@ import {
   Inventory as InventoryIcon,
   LocalOffer as DealIcon,
   LocationOn as LocationOnIcon,
-  TrendingUp as   PromoteIcon,
+  TrendingUp as PromoteIcon,
   Star,
   StarBorder,
+  MoreVert as MoreVertIcon,
+  Category as CategoryIcon,
   Visibility as ViewIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -23,7 +25,10 @@ import {
   Chip,
   Dialog,
   DialogContent,
+  FormControlLabel,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   Switch,
   Tooltip,
@@ -101,6 +106,14 @@ interface Item {
   };
   item_images?: ItemImage[];
   item_tags?: Array<{ tag: { id: string; name: string } }>;
+  item_collections?: Array<{
+    collection: {
+      id: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+    };
+  }>;
   business_inventories?: BusinessInventory[];
   is_favorite?: boolean;
 }
@@ -124,6 +137,7 @@ interface BusinessItemCardViewProps {
     enabled: boolean
   ) => void | Promise<void>;
   onToggleFavorite?: (item: Item, favorited: boolean) => void | Promise<void>;
+  onManageCollections?: (item: Item) => void;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -139,9 +153,11 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onTogglePayOnDelivery,
   onTogglePayAtPickup,
   onToggleFavorite,
+  onManageCollections,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const [settingsAnchor, setSettingsAnchor] = useState<null | HTMLElement>(null);
   const [togglingActive, setTogglingActive] = useState(false);
   const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
   const [togglingPayAtPickup, setTogglingPayAtPickup] = useState(false);
@@ -234,6 +250,17 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   // Check if item requires special handling
   const hasSpecialHandling =
     item.is_fragile || item.is_perishable || item.requires_special_handling;
+
+  const collectionLabels = useMemo(() => {
+    const isFr = i18n.language?.startsWith('fr');
+    return (item.item_collections ?? []).map((ic) => ({
+      id: ic.collection.id,
+      label: isFr ? ic.collection.name_fr : ic.collection.name_en,
+    }));
+  }, [item.item_collections, i18n.language]);
+
+  const showListingSettingsMenu =
+    onToggleItemActive || onTogglePayOnDelivery || onTogglePayAtPickup;
 
   const hasActiveDeal = itemHasActiveDeal(item);
   const hasActivePromotion = itemHasActivePromotion(item);
@@ -692,84 +719,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               {formatCurrency(item.price, item.currency)}
             </Typography>
           </Box>
-          {onToggleItemActive && (
-            <Stack
-              alignItems="flex-end"
-              spacing={0.25}
-              sx={{ flexShrink: 0, maxWidth: 120 }}
-            >
-              <Switch
-                size="small"
-                checked={item.is_active}
-                disabled={togglingActive}
-                onChange={(_e, checked) => {
-                  void handleListingActiveChange(checked);
-                }}
-              />
-              <Typography
-                component="span"
-                variant="caption"
-                color="text.secondary"
-                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
-              >
-                {t('business.items.listingActive', 'Listing active')}
-              </Typography>
-            </Stack>
-          )}
-          {onTogglePayOnDelivery && (
-            <Stack
-              alignItems="flex-end"
-              spacing={0.25}
-              sx={{ flexShrink: 0, maxWidth: 120 }}
-            >
-              <Switch
-                size="small"
-                checked={!!item.pay_on_delivery_enabled}
-                disabled={togglingPayOnDelivery}
-                onChange={(_e, checked) => {
-                  void handlePayOnDeliveryChange(checked);
-                }}
-              />
-              <Typography
-                component="span"
-                variant="caption"
-                color="text.secondary"
-                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
-              >
-                {t(
-                  'business.inventory.payOnDeliveryEnabled',
-                  'Allow payment at delivery'
-                )}
-              </Typography>
-            </Stack>
-          )}
-          {onTogglePayAtPickup && (
-            <Stack
-              alignItems="flex-end"
-              spacing={0.25}
-              sx={{ flexShrink: 0, maxWidth: 120 }}
-            >
-              <Switch
-                size="small"
-                checked={!!item.pay_at_pickup_enabled}
-                disabled={togglingPayAtPickup}
-                onChange={(_e, checked) => {
-                  void handlePayAtPickupChange(checked);
-                }}
-              />
-              <Typography
-                component="span"
-                variant="caption"
-                color="text.secondary"
-                sx={{ lineHeight: 1.2, textAlign: 'right', display: 'block' }}
-              >
-                {t(
-                  'business.inventory.payAtPickupEnabled',
-                  'Allow store pickup (pay at pickup)'
-                )}
-              </Typography>
-            </Stack>
-          )}
         </Box>
 
         {/* Item Metadata */}
@@ -817,6 +766,39 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                   label={`+${item.item_tags.length - 5}`}
                   size="small"
                   variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              )}
+            </Box>
+          )}
+          {collectionLabels.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                {t('business.items.collections.title', 'Collections')}:
+              </Typography>
+              {collectionLabels.slice(0, 4).map((c) => (
+                <Chip
+                  key={c.id}
+                  label={c.label}
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                  onClick={
+                    onManageCollections
+                      ? () => onManageCollections(item)
+                      : undefined
+                  }
+                />
+              ))}
+              {collectionLabels.length > 4 && (
+                <Chip
+                  label={`+${collectionLabels.length - 4}`}
+                  size="small"
+                  variant="outlined"
+                  onClick={
+                    onManageCollections ? () => onManageCollections(item) : undefined
+                  }
                   sx={{ fontSize: '0.7rem' }}
                 />
               )}
@@ -1004,6 +986,126 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 </IconButton>
               </span>
             </Tooltip>
+          )}
+          {onManageCollections && (
+            <Tooltip
+              title={t(
+                'business.items.collections.manageTooltip',
+                'Add or remove collections'
+              )}
+            >
+              <IconButton
+                size="small"
+                onClick={() => onManageCollections(item)}
+                sx={{
+                  color: theme.palette.secondary.dark,
+                  '&:hover': { bgcolor: 'secondary.light', opacity: 0.8 },
+                }}
+              >
+                <CategoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {showListingSettingsMenu && (
+            <>
+              <Tooltip
+                title={t(
+                  'business.items.listingSettings',
+                  'Listing & payment options'
+                )}
+              >
+                <IconButton
+                  size="small"
+                  onClick={(e) => setSettingsAnchor(e.currentTarget)}
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                anchorEl={settingsAnchor}
+                open={Boolean(settingsAnchor)}
+                onClose={() => setSettingsAnchor(null)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              >
+                {onToggleItemActive && (
+                  <MenuItem
+                    dense
+                    disableRipple
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <FormControlLabel
+                      sx={{ m: 0, width: '100%' }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={item.is_active}
+                          disabled={togglingActive}
+                          onChange={(_e, checked) => {
+                            void handleListingActiveChange(checked);
+                          }}
+                        />
+                      }
+                      label={t('business.items.listingActive', 'Listing active')}
+                    />
+                  </MenuItem>
+                )}
+                {onTogglePayOnDelivery && (
+                  <MenuItem
+                    dense
+                    disableRipple
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <FormControlLabel
+                      sx={{ m: 0, width: '100%' }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={!!item.pay_on_delivery_enabled}
+                          disabled={togglingPayOnDelivery}
+                          onChange={(_e, checked) => {
+                            void handlePayOnDeliveryChange(checked);
+                          }}
+                        />
+                      }
+                      label={t(
+                        'business.inventory.payOnDeliveryEnabled',
+                        'Allow payment at delivery'
+                      )}
+                    />
+                  </MenuItem>
+                )}
+                {onTogglePayAtPickup && (
+                  <MenuItem
+                    dense
+                    disableRipple
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <FormControlLabel
+                      sx={{ m: 0, width: '100%' }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={!!item.pay_at_pickup_enabled}
+                          disabled={togglingPayAtPickup}
+                          onChange={(_e, checked) => {
+                            void handlePayAtPickupChange(checked);
+                          }}
+                        />
+                      }
+                      label={t(
+                        'business.inventory.payAtPickupEnabled',
+                        'Allow store pickup (pay at pickup)'
+                      )}
+                    />
+                  </MenuItem>
+                )}
+              </Menu>
+            </>
           )}
           <Tooltip title={t('business.items.deleteItem', 'Delete Item')}>
             <IconButton

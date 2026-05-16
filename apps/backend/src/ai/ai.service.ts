@@ -1212,4 +1212,104 @@ No markdown, no explanation outside JSON.`;
       return null;
     }
   }
+
+  async generateCollectionSuggestions(input: {
+    itemName: string;
+    description?: string;
+    subCategoryName?: string;
+    categoryName?: string;
+    brandName?: string;
+    imageUrls?: string[];
+    availableCollections: Array<{
+      id: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+    }>;
+  }): Promise<
+    Array<{
+      collectionId: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+      reason?: string;
+    }>
+  > {
+    if (!input.availableCollections.length) return [];
+    const catalogJson = JSON.stringify(
+      input.availableCollections.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        name_en: c.name_en,
+        name_fr: c.name_fr,
+      }))
+    );
+    const userText = `
+Product:
+- name: ${input.itemName}
+- description: ${input.description ?? ''}
+- category: ${input.categoryName ?? ''}
+- subcategory: ${input.subCategoryName ?? ''}
+- brand: ${input.brandName ?? ''}
+
+Platform collections (pick only from this list, max 5):
+${catalogJson}
+
+Return ONLY JSON: { "suggestions": [ { "collectionId": "uuid", "reason": "short" } ] }
+Use collectionId values exactly from the list.`;
+    const imageUrlsText = input.imageUrls?.length
+      ? `\nImages:\n${input.imageUrls.map((u) => `- ${u}`).join('\n')}`
+      : '';
+    const request: ChatCompletionRequest = {
+      model: this.deepseekService.defaultChatModel,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You assign e-commerce products to curated shopping collections. Only use collection IDs from the provided list.',
+        },
+        { role: 'user', content: `${userText}${imageUrlsText}` },
+      ],
+      max_tokens: 400,
+      temperature: 0.2,
+    };
+    try {
+      const response = await this.deepseekService.chatCompletions(
+        request,
+        60000
+      );
+      const rawContent = response.choices?.[0]?.message?.content;
+      const contentString = this.messageContentToString(rawContent);
+      const jsonString = this.coerceJsonObjectString(contentString);
+      const parsed = JSON.parse(jsonString) as {
+        suggestions?: Array<{ collectionId?: string; reason?: string }>;
+      };
+      const byId = new Map(
+        input.availableCollections.map((c) => [c.id, c] as const)
+      );
+      const out: Array<{
+        collectionId: string;
+        slug: string;
+        name_en: string;
+        name_fr: string;
+        reason?: string;
+      }> = [];
+      for (const s of parsed.suggestions ?? []) {
+        const id = s.collectionId;
+        if (!id || !byId.has(id)) continue;
+        const c = byId.get(id)!;
+        out.push({
+          collectionId: c.id,
+          slug: c.slug,
+          name_en: c.name_en,
+          name_fr: c.name_fr,
+          reason: s.reason,
+        });
+      }
+      return out.slice(0, 5);
+    } catch (error: unknown) {
+      this.logger.warn('Collection AI suggestions failed', error);
+      return [];
+    }
+  }
 }

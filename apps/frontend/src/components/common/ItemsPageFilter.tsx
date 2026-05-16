@@ -46,6 +46,9 @@ import {
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import { useCollections } from '../../hooks/useCollections';
+import { useAuth0 } from '@auth0/auth0-react';
+import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 
 export interface ItemsPageFilterState {
   category: string;
@@ -53,6 +56,8 @@ export interface ItemsPageFilterState {
   brand: string;
   /** Business (seller) display name — matches GET /inventory-items?business_name= */
   business: string;
+  /** Platform collection slug */
+  collection: string;
 }
 
 interface ItemsPageFilterProps {
@@ -92,6 +97,11 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   onClearFilters,
 }) => {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth0();
+  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const { collections: collectionOptions } = useCollections({
+    anonymousOrigin: browserGeo,
+  });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
@@ -256,6 +266,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       subcategory: '',
       brand: '',
       business: '',
+      collection: '',
     });
     onClearFilters?.();
     void trackSiteEvent({
@@ -269,6 +280,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     filters.subcategory,
     filters.brand,
     filters.business,
+    filters.collection,
   ].filter(Boolean).length;
 
   const getActiveFilterChips = () => {
@@ -301,6 +313,12 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       chips.push({
         label: `${t('public.items.businessFilter', 'Business')}: ${filters.business}`,
         onDelete: () => handleFilterChange('business', ''),
+      });
+    }
+    if (filters.collection) {
+      chips.push({
+        label: `${t('collections.filter', 'Collection')}: ${filters.collection}`,
+        onDelete: () => handleFilterChange('collection', ''),
       });
     }
     return chips;
@@ -368,6 +386,22 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
           {filterOptions.businesses.map((b) => (
             <MenuItem key={b} value={b}>
               {b}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth size="small">
+        <InputLabel>{t('collections.filter', 'Collection')}</InputLabel>
+        <Select
+          value={filters.collection}
+          onChange={(e) => handleFilterChange('collection', e.target.value)}
+          label={t('collections.filter', 'Collection')}
+        >
+          <MenuItem value="">{t('common.all', 'All')}</MenuItem>
+          {collectionOptions.map((c) => (
+            <MenuItem key={c.id} value={c.slug}>
+              {c.name}
             </MenuItem>
           ))}
         </Select>

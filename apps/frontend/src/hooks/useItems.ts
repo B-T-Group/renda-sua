@@ -68,6 +68,15 @@ export interface Item {
     tag_id: string;
     tag: { id: string; name: string };
   }>;
+  item_collections?: Array<{
+    collection_id: string;
+    collection: {
+      id: string;
+      slug: string;
+      name_en: string;
+      name_fr: string;
+    };
+  }>;
   business_inventories?: {
     id: string;
     item_id: string;

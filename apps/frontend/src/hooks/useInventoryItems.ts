@@ -85,6 +85,7 @@ export interface InventoryItem {
       display_order: number;
     }>;
     tags?: Array<{ id: string; name: string }>;
+    collections?: Array<{ id: string; slug: string; name: string }>;
   };
   business_location: {
     id: string;
@@ -135,6 +136,7 @@ export interface GetInventoryItemsQuery {
   include_unavailable?: boolean;
   business_location_id?: string;
   anonymousOrigin?: { lat: number; lng: number } | null;
+  collection?: string;
 }
 
 export interface PaginatedInventoryItems {
@@ -221,6 +223,9 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.business_location_id?.trim() && {
             business_location_id: query.business_location_id.trim(),
           }),
+          ...(query.collection?.trim() && {
+            collection: query.collection.trim(),
+          }),
           ...(!isAuthenticated &&
             query.anonymousOrigin && {
               origin_lat: query.anonymousOrigin.lat,
@@ -281,6 +286,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.sort,
     query.include_unavailable,
     query.business_location_id,
+    query.collection,
     query.anonymousOrigin?.lat,
     query.anonymousOrigin?.lng,
   ]);

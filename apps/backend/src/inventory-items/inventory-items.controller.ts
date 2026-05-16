@@ -40,6 +40,7 @@ interface GetInventoryItemsQueryParams {
   business_location_id?: string;
   origin_lat?: string;
   origin_lng?: string;
+  collection?: string;
 }
 
 interface GetInventorySearchSuggestionsQueryParams
@@ -294,6 +295,12 @@ export class InventoryItemsController {
     description:
       'Approximate longitude for distance (anonymous users; ignored when primary address exists)',
   })
+  @ApiQuery({
+    name: 'collection',
+    required: false,
+    type: String,
+    description: 'Filter by platform collection slug (e.g. home-essentials)',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -349,6 +356,7 @@ export class InventoryItemsController {
         business_location_id: query.business_location_id?.trim() || undefined,
         ...(Number.isFinite(oLat) && { origin_lat: oLat }),
         ...(Number.isFinite(oLng) && { origin_lng: oLng }),
+        collection: query.collection?.trim() || undefined,
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

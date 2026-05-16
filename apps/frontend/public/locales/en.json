@@ -1687,6 +1687,13 @@
       "optionalDetails": "Optional Details",
       "orderLimits": "Order Limits",
       "perishable": "Perishable",
+      "collections": {
+        "title": "Collections",
+        "suggestions": "Suggested",
+        "applySuggestions": "Apply suggestions",
+        "manageTooltip": "Add or remove collections"
+      },
+      "listingSettings": "Listing & payment options",
       "refineWithAi": {
         "title": "Refine with AI",
         "tooltip": "Refine product with AI",
@@ -1895,6 +1902,16 @@
       "subtitle": "Track your order status and history",
       "title": "My Orders"
     }
+  },
+  "collections": {
+    "viewAll": "View all",
+    "filter": "Collection",
+    "indexTitle": "Collections",
+    "indexDescription": "Browse curated product collections for every need",
+    "searchPlaceholder": "Search collections",
+    "productCount": "{{count}} products",
+    "landing": "Collection",
+    "landingDescription": "Browse products in this collection"
   },
   "common": {
     "actions": "Actions",

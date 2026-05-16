@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -32,6 +33,7 @@ import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
+import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -642,5 +644,68 @@ export class BusinessItemsController {
     }
 
     await this.itemDealsService.deleteDeal(businessId, dealId);
+  }
+
+  @Get('collections')
+  @ApiOperation({ summary: 'List platform collections with optional assignment state' })
+  @ApiResponse({ status: 200, description: 'Collections retrieved' })
+  async listCollections(@Query('itemId') itemId?: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const collections = await this.businessItemsService.listAllCollections(
+      itemId,
+      businessId
+    );
+    return { success: true, data: { collections } };
+  }
+
+  @Get('items/:itemId/collection-suggestions')
+  @ApiOperation({ summary: 'Suggested collections for an item (rules + AI)' })
+  @ApiResponse({ status: 200, description: 'Suggestions retrieved' })
+  async getItemCollectionSuggestions(@Param('itemId') itemId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const suggestions =
+      await this.businessItemsService.getItemCollectionSuggestions(
+        businessId,
+        itemId
+      );
+    return { success: true, data: { suggestions } };
+  }
+
+  @Put('items/:itemId/collections')
+  @ApiOperation({ summary: 'Replace item collection assignments' })
+  @ApiBody({ type: SetItemCollectionsDto })
+  @ApiResponse({ status: 200, description: 'Collections updated' })
+  async setItemCollections(
+    @Param('itemId') itemId: string,
+    @Body() body: SetItemCollectionsDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    await this.businessItemsService.setItemCollections(
+      businessId,
+      itemId,
+      body.collectionIds ?? []
+    );
+    return { success: true, message: 'Collections updated' };
   }
 }

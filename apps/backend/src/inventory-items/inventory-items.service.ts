@@ -115,6 +115,7 @@ export interface InventoryItem {
       display_order: number;
     }>;
     tags?: Array<{ id: string; name: string }>;
+    collections?: Array<{ id: string; slug: string; name: string }>;
     item_variants?: Array<{
       id: string;
       name: string;
@@ -189,6 +190,8 @@ export interface GetInventoryItemsQuery {
   /** Anonymous client approximate location (browser) for distance enrichment. */
   origin_lat?: number;
   origin_lng?: number;
+  /** Filter by platform collection slug. */
+  collection?: string;
 }
 
 export type InventorySearchSuggestion =
@@ -305,6 +308,14 @@ const CATALOG_INVENTORY_LIST_GQL = `
           tag {
             id
             name
+          }
+        }
+        item_collections {
+          collection {
+            id
+            slug
+            name_en
+            name_fr
           }
         }
         item_variants(
@@ -453,6 +464,7 @@ export class InventoryItemsService {
     business_location_id?: string;
     country_code?: string;
     state?: string;
+    collection?: string;
   }): Promise<{ unsupported: true } | { where: Record<string, unknown> }> {
     const {
       is_active,
@@ -469,6 +481,7 @@ export class InventoryItemsService {
       business_location_id,
       country_code,
       state,
+      collection,
     } = params;
 
     const whereConditions: any[] = [];
@@ -542,6 +555,15 @@ export class InventoryItemsService {
     }
     if (currency) {
       whereConditions.push({ item: { currency: { _eq: currency } } });
+    }
+    if (collection?.trim()) {
+      whereConditions.push({
+        item: {
+          item_collections: {
+            collection: { slug: { _eq: collection.trim() } },
+          },
+        },
+      });
     }
 
     if (country_code || state) {
@@ -810,6 +832,7 @@ export class InventoryItemsService {
       sort = 'relevance',
       include_unavailable = false,
       business_location_id,
+      collection,
     } = query;
 
     const { country_code, state, clientId } =
@@ -830,6 +853,7 @@ export class InventoryItemsService {
       business_location_id,
       country_code,
       state,
+      collection,
     });
     if ('unsupported' in built) {
       return {
@@ -1226,14 +1250,64 @@ export class InventoryItemsService {
   }
 
   /**
-   * Maps item_tags from GraphQL response to item.tags for API response.
+   * Maps item_tags and item_collections for API response.
    */
   private mapItemTagsToTags(inv: any): InventoryItem {
     if (!inv?.item) return inv;
     const itemTags = inv.item.item_tags ?? [];
     const tags = itemTags.map((it: any) => it.tag);
-    const { item_tags: _omit, ...restItem } = inv.item;
-    return { ...inv, item: { ...restItem, tags } };
+    const itemCollections = inv.item.item_collections ?? [];
+    const collections = itemCollections.map((ic: any) => ({
+      id: ic.collection.id,
+      slug: ic.collection.slug,
+      name: ic.collection.name_en,
+    }));
+    const { item_tags: _omitTags, item_collections: _omitCols, ...restItem } =
+      inv.item;
+    return { ...inv, item: { ...restItem, tags, collections } };
+  }
+
+  /** Count sellable listings per collection slug for the given catalog where. */
+  async countListingCountsByCollectionSlug(
+    query: Pick<
+      GetInventoryItemsQuery,
+      'country_code' | 'state' | 'origin_lat' | 'origin_lng'
+    >
+  ): Promise<Map<string, number>> {
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: true,
+      include_unavailable: false,
+      country_code,
+      state,
+    });
+    const counts = new Map<string, number>();
+    if ('unsupported' in built) return counts;
+    const gql = `
+      query CollectionListingCounts($where: business_inventory_bool_exp!) {
+        business_inventory(where: $where, limit: ${INVENTORY_CATALOG_FETCH_MAX}) {
+          item {
+            item_collections {
+              collection { slug }
+            }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(gql, {
+      where: built.where,
+    });
+    for (const row of result?.business_inventory ?? []) {
+      const slugs = new Set<string>();
+      for (const ic of row?.item?.item_collections ?? []) {
+        const slug = ic?.collection?.slug;
+        if (slug) slugs.add(slug);
+      }
+      for (const slug of slugs) {
+        counts.set(slug, (counts.get(slug) ?? 0) + 1);
+      }
+    }
+    return counts;
   }
 
   /**
@@ -1313,6 +1387,14 @@ export class InventoryItemsService {
               tag {
                 id
                 name
+              }
+            }
+            item_collections {
+              collection {
+                id
+                slug
+                name_en
+                name_fr
               }
             }
             item_variants(

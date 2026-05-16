@@ -2,6 +2,7 @@ import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
   AutoFixHigh as AutoFixHighIcon,
+  Category as CategoryIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
@@ -61,6 +62,7 @@ import ManageDealsDialog from '../business/ManageDealsDialog';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
+import { ManageItemCollectionsDialog } from '../dialogs/ManageItemCollectionsDialog';
 import SEOHead from '../seo/SEOHead';
 
 // Type for business_inventories from Item interface
@@ -97,6 +99,7 @@ export default function ItemViewPage() {
   const [manageDealsInventory, setManageDealsInventory] =
     useState<BusinessInventoryItem | ItemBusinessInventory | null>(null);
   const [showRefineAiDialog, setShowRefineAiDialog] = useState(false);
+  const [showCollectionsDialog, setShowCollectionsDialog] = useState(false);
   const [imageLightboxIndex, setImageLightboxIndex] = useState<number | null>(
     null
   );
@@ -828,15 +831,24 @@ export default function ItemViewPage() {
                   <Typography variant="h6" gutterBottom fontWeight="bold">
                     {t('business.items.details', 'Item Details')}
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<AutoFixHighIcon />}
-                    onClick={handleRefineWithAi}
-                    sx={{ mb: 0.5 }}
-                  >
-                    {t('business.items.refineWithAi.title', 'Refine with AI')}
-                  </Button>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<CategoryIcon />}
+                      onClick={() => setShowCollectionsDialog(true)}
+                    >
+                      {t('business.items.collections.title', 'Collections')}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<AutoFixHighIcon />}
+                      onClick={handleRefineWithAi}
+                    >
+                      {t('business.items.refineWithAi.title', 'Refine with AI')}
+                    </Button>
+                  </Stack>
                 </Stack>
                 <Divider sx={{ mb: 2 }} />
 
@@ -1659,6 +1671,15 @@ export default function ItemViewPage() {
           void fetchItemDetails();
         }}
         updateItem={updateItem}
+      />
+
+      <ManageItemCollectionsDialog
+        open={showCollectionsDialog}
+        itemId={itemId ?? null}
+        onClose={() => setShowCollectionsDialog(false)}
+        onSaved={() => {
+          void fetchItemDetails();
+        }}
       />
 
       <ImageCleanupPreviewDialog

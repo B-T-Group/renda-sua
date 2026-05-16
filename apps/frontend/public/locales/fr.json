@@ -1676,6 +1676,13 @@
       "optionalDetails": "Optional Details",
       "orderLimits": "Limites de commande",
       "perishable": "Périssable",
+      "collections": {
+        "title": "Collections",
+        "suggestions": "Suggestions",
+        "applySuggestions": "Appliquer les suggestions",
+        "manageTooltip": "Ajouter ou retirer des collections"
+      },
+      "listingSettings": "Options de publication et paiement",
       "refineWithAi": {
         "title": "Affiner avec l'IA",
         "tooltip": "Affiner le produit avec l'IA",
@@ -1883,6 +1890,16 @@
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
     }
+  },
+  "collections": {
+    "viewAll": "Voir tout",
+    "filter": "Collection",
+    "indexTitle": "Collections",
+    "indexDescription": "Parcourez nos collections de produits",
+    "searchPlaceholder": "Rechercher une collection",
+    "productCount": "{{count}} produits",
+    "landing": "Collection",
+    "landingDescription": "Parcourez les produits de cette collection"
   },
   "common": {
     "actions": "Actions",

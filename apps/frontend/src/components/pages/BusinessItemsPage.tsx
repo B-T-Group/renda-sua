@@ -48,6 +48,7 @@ import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
 import PromoteItemDialog from '../business/PromoteItemDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
+import { ManageItemCollectionsDialog } from '../dialogs/ManageItemCollectionsDialog';
 import SEOHead from '../seo/SEOHead';
 import { environment } from '../../config/environment';
 import { buildFacebookCatalogCsvFromBusinessItems } from '../../utils/facebookCatalogCsv';
@@ -182,6 +183,9 @@ const BusinessItemsPage: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
   const [refineAiItem, setRefineAiItem] = useState<Item | null>(null);
+  const [manageCollectionsItem, setManageCollectionsItem] = useState<Item | null>(
+    null
+  );
   const [promoteItem, setPromoteItem] = useState<any | null>(null);
   const [facebookExportSelectOpen, setFacebookExportSelectOpen] = useState(false);
 
@@ -866,6 +870,7 @@ const BusinessItemsPage: React.FC = () => {
                     onTogglePayOnDelivery={handleTogglePayOnDelivery}
                     onTogglePayAtPickup={handleTogglePayAtPickup}
                     onToggleFavorite={handleToggleFavorite}
+                    onManageCollections={(i) => setManageCollectionsItem(i)}
                   />
                 </Box>
               ))}
@@ -916,6 +921,17 @@ const BusinessItemsPage: React.FC = () => {
           void refreshListItem(itemId);
         }}
         updateItem={updateItem}
+      />
+
+      <ManageItemCollectionsDialog
+        open={Boolean(manageCollectionsItem)}
+        itemId={manageCollectionsItem?.id ?? null}
+        onClose={() => setManageCollectionsItem(null)}
+        onSaved={() => {
+          if (manageCollectionsItem?.id) {
+            void refreshListItem(manageCollectionsItem.id);
+          }
+        }}
       />
 
       {/* Delete Confirmation Dialog */}
