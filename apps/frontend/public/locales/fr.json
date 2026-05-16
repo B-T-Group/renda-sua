@@ -1991,6 +1991,13 @@
       "refund_requested": "Remboursement demandé",
       "refunded": "Remboursé"
     },
+    "paymentStatus": {
+      "pending": "En attente",
+      "pending_payment": "Paiement en attente",
+      "paid": "Payé",
+      "failed": "Échec du paiement",
+      "refunded": "Remboursé"
+    },
     "orderNumber": "Commande #{{orderNumber}}",
     "orders": "Commandes",
     "page": "Page",

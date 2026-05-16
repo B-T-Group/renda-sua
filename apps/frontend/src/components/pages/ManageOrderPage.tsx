@@ -1588,10 +1588,17 @@ const ManageOrderPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Chip
-                      label={order.payment_status || 'Pending'}
+                      label={t(
+                        `common.paymentStatus.${order.payment_status || 'pending'}`,
+                        order.payment_status || 'Pending'
+                      )}
                       size="small"
                       color={
-                        order.payment_status === 'paid' ? 'success' : 'warning'
+                        order.payment_status === 'paid'
+                          ? 'success'
+                          : order.payment_status === 'failed'
+                            ? 'error'
+                            : 'warning'
                       }
                     />
                   </Box>
@@ -1604,6 +1611,7 @@ const ManageOrderPage: React.FC = () => {
                         <Button
                           fullWidth
                           variant="contained"
+                          color="warning"
                           onClick={async () => {
                             try {
                               await retryOrderPayment(order.id);

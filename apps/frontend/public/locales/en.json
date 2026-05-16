@@ -2003,6 +2003,13 @@
       "refund_requested": "Refund requested",
       "refunded": "Refunded"
     },
+    "paymentStatus": {
+      "pending": "Pending",
+      "pending_payment": "Pending payment",
+      "paid": "Paid",
+      "failed": "Payment failed",
+      "refunded": "Refunded"
+    },
     "orderNumber": "Order #{{orderNumber}}",
     "orders": "Orders",
     "page": "Page",
