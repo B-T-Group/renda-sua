@@ -29,7 +29,6 @@
 - "!include public_google_distance_cache.yaml"
 - "!include public_google_geocode_cache.yaml"
 - "!include public_google_product_categories.yaml"
-- "!include public_collection_category_mappings.yaml"
 - "!include public_collections.yaml"
 - "!include public_item_categories.yaml"
 - "!include public_item_images.yaml"

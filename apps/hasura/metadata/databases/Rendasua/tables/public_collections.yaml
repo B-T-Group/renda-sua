@@ -11,15 +11,6 @@ array_relationships:
         remote_table:
           name: item_collections
           schema: public
-  - name: collection_category_mappings
-    using:
-      manual_configuration:
-        column_mapping:
-          id: collection_id
-        insertion_order: null
-        remote_table:
-          name: collection_category_mappings
-          schema: public
 select_permissions:
   - role: agent
     permission:
