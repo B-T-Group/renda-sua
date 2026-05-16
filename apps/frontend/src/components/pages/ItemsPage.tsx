@@ -45,7 +45,7 @@ import {
 } from '../../utils/metaPixelContentCategory';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
-import { CollectionProductCarouselSection } from '../common/CollectionProductCarouselSection';
+import { FeaturedCollectionsRow } from '../common/FeaturedCollectionsRow';
 import { useCollections } from '../../hooks/useCollections';
 import ItemsPageFilter, {
     ItemsPageFilterState,
@@ -312,7 +312,8 @@ const ItemsPage: React.FC = () => {
     anonymousOrigin: browserGeo,
   });
 
-  const { collections: featuredCollections } = useCollections({
+  const { collections: featuredCollections, loading: collectionsLoading } =
+    useCollections({
       featured: true,
       anonymousOrigin: browserGeo,
       enabled: !collectionSlug && !searchTerm.trim(),
@@ -947,26 +948,13 @@ const ItemsPage: React.FC = () => {
         </Box>
 
         {/* Featured collections */}
-        {!hasActiveFilters && featuredCollections.length > 0 ? (
-          <Box sx={{ px: { xs: 1, sm: 2 }, mb: 1 }}>
-            {featuredCollections.map((col) => (
-              <CollectionProductCarouselSection
-                key={col.id}
-                collection={col}
-                businessLocationId={businessLocationId}
-                anonymousOrigin={browserGeo}
-                formatCurrency={formatCurrency}
-                onOrderClick={handleOrderClick}
-                onAddToCart={handleAddToCart}
-                isPublicView={!isAuthenticated}
-                canOrder={!isAuthenticated || isClientUser}
-                showCartButtons={isAuthenticated && isClientUser}
-                loginButtonText={t('public.items.login', 'Sign In to Order')}
-                orderButtonText={t('common.orderNow', 'Order Now')}
-                addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-              />
-            ))}
+        {!hasActiveFilters && (featuredCollections.length > 0 || collectionsLoading) ? (
+          <Box sx={{ px: { xs: 1, sm: 2 } }}>
+            <FeaturedCollectionsRow
+              collections={featuredCollections}
+              loading={collectionsLoading}
+              onCollectionClick={(slug) => navigate(`/collections/${slug}`)}
+            />
           </Box>
         ) : null}
 

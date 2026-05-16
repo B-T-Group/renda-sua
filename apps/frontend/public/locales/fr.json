@@ -1892,6 +1892,7 @@
     }
   },
   "collections": {
+    "browseTitle": "Collections",
     "viewAll": "Voir tout",
     "filter": "Collection",
     "indexTitle": "Collections",

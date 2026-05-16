@@ -5,6 +5,7 @@ import { INVENTORY_ANONYMOUS_COUNTRY_CODES } from './useInventoryItems';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
 import { useAuth0 } from '@auth0/auth0-react';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
+import { enrichCollectionsWithPreviewImages } from '../utils/collectionPreviewImages';
 
 export interface CollectionSummary {
   id: string;
@@ -12,6 +13,7 @@ export interface CollectionSummary {
   name: string;
   description: string | null;
   image_url: string | null;
+  preview_image_urls?: string[];
   is_featured: boolean;
   sort_order: number;
   listing_count: number;
@@ -66,7 +68,14 @@ export function useCollections(options: UseCollectionsOptions = {}) {
         },
       });
       if (response.data.success) {
-        setCollections(response.data.data.collections ?? []);
+        const rows = response.data.data.collections ?? [];
+        setCollections(rows);
+        const withPreviews = await enrichCollectionsWithPreviewImages(
+          rows,
+          apiClient,
+          { isAuthenticated, anonymousOrigin: options.anonymousOrigin }
+        );
+        setCollections(withPreviews);
       } else {
         setError(response.data.message ?? 'Failed to load collections');
       }

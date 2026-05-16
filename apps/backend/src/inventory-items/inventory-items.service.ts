@@ -1310,6 +1310,69 @@ export class InventoryItemsService {
     return counts;
   }
 
+  /** Up to four distinct listing image URLs per collection slug for browse previews. */
+  async previewListingImagesByCollectionSlug(
+    query: Pick<
+      GetInventoryItemsQuery,
+      'country_code' | 'state' | 'origin_lat' | 'origin_lng'
+    >,
+    maxPerCollection = 4
+  ): Promise<Map<string, string[]>> {
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: true,
+      include_unavailable: false,
+      country_code,
+      state,
+    });
+    const previews = new Map<string, string[]>();
+    if ('unsupported' in built) return previews;
+    const gql = `
+      query CollectionPreviewImages($where: business_inventory_bool_exp!) {
+        business_inventory(where: $where, limit: ${INVENTORY_CATALOG_FETCH_MAX}) {
+          item_id
+          item {
+            item_images(
+              where: { is_active: { _eq: true }, image_url: { _is_null: false } }
+              order_by: { display_order: asc }
+              limit: 1
+            ) {
+              image_url
+            }
+            item_collections {
+              collection { slug }
+            }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(gql, {
+      where: built.where,
+    });
+    const seenItemsBySlug = new Map<string, Set<string>>();
+    for (const row of result?.business_inventory ?? []) {
+      const imageUrl = row?.item?.item_images?.[0]?.image_url?.trim();
+      const itemId = row?.item_id as string | undefined;
+      if (!imageUrl || !itemId) continue;
+      for (const ic of row?.item?.item_collections ?? []) {
+        const slug = ic?.collection?.slug;
+        if (!slug) continue;
+        const urls = previews.get(slug) ?? [];
+        if (urls.length >= maxPerCollection) continue;
+        let seenItems = seenItemsBySlug.get(slug);
+        if (!seenItems) {
+          seenItems = new Set<string>();
+          seenItemsBySlug.set(slug, seenItems);
+        }
+        if (seenItems.has(itemId) || urls.includes(imageUrl)) continue;
+        seenItems.add(itemId);
+        urls.push(imageUrl);
+        previews.set(slug, urls);
+      }
+    }
+    return previews;
+  }
+
   /**
    * Get a specific inventory item by ID
    */

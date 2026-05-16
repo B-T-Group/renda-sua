@@ -1904,6 +1904,7 @@
     }
   },
   "collections": {
+    "browseTitle": "Collections",
     "viewAll": "View all",
     "filter": "Collection",
     "indexTitle": "Collections",

@@ -16,6 +16,7 @@ export interface CollectionSummary {
   name: string;
   description: string | null;
   image_url: string | null;
+  preview_image_urls: string[];
   is_featured: boolean;
   sort_order: number;
   listing_count: number;
@@ -79,9 +80,15 @@ export class CollectionsService {
   ): Promise<CollectionSummary[]> {
     const lang = resolveCollectionLang(query.lang, acceptLanguage);
     const minListings = query.min_listings ?? MIN_COLLECTION_LISTINGS;
-    const counts = await this.inventoryItemsService.countListingCountsByCollectionSlug(
-      this.toCatalogQuery(query)
-    );
+    const catalogQuery = this.toCatalogQuery(query);
+    const [counts, previewImages] = await Promise.all([
+      this.inventoryItemsService.countListingCountsByCollectionSlug(
+        catalogQuery
+      ),
+      this.inventoryItemsService.previewListingImagesByCollectionSlug(
+        catalogQuery
+      ),
+    ]);
     const where: Record<string, unknown> = {};
     if (query.featured === true) {
       where.is_featured = { _eq: true };
@@ -109,6 +116,7 @@ export class CollectionsService {
           name: localized.name,
           description: localized.description,
           image_url: row.image_url ?? null,
+          preview_image_urls: previewImages.get(row.slug) ?? [],
           is_featured: row.is_featured,
           sort_order: row.sort_order,
           listing_count,
@@ -136,6 +144,7 @@ export class CollectionsService {
       name: localized.name,
       description: localized.description,
       image_url: row.image_url ?? null,
+      preview_image_urls: [],
       is_featured: row.is_featured,
       sort_order: row.sort_order,
       listing_count: 0,
