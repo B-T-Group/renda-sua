@@ -3423,6 +3423,89 @@
     "changePhoto": "Changer la photo",
     "profilePictureHint": "JPG, PNG ou WebP. Max 5 Mo.",
     "agentProfilePictureNote": "Ajoutez une photo de profil pour que les clients voient qui livre leur commande. Cela renforce la confiance et facilite les remises.",
+    "deleteAccountLink": "Supprimer le compte",
+    "deleteAccountLinkDescription": "Demander la suppression de votre compte et de vos données personnelles",
+    "deleteRequest": {
+      "badge": "Suppression de compte",
+      "title": "Demander la suppression du compte",
+      "intro": "Cette page explique comment demander à {{app}} de supprimer votre compte et vos données personnelles. Le même nom de développeur et la même adresse de contact figurent sur nos fiches des stores.",
+      "developerLabel": "Application et développeur",
+      "backToProfile": "Retour au profil",
+      "stepsHeading": "Comment demander la suppression",
+      "stepsSubtitle": "Suivez ces étapes. Nous ne supprimons pas les comptes via le chat de l'application seul—vous devez nous envoyer un e-mail.",
+      "cta": "Envoyer la demande par e-mail",
+      "emailSubject": "Demande de suppression de compte",
+      "emailBody": "Bonjour l'équipe Rendasua,\n\nJe souhaite demander la suppression de mon compte.\n\nE-mail enregistré :\nTéléphone enregistré (le cas échéant) :\n\nMerci.",
+      "retention": {
+        "title": "Durée de conservation",
+        "body": "La plupart des données personnelles sont supprimées dans les 30 jours suivant la confirmation de votre demande. Les dossiers financiers et de commandes peuvent être conservés plus longtemps (en général jusqu'à 7 ans) lorsque la loi l'exige, puis supprimés ou anonymisés."
+      },
+      "deletedHeading": "Données que nous supprimons",
+      "deletedSubtitle": "Supprimées ou anonymisées après la suppression de votre compte, sauf obligation légale de conserver des copies.",
+      "keptHeading": "Données que nous pouvons conserver",
+      "keptSubtitle": "Conservées de manière limitée pour les raisons ci-dessous. Les identifiants personnels sont réduits au minimum lorsque c'est possible.",
+      "warning": "Les commandes en cours, litiges ouverts ou soldes de portefeuille peuvent retarder la suppression jusqu'à résolution. Nous expliquerons tout délai dans notre réponse par e-mail.",
+      "table": {
+        "category": "Catégorie",
+        "details": "Détails",
+        "reason": "Motif"
+      },
+      "steps": {
+        "email": {
+          "title": "Écrivez-nous depuis votre adresse enregistrée",
+          "body": "Envoyez votre demande à {{email}} avec la même adresse e-mail que celle liée à votre compte Rendasua afin que nous puissions vous identifier."
+        },
+        "confirm": {
+          "title": "Confirmez votre identité",
+          "body": "Nous pouvons vous demander une confirmation supplémentaire (par exemple votre numéro de téléphone ou un numéro de commande récent) avant de traiter la suppression."
+        },
+        "process": {
+          "title": "Nous traitons votre demande",
+          "body": "Après vérification, nous désactivons votre compte et commençons à supprimer les données personnelles éligibles dans un délai de 30 jours."
+        },
+        "done": {
+          "title": "Vous recevez une confirmation",
+          "body": "Nous vous envoyons un e-mail lorsque la suppression est terminée ou si nous devons conserver certains dossiers pour des raisons légales (voir ci-dessous)."
+        }
+      },
+      "data": {
+        "deleted": {
+          "profile": {
+            "category": "Profil du compte",
+            "detail": "Nom, e-mail, téléphone, photo de profil, fuseau horaire et préférences de rôle"
+          },
+          "addresses": {
+            "category": "Adresses enregistrées",
+            "detail": "Adresses de livraison et de facturation enregistrées sur votre compte"
+          },
+          "documents": {
+            "category": "Documents de vérification",
+            "detail": "Pièces d'identité et autres fichiers téléversés pour la vérification (lorsque la loi permet l'effacement)"
+          },
+          "notifications": {
+            "category": "Jetons de notification",
+            "detail": "Enregistrements de notifications push et préférences dans l'application"
+          }
+        },
+        "kept": {
+          "orders": {
+            "category": "Commandes et livraisons",
+            "detail": "Historique des commandes, statuts et journaux de livraison (anonymisés ou minimisés lorsque possible)",
+            "reason": "Exécution du contrat, litiges et protection des consommateurs"
+          },
+          "payments": {
+            "category": "Paiements et portefeuille",
+            "detail": "Transactions, rapprochements et références mobile money",
+            "reason": "Comptabilité, anti-fraude et obligations réglementaires"
+          },
+          "support": {
+            "category": "Support et sécurité",
+            "detail": "Tickets d'assistance et journaux de prévention des abus liés à des incidents résolus",
+            "reason": "Défense juridique et sécurité de la plateforme"
+          }
+        }
+      }
+    },
     "personalAddressesDescription": "Ajoutez et gérez vos adresses de livraison et de facturation",
     "personaConfirm": {
       "continue": "Continuer",
@@ -3644,6 +3727,11 @@
       "description": "Manage your profile information, preferences, and account settings.",
       "keywords": "profile, account settings, preferences, Rendasua",
       "title": "Profile - Rendasua"
+    },
+    "profile-delete-request": {
+      "description": "Comment demander la suppression de votre compte Rendasua et quelles données sont supprimées ou conservées.",
+      "keywords": "suppression compte, supprimer compte, Rendasua, confidentialité",
+      "title": "Supprimer votre compte - Rendasua"
     },
     "public-items": {
       "description": "Parcourez et découvrez des produits incroyables d'entreprises locales de votre région",

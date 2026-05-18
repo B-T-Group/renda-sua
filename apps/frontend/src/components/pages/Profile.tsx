@@ -7,6 +7,7 @@ import {
   Edit as EditIcon,
   ErrorOutline as ErrorOutlineIcon,
   LocationOn as LocationOnIcon,
+  PersonOff as PersonOffIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
 import {
@@ -892,6 +893,51 @@ const Profile: React.FC = () => {
                   {t(
                     'profile.manageDocumentsDescription',
                     'Upload and manage your verification documents'
+                  )}
+                </Typography>
+              </Box>
+              <ChevronRightIcon sx={{ color: 'text.secondary', fontSize: 24 }} />
+            </Card>
+
+            <Card
+              component={RouterLink}
+              to="/profile/delete-request"
+              variant="outlined"
+              sx={{
+                textDecoration: 'none',
+                color: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                p: 2,
+                transition: 'border-color 0.2s, background-color 0.2s',
+                '&:hover': {
+                  borderColor: 'error.main',
+                  bgcolor: 'action.hover',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 1,
+                  bgcolor: 'action.selected',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 2,
+                }}
+              >
+                <PersonOffIcon sx={{ color: 'error.main', fontSize: 22 }} />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {t('profile.deleteAccountLink', 'Delete account')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'profile.deleteAccountLinkDescription',
+                    'Request deletion of your account and personal data'
                   )}
                 </Typography>
               </Box>

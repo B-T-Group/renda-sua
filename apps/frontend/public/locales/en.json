@@ -3434,6 +3434,89 @@
     "changePhoto": "Change photo",
     "profilePictureHint": "JPG, PNG or WebP. Max 5MB.",
     "agentProfilePictureNote": "Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother.",
+    "deleteAccountLink": "Delete account",
+    "deleteAccountLinkDescription": "Request deletion of your account and personal data",
+    "deleteRequest": {
+      "badge": "Account deletion",
+      "title": "Request account deletion",
+      "intro": "This page explains how to ask {{app}} to delete your account and personal data. The same developer name and contact appear on our app store listings.",
+      "developerLabel": "App & developer",
+      "backToProfile": "Back to profile",
+      "stepsHeading": "How to request deletion",
+      "stepsSubtitle": "Follow these steps. We do not delete accounts from in-app chat alone—you must email us.",
+      "cta": "Email deletion request",
+      "emailSubject": "Account deletion request",
+      "emailBody": "Hello Rendasua team,\n\nI would like to request deletion of my account.\n\nRegistered email:\nRegistered phone (if any):\n\nThank you.",
+      "retention": {
+        "title": "Retention period",
+        "body": "Most personal data is deleted within 30 days after we confirm your request. Financial and order records may be kept longer (typically up to 7 years) where required by law, then deleted or anonymized."
+      },
+      "deletedHeading": "Data we delete",
+      "deletedSubtitle": "Removed or anonymized after your account is deleted, except where we must keep copies for legal reasons.",
+      "keptHeading": "Data we may keep",
+      "keptSubtitle": "Retained in limited form for the reasons below. Personal identifiers are minimized where possible.",
+      "warning": "Pending orders, open disputes, or wallet balances may delay deletion until resolved. We will explain any delay in our reply to your email.",
+      "table": {
+        "category": "Category",
+        "details": "Details",
+        "reason": "Why kept"
+      },
+      "steps": {
+        "email": {
+          "title": "Email us from your registered address",
+          "body": "Send your request to {{email}} using the same email linked to your Rendasua account so we can verify you."
+        },
+        "confirm": {
+          "title": "Confirm your identity",
+          "body": "We may reply to ask for extra confirmation (for example your phone number or a recent order number) before we process the deletion."
+        },
+        "process": {
+          "title": "We process your request",
+          "body": "After verification, we deactivate your account and begin removing eligible personal data within 30 days."
+        },
+        "done": {
+          "title": "You receive confirmation",
+          "body": "We email you when deletion is complete or if we must retain specific records for legal reasons (see below)."
+        }
+      },
+      "data": {
+        "deleted": {
+          "profile": {
+            "category": "Account profile",
+            "detail": "Name, email, phone, profile photo, timezone, and persona preferences"
+          },
+          "addresses": {
+            "category": "Saved addresses",
+            "detail": "Delivery and billing addresses stored on your account"
+          },
+          "documents": {
+            "category": "Verification documents",
+            "detail": "ID and other files you uploaded for verification (where law allows erasure)"
+          },
+          "notifications": {
+            "category": "Notification tokens",
+            "detail": "Push notification registrations and in-app notification preferences"
+          }
+        },
+        "kept": {
+          "orders": {
+            "category": "Orders & delivery records",
+            "detail": "Order history, statuses, and delivery logs (anonymized or minimized where possible)",
+            "reason": "Contract fulfillment, disputes, and consumer protection"
+          },
+          "payments": {
+            "category": "Payments & wallet ledger",
+            "detail": "Transaction records, reconciliation entries, and mobile-money references",
+            "reason": "Accounting, anti-fraud, and regulatory obligations"
+          },
+          "support": {
+            "category": "Support & safety records",
+            "detail": "Support tickets and abuse-prevention logs tied to resolved incidents",
+            "reason": "Legal defense and platform safety"
+          }
+        }
+      }
+    },
     "personalAddressesDescription": "Add and manage your delivery and billing addresses",
     "personaConfirm": {
       "continue": "Continue",
@@ -3655,6 +3738,11 @@
       "description": "Manage your profile information, preferences, and account settings.",
       "keywords": "profile, account settings, preferences, Rendasua",
       "title": "Profile - Rendasua"
+    },
+    "profile-delete-request": {
+      "description": "How to request deletion of your Rendasua account and what data is removed or retained.",
+      "keywords": "account deletion, delete account, Rendasua, data privacy",
+      "title": "Delete your account - Rendasua"
     },
     "public-items": {
       "description": "Browse and discover amazing products from local businesses in your area",

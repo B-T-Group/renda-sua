@@ -432,6 +432,10 @@ function App() {
               }
             />
             <Route
+              path="/profile/delete-request"
+              element={<LazyPages.ProfileDeleteRequestPage />}
+            />
+            <Route
               path="/complete-profile"
               element={
                 <ProtectedRoute>

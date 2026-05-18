@@ -211,6 +211,9 @@ export const PlaceOrderPage = lazy(() =>
   import('../components/pages/PlaceOrderPage')
 );
 export const Profile = lazy(() => import('../components/pages/Profile'));
+export const ProfileDeleteRequestPage = lazy(() =>
+  import('../components/pages/ProfileDeleteRequestPage')
+);
 export const SupportPage = lazy(() =>
   import('../components/pages/SupportPage')
 );
