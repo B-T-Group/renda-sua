@@ -1079,6 +1079,82 @@ export class BusinessItemsService {
     return result.update_business_inventory_by_pk;
   }
 
+  async createInventoryItem(
+    businessId: string,
+    data: {
+      business_location_id: string;
+      item_id: string;
+      quantity: number;
+      reserved_quantity: number;
+      reorder_point: number;
+      reorder_quantity: number;
+      unit_cost: number;
+      selling_price: number;
+      is_active: boolean;
+    }
+  ) {
+    const locRow = await this.hasuraUserService.executeQuery<{
+      business_locations_by_pk: { id: string; business_id: string } | null;
+    }>(
+      `
+      query GetLocationBusiness($locationId: uuid!) {
+        business_locations_by_pk(id: $locationId) {
+          id
+          business_id
+        }
+      }
+    `,
+      { locationId: data.business_location_id }
+    );
+    const loc = locRow?.business_locations_by_pk;
+    if (!loc || loc.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Location not found or access denied' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const itemRow = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BY_ID, { itemId: data.item_id });
+    const item = itemRow.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const result = await this.hasuraUserService.executeMutation<{
+      insert_business_inventory_one: {
+        id: string;
+        item_id: string;
+        business_location_id: string;
+      } | null;
+    }>(INSERT_BUSINESS_INVENTORY, {
+      itemData: {
+        business_location_id: data.business_location_id,
+        item_id: data.item_id,
+        quantity: data.quantity,
+        reserved_quantity: data.reserved_quantity,
+        reorder_point: data.reorder_point,
+        reorder_quantity: data.reorder_quantity,
+        unit_cost: data.unit_cost,
+        selling_price: data.selling_price,
+        is_active: data.is_active,
+      },
+    });
+
+    const created = result?.insert_business_inventory_one;
+    if (!created?.id) {
+      throw new HttpException(
+        { success: false, error: 'Failed to create inventory' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return created;
+  }
+
   private promotionPayloadFromDto(
     dto: UpdateItemPromotionDto
   ): Record<string, unknown> | null {

@@ -31,6 +31,7 @@ import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
+import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
 import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
@@ -287,6 +288,31 @@ export class BusinessItemsController {
       user?.preferred_language ?? 'en'
     );
     return { success: true, data: { item } };
+  }
+
+  @Post('inventory')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create an inventory record for the current business',
+  })
+  @ApiResponse({ status: 201, description: 'Inventory created successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item or location not found' })
+  @ApiBody({ type: CreateInventoryDto })
+  async createInventory(@Body() body: CreateInventoryDto) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const inventory = await this.businessItemsService.createInventoryItem(
+      businessId,
+      body
+    );
+    return { success: true, data: { inventory } };
   }
 
   @Patch('inventory/:inventoryId')
