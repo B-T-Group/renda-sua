@@ -162,6 +162,15 @@ const Footer: React.FC = () => {
                   >
                     {t('footer.terms')}
                   </Typography>
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/profile/delete-request"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.deleteAccount', 'Delete account')}
+                  </Typography>
                 </Stack>
               </Box>
             </Stack>
