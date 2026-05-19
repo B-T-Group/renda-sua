@@ -9,6 +9,10 @@ import { CommissionsService } from './commissions.service';
     AccountsModule,
     HasuraModule,
     forwardRef(() => MobilePaymentsModule),
+    forwardRef(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('../notifications/notifications.module').NotificationsModule;
+    }),
   ],
   providers: [CommissionsService],
   exports: [CommissionsService],

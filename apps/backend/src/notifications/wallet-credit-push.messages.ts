@@ -1,0 +1,82 @@
+import { normalizeLanguage, type EmailLocale } from './email-template-data';
+
+export type WalletCreditCommissionType =
+  | 'base_delivery_fee'
+  | 'per_km_delivery_fee'
+  | 'item_sale'
+  | 'order_subtotal';
+
+function formatAmount(amount: number, currency: string, locale: EmailLocale): string {
+  try {
+    return new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+function sourceLabel(
+  locale: EmailLocale,
+  commissionType: WalletCreditCommissionType
+): string {
+  const en: Record<WalletCreditCommissionType, string> = {
+    order_subtotal: 'sale',
+    item_sale: 'sale commission',
+    base_delivery_fee: 'delivery',
+    per_km_delivery_fee: 'distance delivery',
+  };
+  const fr: Record<WalletCreditCommissionType, string> = {
+    order_subtotal: 'vente',
+    item_sale: 'commission sur vente',
+    base_delivery_fee: 'livraison',
+    per_km_delivery_fee: 'livraison (distance)',
+  };
+  return locale === 'fr' ? fr[commissionType] : en[commissionType];
+}
+
+export function buildWalletCreditPushMessage(params: {
+  amount: number;
+  currency: string;
+  commissionType: WalletCreditCommissionType;
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const formatted = formatAmount(params.amount, params.currency, locale);
+  const source = sourceLabel(locale, params.commissionType);
+  const orderRef = params.orderNumber;
+
+  if (locale === 'fr') {
+    return {
+      title: 'Crédit reçu',
+      body: `+${formatted} — ${source} (commande ${orderRef})`,
+    };
+  }
+  return {
+    title: 'Funds received',
+    body: `+${formatted} — ${source} (order ${orderRef})`,
+  };
+}
+
+export function buildBusinessOrderCreatedPushMessage(params: {
+  orderNumber: string;
+  clientName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const client = params.clientName?.trim() || (locale === 'fr' ? 'un client' : 'a customer');
+  if (locale === 'fr') {
+    return {
+      title: 'Nouvelle commande',
+      body: `Commande ${params.orderNumber} de ${client}`,
+    };
+  }
+  return {
+    title: 'New order',
+    body: `Order ${params.orderNumber} from ${client}`,
+  };
+}

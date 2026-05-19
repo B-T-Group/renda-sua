@@ -2,6 +2,8 @@ import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import type { WalletCreditCommissionType } from '../notifications/wallet-credit-push.messages';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
 
@@ -13,7 +15,9 @@ export class CommissionsService {
     private readonly accountsService: AccountsService,
     private readonly hasuraSystemService: HasuraSystemService,
     @Inject(forwardRef(() => GiveChangePayoutService))
-    private readonly giveChangePayoutService: GiveChangePayoutService
+    private readonly giveChangePayoutService: GiveChangePayoutService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService
   ) {}
 
   /**
@@ -712,6 +716,26 @@ export class CommissionsService {
         `Paid ${amount} ${currency} commission to ${recipientType} for order ${order.order_number}`
       );
 
+      if (
+        transaction.success &&
+        transaction.transactionId &&
+        (recipientType === 'agent' || recipientType === 'business')
+      ) {
+        void this.notificationsService.sendWalletCreditPush({
+          userId: recipientUserId,
+          amount,
+          currency,
+          commissionType: commissionType as WalletCreditCommissionType,
+          orderId: order.id,
+          orderNumber: order.order_number,
+          preferredLanguage: this.preferredLanguageForCommissionRecipient(
+            order,
+            recipientType,
+            recipientUserId
+          ),
+        });
+      }
+
       if (transaction.success && transaction.transactionId) {
         try {
           await this.tryAutoWithdrawAfterCommission({
@@ -735,6 +759,26 @@ export class CommissionsService {
       );
       throw error;
     }
+  }
+
+  private preferredLanguageForCommissionRecipient(
+    order: any,
+    recipientType: 'agent' | 'business',
+    recipientUserId: string
+  ): string | undefined {
+    if (recipientType === 'business') {
+      return (
+        order.business?.user?.preferred_language ??
+        order.business_location?.business?.user?.preferred_language
+      );
+    }
+    if (
+      recipientType === 'agent' &&
+      order.assigned_agent?.user_id === recipientUserId
+    ) {
+      return order.assigned_agent?.user?.preferred_language;
+    }
+    return undefined;
   }
 
   private async tryAutoWithdrawAfterCommission(ctx: {

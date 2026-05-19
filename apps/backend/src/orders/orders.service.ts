@@ -5570,6 +5570,12 @@ export class OrdersService {
 
       const notificationData: NotificationData = {
         orderId: order.id,
+        clientId: order.client?.id,
+        clientUserId: order.client?.user?.id ?? undefined,
+        businessUserId:
+          order.business_location?.business?.user?.id ??
+          order.business?.user_id ??
+          undefined,
         orderNumber: order.order_number,
         clientName: `${order.client?.user?.first_name || ''} ${
           order.client?.user?.last_name || ''
@@ -6886,6 +6892,12 @@ export class OrdersService {
           ) {
             const notificationData: NotificationData = {
               orderId: orderWithDetails.id,
+              clientId: orderWithDetails.client?.id,
+              clientUserId: orderWithDetails.client?.user?.id ?? undefined,
+              businessUserId:
+                orderWithDetails.business_location?.business?.user?.id ??
+                orderWithDetails.business?.user_id ??
+                undefined,
               orderNumber: orderWithDetails.order_number,
               clientName: `${orderWithDetails.client?.user?.first_name || ''} ${
                 orderWithDetails.client?.user?.last_name || ''

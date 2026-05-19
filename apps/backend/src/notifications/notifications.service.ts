@@ -39,6 +39,11 @@ import {
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
+import {
+  buildBusinessOrderCreatedPushMessage,
+  buildWalletCreditPushMessage,
+  type WalletCreditCommissionType,
+} from './wallet-credit-push.messages';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -243,9 +248,84 @@ export class NotificationsService {
       );
     }
 
+    await this.sendOrderCreatedBusinessPush(data);
+
     if (sentAny) {
       this.logger.log(
         `Order creation notification(s) processed for order ${data.orderNumber}`
+      );
+    }
+  }
+
+  /**
+   * Expo + web push when a business receives a new order (if push token registered).
+   */
+  private async sendOrderCreatedBusinessPush(data: NotificationData): Promise<void> {
+    const businessUserId = data.businessUserId?.trim();
+    if (!businessUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const { title, body } = buildBusinessOrderCreatedPushMessage({
+      orderNumber: data.orderNumber,
+      clientName: data.clientName,
+      preferredLanguage: data.businessPreferredLanguage,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(businessUserId, title, body, {
+        url: `/orders/${data.orderId}`,
+        orderId: data.orderId,
+        orderNumber: data.orderNumber,
+        event: 'order_created',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderCreatedBusinessPush failed for order ${data.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  /**
+   * Push when an agent or business account is credited (sale / delivery commission).
+   */
+  async sendWalletCreditPush(params: {
+    userId: string;
+    amount: number;
+    currency: string;
+    commissionType: WalletCreditCommissionType;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId || params.amount <= 0) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const { title, body } = buildWalletCreditPushMessage({
+      amount: params.amount,
+      currency: params.currency,
+      commissionType: params.commissionType,
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: '/accounts',
+        event: 'wallet_credit',
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        commissionType: params.commissionType,
+        amount: String(params.amount),
+        currency: params.currency,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendWalletCreditPush failed for user ${userId}: ${
+          error?.message ?? String(error)
+        }`
       );
     }
   }
