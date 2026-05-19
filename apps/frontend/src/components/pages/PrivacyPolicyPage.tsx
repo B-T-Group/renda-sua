@@ -80,6 +80,21 @@ const PrivacyPolicyPage: React.FC = () => {
               gutterBottom
               sx={{ fontWeight: 500, mb: 1 }}
             >
+              {t('privacyPolicy.locationInformation', 'Location Information')}
+            </Typography>
+            <Typography variant="body1" paragraph>
+              {t(
+                'privacyPolicy.locationInfoText',
+                'Depending on how you use Rendasua, we may collect device location data, including precise GPS coordinates. Delivery agents: when you use the Rendasua Agent mobile app, we collect your location while you are logged in and, if you grant permission, while the app is in the background or not in use, so customers with active deliveries can follow delivery progress. We send location updates to our servers and may display your position to customers linked to orders you are delivering. Clients and businesses: we may use location when you choose features such as filling an address from GPS or viewing maps. You can control location permissions in your device or browser settings at any time.'
+              )}
+            </Typography>
+
+            <Typography
+              variant="h6"
+              component="h3"
+              gutterBottom
+              sx={{ fontWeight: 500, mb: 1 }}
+            >
               {t('privacyPolicy.usageInformation', 'Usage Information')}
             </Typography>
             <Typography variant="body1" paragraph>
@@ -282,7 +297,7 @@ const PrivacyPolicyPage: React.FC = () => {
 
           <Box sx={{ textAlign: 'center', mt: 4 }}>
             <Typography variant="body2" color="text.secondary">
-              {t('privacyPolicy.lastUpdated', 'Last updated: January 2025')}
+              {t('privacyPolicy.lastUpdated', 'Last updated: May 2026')}
             </Typography>
           </Box>
         </Paper>
