@@ -346,6 +346,21 @@ export class AdminController {
     }
   }
 
+  @Get('businesses/:id/verification')
+  @ApiOperation({ summary: 'Get business verification details for admin review' })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  async getBusinessVerification(@Param('id') businessId: string) {
+    try {
+      const data = await this.adminService.getBusinessVerificationDetails(businessId);
+      return { success: true, data };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to load verification details',
+      };
+    }
+  }
+
   @Patch('businesses/:id')
   @ApiOperation({
     summary: 'Update a business (admin only)',
@@ -361,6 +376,7 @@ export class AdminController {
         is_admin: { type: 'boolean' },
         image_cleanup_enabled: { type: 'boolean' },
         withdrawal_pin_enabled: { type: 'boolean' },
+        is_verified: { type: 'boolean' },
         first_name: { type: 'string' },
         last_name: { type: 'string' },
         phone_number: { type: 'string' },
@@ -375,6 +391,7 @@ export class AdminController {
     body: {
       name?: string;
       is_admin?: boolean;
+      is_verified?: boolean;
       image_cleanup_enabled?: boolean;
       withdrawal_pin_enabled?: boolean;
       first_name?: string;
@@ -396,11 +413,14 @@ export class AdminController {
       const businessUpdates: {
         name?: string;
         is_admin?: boolean;
+        is_verified?: boolean;
         image_cleanup_enabled?: boolean;
         withdrawal_pin_enabled?: boolean;
       } = {};
       if (typeof body.name === 'string') businessUpdates.name = body.name;
       if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
+      if (typeof body.is_verified === 'boolean')
+        businessUpdates.is_verified = body.is_verified;
       if (typeof body.image_cleanup_enabled === 'boolean')
         businessUpdates.image_cleanup_enabled = body.image_cleanup_enabled;
       if (typeof body.withdrawal_pin_enabled === 'boolean')

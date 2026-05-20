@@ -531,6 +531,7 @@ export class AdminService {
     businessUpdates: {
       name?: string;
       is_admin?: boolean;
+      is_verified?: boolean;
       image_cleanup_enabled?: boolean;
       withdrawal_pin_enabled?: boolean;
     }
@@ -543,6 +544,60 @@ export class AdminService {
       ? await this.updateBusinessRecord(businessId, businessUpdates)
       : null;
     return { user: updatedUser, business: updatedBusiness };
+  }
+
+  async getBusinessVerificationDetails(businessId: string) {
+    const query = `
+      query BizVerification($businessId: uuid!, $idNames: [String!]) {
+        businesses_by_pk(id: $businessId) {
+          id
+          name
+          is_verified
+          merchant_agreement_version
+          merchant_agreement_accepted_at
+          user {
+            id
+            first_name
+            last_name
+            email
+          }
+        }
+        business_merchant_agreement_acceptances(
+          where: { business_id: { _eq: $businessId } }
+          order_by: { accepted_at: desc }
+          limit: 1
+        ) {
+          id
+          agreement_version
+          signer_legal_name
+          accepted_at
+          pdf_upload_id
+        }
+        user_uploads(
+          where: {
+            user: { business: { id: { _eq: $businessId } } }
+            document_type: { name: { _in: $idNames } }
+          }
+          order_by: { created_at: desc }
+        ) {
+          id
+          file_name
+          is_approved
+          note
+          created_at
+          document_type { name }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+      idNames: ['id_card', 'passport', 'driver_license'],
+    });
+    return {
+      business: result.businesses_by_pk,
+      latestAcceptance: result.business_merchant_agreement_acceptances?.[0] ?? null,
+      identityDocuments: result.user_uploads ?? [],
+    };
   }
 
   async setBusinessWithdrawalPin(businessId: string, pin: string) {

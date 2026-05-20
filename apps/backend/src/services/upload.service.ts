@@ -43,6 +43,29 @@ export class UploadService {
    * Returns whether the user has at least one upload with document type
    * id_card, passport, or driver_license. Used for agent ID verification.
    */
+  async listUserUploads(userId: string) {
+    const query = `
+      query MyUploads($userId: uuid!) {
+        user_uploads(
+          where: { user_id: { _eq: $userId } }
+          order_by: { created_at: desc }
+        ) {
+          id
+          document_type_id
+          note
+          content_type
+          file_name
+          file_size
+          is_approved
+          created_at
+          document_type { id name description }
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeQuery(query, { userId });
+    return result.user_uploads ?? [];
+  }
+
   async hasIdDocument(userId: string): Promise<{ hasIdDocument: boolean }> {
     const query = `
       query AgentHasIdDocument($userId: uuid!, $documentTypeNames: [String!]) {
@@ -63,6 +86,22 @@ export class UploadService {
     });
     const uploads = (result?.user_uploads as { id: string }[] | undefined) ?? [];
     return { hasIdDocument: uploads.length > 0 };
+  }
+
+  async listDocumentTypes(excludeNames: string[] = []) {
+    const query = `
+      query DocumentTypes {
+        document_types(order_by: { name: asc }) {
+          id
+          name
+          description
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeQuery(query, {});
+    const types = (result.document_types as { id: number; name: string; description: string }[]) ?? [];
+    if (!excludeNames.length) return types;
+    return types.filter((dt) => !excludeNames.includes(dt.name));
   }
 
   /**

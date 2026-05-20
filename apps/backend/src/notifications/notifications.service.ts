@@ -1504,6 +1504,39 @@ export class NotificationsService {
     }
   }
 
+  async sendMerchantAgreementCopyEmail(params: {
+    to: string;
+    businessName: string;
+    signerLegalName: string;
+    agreementVersion: string;
+  }): Promise<void> {
+    this.initializeResend();
+    if (!this.resendClient || !params.to) {
+      this.logger.warn('Skipping merchant agreement email — Resend or recipient missing');
+      return;
+    }
+    const html = `
+      <p>Hello ${params.signerLegalName},</p>
+      <p>Thank you for accepting the Rendasua Merchant Partnership Agreement (version ${params.agreementVersion}) on behalf of <strong>${params.businessName}</strong>.</p>
+      <p>A signed copy has been saved to your document library on Rendasua.</p>
+      <p>Next step: upload a government-issued ID in the Documents section so we can verify your account.</p>
+      <p>— Rendasua</p>
+    `;
+    try {
+      const { error } = await this.resendClient.emails.send({
+        from: this.fromEmail,
+        to: [params.to],
+        subject: `Merchant agreement accepted — ${params.businessName}`,
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (error: any) {
+      this.logger.error(
+        `Merchant agreement email failed: ${error?.message ?? error}`
+      );
+    }
+  }
+
   /**
    * Get template key for order status
    */

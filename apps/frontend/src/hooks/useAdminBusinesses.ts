@@ -32,6 +32,7 @@ export interface UpdateBusinessPayload {
   phone_number?: string;
   name?: string;
   is_admin?: boolean;
+  is_verified?: boolean;
   image_cleanup_enabled?: boolean;
   withdrawal_pin_enabled?: boolean;
 }

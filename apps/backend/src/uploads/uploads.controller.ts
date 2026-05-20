@@ -48,10 +48,27 @@ export class UploadsController {
       user,
       this.hasuraUserService.getActivePersonaHeader()
     );
-    if (active !== 'agent' || !user.agent?.id) {
+    if ((active !== 'agent' && active !== 'business') || !user.id) {
       return { hasIdDocument: false };
     }
     return this.uploadService.hasIdDocument(user.id);
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'List current user uploads' })
+  async listMyUploads() {
+    const user = await this.hasuraUserService.getUser();
+    const uploads = await this.uploadService.listUserUploads(user.id);
+    return { success: true, data: { uploads } };
+  }
+
+  @Get('document-types')
+  @ApiOperation({ summary: 'List document types for upload picker' })
+  async listDocumentTypes() {
+    const types = await this.uploadService.listDocumentTypes([
+      'rendasua_contract_agreement',
+    ]);
+    return { success: true, data: { documentTypes: types } };
   }
 
   @Post('get_upload_url')

@@ -17,6 +17,7 @@ import { BrandsModule } from '../brands/brands.module';
 import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
+import { BusinessVerificationModule } from '../business-verification/business-verification.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { CollectionsModule } from '../collections/collections.module';
 import configuration from '../config/configuration';
@@ -116,6 +117,7 @@ import { AppService } from './app.service';
     BusinessAgentsModule,
     BusinessItemsModule,
     BusinessImagesModule,
+    BusinessVerificationModule,
     CategoriesModule,
     SubcategoriesModule,
     AiModule,

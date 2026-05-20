@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
@@ -665,6 +666,8 @@ const BusinessItemsPage: React.FC = () => {
         description={t('seo.business-items.description')}
         keywords={t('seo.business-items.keywords')}
       />
+
+      <BusinessVerificationBanner />
 
       {/* Title row: title + subtitle, actions */}
       <Stack

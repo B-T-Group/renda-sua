@@ -1,6 +1,5 @@
 import {
   Alert,
-  AlertTitle,
   Box,
   Button,
   Container,
@@ -14,6 +13,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
+import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
   BusinessDashboardModule,
 } from '../business/BusinessDashboardModuleCard';
@@ -97,22 +97,7 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       </Box>
 
-      {!profile.business.is_verified && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <AlertTitle>
-            {t(
-              'business.dashboard.verificationNoticeTitle',
-              'Account verification required'
-            )}
-          </AlertTitle>
-          <Typography variant="body2" component="div" sx={{ mt: 0.5 }}>
-            {t(
-              'business.dashboard.verificationNotice',
-              'Your business account must be verified by Rendasua head office before your items can be visible to customers on the platform. You can continue to manage your catalog and settings; we will notify you when your account has been verified.'
-            )}
-          </Typography>
-        </Alert>
-      )}
+      <BusinessVerificationBanner />
 
       {accounts.length > 0 && (
         <Box sx={{ mb: 3 }}>

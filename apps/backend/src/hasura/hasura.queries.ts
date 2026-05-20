@@ -43,6 +43,8 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         is_admin
         is_verified
         image_cleanup_enabled
+        merchant_agreement_version
+        merchant_agreement_accepted_at
         created_at
         updated_at
       }

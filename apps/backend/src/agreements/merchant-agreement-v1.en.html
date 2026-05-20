@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rendasua Merchant Agreement</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.5; color: #1d1d1f; padding: 24px; }
+    h1 { font-size: 18px; margin-bottom: 8px; }
+    h2 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+    p { margin: 8px 0; }
+    .meta { color: #555; font-size: 11px; margin-bottom: 24px; }
+    .signature-block { margin-top: 32px; border-top: 1px solid #ccc; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Rendasua Merchant Partnership Agreement</h1>
+  <p class="meta">Version {{agreementVersion}} · Effective upon electronic acceptance</p>
+
+  <p>This Merchant Partnership Agreement ("Agreement") is entered into between <strong>{{businessName}}</strong> ("Merchant", "you") and Rendasua ("Platform", "we", "us"), governing your use of the Rendasua marketplace to list and sell products or services to customers in Cameroon and other territories where the Platform operates.</p>
+
+  <h2>1. Platform role</h2>
+  <p>Rendasua provides an online marketplace and related tools. Unless expressly stated otherwise for a specific transaction, Rendasua is not the seller of your products. You remain responsible for your listings, fulfilment, and compliance with applicable laws.</p>
+
+  <h2>2. Merchant obligations</h2>
+  <p>You agree to: (a) provide accurate, clear product descriptions, prices, and images; (b) honour confirmed orders in a timely manner; (c) maintain adequate stock and update availability; (d) provide responsive customer service; (e) comply with consumer protection, tax, and business registration requirements in your jurisdiction.</p>
+
+  <h2>3. Acceptable use</h2>
+  <p>You must not list or sell illegal, counterfeit, stolen, dangerous, or prohibited goods; content that is fraudulent, misleading, defamatory, or hateful; or products that infringe intellectual property. You must not circumvent Platform payment rules where in-app or Platform-mediated payment is required. We may remove listings or suspend accounts for violations.</p>
+
+  <h2>4. Product information standards</h2>
+  <p>Listings must truthfully represent the item, including condition, quantity, allergens or safety warnings where relevant, and delivery or pickup terms. Photos should reflect the actual product offered.</p>
+
+  <h2>5. Fees, payouts, and taxes</h2>
+  <p>Applicable commissions, delivery fees, and payout schedules are disclosed in the Platform or separate fee schedules. You are solely responsible for declaring and remitting taxes owed on your sales.</p>
+
+  <h2>6. Data protection</h2>
+  <p>You will handle customer data received through the Platform only for order fulfilment and as permitted by our privacy policy and applicable law. You must not misuse or resell customer personal data.</p>
+
+  <h2>7. Suspension and termination</h2>
+  <p>We may suspend or terminate your merchant access for breach of this Agreement, legal risk, or repeated customer complaints. You may stop using the Platform by closing your account subject to outstanding obligations.</p>
+
+  <h2>8. Limitation of liability</h2>
+  <p>To the fullest extent permitted by law, Rendasua is not liable for indirect, incidental, or consequential damages arising from your use of the Platform. Our aggregate liability is limited to fees paid by you to us in the twelve (12) months preceding the claim, except where law prohibits such limitation.</p>
+
+  <h2>9. Governing law</h2>
+  <p>This Agreement is governed by the laws of Cameroon and applicable OHADA commercial principles, without regard to conflict-of-law rules. Disputes shall be submitted to the competent courts of Douala, Cameroon, unless mandatory consumer or local law requires otherwise.</p>
+
+  <h2>10. Electronic acceptance</h2>
+  <p>By checking the acceptance box and typing your legal name on the Platform, you agree that this constitutes your electronic signature and binding acceptance of this Agreement.</p>
+
+  <div class="signature-block">
+    <p><strong>Accepted by:</strong> {{signerLegalName}}</p>
+    <p><strong>Email:</strong> {{signerEmail}}</p>
+    <p><strong>Business:</strong> {{businessName}}</p>
+    <p><strong>Date (UTC):</strong> {{acceptedAt}}</p>
+    <p><strong>Agreement version:</strong> {{agreementVersion}}</p>
+    {{#signatureImageUrl}}
+    <p><strong>Signature:</strong></p>
+    <img src="{{signatureImageUrl}}" alt="Signature" style="max-height: 80px;" />
+    {{/signatureImageUrl}}
+  </div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Contrat marchand Rendasua</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.5; color: #1d1d1f; padding: 24px; }
+    h1 { font-size: 18px; margin-bottom: 8px; }
+    h2 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+    p { margin: 8px 0; }
+    .meta { color: #555; font-size: 11px; margin-bottom: 24px; }
+    .signature-block { margin-top: 32px; border-top: 1px solid #ccc; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Contrat de partenariat marchand Rendasua</h1>
+  <p class="meta">Version {{agreementVersion}} · Applicable dès l’acceptation électronique</p>
+
+  <p>Le présent contrat (« Contrat ») est conclu entre <strong>{{businessName}}</strong> (« Marchand », « vous ») et Rendasua (« Plateforme », « nous »), et régit votre utilisation de la marketplace Rendasua pour proposer des produits ou services aux clients au Cameroun et dans les territoires couverts.</p>
+
+  <h2>1. Rôle de la plateforme</h2>
+  <p>Rendasua fournit une marketplace en ligne et des outils associés. Sauf indication contraire, Rendasua n’est pas le vendeur de vos produits. Vous restez responsable de vos annonces, de l’exécution des commandes et du respect des lois applicables.</p>
+
+  <h2>2. Obligations du marchand</h2>
+  <p>Vous vous engagez à : (a) fournir des descriptions, prix et images exacts ; (b) honorer les commandes confirmées dans des délais raisonnables ; (c) maintenir des stocks à jour ; (d) assurer un service client réactif ; (e) respecter la réglementation fiscale et commerciale en vigueur.</p>
+
+  <h2>3. Utilisation acceptable</h2>
+  <p>Il est interdit de proposer des biens illégaux, contrefaits, volés, dangereux ou prohibés ; du contenu frauduleux, trompeur ou haineux ; ou des produits portant atteinte à la propriété intellectuelle. Vous ne devez pas contourner les règles de paiement de la Plateforme lorsqu’un paiement via la Plateforme est requis. Nous pouvons retirer des annonces ou suspendre des comptes en cas de violation.</p>
+
+  <h2>4. Informations produits</h2>
+  <p>Les annonces doivent représenter fidèlement l’article, y compris l’état, la quantité, les allergènes ou avertissements pertinents, et les modalités de livraison ou retrait.</p>
+
+  <h2>5. Frais, paiements et taxes</h2>
+  <p>Les commissions, frais de livraison et calendriers de versement applicables sont indiqués sur la Plateforme. Vous êtes seul responsable de la déclaration et du paiement des taxes liées à vos ventes.</p>
+
+  <h2>6. Protection des données</h2>
+  <p>Les données clients reçues via la Plateforme ne peuvent être utilisées que pour l’exécution des commandes et conformément à notre politique de confidentialité et à la loi.</p>
+
+  <h2>7. Suspension et résiliation</h2>
+  <p>Nous pouvons suspendre ou résilier votre accès en cas de manquement, de risque juridique ou de plaintes répétées. Vous pouvez cesser d’utiliser la Plateforme sous réserve des obligations en cours.</p>
+
+  <h2>8. Limitation de responsabilité</h2>
+  <p>Dans la mesure permise par la loi, Rendasua n’est pas responsable des dommages indirects ou consécutifs. Notre responsabilité globale est limitée aux frais que vous nous avez versés au cours des douze (12) mois précédant la réclamation, sauf disposition légale impérative contraire.</p>
+
+  <h2>9. Droit applicable</h2>
+  <p>Le présent Contrat est régi par le droit camerounais et les principes commerciaux OHADA applicables. Les litiges relèvent des tribunaux compétents de Douala, Cameroun, sauf règle impérative contraire.</p>
+
+  <h2>10. Acceptation électronique</h2>
+  <p>En cochant la case d’acceptation et en saisissant votre nom légal sur la Plateforme, vous reconnaissez que cela constitue votre signature électronique et votre acceptation contraignante du présent Contrat.</p>
+
+  <div class="signature-block">
+    <p><strong>Accepté par :</strong> {{signerLegalName}}</p>
+    <p><strong>E-mail :</strong> {{signerEmail}}</p>
+    <p><strong>Entreprise :</strong> {{businessName}}</p>
+    <p><strong>Date (UTC) :</strong> {{acceptedAt}}</p>
+    <p><strong>Version du contrat :</strong> {{agreementVersion}}</p>
+    {{#signatureImageUrl}}
+    <p><strong>Signature :</strong></p>
+    <img src="{{signatureImageUrl}}" alt="Signature" style="max-height: 80px;" />
+    {{/signatureImageUrl}}
+  </div>
+</body>
+</html>

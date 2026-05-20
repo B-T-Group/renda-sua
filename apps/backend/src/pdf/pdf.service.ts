@@ -4,6 +4,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as Mustache from 'mustache';
 import * as path from 'path';
+import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
@@ -364,6 +365,71 @@ export class PdfService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  async generateMerchantAgreementPdf(params: {
+    locale: string;
+    businessName: string;
+    signerLegalName: string;
+    signerEmail: string;
+    agreementVersion: string;
+    acceptedAt: string;
+    signatureBase64?: string;
+  }): Promise<{ id: string }> {
+    const lang = params.locale?.startsWith('fr') ? 'fr' : 'en';
+    const templatePath = path.join(
+      __dirname,
+      '..',
+      'agreements',
+      `merchant-agreement-v1.${lang}.html`
+    );
+    const template = fs.readFileSync(templatePath, 'utf8');
+    let signatureImageUrl: string | undefined;
+    if (params.signatureBase64?.trim()) {
+      const raw = params.signatureBase64.trim();
+      signatureImageUrl = raw.startsWith('data:')
+        ? raw
+        : `data:image/png;base64,${raw}`;
+    }
+    const html = Mustache.render(template, {
+      ...params,
+      agreementVersion: params.agreementVersion || MERCHANT_AGREEMENT_VERSION,
+      signatureImageUrl,
+    });
+    const pdfBuffer = await this.convertHtmlToPdf(html);
+    const docTypeId = await this.getDocumentTypeId('rendasua_contract_agreement');
+    const fileName = `merchant-agreement-${Date.now()}.pdf`;
+    const uploadResult = await this.uploadService.generateUploadUrl({
+      document_type_id: docTypeId,
+      file_name: fileName,
+      content_type: 'application/pdf',
+      file_size: pdfBuffer.length,
+      note: `Merchant agreement ${params.agreementVersion}`,
+    });
+    await axios.put(uploadResult.presigned_url, pdfBuffer, {
+      headers: { 'Content-Type': 'application/pdf' },
+      timeout: 30000,
+    });
+    return { id: uploadResult.upload_record.id };
+  }
+
+  private async getDocumentTypeId(name: string): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      document_types: Array<{ id: number }>;
+    }>(
+      `query DocType($name: String!) {
+        document_types(where: { name: { _eq: $name } }, limit: 1) { id }
+      }`,
+      { name }
+    );
+    const id = result.document_types?.[0]?.id;
+    if (!id) {
+      throw new HttpException(
+        `Document type ${name} not found`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return id;
   }
 
   /**

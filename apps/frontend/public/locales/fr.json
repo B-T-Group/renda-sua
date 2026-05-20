@@ -293,7 +293,21 @@
       }
     },
     "businesses": {
-      "imageCleanupEnabled": "Nettoyage d'image activé"
+      "imageCleanupEnabled": "Nettoyage d'image activé",
+      "verification": "Vérification",
+      "verificationTitle": "Vérification entreprise",
+      "noAgreement": "Aucun contrat marchand enregistré. Demandez à l'entreprise de signer le contrat dans l'application.",
+      "merchantAgreement": "Contrat marchand",
+      "signerName": "Signataire",
+      "viewAgreementPdf": "Voir le PDF signé",
+      "noIdDocument": "Aucune pièce d'identité téléversée. Demandez à l'entreprise de téléverser une pièce dans Documents.",
+      "idDocuments": "Pièces d'identité",
+      "nameMatchConfirm": "Le nom légal sur la pièce correspond au nom du propriétaire du compte",
+      "setAsVerified": "Marquer comme vérifié",
+      "flags": {
+        "verified": "Vérifié",
+        "verifiedHelp": "Les entreprises vérifiées peuvent avoir des articles visibles publiquement."
+      }
     },
     "rentalListingModeration": {
       "pageTitle": "Modération des annonces de location",
@@ -836,6 +850,26 @@
       "updated": "Mis à jour",
       "upload": "Téléverser",
       "uploading": "Téléversement en cours..."
+    },
+    "verification": {
+      "noticeTitle": "Vérification du compte requise",
+      "notice": "Votre compte entreprise doit être vérifié avant que vos articles soient visibles par les clients. Complétez les étapes ci-dessous.",
+      "stepAgreement": "Contrat",
+      "stepIdentity": "Pièce d'identité",
+      "stepReview": "Examen",
+      "signAgreement": "Signer le contrat marchand",
+      "uploadId": "Téléverser une pièce d'identité",
+      "pendingReview": "Documents soumis. Le siège Rendasua examinera votre compte sous peu.",
+      "idUploadHint": "Téléversez une carte d'identité, un passeport ou un permis de conduire. Le nom doit correspondre à : {{fullName}}",
+      "agreementTitle": "Contrat marchand",
+      "legalName": "Nom légal complet",
+      "acceptTerms": "J'ai lu et j'accepte le contrat marchand",
+      "submit": "Accepter et signer",
+      "submitting": "Envoi en cours…",
+      "successTitle": "Contrat signé",
+      "successBody": "Téléversez votre pièce d'identité dans Documents pour poursuivre la vérification.",
+      "goToDocuments": "Aller aux Documents",
+      "loadError": "Impossible de charger le contrat. Veuillez réessayer."
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",

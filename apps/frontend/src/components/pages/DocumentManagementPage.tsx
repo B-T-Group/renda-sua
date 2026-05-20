@@ -20,6 +20,8 @@ import {
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
+import { useBusinessVerification } from '../../hooks/useBusinessVerification';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   useDocumentManagement,
   UserDocument,
@@ -51,6 +53,9 @@ function TabPanel(props: TabPanelProps) {
 
 export const DocumentManagementPage: React.FC = () => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
+  const isBusiness = !!profile?.business;
+  const { status: verificationStatus } = useBusinessVerification(isBusiness);
   const [tabValue, setTabValue] = useState(0);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
@@ -186,7 +191,12 @@ export const DocumentManagementPage: React.FC = () => {
   ];
 
   const hasDocuments = documents.length > 0;
-  const hasDocumentTypes = documentTypes.length > 0;
+  const uploadDocumentTypes = isBusiness
+    ? documentTypes.filter((dt) => dt.name !== 'rendasua_contract_agreement')
+    : documentTypes;
+  const hasDocumentTypes = uploadDocumentTypes.length > 0;
+  const needsIdUpload =
+    isBusiness && verificationStatus?.nextAction === 'upload_id';
 
   return (
     <Container
@@ -240,6 +250,16 @@ export const DocumentManagementPage: React.FC = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
+        </Alert>
+      )}
+
+      {needsIdUpload && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t(
+            'business.verification.idUploadHint',
+            'Upload a national ID, passport, or driver\'s license. The name on the document must match: {{fullName}}',
+            { fullName: verificationStatus?.accountFullName ?? '' }
+          )}
         </Alert>
       )}
 
@@ -301,7 +321,7 @@ export const DocumentManagementPage: React.FC = () => {
           <TabPanel key={tab.value} value={tabValue} index={tab.value}>
             <DocumentList
               documents={tab.documents}
-              documentTypes={documentTypes}
+              documentTypes={uploadDocumentTypes}
               loading={loading}
               error={error}
               onDelete={handleDelete}
@@ -346,7 +366,7 @@ export const DocumentManagementPage: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <DocumentUpload
-            documentTypes={documentTypes}
+            documentTypes={uploadDocumentTypes}
             onUploadSuccess={handleUploadSuccess}
             onUploadError={handleUploadError}
           />

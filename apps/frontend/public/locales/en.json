@@ -293,7 +293,21 @@
       }
     },
     "businesses": {
-      "imageCleanupEnabled": "Image cleanup enabled"
+      "imageCleanupEnabled": "Image cleanup enabled",
+      "verification": "Verification",
+      "verificationTitle": "Business verification",
+      "noAgreement": "No merchant agreement on file. Ask the business to sign the agreement in the app.",
+      "merchantAgreement": "Merchant agreement",
+      "signerName": "Signer",
+      "viewAgreementPdf": "View signed PDF",
+      "noIdDocument": "No ID document uploaded. Ask the business to upload ID from Documents.",
+      "idDocuments": "Identity documents",
+      "nameMatchConfirm": "Legal name on ID matches account owner name",
+      "setAsVerified": "Set as verified",
+      "flags": {
+        "verified": "Verified",
+        "verifiedHelp": "Verified businesses can have catalog items visible publicly."
+      }
     },
     "rentalListingModeration": {
       "pageTitle": "Rental listing moderation",
@@ -847,6 +861,26 @@
       "updated": "Updated",
       "upload": "Upload",
       "uploading": "Uploading..."
+    },
+    "verification": {
+      "noticeTitle": "Account verification required",
+      "notice": "Your business account must be verified before your items are visible to customers. Complete the steps below.",
+      "stepAgreement": "Agreement",
+      "stepIdentity": "ID document",
+      "stepReview": "Review",
+      "signAgreement": "Sign merchant agreement",
+      "uploadId": "Upload identification",
+      "pendingReview": "Documents submitted. Rendasua head office will review your account shortly.",
+      "idUploadHint": "Upload a national ID, passport, or driver's license. The name on the document must match: {{fullName}}",
+      "agreementTitle": "Merchant agreement",
+      "legalName": "Full legal name",
+      "acceptTerms": "I have read and accept the merchant agreement",
+      "submit": "Accept and sign",
+      "submitting": "Submitting…",
+      "successTitle": "Agreement signed",
+      "successBody": "Upload your government ID in Documents to continue verification.",
+      "goToDocuments": "Go to Documents",
+      "loadError": "Could not load the agreement. Please try again."
     },
     "dashboard": {
       "welcome": "Welcome to your business dashboard",

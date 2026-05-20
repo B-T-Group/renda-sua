@@ -1,0 +1,1 @@
+export const MERCHANT_AGREEMENT_VERSION = '2026-05-1';

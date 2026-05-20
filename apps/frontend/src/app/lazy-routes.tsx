@@ -130,6 +130,11 @@ export const FirstRentalItemOnboardingPage = lazy(() =>
 export const AddSaleItemFromImagePage = lazy(() =>
   import('../components/pages/AddSaleItemFromImagePage')
 );
+export const BusinessMerchantAgreementPage = lazy(() =>
+  import('../components/pages/BusinessMerchantAgreementPage').then((m) => ({
+    default: m.BusinessMerchantAgreementPage,
+  }))
+);
 export const FirstSaleItemOnboardingPage = lazy(() =>
   import('../components/pages/FirstSaleItemOnboardingPage')
 );
