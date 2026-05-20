@@ -294,6 +294,13 @@
     },
     "businesses": {
       "imageCleanupEnabled": "Nettoyage d'image activé",
+      "imageCleanupEnabledHelp": "Supprime automatiquement les images inutilisées pour économiser l'espace de stockage.",
+      "withdrawalPinEnabled": "Exiger un code PIN de retrait",
+      "withdrawalPinEnabledHelp": "Lorsque cette option est activée, les retraits nécessitent un code PIN à 4 chiffres.",
+      "changeWithdrawalPin": "Modifier le code PIN",
+      "clearWithdrawalPin": "Supprimer le code PIN",
+      "editTitle": "Modifier l'entreprise",
+      "unnamed": "Entreprise",
       "verification": "Vérification",
       "verificationTitle": "Vérification entreprise",
       "noAgreement": "Aucun contrat marchand enregistré. Demandez à l'entreprise de signer le contrat dans l'application.",
@@ -304,9 +311,29 @@
       "idDocuments": "Pièces d'identité",
       "nameMatchConfirm": "Le nom légal sur la pièce correspond au nom du propriétaire du compte",
       "setAsVerified": "Marquer comme vérifié",
+      "section": {
+        "business": "Entreprise",
+        "settings": "Paramètres",
+        "owner": "Propriétaire"
+      },
+      "fields": {
+        "name": "Nom de l'entreprise",
+        "ownerFirstName": "Prénom du propriétaire",
+        "ownerLastName": "Nom du propriétaire",
+        "ownerPhone": "Téléphone du propriétaire"
+      },
       "flags": {
         "verified": "Vérifié",
-        "verifiedHelp": "Les entreprises vérifiées peuvent avoir des articles visibles publiquement."
+        "verifiedHelp": "Les entreprises vérifiées peuvent avoir des articles visibles publiquement.",
+        "admin": "Administrateur",
+        "adminHelp": "Marque l'entreprise comme un compte entreprise administrateur."
+      },
+      "withdrawalPinDialog": {
+        "title": "Définir le code PIN de retrait",
+        "body": "Saisissez un code PIN à 4 chiffres. Les retraits de l'entreprise nécessiteront ce code PIN.",
+        "pinLabel": "Code PIN (4 chiffres)",
+        "setPin": "Définir le code PIN",
+        "enterPin": "Saisissez un code PIN à 4 chiffres"
       }
     },
     "rentalListingModeration": {
@@ -479,6 +506,7 @@
       "presignedUrlNote": "Voir et Télécharger demandent une URL présignée temporaire au serveur.",
       "reject": "Rejeter",
       "rejectDocument": "Rejeter le document",
+      "rejectMessage": "Message à l'utilisateur",
       "rejectMessageHelp": "Le message sera enregistré dans la note du document et visible par l'utilisateur.",
       "rejectionMessage": "Message de rejet",
       "rejectionNote": "Note de rejet (visible par l'utilisateur) :",

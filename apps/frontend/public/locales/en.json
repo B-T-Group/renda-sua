@@ -294,6 +294,13 @@
     },
     "businesses": {
       "imageCleanupEnabled": "Image cleanup enabled",
+      "imageCleanupEnabledHelp": "Automatically removes unused images to save storage.",
+      "withdrawalPinEnabled": "Require withdrawal PIN",
+      "withdrawalPinEnabledHelp": "When enabled, withdrawals require a 4-digit PIN.",
+      "changeWithdrawalPin": "Change PIN",
+      "clearWithdrawalPin": "Clear PIN",
+      "editTitle": "Edit business",
+      "unnamed": "Business",
       "verification": "Verification",
       "verificationTitle": "Business verification",
       "noAgreement": "No merchant agreement on file. Ask the business to sign the agreement in the app.",
@@ -304,9 +311,29 @@
       "idDocuments": "Identity documents",
       "nameMatchConfirm": "Legal name on ID matches account owner name",
       "setAsVerified": "Set as verified",
+      "section": {
+        "business": "Business",
+        "settings": "Settings",
+        "owner": "Owner"
+      },
+      "fields": {
+        "name": "Business name",
+        "ownerFirstName": "Owner first name",
+        "ownerLastName": "Owner last name",
+        "ownerPhone": "Owner phone"
+      },
       "flags": {
         "verified": "Verified",
-        "verifiedHelp": "Verified businesses can have catalog items visible publicly."
+        "verifiedHelp": "Verified businesses can have catalog items visible publicly.",
+        "admin": "Admin",
+        "adminHelp": "Marks the business as an admin business account."
+      },
+      "withdrawalPinDialog": {
+        "title": "Set withdrawal PIN",
+        "body": "Enter a 4-digit PIN. Business withdrawals will require this PIN.",
+        "pinLabel": "PIN (4 digits)",
+        "setPin": "Set PIN",
+        "enterPin": "Enter a 4-digit PIN"
       }
     },
     "rentalListingModeration": {
@@ -479,6 +506,7 @@
       "presignedUrlNote": "View and Download request a temporary presigned URL from the server.",
       "reject": "Reject",
       "rejectDocument": "Reject document",
+      "rejectMessage": "Message to user",
       "rejectMessageHelp": "The message will be saved to the document note and visible to the user.",
       "rejectionMessage": "Rejection message",
       "rejectionNote": "Rejection note (visible to user):",
