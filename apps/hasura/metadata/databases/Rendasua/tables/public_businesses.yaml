@@ -69,6 +69,13 @@ array_relationships:
         remote_table:
           name: rental_item_images
           schema: public
+  - name: merchant_agreement_acceptances
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_merchant_agreement_acceptances
+          schema: public
 insert_permissions:
   - role: agent
     permission:
@@ -142,6 +149,8 @@ select_permissions:
         - is_admin
         - is_verified
         - image_cleanup_enabled
+        - merchant_agreement_version
+        - merchant_agreement_accepted_at
       filter: {}
   - role: business
     permission:
@@ -155,6 +164,8 @@ select_permissions:
         - is_admin
         - is_verified
         - image_cleanup_enabled
+        - merchant_agreement_version
+        - merchant_agreement_accepted_at
       filter: {}
   - role: client
     permission:

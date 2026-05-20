@@ -1,0 +1,26 @@
+table:
+  name: business_merchant_agreement_acceptances
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: pdf_upload
+    using:
+      foreign_key_constraint_on: pdf_upload_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - agreement_version
+        - signer_legal_name
+        - signer_email
+        - business_name
+        - accepted_at
+        - pdf_upload_id
+      filter:
+        business:
+          user_id:
+            _eq: X-Hasura-User-Id
