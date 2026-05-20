@@ -540,8 +540,23 @@ export class AddressesService {
   }
 
   /**
+   * Primary business location name at signup, e.g. "Space Inc - Montreal".
+   */
+  private buildInitialBusinessLocationName(
+    businessName: string | null | undefined,
+    city: string
+  ): string {
+    const name = businessName?.trim();
+    const cityTrimmed = city.trim();
+    if (name && cityTrimmed) {
+      return `${name} - ${cityTrimmed}`;
+    }
+    return name || cityTrimmed || 'HQ';
+  }
+
+  /**
    * Create address at signup and link to client, agent, or business.
-   * For business: inserts both business_addresses and business_locations (HQ).
+   * For business: inserts both business_addresses and the primary business_locations row.
    * No geocoding; postal_code defaults to empty string.
    */
   async createAddressForSignup(
@@ -641,10 +656,15 @@ export class AddressesService {
         }`,
         { businessId: entityId, addressId: address.id }
       );
+      const business = await this.hasuraSystemService.getBusiness(entityId);
+      const locationName = this.buildInitialBusinessLocationName(
+        business?.name,
+        addressData.city
+      );
       const locationResult = await this.hasuraSystemService.executeMutation<{
         insert_business_locations_one: { id: string };
       }>(
-        `mutation CreateBusinessLocationHQ($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
+        `mutation CreateBusinessLocationInitial($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
           insert_business_locations_one(object: {
             business_id: $businessId,
             address_id: $addressId,
@@ -656,7 +676,7 @@ export class AddressesService {
         {
           businessId: entityId,
           addressId: address.id,
-          name: 'HQ',
+          name: locationName,
           locationType: 'office',
           isPrimary: true,
         }
