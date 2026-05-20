@@ -193,54 +193,6 @@ export const useItems = (
   );
   const { fetchDistanceMatrix } = useDistanceMatrix();
 
-  // Create item mutation
-  const createItemMutation = `
-    mutation CreateItem($itemData: items_insert_input!) {
-      insert_items_one(object: $itemData) {
-        id
-        name
-        description
-        item_sub_category_id
-        pay_on_delivery_enabled
-        pay_at_pickup_enabled
-        weight
-        weight_unit
-        dimensions
-        price
-        currency
-        sku
-        brand_id
-        model
-        color
-        is_fragile
-        is_perishable
-        requires_special_handling
-        max_delivery_distance
-        estimated_delivery_time
-        min_order_quantity
-        max_order_quantity
-        is_active
-        business_id
-        created_at
-        updated_at
-        brand {
-          id
-          name
-          description
-        }
-        item_sub_category {
-          id
-          name
-          item_category {
-            id
-            name
-          }
-        }
-      }
-    }
-  `;
-  const { execute: executeCreateItem } = useGraphQLRequest(createItemMutation);
-
   // Create brand mutation
   const createBrandMutation = `
     mutation CreateBrand($brandData: brands_insert_input!) {
@@ -377,24 +329,26 @@ export const useItems = (
 
   const createItem = useCallback(
     async (itemData: CreateItemData) => {
-      // Ensure business_id is provided
       if (!itemData.business_id) {
         throw new Error('business_id is required for creating items');
       }
 
       try {
-        const result = await executeCreateItem({ itemData });
+        const { business_id: _businessId, ...body } = itemData;
+        const response = await apiClient.post<{
+          success: boolean;
+          data: { item: Item };
+        }>('/business-items/items', body);
 
-        // Refresh items after creating
+        const created = response.data?.data?.item;
         await fetchItems();
-
-        return result.insert_items_one;
+        return created;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create item');
         throw err;
       }
     },
-    [executeCreateItem, fetchItems]
+    [apiClient, fetchItems]
   );
 
   const createBrand = useCallback(

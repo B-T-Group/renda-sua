@@ -302,32 +302,3 @@ update_permissions:
             id:
               _eq: X-Hasura-User-Id
       check: null
-event_triggers:
-  - name: sync_item_embeddings_on_insert
-    definition:
-      enable_manual: false
-      insert:
-        columns: '*'
-    retry_conf:
-      interval_sec: 15
-      num_retries: 2
-      timeout_sec: 120
-    webhook: http://host.docker.internal:3000/api/internal/items/embeddings/sync
-    headers:
-      - name: x-internal-api-key
-        value_from_env: NOTIFICATIONS_INTERNAL_API_KEY
-  - name: sync_item_embeddings_on_update
-    definition:
-      enable_manual: false
-      update:
-        columns:
-          - name
-          - description
-    retry_conf:
-      interval_sec: 15
-      num_retries: 2
-      timeout_sec: 120
-    webhook: http://host.docker.internal:3000/api/internal/items/embeddings/sync
-    headers:
-      - name: x-internal-api-key
-        value_from_env: NOTIFICATIONS_INTERNAL_API_KEY

@@ -29,6 +29,7 @@ import { BusinessItemsService } from './business-items.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
+import { CreateItemDto } from '../items/dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -429,6 +430,24 @@ export class BusinessItemsController {
       body
     );
     return { success: true, data: result };
+  }
+
+  @Post('items')
+  @ApiOperation({ summary: 'Create a catalog item for the current business' })
+  @ApiResponse({ status: 201, description: 'Item created successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiBody({ type: CreateItemDto })
+  async createItem(@Body() body: CreateItemDto) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const item = await this.businessItemsService.createItem(businessId, body);
+    return { success: true, data: { item } };
   }
 
   @Patch('items/:itemId')

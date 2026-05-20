@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { AiService } from '../ai/ai.service';
-import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
+import { CreateItemDto } from '../items/dto/create-item.dto';
+import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
+import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 
 const GET_ITEMS = `
@@ -405,79 +407,6 @@ const GET_BUSINESS_INVENTORY = `
   }
 `;
 
-const INSERT_ITEM = `
-  mutation CreateItem($itemData: items_insert_input!) {
-    insert_items_one(object: $itemData) {
-      id
-      name
-      sku
-      pay_on_delivery_enabled
-      pay_at_pickup_enabled
-    }
-  }
-`;
-
-const UPDATE_ITEM = `
-  mutation UpdateItem($id: uuid!, $itemData: items_set_input!) {
-    update_items_by_pk(
-      pk_columns: { id: $id }
-      _set: $itemData
-    ) {
-      id
-      name
-      description
-      item_sub_category_id
-      pay_on_delivery_enabled
-      pay_at_pickup_enabled
-      weight
-      weight_unit
-      dimensions
-      price
-      currency
-      sku
-      brand_id
-      model
-      color
-      is_fragile
-      is_perishable
-      requires_special_handling
-      max_delivery_distance
-      estimated_delivery_time
-      min_order_quantity
-      max_order_quantity
-      is_active
-      business_id
-      created_at
-      updated_at
-      brand {
-        id
-        name
-        description
-      }
-      item_sub_category {
-        id
-        name
-        google_product_category
-        fb_product_category
-        google_product_category_row {
-          id
-          name_en
-          name_fr
-        }
-        fb_product_category_row {
-          id
-          name_en
-          name_fr
-        }
-        item_category {
-          id
-          name
-        }
-      }
-    }
-  }
-`;
-
 const INSERT_BUSINESS_INVENTORY = `
   mutation AddInventoryItem($itemData: business_inventory_insert_input!) {
     insert_business_inventory_one(object: $itemData) {
@@ -686,7 +615,7 @@ export class BusinessItemsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
     private readonly aiService: AiService,
-    private readonly itemEmbeddingService: ItemEmbeddingService
+    private readonly itemsService: ItemsService
   ) {}
 
   async getItems(businessId: string) {
@@ -1198,98 +1127,22 @@ export class BusinessItemsService {
     };
   }
 
+  async createItem(
+    businessId: string,
+    input: ItemsInsertInput | CreateItemDto
+  ): Promise<Record<string, unknown>> {
+    return this.itemsService.createItem(
+      businessId,
+      input as ItemsInsertInput
+    );
+  }
+
   async updateItem(
     businessId: string,
     itemId: string,
-    updates: {
-      name?: string;
-      description?: string;
-      item_sub_category_id?: number;
-      weight?: number | null;
-      weight_unit?: string | null;
-      dimensions?: string | null;
-      price?: number;
-      currency?: string;
-      sku?: string | null;
-      brand_id?: string | null;
-      model?: string | null;
-      color?: string | null;
-      is_fragile?: boolean;
-      is_perishable?: boolean;
-      requires_special_handling?: boolean;
-      max_delivery_distance?: number | null;
-      estimated_delivery_time?: number | null;
-      min_order_quantity?: number;
-      max_order_quantity?: number | null;
-      is_active?: boolean;
-      pay_on_delivery_enabled?: boolean;
-      pay_at_pickup_enabled?: boolean;
-    }
+    updates: UpdateItemDto
   ) {
-    const result = await this.hasuraUserService.executeQuery<{
-      items_by_pk: {
-        id: string;
-        business_id: string;
-        name: string;
-        description: string;
-      } | null;
-    }>(GET_ITEM_BY_ID, { itemId });
-    const item = result?.items_by_pk;
-
-    if (!item || item.business_id !== businessId) {
-      throw new HttpException(
-        { success: false, error: 'Item not found or not owned by business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
-    const itemData = {
-      ...updates,
-      ...(Object.prototype.hasOwnProperty.call(updates, 'description') &&
-      (updates.description === undefined || updates.description === null)
-        ? { description: '' }
-        : {}),
-    };
-
-    const mutationResult =
-      await this.hasuraUserService.executeMutation<{
-        update_items_by_pk: Record<string, unknown> | null;
-      }>(UPDATE_ITEM, {
-        id: itemId,
-        itemData,
-      });
-
-    const updated = mutationResult.update_items_by_pk;
-    const nextName =
-      typeof updates.name === 'string' ? updates.name : item.name;
-    const nextDesc =
-      typeof updates.description === 'string'
-        ? updates.description
-        : (item.description ?? '');
-    await this.refreshItemEmbeddings(itemId, nextName, nextDesc, {
-      previousName: item.name,
-      previousDescription: item.description ?? '',
-    });
-    return updated;
-  }
-
-  private async refreshItemEmbeddings(
-    itemId: string,
-    name: string,
-    description: string,
-    options?: { previousName?: string; previousDescription?: string }
-  ): Promise<void> {
-    try {
-      await this.itemEmbeddingService.syncItemEmbeddings(
-        itemId,
-        { name, description },
-        options
-      );
-    } catch (error: any) {
-      this.logger.warn(
-        `Item embeddings sync failed for ${itemId}: ${error?.message ?? error}`
-      );
-    }
+    return this.itemsService.updateItem(businessId, itemId, updates);
   }
 
   /**
@@ -1411,18 +1264,10 @@ export class BusinessItemsService {
             is_active: row.is_active,
             brand_id: row.brand_id,
           };
-          await this.hasuraUserService.executeMutation(UPDATE_ITEM, {
-            id: existingItem.id,
-            itemData,
-          });
-          await this.refreshItemEmbeddings(
+          await this.itemsService.updateItem(
+            businessId,
             existingItem.id,
-            row.name,
-            row.description ?? '',
-            {
-              previousName: existingItem.name,
-              previousDescription: existingItem.description ?? '',
-            }
+            itemData
           );
           this.logger.log(`CSV upload: updated item id=${existingItem.id} name="${row.name}"`);
           details.updated.push(`Item: ${row.name}`);
@@ -1466,19 +1311,14 @@ export class BusinessItemsService {
             is_active: row.is_active,
             brand_id: row.brand_id,
           };
-          const insertResult = await this.hasuraUserService.executeMutation<{
-            insert_items_one: { id: string };
-          }>(INSERT_ITEM, { itemData: insertData });
-          const newItem = insertResult?.insert_items_one;
-          if (!newItem?.id) {
+          const newItem = await this.itemsService.createItem(
+            businessId,
+            insertData as ItemsInsertInput
+          );
+          itemId = newItem.id as string;
+          if (!itemId) {
             throw new Error('Failed to create item');
           }
-          itemId = newItem.id;
-          await this.refreshItemEmbeddings(
-            itemId,
-            row.name,
-            row.description ?? ''
-          );
           this.logger.log(`CSV upload: inserted item id=${itemId} name="${row.name}"`);
           details.inserted.push(`Item: ${row.name}`);
           insertedCount++;
@@ -1680,11 +1520,12 @@ export class BusinessItemsService {
       is_active: false,
     };
 
-    const insertResult = await this.hasuraUserService.executeMutation<{
-      insert_items_one: { id: string; name: string; sku: string | null };
-    }>(INSERT_ITEM, { itemData: insertData });
-    const newItem = insertResult?.insert_items_one;
-    if (!newItem?.id) {
+    const newItem = await this.itemsService.createItem(
+      businessId,
+      insertData as ItemsInsertInput
+    );
+    const newItemId = newItem.id as string;
+    if (!newItemId) {
       throw new HttpException(
         { success: false, error: 'Failed to create item from image' },
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -1694,19 +1535,13 @@ export class BusinessItemsService {
     await this.businessImagesService.linkLibraryImageToNewItem(
       businessId,
       image.id,
-      newItem.id
-    );
-
-    await this.refreshItemEmbeddings(
-      newItem.id,
-      name,
-      generatedDescription
+      newItemId
     );
 
     return {
-      id: newItem.id,
-      name: newItem.name,
-      sku: newItem.sku,
+      id: newItemId,
+      name: (newItem.name as string) ?? name,
+      sku: (newItem.sku as string | null) ?? sku,
     };
   }
 
