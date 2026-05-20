@@ -2,6 +2,10 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
+import {
+  ItemEmbeddingService,
+  type ItemSimilarityMatch,
+} from '../embeddings/item-embedding.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import {
@@ -418,7 +422,8 @@ export class InventoryItemsService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly addressesService: AddressesService,
     private readonly googleDistanceService: GoogleDistanceService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly itemEmbeddingService: ItemEmbeddingService
   ) {}
 
   private async resolveInventoryListGeo(
@@ -449,10 +454,62 @@ export class InventoryItemsService {
     return { country_code, state, clientId };
   }
 
+  private async resolveSemanticSearch(
+    search: string
+  ): Promise<
+    | { empty: true }
+    | { itemIds: string[]; scores: Map<string, number> }
+  > {
+    const q = this.itemEmbeddingService.normalizeSearchQuery(search);
+    if (q.length < 2) {
+      return { empty: true };
+    }
+    try {
+      const queryVector = await this.itemEmbeddingService.embedSearchQuery(q);
+      const matches = await this.itemEmbeddingService.findSimilarItemIds(
+        queryVector,
+        this.itemEmbeddingService.getMinSimilarity(),
+        this.itemEmbeddingService.getMatchLimit()
+      );
+      const scores = new Map<string, number>();
+      for (const m of matches) {
+        scores.set(m.item_id, m.similarity);
+      }
+      let itemIds = matches.map((m: ItemSimilarityMatch) => m.item_id);
+      if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
+        const skuIds = await this.itemEmbeddingService.findItemIdsByExactSku(q);
+        for (const id of skuIds) {
+          if (!scores.has(id)) {
+            scores.set(id, 1);
+            itemIds.push(id);
+          }
+        }
+        itemIds = [...new Set(itemIds)];
+      }
+      if (itemIds.length === 0) {
+        return { empty: true };
+      }
+      return { itemIds, scores };
+    } catch (error: any) {
+      this.logger.error(
+        `Semantic search failed: ${error?.message ?? error}`,
+        error?.stack
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Search is temporarily unavailable',
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
+    }
+  }
+
   private async buildInventoryCatalogWhere(params: {
     is_active: boolean;
     include_unavailable: boolean;
-    search?: string;
+    searchItemIds?: string[];
+    searchSkuQuery?: string;
     category?: string;
     subcategory?: string;
     location_name?: string;
@@ -469,7 +526,8 @@ export class InventoryItemsService {
     const {
       is_active,
       include_unavailable,
-      search,
+      searchItemIds,
+      searchSkuQuery,
       category,
       subcategory,
       location_name,
@@ -499,20 +557,20 @@ export class InventoryItemsService {
         business_location_id: { _eq: business_location_id.trim() },
       });
     }
-    if (search) {
-      whereConditions.push({
-        _or: [
-          { item: { name: { _ilike: `%${search}%` } } },
-          { item: { description: { _ilike: `%${search}%` } } },
-          { item: { sku: { _ilike: `%${search}%` } } },
-          { item: { brand: { name: { _ilike: `%${search}%` } } } },
-          {
-            item: {
-              item_tags: { tag: { name: { _ilike: `%${search}%` } } },
-            },
-          },
-        ],
-      });
+    if (searchItemIds !== undefined) {
+      const orClause: Record<string, unknown>[] = [
+        { item: { id: { _in: searchItemIds } } },
+      ];
+      if (searchSkuQuery?.trim()) {
+        orClause.push({
+          item: { sku: { _ilike: searchSkuQuery.trim() } },
+        });
+      }
+      whereConditions.push(
+        searchItemIds.length === 0 && orClause.length === 1
+          ? { item: { id: { _in: [] as string[] } } }
+          : { _or: orClause }
+      );
     }
     if (category) {
       whereConditions.push({
@@ -838,10 +896,33 @@ export class InventoryItemsService {
     const { country_code, state, clientId } =
       await this.resolveInventoryListGeo(query);
 
+    let semanticScores: Map<string, number> | undefined;
+    let searchItemIds: string[] | undefined;
+    let searchSkuQuery: string | undefined;
+    if (search?.trim()) {
+      const semantic = await this.resolveSemanticSearch(search);
+      if ('empty' in semantic) {
+        return {
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+      semanticScores = semantic.scores;
+      searchItemIds = semantic.itemIds;
+      const q = this.itemEmbeddingService.normalizeSearchQuery(search);
+      if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
+        searchSkuQuery = q;
+      }
+    }
+
     const built = await this.buildInventoryCatalogWhere({
       is_active,
       include_unavailable,
-      search,
+      searchItemIds,
+      searchSkuQuery,
       category,
       subcategory,
       location_name,
@@ -931,12 +1012,15 @@ export class InventoryItemsService {
         clientId,
         relevanceSignals
       );
-      const sorted = await this.applySortByMode(
+      let sorted = await this.applySortByMode(
         winners,
         sort,
         clientId,
         relevanceSignals
       );
+      if (semanticScores?.size) {
+        sorted = this.applySemanticPrimarySort(sorted, semanticScores);
+      }
       const totalPages = Math.ceil(total / limit);
       const listOffset = (page - 1) * limit;
       const pageItems = sorted.slice(listOffset, listOffset + limit);
@@ -1085,12 +1169,21 @@ export class InventoryItemsService {
   }
 
   private normalizeSuggestionQuery(q: string): string {
-    return q
-      .trim()
-      .slice(0, 64)
-      .replace(/[%_]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return this.itemEmbeddingService.normalizeSearchQuery(q);
+  }
+
+  private applySemanticPrimarySort(
+    items: InventoryItem[],
+    scores: Map<string, number>
+  ): InventoryItem[] {
+    const indexed = items.map((item, order) => ({ item, order }));
+    indexed.sort((a, b) => {
+      const sa = scores.get(a.item.item_id) ?? 0;
+      const sb = scores.get(b.item.item_id) ?? 0;
+      if (sb !== sa) return sb - sa;
+      return a.order - b.order;
+    });
+    return indexed.map((x) => x.item);
   }
 
   private tryAddProductSuggestion(params: {
@@ -1193,15 +1286,26 @@ export class InventoryItemsService {
     const q = this.normalizeSuggestionQuery(query.q);
     if (q.length < 2) return [];
 
+    const semantic = await this.resolveSemanticSearch(q);
+    if ('empty' in semantic) {
+      return [{ kind: 'term', value: q }];
+    }
+
     const { country_code, state } = await this.resolveInventoryListGeo({
       country_code: query.country_code,
       state: query.state,
     });
 
+    let searchSkuQuery: string | undefined;
+    if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
+      searchSkuQuery = q;
+    }
+
     const built = await this.buildInventoryCatalogWhere({
       is_active: query.is_active !== undefined ? query.is_active : true,
       include_unavailable: query.include_unavailable ?? false,
-      search: q,
+      searchItemIds: semantic.itemIds,
+      searchSkuQuery,
       business_location_id: query.business_location_id,
       country_code,
       state,
@@ -1246,7 +1350,12 @@ export class InventoryItemsService {
       limit: 20,
     });
     const rows = result?.business_inventory ?? [];
-    return this.buildSuggestionsFromRows(rows, q);
+    const sortedRows = [...rows].sort((a: { item_id: string }, b: { item_id: string }) => {
+      const sa = semantic.scores.get(a.item_id) ?? 0;
+      const sb = semantic.scores.get(b.item_id) ?? 0;
+      return sb - sa;
+    });
+    return this.buildSuggestionsFromRows(sortedRows, q);
   }
 
   /**

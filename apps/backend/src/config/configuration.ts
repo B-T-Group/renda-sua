@@ -128,6 +128,14 @@ export interface OpenAIConfig {
   apiKey: string;
   /** Vision-capable chat model for `generateImageItemSuggestions` when `provider` is `openai` (e.g. `gpt-4o-mini`). */
   chatModel: string;
+  /** OpenAI embeddings model for catalog semantic search (default `text-embedding-3-small`). */
+  embeddingModel: string;
+}
+
+export interface InventorySearchConfig {
+  minSimilarity: number;
+  matchLimit: number;
+  queryCacheTtlMs: number;
 }
 
 export interface DeepseekConfig {
@@ -234,6 +242,7 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  inventorySearch: InventorySearchConfig;
   deepseek: DeepseekConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
@@ -436,6 +445,21 @@ export default (): Configuration => {
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
       chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
+      embeddingModel:
+        process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    },
+    inventorySearch: {
+      minSimilarity: parseFloat(
+        process.env.INVENTORY_SEARCH_MIN_SIMILARITY || '0.38'
+      ),
+      matchLimit: parseInt(
+        process.env.INVENTORY_SEARCH_MATCH_LIMIT || '500',
+        10
+      ),
+      queryCacheTtlMs: parseInt(
+        process.env.INVENTORY_SEARCH_QUERY_CACHE_TTL_MS || '300000',
+        10
+      ),
     },
     deepseek: {
       apiKey: process.env.DEEPSEEK_API_KEY || '',

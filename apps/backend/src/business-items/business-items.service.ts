@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { AiService } from '../ai/ai.service';
+import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
@@ -616,6 +617,8 @@ const GET_ITEM_BY_ID = `
     items_by_pk(id: $itemId) {
       id
       business_id
+      name
+      description
     }
   }
 `;
@@ -682,7 +685,8 @@ export class BusinessItemsService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
-    private readonly aiService: AiService
+    private readonly aiService: AiService,
+    private readonly itemEmbeddingService: ItemEmbeddingService
   ) {}
 
   async getItems(businessId: string) {
@@ -1223,7 +1227,12 @@ export class BusinessItemsService {
     }
   ) {
     const result = await this.hasuraUserService.executeQuery<{
-      items_by_pk: { id: string; business_id: string } | null;
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        name: string;
+        description: string;
+      } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
 
@@ -1250,7 +1259,37 @@ export class BusinessItemsService {
         itemData,
       });
 
-    return mutationResult.update_items_by_pk;
+    const updated = mutationResult.update_items_by_pk;
+    const nextName =
+      typeof updates.name === 'string' ? updates.name : item.name;
+    const nextDesc =
+      typeof updates.description === 'string'
+        ? updates.description
+        : (item.description ?? '');
+    await this.refreshItemEmbeddings(itemId, nextName, nextDesc, {
+      previousName: item.name,
+      previousDescription: item.description ?? '',
+    });
+    return updated;
+  }
+
+  private async refreshItemEmbeddings(
+    itemId: string,
+    name: string,
+    description: string,
+    options?: { previousName?: string; previousDescription?: string }
+  ): Promise<void> {
+    try {
+      await this.itemEmbeddingService.syncItemEmbeddings(
+        itemId,
+        { name, description },
+        options
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Item embeddings sync failed for ${itemId}: ${error?.message ?? error}`
+      );
+    }
   }
 
   /**
@@ -1376,6 +1415,15 @@ export class BusinessItemsService {
             id: existingItem.id,
             itemData,
           });
+          await this.refreshItemEmbeddings(
+            existingItem.id,
+            row.name,
+            row.description ?? '',
+            {
+              previousName: existingItem.name,
+              previousDescription: existingItem.description ?? '',
+            }
+          );
           this.logger.log(`CSV upload: updated item id=${existingItem.id} name="${row.name}"`);
           details.updated.push(`Item: ${row.name}`);
           updatedCount++;
@@ -1426,6 +1474,11 @@ export class BusinessItemsService {
             throw new Error('Failed to create item');
           }
           itemId = newItem.id;
+          await this.refreshItemEmbeddings(
+            itemId,
+            row.name,
+            row.description ?? ''
+          );
           this.logger.log(`CSV upload: inserted item id=${itemId} name="${row.name}"`);
           details.inserted.push(`Item: ${row.name}`);
           insertedCount++;
@@ -1642,6 +1695,12 @@ export class BusinessItemsService {
       businessId,
       image.id,
       newItem.id
+    );
+
+    await this.refreshItemEmbeddings(
+      newItem.id,
+      name,
+      generatedDescription
     );
 
     return {

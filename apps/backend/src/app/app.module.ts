@@ -21,6 +21,8 @@ import { BusinessVerificationModule } from '../business-verification/business-ve
 import { CategoriesModule } from '../categories/categories.module';
 import { CollectionsModule } from '../collections/collections.module';
 import configuration from '../config/configuration';
+import { DatabaseModule } from '../database/database.module';
+import { EmbeddingsModule } from '../embeddings/embeddings.module';
 import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { DeliveryModule } from '../delivery/delivery.module';
@@ -87,6 +89,8 @@ import { AppService } from './app.service';
     }),
     AnalyticsModule,
     AuthModule,
+    DatabaseModule,
+    EmbeddingsModule,
     HasuraModule,
     InventoryItemsModule,
     CollectionsModule,

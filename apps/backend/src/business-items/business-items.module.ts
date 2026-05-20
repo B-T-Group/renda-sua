@@ -4,9 +4,14 @@ import { BusinessItemsService } from './business-items.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { AiModule } from '../ai/ai.module';
+import { EmbeddingsModule } from '../embeddings/embeddings.module';
 
 @Module({
-  imports: [BusinessImagesModule, forwardRef(() => AiModule)],
+  imports: [
+    BusinessImagesModule,
+    forwardRef(() => AiModule),
+    EmbeddingsModule,
+  ],
   controllers: [BusinessItemsController],
   providers: [BusinessItemsService, ItemDealsService],
   exports: [BusinessItemsService, ItemDealsService],
