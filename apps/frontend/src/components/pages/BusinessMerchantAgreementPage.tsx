@@ -14,9 +14,13 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  merchantAgreementPreviewVars,
+  renderMerchantAgreementHtml,
+} from '../../utils/renderMerchantAgreementHtml';
 
 export const BusinessMerchantAgreementPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { profile } = useUserProfileContext();
@@ -37,20 +41,26 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   }, [defaultName, legalName]);
 
   const loadAgreement = useCallback(async () => {
-    if (!apiClient) return;
+    if (!apiClient || !profile) return;
     try {
       const res = await apiClient.get<{
         success: boolean;
-        data: { html: string; version: string };
+        data: { html: string; version: string; locale?: string };
       }>('/business-verification/merchant-agreement');
       if (res.data.success) {
-        setHtml(res.data.data.html);
-        setVersion(res.data.data.version);
+        const { html: raw, version: v, locale } = res.data.data;
+        setVersion(v);
+        const vars = merchantAgreementPreviewVars(
+          profile,
+          v,
+          locale ?? i18n.language ?? 'en'
+        );
+        setHtml(renderMerchantAgreementHtml(raw, vars));
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load agreement');
     }
-  }, [apiClient]);
+  }, [apiClient, profile, i18n.language]);
 
   useEffect(() => {
     void loadAgreement();

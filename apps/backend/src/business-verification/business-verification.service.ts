@@ -4,6 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import * as fs from 'fs';
+import Mustache from 'mustache';
 import * as path from 'path';
 import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -36,7 +37,14 @@ export class BusinessVerificationService {
   async getMerchantAgreementForUser() {
     const user = await this.requireBusinessUser();
     const lang = user.preferred_language?.startsWith('fr') ? 'fr' : 'en';
-    const html = this.loadAgreementTemplate(lang);
+    const html = this.renderAgreementTemplate(lang, {
+      businessName: user.business?.name ?? '',
+      signerLegalName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+      signerEmail: user.email ?? '',
+      acceptedAt:
+        lang === 'fr' ? 'À la signature électronique' : 'Upon electronic acceptance',
+      agreementVersion: MERCHANT_AGREEMENT_VERSION,
+    });
     return {
       version: MERCHANT_AGREEMENT_VERSION,
       locale: lang,
@@ -104,6 +112,21 @@ export class BusinessVerificationService {
       `merchant-agreement-v1.${lang}.html`
     );
     return fs.readFileSync(file, 'utf8');
+  }
+
+  private renderAgreementTemplate(
+    lang: 'en' | 'fr',
+    data: {
+      businessName: string;
+      signerLegalName: string;
+      signerEmail: string;
+      acceptedAt: string;
+      agreementVersion: string;
+      signatureImageUrl?: string;
+    }
+  ): string {
+    const template = this.loadAgreementTemplate(lang);
+    return Mustache.render(template, data);
   }
 
   private async buildStatus(businessId: string, user: any) {
