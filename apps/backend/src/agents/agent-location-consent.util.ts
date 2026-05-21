@@ -1,5 +1,20 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import type { AgentLocationTrackingConsent } from './dto/update-location-tracking-consent.dto';
+import {
+  AGENT_LOCATION_TRACKING_CONSENT_VALUES,
+  type AgentLocationTrackingConsent,
+} from './dto/update-location-tracking-consent.dto';
+
+export function normalizeAgentLocationTrackingConsent(
+  value: unknown
+): AgentLocationTrackingConsent {
+  if (
+    typeof value === 'string' &&
+    (AGENT_LOCATION_TRACKING_CONSENT_VALUES as readonly string[]).includes(value)
+  ) {
+    return value as AgentLocationTrackingConsent;
+  }
+  return 'not_shown';
+}
 
 const ALLOWED_TRANSITIONS: Record<
   AgentLocationTrackingConsent,

@@ -15,7 +15,13 @@ import {
   resolveActivePersonaWithDefault,
 } from '../users/persona.util';
 import type { PersonaId } from '../users/persona.types';
+import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
+import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
 import { HasuraSystemService } from './hasura-system.service';
+
+export type MeAgent = Agents & {
+  location_tracking_consent: AgentLocationTrackingConsent;
+};
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
 
@@ -733,7 +739,7 @@ export class HasuraUserService {
   async getUser(): Promise<
     Users & {
       client?: Clients;
-      agent?: Agents;
+      agent?: MeAgent;
       business?: Businesses;
       addresses?: Addresses[];
       personas?: PersonaId[];
@@ -762,14 +768,14 @@ export class HasuraUserService {
       // Build the user object with client/agent/business data
       const user: Users & {
         client?: Clients;
-        agent?: Agents;
+        agent?: MeAgent;
         business?: Businesses;
         addresses?: Addresses[];
         personas?: PersonaId[];
       } = {
         ...userData,
         client: userData.client || undefined,
-        agent: userData.agent || undefined,
+        agent: await this.resolveMeAgent(userData.id, userData.agent),
         business: userData.business || undefined,
         personas,
       };
@@ -806,6 +812,26 @@ export class HasuraUserService {
         `Failed to get user by id: ${error.message || 'Unknown error'}`
       );
     }
+  }
+
+  /** Ensures `/users/me` always exposes `agent.location_tracking_consent`. */
+  private async resolveMeAgent(
+    userId: string,
+    agent: Agents | null | undefined
+  ): Promise<MeAgent | undefined> {
+    if (!agent) {
+      return undefined;
+    }
+    let consent: unknown = (agent as MeAgent).location_tracking_consent;
+    if (consent == null) {
+      const full = await this.hasuraSystemService.getUserAgent(userId);
+      consent = (full as { location_tracking_consent?: unknown } | undefined)
+        ?.location_tracking_consent;
+    }
+    return {
+      ...agent,
+      location_tracking_consent: normalizeAgentLocationTrackingConsent(consent),
+    };
   }
 
   /**
