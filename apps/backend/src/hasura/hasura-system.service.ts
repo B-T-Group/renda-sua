@@ -24,9 +24,11 @@ import {
   GET_USER_ACCOUNT_BY_LOCATION,
   GET_USER_AGENT,
   GET_USER_BUSINESS,
+  GET_AGENT_LOCATION_CONSENT,
   GET_USER_BY_ID,
   GET_USER_BY_ID_WITH_RELATIONS,
   GET_USER_CLIENT,
+  UPDATE_AGENT_LOCATION_CONSENT,
 } from './hasura.queries';
 
 /** Row from account lookup queries; used for explicit location vs legacy matching. */
@@ -527,6 +529,26 @@ export class HasuraSystemService {
       }
     );
     return agentResult.agents[0];
+  }
+
+  async getAgentLocationConsent(agentId: string): Promise<string | null> {
+    const result = await this.executeQuery<{
+      agents_by_pk: { location_tracking_consent: string } | null;
+    }>(GET_AGENT_LOCATION_CONSENT, { id: agentId });
+    return result.agents_by_pk?.location_tracking_consent ?? null;
+  }
+
+  async updateAgentLocationConsent(
+    agentId: string,
+    consent: string
+  ): Promise<{ id: string; location_tracking_consent: string } | null> {
+    const result = await this.executeMutation<{
+      update_agents_by_pk: {
+        id: string;
+        location_tracking_consent: string;
+      } | null;
+    }>(UPDATE_AGENT_LOCATION_CONSENT, { id: agentId, consent });
+    return result.update_agents_by_pk;
   }
 
   /**

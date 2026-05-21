@@ -286,6 +286,29 @@ export const GET_BUSINESS_BY_ID = gql`
   }
 `;
 
+export const GET_AGENT_LOCATION_CONSENT = gql`
+  query GetAgentLocationConsent($id: uuid!) {
+    agents_by_pk(id: $id) {
+      location_tracking_consent
+    }
+  }
+`;
+
+export const UPDATE_AGENT_LOCATION_CONSENT = gql`
+  mutation UpdateAgentLocationConsent(
+    $id: uuid!
+    $consent: agent_location_tracking_consent!
+  ) {
+    update_agents_by_pk(
+      pk_columns: { id: $id }
+      _set: { location_tracking_consent: $consent, updated_at: "now()" }
+    ) {
+      id
+      location_tracking_consent
+    }
+  }
+`;
+
 // Query for getting agent by ID
 export const GET_AGENT_BY_ID = gql`
   query GetAgentById($id: uuid!) {

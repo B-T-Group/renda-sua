@@ -196,6 +196,7 @@ update_permissions:
         - is_verified
         - onboarding_complete
         - auto_withdraw_commissions
+        - location_tracking_consent
       filter:
         user:
           id:

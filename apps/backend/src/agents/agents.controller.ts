@@ -888,53 +888,25 @@ export class AgentsController {
   private async getAgentLocationConsent(
     agentId: string
   ): Promise<AgentLocationTrackingConsent> {
-    const query = `
-      query AgentLocationConsent($id: uuid!) {
-        agents_by_pk(id: $id) {
-          location_tracking_consent
-        }
-      }
-    `;
-    const result = await this.hasuraUserService.executeQuery<{
-      agents_by_pk: { location_tracking_consent: AgentLocationTrackingConsent } | null;
-    }>(query, { id: agentId });
-    const consent = result.agents_by_pk?.location_tracking_consent;
-    if (!consent) {
-      return 'not_shown';
-    }
-    return consent;
+    const consent =
+      await this.hasuraSystemService.getAgentLocationConsent(agentId);
+    return (consent as AgentLocationTrackingConsent) ?? 'not_shown';
   }
 
   private async patchAgentLocationConsent(
     agentId: string,
     consent: AgentLocationTrackingConsent
   ) {
-    const mutation = `
-      mutation SetAgentLocationConsent($id: uuid!, $consent: agent_location_tracking_consent!) {
-        update_agents_by_pk(
-          pk_columns: { id: $id }
-          _set: {
-            location_tracking_consent: $consent
-            updated_at: "now()"
-          }
-        ) {
-          id
-          location_tracking_consent
-        }
-      }
-    `;
-    const result = await this.hasuraUserService.executeMutation<{
-      update_agents_by_pk: {
-        id: string;
-        location_tracking_consent: AgentLocationTrackingConsent;
-      } | null;
-    }>(mutation, { id: agentId, consent });
-    if (!result.update_agents_by_pk) {
+    const agent = await this.hasuraSystemService.updateAgentLocationConsent(
+      agentId,
+      consent
+    );
+    if (!agent) {
       throw new HttpException(
         { success: false, error: 'Agent not found or could not be updated' },
         HttpStatus.NOT_FOUND
       );
     }
-    return result.update_agents_by_pk;
+    return agent;
   }
 }
