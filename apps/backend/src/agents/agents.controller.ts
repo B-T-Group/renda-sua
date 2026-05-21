@@ -22,6 +22,11 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
 import { AgentReferralsService } from './agent-referrals.service';
+import { assertLocationConsentTransition } from './agent-location-consent.util';
+import {
+  type AgentLocationTrackingConsent,
+  UpdateLocationTrackingConsentDto,
+} from './dto/update-location-tracking-consent.dto';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -817,5 +822,119 @@ export class AgentsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Patch('me/location-tracking-consent')
+  @ApiOperation({
+    summary: 'Update agent location tracking disclosure consent',
+  })
+  @ApiBody({ type: UpdateLocationTrackingConsentDto })
+  @ApiResponse({ status: 200, description: 'Consent updated' })
+  @ApiResponse({ status: 400, description: 'Invalid transition' })
+  @ApiResponse({ status: 403, description: 'Not an agent' })
+  async updateLocationTrackingConsent(
+    @Body() body: UpdateLocationTrackingConsentDto
+  ) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+      const current = await this.getAgentLocationConsent(agentId);
+      assertLocationConsentTransition(current, body.consent);
+      const agent = await this.patchAgentLocationConsent(agentId, body.consent);
+      return { success: true, agent };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update location tracking consent',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('me/location-tracking-consent/reset-disclosure')
+  @ApiOperation({
+    summary: 'Reset location disclosure so the agent can go through the flow again',
+  })
+  @ApiResponse({ status: 200, description: 'Reset to not_shown' })
+  @ApiResponse({ status: 400, description: 'Invalid transition' })
+  @ApiResponse({ status: 403, description: 'Not an agent' })
+  async resetLocationTrackingDisclosure() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+      const current = await this.getAgentLocationConsent(agentId);
+      assertLocationConsentTransition(current, 'not_shown');
+      const agent = await this.patchAgentLocationConsent(agentId, 'not_shown');
+      return { success: true, agent };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to reset location tracking consent',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  private async getAgentLocationConsent(
+    agentId: string
+  ): Promise<AgentLocationTrackingConsent> {
+    const query = `
+      query AgentLocationConsent($id: uuid!) {
+        agents_by_pk(id: $id) {
+          location_tracking_consent
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeQuery<{
+      agents_by_pk: { location_tracking_consent: AgentLocationTrackingConsent } | null;
+    }>(query, { id: agentId });
+    const consent = result.agents_by_pk?.location_tracking_consent;
+    if (!consent) {
+      return 'not_shown';
+    }
+    return consent;
+  }
+
+  private async patchAgentLocationConsent(
+    agentId: string,
+    consent: AgentLocationTrackingConsent
+  ) {
+    const mutation = `
+      mutation SetAgentLocationConsent($id: uuid!, $consent: agent_location_tracking_consent!) {
+        update_agents_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            location_tracking_consent: $consent
+            updated_at: "now()"
+          }
+        ) {
+          id
+          location_tracking_consent
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeMutation<{
+      update_agents_by_pk: {
+        id: string;
+        location_tracking_consent: AgentLocationTrackingConsent;
+      } | null;
+    }>(mutation, { id: agentId, consent });
+    if (!result.update_agents_by_pk) {
+      throw new HttpException(
+        { success: false, error: 'Agent not found or could not be updated' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return result.update_agents_by_pk;
   }
 }

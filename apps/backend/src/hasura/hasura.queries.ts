@@ -32,6 +32,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         onboarding_complete
         status
         agent_code
+        location_tracking_consent
         created_at
         updated_at
       }
@@ -240,6 +241,7 @@ export const GET_USER_AGENT = gql`
       is_verified
       onboarding_complete
       agent_code
+      location_tracking_consent
       agent_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
@@ -294,6 +296,7 @@ export const GET_AGENT_BY_ID = gql`
       is_verified
       onboarding_complete
       agent_code
+      location_tracking_consent
     }
   }
 `;
