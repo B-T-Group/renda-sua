@@ -322,8 +322,7 @@ export default (): Configuration => {
     },
     database: {
       url:
-        process.env.DATABASE_URL ||
-        'postgresql://username:password@localhost:5432/rendasua',
+        process.env.DATABASE_URL || 'postgresql://username:password@localhost:5432/rendasua',
     },
     hasura: {
       endpoint:

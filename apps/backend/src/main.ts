@@ -57,7 +57,7 @@ async function loadSecrets() {
 
     // Inject into process.env
     for (const [key, value] of Object.entries(secrets)) {
-      if (!process.env[key] || key === 'HASURA_GRAPHQL_ADMIN_SECRET' || key === 'GOOGLE_MAPS_API_KEY') {
+      if (!process.env[key] || key === 'HASURA_GRAPHQL_ADMIN_SECRET' || key === 'GOOGLE_MAPS_API_KEY' || key === 'DATABASE_URL') {
         process.env[key] = String(value);
       }
     }
