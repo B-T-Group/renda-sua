@@ -822,7 +822,7 @@ export class LocationsController {
     agentId: string
   ): Promise<boolean> {
     const consent =
-      await this.hasuraSystemService.getAgentLocationConsent(agentId);
+      await this.hasuraService.getAgentLocationConsent(agentId);
     return hasAcceptedAgentLocationTrackingConsent(consent);
   }
 
