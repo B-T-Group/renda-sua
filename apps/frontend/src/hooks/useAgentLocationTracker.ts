@@ -17,6 +17,10 @@ import {
     registerBackgroundSync,
     storeLastLocation,
 } from '../utils/backgroundLocationSync';
+import {
+  hasAcceptedBackgroundLocationTrackingConsent,
+  hasAcceptedLocationTrackingConsent,
+} from '../types/agentLocationConsent';
 import { useApiClient } from './useApiClient';
 
 // Default update interval: 20 minutes (1200000 ms)
@@ -111,6 +115,14 @@ export const useAgentLocationTracker = (
 
   // Check if user is an agent
   const isAgent = userType === 'agent' && !!profile?.agent;
+  const locationTrackingConsent = profile?.agent?.location_tracking_consent;
+  const hasLocationTrackingConsent = hasAcceptedLocationTrackingConsent(
+    locationTrackingConsent
+  );
+  const hasBackgroundLocationTrackingConsent =
+    hasAcceptedBackgroundLocationTrackingConsent(locationTrackingConsent);
+  const shouldUseBackgroundSync =
+    enableBackgroundSync && hasBackgroundLocationTrackingConsent;
 
   /**
    * Get current location coordinates (no geocoding)
@@ -149,6 +161,11 @@ export const useAgentLocationTracker = (
    */
   const updateLocation = useCallback(async () => {
     if (!isAgent || !profile?.agent) {
+      return;
+    }
+
+    if (!hasLocationTrackingConsent) {
+      clearLastLocation();
       return;
     }
 
@@ -195,7 +212,7 @@ export const useAgentLocationTracker = (
       };
 
       // If background sync is enabled and supported, store the location
-      if (enableBackgroundSync && isBackgroundSyncSupported()) {
+      if (shouldUseBackgroundSync && isBackgroundSyncSupported()) {
         await storeLastLocation(coordinates.latitude, coordinates.longitude);
 
         // Also try to register background sync
@@ -229,7 +246,8 @@ export const useAgentLocationTracker = (
     profile,
     getCurrentCoordinates,
     apiClient,
-    enableBackgroundSync,
+    hasLocationTrackingConsent,
+    shouldUseBackgroundSync,
     minDistanceChange,
   ]);
 
@@ -237,7 +255,7 @@ export const useAgentLocationTracker = (
    * Start tracking
    */
   const startTracking = useCallback(() => {
-    if (!isAgent || !isAuthenticated) {
+    if (!isAgent || !isAuthenticated || !hasLocationTrackingConsent) {
       return;
     }
 
@@ -249,8 +267,12 @@ export const useAgentLocationTracker = (
 
     console.log('Starting agent location tracking');
 
-    // Register service worker if background sync is enabled
-    if (enableBackgroundSync && 'serviceWorker' in navigator) {
+    if (!shouldUseBackgroundSync) {
+      clearLastLocation();
+    }
+
+    // Register service worker only when background consent is accepted
+    if (shouldUseBackgroundSync && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/service-worker.js')
         .then((registration) => {
@@ -276,9 +298,10 @@ export const useAgentLocationTracker = (
   }, [
     isAgent,
     isAuthenticated,
+    hasLocationTrackingConsent,
     updateLocation,
     effectiveInterval,
-    enableBackgroundSync,
+    shouldUseBackgroundSync,
   ]);
 
   /**
@@ -298,9 +321,17 @@ export const useAgentLocationTracker = (
   // Auto-start tracking when agent is authenticated
   useEffect(() => {
     // Only start if we're an agent, authenticated, and not already tracking
-    if (isAgent && isAuthenticated && intervalRef.current === null) {
+    if (
+      isAgent &&
+      isAuthenticated &&
+      hasLocationTrackingConsent &&
+      intervalRef.current === null
+    ) {
       startTracking();
-    } else if ((!isAgent || !isAuthenticated) && intervalRef.current !== null) {
+    } else if (
+      (!isAgent || !isAuthenticated || !hasLocationTrackingConsent) &&
+      intervalRef.current !== null
+    ) {
       stopTracking();
     }
 
@@ -311,7 +342,7 @@ export const useAgentLocationTracker = (
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAgent, isAuthenticated]); // Only depend on these to avoid recreating on every updateLocation change
+  }, [isAgent, isAuthenticated, locationTrackingConsent, enableBackgroundSync]);
 
   // Update auth token in service worker and handle sync requests
   const { getAccessToken } = useSessionAuth();
@@ -326,6 +357,11 @@ export const useAgentLocationTracker = (
             const location = getLastLocation();
             if (!location) {
               console.log('No location data to sync');
+              return;
+            }
+
+            if (!hasBackgroundLocationTrackingConsent) {
+              clearLastLocation();
               return;
             }
 
@@ -362,7 +398,12 @@ export const useAgentLocationTracker = (
       };
     }
     return undefined;
-  }, [isAuthenticated, getAccessToken, profile?.agent?.id]);
+  }, [
+    isAuthenticated,
+    getAccessToken,
+    profile?.agent?.id,
+    hasBackgroundLocationTrackingConsent,
+  ]);
 
   return {
     isTracking,

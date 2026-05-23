@@ -26,6 +26,7 @@ import {
     DeliveryConfigService,
     FastDeliveryConfig,
 } from '../delivery-configs/delivery-configs.service';
+import { hasAcceptedAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
@@ -639,6 +640,7 @@ export class LocationsController {
     this.ensureAuthenticatedForLocation();
     const user = await this.hasuraUserService.getUser();
     const agentId = this.requireAgentIdFromUser(user);
+    await this.ensureLocationTrackingConsentAccepted(agentId);
     const row = await this.locationsService.upsertMyAgentLocation(
       agentId,
       body.latitude,
@@ -761,6 +763,15 @@ export class LocationsController {
         );
       }
 
+      if (
+        !(await this.hasLocationTrackingConsentAccepted(order.assigned_agent_id))
+      ) {
+        return {
+          success: true,
+          location: undefined,
+        };
+      }
+
       const location =
         await this.locationsService.getLatestAgentLocation(
           order.assigned_agent_id
@@ -793,6 +804,26 @@ export class LocationsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private async ensureLocationTrackingConsentAccepted(
+    agentId: string
+  ): Promise<void> {
+    if (await this.hasLocationTrackingConsentAccepted(agentId)) {
+      return;
+    }
+    throw new HttpException(
+      { success: false, error: 'Location tracking consent is required' },
+      HttpStatus.FORBIDDEN
+    );
+  }
+
+  private async hasLocationTrackingConsentAccepted(
+    agentId: string
+  ): Promise<boolean> {
+    const consent =
+      await this.hasuraService.getAgentLocationConsent(agentId);
+    return hasAcceptedAgentLocationTrackingConsent(consent);
   }
 
   private ensureAuthenticatedForLocation(): void {

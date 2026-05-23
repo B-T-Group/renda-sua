@@ -275,7 +275,15 @@ export class LocationsService {
       // Get all agent locations (each agent has one location entry)
       const query = `
         query GetAgentLocations {
-          agent_locations {
+          agent_locations(
+            where: {
+              agent: {
+                location_tracking_consent: {
+                  _in: [accepted_fg, accepted_bg]
+                }
+              }
+            }
+          ) {
             agent_id
             latitude
             longitude
