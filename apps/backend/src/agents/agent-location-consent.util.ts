@@ -16,6 +16,13 @@ export function normalizeAgentLocationTrackingConsent(
   return 'not_shown';
 }
 
+export function hasAcceptedAgentLocationTrackingConsent(
+  value: unknown
+): boolean {
+  const consent = normalizeAgentLocationTrackingConsent(value);
+  return consent === 'accepted_fg' || consent === 'accepted_bg';
+}
+
 const ALLOWED_TRANSITIONS: Record<
   AgentLocationTrackingConsent,
   AgentLocationTrackingConsent[]

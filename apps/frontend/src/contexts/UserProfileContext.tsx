@@ -17,6 +17,7 @@ import {
   writeStoredActivePersona,
   clearStoredActivePersona,
 } from '../utils/activePersonaStorage';
+import type { AgentLocationTrackingConsent } from '../types/agentLocationConsent';
 
 export interface Address {
   id: string;
@@ -83,6 +84,7 @@ export interface UserProfile {
     onboarding_complete: boolean;
     status?: 'active' | 'suspended';
     agent_code?: string;
+    location_tracking_consent?: AgentLocationTrackingConsent;
     created_at: string;
     updated_at: string;
   };

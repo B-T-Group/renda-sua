@@ -26,7 +26,15 @@ def get_all_agent_locations(
     """
     query = """
     query GetAgentLocations {
-      agent_locations {
+      agent_locations(
+        where: {
+          agent: {
+            location_tracking_consent: {
+              _in: [accepted_fg, accepted_bg]
+            }
+          }
+        }
+      ) {
         id
         agent_id
         latitude

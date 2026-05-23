@@ -10,6 +10,10 @@ insert_permissions:
     permission:
       check:
         agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
           user:
             id:
               _eq: X-Hasura-User-Id
@@ -29,6 +33,10 @@ select_permissions:
         - updated_at
       filter:
         agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
           user:
             id:
               _eq: X-Hasura-User-Id
@@ -41,7 +49,12 @@ select_permissions:
         - longitude
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
   - role: user
     permission:
       columns:
@@ -51,7 +64,12 @@ select_permissions:
         - longitude
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
 update_permissions:
   - role: agent
     permission:
