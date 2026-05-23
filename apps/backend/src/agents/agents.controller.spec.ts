@@ -1,6 +1,22 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { AgentsController } from './agents.controller';
 
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
+jest.mock('../hasura/hasura-system.service', () => ({
+  HasuraSystemService: class HasuraSystemService {},
+}));
+jest.mock('../hasura/hasura-user.service', () => ({
+  HasuraUserService: class HasuraUserService {},
+}));
+jest.mock('./agent-hold.service', () => ({
+  AgentHoldService: class AgentHoldService {},
+}));
+jest.mock('./agent-referrals.service', () => ({
+  AgentReferralsService: class AgentReferralsService {},
+}));
+
 describe('AgentsController location tracking consent', () => {
   let controller: AgentsController;
   let hasuraUserService: {
@@ -38,7 +54,10 @@ describe('AgentsController location tracking consent', () => {
   });
 
   it('updates consent when the agent moves through an allowed transition', async () => {
-    const updatedAgent = { id: 'agent-1', location_tracking_consent: 'accepted_bg' };
+    const updatedAgent = {
+      id: 'agent-1',
+      location_tracking_consent: 'accepted_bg',
+    };
     hasuraSystemService.getAgentLocationConsent.mockResolvedValue('deferred');
     hasuraSystemService.updateAgentLocationConsent.mockResolvedValue(updatedAgent);
 
@@ -66,7 +85,9 @@ describe('AgentsController location tracking consent', () => {
         HttpStatus.BAD_REQUEST
       )
     );
-    expect(hasuraSystemService.updateAgentLocationConsent).not.toHaveBeenCalled();
+    expect(
+      hasuraSystemService.updateAgentLocationConsent
+    ).not.toHaveBeenCalled();
   });
 
   it('allows rejected agents to reset disclosure to not_shown', async () => {
@@ -101,6 +122,8 @@ describe('AgentsController location tracking consent', () => {
       )
     );
     expect(hasuraSystemService.getAgentLocationConsent).not.toHaveBeenCalled();
-    expect(hasuraSystemService.updateAgentLocationConsent).not.toHaveBeenCalled();
+    expect(
+      hasuraSystemService.updateAgentLocationConsent
+    ).not.toHaveBeenCalled();
   });
 });
