@@ -26,6 +26,7 @@ import {
     DeliveryConfigService,
     FastDeliveryConfig,
 } from '../delivery-configs/delivery-configs.service';
+import { hasAcceptedAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
@@ -639,6 +640,7 @@ export class LocationsController {
     this.ensureAuthenticatedForLocation();
     const user = await this.hasuraUserService.getUser();
     const agentId = this.requireAgentIdFromUser(user);
+    this.requireLocationTrackingConsent(user.agent?.location_tracking_consent);
     const row = await this.locationsService.upsertMyAgentLocation(
       agentId,
       body.latitude,
@@ -814,6 +816,19 @@ export class LocationsController {
       );
     }
     return agentId;
+  }
+
+  private requireLocationTrackingConsent(consent: unknown): void {
+    if (hasAcceptedAgentLocationTrackingConsent(consent)) {
+      return;
+    }
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Location tracking consent is required before sharing location',
+      },
+      HttpStatus.FORBIDDEN
+    );
   }
 
   private successAgentLocationPayload(row: {

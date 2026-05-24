@@ -10,6 +10,10 @@ insert_permissions:
     permission:
       check:
         agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
           user:
             id:
               _eq: X-Hasura-User-Id
@@ -60,6 +64,10 @@ update_permissions:
         - longitude
       filter:
         agent:
+          location_tracking_consent:
+            _in:
+              - accepted_fg
+              - accepted_bg
           user:
             id:
               _eq: X-Hasura-User-Id
