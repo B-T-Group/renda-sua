@@ -905,6 +905,11 @@ export class UsersController {
     if (persona === 'client') {
       if (userHasPersona(user, 'client'))
         return { success: true, client: user.client };
+      const source =
+        await this.addressesService.resolveSourceAddressForPersonaSeed(
+          uid,
+          user
+        );
       const r = await this.hasuraSystemService.executeMutation<{
         insert_clients_one: { id: string };
       }>(
@@ -920,11 +925,24 @@ export class UsersController {
       `,
         { userId: uid }
       );
+      if (source) {
+        await this.addressesService.seedDefaultAddressForNewPersona(
+          uid,
+          r.insert_clients_one.id,
+          'client',
+          source
+        );
+      }
       return { success: true, client: r.insert_clients_one };
     }
     if (persona === 'agent') {
       if (userHasPersona(user, 'agent'))
         return { success: true, agent: user.agent };
+      const source =
+        await this.addressesService.resolveSourceAddressForPersonaSeed(
+          uid,
+          user
+        );
       const vt = body.vehicle_type_id || 'other';
       const r = await this.hasuraSystemService.executeMutation<{
         insert_agents_one: { id: string };
@@ -942,6 +960,14 @@ export class UsersController {
       `,
         { userId: uid, vt }
       );
+      if (source) {
+        await this.addressesService.seedDefaultAddressForNewPersona(
+          uid,
+          r.insert_agents_one.id,
+          'agent',
+          source
+        );
+      }
       return { success: true, agent: r.insert_agents_one };
     }
     if (persona === 'business') {
@@ -954,6 +980,11 @@ export class UsersController {
           HttpStatus.BAD_REQUEST
         );
       }
+      const source =
+        await this.addressesService.resolveSourceAddressForPersonaSeed(
+          uid,
+          user
+        );
       const mi = body.main_interest ?? 'sell_items';
       if (mi !== 'sell_items' && mi !== 'rent_items') {
         throw new HttpException('Invalid main_interest', HttpStatus.BAD_REQUEST);
@@ -975,6 +1006,15 @@ export class UsersController {
       `,
         { userId: uid, name, mi }
       );
+      if (source) {
+        await this.addressesService.seedDefaultAddressForNewPersona(
+          uid,
+          r.insert_businesses_one.id,
+          'business',
+          source,
+          name
+        );
+      }
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);

@@ -1,4 +1,18 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: jest.fn(),
+}));
+jest.mock('../agents/agent-referrals.service', () => ({
+  AgentReferralsService: jest.fn(),
+}));
+jest.mock('../hasura/hasura-system.service', () => ({
+  HasuraSystemService: jest.fn(),
+}));
+jest.mock('../hasura/hasura-user.service', () => ({
+  HasuraUserService: jest.fn(),
+}));
+
 import { UsersController } from './users.controller';
 
 describe('UsersController', () => {
@@ -10,6 +24,11 @@ describe('UsersController', () => {
   };
   let hasuraSystemService: {
     executeQuery: jest.Mock;
+    executeMutation: jest.Mock;
+  };
+  let addressesService: {
+    resolveSourceAddressForPersonaSeed: jest.Mock;
+    seedDefaultAddressForNewPersona: jest.Mock;
   };
 
   const currentUser = {
@@ -32,16 +51,135 @@ describe('UsersController', () => {
     };
     hasuraSystemService = {
       executeQuery: jest.fn(),
+      executeMutation: jest.fn(),
+    };
+    addressesService = {
+      resolveSourceAddressForPersonaSeed: jest.fn().mockResolvedValue(null),
+      seedDefaultAddressForNewPersona: jest.fn().mockResolvedValue(undefined),
     };
     controller = new UsersController(
       hasuraUserService as any,
       hasuraSystemService as any,
       {} as any,
-      {} as any,
+      addressesService as any,
       {} as any,
       {} as any,
       {} as any
     );
+  });
+
+  describe('addPersona', () => {
+    const sourceAddress = {
+      id: 'addr-1',
+      address_line_1: '123 Main St',
+      city: 'Douala',
+      state: 'Littoral',
+      postal_code: '',
+      country: 'CM',
+      is_primary: true,
+    };
+
+    it('seeds client address when active persona has an address', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        user_type_id: 'agent',
+        agent: { id: 'agent-1' },
+        personas: ['agent'],
+      });
+      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(
+        sourceAddress
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_clients_one: { id: 'client-new' },
+      });
+
+      await expect(
+        controller.addPersona('client', {})
+      ).resolves.toEqual({
+        success: true,
+        client: { id: 'client-new' },
+      });
+
+      expect(
+        addressesService.resolveSourceAddressForPersonaSeed
+      ).toHaveBeenCalledWith(currentUser.id, expect.objectContaining({ agent: { id: 'agent-1' } }));
+      expect(
+        addressesService.seedDefaultAddressForNewPersona
+      ).toHaveBeenCalledWith(
+        currentUser.id,
+        'client-new',
+        'client',
+        sourceAddress
+      );
+    });
+
+    it('does not seed when active persona has no address', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        user_type_id: 'agent',
+        agent: { id: 'agent-1' },
+        personas: ['agent'],
+      });
+      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(null);
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_clients_one: { id: 'client-new' },
+      });
+
+      await controller.addPersona('client', {});
+
+      expect(
+        addressesService.seedDefaultAddressForNewPersona
+      ).not.toHaveBeenCalled();
+    });
+
+    it('seeds business address and location name from business name', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        user_type_id: 'client',
+        client: { id: 'client-1' },
+        personas: ['client'],
+      });
+      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(
+        sourceAddress
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_businesses_one: { id: 'biz-new', name: 'Shop' },
+      });
+
+      await controller.addPersona('business', {
+        name: 'Shop',
+        main_interest: 'sell_items',
+      });
+
+      expect(
+        addressesService.seedDefaultAddressForNewPersona
+      ).toHaveBeenCalledWith(
+        currentUser.id,
+        'biz-new',
+        'business',
+        sourceAddress,
+        'Shop'
+      );
+    });
+
+    it('skips insert and seed when client persona already exists', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        user_type_id: 'client',
+        client: { id: 'client-1' },
+        personas: ['client'],
+      });
+
+      await expect(controller.addPersona('client', {})).resolves.toEqual({
+        success: true,
+        client: { id: 'client-1' },
+      });
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(
+        addressesService.resolveSourceAddressForPersonaSeed
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateCurrentUser', () => {

@@ -10,7 +10,11 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { PersonaId } from '../users/persona.types';
-import { getActivePersonaOrThrow } from '../users/persona.util';
+import {
+  getActivePersonaOrThrow,
+  resolveActivePersonaWithDefault,
+  type UserPersonaShape,
+} from '../users/persona.util';
 import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
 import { postalCodeForStorage } from './postal-code.util';
 
@@ -695,6 +699,171 @@ export class AddressesService {
     }
 
     return address as AddressResponse;
+  }
+
+  /**
+   * Primary address on the active persona, for seeding a newly added persona.
+   */
+  async resolveSourceAddressForPersonaSeed(
+    userId: string,
+    user: UserPersonaShape & {
+      user_type_id?: string;
+      personas?: PersonaId[];
+    }
+  ): Promise<AddressResponse | null> {
+    const sourcePersona = resolveActivePersonaWithDefault(
+      user,
+      this.hasuraUserService.getActivePersonaHeader()
+    );
+    const addresses = await this.hasuraSystemService.getAllUserAddresses(
+      userId,
+      sourcePersona
+    );
+    if (!addresses.length) {
+      return null;
+    }
+    const primary = addresses.find((a) => a.is_primary);
+    return (primary ?? addresses[0]) as AddressResponse;
+  }
+
+  /**
+   * Clone an address onto a newly created persona (add-persona flow).
+   * For business: also creates primary business_locations row.
+   */
+  async seedDefaultAddressForNewPersona(
+    userId: string,
+    entityId: string,
+    entityType: PersonaId,
+    source: AddressResponse,
+    businessName?: string
+  ): Promise<void> {
+    const addressCountBefore =
+      await this.hasuraSystemService.countLinkedAddressesForUser(userId);
+
+    const createAddressMutation = `
+      mutation SeedPersonaAddress(
+        $addressLine1: String!,
+        $addressLine2: String,
+        $city: String!,
+        $state: String!,
+        $postalCode: String,
+        $country: String!,
+        $isPrimary: Boolean!,
+        $addressType: String!,
+        $latitude: numeric,
+        $longitude: numeric,
+        $instructions: String
+      ) {
+        insert_addresses_one(object: {
+          address_line_1: $addressLine1,
+          address_line_2: $addressLine2,
+          city: $city,
+          state: $state,
+          postal_code: $postalCode,
+          country: $country,
+          is_primary: $isPrimary,
+          address_type: $addressType,
+          latitude: $latitude,
+          longitude: $longitude,
+          instructions: $instructions
+        }) {
+          id
+          city
+          country
+        }
+      }
+    `;
+
+    const addressResult = await this.hasuraSystemService.executeMutation<{
+      insert_addresses_one: { id: string; city: string; country: string };
+    }>(createAddressMutation, {
+      addressLine1: source.address_line_1,
+      addressLine2: source.address_line_2 ?? null,
+      city: source.city,
+      state: source.state,
+      postalCode: postalCodeForStorage(source.postal_code),
+      country: source.country,
+      isPrimary: true,
+      addressType: source.address_type || 'home',
+      latitude: source.latitude ?? null,
+      longitude: source.longitude ?? null,
+      instructions: source.instructions ?? null,
+    });
+
+    const address = addressResult.insert_addresses_one;
+    if (!address) {
+      throw new HttpException(
+        { success: false, error: 'Failed to seed address for new persona' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    if (entityType === 'client') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
+          insert_client_addresses_one(object: {
+            client_id: $clientId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { clientId: entityId, addressId: address.id }
+      );
+    } else if (entityType === 'agent') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateAgentAddress($agentId: uuid!, $addressId: uuid!) {
+          insert_agent_addresses_one(object: {
+            agent_id: $agentId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { agentId: entityId, addressId: address.id }
+      );
+    } else if (entityType === 'business') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateBusinessAddress($businessId: uuid!, $addressId: uuid!) {
+          insert_business_addresses_one(object: {
+            business_id: $businessId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { businessId: entityId, addressId: address.id }
+      );
+      const locationName = this.buildInitialBusinessLocationName(
+        businessName,
+        source.city
+      );
+      const locationResult = await this.hasuraSystemService.executeMutation<{
+        insert_business_locations_one: { id: string };
+      }>(
+        `mutation CreateBusinessLocationInitial($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
+          insert_business_locations_one(object: {
+            business_id: $businessId,
+            address_id: $addressId,
+            name: $name,
+            location_type: $locationType,
+            is_primary: $isPrimary
+          }) { id }
+        }`,
+        {
+          businessId: entityId,
+          addressId: address.id,
+          name: locationName,
+          locationType: 'office',
+          isPrimary: true,
+        }
+      );
+      const locationId = locationResult.insert_business_locations_one?.id;
+      if (locationId) {
+        await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
+      }
+    }
+
+    if (addressCountBefore === 0) {
+      await this.hasuraSystemService.setUserTimezone(
+        userId,
+        timezoneFromAddressCountryCode(source.country)
+      );
+    }
   }
 
   /**
