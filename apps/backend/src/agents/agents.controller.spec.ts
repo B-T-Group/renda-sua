@@ -2,6 +2,22 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { AgentsController } from './agents.controller';
 import type { AgentLocationTrackingConsent } from './dto/update-location-tracking-consent.dto';
 
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
+jest.mock('../hasura/hasura-system.service', () => ({
+  HasuraSystemService: class HasuraSystemService {},
+}));
+jest.mock('../hasura/hasura-user.service', () => ({
+  HasuraUserService: class HasuraUserService {},
+}));
+jest.mock('./agent-hold.service', () => ({
+  AgentHoldService: class AgentHoldService {},
+}));
+jest.mock('./agent-referrals.service', () => ({
+  AgentReferralsService: class AgentReferralsService {},
+}));
+
 describe('AgentsController location tracking consent', () => {
   let controller: AgentsController;
   let hasuraUserService: {
