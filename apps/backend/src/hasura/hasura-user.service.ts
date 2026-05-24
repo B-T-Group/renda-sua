@@ -824,14 +824,25 @@ export class HasuraUserService {
     }
     let consent: unknown = (agent as MeAgent).location_tracking_consent;
     if (consent == null) {
-      const full = await this.hasuraSystemService.getUserAgent(userId);
-      consent = (full as { location_tracking_consent?: unknown } | undefined)
-        ?.location_tracking_consent;
+      consent = await this.loadAgentLocationTrackingConsent(userId);
     }
     return {
       ...agent,
       location_tracking_consent: normalizeAgentLocationTrackingConsent(consent),
     };
+  }
+
+  private async loadAgentLocationTrackingConsent(userId: string) {
+    try {
+      const full = await this.hasuraSystemService.getUserAgent(userId);
+      return (full as { location_tracking_consent?: unknown } | undefined)
+        ?.location_tracking_consent;
+    } catch (error: any) {
+      this.logger.warn(
+        `Unable to load agent location tracking consent: ${error.message}`
+      );
+      return null;
+    }
   }
 
   /**

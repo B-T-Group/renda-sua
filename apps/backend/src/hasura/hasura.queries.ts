@@ -32,7 +32,6 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         onboarding_complete
         status
         agent_code
-        location_tracking_consent
         created_at
         updated_at
       }
