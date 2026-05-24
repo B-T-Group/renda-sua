@@ -118,6 +118,7 @@ describe('AgentsController location tracking consent', () => {
   });
 
   it('blocks non-agent users before reading consent', async () => {
+    hasuraUserService.getActivePersonaHeader.mockReturnValue(undefined);
     hasuraUserService.getUser.mockResolvedValue({
       id: 'user-1',
       user_type_id: 'client',
