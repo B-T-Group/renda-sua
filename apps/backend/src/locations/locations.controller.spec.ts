@@ -1,3 +1,14 @@
+jest.mock('graphql-request', () => ({
+  GraphQLClient: jest.fn().mockImplementation(() => ({
+    request: jest.fn(),
+  })),
+  gql: (strings: TemplateStringsArray, ...values: unknown[]) =>
+    strings.reduce(
+      (result, part, index) => `${result}${part}${values[index] ?? ''}`,
+      ''
+    ),
+}));
+
 import { HttpStatus } from '@nestjs/common';
 import { LocationsController } from './locations.controller';
 
