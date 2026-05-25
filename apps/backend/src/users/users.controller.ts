@@ -16,7 +16,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { AddressesService } from '../addresses/addresses.service';
+import {
+  AddressResponse,
+  AddressesService,
+} from '../addresses/addresses.service';
 import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
@@ -1024,17 +1027,15 @@ export class UsersController {
     userId: string,
     entityId: string,
     persona: PersonaId,
-    source: Parameters<AddressesService['seedDefaultAddressForNewPersona']>[3],
+    source: AddressResponse,
     businessName?: string
   ): Promise<void> {
     try {
-      await this.addressesService.seedDefaultAddressForNewPersona(
-        userId,
-        entityId,
-        persona,
-        source,
-        businessName
-      );
+      const args: [string, string, PersonaId, AddressResponse, string?] =
+        businessName === undefined
+          ? [userId, entityId, persona, source]
+          : [userId, entityId, persona, source, businessName];
+      await this.addressesService.seedDefaultAddressForNewPersona(...args);
     } catch (error: any) {
       await this.rollbackNewPersona(persona, entityId);
       throw error;
