@@ -180,6 +180,36 @@ describe('UsersController', () => {
         addressesService.resolveSourceAddressForPersonaSeed
       ).not.toHaveBeenCalled();
     });
+
+    it('rolls back a new persona when address seeding fails', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        user_type_id: 'agent',
+        agent: { id: 'agent-1' },
+        personas: ['agent'],
+      });
+      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(
+        sourceAddress
+      );
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({ insert_clients_one: { id: 'client-new' } })
+        .mockResolvedValueOnce({ delete_clients_by_pk: { id: 'client-new' } });
+      addressesService.seedDefaultAddressForNewPersona.mockRejectedValue(
+        new Error('seed failed')
+      );
+
+      await expect(controller.addPersona('client', {})).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'seed failed' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('delete_clients_by_pk'),
+        { id: 'client-new' }
+      );
+    });
   });
 
   describe('updateCurrentUser', () => {

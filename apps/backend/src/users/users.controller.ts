@@ -926,7 +926,7 @@ export class UsersController {
         { userId: uid }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_clients_one.id,
           'client',
@@ -961,7 +961,7 @@ export class UsersController {
         { userId: uid, vt }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_agents_one.id,
           'agent',
@@ -1007,7 +1007,7 @@ export class UsersController {
         { userId: uid, name, mi }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_businesses_one.id,
           'business',
@@ -1018,6 +1018,45 @@ export class UsersController {
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
+  }
+
+  private async seedAddressOrRollbackPersona(
+    userId: string,
+    entityId: string,
+    persona: PersonaId,
+    source: Parameters<AddressesService['seedDefaultAddressForNewPersona']>[3],
+    businessName?: string
+  ): Promise<void> {
+    try {
+      await this.addressesService.seedDefaultAddressForNewPersona(
+        userId,
+        entityId,
+        persona,
+        source,
+        businessName
+      );
+    } catch (error: any) {
+      await this.rollbackNewPersona(persona, entityId);
+      throw error;
+    }
+  }
+
+  private async rollbackNewPersona(
+    persona: PersonaId,
+    entityId: string
+  ): Promise<void> {
+    const tables: Record<PersonaId, string> = {
+      client: 'clients',
+      agent: 'agents',
+      business: 'businesses',
+    };
+    const table = tables[persona];
+    await this.hasuraSystemService.executeMutation(
+      `mutation RollbackPersona($id: uuid!) {
+        delete_${table}_by_pk(id: $id) { id }
+      }`,
+      { id: entityId }
+    );
   }
 
   private normalizeEmailForUpdate(raw?: string | null): string {
