@@ -128,7 +128,8 @@ select_permissions:
         - onboarding_complete
         - status
         - auto_withdraw_commissions
-        - location_tracking_consent
+        - location_tracking_consent_ios
+        - location_tracking_consent_android
       filter:
         user:
           id:
@@ -196,7 +197,8 @@ update_permissions:
         - is_verified
         - onboarding_complete
         - auto_withdraw_commissions
-        - location_tracking_consent
+        - location_tracking_consent_ios
+        - location_tracking_consent_android
       filter:
         user:
           id:

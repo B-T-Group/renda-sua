@@ -20,7 +20,8 @@ import type { AgentLocationTrackingConsent } from '../agents/dto/update-location
 import { HasuraSystemService } from './hasura-system.service';
 
 export type MeAgent = Agents & {
-  location_tracking_consent: AgentLocationTrackingConsent;
+  location_tracking_consent_ios: AgentLocationTrackingConsent;
+  location_tracking_consent_android: AgentLocationTrackingConsent;
 };
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
@@ -814,7 +815,7 @@ export class HasuraUserService {
     }
   }
 
-  /** Ensures `/users/me` always exposes `agent.location_tracking_consent`. */
+  /** Ensures `/users/me` always exposes platform-specific location consent fields. */
   private async resolveMeAgent(
     userId: string,
     agent: Agents | null | undefined
@@ -822,15 +823,27 @@ export class HasuraUserService {
     if (!agent) {
       return undefined;
     }
-    let consent: unknown = (agent as MeAgent).location_tracking_consent;
-    if (consent == null) {
+    let ios: unknown = (agent as MeAgent).location_tracking_consent_ios;
+    let android: unknown = (agent as MeAgent).location_tracking_consent_android;
+    if (ios == null || android == null) {
       const full = await this.hasuraSystemService.getUserAgent(userId);
-      consent = (full as { location_tracking_consent?: unknown } | undefined)
-        ?.location_tracking_consent;
+      const row = full as {
+        location_tracking_consent_ios?: unknown;
+        location_tracking_consent_android?: unknown;
+      } | undefined;
+      if (ios == null) {
+        ios = row?.location_tracking_consent_ios;
+      }
+      if (android == null) {
+        android = row?.location_tracking_consent_android;
+      }
     }
     return {
       ...agent,
-      location_tracking_consent: normalizeAgentLocationTrackingConsent(consent),
+      location_tracking_consent_ios:
+        normalizeAgentLocationTrackingConsent(ios),
+      location_tracking_consent_android:
+        normalizeAgentLocationTrackingConsent(android),
     };
   }
 

@@ -32,7 +32,8 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         onboarding_complete
         status
         agent_code
-        location_tracking_consent
+        location_tracking_consent_ios
+        location_tracking_consent_android
         created_at
         updated_at
       }
@@ -241,8 +242,9 @@ export const GET_USER_AGENT = gql`
       is_verified
       onboarding_complete
       agent_code
-      location_tracking_consent
-      agent_addresses(where: { address: { status: { _eq: active } } }) {
+      location_tracking_consent_ios
+      location_tracking_consent_android
+      agent_addresses(where: { address: { status: { _eq: active } } } }) {
         address {
           id
           address_line_1
@@ -289,22 +291,43 @@ export const GET_BUSINESS_BY_ID = gql`
 export const GET_AGENT_LOCATION_CONSENT = gql`
   query GetAgentLocationConsent($id: uuid!) {
     agents_by_pk(id: $id) {
-      location_tracking_consent
+      location_tracking_consent_ios
+      location_tracking_consent_android
     }
   }
 `;
 
-export const UPDATE_AGENT_LOCATION_CONSENT = gql`
-  mutation UpdateAgentLocationConsent(
+export const UPDATE_AGENT_LOCATION_CONSENT_IOS = gql`
+  mutation UpdateAgentLocationConsentIos(
     $id: uuid!
     $consent: agent_location_tracking_consent!
   ) {
     update_agents_by_pk(
       pk_columns: { id: $id }
-      _set: { location_tracking_consent: $consent, updated_at: "now()" }
+      _set: { location_tracking_consent_ios: $consent, updated_at: "now()" }
     ) {
       id
-      location_tracking_consent
+      location_tracking_consent_ios
+      location_tracking_consent_android
+    }
+  }
+`;
+
+export const UPDATE_AGENT_LOCATION_CONSENT_ANDROID = gql`
+  mutation UpdateAgentLocationConsentAndroid(
+    $id: uuid!
+    $consent: agent_location_tracking_consent!
+  ) {
+    update_agents_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        location_tracking_consent_android: $consent
+        updated_at: "now()"
+      }
+    ) {
+      id
+      location_tracking_consent_ios
+      location_tracking_consent_android
     }
   }
 `;
@@ -319,7 +342,8 @@ export const GET_AGENT_BY_ID = gql`
       is_verified
       onboarding_complete
       agent_code
-      location_tracking_consent
+      location_tracking_consent_ios
+      location_tracking_consent_android
     }
   }
 `;

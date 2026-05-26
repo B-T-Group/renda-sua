@@ -28,8 +28,10 @@ import {
   GET_USER_BY_ID,
   GET_USER_BY_ID_WITH_RELATIONS,
   GET_USER_CLIENT,
-  UPDATE_AGENT_LOCATION_CONSENT,
+  UPDATE_AGENT_LOCATION_CONSENT_ANDROID,
+  UPDATE_AGENT_LOCATION_CONSENT_IOS,
 } from './hasura.queries';
+import type { LocationConsentPlatform } from '../agents/dto/update-location-tracking-consent.dto';
 
 /** Row from account lookup queries; used for explicit location vs legacy matching. */
 type UserAccountLookupRow = {
@@ -531,23 +533,45 @@ export class HasuraSystemService {
     return agentResult.agents[0];
   }
 
-  async getAgentLocationConsent(agentId: string): Promise<string | null> {
+  async getAgentLocationConsent(
+    agentId: string,
+    platform: LocationConsentPlatform
+  ): Promise<string | null> {
     const result = await this.executeQuery<{
-      agents_by_pk: { location_tracking_consent: string } | null;
+      agents_by_pk: {
+        location_tracking_consent_ios: string;
+        location_tracking_consent_android: string;
+      } | null;
     }>(GET_AGENT_LOCATION_CONSENT, { id: agentId });
-    return result.agents_by_pk?.location_tracking_consent ?? null;
+    const row = result.agents_by_pk;
+    if (!row) {
+      return null;
+    }
+    return platform === 'ios'
+      ? row.location_tracking_consent_ios
+      : row.location_tracking_consent_android;
   }
 
   async updateAgentLocationConsent(
     agentId: string,
+    platform: LocationConsentPlatform,
     consent: string
-  ): Promise<{ id: string; location_tracking_consent: string } | null> {
+  ): Promise<{
+    id: string;
+    location_tracking_consent_ios: string;
+    location_tracking_consent_android: string;
+  } | null> {
+    const mutation =
+      platform === 'ios'
+        ? UPDATE_AGENT_LOCATION_CONSENT_IOS
+        : UPDATE_AGENT_LOCATION_CONSENT_ANDROID;
     const result = await this.executeMutation<{
       update_agents_by_pk: {
         id: string;
-        location_tracking_consent: string;
+        location_tracking_consent_ios: string;
+        location_tracking_consent_android: string;
       } | null;
-    }>(UPDATE_AGENT_LOCATION_CONSENT, { id: agentId, consent });
+    }>(mutation, { id: agentId, consent });
     return result.update_agents_by_pk;
   }
 

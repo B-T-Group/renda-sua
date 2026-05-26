@@ -25,6 +25,8 @@ import { AgentReferralsService } from './agent-referrals.service';
 import { assertLocationConsentTransition } from './agent-location-consent.util';
 import {
   type AgentLocationTrackingConsent,
+  type LocationConsentPlatform,
+  ResetLocationTrackingDisclosureDto,
   UpdateLocationTrackingConsentDto,
 } from './dto/update-location-tracking-consent.dto';
 
@@ -838,9 +840,16 @@ export class AgentsController {
     try {
       const user = await this.hasuraUserService.getUser();
       const agentId = this.requireAgentActor(user);
-      const current = await this.getAgentLocationConsent(agentId);
+      const current = await this.getAgentLocationConsent(
+        agentId,
+        body.platform
+      );
       assertLocationConsentTransition(current, body.consent);
-      const agent = await this.patchAgentLocationConsent(agentId, body.consent);
+      const agent = await this.patchAgentLocationConsent(
+        agentId,
+        body.platform,
+        body.consent
+      );
       return { success: true, agent };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -860,16 +869,26 @@ export class AgentsController {
   @ApiOperation({
     summary: 'Reset location disclosure so the agent can go through the flow again',
   })
+  @ApiBody({ type: ResetLocationTrackingDisclosureDto })
   @ApiResponse({ status: 200, description: 'Reset to not_shown' })
   @ApiResponse({ status: 400, description: 'Invalid transition' })
   @ApiResponse({ status: 403, description: 'Not an agent' })
-  async resetLocationTrackingDisclosure() {
+  async resetLocationTrackingDisclosure(
+    @Body() body: ResetLocationTrackingDisclosureDto
+  ) {
     try {
       const user = await this.hasuraUserService.getUser();
       const agentId = this.requireAgentActor(user);
-      const current = await this.getAgentLocationConsent(agentId);
+      const current = await this.getAgentLocationConsent(
+        agentId,
+        body.platform
+      );
       assertLocationConsentTransition(current, 'not_shown');
-      const agent = await this.patchAgentLocationConsent(agentId, 'not_shown');
+      const agent = await this.patchAgentLocationConsent(
+        agentId,
+        body.platform,
+        'not_shown'
+      );
       return { success: true, agent };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -886,19 +905,24 @@ export class AgentsController {
   }
 
   private async getAgentLocationConsent(
-    agentId: string
+    agentId: string,
+    platform: LocationConsentPlatform
   ): Promise<AgentLocationTrackingConsent> {
-    const consent =
-      await this.hasuraSystemService.getAgentLocationConsent(agentId);
+    const consent = await this.hasuraSystemService.getAgentLocationConsent(
+      agentId,
+      platform
+    );
     return (consent as AgentLocationTrackingConsent) ?? 'not_shown';
   }
 
   private async patchAgentLocationConsent(
     agentId: string,
+    platform: LocationConsentPlatform,
     consent: AgentLocationTrackingConsent
   ) {
     const agent = await this.hasuraSystemService.updateAgentLocationConsent(
       agentId,
+      platform,
       consent
     );
     if (!agent) {
