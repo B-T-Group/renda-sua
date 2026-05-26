@@ -21,8 +21,8 @@ const ALLOWED_TRANSITIONS: Record<
   AgentLocationTrackingConsent[]
 > = {
   not_shown: ['accepted_fg', 'accepted_bg', 'rejected', 'deferred'],
-  accepted_fg: ['accepted_bg', 'rejected'],
-  accepted_bg: ['accepted_fg', 'rejected'],
+  accepted_fg: ['accepted_bg', 'rejected', 'not_shown'],
+  accepted_bg: ['accepted_fg', 'rejected', 'not_shown'],
   rejected: ['not_shown'],
   deferred: ['accepted_fg', 'accepted_bg', 'rejected', 'not_shown'],
 };
