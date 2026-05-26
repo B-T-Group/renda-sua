@@ -6,6 +6,16 @@ import {
   UPDATE_AGENT_LOCATION_CONSENT_IOS,
 } from './hasura.queries';
 
+jest.mock('graphql-request', () => ({
+  GraphQLClient: jest.fn().mockImplementation(() => ({
+    request: jest.fn(),
+  })),
+  gql: (strings: TemplateStringsArray, ...values: unknown[]) =>
+    strings.reduce((query, chunk, index) => {
+      return `${query}${chunk}${index < values.length ? values[index] : ''}`;
+    }, ''),
+}));
+
 describe('HasuraSystemService', () => {
   let service: HasuraSystemService;
   let logSpy: jest.SpyInstance;
