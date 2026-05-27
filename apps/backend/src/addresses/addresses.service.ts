@@ -866,6 +866,130 @@ export class AddressesService {
     }
   }
 
+  async seedDefaultAddressForNewPersonaIfMissing(
+    userId: string,
+    entityId: string,
+    entityType: PersonaId,
+    user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
+    businessName?: string
+  ): Promise<void> {
+    const existing = await this.getPrimarySeededAddress(userId, entityType);
+    if (existing) {
+      await this.ensureBusinessSeedLocation(
+        entityId,
+        entityType,
+        existing,
+        businessName
+      );
+      return;
+    }
+    const source = await this.resolveSourceAddressForPersonaSeed(userId, user);
+    if (source) {
+      await this.seedDefaultAddressForNewPersona(
+        userId,
+        entityId,
+        entityType,
+        source,
+        businessName
+      );
+    }
+  }
+
+  private async getPrimarySeededAddress(
+    userId: string,
+    entityType: PersonaId
+  ): Promise<AddressResponse | null> {
+    const addresses = await this.hasuraSystemService.getAllUserAddresses(
+      userId,
+      entityType
+    );
+    return (addresses.find((a) => a.is_primary) ??
+      addresses[0] ??
+      null) as AddressResponse | null;
+  }
+
+  private async ensureBusinessSeedLocation(
+    entityId: string,
+    entityType: PersonaId,
+    address: AddressResponse,
+    businessName?: string
+  ): Promise<void> {
+    if (entityType !== 'business') {
+      return;
+    }
+    const locationId = await this.getOrCreateBusinessSeedLocation(
+      entityId,
+      address,
+      businessName
+    );
+    await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
+  }
+
+  private async getOrCreateBusinessSeedLocation(
+    businessId: string,
+    address: AddressResponse,
+    businessName?: string
+  ): Promise<string> {
+    const existingId = await this.getBusinessLocationByAddress(
+      businessId,
+      address.id
+    );
+    if (existingId) {
+      return existingId;
+    }
+    return this.createInitialBusinessLocation(
+      businessId,
+      address,
+      businessName
+    );
+  }
+
+  private async getBusinessLocationByAddress(
+    businessId: string,
+    addressId: string
+  ): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_locations: Array<{ id: string }>;
+    }>(
+      `query GetBusinessLocationByAddress($businessId: uuid!, $addressId: uuid!) {
+        business_locations(
+          where: { business_id: { _eq: $businessId }, address_id: { _eq: $addressId } }
+          limit: 1
+        ) { id }
+      }`,
+      { businessId, addressId }
+    );
+    return result.business_locations?.[0]?.id ?? null;
+  }
+
+  private async createInitialBusinessLocation(
+    businessId: string,
+    address: AddressResponse,
+    businessName?: string
+  ): Promise<string> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      insert_business_locations_one: { id: string };
+    }>(
+      `mutation CreateBusinessLocationInitial($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
+        insert_business_locations_one(object: {
+          business_id: $businessId,
+          address_id: $addressId,
+          name: $name,
+          location_type: $locationType,
+          is_primary: $isPrimary
+        }) { id }
+      }`,
+      {
+        businessId,
+        addressId: address.id,
+        name: this.buildInitialBusinessLocationName(businessName, address.city),
+        locationType: 'office',
+        isPrimary: true,
+      }
+    );
+    return result.insert_business_locations_one.id;
+  }
+
   /**
    * Get a single address by ID with user validation
    */

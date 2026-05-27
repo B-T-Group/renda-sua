@@ -29,6 +29,7 @@ describe('UsersController', () => {
   let addressesService: {
     resolveSourceAddressForPersonaSeed: jest.Mock;
     seedDefaultAddressForNewPersona: jest.Mock;
+    seedDefaultAddressForNewPersonaIfMissing: jest.Mock;
   };
 
   const currentUser = {
@@ -56,6 +57,9 @@ describe('UsersController', () => {
     addressesService = {
       resolveSourceAddressForPersonaSeed: jest.fn().mockResolvedValue(null),
       seedDefaultAddressForNewPersona: jest.fn().mockResolvedValue(undefined),
+      seedDefaultAddressForNewPersonaIfMissing: jest
+        .fn()
+        .mockResolvedValue(undefined),
     };
     controller = new UsersController(
       hasuraUserService as any,
@@ -69,58 +73,42 @@ describe('UsersController', () => {
   });
 
   describe('addPersona', () => {
-    const sourceAddress = {
-      id: 'addr-1',
-      address_line_1: '123 Main St',
-      city: 'Douala',
-      state: 'Littoral',
-      postal_code: '',
-      country: 'CM',
-      is_primary: true,
-    };
-
-    it('seeds client address when active persona has an address', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
+    it('checks client seed data after inserting the persona', async () => {
+      const user = {
         ...currentUser,
         user_type_id: 'agent',
         agent: { id: 'agent-1' },
         personas: ['agent'],
-      });
-      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(
-        sourceAddress
-      );
+      };
+      hasuraUserService.getUser.mockResolvedValue(user);
       hasuraSystemService.executeMutation.mockResolvedValue({
         insert_clients_one: { id: 'client-new' },
       });
 
-      await expect(
-        controller.addPersona('client', {})
-      ).resolves.toEqual({
+      await expect(controller.addPersona('client', {})).resolves.toEqual({
         success: true,
         client: { id: 'client-new' },
       });
 
       expect(
-        addressesService.resolveSourceAddressForPersonaSeed
-      ).toHaveBeenCalledWith(currentUser.id, expect.objectContaining({ agent: { id: 'agent-1' } }));
-      expect(
-        addressesService.seedDefaultAddressForNewPersona
+        addressesService.seedDefaultAddressForNewPersonaIfMissing
       ).toHaveBeenCalledWith(
         currentUser.id,
         'client-new',
         'client',
-        sourceAddress
+        user,
+        undefined
       );
     });
 
-    it('does not seed when active persona has no address', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
+    it('delegates missing-source handling to the idempotent seed method', async () => {
+      const user = {
         ...currentUser,
         user_type_id: 'agent',
         agent: { id: 'agent-1' },
         personas: ['agent'],
-      });
-      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(null);
+      };
+      hasuraUserService.getUser.mockResolvedValue(user);
       hasuraSystemService.executeMutation.mockResolvedValue({
         insert_clients_one: { id: 'client-new' },
       });
@@ -128,20 +116,24 @@ describe('UsersController', () => {
       await controller.addPersona('client', {});
 
       expect(
-        addressesService.seedDefaultAddressForNewPersona
-      ).not.toHaveBeenCalled();
+        addressesService.seedDefaultAddressForNewPersonaIfMissing
+      ).toHaveBeenCalledWith(
+        currentUser.id,
+        'client-new',
+        'client',
+        user,
+        undefined
+      );
     });
 
     it('seeds business address and location name from business name', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
+      const user = {
         ...currentUser,
         user_type_id: 'client',
         client: { id: 'client-1' },
         personas: ['client'],
-      });
-      addressesService.resolveSourceAddressForPersonaSeed.mockResolvedValue(
-        sourceAddress
-      );
+      };
+      hasuraUserService.getUser.mockResolvedValue(user);
       hasuraSystemService.executeMutation.mockResolvedValue({
         insert_businesses_one: { id: 'biz-new', name: 'Shop' },
       });
@@ -152,23 +144,24 @@ describe('UsersController', () => {
       });
 
       expect(
-        addressesService.seedDefaultAddressForNewPersona
+        addressesService.seedDefaultAddressForNewPersonaIfMissing
       ).toHaveBeenCalledWith(
         currentUser.id,
         'biz-new',
         'business',
-        sourceAddress,
+        user,
         'Shop'
       );
     });
 
-    it('skips insert and seed when client persona already exists', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
+    it('retries seed repair when the client persona already exists', async () => {
+      const user = {
         ...currentUser,
         user_type_id: 'client',
         client: { id: 'client-1' },
         personas: ['client'],
-      });
+      };
+      hasuraUserService.getUser.mockResolvedValue(user);
 
       await expect(controller.addPersona('client', {})).resolves.toEqual({
         success: true,
@@ -177,8 +170,14 @@ describe('UsersController', () => {
 
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
       expect(
-        addressesService.resolveSourceAddressForPersonaSeed
-      ).not.toHaveBeenCalled();
+        addressesService.seedDefaultAddressForNewPersonaIfMissing
+      ).toHaveBeenCalledWith(
+        currentUser.id,
+        'client-1',
+        'client',
+        user,
+        undefined
+      );
     });
   });
 
@@ -311,7 +310,9 @@ describe('UsersController', () => {
     });
 
     it('rejects empty phone', async () => {
-      await expect(controller.updateCurrentUserPhone({ phoneNumber: '  ' })).rejects.toThrow(
+      await expect(
+        controller.updateCurrentUserPhone({ phoneNumber: '  ' })
+      ).rejects.toThrow(
         new HttpException(
           { success: false, error: 'Phone number is required' },
           HttpStatus.BAD_REQUEST
@@ -365,7 +366,8 @@ describe('UsersController', () => {
         new HttpException(
           {
             success: false,
-            error: 'Email is verified and cannot be changed from profile settings.',
+            error:
+              'Email is verified and cannot be changed from profile settings.',
           },
           HttpStatus.BAD_REQUEST
         )
