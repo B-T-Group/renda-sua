@@ -1,4 +1,21 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: jest.fn(),
+}));
+jest.mock('../hasura/hasura-system.service', () => ({
+  HasuraSystemService: jest.fn(),
+}));
+jest.mock('../hasura/hasura-user.service', () => ({
+  HasuraUserService: jest.fn(),
+}));
+jest.mock('./agent-hold.service', () => ({
+  AgentHoldService: jest.fn(),
+}));
+jest.mock('./agent-referrals.service', () => ({
+  AgentReferralsService: jest.fn(),
+}));
+
 import { AgentsController } from './agents.controller';
 
 describe('AgentsController', () => {
