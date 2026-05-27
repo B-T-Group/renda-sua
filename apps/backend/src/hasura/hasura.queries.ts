@@ -244,7 +244,7 @@ export const GET_USER_AGENT = gql`
       agent_code
       location_tracking_consent_ios
       location_tracking_consent_android
-      agent_addresses(where: { address: { status: { _eq: active } } } }) {
+      agent_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
