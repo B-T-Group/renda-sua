@@ -2,6 +2,11 @@ ALTER TABLE public.agents
   ADD COLUMN location_tracking_consent_ios public.agent_location_tracking_consent NOT NULL DEFAULT 'not_shown',
   ADD COLUMN location_tracking_consent_android public.agent_location_tracking_consent NOT NULL DEFAULT 'not_shown';
 
+UPDATE public.agents
+SET
+  location_tracking_consent_ios = location_tracking_consent,
+  location_tracking_consent_android = location_tracking_consent;
+
 ALTER TABLE public.agents DROP COLUMN location_tracking_consent;
 
 COMMENT ON COLUMN public.agents.location_tracking_consent_ios IS
