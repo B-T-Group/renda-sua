@@ -34,6 +34,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         agent_code
         location_tracking_consent_ios
         location_tracking_consent_android
+        location_tracking_consent_web
         created_at
         updated_at
       }
@@ -244,6 +245,7 @@ export const GET_USER_AGENT = gql`
       agent_code
       location_tracking_consent_ios
       location_tracking_consent_android
+      location_tracking_consent_web
       agent_addresses(where: { address: { status: { _eq: active } } } }) {
         address {
           id
@@ -293,6 +295,7 @@ export const GET_AGENT_LOCATION_CONSENT = gql`
     agents_by_pk(id: $id) {
       location_tracking_consent_ios
       location_tracking_consent_android
+      location_tracking_consent_web
     }
   }
 `;
@@ -309,6 +312,7 @@ export const UPDATE_AGENT_LOCATION_CONSENT_IOS = gql`
       id
       location_tracking_consent_ios
       location_tracking_consent_android
+      location_tracking_consent_web
     }
   }
 `;
@@ -328,6 +332,24 @@ export const UPDATE_AGENT_LOCATION_CONSENT_ANDROID = gql`
       id
       location_tracking_consent_ios
       location_tracking_consent_android
+      location_tracking_consent_web
+    }
+  }
+`;
+
+export const UPDATE_AGENT_LOCATION_CONSENT_WEB = gql`
+  mutation UpdateAgentLocationConsentWeb(
+    $id: uuid!
+    $consent: agent_location_tracking_consent!
+  ) {
+    update_agents_by_pk(
+      pk_columns: { id: $id }
+      _set: { location_tracking_consent_web: $consent, updated_at: "now()" }
+    ) {
+      id
+      location_tracking_consent_ios
+      location_tracking_consent_android
+      location_tracking_consent_web
     }
   }
 `;
@@ -344,6 +366,7 @@ export const GET_AGENT_BY_ID = gql`
       agent_code
       location_tracking_consent_ios
       location_tracking_consent_android
+      location_tracking_consent_web
     }
   }
 `;

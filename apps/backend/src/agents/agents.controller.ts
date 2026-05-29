@@ -26,7 +26,6 @@ import { assertLocationConsentTransition } from './agent-location-consent.util';
 import {
   type AgentLocationTrackingConsent,
   type LocationConsentPlatform,
-  ResetLocationTrackingDisclosureDto,
   UpdateLocationTrackingConsentDto,
 } from './dto/update-location-tracking-consent.dto';
 
@@ -859,45 +858,6 @@ export class AgentsController {
         {
           success: false,
           error: error.message || 'Failed to update location tracking consent',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  @Post('me/location-tracking-consent/reset-disclosure')
-  @ApiOperation({
-    summary: 'Reset location disclosure so the agent can go through the flow again',
-  })
-  @ApiBody({ type: ResetLocationTrackingDisclosureDto })
-  @ApiResponse({ status: 200, description: 'Reset to not_shown' })
-  @ApiResponse({ status: 400, description: 'Invalid transition' })
-  @ApiResponse({ status: 403, description: 'Not an agent' })
-  async resetLocationTrackingDisclosure(
-    @Body() body: ResetLocationTrackingDisclosureDto
-  ) {
-    try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
-      const current = await this.getAgentLocationConsent(
-        agentId,
-        body.platform
-      );
-      assertLocationConsentTransition(current, 'not_shown');
-      const agent = await this.patchAgentLocationConsent(
-        agentId,
-        body.platform,
-        'not_shown'
-      );
-      return { success: true, agent };
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to reset location tracking consent',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

@@ -83,6 +83,7 @@ export interface UserProfile {
     onboarding_complete: boolean;
     status?: 'active' | 'suspended';
     agent_code?: string;
+    location_tracking_consent_web?: 'not_shown' | 'accepted' | 'deferred';
     created_at: string;
     updated_at: string;
   };

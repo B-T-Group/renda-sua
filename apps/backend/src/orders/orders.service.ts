@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
+import { assertMobileLocationConsentAccepted } from '../agents/agent-location-claim.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -1252,7 +1253,7 @@ export class OrdersService {
     );
   }
 
-  async claimOrder(request: GetOrderRequest) {
+  async claimOrder(request: GetOrderRequest, platformHeader?: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -1260,6 +1261,11 @@ export class OrdersService {
       'Only agent users can get orders'
     );
     const agent = this.requireAgentRecord(user);
+    await assertMobileLocationConsentAccepted(
+      this.hasuraSystemService,
+      agent.id,
+      platformHeader
+    );
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
@@ -1375,7 +1381,7 @@ export class OrdersService {
     };
   }
 
-  async claimOrderWithTopup(request: GetOrderRequest) {
+  async claimOrderWithTopup(request: GetOrderRequest, platformHeader?: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -1383,6 +1389,11 @@ export class OrdersService {
       'Only agent users can claim orders'
     );
     const agent = this.requireAgentRecord(user);
+    await assertMobileLocationConsentAccepted(
+      this.hasuraSystemService,
+      agent.id,
+      platformHeader
+    );
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
@@ -3999,7 +4010,8 @@ export class OrdersService {
   }
 
   async checkOrderClaimAvailability(
-    orderId: string
+    orderId: string,
+    platformHeader?: string
   ): Promise<ClaimAvailabilityResponse> {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
@@ -4008,6 +4020,26 @@ export class OrdersService {
       'Only agent users can claim orders'
     );
     const agent = this.requireAgentRecord(user);
+
+    try {
+      await assertMobileLocationConsentAccepted(
+        this.hasuraSystemService,
+        agent.id,
+        platformHeader
+      );
+    } catch (error: any) {
+      const holdPercentage =
+        await this.agentHoldService.getHoldPercentageForAgent();
+      const order = await this.getOrderWithItems(orderId);
+      const holdAmount = order
+        ? (order.subtotal * holdPercentage) / 100
+        : 0;
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        error?.response?.error ??
+          'Location tracking consent is required to claim orders.'
+      );
+    }
 
     const order = await this.getOrderWithItems(orderId);
     if (!order) {

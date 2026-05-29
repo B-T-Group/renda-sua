@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpException,
   HttpStatus,
   Param,
@@ -19,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
 import { Public } from '../auth/public.decorator';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
@@ -1002,8 +1004,11 @@ export class OrdersController {
       },
     },
   })
-  async checkOrderClaimAvailability(@Param('orderId') orderId: string) {
-    return this.ordersService.checkOrderClaimAvailability(orderId);
+  async checkOrderClaimAvailability(
+    @Param('orderId') orderId: string,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
+  ) {
+    return this.ordersService.checkOrderClaimAvailability(orderId, platform);
   }
 
   @Get(':id')
@@ -1061,8 +1066,11 @@ export class OrdersController {
   }
 
   @Post('claim_order')
-  async claimOrder(@Body() request: GetOrderRequest) {
-    return this.ordersService.claimOrder(request);
+  async claimOrder(
+    @Body() request: GetOrderRequest,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
+  ) {
+    return this.ordersService.claimOrder(request, platform);
   }
 
   @Post('claim_order_with_topup')
@@ -1150,8 +1158,11 @@ export class OrdersController {
       },
     },
   })
-  async claimOrderWithTopup(@Body() request: GetOrderRequest) {
-    return this.ordersService.claimOrderWithTopup(request);
+  async claimOrderWithTopup(
+    @Body() request: GetOrderRequest,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
+  ) {
+    return this.ordersService.claimOrderWithTopup(request, platform);
   }
 
   @Post('cancel-claim-request')

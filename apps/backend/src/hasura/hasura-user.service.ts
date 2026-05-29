@@ -22,6 +22,7 @@ import { HasuraSystemService } from './hasura-system.service';
 export type MeAgent = Agents & {
   location_tracking_consent_ios: AgentLocationTrackingConsent;
   location_tracking_consent_android: AgentLocationTrackingConsent;
+  location_tracking_consent_web: AgentLocationTrackingConsent;
 };
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
@@ -825,17 +826,22 @@ export class HasuraUserService {
     }
     let ios: unknown = (agent as MeAgent).location_tracking_consent_ios;
     let android: unknown = (agent as MeAgent).location_tracking_consent_android;
-    if (ios == null || android == null) {
+    let web: unknown = (agent as MeAgent).location_tracking_consent_web;
+    if (ios == null || android == null || web == null) {
       const full = await this.hasuraSystemService.getUserAgent(userId);
       const row = full as {
         location_tracking_consent_ios?: unknown;
         location_tracking_consent_android?: unknown;
+        location_tracking_consent_web?: unknown;
       } | undefined;
       if (ios == null) {
         ios = row?.location_tracking_consent_ios;
       }
       if (android == null) {
         android = row?.location_tracking_consent_android;
+      }
+      if (web == null) {
+        web = row?.location_tracking_consent_web;
       }
     }
     return {
@@ -844,6 +850,8 @@ export class HasuraUserService {
         normalizeAgentLocationTrackingConsent(ios),
       location_tracking_consent_android:
         normalizeAgentLocationTrackingConsent(android),
+      location_tracking_consent_web:
+        normalizeAgentLocationTrackingConsent(web),
     };
   }
 

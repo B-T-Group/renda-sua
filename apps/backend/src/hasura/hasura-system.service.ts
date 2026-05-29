@@ -30,6 +30,7 @@ import {
   GET_USER_CLIENT,
   UPDATE_AGENT_LOCATION_CONSENT_ANDROID,
   UPDATE_AGENT_LOCATION_CONSENT_IOS,
+  UPDATE_AGENT_LOCATION_CONSENT_WEB,
 } from './hasura.queries';
 import type { LocationConsentPlatform } from '../agents/dto/update-location-tracking-consent.dto';
 
@@ -541,15 +542,20 @@ export class HasuraSystemService {
       agents_by_pk: {
         location_tracking_consent_ios: string;
         location_tracking_consent_android: string;
+        location_tracking_consent_web: string;
       } | null;
     }>(GET_AGENT_LOCATION_CONSENT, { id: agentId });
     const row = result.agents_by_pk;
     if (!row) {
       return null;
     }
-    return platform === 'ios'
-      ? row.location_tracking_consent_ios
-      : row.location_tracking_consent_android;
+    if (platform === 'ios') {
+      return row.location_tracking_consent_ios;
+    }
+    if (platform === 'android') {
+      return row.location_tracking_consent_android;
+    }
+    return row.location_tracking_consent_web;
   }
 
   async updateAgentLocationConsent(
@@ -560,16 +566,20 @@ export class HasuraSystemService {
     id: string;
     location_tracking_consent_ios: string;
     location_tracking_consent_android: string;
+    location_tracking_consent_web: string;
   } | null> {
     const mutation =
       platform === 'ios'
         ? UPDATE_AGENT_LOCATION_CONSENT_IOS
-        : UPDATE_AGENT_LOCATION_CONSENT_ANDROID;
+        : platform === 'android'
+          ? UPDATE_AGENT_LOCATION_CONSENT_ANDROID
+          : UPDATE_AGENT_LOCATION_CONSENT_WEB;
     const result = await this.executeMutation<{
       update_agents_by_pk: {
         id: string;
         location_tracking_consent_ios: string;
         location_tracking_consent_android: string;
+        location_tracking_consent_web: string;
       } | null;
     }>(mutation, { id: agentId, consent });
     return result.update_agents_by_pk;

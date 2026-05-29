@@ -14,6 +14,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute';
 import { DeferredFloatingWhatsApp } from '../components/common/DeferredFloatingWhatsApp';
 import LoadingPage from '../components/common/LoadingPage';
 import AgentOnboardingModal from '../components/dialogs/AgentOnboardingModal';
+import AgentLocationDisclosureModal from '../components/dialogs/AgentLocationDisclosureModal';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
 import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
@@ -28,6 +29,7 @@ import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
+import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
@@ -98,8 +100,16 @@ function App() {
     isMobile && (isItemDetailPage || isPlaceOrderFlowPage);
   const isBusinessItemsCatalog = location.pathname.startsWith('/business/items');
 
-  // Initialize agent location tracking (runs automatically for agents)
-  useAgentLocationTracker();
+  const {
+    consent: webLocationConsent,
+    showDisclosure: showLocationDisclosure,
+    setConsent: setWebLocationConsent,
+    saving: webLocationConsentSaving,
+  } = useAgentLocationConsent();
+
+  useAgentLocationTracker({
+    enabled: userType === 'agent' && webLocationConsent === 'accepted',
+  });
 
   // Sync push subscription to backend once when user is logged in (prompts for permission once if needed)
   const { syncWhenGranted } = usePushSubscription();
@@ -785,6 +795,13 @@ function App() {
         open={agentNeedsOnboarding}
         onComplete={handleOnboardingComplete}
         loading={onboardingLoading}
+      />
+
+      <AgentLocationDisclosureModal
+        open={showLocationDisclosure}
+        saving={webLocationConsentSaving}
+        onAccept={() => void setWebLocationConsent('accepted')}
+        onDefer={() => void setWebLocationConsent('deferred')}
       />
     </Box>
   );

@@ -563,6 +563,17 @@
       "noAddresses": "No addresses found. Add your first address to start accepting orders.",
       "title": "Add Your Address"
     },
+    "locationTracking": {
+      "disclosureTitle": "Location data disclosure",
+      "disclosureProminent": "Rendasua collects, transmits, and stores your device's precise location data to enable finding nearby open delivery orders and live delivery tracking for customers.",
+      "disclosureHowUsedTitle": "How your location is used",
+      "disclosureUseCaseNearbyFull": "Nearby orders: to show open orders near you when you browse available deliveries.",
+      "disclosureUseCaseDeliveryFull": "Active deliveries: to share your live position with customers on orders you are delivering.",
+      "disclosureSharingBody": "Location data is sent to Rendasua servers and shared with customers only for orders you are delivering or viewing. It is not used for advertising.",
+      "disclosureAgree": "I agree",
+      "disclosureDecline": "Not now",
+      "privacyPolicyLink": "Privacy Policy"
+    },
     "claimOrder": {
       "confirmClaim": "Confirm & Claim Order",
       "deliveryEarnings": "You will earn {{deliveryFee}} in delivery fees from this order.",

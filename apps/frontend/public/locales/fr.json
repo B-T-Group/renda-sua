@@ -561,6 +561,17 @@
       "noAddresses": "Aucune adresse trouvée. Ajoutez votre première adresse pour commencer à accepter des commandes.",
       "title": "Ajoutez Votre Adresse"
     },
+    "locationTracking": {
+      "disclosureTitle": "Divulgation des données de localisation",
+      "disclosureProminent": "Rendasua collecte, transmet et stocke la localisation précise de votre appareil pour vous permettre de trouver des commandes de livraison ouvertes à proximité et le suivi en direct des livraisons pour les clients.",
+      "disclosureHowUsedTitle": "Comment votre localisation est utilisée",
+      "disclosureUseCaseNearbyFull": "Commandes à proximité : pour afficher les commandes ouvertes près de vous lorsque vous parcourez les livraisons disponibles.",
+      "disclosureUseCaseDeliveryFull": "Livraisons actives : pour partager votre position en direct avec les clients sur les commandes que vous livrez.",
+      "disclosureSharingBody": "Les données de localisation sont envoyées aux serveurs Rendasua et partagées avec les clients uniquement pour les commandes que vous livrez ou consultez. Elles ne sont pas utilisées à des fins publicitaires.",
+      "disclosureAgree": "J'accepte",
+      "disclosureDecline": "Pas maintenant",
+      "privacyPolicyLink": "Politique de confidentialité"
+    },
     "claimOrder": {
       "confirmClaim": "Confirmer et Réclamer la Commande",
       "deliveryEarnings": "Vous gagnerez {{deliveryFee}} en frais de livraison de cette commande.",

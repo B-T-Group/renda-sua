@@ -130,6 +130,7 @@ select_permissions:
         - auto_withdraw_commissions
         - location_tracking_consent_ios
         - location_tracking_consent_android
+        - location_tracking_consent_web
       filter:
         user:
           id:
@@ -199,6 +200,7 @@ update_permissions:
         - auto_withdraw_commissions
         - location_tracking_consent_ios
         - location_tracking_consent_android
+        - location_tracking_consent_web
       filter:
         user:
           id:

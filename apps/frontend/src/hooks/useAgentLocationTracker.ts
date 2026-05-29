@@ -38,6 +38,8 @@ interface UseAgentLocationTrackerOptions {
   enableBackgroundSync?: boolean;
   /** When set, use 60s interval and 50m min distance (active delivery) */
   activeOrderId?: string | null;
+  /** When false, tracking will not start (default: true) */
+  enabled?: boolean;
 }
 
 interface UseAgentLocationTrackerReturn {
@@ -85,6 +87,7 @@ export const useAgentLocationTracker = (
     updateInterval = DEFAULT_UPDATE_INTERVAL,
     enableBackgroundSync = true,
     activeOrderId,
+    enabled = true,
   } = options;
 
   const isActiveDelivery = Boolean(activeOrderId);
@@ -237,7 +240,7 @@ export const useAgentLocationTracker = (
    * Start tracking
    */
   const startTracking = useCallback(() => {
-    if (!isAgent || !isAuthenticated) {
+    if (!isAgent || !isAuthenticated || !enabled) {
       return;
     }
 
@@ -279,6 +282,7 @@ export const useAgentLocationTracker = (
     updateLocation,
     effectiveInterval,
     enableBackgroundSync,
+    enabled,
   ]);
 
   /**
@@ -297,21 +301,19 @@ export const useAgentLocationTracker = (
 
   // Auto-start tracking when agent is authenticated
   useEffect(() => {
-    // Only start if we're an agent, authenticated, and not already tracking
-    if (isAgent && isAuthenticated && intervalRef.current === null) {
+    if (isAgent && isAuthenticated && enabled && intervalRef.current === null) {
       startTracking();
-    } else if ((!isAgent || !isAuthenticated) && intervalRef.current !== null) {
+    } else if ((!isAgent || !isAuthenticated || !enabled) && intervalRef.current !== null) {
       stopTracking();
     }
 
-    // Cleanup on unmount
     return () => {
       if (intervalRef.current !== null) {
         stopTracking();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAgent, isAuthenticated]); // Only depend on these to avoid recreating on every updateLocation change
+  }, [isAgent, isAuthenticated, enabled]);
 
   // Update auth token in service worker and handle sync requests
   const { getAccessToken } = useSessionAuth();
