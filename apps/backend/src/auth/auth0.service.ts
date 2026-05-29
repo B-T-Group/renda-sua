@@ -99,4 +99,12 @@ export class Auth0Service {
   async verifySmsOtp(phoneNumber: string, otp: string) {
     return this.exchangePasswordlessOtp(phoneNumber, otp, 'sms');
   }
+
+  async deleteAuth0User(sub: string): Promise<void> {
+    if (!sub?.trim()) {
+      throw new Error('Auth0 user id (sub) is required');
+    }
+    const client = this.getManagementClient();
+    await client.users.delete({ id: sub });
+  }
 }

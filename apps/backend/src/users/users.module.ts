@@ -5,11 +5,12 @@ import { PermissionService } from '../auth/permission.service';
 import { AwsModule } from '../aws/aws.module';
 import { AgentsModule } from '../agents/agents.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { AccountDeletionService } from './account-deletion.service';
 import { UsersController } from './users.controller';
 
 @Module({
   imports: [HasuraModule, AwsModule, AddressesModule, AgentsModule],
   controllers: [UsersController],
-  providers: [Auth0Service, PermissionService],
+  providers: [Auth0Service, PermissionService, AccountDeletionService],
 })
 export class UsersModule {}

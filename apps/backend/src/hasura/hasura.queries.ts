@@ -12,6 +12,8 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
       phone_number_verified
       email_verified
       user_type_id
+      account_status
+      deleted_at
       profile_picture_url
       preferred_language
       timezone

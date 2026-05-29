@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  Scope,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
@@ -759,6 +766,12 @@ export class HasuraUserService {
       );
       if (!userData) {
         throw new Error(`User not found for id: ${this.user_id}`);
+      }
+      if (userData.account_status === 'deleted') {
+        throw new HttpException(
+          { success: false, error: 'Account has been deleted' },
+          HttpStatus.FORBIDDEN
+        );
       }
 
       const personas = personasFromProfileRelations({

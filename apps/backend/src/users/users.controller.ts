@@ -22,6 +22,7 @@ import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { derivePersonas, userHasPersona } from './persona.util';
@@ -120,7 +121,8 @@ export class UsersController {
     private readonly addressesService: AddressesService,
     private readonly awsService: AwsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly agentReferralsService: AgentReferralsService
+    private readonly agentReferralsService: AgentReferralsService,
+    private readonly accountDeletionService: AccountDeletionService
   ) {}
 
   @Get('me')
@@ -204,6 +206,36 @@ export class UsersController {
       throw new HttpException(
         { success: false, error: error.message || 'Failed to update persona' },
         HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post('me/delete')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete the current user account and anonymize personal data' })
+  @ApiResponse({ status: 200, description: 'Account deleted' })
+  @ApiResponse({ status: 409, description: 'Cannot delete (e.g. active orders)' })
+  async deleteCurrentUser(@CurrentUser() auth0User: any) {
+    const auth0Sub = auth0User?.sub?.trim();
+    if (!auth0Sub) {
+      throw new HttpException(
+        { success: false, error: 'Invalid authenticated user' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    try {
+      const userId = this.hasuraUserService.getUserId();
+      await this.accountDeletionService.deleteAccount(userId, auth0Sub);
+      return { success: true };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to delete account',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

@@ -221,8 +221,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
   - role: business
     permission:
       columns:
@@ -241,8 +244,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
   - role: client
     permission:
       columns:
@@ -261,8 +267,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
   - role: partner
     permission:
       columns:
@@ -281,8 +290,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
   - role: user
     permission:
       columns:
@@ -301,8 +313,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
 update_permissions:
   - role: agent
     permission:
@@ -317,8 +332,11 @@ update_permissions:
         - timezone
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
       check: null
   - role: business
     permission:
@@ -333,8 +351,11 @@ update_permissions:
         - timezone
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
       check: null
   - role: client
     permission:
@@ -349,8 +370,11 @@ update_permissions:
         - timezone
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
       check: null
   - role: partner
     permission:
@@ -365,8 +389,11 @@ update_permissions:
         - timezone
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
       check: null
   - role: user
     permission:
@@ -381,6 +408,9 @@ update_permissions:
         - timezone
         - updated_at
       filter:
-        id:
-          _eq: X-Hasura-User-Id
+        _and:
+          - id:
+              _eq: X-Hasura-User-Id
+          - account_status:
+              _eq: active
       check: null
