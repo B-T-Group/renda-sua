@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface BusinessItemsPageData {
   items: any[];
@@ -42,7 +43,7 @@ export function useBusinessItemsPageData(businessId?: string) {
       const response = await apiClient.get<{
         success: boolean;
         data: BusinessItemsPageData;
-      }>('/business-items/page-data');
+      }>('/business-items/page-data', businessItemsApiParams(businessId));
 
       const data = response.data?.data;
       if (!data) {
@@ -135,7 +136,7 @@ export function useBusinessItemsPageData(businessId?: string) {
         const response = await apiClient.get<{
           success: boolean;
           data: { item: any };
-        }>(`/business-items/items/${itemId}`);
+        }>(`/business-items/items/${itemId}`, businessItemsApiParams(businessId));
         const fresh = response.data?.data?.item;
         if (!fresh) return;
         setItems((prev) =>

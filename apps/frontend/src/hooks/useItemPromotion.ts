@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface ItemPromotionPayload {
   promoted: boolean;
@@ -8,7 +9,7 @@ export interface ItemPromotionPayload {
   sponsored?: boolean;
 }
 
-export function useItemPromotion() {
+export function useItemPromotion(businessId?: string) {
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
 
@@ -18,13 +19,14 @@ export function useItemPromotion() {
       try {
         await apiClient.patch(
           `/business-items/items/${itemId}/promotion`,
-          payload
+          payload,
+          businessItemsApiParams(businessId)
         );
       } finally {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, businessId]
   );
 
   return { setPromotion, loading };

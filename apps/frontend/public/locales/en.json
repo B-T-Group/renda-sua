@@ -1614,6 +1614,12 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Add Item",
       "addFromImage": "Add from image",
+      "businessSelector": {
+        "label": "Business",
+        "placeholder": "Search businesses…",
+        "ownBusiness": "My business"
+      },
+      "managingOtherBusiness": "Managing items for {{businessName}}",
       "facebookExport": {
         "button": "Export for Facebook (CSV)",
         "previewTitle": "Facebook export preview",

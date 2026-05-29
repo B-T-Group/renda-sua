@@ -35,6 +35,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import { useAi } from '../../hooks/useAi';
 import { Brand, useBrands } from '../../hooks/useBrands';
 import {
@@ -119,6 +120,7 @@ const ItemFormPage: React.FC = () => {
   const { itemId } = useParams<{ itemId: string }>();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
+  const { effectiveBusinessId, businessQuerySuffix } = useBusinessCatalogScope();
   const { generateDescription, loading: aiLoading } = useAi();
 
   const isEditMode = !!itemId;
@@ -177,7 +179,7 @@ const ItemFormPage: React.FC = () => {
     fetchSingleItem,
     createItem,
     updateItem,
-  } = useItems(profile?.business?.id);
+  } = useItems(effectiveBusinessId);
 
   const {
     brands,
@@ -201,10 +203,10 @@ const ItemFormPage: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
 
   useEffect(() => {
-    if (profile?.business?.id) {
+    if (effectiveBusinessId) {
       fetchBrandsFromItems();
     }
-  }, [profile?.business?.id, fetchBrandsFromItems]);
+  }, [effectiveBusinessId, fetchBrandsFromItems]);
 
   useEffect(() => {
     fetchTags();
@@ -231,7 +233,7 @@ const ItemFormPage: React.FC = () => {
 
   // Fetch item data for edit mode
   useEffect(() => {
-    if (isEditMode && itemId && profile?.business?.id) {
+    if (isEditMode && itemId && effectiveBusinessId) {
       const fetchItem = async () => {
         try {
           const foundItem = await fetchSingleItem(itemId);
@@ -289,7 +291,7 @@ const ItemFormPage: React.FC = () => {
 
       fetchItem();
     }
-  }, [isEditMode, itemId, profile?.business?.id, fetchSingleItem]);
+  }, [isEditMode, itemId, effectiveBusinessId, fetchSingleItem]);
 
   // Fetch all existing SKUs
   const fetchExistingSkus = useCallback(async () => {
@@ -382,7 +384,7 @@ const ItemFormPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!profile?.business?.id) {
+    if (!effectiveBusinessId) {
       setError('Business profile not found');
       return;
     }
@@ -428,7 +430,7 @@ const ItemFormPage: React.FC = () => {
         const createData = {
           ...formData,
           name: normalizedName,
-          business_id: profile.business.id,
+          business_id: effectiveBusinessId,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -449,7 +451,7 @@ const ItemFormPage: React.FC = () => {
       }
 
       // Redirect to the item view page
-      navigate(`/business/items/${result.id}`);
+      navigate(`/business/items/${result.id}${businessQuerySuffix}`);
     } catch (err) {
       const errorMessage =
         err instanceof Error
@@ -465,12 +467,12 @@ const ItemFormPage: React.FC = () => {
   };
 
   const handleBackToItems = () => {
-    navigate('/business/items');
+    navigate(`/business/items${businessQuerySuffix}`);
   };
 
   const handleBackToItem = () => {
     if (itemId) {
-      navigate(`/business/items/${itemId}`);
+      navigate(`/business/items/${itemId}${businessQuerySuffix}`);
     }
   };
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from './useApiClient';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface ItemDeal {
   id: string;
@@ -15,7 +16,10 @@ export interface ItemDeal {
   updated_at: string;
 }
 
-export const useItemDeals = (inventoryItemId: string | null) => {
+export const useItemDeals = (
+  inventoryItemId: string | null,
+  businessId?: string
+) => {
   const apiClient = useApiClient();
   const { enqueueSnackbar } = useSnackbar();
   const { t } = useTranslation();
@@ -30,7 +34,8 @@ export const useItemDeals = (inventoryItemId: string | null) => {
     setError(null);
     try {
       const response = await apiClient.get(
-        `/business-items/${inventoryItemId}/deals`
+        `/business-items/${inventoryItemId}/deals`,
+        businessItemsApiParams(businessId)
       );
       if (response.data.success) {
         setDeals(response.data.data?.deals ?? []);
@@ -47,7 +52,7 @@ export const useItemDeals = (inventoryItemId: string | null) => {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, inventoryItemId, enqueueSnackbar, t]);
+  }, [apiClient, inventoryItemId, businessId, enqueueSnackbar, t]);
 
   useEffect(() => {
     void fetchDeals();
@@ -64,7 +69,8 @@ export const useItemDeals = (inventoryItemId: string | null) => {
       try {
         const response = await apiClient.post(
           `/business-items/${inventoryItemId}/deals`,
-          payload
+          payload,
+          businessItemsApiParams(businessId)
         );
         if (!response.data.success) {
           throw new Error(response.data.error || 'Failed to create deal');
@@ -83,7 +89,7 @@ export const useItemDeals = (inventoryItemId: string | null) => {
         throw err;
       }
     },
-    [apiClient, inventoryItemId, enqueueSnackbar, fetchDeals, t]
+    [apiClient, inventoryItemId, businessId, enqueueSnackbar, fetchDeals, t]
   );
 
   const updateDeal = useCallback(
@@ -100,7 +106,8 @@ export const useItemDeals = (inventoryItemId: string | null) => {
       try {
         const response = await apiClient.post(
           `/business-items/deals/${dealId}`,
-          updates
+          updates,
+          businessItemsApiParams(businessId)
         );
         if (!response.data.success) {
           throw new Error(response.data.error || 'Failed to update deal');
@@ -119,13 +126,16 @@ export const useItemDeals = (inventoryItemId: string | null) => {
         throw err;
       }
     },
-    [apiClient, enqueueSnackbar, fetchDeals, t]
+    [apiClient, businessId, enqueueSnackbar, fetchDeals, t]
   );
 
   const deleteDeal = useCallback(
     async (dealId: string) => {
       try {
-        await apiClient.delete(`/business-items/deals/${dealId}`);
+        await apiClient.delete(
+          `/business-items/deals/${dealId}`,
+          businessItemsApiParams(businessId)
+        );
         enqueueSnackbar(
           t('business.items.deals.deleted', 'Deal deleted successfully'),
           { variant: 'success' }
@@ -140,7 +150,7 @@ export const useItemDeals = (inventoryItemId: string | null) => {
         throw err;
       }
     },
-    [apiClient, enqueueSnackbar, fetchDeals, t]
+    [apiClient, businessId, enqueueSnackbar, fetchDeals, t]
   );
 
   return {
@@ -153,4 +163,3 @@ export const useItemDeals = (inventoryItemId: string | null) => {
     deleteDeal,
   };
 };
-

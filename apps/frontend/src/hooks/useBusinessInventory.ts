@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { useGraphQLRequest } from './useGraphQLRequest';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface BusinessInventoryItem {
   id: string;
@@ -294,7 +295,7 @@ export const useBusinessInventory = (
       const response = await apiClient.get<{
         success: boolean;
         data: { business_locations: any[] };
-      }>('/business-items/locations');
+      }>('/business-items/locations', businessItemsApiParams(businessId));
       console.log('useBusinessInventory: Locations fetch result:', response.data);
       setBusinessLocations(response.data?.data?.business_locations ?? []);
     } catch (err) {
@@ -332,7 +333,11 @@ export const useBusinessInventory = (
       options?: { skipFetchInventory?: boolean }
     ) => {
       try {
-        await apiClient.patch(`/business-items/inventory/${itemId}`, updates);
+        await apiClient.patch(
+          `/business-items/inventory/${itemId}`,
+          updates,
+          businessItemsApiParams(businessId)
+        );
         if (!options?.skipFetchInventory) {
           await fetchInventory();
         }
@@ -342,7 +347,7 @@ export const useBusinessInventory = (
         );
       }
     },
-    [apiClient, fetchInventory]
+    [apiClient, fetchInventory, businessId]
   );
 
   const deleteInventoryItem = useCallback(

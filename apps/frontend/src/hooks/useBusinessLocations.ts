@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 import { useApiClient } from './useApiClient';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface BusinessLocation {
   id: string;
@@ -116,7 +117,7 @@ export const useBusinessLocations = (
           business_locations?: BusinessLocation[];
           primary_address_country?: string | null;
         };
-      }>('/business-items/locations');
+      }>('/business-items/locations', businessItemsApiParams(businessId));
       if (response.data.success && response.data.data) {
         setLocations(response.data.data.business_locations ?? []);
         setPrimaryAddressCountry(
@@ -142,7 +143,7 @@ export const useBusinessLocations = (
     } finally {
       setLoading(false);
     }
-  }, [apiClient]);
+  }, [apiClient, businessId]);
 
   const addLocation = useCallback(
     async (data: AddBusinessLocationData) => {
@@ -193,7 +194,7 @@ export const useBusinessLocations = (
           success: boolean;
           message?: string;
           data?: { business_location?: BusinessLocation };
-        }>('/business-items/locations', body);
+        }>('/business-items/locations', body, businessItemsApiParams(businessId));
         if (response.data.success && response.data.data?.business_location) {
           await fetchLocations();
           if (onAddressCreated) {
@@ -261,7 +262,11 @@ export const useBusinessLocations = (
           await apiClient.patch<{
             success: boolean;
             data?: { business_location?: BusinessLocation };
-          }>(`/business-items/locations/${id}`, locationFields);
+          }>(
+            `/business-items/locations/${id}`,
+            locationFields,
+            businessItemsApiParams(businessId)
+          );
         }
 
         // If address data is provided, update the address using REST API

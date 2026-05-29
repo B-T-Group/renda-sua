@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface BusinessCollectionOption {
   id: string;
@@ -23,7 +24,11 @@ export interface CollectionSuggestion {
   reason?: string;
 }
 
-export function useBusinessItemCollections(itemId: string | null, open: boolean) {
+export function useBusinessItemCollections(
+  itemId: string | null,
+  open: boolean,
+  businessId?: string
+) {
   const apiClient = useApiClient();
   const [collections, setCollections] = useState<BusinessCollectionOption[]>([]);
   const [suggestions, setSuggestions] = useState<CollectionSuggestion[]>([]);
@@ -36,15 +41,21 @@ export function useBusinessItemCollections(itemId: string | null, open: boolean)
     setLoading(true);
     setError(null);
     try {
+      const catalogParams = businessItemsApiParams(businessId).params ?? {};
       const [listRes, suggestRes] = await Promise.all([
         apiClient.get<{
           success: boolean;
           data: { collections: BusinessCollectionOption[] };
-        }>('/business-items/collections', { params: { itemId } }),
+        }>('/business-items/collections', {
+          params: { itemId, ...catalogParams },
+        }),
         apiClient.get<{
           success: boolean;
           data: { suggestions: CollectionSuggestion[] };
-        }>(`/business-items/items/${itemId}/collection-suggestions`),
+        }>(
+          `/business-items/items/${itemId}/collection-suggestions`,
+          businessItemsApiParams(businessId)
+        ),
       ]);
       if (listRes.data.success) {
         setCollections(listRes.data.data.collections ?? []);
@@ -60,7 +71,7 @@ export function useBusinessItemCollections(itemId: string | null, open: boolean)
     } finally {
       setLoading(false);
     }
-  }, [apiClient, itemId, open]);
+  }, [apiClient, itemId, open, businessId]);
 
   useEffect(() => {
     load();
@@ -72,9 +83,11 @@ export function useBusinessItemCollections(itemId: string | null, open: boolean)
       setSaving(true);
       setError(null);
       try {
-        await apiClient.put(`/business-items/items/${itemId}/collections`, {
-          collectionIds,
-        });
+        await apiClient.put(
+          `/business-items/items/${itemId}/collections`,
+          { collectionIds },
+          businessItemsApiParams(businessId)
+        );
         await load();
         return true;
       } catch (err: unknown) {
@@ -87,7 +100,7 @@ export function useBusinessItemCollections(itemId: string | null, open: boolean)
         setSaving(false);
       }
     },
-    [apiClient, itemId, load]
+    [apiClient, itemId, businessId, load]
   );
 
   return {

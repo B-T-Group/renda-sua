@@ -42,6 +42,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import { useAws } from '../../hooks/useAws';
 import { useBusinessImages } from '../../hooks/useBusinessImages';
 import {
@@ -87,6 +88,11 @@ export default function ItemViewPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const {
+    effectiveBusinessId,
+    canSuperUserActions,
+    businessQuerySuffix,
+  } = useBusinessCatalogScope();
   const listItem = (location.state as { item?: Item } | null)?.item;
 
   const [item, setItem] = useState<Item | null>(
@@ -135,8 +141,8 @@ export default function ItemViewPage() {
     fetchBrands,
     fetchItemSubCategories,
     updateItem,
-  } = useItems(profile?.business?.id);
-  const { fetchBusinessLocations } = useBusinessInventory();
+  } = useItems(effectiveBusinessId);
+  const { fetchBusinessLocations } = useBusinessInventory(effectiveBusinessId);
 
   const fetchItemDetails = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -173,21 +179,21 @@ export default function ItemViewPage() {
   }, [itemId, listItem?.id, fetchItemDetails]);
 
   useEffect(() => {
-    if (profile?.business?.id) {
+    if (effectiveBusinessId) {
       fetchBusinessLocations();
     }
-  }, [profile?.business?.id, fetchBusinessLocations]);
+  }, [effectiveBusinessId, fetchBusinessLocations]);
 
   useEffect(() => {
-    if (profile?.business?.id) {
+    if (effectiveBusinessId) {
       fetchBrands().catch(() => undefined);
       fetchItemSubCategories().catch(() => undefined);
     }
-  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
+  }, [effectiveBusinessId, fetchBrands, fetchItemSubCategories]);
 
   const handleEditItem = () => {
     if (item?.id) {
-      navigate(`/business/items/edit/${item.id}`);
+      navigate(`/business/items/edit/${item.id}${businessQuerySuffix}`);
     }
   };
 
@@ -841,14 +847,16 @@ export default function ItemViewPage() {
                     {t('business.items.details', 'Item Details')}
                   </Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<CategoryIcon />}
-                      onClick={() => setShowCollectionsDialog(true)}
-                    >
-                      {t('business.items.collections.title', 'Collections')}
-                    </Button>
+                    {canSuperUserActions && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<CategoryIcon />}
+                        onClick={() => setShowCollectionsDialog(true)}
+                      >
+                        {t('business.items.collections.title', 'Collections')}
+                      </Button>
+                    )}
                     <Button
                       variant="outlined"
                       size="small"
@@ -1278,13 +1286,18 @@ export default function ItemViewPage() {
                                   'Update Stock'
                                 )}
                               </Button>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => handleManageDeals(inventory)}
-                              >
-                                {t('business.items.deals.manage', 'Manage deals')}
-                              </Button>
+                              {canSuperUserActions && (
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => handleManageDeals(inventory)}
+                                >
+                                  {t(
+                                    'business.items.deals.manage',
+                                    'Manage deals'
+                                  )}
+                                </Button>
+                              )}
                             </Stack>
                           </CardContent>
                         </Card>
@@ -1642,6 +1655,7 @@ export default function ItemViewPage() {
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
+        businessId={effectiveBusinessId}
         item={item}
         selectedInventory={selectedInventory}
         onInventoryUpdated={() => {
@@ -1668,6 +1682,7 @@ export default function ItemViewPage() {
         inventoryItem={
           (manageDealsInventory as unknown as BusinessInventoryItem) || null
         }
+        businessId={effectiveBusinessId}
       />
 
       <RefineItemWithAiDialog
@@ -1685,6 +1700,7 @@ export default function ItemViewPage() {
       <ManageItemCollectionsDialog
         open={showCollectionsDialog}
         itemId={itemId ?? null}
+        businessId={effectiveBusinessId}
         onClose={() => setShowCollectionsDialog(false)}
         onSaved={() => {
           void fetchItemDetails();

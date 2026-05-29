@@ -20,6 +20,7 @@ export interface ManageItemCollectionsDialogProps {
   itemId: string | null;
   onClose: () => void;
   onSaved?: () => void;
+  businessId?: string;
 }
 
 export function ManageItemCollectionsDialog({
@@ -27,6 +28,7 @@ export function ManageItemCollectionsDialog({
   itemId,
   onClose,
   onSaved,
+  businessId,
 }: ManageItemCollectionsDialogProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -36,7 +38,7 @@ export function ManageItemCollectionsDialog({
     saving,
     error,
     saveCollections,
-  } = useBusinessItemCollections(itemId, open);
+  } = useBusinessItemCollections(itemId, open, businessId);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {

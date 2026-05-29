@@ -30,6 +30,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
+import { businessItemsApiParams } from '../../utils/businessItemsApiParams';
+import AdminBusinessSelector from '../business/AdminBusinessSelector';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
@@ -192,6 +195,16 @@ const BusinessItemsPage: React.FC = () => {
     loading: profileLoading,
     error: profileError,
   } = useUserProfileContext();
+  const {
+    effectiveBusinessId,
+    isPlatformAdmin,
+    isViewingOtherBusiness,
+    canDelete,
+    canSuperUserActions,
+    setSelectedBusinessId,
+    ownBusinessId,
+    businessQuerySuffix,
+  } = useBusinessCatalogScope();
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -205,6 +218,7 @@ const BusinessItemsPage: React.FC = () => {
   );
   const [promoteItem, setPromoteItem] = useState<any | null>(null);
   const [facebookExportSelectOpen, setFacebookExportSelectOpen] = useState(false);
+  const [selectedBusinessName, setSelectedBusinessName] = useState<string>('');
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -226,7 +240,7 @@ const BusinessItemsPage: React.FC = () => {
     refetch: refetchPageData,
     mergeItemIntoList,
     refreshListItem,
-  } = useBusinessItemsPageData(profile?.business?.id);
+  } = useBusinessItemsPageData(effectiveBusinessId);
 
   const {
     brands,
@@ -236,9 +250,9 @@ const BusinessItemsPage: React.FC = () => {
     fetchBrands,
     fetchItemSubCategories,
     updateItem,
-  } = useItems(profile?.business?.id, { skipInitialItemsFetch: true });
+  } = useItems(effectiveBusinessId, { skipInitialItemsFetch: true });
 
-  useBusinessInventory(profile?.business?.id, { skipInitialFetch: true });
+  useBusinessInventory(effectiveBusinessId, { skipInitialFetch: true });
 
   const navigate = useNavigate();
 
@@ -247,15 +261,16 @@ const BusinessItemsPage: React.FC = () => {
 
   // Fetch brands and subcategories when component mounts (items/locations come from page-data)
   useEffect(() => {
-    if (profile?.business?.id) {
+    if (effectiveBusinessId) {
       fetchBrands();
       fetchItemSubCategories();
     }
-  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
+  }, [effectiveBusinessId, fetchBrands, fetchItemSubCategories]);
+
+  const itemPathSuffix = businessQuerySuffix;
 
   const handleEditItem = (item: any) => {
-    // Navigate to the edit page instead of opening dialog
-    navigate(`/business/items/edit/${item.id}`);
+    navigate(`/business/items/edit/${item.id}${itemPathSuffix}`);
   };
 
   const downloadFacebookCatalogCsv = (selectedItemIds: Set<string>) => {
@@ -320,7 +335,7 @@ const BusinessItemsPage: React.FC = () => {
   };
 
   const handleViewItem = (item: Item) => {
-    navigate(`/business/items/${item.id}`, { state: { item } });
+    navigate(`/business/items/${item.id}${itemPathSuffix}`, { state: { item } });
   };
 
   const handleDeleteItem = (item: any) => {
@@ -333,7 +348,10 @@ const BusinessItemsPage: React.FC = () => {
 
     setDeleteLoading(true);
     try {
-      await apiClient.delete('/business-items/' + itemToDelete.id);
+      await apiClient.delete(
+        '/business-items/' + itemToDelete.id,
+        businessItemsApiParams(effectiveBusinessId)
+      );
       enqueueSnackbar(t('business.items.itemDeleted'), {
         variant: 'success',
       });
@@ -390,9 +408,11 @@ const BusinessItemsPage: React.FC = () => {
   const handleToggleFavorite = useCallback(
     async (row: Item, favorited: boolean) => {
       try {
-        await apiClient.put(`/business-items/items/${row.id}/favorite`, {
-          favorited,
-        });
+        await apiClient.put(
+          `/business-items/items/${row.id}/favorite`,
+          { favorited },
+          businessItemsApiParams(effectiveBusinessId)
+        );
         mergeItemIntoList(row.id, { is_favorite: favorited });
         enqueueSnackbar(
           t('business.items.favoriteUpdated', 'Favorites updated'),
@@ -408,7 +428,7 @@ const BusinessItemsPage: React.FC = () => {
         );
       }
     },
-    [apiClient, mergeItemIntoList, enqueueSnackbar, t]
+    [apiClient, mergeItemIntoList, enqueueSnackbar, t, effectiveBusinessId]
   );
 
   const handleToggleItemActive = useCallback(
@@ -669,6 +689,32 @@ const BusinessItemsPage: React.FC = () => {
 
       <BusinessVerificationBanner />
 
+      {isPlatformAdmin && (
+        <Box sx={{ mb: 1.5 }}>
+          <AdminBusinessSelector
+            selectedBusinessId={effectiveBusinessId}
+            ownBusinessId={ownBusinessId}
+            ownBusinessName={profile.business.name}
+            onChange={(businessId, businessName) => {
+              setSelectedBusinessId(businessId);
+              setSelectedBusinessName(businessName);
+            }}
+          />
+        </Box>
+      )}
+
+      {isViewingOtherBusiness && (
+        <Alert severity="info" sx={{ mb: 1.5 }}>
+          {t('business.items.managingOtherBusiness', {
+            defaultValue: 'Managing items for {{businessName}}',
+            businessName:
+              selectedBusinessName ||
+              items?.[0]?.business?.name ||
+              effectiveBusinessId,
+          })}
+        </Alert>
+      )}
+
       {/* Title row: title + subtitle, actions */}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
@@ -851,16 +897,24 @@ const BusinessItemsPage: React.FC = () => {
                     item={item}
                     onViewItem={handleViewItem}
                     onEditItem={handleEditItem}
-                    onDeleteItem={handleDeleteItem}
+                    onDeleteItem={canDelete ? handleDeleteItem : undefined}
                     onRestockInventoryItem={handleRestockInventoryItem}
-                    onManageDeals={handleManageDeals}
-                    onPromoteItem={handlePromoteItem}
+                    onManageDeals={
+                      canSuperUserActions ? handleManageDeals : undefined
+                    }
+                    onPromoteItem={
+                      canSuperUserActions ? handlePromoteItem : undefined
+                    }
                     onRefineWithAi={(i) => setRefineAiItem(i)}
                     onToggleItemActive={handleToggleItemActive}
                     onTogglePayOnDelivery={handleTogglePayOnDelivery}
                     onTogglePayAtPickup={handleTogglePayAtPickup}
                     onToggleFavorite={handleToggleFavorite}
-                    onManageCollections={(i) => setManageCollectionsItem(i)}
+                    onManageCollections={
+                      canSuperUserActions
+                        ? (i) => setManageCollectionsItem(i)
+                        : undefined
+                    }
                   />
                 </Box>
               ))}
@@ -873,6 +927,7 @@ const BusinessItemsPage: React.FC = () => {
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
+        businessId={effectiveBusinessId}
         item={
           updatingInventoryItem
             ? items.find((item) => item.id === updatingInventoryItem.item_id) ||
@@ -890,12 +945,14 @@ const BusinessItemsPage: React.FC = () => {
         open={Boolean(manageDealsItem)}
         onClose={() => setManageDealsItem(null)}
         inventoryItem={manageDealsItem}
+        businessId={effectiveBusinessId}
       />
 
       <PromoteItemDialog
         open={Boolean(promoteItem)}
         onClose={() => setPromoteItem(null)}
         item={promoteItem}
+        businessId={effectiveBusinessId}
         onSaved={() => {
           if (promoteItem?.id) void refreshListItem(promoteItem.id);
         }}
@@ -916,6 +973,7 @@ const BusinessItemsPage: React.FC = () => {
       <ManageItemCollectionsDialog
         open={Boolean(manageCollectionsItem)}
         itemId={manageCollectionsItem?.id ?? null}
+        businessId={effectiveBusinessId}
         onClose={() => setManageCollectionsItem(null)}
         onSaved={() => {
           if (manageCollectionsItem?.id) {

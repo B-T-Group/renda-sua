@@ -37,6 +37,7 @@ interface PromoteItemDialogProps {
   onClose: () => void;
   item: PageItem | null;
   onSaved: () => void;
+  businessId?: string;
 }
 
 function readPromotionFromItem(item: PageItem | null) {
@@ -71,10 +72,11 @@ const PromoteItemDialog: React.FC<PromoteItemDialogProps> = ({
   onClose,
   item,
   onSaved,
+  businessId,
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { setPromotion, loading } = useItemPromotion();
+  const { setPromotion, loading } = useItemPromotion(businessId);
   const [promoted, setPromoted] = useState(false);
   const [sponsored, setSponsored] = useState(false);
   const [start, setStart] = useState('');

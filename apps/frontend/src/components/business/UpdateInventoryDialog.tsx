@@ -29,6 +29,7 @@ interface UpdateInventoryDialogProps {
   onInventoryUpdated?: (itemId: string) => void;
   /** When set, avoid refetching full business inventory; caller refreshes their own list (e.g. items page) */
   skipFetchInventory?: boolean;
+  businessId?: string;
 }
 
 export default function UpdateInventoryDialog({
@@ -38,17 +39,19 @@ export default function UpdateInventoryDialog({
   selectedInventory,
   onInventoryUpdated,
   skipFetchInventory = false,
+  businessId: businessIdProp,
 }: UpdateInventoryDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
+  const catalogBusinessId = businessIdProp ?? profile?.business?.id;
   const { addInventoryItem, updateInventoryItem, loading } =
-    useBusinessInventory();
+    useBusinessInventory(catalogBusinessId);
   const {
     locations: businessLocations,
     loading: locationsLoading,
     error: locationsError,
-  } = useBusinessLocations(profile?.business?.id);
+  } = useBusinessLocations(catalogBusinessId);
 
   const [formData, setFormData] = useState({
     business_location_id: '',

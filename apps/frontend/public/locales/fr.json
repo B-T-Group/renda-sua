@@ -1603,6 +1603,12 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Ajouter un article",
       "addFromImage": "Ajouter à partir d’une image",
+      "businessSelector": {
+        "label": "Entreprise",
+        "placeholder": "Rechercher une entreprise…",
+        "ownBusiness": "Mon entreprise"
+      },
+      "managingOtherBusiness": "Gestion des articles pour {{businessName}}",
       "facebookExport": {
         "button": "Exporter pour Facebook (CSV)",
         "previewTitle": "Aperçu de l’export Facebook",

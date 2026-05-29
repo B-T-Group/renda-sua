@@ -19,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,6 +27,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CsvUploadRequestDto } from './dto/csv-upload.dto';
 import { BusinessItemsService } from './business-items.service';
+import { BusinessItemsAccessService } from './business-items-access.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
@@ -47,42 +49,34 @@ export class BusinessItemsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly businessItemsService: BusinessItemsService,
-    private readonly itemDealsService: ItemDealsService
+    private readonly itemDealsService: ItemDealsService,
+    private readonly accessService: BusinessItemsAccessService
   ) {}
 
   @Get('page-data')
   @ApiOperation({
-    summary: 'Get all page data for business items (items, locations, available-items) in one request',
+    summary:
+      'Get all page data for business items (items, locations, available-items) in one request',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Page data retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async getPageData() {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const data = await this.businessItemsService.getPageData(businessId);
+  async getPageData(@Query('businessId') businessId?: string) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.businessItemsService.getPageData(
+      ctx.targetBusinessId
+    );
     return { success: true, data };
   }
 
   @Get('items')
   @ApiOperation({ summary: 'Get items for the current business' })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Items retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async getItems() {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const items = await this.businessItemsService.getItems(businessId);
+  async getItems(@Query('businessId') businessId?: string) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const items = await this.businessItemsService.getItems(ctx.targetBusinessId);
     return { success: true, data: { items } };
   }
 
@@ -90,6 +84,7 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Update a business location (e.g. commission percentage)',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Location updated successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Location not found' })
@@ -100,7 +95,10 @@ export class BusinessItemsController {
         name: { type: 'string' },
         phone: { type: 'string' },
         email: { type: 'string' },
-        location_type: { type: 'string', enum: ['store', 'warehouse', 'office', 'pickup_point'] },
+        location_type: {
+          type: 'string',
+          enum: ['store', 'warehouse', 'office', 'pickup_point'],
+        },
         is_active: { type: 'boolean' },
         is_primary: { type: 'boolean' },
         rendasua_item_commission_percentage: { type: 'number', nullable: true },
@@ -119,6 +117,7 @@ export class BusinessItemsController {
   })
   async patchLocation(
     @Param('locationId') locationId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body()
     body: {
       name?: string;
@@ -132,16 +131,9 @@ export class BusinessItemsController {
       logo_url?: string | null;
     }
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
     const location = await this.businessItemsService.updateBusinessLocation(
-      businessId,
+      ctx.targetBusinessId,
       locationId,
       body
     );
@@ -150,20 +142,16 @@ export class BusinessItemsController {
 
   @Get('locations')
   @ApiOperation({ summary: 'Get business locations for the current business' })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Locations retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async getLocations() {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async getLocations(@Query('businessId') businessId?: string) {
+    const ctx = await this.accessService.resolveAccess(businessId);
     const [business_locations, primary_address_country] = await Promise.all([
-      this.businessItemsService.getBusinessLocations(businessId),
-      this.businessItemsService.getBusinessPrimaryAddressCountry(businessId),
+      this.businessItemsService.getBusinessLocations(ctx.targetBusinessId),
+      this.businessItemsService.getBusinessPrimaryAddressCountry(
+        ctx.targetBusinessId
+      ),
     ]);
     return {
       success: true,
@@ -177,8 +165,12 @@ export class BusinessItemsController {
     summary:
       'Create a business location (new address lines, or reuse address_id linked to the business; creates location account)',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 201, description: 'Location created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid body or business has no address for new-address flow' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid body or business has no address for new-address flow',
+  })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiBody({
     schema: {
@@ -200,12 +192,18 @@ export class BusinessItemsController {
             address_line_2: { type: 'string' },
             city: { type: 'string' },
             state: { type: 'string' },
-            postal_code: { type: 'string', description: 'Optional; empty string allowed' },
+            postal_code: {
+              type: 'string',
+              description: 'Optional; empty string allowed',
+            },
           },
         },
         phone: { type: 'string' },
         email: { type: 'string' },
-        location_type: { type: 'string', enum: ['store', 'warehouse', 'office', 'pickup_point'] },
+        location_type: {
+          type: 'string',
+          enum: ['store', 'warehouse', 'office', 'pickup_point'],
+        },
         is_primary: { type: 'boolean' },
         rendasua_item_commission_percentage: { type: 'number', nullable: true },
         auto_withdraw_commissions: {
@@ -221,6 +219,7 @@ export class BusinessItemsController {
     },
   })
   async createLocation(
+    @Query('businessId') businessId: string | undefined,
     @Body()
     body: {
       name: string;
@@ -241,15 +240,11 @@ export class BusinessItemsController {
       logo_url?: string | null;
     }
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const location = await this.businessItemsService.createBusinessLocation(businessId, body);
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const location = await this.businessItemsService.createBusinessLocation(
+      ctx.targetBusinessId,
+      body
+    );
     return { success: true, data: { business_location: location } };
   }
 
@@ -268,23 +263,21 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Create a new item for the current business from a business image',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({
     status: 201,
     description: 'Item created from image successfully',
   })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiBody({ type: CreateItemFromImageDto })
-  async createItemFromImage(@Body() body: CreateItemFromImageDto) {
+  async createItemFromImage(
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: CreateItemFromImageDto
+  ) {
     const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
     const item = await this.businessItemsService.createItemFromImage(
-      businessId,
+      ctx.targetBusinessId,
       body,
       user?.preferred_language ?? 'en'
     );
@@ -296,21 +289,18 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Create an inventory record for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 201, description: 'Inventory created successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Item or location not found' })
   @ApiBody({ type: CreateInventoryDto })
-  async createInventory(@Body() body: CreateInventoryDto) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async createInventory(
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: CreateInventoryDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
     const inventory = await this.businessItemsService.createInventoryItem(
-      businessId,
+      ctx.targetBusinessId,
       body
     );
     return { success: true, data: { inventory } };
@@ -320,6 +310,7 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Update an inventory record for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Inventory updated successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Inventory not found' })
@@ -344,6 +335,7 @@ export class BusinessItemsController {
   })
   async updateInventory(
     @Param('inventoryId') inventoryId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body()
     body: {
       quantity?: number;
@@ -356,16 +348,9 @@ export class BusinessItemsController {
       promotion?: Record<string, unknown> | null;
     }
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
     const inventory = await this.businessItemsService.updateInventoryItem(
-      businessId,
+      ctx.targetBusinessId,
       inventoryId,
       body
     );
@@ -376,21 +361,18 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Get a single item for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Item retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Item not found' })
-  async getItem(@Param('itemId') itemId: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async getItem(
+    @Param('itemId') itemId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
     try {
       const item = await this.businessItemsService.getSingleItem(
-        businessId,
+        ctx.targetBusinessId,
         itemId
       );
       return { success: true, data: { item } };
@@ -408,24 +390,20 @@ export class BusinessItemsController {
     summary:
       'Set promotion on all inventory rows for this item within the business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Promotion updated' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Item not found' })
   @ApiBody({ type: UpdateItemPromotionDto })
   async updateItemPromotion(
     @Param('itemId') itemId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: UpdateItemPromotionDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const result = await this.businessItemsService.setPromotionForItem(
-      businessId,
+      ctx.targetBusinessId,
       itemId,
       body
     );
@@ -434,19 +412,19 @@ export class BusinessItemsController {
 
   @Post('items')
   @ApiOperation({ summary: 'Create a catalog item for the current business' })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 201, description: 'Item created successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiBody({ type: CreateItemDto })
-  async createItem(@Body() body: CreateItemDto) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const item = await this.businessItemsService.createItem(businessId, body);
+  async createItem(
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: CreateItemDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const item = await this.businessItemsService.createItem(
+      ctx.targetBusinessId,
+      body
+    );
     return { success: true, data: { item } };
   }
 
@@ -454,25 +432,22 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Update an item for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Item updated successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  @ApiResponse({ status: 404, description: 'Item not found or not owned by business' })
+  @ApiResponse({
+    status: 404,
+    description: 'Item not found or not owned by business',
+  })
   @ApiBody({ type: UpdateItemDto })
   async updateItem(
     @Param('itemId') itemId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: UpdateItemDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
+    const ctx = await this.accessService.resolveAccess(businessId);
     const item = await this.businessItemsService.updateItem(
-      businessId,
+      ctx.targetBusinessId,
       itemId,
       body
     );
@@ -483,24 +458,19 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Mark or unmark an item as a business favorite (catalog bookmark)',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Favorite status updated' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Item not found for this business' })
   @ApiBody({ type: SetItemFavoriteDto })
   async setItemFavorite(
     @Param('itemId') itemId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: SetItemFavoriteDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
     await this.businessItemsService.setItemFavorite(
-      businessId,
+      ctx.targetBusinessId,
       itemId,
       body.favorited
     );
@@ -509,35 +479,45 @@ export class BusinessItemsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft-delete an item (set status to deleted, clear location inventories)' })
+  @ApiOperation({
+    summary: 'Soft-delete an item (set status to deleted, clear location inventories)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 204, description: 'Item deleted successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  @ApiResponse({ status: 404, description: 'Item not found or not owned by business' })
-  async deleteItem(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    await this.businessItemsService.deleteItem(businessId, id);
+  @ApiResponse({
+    status: 404,
+    description: 'Item not found or not owned by business',
+  })
+  async deleteItem(
+    @Param('id') id: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertCanDelete(ctx);
+    await this.businessItemsService.deleteItem(ctx.targetBusinessId, id);
   }
 
   @Post('csv-upload')
   @ApiOperation({
     summary: 'Upload CSV rows to create/update items and inventory',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiBody({ type: CsvUploadRequestDto })
-  @ApiResponse({ status: 200, description: 'CSV processing result with inserted/updated/error counts' })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV processing result with inserted/updated/error counts',
+  })
   @ApiResponse({ status: 400, description: 'Too many rows or invalid body' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async csvUpload(@Body() body: CsvUploadRequestDto) {
+  async csvUpload(
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: CsvUploadRequestDto
+  ) {
     const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
+    const ctx = await this.accessService.resolveAccess(businessId);
     const userId = user?.id;
-    if (!businessId || !userId) {
+    if (!userId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN
@@ -567,7 +547,7 @@ export class BusinessItemsController {
     }
     const rowOffset = body?.rowOffset ?? 0;
     const data = await this.businessItemsService.processCsvRows(
-      businessId,
+      ctx.targetBusinessId,
       userId,
       rows,
       rowOffset
@@ -579,21 +559,19 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'List deals for a specific inventory item of the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({
     status: 200,
     description: 'Deals retrieved successfully',
   })
-  async getItemDeals(@Param('inventoryItemId') inventoryItemId: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async getItemDeals(
+    @Param('inventoryItemId') inventoryItemId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const deals = await this.itemDealsService.getDealsForInventory(
-      businessId,
+      ctx.targetBusinessId,
       inventoryItemId
     );
     return { success: true, data: { deals } };
@@ -603,32 +581,26 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Create a new deal for an inventory item',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({
     status: 201,
     description: 'Deal created successfully',
   })
   async createItemDeal(
     @Param('inventoryItemId') inventoryItemId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: CreateItemDealDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const deal = await this.itemDealsService.createDeal({
-      businessId,
+      businessId: ctx.targetBusinessId,
       inventoryItemId,
       discountType: body.discountType,
       discountValue: body.discountValue,
       startAt: body.startAt,
       endAt: body.endAt,
     });
-
     return { success: true, data: { deal } };
   }
 
@@ -637,25 +609,20 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Update an existing deal for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({
     status: 200,
     description: 'Deal updated successfully',
   })
   async updateItemDeal(
     @Param('dealId') dealId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: UpdateItemDealDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const deal = await this.itemDealsService.updateDeal({
-      businessId,
+      businessId: ctx.targetBusinessId,
       dealId,
       updates: {
         discountType: body.discountType,
@@ -665,7 +632,6 @@ export class BusinessItemsController {
         isActive: body.isActive,
       },
     });
-
     return { success: true, data: { deal } };
   }
 
@@ -673,58 +639,53 @@ export class BusinessItemsController {
   @ApiOperation({
     summary: 'Delete a deal for the current business',
   })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({
     status: 204,
     description: 'Deal deleted successfully',
   })
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteItemDeal(@Param('dealId') dealId: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
-    await this.itemDealsService.deleteDeal(businessId, dealId);
+  async deleteItemDeal(
+    @Param('dealId') dealId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
+    await this.itemDealsService.deleteDeal(ctx.targetBusinessId, dealId);
   }
 
   @Get('collections')
-  @ApiOperation({ summary: 'List platform collections with optional assignment state' })
+  @ApiOperation({
+    summary: 'List platform collections with optional assignment state',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Collections retrieved' })
-  async listCollections(@Query('itemId') itemId?: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async listCollections(
+    @Query('itemId') itemId?: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const collections = await this.businessItemsService.listAllCollections(
       itemId,
-      businessId
+      ctx.targetBusinessId
     );
     return { success: true, data: { collections } };
   }
 
   @Get('items/:itemId/collection-suggestions')
   @ApiOperation({ summary: 'Suggested collections for an item (AI)' })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Suggestions retrieved' })
-  async getItemCollectionSuggestions(@Param('itemId') itemId: string) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+  async getItemCollectionSuggestions(
+    @Param('itemId') itemId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     const suggestions =
       await this.businessItemsService.getItemCollectionSuggestions(
-        businessId,
+        ctx.targetBusinessId,
         itemId
       );
     return { success: true, data: { suggestions } };
@@ -732,22 +693,18 @@ export class BusinessItemsController {
 
   @Put('items/:itemId/collections')
   @ApiOperation({ summary: 'Replace item collection assignments' })
+  @ApiQuery({ name: 'businessId', required: false })
   @ApiBody({ type: SetItemCollectionsDto })
   @ApiResponse({ status: 200, description: 'Collections updated' })
   async setItemCollections(
     @Param('itemId') itemId: string,
+    @Query('businessId') businessId: string | undefined,
     @Body() body: SetItemCollectionsDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
+    const ctx = await this.accessService.resolveAccess(businessId);
+    this.accessService.assertPlatformAdmin(ctx);
     await this.businessItemsService.setItemCollections(
-      businessId,
+      ctx.targetBusinessId,
       itemId,
       body.collectionIds ?? []
     );

@@ -24,6 +24,7 @@ interface ManageDealsDialogProps {
   open: boolean;
   onClose: () => void;
   inventoryItem: BusinessInventoryItem | null;
+  businessId?: string;
 }
 
 const formatDateTimeLocal = (value: string) => {
@@ -36,10 +37,14 @@ const ManageDealsDialog: React.FC<ManageDealsDialogProps> = ({
   open,
   onClose,
   inventoryItem,
+  businessId,
 }) => {
   const { t } = useTranslation();
   const inventoryId = inventoryItem?.id ?? null;
-  const { deals, loading, createDeal, deleteDeal } = useItemDeals(inventoryId);
+  const { deals, loading, createDeal, deleteDeal } = useItemDeals(
+    inventoryId,
+    businessId
+  );
 
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(
     'percentage'

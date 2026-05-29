@@ -118,7 +118,7 @@ interface BusinessItemCardViewProps {
   item: Item;
   onViewItem: (item: Item) => void;
   onEditItem: (item: Item) => void;
-  onDeleteItem: (item: Item) => void;
+  onDeleteItem?: (item: Item) => void;
   onRestockInventoryItem: (item: Item) => void;
   onManageDeals?: (item: Item) => void;
   onPromoteItem?: (item: Item) => void;
@@ -1109,6 +1109,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               </IconButton>
             </Tooltip>
           )}
+          {onDeleteItem && (
           <Tooltip title={t('business.items.deleteItem', 'Delete Item')}>
             <IconButton
               size="small"
@@ -1124,6 +1125,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          )}
           </Stack>
         </Stack>
       </CardContent>

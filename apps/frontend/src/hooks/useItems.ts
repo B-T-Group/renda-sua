@@ -3,6 +3,7 @@ import { ItemImage } from '../types/image';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
+import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
 export interface Item {
   id: string;
@@ -223,7 +224,7 @@ export const useItems = (
         const response = await apiClient.get<{
           success: boolean;
           data: { items: any[] };
-        }>('/business-items/items');
+        }>('/business-items/items', businessItemsApiParams(businessId));
         console.log('useItems: Fetch result:', response.data);
         const fetchedItems = response.data?.data?.items ?? [];
         // Collect unique destination address IDs from all business_inventories
@@ -287,7 +288,7 @@ export const useItems = (
           success: boolean;
           data: { item: any };
           message?: string;
-        }>(`/business-items/items/${itemId}`);
+        }>(`/business-items/items/${itemId}`, businessItemsApiParams(businessId));
         if (response.data.success && response.data.data?.item) {
           return response.data.data.item;
         }
@@ -302,7 +303,7 @@ export const useItems = (
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, businessId]
   );
 
   const fetchBrands = useCallback(async () => {
@@ -338,7 +339,7 @@ export const useItems = (
         const response = await apiClient.post<{
           success: boolean;
           data: { item: Item };
-        }>('/business-items/items', body);
+        }>('/business-items/items', body, businessItemsApiParams(businessId));
 
         const created = response.data?.data?.item;
         await fetchItems();
@@ -348,7 +349,7 @@ export const useItems = (
         throw err;
       }
     },
-    [apiClient, fetchItems]
+    [apiClient, fetchItems, businessId]
   );
 
   const createBrand = useCallback(
@@ -378,7 +379,7 @@ export const useItems = (
         const response = await apiClient.patch<{
           success: boolean;
           data: { item: Item };
-        }>(`/business-items/items/${id}`, itemData);
+        }>(`/business-items/items/${id}`, itemData, businessItemsApiParams(businessId));
 
         const updated = response.data?.data?.item;
 
@@ -396,7 +397,7 @@ export const useItems = (
         throw err;
       }
     },
-    [apiClient, fetchItems]
+    [apiClient, fetchItems, businessId]
   );
 
   useEffect(() => {
