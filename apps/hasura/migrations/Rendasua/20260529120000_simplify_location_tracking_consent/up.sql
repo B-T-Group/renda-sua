@@ -9,7 +9,8 @@ ALTER TABLE public.agents
 
 ALTER TABLE public.agents
   ALTER COLUMN location_tracking_consent_ios DROP DEFAULT,
-  ALTER COLUMN location_tracking_consent_android DROP DEFAULT;
+  ALTER COLUMN location_tracking_consent_android DROP DEFAULT,
+  ALTER COLUMN location_tracking_consent_web DROP DEFAULT;
 
 ALTER TABLE public.agents
   ALTER COLUMN location_tracking_consent_ios
