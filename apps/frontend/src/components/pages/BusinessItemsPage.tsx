@@ -218,7 +218,6 @@ const BusinessItemsPage: React.FC = () => {
   );
   const [promoteItem, setPromoteItem] = useState<any | null>(null);
   const [facebookExportSelectOpen, setFacebookExportSelectOpen] = useState(false);
-  const [selectedBusinessName, setSelectedBusinessName] = useState<string>('');
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -690,29 +689,15 @@ const BusinessItemsPage: React.FC = () => {
       <BusinessVerificationBanner />
 
       {isPlatformAdmin && (
-        <Box sx={{ mb: 1.5 }}>
-          <AdminBusinessSelector
-            selectedBusinessId={effectiveBusinessId}
-            ownBusinessId={ownBusinessId}
-            ownBusinessName={profile.business.name}
-            onChange={(businessId, businessName) => {
-              setSelectedBusinessId(businessId);
-              setSelectedBusinessName(businessName);
-            }}
-          />
-        </Box>
-      )}
-
-      {isViewingOtherBusiness && (
-        <Alert severity="info" sx={{ mb: 1.5 }}>
-          {t('business.items.managingOtherBusiness', {
-            defaultValue: 'Managing items for {{businessName}}',
-            businessName:
-              selectedBusinessName ||
-              items?.[0]?.business?.name ||
-              effectiveBusinessId,
-          })}
-        </Alert>
+        <AdminBusinessSelector
+          selectedBusinessId={effectiveBusinessId}
+          ownBusinessId={ownBusinessId}
+          ownBusinessName={profile.business.name}
+          isViewingOtherBusiness={isViewingOtherBusiness}
+          onChange={(businessId) => {
+            setSelectedBusinessId(businessId);
+          }}
+        />
       )}
 
       {/* Title row: title + subtitle, actions */}

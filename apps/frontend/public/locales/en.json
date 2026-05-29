@@ -1616,8 +1616,16 @@
       "addFromImage": "Add from image",
       "businessSelector": {
         "label": "Business",
-        "placeholder": "Search businesses…",
-        "ownBusiness": "My business"
+        "title": "Catalog scope",
+        "adminBadge": "Admin",
+        "placeholder": "Search by business name…",
+        "ownBusiness": "My business",
+        "ownHint": "Your catalog — switch to manage another business",
+        "viewingOtherHint": "You are managing another business's inventory",
+        "noResults": "No businesses found",
+        "loading": "Loading businesses…",
+        "backToOwn": "Back to my business",
+        "activeScope": "Active scope:"
       },
       "managingOtherBusiness": "Managing items for {{businessName}}",
       "facebookExport": {

@@ -1605,8 +1605,16 @@
       "addFromImage": "Ajouter à partir d’une image",
       "businessSelector": {
         "label": "Entreprise",
-        "placeholder": "Rechercher une entreprise…",
-        "ownBusiness": "Mon entreprise"
+        "title": "Périmètre du catalogue",
+        "adminBadge": "Admin",
+        "placeholder": "Rechercher par nom d'entreprise…",
+        "ownBusiness": "Mon entreprise",
+        "ownHint": "Votre catalogue — basculez pour gérer une autre entreprise",
+        "viewingOtherHint": "Vous gérez l'inventaire d'une autre entreprise",
+        "noResults": "Aucune entreprise trouvée",
+        "loading": "Chargement des entreprises…",
+        "backToOwn": "Revenir à mon entreprise",
+        "activeScope": "Périmètre actif :"
       },
       "managingOtherBusiness": "Gestion des articles pour {{businessName}}",
       "facebookExport": {
