@@ -1,14 +1,26 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { PermissionService } from '../auth/permission.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessItemsAccessService } from './business-items-access.service';
+
+jest.mock('../auth/permission.service', () => ({
+  PermissionService: class PermissionService {},
+}));
+
+jest.mock('../hasura/hasura-user.service', () => ({
+  HasuraUserService: class HasuraUserService {},
+}));
+
+interface HasuraUserServiceMock {
+  getUser: jest.Mock;
+}
+
+interface PermissionServiceMock {
+  canAccessBusinessData: jest.Mock;
+}
 
 describe('BusinessItemsAccessService', () => {
   let service: BusinessItemsAccessService;
-  let hasuraUserService: jest.Mocked<Pick<HasuraUserService, 'getUser'>>;
-  let permissionService: jest.Mocked<
-    Pick<PermissionService, 'canAccessBusinessData'>
-  >;
+  let hasuraUserService: HasuraUserServiceMock;
+  let permissionService: PermissionServiceMock;
 
   const ownBusinessUser = {
     id: 'user-1',
@@ -19,8 +31,8 @@ describe('BusinessItemsAccessService', () => {
     hasuraUserService = { getUser: jest.fn() };
     permissionService = { canAccessBusinessData: jest.fn() };
     service = new BusinessItemsAccessService(
-      hasuraUserService as unknown as HasuraUserService,
-      permissionService as unknown as PermissionService
+      hasuraUserService as any,
+      permissionService as any
     );
   });
 

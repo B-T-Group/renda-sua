@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
+import type { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   assertMobileLocationConsentAccepted,
   parseLocationConsentPlatformHeader,

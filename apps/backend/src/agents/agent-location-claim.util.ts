@@ -3,7 +3,7 @@ import {
   LOCATION_CONSENT_PLATFORMS,
   type LocationConsentPlatform,
 } from '../agents/dto/update-location-tracking-consent.dto';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
+import type { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export const RENDASUA_PLATFORM_HEADER = 'x-rendasua-platform';
 
