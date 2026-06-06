@@ -17,6 +17,10 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
+import { configureRuntimeDns } from './config/configure-runtime-dns';
+
+// Must run before bootstrap / Nest so Hasura GraphQL clients can resolve hostnames.
+configureRuntimeDns();
 
 async function loadSecrets() {
   const client = new SecretsManagerClient({
@@ -57,7 +61,13 @@ async function loadSecrets() {
 
     // Inject into process.env
     for (const [key, value] of Object.entries(secrets)) {
-      if (!process.env[key] || key === 'HASURA_GRAPHQL_ADMIN_SECRET' || key === 'GOOGLE_MAPS_API_KEY' || key === 'DATABASE_URL') {
+      if (
+        !process.env[key] ||
+        key === 'HASURA_GRAPHQL_ADMIN_SECRET' ||
+        key === 'HASURA_GRAPHQL_ENDPOINT' ||
+        key === 'GOOGLE_MAPS_API_KEY' ||
+        key === 'DATABASE_URL'
+      ) {
         process.env[key] = String(value);
       }
     }
