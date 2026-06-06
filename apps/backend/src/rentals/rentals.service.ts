@@ -226,6 +226,10 @@ export class RentalsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly accountsService: AccountsService,
+    private readonly inventoryItemsService: InventoryItemsService,
+    private readonly addressesService: AddressesService,
+    private readonly googleDistanceService: GoogleDistanceService,
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => MobilePaymentsService))
     private readonly mobilePaymentsService: MobilePaymentsService,
     @Inject(forwardRef(() => MobilePaymentsDatabaseService))
@@ -233,11 +237,7 @@ export class RentalsService {
     @Inject(forwardRef(() => DeliveryPinService))
     private readonly deliveryPinService: DeliveryPinService,
     @Inject(forwardRef(() => NotificationsService))
-    private readonly notificationsService: NotificationsService,
-    private readonly inventoryItemsService: InventoryItemsService,
-    private readonly addressesService: AddressesService,
-    private readonly googleDistanceService: GoogleDistanceService,
-    private readonly configService: ConfigService
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async listPublicRentalListings(
