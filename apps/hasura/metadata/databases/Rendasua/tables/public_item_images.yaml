@@ -50,6 +50,11 @@ insert_permissions:
         - tags
         - status
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
 select_permissions:
   - role: agent
     permission:
@@ -131,6 +136,11 @@ select_permissions:
         - tags
         - status
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
         - created_at
         - updated_at
       filter:
@@ -205,6 +215,11 @@ update_permissions:
         - tags
         - status
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
       filter:
         business:
           user:

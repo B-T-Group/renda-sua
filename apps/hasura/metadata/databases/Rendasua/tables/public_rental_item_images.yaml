@@ -44,6 +44,11 @@ insert_permissions:
         - status
         - display_order
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
 select_permissions:
   - role: anonymous
     permission:
@@ -85,6 +90,11 @@ select_permissions:
         - status
         - display_order
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
         - created_at
         - updated_at
       filter:
@@ -131,6 +141,11 @@ update_permissions:
         - status
         - display_order
         - is_ai_cleaned
+        - quality_score
+        - perceptual_hash
+        - validation_errors
+        - validation_warnings
+        - validated_at
       filter:
         business:
           user:
