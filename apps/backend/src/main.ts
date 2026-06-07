@@ -15,6 +15,7 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
@@ -77,6 +78,9 @@ async function loadSecrets() {
   }
 }
 
+// Up to 10 images × 10MB each, base64-encoded (~4/3 overhead).
+const JSON_BODY_LIMIT = '150mb';
+
 async function bootstrap() {
   if (process.env.SENTRY_DSN) {
     try {
@@ -101,7 +105,9 @@ async function bootstrap() {
   // Load secrets BEFORE NestJS starts
   await loadSecrets();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: JSON_BODY_LIMIT }));
+  app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));

@@ -138,6 +138,21 @@ export interface InventorySearchConfig {
   queryCacheTtlMs: number;
 }
 
+export type ImageValidationModerationProvider = 'none' | 'rekognition' | 'openai';
+
+/** Product image validation pipeline (local checks + optional vision / moderation). */
+export interface ImageValidationConfig {
+  /** OpenAI vision for soft checks (product size, clutter, text). Default off for cost control. */
+  enableVision: boolean;
+  /** When true, fail validation if vision was required but unavailable. Default off. */
+  requireVision: boolean;
+  /** Blocking content moderation provider. Default none (Tier A). */
+  moderationProvider: ImageValidationModerationProvider;
+  timeoutMs: number;
+  /** Rekognition label confidence threshold (0–100). */
+  rekognitionMinConfidence: number;
+}
+
 export interface DeepseekConfig {
   apiKey: string;
   /**
@@ -243,6 +258,7 @@ export interface Configuration {
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   inventorySearch: InventorySearchConfig;
+  imageValidation: ImageValidationConfig;
   deepseek: DeepseekConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
@@ -251,6 +267,16 @@ export interface Configuration {
   mtnSms: MtnSmsConfig;
   orangeSms: OrangeSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
+}
+
+function parseImageValidationModerationProvider(
+  value: string | undefined
+): ImageValidationModerationProvider {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'rekognition' || normalized === 'openai') {
+    return normalized;
+  }
+  return 'none';
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -458,6 +484,20 @@ export default (): Configuration => {
       queryCacheTtlMs: parseInt(
         process.env.INVENTORY_SEARCH_QUERY_CACHE_TTL_MS || '300000',
         10
+      ),
+    },
+    imageValidation: {
+      enableVision: process.env.IMAGE_VALIDATION_ENABLE_VISION === 'true',
+      requireVision: process.env.IMAGE_VALIDATION_REQUIRE_VISION === 'true',
+      moderationProvider: parseImageValidationModerationProvider(
+        process.env.IMAGE_VALIDATION_MODERATION_PROVIDER
+      ),
+      timeoutMs: parseInt(
+        process.env.IMAGE_VALIDATION_TIMEOUT_MS || '5000',
+        10
+      ),
+      rekognitionMinConfidence: parseFloat(
+        process.env.IMAGE_VALIDATION_REKOGNITION_MIN_CONFIDENCE || '80'
       ),
     },
     deepseek: {

@@ -357,6 +357,17 @@ export default function ItemViewPage() {
   const handleToggleItemActive = useCallback(
     async (nextActive: boolean) => {
       if (!item?.id) return;
+      if (nextActive && displayImages.length < 2) {
+        enqueueSnackbar(
+          t(
+            'business.images.validation.activateMinPhotos',
+            'At least {{count}} photos are required to activate this listing.',
+            { count: 2 }
+          ),
+          { variant: 'warning' }
+        );
+        return;
+      }
       setItemActiveToggling(true);
       try {
         await updateItem(item.id, { is_active: nextActive }, {
@@ -381,7 +392,7 @@ export default function ItemViewPage() {
         setItemActiveToggling(false);
       }
     },
-    [enqueueSnackbar, item?.id, t, updateItem]
+    [displayImages.length, enqueueSnackbar, item?.id, t, updateItem]
   );
 
   const handleSetImageAsGallery = useCallback(

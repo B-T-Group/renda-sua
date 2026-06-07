@@ -52,6 +52,11 @@ export interface CreateRentalItemImageInput {
   format?: string | null;
   caption?: string | null;
   alt_text?: string | null;
+  quality_score?: number | null;
+  perceptual_hash?: string | null;
+  validation_errors?: unknown[] | null;
+  validation_warnings?: unknown[] | null;
+  validated_at?: string | null;
 }
 
 export interface UpdateRentalItemImageInput {
@@ -280,6 +285,11 @@ export class RentalItemImagesService {
       alt_text: img.alt_text ?? null,
       tags: [],
       status: 'unassigned',
+      quality_score: img.quality_score ?? null,
+      perceptual_hash: img.perceptual_hash ?? null,
+      validation_errors: img.validation_errors ?? [],
+      validation_warnings: img.validation_warnings ?? [],
+      validated_at: img.validated_at ?? new Date().toISOString(),
     }));
     const row = await this.hasuraUserService.executeMutation<{
       insert_rental_item_images: { returning: { id: string }[] };

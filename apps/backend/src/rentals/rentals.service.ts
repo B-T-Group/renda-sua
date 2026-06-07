@@ -36,6 +36,7 @@ import {
   RentalPricingSnapshotDto,
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
+import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
 import { isActivePersona } from '../users/persona.util';
 import * as Q from './rentals-queries';
@@ -231,7 +232,8 @@ export class RentalsService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly deliveryPinService: DeliveryPinService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly activationValidation: ItemActivationValidationService
   ) {}
 
   async listPublicRentalListings(
@@ -723,6 +725,9 @@ export class RentalsService {
     const changes = this.buildRentalItemUpdateSet(dto);
     if (!Object.keys(changes).length) {
       return;
+    }
+    if (changes.is_active === true) {
+      await this.activationValidation.assertRentalItemCanActivate(itemId);
     }
     const result = await this.hasuraUserService.executeMutation<{
       update_rental_items_by_pk: { id: string } | null;

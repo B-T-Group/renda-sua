@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { UpdateItemDto } from '../business-items/dto/update-item.dto';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
@@ -100,7 +101,8 @@ export class ItemsService {
 
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly itemEmbeddingService: ItemEmbeddingService
+    private readonly itemEmbeddingService: ItemEmbeddingService,
+    private readonly activationValidation: ItemActivationValidationService
   ) {}
 
   async createItem(
@@ -134,6 +136,9 @@ export class ItemsService {
   ): Promise<Record<string, unknown> | null> {
     const item = await this.requireOwnedItem(businessId, itemId);
     const itemData = this.normalizeUpdatePayload(updates);
+    if (itemData.is_active === true) {
+      await this.activationValidation.assertItemCanActivate(itemId);
+    }
     const result = await this.hasuraUserService.executeMutation<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });

@@ -1575,7 +1575,32 @@
         "reject": "Rejeter",
         "success": "Image remplacée par la version nettoyée",
         "error": "Échec du nettoyage de l'image",
-        "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA"
+        "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA",
+        "fixWithAi": "Corriger avec l'IA",
+        "issuesAddressed": "L'IA va tenter de corriger : {{issues}}"
+      },
+      "validation": {
+        "validating": "Vérification de la qualité des images…",
+        "blocked": "Corrigez les problèmes ci-dessous avant de téléverser.",
+        "minPhotos": "Ajoutez au moins {{count}} photos pour continuer.",
+        "activateMinPhotos": "Au moins {{count}} photos sont requises pour activer cette annonce.",
+        "activateValidationErrors": "Corrigez les problèmes de qualité des images avant d'activer cette annonce.",
+        "guidelines": {
+          "resolution": "Utilisez au moins 800×800 pixels. Des photos nettes et bien éclairées fonctionnent mieux.",
+          "background": "Gardez le produit au centre sur un arrière-plan épuré.",
+          "lighting": "Évitez les images trop sombres ou surexposées.",
+          "minPhotos": "Vous avez besoin d'au moins {{count}} photos pour publier une annonce."
+        },
+        "codes": {
+          "LOW_RESOLUTION": "La résolution de l'image est trop faible. Utilisez au moins 800×800 pixels.",
+          "IMAGE_BLURRY": "L'image est floue. Veuillez téléverser une photo plus nette.",
+          "INAPPROPRIATE_CONTENT": "Cette image ne peut pas être utilisée car elle contient du contenu inapproprié.",
+          "POOR_LIGHTING": "L'image est trop sombre ou surexposée. Un meilleur éclairage peut rassurer les acheteurs.",
+          "PRODUCT_TOO_SMALL": "Le produit semble trop petit dans l'image. Rapprochez-vous.",
+          "CLUTTERED_BACKGROUND": "L'arrière-plan contient des éléments distrayants. Privilégiez un fond plus épuré.",
+          "TOO_MUCH_TEXT": "L'image contient beaucoup de texte promotionnel. Une photo produit plus simple fonctionne mieux.",
+          "DUPLICATE_IMAGE": "Cette image ressemble fortement à une autre photo déjà téléversée."
+        }
       },
       "createItemFromImage": {
         "title": "Créer un article à partir de l'image",

@@ -41,6 +41,11 @@ export interface BulkCreateBusinessImagesPayload {
     format?: string | null;
     caption?: string | null;
     alt_text?: string | null;
+    quality_score?: number | null;
+    perceptual_hash?: string | null;
+    validation_errors?: unknown[] | null;
+    validation_warnings?: unknown[] | null;
+    validated_at?: string | null;
   }[];
 }
 

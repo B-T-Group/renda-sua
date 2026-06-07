@@ -19,6 +19,18 @@ export interface CleanupProductImageResponse {
   b64_json: string;
 }
 
+export interface CleanupProductImageIssue {
+  code: string;
+  message?: string;
+}
+
+export interface CleanupProductImageInput {
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  issues?: CleanupProductImageIssue[];
+}
+
 interface OpenAIImageEditResponse {
   data?: Array<{ b64_json?: string; url?: string }>;
 }
@@ -236,8 +248,11 @@ export class AiService {
   }
 
   async cleanupProductImage(
-    imageUrl: string
+    input: string | CleanupProductImageInput
   ): Promise<CleanupProductImageResponse> {
+    const resolved =
+      typeof input === 'string' ? { imageUrl: input } : input;
+    const imageRef = this.resolveCleanupImageRef(resolved);
     const apiKey = this.configService.get<string>('openai.apiKey');
     if (!apiKey) {
       this.logger.error('OpenAI API key not configured');
@@ -249,16 +264,15 @@ export class AiService {
 
     try {
       const body = {
-        images: [{ image_url: imageUrl }],
-        prompt:
-          'Clean up this product image. Remove background clutter. Add a simple background with a few subtle items or props for color (e.g. plants, fabric, or complementary objects). Keep the product as the clear focal point for e-commerce.',
+        images: [{ image_url: imageRef }],
+        prompt: this.buildCleanupPrompt(resolved.issues),
         model: 'gpt-image-1.5',
         n: 1,
         output_format: 'png',
         background: 'opaque',
       };
 
-      this.logger.log('Sending image URL to OpenAI for cleanup');
+      this.logger.log('Sending image to OpenAI for cleanup');
       const editResponse = await axios.post<OpenAIImageEditResponse>(
         this.openaiImagesEditsUrl,
         body,
@@ -319,6 +333,47 @@ export class AiService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private resolveCleanupImageRef(input: CleanupProductImageInput): string {
+    if (input.imageUrl?.trim()) return input.imageUrl.trim();
+    if (input.imageBase64?.trim()) {
+      const mime = input.mimeType?.trim() || 'image/jpeg';
+      return `data:${mime};base64,${input.imageBase64.trim()}`;
+    }
+    throw new HttpException(
+      'imageUrl or imageBase64 is required',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private buildCleanupPrompt(issues?: CleanupProductImageIssue[]): string {
+    const base =
+      'Clean up this product image for e-commerce. Keep the product as the clear focal point.';
+    const hints: string[] = [];
+    const codes = new Set((issues ?? []).map((i) => i.code));
+    if (codes.has('IMAGE_BLURRY')) {
+      hints.push('Sharpen the product and reduce blur.');
+    }
+    if (codes.has('CLUTTERED_BACKGROUND') || codes.has('POOR_LIGHTING')) {
+      hints.push(
+        'Remove background clutter. Use a simple, well-lit background with subtle complementary props.'
+      );
+    }
+    if (codes.has('PRODUCT_TOO_SMALL')) {
+      hints.push(
+        'Crop tighter on the product so it fills most of the frame.'
+      );
+    }
+    if (codes.has('TOO_MUCH_TEXT')) {
+      hints.push('Remove promotional text overlays and watermarks.');
+    }
+    if (!hints.length) {
+      hints.push(
+        'Remove background clutter. Add a simple background with a few subtle items or props for color.'
+      );
+    }
+    return `${base} ${hints.join(' ')}`;
   }
 
   private getSystemPrompt(language: string): string {

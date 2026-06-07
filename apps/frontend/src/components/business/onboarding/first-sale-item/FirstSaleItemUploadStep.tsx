@@ -20,8 +20,14 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import ImageCleanupPreviewDialog from '../../../dialogs/ImageCleanupPreviewDialog';
+import ImageGuidelinesPanel from '../../../common/ImageGuidelinesPanel';
+import ImageValidationFeedback from '../../../common/ImageValidationFeedback';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useAws } from '../../../../hooks/useAws';
+import { useImageValidation } from '../../../../hooks/useImageValidation';
+import type { ImageValidationResult } from '../../../../types/imageValidation';
+import { fileMimeType, fileToBase64 } from '../../../../utils/imageFileToBase64';
 import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
@@ -41,10 +47,24 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const { profile } = useUserProfileContext();
   const { generateImageUploadUrl } = useAws();
   const { bulkCreateImages, submitting } = useBusinessImages();
+  const {
+    validateFiles,
+    metadataFromResults,
+    cleanupPreview,
+    validating,
+    cleanupLoading,
+  } = useImageValidation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [validationResults, setValidationResults] = useState<
+    ImageValidationResult[]
+  >([]);
+  const [cleanupIndex, setCleanupIndex] = useState<number | null>(null);
+  const [cleanupB64, setCleanupB64] = useState<string | null>(null);
+  const cleanupEnabled = Boolean(profile?.business?.image_cleanup_enabled);
+  const minPhotos = 2;
 
   const objectUrls = useMemo(
     () => files.map((f) => URL.createObjectURL(f)),
@@ -87,28 +107,94 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     setPreviewIndex(null);
   };
 
+  const runCleanupForIndex = async (index: number) => {
+    const file = files[index];
+    if (!file) return;
+    const result = validationResults[index];
+    const issues = [...(result?.errors ?? []), ...(result?.warnings ?? [])];
+    setCleanupIndex(index);
+    setCleanupB64(null);
+    try {
+      const b64 = await cleanupPreview({
+        imageBase64: await fileToBase64(file),
+        mimeType: fileMimeType(file),
+        issues,
+      });
+      setCleanupB64(b64);
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.message ||
+          t('business.images.cleanup.error', 'Failed to cleanup image'),
+        { variant: 'error' }
+      );
+      setCleanupIndex(null);
+    }
+  };
+
+  const acceptCleanup = async () => {
+    if (cleanupIndex === null || !cleanupB64) return;
+    const blob = await fetch(`data:image/png;base64,${cleanupB64}`).then((r) =>
+      r.blob()
+    );
+    const cleaned = new File([blob], `cleaned-${files[cleanupIndex].name}.png`, {
+      type: 'image/png',
+    });
+    setFiles((prev) => {
+      const next = [...prev];
+      next[cleanupIndex] = cleaned;
+      return next;
+    });
+    setValidationResults([]);
+    setCleanupIndex(null);
+    setCleanupB64(null);
+  };
+
   const uploadAll = async () => {
     const bid = profile?.business?.id;
     const primary = files[0];
     if (!bid || !files.length || !primary) return;
+    if (files.length < minPhotos) {
+      enqueueSnackbar(
+        t('business.images.validation.minPhotos', 'Add at least {{count}} photos to continue.', {
+          count: minPhotos,
+        }),
+        { variant: 'warning' }
+      );
+      return;
+    }
     setBusy(true);
     try {
+      const validation = await validateFiles(files);
+      setValidationResults(validation.results);
+      if (!validation.passed) {
+        enqueueSnackbar(
+          t(
+            'business.images.validation.blocked',
+            'Fix the issues below before uploading.'
+          ),
+          { variant: 'error' }
+        );
+        return;
+      }
+      const meta = metadataFromResults(validation.results);
       const prefix = `businesses/${bid}/images`;
       const errMsg = t(
         'business.onboarding.firstSale.upload.presignError',
         'Failed to prepare image upload'
       );
       const payloads = [];
-      for (const file of files) {
-        payloads.push(
-          await presignUploadLibraryImage(
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        payloads.push({
+          ...(await presignUploadLibraryImage(
             file,
             bucketName,
             prefix,
             generateImageUploadUrl,
             errMsg
-          )
-        );
+          )),
+          ...meta[i],
+        });
       }
       const ids = await bulkCreateImages(
         { images: payloads },
@@ -161,17 +247,8 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           'Add one or more photos. The main photo is used to create the listing; you can change which image is main before continuing. Extra photos attach to the same item.'
         )}
       </Typography>
-      <Alert
-        severity="info"
-        sx={{
-          '& .MuiAlert-message': { fontSize: { xs: '0.8125rem', sm: '0.875rem' } },
-        }}
-      >
-        {t(
-          'business.onboarding.firstSale.upload.clearPhotoNote',
-          'Use a clear, well-lit photo of your product on a simple background so buyers (and AI, if you use it) can see details easily.'
-        )}
-      </Alert>
+      <ImageGuidelinesPanel minPhotos={minPhotos} />
+      <ImageValidationFeedback results={validationResults} />
       <input
         ref={inputRef}
         type="file"
@@ -399,22 +476,61 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         <Button
           variant="contained"
           onClick={() => void uploadAll()}
-          disabled={busy || submitting || !files.length}
+          disabled={
+            busy ||
+            submitting ||
+            validating ||
+            files.length < minPhotos
+          }
           fullWidth={isNarrow}
           startIcon={
-            busy || submitting ? (
+            busy || submitting || validating ? (
               <CircularProgress color="inherit" size={18} />
             ) : undefined
           }
         >
-          {busy || submitting
+          {validating
             ? t(
-                'business.onboarding.firstSale.upload.uploading',
-                'Uploading…'
+                'business.images.validation.validating',
+                'Checking image quality…'
               )
-            : t('business.onboarding.firstSale.upload.continue', 'Continue')}
+            : busy || submitting
+              ? t(
+                  'business.onboarding.firstSale.upload.uploading',
+                  'Uploading…'
+                )
+              : t('business.onboarding.firstSale.upload.continue', 'Continue')}
         </Button>
       </Stack>
+      {cleanupEnabled &&
+        validationResults.some(
+          (r) => r.errors.length > 0 || r.warnings.length > 0
+        ) && (
+          <Button
+            variant="text"
+            onClick={() => void runCleanupForIndex(0)}
+            disabled={cleanupLoading || !files.length}
+          >
+            {t('business.images.cleanup.fixWithAi', 'Fix with AI')}
+          </Button>
+        )}
+      <ImageCleanupPreviewDialog
+        open={cleanupIndex !== null}
+        onClose={() => {
+          setCleanupIndex(null);
+          setCleanupB64(null);
+        }}
+        originalUrl={
+          cleanupIndex !== null ? objectUrls[cleanupIndex] ?? '' : ''
+        }
+        cleanedB64={cleanupB64}
+        loading={cleanupLoading}
+        onAccept={() => void acceptCleanup()}
+        onReject={() => {
+          setCleanupIndex(null);
+          setCleanupB64(null);
+        }}
+      />
     </Stack>
   );
 };

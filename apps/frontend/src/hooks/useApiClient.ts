@@ -11,7 +11,10 @@ import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
   const url = config.url ?? '';
   const method = (config.method ?? 'get').toLowerCase();
-  if (method === 'post' && url.includes('/cleanup')) {
+  if (
+    method === 'post' &&
+    (url.includes('/cleanup') || url.includes('/images/cleanup-preview'))
+  ) {
     config.timeout = environment.imageCleanupRequestTimeoutMs;
   }
 }
@@ -19,7 +22,7 @@ function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
 /** Avoid stacking the global LoadingScreen on flows that already show inline loading. */
 function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   if (!url) return false;
-  if (url.includes('/cleanup')) return true;
+  if (url.includes('/cleanup') || url.includes('/images/validate')) return true;
   const substrings = [
     '/track-site-event',
     '/admin/site-events',

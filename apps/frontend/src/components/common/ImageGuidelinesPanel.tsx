@@ -1,0 +1,47 @@
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { Alert, List, ListItem, ListItemText } from '@mui/material';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+
+interface ImageGuidelinesPanelProps {
+  minPhotos?: number;
+}
+
+const ImageGuidelinesPanel: React.FC<ImageGuidelinesPanelProps> = ({
+  minPhotos = 2,
+}) => {
+  const { t } = useTranslation();
+  const bullets = [
+    t(
+      'business.images.validation.guidelines.resolution',
+      'Use at least 800×800 pixels. Sharp, well-lit photos work best.'
+    ),
+    t(
+      'business.images.validation.guidelines.background',
+      'Keep the product as the main focus on a clean background.'
+    ),
+    t(
+      'business.images.validation.guidelines.lighting',
+      'Avoid very dark or overexposed images.'
+    ),
+    t(
+      'business.images.validation.guidelines.minPhotos',
+      'You need at least {{count}} photos to publish a listing.',
+      { count: minPhotos }
+    ),
+  ];
+
+  return (
+    <Alert severity="info" icon={<InfoOutlinedIcon />}>
+      <List dense disablePadding>
+        {bullets.map((text) => (
+          <ListItem key={text} disablePadding sx={{ py: 0.25 }}>
+            <ListItemText primary={text} />
+          </ListItem>
+        ))}
+      </List>
+    </Alert>
+  );
+};
+
+export default ImageGuidelinesPanel;

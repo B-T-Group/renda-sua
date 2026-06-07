@@ -37,6 +37,11 @@ export interface CreateBusinessImageInput {
   format?: string | null;
   caption?: string | null;
   alt_text?: string | null;
+  quality_score?: number | null;
+  perceptual_hash?: string | null;
+  validation_errors?: unknown[] | null;
+  validation_warnings?: unknown[] | null;
+  validated_at?: string | null;
 }
 
 export interface UpdateBusinessImageInput {
@@ -309,6 +314,11 @@ export class BusinessImagesService {
       image_type: index === 0 ? 'main' : 'gallery',
       display_order: 0,
       is_active: true,
+      quality_score: img.quality_score ?? null,
+      perceptual_hash: img.perceptual_hash ?? null,
+      validation_errors: img.validation_errors ?? [],
+      validation_warnings: img.validation_warnings ?? [],
+      validated_at: img.validated_at ?? new Date().toISOString(),
     }));
     const row = await this.hasuraUserService.executeMutation<{
       insert_item_images: { returning: { id: string }[] };

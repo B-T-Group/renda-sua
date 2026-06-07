@@ -1586,7 +1586,32 @@
         "reject": "Reject",
         "success": "Image replaced with cleaned version",
         "error": "Failed to cleanup image",
-        "alreadyCleaned": "Image was already cleaned with AI"
+        "alreadyCleaned": "Image was already cleaned with AI",
+        "fixWithAi": "Fix with AI",
+        "issuesAddressed": "AI will try to fix: {{issues}}"
+      },
+      "validation": {
+        "validating": "Checking image quality…",
+        "blocked": "Fix the issues below before uploading.",
+        "minPhotos": "Add at least {{count}} photos to continue.",
+        "activateMinPhotos": "At least {{count}} photos are required to activate this listing.",
+        "activateValidationErrors": "Fix image quality issues before activating this listing.",
+        "guidelines": {
+          "resolution": "Use at least 800×800 pixels. Sharp, well-lit photos work best.",
+          "background": "Keep the product as the main focus on a clean background.",
+          "lighting": "Avoid very dark or overexposed images.",
+          "minPhotos": "You need at least {{count}} photos to publish a listing."
+        },
+        "codes": {
+          "LOW_RESOLUTION": "The image resolution is too low. Use at least 800×800 pixels.",
+          "IMAGE_BLURRY": "The image is blurry. Please upload a sharper photo.",
+          "INAPPROPRIATE_CONTENT": "This image cannot be used because it contains inappropriate content.",
+          "POOR_LIGHTING": "The image is too dark or overexposed. Better lighting may improve buyer confidence.",
+          "PRODUCT_TOO_SMALL": "The product appears too small in the image. Try moving closer.",
+          "CLUTTERED_BACKGROUND": "The background contains distracting objects. Consider using a cleaner background.",
+          "TOO_MUCH_TEXT": "The image contains a lot of promotional text. A cleaner product photo works better.",
+          "DUPLICATE_IMAGE": "This image looks very similar to another photo you already uploaded."
+        }
       },
       "createItemFromImage": {
         "title": "Create item from image",

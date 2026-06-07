@@ -12,8 +12,12 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import ImageGuidelinesPanel from '../../../common/ImageGuidelinesPanel';
+import ImageValidationFeedback from '../../../common/ImageValidationFeedback';
 import { useAws } from '../../../../hooks/useAws';
+import { useImageValidation } from '../../../../hooks/useImageValidation';
 import { useRentalItemImages } from '../../../../hooks/useRentalItemImages';
+import type { ImageValidationResult } from '../../../../types/imageValidation';
 import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
 import type { FirstRentalUploadResult } from './firstRentalUploadTypes';
 
@@ -29,11 +33,16 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
   const { profile } = useUserProfileContext();
   const { generateImageUploadUrl } = useAws();
   const { bulkCreateImages, submitting } = useRentalItemImages();
+  const { validateFiles, metadataFromResults, validating } = useImageValidation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [mainImageIndex, setMainImageIndex] = useState(0);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [validationResults, setValidationResults] = useState<
+    ImageValidationResult[]
+  >([]);
+  const minPhotos = 2;
 
   useEffect(() => {
     const urls = files.map((f) => URL.createObjectURL(f));
@@ -72,24 +81,45 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
   const uploadAll = async () => {
     const bid = profile?.business?.id;
     if (!bid || !files.length) return;
+    if (files.length < minPhotos) {
+      enqueueSnackbar(
+        t('business.images.validation.minPhotos', 'Add at least {{count}} photos to continue.', {
+          count: minPhotos,
+        }),
+        { variant: 'warning' }
+      );
+      return;
+    }
     setBusy(true);
     try {
+      const validation = await validateFiles(files);
+      setValidationResults(validation.results);
+      if (!validation.passed) {
+        enqueueSnackbar(
+          t('business.images.validation.blocked', 'Fix the issues below before uploading.'),
+          { variant: 'error' }
+        );
+        return;
+      }
+      const meta = metadataFromResults(validation.results);
       const prefix = `businesses/${bid}/rental-images`;
       const errMsg = t(
         'business.onboarding.firstRental.upload.presignError',
         'Failed to prepare upload'
       );
       const payloads = [];
-      for (const file of files) {
-        payloads.push(
-          await presignUploadLibraryImage(
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        payloads.push({
+          ...(await presignUploadLibraryImage(
             file,
             bucketName,
             prefix,
             generateImageUploadUrl,
             errMsg
-          )
-        );
+          )),
+          ...meta[i],
+        });
       }
       const rows = await bulkCreateImages(
         { images: payloads },
@@ -142,12 +172,8 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
           'Add one or more photos. Choose which image is the main listing photo, then continue.'
         )}
       </Typography>
-      <Alert severity="info">
-        {t(
-          'business.onboarding.firstRental.upload.clearPhotoNote',
-          'Use clear, well-lit photos of the item you rent on a simple background so renters (and AI, if you use it) can see details easily.'
-        )}
-      </Alert>
+      <ImageGuidelinesPanel minPhotos={minPhotos} />
+      <ImageValidationFeedback results={validationResults} />
       <input
         ref={inputRef}
         type="file"
@@ -286,9 +312,11 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
         <Button
           variant="contained"
           onClick={() => void uploadAll()}
-          disabled={busy || submitting || !files.length}
+          disabled={busy || submitting || validating || files.length < minPhotos}
         >
-          {t('business.onboarding.firstRental.upload.continue', 'Continue')}
+          {validating
+            ? t('business.images.validation.validating', 'Checking image quality…')
+            : t('business.onboarding.firstRental.upload.continue', 'Continue')}
         </Button>
       </Stack>
     </Stack>

@@ -28,6 +28,7 @@ import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
+import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
 import { LocationsModule } from '../locations/locations.module';
@@ -125,6 +126,7 @@ import { AppService } from './app.service';
     BusinessAgentsModule,
     BusinessItemsModule,
     BusinessImagesModule,
+    ImageValidationModule,
     BusinessVerificationModule,
     CategoriesModule,
     SubcategoriesModule,
