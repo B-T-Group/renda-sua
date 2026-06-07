@@ -13,16 +13,9 @@ const HANDLER_TYPES: Type<PaymentCallbackHandler>[] = [
 export class PaymentCallbackRegistryService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
-  async getHandlers(): Promise<PaymentCallbackHandler[]> {
-    const handlers = await Promise.all(
-      HANDLER_TYPES.map((type) =>
-        this.moduleRef
-          .resolve<PaymentCallbackHandler>(type, undefined, { strict: false })
-          .catch(() => null)
-      )
-    );
-    return handlers.filter((handler): handler is PaymentCallbackHandler =>
-      Boolean(handler)
-    );
+  getHandlers(): PaymentCallbackHandler[] {
+    return HANDLER_TYPES.map((type) =>
+      this.moduleRef.get<PaymentCallbackHandler>(type, { strict: false })
+    ).filter((handler): handler is PaymentCallbackHandler => Boolean(handler));
   }
 }

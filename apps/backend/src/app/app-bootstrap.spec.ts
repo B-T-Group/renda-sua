@@ -50,10 +50,9 @@ describe('App bootstrap (DI smoke test)', () => {
     expect(app.get(OrdersService)).toBeInstanceOf(OrdersService);
   });
 
-  it('registers payment callback handlers from domain modules', async () => {
+  it('registers payment callback handlers from domain modules', () => {
     const registry = app.get(PaymentCallbackRegistryService);
-    const handlers = await registry.getHandlers();
-    expect(handlers.length).toBeGreaterThanOrEqual(2);
+    expect(registry.getHandlers().length).toBeGreaterThanOrEqual(2);
   });
 
   it('listPublicRentalListings uses injected InventoryItemsService without DI errors', async () => {
