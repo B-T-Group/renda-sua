@@ -9,6 +9,7 @@ import {
   Card,
   CardActions,
   CardContent,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,6 +28,10 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { ItemImage, useItemImages } from '../../hooks/useItemImages';
+import { useImageValidation } from '../../hooks/useImageValidation';
+import type { ImageValidationResult } from '../../types/imageValidation';
+import ImageGuidelinesPanel from '../common/ImageGuidelinesPanel';
+import ImageValidationFeedback from '../common/ImageValidationFeedback';
 
 interface ImageUploadDialogProps {
   open: boolean;
@@ -36,13 +41,14 @@ interface ImageUploadDialogProps {
 }
 
 const MAX_IMAGES = 5;
+const MIN_PHOTOS = 2;
 const ACCEPTED_FILE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
   'image/webp',
 ];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const hasOwnKey = (o: object, k: string) =>
   Object.prototype.hasOwnProperty.call(o, k);
@@ -77,9 +83,13 @@ export default function ImageUploadDialog({
     deleteItemImage,
     updateItemImageType,
   } = useItemImages();
+  const { validateFiles, metadataFromResults, validating } = useImageValidation();
 
   const [images, setImages] = useState<ItemImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [validationResults, setValidationResults] = useState<
+    ImageValidationResult[]
+  >([]);
   const [altTexts, setAltTexts] = useState<Record<string, string>>({});
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [fileImageTypes, setFileImageTypes] = useState<
@@ -92,6 +102,8 @@ export default function ImageUploadDialog({
       loadImages();
       setImagesModified(false);
       setFileImageTypes({});
+      setSelectedFiles([]);
+      setValidationResults([]);
     }
   }, [open, itemId]);
 
@@ -139,6 +151,7 @@ export default function ImageUploadDialog({
     });
 
     setSelectedFiles((prev) => [...prev, ...validFiles]);
+    setValidationResults([]);
   };
 
   const removeSelectedFile = (index: number) => {
@@ -157,6 +170,7 @@ export default function ImageUploadDialog({
       });
       return prev.filter((_, i) => i !== index);
     });
+    setValidationResults([]);
   };
 
   const hasExistingMain = images.some((i) => i.image_type === 'main');
@@ -230,7 +244,24 @@ export default function ImageUploadDialog({
     const bucketName =
       process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
 
+    if (selectedFiles.length === 0) return;
+
     try {
+      const validation = await validateFiles(selectedFiles, { itemId });
+      setValidationResults(validation.results);
+      if (!validation.passed) {
+        enqueueSnackbar(
+          t(
+            'business.images.validation.blocked',
+            'Fix the issues below before uploading.'
+          ),
+          { variant: 'error' }
+        );
+        return;
+      }
+
+      const meta = metadataFromResults(validation.results);
+
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
         const fileKey = `file-${i}`;
@@ -246,7 +277,8 @@ export default function ImageUploadDialog({
           bucketName,
           altTexts[fileKey] || '',
           captions[fileKey] || '',
-          preferred
+          preferred,
+          meta[i]
         );
       }
 
@@ -258,6 +290,7 @@ export default function ImageUploadDialog({
       setAltTexts({});
       setCaptions({});
       setFileImageTypes({});
+      setValidationResults([]);
 
       enqueueSnackbar(t('business.inventory.imagesUploadedSuccessfully'), {
         variant: 'success',
@@ -324,6 +357,9 @@ export default function ImageUploadDialog({
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3}>
+          <ImageGuidelinesPanel minPhotos={MIN_PHOTOS} />
+          <ImageValidationFeedback results={validationResults} />
+
           {/* Current Images */}
           {images.length > 0 && (
             <Paper variant="outlined" sx={{ p: 3 }}>
@@ -691,7 +727,12 @@ export default function ImageUploadDialog({
           <Button
             onClick={handleUpload}
             variant="contained"
-            disabled={loading}
+            disabled={loading || validating}
+            startIcon={
+              loading || validating ? (
+                <CircularProgress color="inherit" size={18} />
+              ) : undefined
+            }
             sx={{
               borderRadius: 2,
               textTransform: 'none',
@@ -703,8 +744,13 @@ export default function ImageUploadDialog({
               },
             }}
           >
-            {loading
-              ? t('common.uploading')
+            {loading || validating
+              ? validating
+                ? t(
+                    'business.images.validation.validating',
+                    'Checking image quality…'
+                  )
+                : t('common.uploading')
               : t('business.inventory.uploadImages')}
           </Button>
         )}

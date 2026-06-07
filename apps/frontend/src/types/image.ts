@@ -24,4 +24,9 @@ export interface CreateItemImageData {
   caption?: string;
   display_order: number;
   uploaded_by: string;
+  quality_score?: number | null;
+  perceptual_hash?: string | null;
+  validation_errors?: unknown[] | null;
+  validation_warnings?: unknown[] | null;
+  validated_at?: string | null;
 }

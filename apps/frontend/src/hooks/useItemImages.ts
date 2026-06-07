@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { useCallback, useState } from 'react';
 import { CreateItemImageData, ImageType, ItemImage } from '../types/image';
+import type { ImageValidationMetadata } from '../types/imageValidation';
 import { useAws } from './useAws';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
@@ -258,7 +259,8 @@ export const useItemImages = () => {
       bucketName: string,
       altText?: string,
       caption?: string,
-      preferredImageType?: 'main' | 'gallery'
+      preferredImageType?: 'main' | 'gallery',
+      validationMetadata?: ImageValidationMetadata
     ): Promise<ItemImage> => {
       setLoading(true);
       setError(null);
@@ -299,6 +301,11 @@ export const useItemImages = () => {
           caption: caption,
           display_order: nextDisplayOrder,
           uploaded_by: userId,
+          quality_score: validationMetadata?.quality_score ?? null,
+          perceptual_hash: validationMetadata?.perceptual_hash ?? null,
+          validation_errors: validationMetadata?.validation_errors ?? null,
+          validation_warnings: validationMetadata?.validation_warnings ?? null,
+          validated_at: validationMetadata?.validated_at ?? null,
         };
 
         return await createItemImage(imageData);

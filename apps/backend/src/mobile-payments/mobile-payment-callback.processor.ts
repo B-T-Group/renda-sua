@@ -36,7 +36,7 @@ export class MobilePaymentCallbackProcessor {
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService
   ) {}
 
-  private get handlers(): PaymentCallbackHandler[] {
+  private async resolveHandlers(): Promise<PaymentCallbackHandler[]> {
     return this.paymentCallbackRegistry.getHandlers();
   }
 
@@ -138,7 +138,8 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
-    const handler = findPaymentCallbackHandler(this.handlers, tx.payment_entity);
+    const handlers = await this.resolveHandlers();
+    const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
     if (!handler) {
       this.logger.warn(
         `No payment callback handler for cash reconciliation entity ${tx.payment_entity}`
@@ -208,8 +209,9 @@ export class MobilePaymentCallbackProcessor {
         `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
       );
 
+      const handlers = await this.resolveHandlers();
       const handler = findPaymentCallbackHandler(
-        this.handlers,
+        handlers,
         transaction.payment_entity
       );
       if (handler) {
@@ -231,8 +233,9 @@ export class MobilePaymentCallbackProcessor {
     if (callbackData.status !== 'FAILED') {
       return;
     }
+    const handlers = await this.resolveHandlers();
     const handler = findPaymentCallbackHandler(
-      this.handlers,
+      handlers,
       transaction.payment_entity
     );
     if (handler) {
@@ -290,8 +293,9 @@ export class MobilePaymentCallbackProcessor {
         `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
       );
 
+      const handlers = await this.resolveHandlers();
       const handler = findPaymentCallbackHandler(
-        this.handlers,
+        handlers,
         transaction.payment_entity
       );
       if (handler) {
@@ -312,8 +316,9 @@ export class MobilePaymentCallbackProcessor {
     if (callbackData.status !== 'FAILED') {
       return;
     }
+    const handlers = await this.resolveHandlers();
     const handler = findPaymentCallbackHandler(
-      this.handlers,
+      handlers,
       transaction.payment_entity
     );
     if (handler) {
