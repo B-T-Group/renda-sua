@@ -1589,6 +1589,7 @@
           "resolution": "Utilisez au moins 800×800 pixels. Des photos nettes et bien éclairées fonctionnent mieux.",
           "background": "Gardez le produit au centre sur un arrière-plan épuré.",
           "lighting": "Évitez les images trop sombres ou surexposées.",
+          "fileSize": "Chaque image doit faire au maximum {{maxSize}} Mo.",
           "minPhotos": "Vous avez besoin d'au moins {{count}} photos pour publier une annonce."
         },
         "codes": {

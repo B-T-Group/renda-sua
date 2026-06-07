@@ -1600,6 +1600,7 @@
           "resolution": "Use at least 800×800 pixels. Sharp, well-lit photos work best.",
           "background": "Keep the product as the main focus on a clean background.",
           "lighting": "Avoid very dark or overexposed images.",
+          "fileSize": "Each image must be {{maxSize}} MB or smaller.",
           "minPhotos": "You need at least {{count}} photos to publish a listing."
         },
         "codes": {

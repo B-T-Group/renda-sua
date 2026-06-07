@@ -3,6 +3,8 @@ import { Alert, List, ListItem, ListItemText } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
+const MAX_IMAGE_SIZE_MB = 10;
+
 interface ImageGuidelinesPanelProps {
   minPhotos?: number;
 }
@@ -23,6 +25,11 @@ const ImageGuidelinesPanel: React.FC<ImageGuidelinesPanelProps> = ({
     t(
       'business.images.validation.guidelines.lighting',
       'Avoid very dark or overexposed images.'
+    ),
+    t(
+      'business.images.validation.guidelines.fileSize',
+      'Each image must be {{maxSize}} MB or smaller.',
+      { maxSize: MAX_IMAGE_SIZE_MB }
     ),
     t(
       'business.images.validation.guidelines.minPhotos',
