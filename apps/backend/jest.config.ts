@@ -16,6 +16,7 @@ export default {
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig]
   },
+  transformIgnorePatterns: ['node_modules/(?!(graphql-request)/)'],
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage'
 };

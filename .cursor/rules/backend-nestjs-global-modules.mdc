@@ -1,0 +1,70 @@
+---
+description: When to use @Global() on NestJS modules (backend)
+globs: apps/backend/src/**/*.module.ts
+alwaysApply: false
+---
+
+# NestJS `@Global()` modules (backend)
+
+Follow [NestJS global module guidance](https://docs.nestjs.com/techniques/configuration#use-module-globally): **`@Global()` is for providers that must be available app-wide without every feature module re-importing the same module.** Register the module **once** near the top of `AppModule`; do not sprinkle global modules across the tree.
+
+Also see `apps/backend/MODULES.md` for this repo’s layer map.
+
+## Default: not global
+
+- **Domain modules** (`OrdersModule`, `RentalsModule`, `AdminModule`, …) stay **non-global**. Import them explicitly where needed so dependencies stay visible.
+- If only 1–2 modules need a provider, **import that module normally** — do not mark it global.
+
+## When `@Global()` is appropriate
+
+Use sparingly for **stable, low-coupling infrastructure** with **no domain imports**:
+
+- Framework/config: `ConfigModule.forRoot({ isGlobal: true })`
+- Cross-cutting infra already in this repo: `HasuraModule`, `DatabaseModule`, `GoogleModule`, `SmsModule`, `MobilePaymentsCoreModule`, `DeliveryPinModule`, etc.
+
+Requirements before adding `@Global()`:
+
+1. Exports are **shared infrastructure**, not domain orchestration.
+2. Module **does not import domain modules** (no `OrdersModule`, `RentalsModule`, …).
+3. Providers are **stateless or clearly infrastructure-scoped** (DB clients, config, geocoding, SMS transport).
+
+## Prefer these over global domain modules
+
+For production coupling, apply in order:
+
+1. **Extract a third shared service/module** (best) — e.g. `MobilePaymentsCoreModule`, `AiGenerationModule`, `DeliveryPinModule`.
+2. **Use events** when domains should stay decoupled (side effects, notifications, post-commit work).
+3. **`forwardRef()` only** when a genuine bidirectional relationship cannot be redesigned — document why in the PR; treat as a smell.
+
+Do **not** mark a large domain module `@Global()` to avoid import churn (e.g. former `OrdersModule` pattern). That hides dependencies and amplifies circular init bugs.
+
+## Anti-patterns
+
+```typescript
+// ❌ Global domain module — hides deps, encourages cycles
+@Global()
+@Module({ providers: [OrdersService], exports: [OrdersService] })
+export class OrdersModule {}
+
+// ❌ Global module that imports domain code
+@Global()
+@Module({ imports: [OrdersModule], providers: [SomeService] })
+export class SomeInfraModule {}
+
+// ✅ Explicit import where needed
+@Module({ imports: [OrdersModule], controllers: [XController] })
+export class XModule {}
+
+// ✅ Global infra, no domain imports, registered once in AppModule
+@Global()
+@Module({ providers: [GoogleDistanceService], exports: [GoogleDistanceService] })
+export class GoogleModule {}
+```
+
+## Checklist before adding `@Global()`
+
+- [ ] Cannot be solved with a normal `imports: [FooModule]` in the few consumers?
+- [ ] Cannot be solved by extracting a smaller shared module/service?
+- [ ] No domain modules in `imports`?
+- [ ] Added once in `AppModule` (not duplicated)?
+- [ ] `nx build backend` and `nx test backend --testPathPattern=app-bootstrap` pass?

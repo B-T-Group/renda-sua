@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
@@ -14,9 +14,7 @@ export class CommissionsService {
   constructor(
     private readonly accountsService: AccountsService,
     private readonly hasuraSystemService: HasuraSystemService,
-    @Inject(forwardRef(() => GiveChangePayoutService))
     private readonly giveChangePayoutService: GiveChangePayoutService,
-    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService
   ) {}
 

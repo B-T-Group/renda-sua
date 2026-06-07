@@ -1,10 +1,8 @@
 import {
   Body,
   Controller,
-  forwardRef,
   HttpException,
   HttpStatus,
-  Inject,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -32,7 +30,6 @@ export class AiController {
     private readonly aiService: AiService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly businessImagesService: BusinessImagesService,
-    @Inject(forwardRef(() => BusinessItemsService))
     private readonly businessItemsService: BusinessItemsService
   ) {}
 

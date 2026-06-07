@@ -22,6 +22,7 @@ import { CategoriesModule } from '../categories/categories.module';
 import { CollectionsModule } from '../collections/collections.module';
 import configuration from '../config/configuration';
 import { DatabaseModule } from '../database/database.module';
+import { DeliveryPinModule } from '../delivery-pin/delivery-pin.module';
 import { EmbeddingsModule } from '../embeddings/embeddings.module';
 import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
@@ -32,6 +33,7 @@ import { InventoryItemsModule } from '../inventory-items/inventory-items.module'
 import { LocationsModule } from '../locations/locations.module';
 import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
+import { MobilePaymentsCoreModule } from '../mobile-payments/mobile-payments-core.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrangeMomoController } from '../orange-momo/orange-momo.controller';
@@ -87,20 +89,24 @@ import { AppService } from './app.service';
         });
       },
     }),
-    AnalyticsModule,
-    AuthModule,
     DatabaseModule,
-    EmbeddingsModule,
+    DeliveryPinModule,
     HasuraModule,
+    AccountsModule,
+    AddressesModule,
+    GoogleModule,
+    EmbeddingsModule,
+    SmsModule,
     InventoryItemsModule,
+    MobilePaymentsCoreModule,
+    AuthModule,
+    AnalyticsModule,
     CollectionsModule,
     LocationsModule,
     MessagesModule,
     ServicesModule,
     UploadsModule,
     UsersModule,
-    AccountsModule,
-    AddressesModule,
     OrdersModule,
     RatingsModule,
     RentalsModule,
@@ -113,10 +119,8 @@ import { AppService } from './app.service';
     MtnMomoModule,
     OrangeMomoModule,
     MobilePaymentsModule,
-    GoogleModule,
     AdminModule,
     NotificationsModule,
-    SmsModule,
     BrandsModule,
     BusinessAgentsModule,
     BusinessItemsModule,

@@ -4,10 +4,8 @@ import {
   Get,
   HttpException,
   HttpStatus,
-  Inject,
   Post,
   Query,
-  forwardRef,
 } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from './google-distance.service';
@@ -22,7 +20,6 @@ interface DistanceMatrixRequest {
 export class GoogleDistanceController {
   constructor(
     private readonly googleDistanceService: GoogleDistanceService,
-    @Inject(forwardRef(() => AddressesService))
     private readonly addressesService: AddressesService
   ) {}
 

@@ -1,29 +1,14 @@
-import { forwardRef, Module } from '@nestjs/common';
-import { GoogleModule } from '../google/google.module';
-import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
-import { RentalsCronService } from './rentals-cron.service';
+import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { RentalPaymentCallbackHandler } from './rental-payment-callback.handler';
 import { RentalsController } from './rentals.controller';
+import { RentalsCronService } from './rentals-cron.service';
 import { RentalsService } from './rentals.service';
 
 @Module({
-  imports: [
-    forwardRef(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('../mobile-payments/mobile-payments.module').MobilePaymentsModule;
-    }),
-    forwardRef(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('../orders/orders.module').OrdersModule;
-    }),
-    forwardRef(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('../notifications/notifications.module').NotificationsModule;
-    }),
-    InventoryItemsModule,
-    GoogleModule,
-  ],
+  imports: [NotificationsModule],
   controllers: [RentalsController],
-  providers: [RentalsService, RentalsCronService],
-  exports: [RentalsService],
+  providers: [RentalsService, RentalsCronService, RentalPaymentCallbackHandler],
+  exports: [RentalsService, RentalPaymentCallbackHandler],
 })
 export class RentalsModule {}

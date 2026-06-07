@@ -1,8 +1,6 @@
 import {
-  forwardRef,
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -13,7 +11,7 @@ import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
-import { DeliveryPinService } from '../orders/delivery-pin.service';
+import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -230,13 +228,9 @@ export class RentalsService {
     private readonly addressesService: AddressesService,
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => MobilePaymentsService))
     private readonly mobilePaymentsService: MobilePaymentsService,
-    @Inject(forwardRef(() => MobilePaymentsDatabaseService))
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
-    @Inject(forwardRef(() => DeliveryPinService))
     private readonly deliveryPinService: DeliveryPinService,
-    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService
   ) {}
 

@@ -1,10 +1,8 @@
 import {
   Body,
   Controller,
-  forwardRef,
   Get,
   Headers,
-  Inject,
   Post,
   Query,
   Req,
@@ -25,7 +23,6 @@ import { AuthGuard } from '../auth/auth.guard';
 import { Public } from '../auth/public.decorator';
 import type { Configuration } from '../config/configuration';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { OrderStatusService } from '../orders/order-status.service';
 import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
 
@@ -39,9 +36,7 @@ export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly configService: ConfigService<Configuration>,
-    @Inject(forwardRef(() => OrderStatusService))
-    private readonly orderStatusService: OrderStatusService
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   @Get('vapid-public-key')
@@ -213,74 +208,6 @@ export class NotificationsController {
       { actorUserId: data.actorUserId }
     );
     return { success: true, message: 'Test notifications sent successfully' };
-  }
-
-  @Public()
-  @Post('internal/order-status-change')
-  @ApiOperation({
-    summary:
-      'Internal: send order status change notifications (order-status-handler Lambda)',
-  })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['orderId', 'previousStatus'],
-      properties: {
-        orderId: { type: 'string', format: 'uuid' },
-        previousStatus: { type: 'string' },
-        actorUserId: {
-          type: 'string',
-          format: 'uuid',
-          description: 'Optional users.id of the actor; excluded from recipient list',
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 200, description: 'Notification attempt finished' })
-  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
-  async internalOrderStatusChange(
-    @Body()
-    body: {
-      orderId?: string;
-      previousStatus?: string;
-      actorUserId?: string | null;
-    },
-    @Headers('x-rendasua-internal-key') internalKey?: string
-  ): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
-    const expected =
-      this.configService.get<Configuration['notificationsInternal']>(
-        'notificationsInternal'
-      )?.apiKey ?? '';
-    if (!expected || internalKey !== expected) {
-      throw new UnauthorizedException();
-    }
-    const orderId = body?.orderId?.trim();
-    const previousStatus = body?.previousStatus?.trim();
-    if (!orderId || !previousStatus) {
-      return { success: false, error: 'orderId and previousStatus are required' };
-    }
-    const notificationsEnabled =
-      this.configService.get('notification').orderStatusChangeEnabled;
-    if (!notificationsEnabled) {
-      return { success: true, skipped: true };
-    }
-    try {
-      const orderDetails =
-        await this.orderStatusService.getOrderDetailsForNotification(orderId);
-      if (!orderDetails) {
-        return { success: false, error: 'Order not found or notification payload unavailable' };
-      }
-      await this.notificationsService.sendOrderStatusChangeNotifications(
-        orderDetails,
-        previousStatus,
-        { actorUserId: body.actorUserId }
-      );
-      return { success: true };
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      return { success: false, error: message };
-    }
   }
 
   @Public()

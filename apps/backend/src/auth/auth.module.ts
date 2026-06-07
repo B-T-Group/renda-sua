@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -12,7 +12,7 @@ import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
 
 @Module({
-  imports: [ConfigModule, HasuraModule, forwardRef(() => AddressesModule)],
+  imports: [ConfigModule, HasuraModule, AddressesModule],
   controllers: [SignupController, LoginController],
   providers: [
     AuthGuard,

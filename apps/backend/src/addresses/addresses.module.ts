@@ -1,14 +1,12 @@
-import { Global, Module, forwardRef } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 import { AddressesController } from './addresses.controller';
 import { AddressesService } from './addresses.service';
-import { GoogleModule } from '../google/google.module';
-import { AuthModule } from '../auth/auth.module';
 
 @Global()
 @Module({
-  imports: [forwardRef(() => GoogleModule), forwardRef(() => AuthModule)],
   controllers: [AddressesController],
-  providers: [AddressesService],
+  providers: [AddressesService, AuthGuard],
   exports: [AddressesService],
 })
 export class AddressesModule {}

@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
-import { OrdersService } from '../orders/orders.service';
-import { RentalsService } from '../rentals/rentals.service';
 import type {
   FreemopayCallbackDto,
   MyPVitCallbackDto,
@@ -10,6 +8,11 @@ import {
   MobilePaymentTransaction,
   MobilePaymentsDatabaseService,
 } from './mobile-payments-database.service';
+import {
+  findPaymentCallbackHandler,
+  type PaymentCallbackHandler,
+} from './payment-callback/payment-callback-handler.interface';
+import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
 
 export type MypvitCallbackProcessResult = {
   responseCode: number;
@@ -30,9 +33,12 @@ export class MobilePaymentCallbackProcessor {
   constructor(
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
-    private readonly ordersService: OrdersService,
-    private readonly rentalsService: RentalsService
+    private readonly paymentCallbackRegistry: PaymentCallbackRegistryService
   ) {}
+
+  private get handlers(): PaymentCallbackHandler[] {
+    return this.paymentCallbackRegistry.getHandlers();
+  }
 
   async processMypvitCallback(
     callbackData: MyPVitCallbackDto
@@ -74,25 +80,7 @@ export class MobilePaymentCallbackProcessor {
       tx.payment_entity === 'order_cash_reconciliation';
 
     if (isCashRecSuccess) {
-      try {
-        await this.ordersService.finalizeCashExceptionReconciliationAfterMobilePayment(
-          tx
-        );
-        await this.databaseService.updateTransaction(tx.id, {
-          status: 'success',
-          transaction_id: callbackData.transactionId,
-        });
-        this.logger.log(
-          `Cash reconciliation settled for mobile tx ${tx.id}`
-        );
-      } catch (error: any) {
-        this.logger.error(
-          `Cash reconciliation finalize failed for ${tx.id}: ${
-            error?.message || error
-          }`
-        );
-        throw error;
-      }
+      await this.settleCashReconciliation(tx, callbackData.transactionId);
     } else {
       await this.applyMypvitStatusUpdate(tx, callbackData);
       await this.applyMypvitSuccessCredit(tx, callbackData);
@@ -136,25 +124,7 @@ export class MobilePaymentCallbackProcessor {
       tx.payment_entity === 'order_cash_reconciliation';
 
     if (isCashRecSuccess) {
-      try {
-        await this.ordersService.finalizeCashExceptionReconciliationAfterMobilePayment(
-          tx
-        );
-        await this.databaseService.updateTransaction(tx.id, {
-          status: 'success',
-          transaction_id: callbackData.reference,
-        });
-        this.logger.log(
-          `Cash reconciliation settled for mobile tx ${tx.id}`
-        );
-      } catch (error: any) {
-        this.logger.error(
-          `Cash reconciliation finalize failed for ${tx.id}: ${
-            error?.message || error
-          }`
-        );
-        throw error;
-      }
+      await this.settleCashReconciliation(tx, callbackData.reference);
     } else {
       await this.applyFreemopayStatusUpdate(tx, callbackData);
       await this.applyFreemopaySuccessCredit(tx, callbackData);
@@ -164,25 +134,32 @@ export class MobilePaymentCallbackProcessor {
     return { received: true, reference: callbackData.reference };
   }
 
-  private async handleRentalBookingCallback(
-    transaction: {
-      entity_id?: string;
-      reference?: string;
-      payment_entity?: string;
-    },
-    wasSuccess: boolean
+  private async settleCashReconciliation(
+    tx: MobilePaymentTransaction,
+    providerTransactionId: string
   ): Promise<void> {
-    const bookingNumber =
-      transaction.entity_id || transaction.reference || 'unknown';
-
-    if (!wasSuccess) {
-      this.logger.log(
-        `Rental booking payment callback FAILED for booking ${bookingNumber} (will keep booking retryable).`
+    const handler = findPaymentCallbackHandler(this.handlers, tx.payment_entity);
+    if (!handler) {
+      this.logger.warn(
+        `No payment callback handler for cash reconciliation entity ${tx.payment_entity}`
       );
       return;
     }
-
-    await this.rentalsService.processRentalBookingPayment(transaction);
+    try {
+      await handler.finalizeCashReconciliationAfterPayment(tx);
+      await this.databaseService.updateTransaction(tx.id, {
+        status: 'success',
+        transaction_id: providerTransactionId,
+      });
+      this.logger.log(`Cash reconciliation settled for mobile tx ${tx.id}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Cash reconciliation finalize failed for ${tx.id}: ${
+          error?.message || error
+        }`
+      );
+      throw error;
+    }
   }
 
   private async applyMypvitStatusUpdate(
@@ -231,12 +208,12 @@ export class MobilePaymentCallbackProcessor {
         `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
       );
 
-      if (transaction.payment_entity === 'order') {
-        await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
-      } else if (transaction.payment_entity === 'claim_order') {
-        await this.ordersService.processClaimOrderPayment(transaction);
-      } else if (transaction.payment_entity === 'rental_booking') {
-        await this.handleRentalBookingCallback(transaction, true);
+      const handler = findPaymentCallbackHandler(
+        this.handlers,
+        transaction.payment_entity
+      );
+      if (handler) {
+        await handler.onPaymentSuccess(transaction);
       }
     } catch (creditError: any) {
       this.logger.error(
@@ -254,26 +231,12 @@ export class MobilePaymentCallbackProcessor {
     if (callbackData.status !== 'FAILED') {
       return;
     }
-    if (transaction.payment_entity === 'order_cash_reconciliation') {
-      this.logger.log(
-        `Cash exception reconciliation payment failed for order ${
-          transaction.entity_id || transaction.reference || 'unknown'
-        }`
-      );
-      return;
-    }
-    if (transaction.payment_entity === 'order') {
-      const orderNumber = transaction.entity_id || transaction.reference;
-      const order = await this.ordersService.getOrderByNumber(
-        orderNumber
-      );
-      await this.ordersService.onOrderPaymentFailed(order.id, 'Payment failed');
-    } else if (transaction.payment_entity === 'claim_order') {
-      this.logger.log(
-        `Claim order payment failed for order ${transaction.reference}`
-      );
-    } else if (transaction.payment_entity === 'rental_booking') {
-      await this.handleRentalBookingCallback(transaction, false);
+    const handler = findPaymentCallbackHandler(
+      this.handlers,
+      transaction.payment_entity
+    );
+    if (handler) {
+      await handler.onPaymentFailure(transaction, 'Payment failed');
     }
   }
 
@@ -327,12 +290,12 @@ export class MobilePaymentCallbackProcessor {
         `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
       );
 
-      if (transaction.payment_entity === 'order') {
-        await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
-      } else if (transaction.payment_entity === 'claim_order') {
-        await this.ordersService.processClaimOrderPayment(transaction);
-      } else if (transaction.payment_entity === 'rental_booking') {
-        await this.handleRentalBookingCallback(transaction, true);
+      const handler = findPaymentCallbackHandler(
+        this.handlers,
+        transaction.payment_entity
+      );
+      if (handler) {
+        await handler.onPaymentSuccess(transaction);
       }
     } catch (creditError: any) {
       this.logger.error(
@@ -349,28 +312,14 @@ export class MobilePaymentCallbackProcessor {
     if (callbackData.status !== 'FAILED') {
       return;
     }
-    if (transaction.payment_entity === 'order_cash_reconciliation') {
-      this.logger.log(
-        `Cash exception reconciliation payment failed for order ${
-          transaction.entity_id || transaction.reference || 'unknown'
-        }`
-      );
-      return;
-    }
-    if (transaction.payment_entity === 'order') {
-      const orderNumber = transaction.entity_id || transaction.reference;
-      const order = await this.ordersService.getOrderByNumber(
-        orderNumber
-      );
+    const handler = findPaymentCallbackHandler(
+      this.handlers,
+      transaction.payment_entity
+    );
+    if (handler) {
       const failureMessage =
         callbackData.reason || callbackData.message || 'Payment failed';
-      await this.ordersService.onOrderPaymentFailed(order.id, failureMessage);
-    } else if (transaction.payment_entity === 'claim_order') {
-      this.logger.log(
-        `Claim order payment failed for order ${transaction.reference}`
-      );
-    } else if (transaction.payment_entity === 'rental_booking') {
-      await this.handleRentalBookingCallback(transaction, false);
+      await handler.onPaymentFailure(transaction, failureMessage);
     }
   }
 }

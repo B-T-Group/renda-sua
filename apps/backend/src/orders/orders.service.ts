@@ -47,7 +47,7 @@ import {
   parseCalendarDatePartsFromPreferredDate,
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
-import { DeliveryPinService } from './delivery-pin.service';
+import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
