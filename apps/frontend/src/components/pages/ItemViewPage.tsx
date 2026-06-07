@@ -357,7 +357,7 @@ export default function ItemViewPage() {
   const handleToggleItemActive = useCallback(
     async (nextActive: boolean) => {
       if (!item?.id) return;
-      if (nextActive && displayImages.length < 2) {
+      if (nextActive && sortedItemImages.length < 2) {
         enqueueSnackbar(
           t(
             'business.images.validation.activateMinPhotos',
@@ -392,7 +392,7 @@ export default function ItemViewPage() {
         setItemActiveToggling(false);
       }
     },
-    [displayImages.length, enqueueSnackbar, item?.id, t, updateItem]
+    [sortedItemImages.length, enqueueSnackbar, item?.id, t, updateItem]
   );
 
   const handleSetImageAsGallery = useCallback(
