@@ -1,6 +1,7 @@
 import { webcrypto } from 'crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ContextIdFactory } from '@nestjs/core';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
@@ -50,9 +51,11 @@ describe('App bootstrap (DI smoke test)', () => {
     expect(app.get(OrdersService)).toBeInstanceOf(OrdersService);
   });
 
-  it('registers payment callback handlers from domain modules', () => {
+  it('registers payment callback handlers from domain modules', async () => {
     const registry = app.get(PaymentCallbackRegistryService);
-    expect(registry.getHandlers().length).toBeGreaterThanOrEqual(2);
+    const contextId = ContextIdFactory.create();
+    const handlers = await registry.getHandlers(contextId);
+    expect(handlers.length).toBeGreaterThanOrEqual(2);
   });
 
   it('listPublicRentalListings uses injected InventoryItemsService without DI errors', async () => {

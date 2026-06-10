@@ -9,8 +9,10 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -127,7 +129,7 @@ export class AdminMobilePaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Transaction not found' })
   @ApiResponse({ status: 409, description: 'Transaction not pending' })
-  async resolve(@Param('id') id: string) {
+  async resolve(@Param('id') id: string, @Req() req: Request) {
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new NotFoundException('Transaction not found');
@@ -187,7 +189,7 @@ export class AdminMobilePaymentsController {
 
     if (provider === 'mypvit') {
       const dto = this.buildMypvitReplayDto(tx, live);
-      const result = await this.callbackProcessor.processMypvitCallback(dto);
+      const result = await this.callbackProcessor.processMypvitCallback(dto, req);
       return {
         success: true,
         replayed: !result.skipped,
@@ -196,7 +198,7 @@ export class AdminMobilePaymentsController {
     }
 
     const dto = this.buildFreemopayReplayDto(tx, live);
-    const result = await this.callbackProcessor.processFreemopayCallback(dto);
+    const result = await this.callbackProcessor.processFreemopayCallback(dto, req);
     return {
       success: true,
       replayed: !result.skipped,

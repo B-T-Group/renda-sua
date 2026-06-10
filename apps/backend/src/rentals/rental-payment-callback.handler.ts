@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import type { PaymentCallbackHandler } from '../mobile-payments/payment-callback/payment-callback-handler.interface';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
 import { RentalsService } from './rentals.service';
@@ -8,11 +7,7 @@ import { RentalsService } from './rentals.service';
 export class RentalPaymentCallbackHandler implements PaymentCallbackHandler {
   private readonly logger = new Logger(RentalPaymentCallbackHandler.name);
 
-  constructor(private readonly moduleRef: ModuleRef) {}
-
-  private resolveRentalsService(): Promise<RentalsService> {
-    return this.moduleRef.resolve(RentalsService);
-  }
+  constructor(private readonly rentalsService: RentalsService) {}
 
   supportsPaymentEntity(paymentEntity: string | undefined): boolean {
     return paymentEntity === 'rental_booking';
@@ -25,8 +20,7 @@ export class RentalPaymentCallbackHandler implements PaymentCallbackHandler {
   }
 
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
-    const rentalsService = await this.resolveRentalsService();
-    await rentalsService.processRentalBookingPayment(transaction);
+    await this.rentalsService.processRentalBookingPayment(transaction);
   }
 
   async onPaymentFailure(

@@ -8,7 +8,9 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
@@ -657,7 +659,10 @@ export class MobilePaymentsController {
    */
   @Public()
   @Post('callback/mypvit')
-  async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
+  async mypvitCallback(
+    @Body() callbackData: MyPVitCallbackDto,
+    @Req() req: Request
+  ) {
     try {
       if (
         !callbackData.transactionId ||
@@ -673,7 +678,7 @@ export class MobilePaymentsController {
         );
       }
 
-      return await this.callbackProcessor.processMypvitCallback(callbackData);
+      return await this.callbackProcessor.processMypvitCallback(callbackData, req);
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -699,7 +704,10 @@ export class MobilePaymentsController {
    */
   @Public()
   @Post('callback/freemopay')
-  async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
+  async freemopayCallback(
+    @Body() callbackData: FreemopayCallbackDto,
+    @Req() req: Request
+  ) {
     this.logger.log('freemopayCallback', callbackData);
     try {
       if (!callbackData.reference || !callbackData.status) {
@@ -716,7 +724,8 @@ export class MobilePaymentsController {
       }
 
       return await this.callbackProcessor.processFreemopayCallback(
-        callbackData
+        callbackData,
+        req
       );
     } catch (error: any) {
       if (error instanceof HttpException) {

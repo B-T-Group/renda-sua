@@ -548,7 +548,7 @@ export class HasuraUserService {
    * Extract auth token from request headers
    */
   private extractAuthToken(): string | null {
-    const authHeader = this.request.headers.authorization;
+    const authHeader = this.request?.headers?.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return null; // Return null instead of throwing error
     }
