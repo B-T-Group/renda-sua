@@ -4810,7 +4810,61 @@ export class OrdersService {
       );
     }
 
+    await this.notifyOrderMessageParticipants(
+      order,
+      user.id,
+      result.insert_user_messages_one
+    );
+
     return result.insert_user_messages_one;
+  }
+
+  /**
+   * Best-effort push notification to the other order participants when a new
+   * message is posted. Failures never block the message creation response.
+   */
+  private async notifyOrderMessageParticipants(
+    order: {
+      id: string;
+      order_number: string;
+      client?: { user_id?: string | null } | null;
+      business?: { user_id?: string | null } | null;
+      assigned_agent?: { user_id?: string | null } | null;
+    },
+    senderUserId: string,
+    created: { user?: { first_name?: string; last_name?: string } }
+  ): Promise<void> {
+    try {
+      const senderName = `${created.user?.first_name ?? ''} ${
+        created.user?.last_name ?? ''
+      }`.trim();
+      const recipientIds = Array.from(
+        new Set(
+          [
+            order.client?.user_id,
+            order.business?.user_id,
+            order.assigned_agent?.user_id,
+          ].filter((id): id is string => !!id && id !== senderUserId)
+        )
+      );
+
+      await Promise.all(
+        recipientIds.map((recipientUserId) =>
+          this.notificationsService.sendNewOrderMessagePush({
+            recipientUserId,
+            orderId: order.id,
+            orderNumber: order.order_number,
+            senderName,
+          })
+        )
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to send order message push for order ${order.order_number}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
   }
 
   async dropOrder(request: OrderStatusChangeRequest) {

@@ -41,6 +41,7 @@ import {
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildBusinessOrderCreatedPushMessage,
+  buildNewOrderMessagePushMessage,
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
@@ -253,6 +254,43 @@ export class NotificationsService {
     if (sentAny) {
       this.logger.log(
         `Order creation notification(s) processed for order ${data.orderNumber}`
+      );
+    }
+  }
+
+  /**
+   * Expo + web push to an order participant when a new order message is posted.
+   * No-ops safely when push is disabled or the recipient has no registered token.
+   */
+  async sendNewOrderMessagePush(params: {
+    recipientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    senderName: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildNewOrderMessagePushMessage({
+      orderNumber: params.orderNumber,
+      senderName: params.senderName,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_message',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendNewOrderMessagePush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
       );
     }
   }

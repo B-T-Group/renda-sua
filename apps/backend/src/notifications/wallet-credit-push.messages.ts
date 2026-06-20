@@ -62,6 +62,26 @@ export function buildWalletCreditPushMessage(params: {
   };
 }
 
+export function buildNewOrderMessagePushMessage(params: {
+  orderNumber: string;
+  senderName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const sender =
+    params.senderName?.trim() || (locale === 'fr' ? 'Quelqu’un' : 'Someone');
+  if (locale === 'fr') {
+    return {
+      title: `Nouveau message · Commande ${params.orderNumber}`,
+      body: `${sender} vous a envoyé un message`,
+    };
+  }
+  return {
+    title: `New message · Order ${params.orderNumber}`,
+    body: `${sender} sent you a message`,
+  };
+}
+
 export function buildBusinessOrderCreatedPushMessage(params: {
   orderNumber: string;
   clientName: string;
