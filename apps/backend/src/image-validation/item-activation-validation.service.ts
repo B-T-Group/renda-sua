@@ -3,9 +3,6 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 
 const COUNT_ITEM_IMAGES = `
   query CountItemImagesForActivation($itemId: uuid!) {
-    item_images_aggregate(where: { item_id: { _eq: $itemId } }) {
-      aggregate { count }
-    }
     item_images(where: { item_id: { _eq: $itemId } }) {
       validation_errors
     }
@@ -14,11 +11,6 @@ const COUNT_ITEM_IMAGES = `
 
 const COUNT_RENTAL_IMAGES = `
   query CountRentalImagesForActivation($rentalItemId: uuid!) {
-    rental_item_images_aggregate(
-      where: { rental_item_id: { _eq: $rentalItemId } }
-    ) {
-      aggregate { count }
-    }
     rental_item_images(where: { rental_item_id: { _eq: $rentalItemId } }) {
       validation_errors
     }
@@ -33,12 +25,11 @@ export class ItemActivationValidationService {
 
   async assertItemCanActivate(itemId: string): Promise<void> {
     const row = await this.hasuraUserService.executeQuery<{
-      item_images_aggregate: { aggregate: { count: number } };
       item_images: { validation_errors: unknown[] }[];
     }>(COUNT_ITEM_IMAGES, { itemId });
 
-    const count = row?.item_images_aggregate?.aggregate?.count ?? 0;
-    if (count < MIN_IMAGES_FOR_ACTIVE) {
+    const images = row?.item_images ?? [];
+    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
       throw new HttpException(
         {
           success: false,
@@ -49,17 +40,16 @@ export class ItemActivationValidationService {
         HttpStatus.BAD_REQUEST
       );
     }
-    this.assertNoBlockingErrors(row?.item_images ?? []);
+    this.assertNoBlockingErrors(images);
   }
 
   async assertRentalItemCanActivate(rentalItemId: string): Promise<void> {
     const row = await this.hasuraUserService.executeQuery<{
-      rental_item_images_aggregate: { aggregate: { count: number } };
       rental_item_images: { validation_errors: unknown[] }[];
     }>(COUNT_RENTAL_IMAGES, { rentalItemId });
 
-    const count = row?.rental_item_images_aggregate?.aggregate?.count ?? 0;
-    if (count < MIN_IMAGES_FOR_ACTIVE) {
+    const images = row?.rental_item_images ?? [];
+    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
       throw new HttpException(
         {
           success: false,
@@ -70,7 +60,7 @@ export class ItemActivationValidationService {
         HttpStatus.BAD_REQUEST
       );
     }
-    this.assertNoBlockingErrors(row?.rental_item_images ?? []);
+    this.assertNoBlockingErrors(images);
   }
 
   private assertNoBlockingErrors(
