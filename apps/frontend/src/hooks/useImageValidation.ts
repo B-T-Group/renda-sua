@@ -5,7 +5,6 @@ import type {
   ValidateImagesResponse,
   ValidationIssue,
 } from '../types/imageValidation';
-import { fileMimeType, fileToBase64 } from '../utils/imageFileToBase64';
 import { useApiClient } from './useApiClient';
 
 export interface CleanupPreviewInput {
@@ -16,40 +15,31 @@ export interface CleanupPreviewInput {
 
 export const useImageValidation = () => {
   const apiClient = useApiClient();
-  const [validating, setValidating] = useState(false);
+  const [validating] = useState(false);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [lastResults, setLastResults] = useState<ImageValidationResult[]>([]);
 
+  // Pre-upload image validation is intentionally disabled: sending the image
+  // data to /images/validate doubled the upload over slow networks. This now
+  // resolves instantly without a network call so uploads stay fast. Re-enable
+  // by restoring the POST below and setting IMAGE_VALIDATION_ENABLED on the
+  // backend.
   const validateFiles = useCallback(
     async (
-      files: File[],
-      options?: { itemId?: string; rentalItemId?: string }
+      _files: File[],
+      _options?: { itemId?: string; rentalItemId?: string }
     ): Promise<ValidateImagesResponse> => {
-      setValidating(true);
-      try {
-        const images = await Promise.all(
-          files.map(async (file) => ({
-            data: await fileToBase64(file),
-            mimeType: fileMimeType(file),
-            fileName: file.name,
-          }))
-        );
-        const response = await apiClient.post<{
-          success: boolean;
-          data: ValidateImagesResponse;
-        }>('/images/validate', {
-          images,
-          itemId: options?.itemId,
-          rentalItemId: options?.rentalItemId,
-        });
-        const data = response.data.data;
-        setLastResults(data.results);
-        return data;
-      } finally {
-        setValidating(false);
-      }
+      const data: ValidateImagesResponse = {
+        passed: true,
+        score: 100,
+        results: [],
+        errors: [],
+        warnings: [],
+      };
+      setLastResults(data.results);
+      return data;
     },
-    [apiClient]
+    []
   );
 
   const metadataFromResults = useCallback(

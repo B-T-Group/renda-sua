@@ -17,6 +17,7 @@ describe('ImageValidationService flags', () => {
     const configGet = jest.fn((key: string) => {
       if (key === 'imageValidation') {
         return {
+          enabled: true,
           enableVision: cfg.enableVision ?? false,
           requireVision: false,
           moderationProvider: cfg.moderationProvider ?? 'none',

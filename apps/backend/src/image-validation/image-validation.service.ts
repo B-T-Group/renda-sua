@@ -65,6 +65,11 @@ export class ImageValidationService {
     dto: ValidateImagesDto
   ): Promise<ValidateImagesResponse> {
     const cfg = this.configService.get('imageValidation', { infer: true });
+
+    if (!(cfg?.enabled ?? false)) {
+      return this.buildDisabledResponse(dto);
+    }
+
     const timeoutMs = cfg?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const flags = {
       enableVision: cfg?.enableVision ?? false,
@@ -150,6 +155,25 @@ export class ImageValidationService {
       results,
       errors: allErrors,
       warnings: allWarnings,
+    };
+  }
+
+  private buildDisabledResponse(
+    dto: ValidateImagesDto
+  ): ValidateImagesResponse {
+    return {
+      passed: true,
+      score: 100,
+      results: dto.images.map((img, i) => ({
+        passed: true,
+        score: 100,
+        errors: [],
+        warnings: [],
+        fileName: img.fileName,
+        clientIndex: i,
+      })),
+      errors: [],
+      warnings: [],
     };
   }
 

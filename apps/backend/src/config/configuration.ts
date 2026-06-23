@@ -142,6 +142,8 @@ export type ImageValidationModerationProvider = 'none' | 'rekognition' | 'openai
 
 /** Product image validation pipeline (local checks + optional vision / moderation). */
 export interface ImageValidationConfig {
+  /** Master switch for the pre-upload image validation check. Default off: the check is slow over the network, so it is skipped unless explicitly enabled. */
+  enabled: boolean;
   /** OpenAI vision for soft checks (product size, clutter, text). Default off for cost control. */
   enableVision: boolean;
   /** When true, fail validation if vision was required but unavailable. Default off. */
@@ -487,6 +489,7 @@ export default (): Configuration => {
       ),
     },
     imageValidation: {
+      enabled: process.env.IMAGE_VALIDATION_ENABLED === 'true',
       enableVision: process.env.IMAGE_VALIDATION_ENABLE_VISION === 'true',
       requireVision: process.env.IMAGE_VALIDATION_REQUIRE_VISION === 'true',
       moderationProvider: parseImageValidationModerationProvider(
