@@ -1099,10 +1099,10 @@ describe('OrdersService', () => {
       };
 
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
         orders_by_pk: orderWithDuplicateRecipients,
       });
-      hasuraSystemService.executeMutation.mockResolvedValue({
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({
         insert_user_messages_one: createdMessage,
       });
 
