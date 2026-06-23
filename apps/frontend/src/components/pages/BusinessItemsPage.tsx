@@ -731,7 +731,7 @@ const BusinessItemsPage: React.FC = () => {
             size="small"
             sx={{ borderRadius: 0 }}
           >
-            {t('business.items.addFromImage', 'Add from image')}
+            {t('business.items.addFromImage', 'Create new item')}
           </Button>
           <Button
             variant="outlined"
