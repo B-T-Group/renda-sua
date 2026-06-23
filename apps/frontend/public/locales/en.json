@@ -1760,6 +1760,7 @@
       "badgeSponsored": "Sponsored",
       "fragile": "Fragile",
       "gallery": "Gallery",
+      "galleryHint": "Tap a photo to preview",
       "galleryImage": "Gallery Image",
       "generate": "AI Generate",
       "generateDescriptionHelper": "Click \"Generate\" to create an AI-powered description based on your product details",

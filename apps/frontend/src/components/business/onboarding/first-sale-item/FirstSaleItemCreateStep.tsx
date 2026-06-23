@@ -1,5 +1,6 @@
 import { AutoAwesome as AutoAwesomeIcon } from '@mui/icons-material';
 import {
+  Autocomplete,
   Backdrop,
   Box,
   Button,
@@ -11,12 +12,14 @@ import {
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageCleanupLoadingAnimation from '../../../common/ImageCleanupLoadingAnimation';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import { useApiClient } from '../../../../hooks/useApiClient';
+import { useBrands } from '../../../../hooks/useBrands';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
+import { useCategories, useSubcategories } from '../../../../hooks/useCategories';
 import { useCreateItemFromImage } from '../../../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import { Item, useItems } from '../../../../hooks/useItems';
@@ -88,6 +91,24 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const { createItemFromImage, loading: createLoading } =
     useCreateItemFromImage();
   const { associateImageToItem } = useBusinessImages();
+  const { categories } = useCategories();
+  const { brands } = useBrands();
+  const selectedCategoryId = useMemo(() => {
+    const match = categories.find(
+      (c) => c.name.trim().toLowerCase() === categoryName.trim().toLowerCase()
+    );
+    return match ? String(match.id) : undefined;
+  }, [categories, categoryName]);
+  const { subcategories } = useSubcategories(undefined, selectedCategoryId);
+  const categoryOptions = useMemo(
+    () => categories.map((c) => c.name),
+    [categories]
+  );
+  const subCategoryOptions = useMemo(
+    () => subcategories.map((s) => s.name),
+    [subcategories]
+  );
+  const brandOptions = useMemo(() => brands.map((b) => b.name), [brands]);
 
   useEffect(() => {
     if (!existingItem?.id) {
@@ -241,6 +262,15 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   };
 
   const formDisabled = sugLoading || createLoading || saveBusy;
+  const priceNumber = Number(price.trim());
+  const priceValid =
+    price.trim() !== '' && !Number.isNaN(priceNumber) && priceNumber > 0;
+  const requiredComplete =
+    name.trim() !== '' &&
+    categoryName.trim() !== '' &&
+    subCategoryName.trim() !== '' &&
+    description.trim() !== '' &&
+    priceValid;
 
   return (
     <Stack spacing={{ xs: 2.5, sm: 2 }}>
@@ -257,11 +287,9 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
       {imagePreviewUrls.length > 0 ? (
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'repeat(3, minmax(0, 1fr))',
-              sm: 'repeat(auto-fill, minmax(120px, 1fr))',
-            },
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
             gap: 1,
           }}
         >
@@ -269,6 +297,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
             <Box
               key={`${url}-${i}`}
               sx={{
+                width: { xs: 96, sm: 120 },
                 borderRadius: 2,
                 overflow: 'hidden',
                 border: 1,
@@ -340,32 +369,63 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         required
         disabled={formDisabled}
       />
-      <TextField
-        label={t(
-          'business.onboarding.firstSale.create.category',
-          'Category name'
-        )}
+      <Autocomplete
+        freeSolo
+        options={categoryOptions}
         value={categoryName}
-        onChange={(e) => setCategoryName(e.target.value)}
-        fullWidth
+        onChange={(_, v) => setCategoryName(typeof v === 'string' ? v : v ?? '')}
+        inputValue={categoryName}
+        onInputChange={(_, v) => setCategoryName(v)}
         disabled={formDisabled}
-      />
-      <TextField
-        label={t(
-          'business.onboarding.firstSale.create.subCategory',
-          'Subcategory name'
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={t(
+              'business.onboarding.firstSale.create.category',
+              'Category name'
+            )}
+            required
+            fullWidth
+          />
         )}
-        value={subCategoryName}
-        onChange={(e) => setSubCategoryName(e.target.value)}
-        fullWidth
-        disabled={formDisabled}
       />
-      <TextField
-        label={t('business.onboarding.firstSale.create.brand', 'Brand')}
-        value={brandName}
-        onChange={(e) => setBrandName(e.target.value)}
-        fullWidth
+      <Autocomplete
+        freeSolo
+        options={subCategoryOptions}
+        value={subCategoryName}
+        onChange={(_, v) =>
+          setSubCategoryName(typeof v === 'string' ? v : v ?? '')
+        }
+        inputValue={subCategoryName}
+        onInputChange={(_, v) => setSubCategoryName(v)}
         disabled={formDisabled}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={t(
+              'business.onboarding.firstSale.create.subCategory',
+              'Subcategory name'
+            )}
+            required
+            fullWidth
+          />
+        )}
+      />
+      <Autocomplete
+        freeSolo
+        options={brandOptions}
+        value={brandName}
+        onChange={(_, v) => setBrandName(typeof v === 'string' ? v : v ?? '')}
+        inputValue={brandName}
+        onInputChange={(_, v) => setBrandName(v)}
+        disabled={formDisabled}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={t('business.onboarding.firstSale.create.brand', 'Brand')}
+            fullWidth
+          />
+        )}
       />
       <TextField
         label={t(
@@ -377,6 +437,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         fullWidth
         multiline
         minRows={2}
+        required
         disabled={formDisabled}
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -385,6 +446,8 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           type="number"
+          required
+          error={price.trim() !== '' && !priceValid}
           disabled={formDisabled}
           sx={{ flex: 1 }}
         />
@@ -402,7 +465,9 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
       <Button
         variant="contained"
         onClick={() => void submit()}
-        disabled={formDisabled || (!primaryId && !itemForEdit)}
+        disabled={
+          formDisabled || (!primaryId && !itemForEdit) || !requiredComplete
+        }
         fullWidth={isNarrow}
         size="large"
         sx={{ minHeight: 48 }}

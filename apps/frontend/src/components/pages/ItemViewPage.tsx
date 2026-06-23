@@ -13,7 +13,6 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
@@ -113,6 +112,7 @@ export default function ItemViewPage() {
   const [imageLightboxIndex, setImageLightboxIndex] = useState<number | null>(
     null
   );
+  const [viewerImageId, setViewerImageId] = useState<string | null>(null);
   const [itemActiveToggling, setItemActiveToggling] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
@@ -310,8 +310,10 @@ export default function ItemViewPage() {
   }, [item?.item_images]);
 
   const heroImage = getPrimaryOrFirstItemImage(sortedItemImages);
-  const galleryThumbs = sortedItemImages.filter(
-    (i) => !isPrimaryItemImageType(i.image_type)
+  const activeImage = useMemo(
+    () =>
+      sortedItemImages.find((i) => i.id === viewerImageId) ?? heroImage,
+    [sortedItemImages, viewerImageId, heroImage]
   );
 
   const openImageLightbox = useCallback((index: number) => {
@@ -792,54 +794,98 @@ export default function ItemViewPage() {
           <Stack spacing={3}>
             {/* Item Images */}
             <Card>
-              <CardMedia
-                component="img"
-                height="300"
-                image={heroImage?.image_url || NoImage}
-                alt={item.name}
+              {/* Fixed square image area: full-width image centered vertically */}
+              <Box
                 onClick={() => {
-                  if (!heroImage || sortedItemImages.length === 0) return;
+                  if (!activeImage || sortedItemImages.length === 0) return;
                   const idx = sortedItemImages.findIndex(
-                    (i) => i.id === heroImage.id
+                    (i) => i.id === activeImage.id
                   );
                   openImageLightbox(idx >= 0 ? idx : 0);
                 }}
                 sx={{
-                  objectFit: 'cover',
+                  position: 'relative',
+                  width: '100%',
+                  aspectRatio: '1 / 1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'grey.50',
+                  overflow: 'hidden',
                   cursor:
-                    sortedItemImages.length > 0 ? 'pointer' : 'default',
+                    sortedItemImages.length > 0 ? 'zoom-in' : 'default',
                 }}
-              />
-              {galleryThumbs.length > 0 && (
+              >
+                <Box
+                  component="img"
+                  src={activeImage?.image_url || NoImage}
+                  alt={activeImage?.alt_text || item.name}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </Box>
+              {sortedItemImages.length > 0 && (
                 <Box sx={{ p: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    {t('business.items.gallery', 'Gallery')}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {galleryThumbs.slice(0, 4).map((image: ItemImage) => (
-                      <Avatar
-                        key={image.id}
-                        src={image.image_url}
-                        alt={image.alt_text || item.name}
-                        onClick={() =>
-                          openImageLightbox(
-                            sortedItemImages.findIndex((i) => i.id === image.id)
-                          )
-                        }
-                        sx={{ width: 60, height: 60, cursor: 'pointer' }}
-                        variant="rounded"
-                      />
-                    ))}
-                    {galleryThumbs.length > 4 && (
-                      <Avatar
-                        sx={{ width: 60, height: 60, bgcolor: 'grey.300' }}
-                        variant="rounded"
-                      >
-                        <Typography variant="caption">
-                          +{galleryThumbs.length - 4}
-                        </Typography>
-                      </Avatar>
-                    )}
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mb: 1 }}
+                  >
+                    <Typography variant="subtitle2">
+                      {t('business.items.gallery', 'Gallery')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t(
+                        'business.items.galleryHint',
+                        'Tap a photo to preview'
+                      )}
+                    </Typography>
+                  </Stack>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 1,
+                      overflowX: 'auto',
+                      pb: 1,
+                    }}
+                  >
+                    {sortedItemImages.map((image: ItemImage) => {
+                      const isActive = activeImage?.id === image.id;
+                      return (
+                        <Box
+                          key={image.id}
+                          component="img"
+                          src={image.image_url}
+                          alt={image.alt_text || item.name}
+                          onClick={() => setViewerImageId(image.id)}
+                          sx={{
+                            flex: '0 0 auto',
+                            width: 64,
+                            height: 64,
+                            borderRadius: 1,
+                            objectFit: 'cover',
+                            cursor: 'pointer',
+                            border: 2,
+                            borderColor: isActive
+                              ? 'primary.main'
+                              : 'transparent',
+                            boxShadow: isActive ? 2 : 0,
+                            opacity: isActive ? 1 : 0.85,
+                            transition:
+                              'opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+                            '&:hover': {
+                              opacity: 1,
+                              borderColor: 'primary.light',
+                            },
+                          }}
+                        />
+                      );
+                    })}
                   </Box>
                 </Box>
               )}
@@ -848,22 +894,23 @@ export default function ItemViewPage() {
             {/* Item Details Card */}
             <Card>
               <CardContent>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  gap={1}
-                >
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
+                <Stack spacing={1.5} sx={{ mb: 1 }}>
+                  <Typography variant="h6" fontWeight="bold">
                     {t('business.items.details', 'Item Details')}
                   </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    useFlexGap
+                  >
                     {canSuperUserActions && (
                       <Button
                         variant="outlined"
                         size="small"
                         startIcon={<CategoryIcon />}
                         onClick={() => setShowCollectionsDialog(true)}
+                        sx={{ flex: 1, minWidth: 140 }}
                       >
                         {t('business.items.collections.title', 'Collections')}
                       </Button>
@@ -873,6 +920,7 @@ export default function ItemViewPage() {
                       size="small"
                       startIcon={<AutoFixHighIcon />}
                       onClick={handleRefineWithAi}
+                      sx={{ flex: 1, minWidth: 140 }}
                     >
                       {t('business.items.refineWithAi.title', 'Refine with AI')}
                     </Button>
