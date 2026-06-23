@@ -2,9 +2,9 @@ import { VALIDATION_CODES } from '../types/image-validation.types';
 
 const MESSAGES: Record<string, string> = {
   [VALIDATION_CODES.LOW_RESOLUTION]:
-    'The image resolution is too low. Use at least 800×800 pixels.',
+    'For the best listing, we recommend at least 800×800 pixels.',
   [VALIDATION_CODES.IMAGE_BLURRY]:
-    'The image is blurry. Please upload a sharper photo.',
+    'This photo looks a bit blurry. A sharper photo will look better to buyers.',
   [VALIDATION_CODES.INAPPROPRIATE_CONTENT]:
     'This image cannot be used because it contains inappropriate content.',
   [VALIDATION_CODES.POOR_LIGHTING]:

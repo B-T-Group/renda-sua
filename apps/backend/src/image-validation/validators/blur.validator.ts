@@ -28,7 +28,7 @@ export class BlurValidator implements ImageValidator {
       {
         code: VALIDATION_CODES.IMAGE_BLURRY,
         message: validationMessage(VALIDATION_CODES.IMAGE_BLURRY),
-        severity: 'error',
+        severity: 'warning',
       },
     ];
   }

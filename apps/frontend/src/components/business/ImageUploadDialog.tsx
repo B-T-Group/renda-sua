@@ -119,6 +119,29 @@ export default function ImageUploadDialog({
     }
   };
 
+  // Validate as soon as files are selected so quality recommendations are
+  // shown inline. This is informational only; it never blocks the upload.
+  useEffect(() => {
+    if (selectedFiles.length === 0) {
+      setValidationResults([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const validation = await validateFiles(selectedFiles, { itemId });
+        if (!cancelled) {
+          setValidationResults(validation.results);
+        }
+      } catch (error) {
+        console.error('Failed to validate images:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFiles, itemId, validateFiles]);
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
 
@@ -151,7 +174,6 @@ export default function ImageUploadDialog({
     });
 
     setSelectedFiles((prev) => [...prev, ...validFiles]);
-    setValidationResults([]);
   };
 
   const removeSelectedFile = (index: number) => {
@@ -170,7 +192,6 @@ export default function ImageUploadDialog({
       });
       return prev.filter((_, i) => i !== index);
     });
-    setValidationResults([]);
   };
 
   const hasExistingMain = images.some((i) => i.image_type === 'main');

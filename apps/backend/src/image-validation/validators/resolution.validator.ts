@@ -22,7 +22,7 @@ export class ResolutionValidator implements ImageValidator {
       {
         code: VALIDATION_CODES.LOW_RESOLUTION,
         message: validationMessage(VALIDATION_CODES.LOW_RESOLUTION),
-        severity: 'error',
+        severity: 'warning',
       },
     ];
   }

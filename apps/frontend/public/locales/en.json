@@ -1593,23 +1593,25 @@
       "validation": {
         "validating": "Checking image quality…",
         "blocked": "Fix the issues below before uploading.",
+        "recommendationsNotMet": "Some photos don't meet our recommendations. You can still upload, but better photos help your listing.",
         "minPhotos": "Add at least {{count}} photos to continue.",
         "activateMinPhotos": "At least {{count}} photos are required to activate this listing.",
         "activateValidationErrors": "Fix image quality issues before activating this listing.",
         "guidelines": {
-          "resolution": "Use at least 800×800 pixels. Sharp, well-lit photos work best.",
+          "intro": "For the best listing experience, we recommend:",
+          "resolution": "At least 800×800 pixels. Sharp, well-lit photos work best.",
           "background": "Keep the product as the main focus on a clean background.",
           "lighting": "Avoid very dark or overexposed images.",
           "fileSize": "Each image must be {{maxSize}} MB or smaller.",
-          "minPhotos": "You need at least {{count}} photos to publish a listing."
+          "minPhotos": "At least {{count}} photos are required to publish a listing."
         },
         "codes": {
-          "LOW_RESOLUTION": "The image resolution is too low. Use at least 800×800 pixels.",
-          "IMAGE_BLURRY": "The image is blurry. Please upload a sharper photo.",
+          "LOW_RESOLUTION": "For the best listing, we recommend at least 800×800 pixels.",
+          "IMAGE_BLURRY": "This photo looks a bit blurry. A sharper photo will look better to buyers.",
           "INAPPROPRIATE_CONTENT": "This image cannot be used because it contains inappropriate content.",
-          "POOR_LIGHTING": "The image is too dark or overexposed. Better lighting may improve buyer confidence.",
-          "PRODUCT_TOO_SMALL": "The product appears too small in the image. Try moving closer.",
-          "CLUTTERED_BACKGROUND": "The background contains distracting objects. Consider using a cleaner background.",
+          "POOR_LIGHTING": "The image is a little dark or overexposed. Better lighting may improve buyer confidence.",
+          "PRODUCT_TOO_SMALL": "The product appears small in the image. Moving closer may help.",
+          "CLUTTERED_BACKGROUND": "The background contains distracting objects. A cleaner background may help.",
           "TOO_MUCH_TEXT": "The image contains a lot of promotional text. A cleaner product photo works better.",
           "DUPLICATE_IMAGE": "This image looks very similar to another photo you already uploaded."
         }
