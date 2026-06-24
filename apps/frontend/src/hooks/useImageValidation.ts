@@ -13,6 +13,18 @@ export interface CleanupPreviewInput {
   issues?: ValidationIssue[];
 }
 
+const passedResultForFile = (
+  file: File,
+  clientIndex: number
+): ImageValidationResult => ({
+  passed: true,
+  score: 100,
+  errors: [],
+  warnings: [],
+  fileName: file.name,
+  clientIndex,
+});
+
 export const useImageValidation = () => {
   const apiClient = useApiClient();
   const [validating] = useState(false);
@@ -26,13 +38,14 @@ export const useImageValidation = () => {
   // backend.
   const validateFiles = useCallback(
     async (
-      _files: File[],
+      files: File[],
       _options?: { itemId?: string; rentalItemId?: string }
     ): Promise<ValidateImagesResponse> => {
+      const results = files.map(passedResultForFile);
       const data: ValidateImagesResponse = {
         passed: true,
         score: 100,
-        results: [],
+        results,
         errors: [],
         warnings: [],
       };
