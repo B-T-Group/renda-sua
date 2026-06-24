@@ -99,6 +99,14 @@ export interface AirtelMoneyConfig {
   remittanceSecondaryKey?: string;
 }
 
+export interface Auth0TestUsersConfig {
+  enabled: boolean;
+  connection: string;
+  password: string;
+  emailDomain: string;
+  phoneSuffix: string;
+}
+
 export interface Auth0Config {
   domain: string;
   audience: string;
@@ -106,6 +114,7 @@ export interface Auth0Config {
   clientSecret?: string;
   managementClientId?: string;
   managementClientSecret?: string;
+  testUsers: Auth0TestUsersConfig;
 }
 
 export interface OrderConfig {
@@ -464,6 +473,17 @@ export default (): Configuration => {
         process.env.AUTH0_CLIENT_SECRET,
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
+      testUsers: {
+        enabled:
+          process.env.AUTH0_TEST_USERS_ENABLED !== undefined
+            ? process.env.AUTH0_TEST_USERS_ENABLED === 'true'
+            : process.env.NODE_ENV !== 'production',
+        connection: process.env.AUTH0_TEST_USERS_CONNECTION || 'Test-Users',
+        password: process.env.AUTH0_TEST_USER_PASSWORD || 'Rendasu@21',
+        emailDomain:
+          process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
+        phoneSuffix: process.env.AUTH0_TEST_PHONE_SUFFIX || '0000',
+      },
     },
     googleCache: {
       enabled: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true

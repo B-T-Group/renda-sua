@@ -135,6 +135,13 @@ export class LoginService {
     );
   }
 
+  private isTestUser(identifier: string, isPhone: boolean): boolean {
+    if (!this.auth0Service.isTestUsersEnabled()) return false;
+    return isPhone
+      ? this.auth0Service.isTestPhone(identifier)
+      : this.auth0Service.isTestEmail(identifier);
+  }
+
   private async startLoginOtpWithEmail(email: string): Promise<void> {
     const user = await this.getUserByEmail(email);
     if (!user) {
@@ -143,6 +150,7 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
+    if (this.isTestUser(email, false)) return;
     await this.auth0Service.startEmailOtp(email);
   }
 
@@ -154,6 +162,7 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
+    if (this.isTestUser(phoneNumber, true)) return;
     await this.auth0Service.startSmsOtp(phoneNumber);
   }
 
@@ -232,10 +241,9 @@ export class LoginService {
     email: string,
     otp: string
   ): Promise<TokenData> {
-    const tokenData = (await this.auth0Service.verifyEmailOtp(
-      email,
-      otp
-    )) as TokenData;
+    const tokenData = (await (this.isTestUser(email, false)
+      ? this.auth0Service.verifyTestUserEmail(email)
+      : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByEmail(email);
@@ -253,10 +261,9 @@ export class LoginService {
     phoneNumber: string,
     otp: string
   ): Promise<TokenData> {
-    const tokenData = (await this.auth0Service.verifySmsOtp(
-      phoneNumber,
-      otp
-    )) as TokenData;
+    const tokenData = (await (this.isTestUser(phoneNumber, true)
+      ? this.auth0Service.verifyTestUserPhone(phoneNumber)
+      : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByPhoneNumber(phoneNumber);

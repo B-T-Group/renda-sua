@@ -37,6 +37,12 @@ describe('SignupService', () => {
           provide: Auth0Service,
           useValue: {
             verifyEmailOtp: jest.fn(),
+            verifySmsOtp: jest.fn(),
+            verifyTestUserEmail: jest.fn(),
+            verifyTestUserPhone: jest.fn(),
+            isTestUsersEnabled: jest.fn().mockReturnValue(false),
+            isTestEmail: jest.fn().mockReturnValue(false),
+            isTestPhone: jest.fn().mockReturnValue(false),
           },
         },
         {
@@ -212,12 +218,73 @@ describe('SignupService', () => {
       auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
 
       await expect(
-        service.verifyOtp(' New@Example.COM ', '123456')
+        service.verifyOtp({ email: ' New@Example.COM ', otp: '123456' })
       ).resolves.toEqual(auth0Token);
       expect(auth0Service.verifyEmailOtp).toHaveBeenCalledWith(
         'new@example.com',
         '123456'
       );
+    });
+
+    it('delegates phone OTP verification to Auth0 SMS', async () => {
+      const auth0Token = {
+        access_token: 'token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      };
+      auth0Service.verifySmsOtp.mockResolvedValue(auth0Token);
+
+      await expect(
+        service.verifyOtp({ phone_number: '+237600000001', otp: '123456' })
+      ).resolves.toEqual(auth0Token);
+      expect(auth0Service.verifySmsOtp).toHaveBeenCalledWith(
+        '+237600000001',
+        '123456'
+      );
+    });
+
+    it('rejects when neither email nor phone is provided', async () => {
+      await expect(service.verifyOtp({ otp: '123456' })).rejects.toThrow(
+        HttpException
+      );
+    });
+
+    it('routes test emails to the Test-Users password grant', async () => {
+      const auth0Token = {
+        access_token: 'token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      };
+      auth0Service.isTestUsersEnabled.mockReturnValue(true);
+      auth0Service.isTestEmail.mockReturnValue(true);
+      auth0Service.verifyTestUserEmail.mockResolvedValue(auth0Token);
+
+      await expect(
+        service.verifyOtp({ email: 'tester@rendasua-test.com', otp: '000000' })
+      ).resolves.toEqual(auth0Token);
+      expect(auth0Service.verifyTestUserEmail).toHaveBeenCalledWith(
+        'tester@rendasua-test.com'
+      );
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('routes test phones to the Test-Users password grant', async () => {
+      const auth0Token = {
+        access_token: 'token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      };
+      auth0Service.isTestUsersEnabled.mockReturnValue(true);
+      auth0Service.isTestPhone.mockReturnValue(true);
+      auth0Service.verifyTestUserPhone.mockResolvedValue(auth0Token);
+
+      await expect(
+        service.verifyOtp({ phone_number: '+23700000000', otp: '000000' })
+      ).resolves.toEqual(auth0Token);
+      expect(auth0Service.verifyTestUserPhone).toHaveBeenCalledWith(
+        '+23700000000'
+      );
+      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
     });
   });
 });

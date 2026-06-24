@@ -60,9 +60,17 @@ export class SignupController {
 
   @Public()
   @Post('signup/verify-otp')
-  @ApiOperation({ summary: 'Verify email OTP via Auth0' })
-  async verifyOtp(@Body() body: { email: string; otp: string; userId: string }) {
-    const tokenData = await this.signupService.verifyOtp(body.email, body.otp);
+  @ApiOperation({ summary: 'Verify signup OTP via Auth0 (email or phone)' })
+  async verifyOtp(
+    @Body()
+    body: {
+      email?: string;
+      phone_number?: string;
+      otp: string;
+      userId: string;
+    }
+  ) {
+    const tokenData = await this.signupService.verifyOtp(body);
     return {
       success: true,
       verified: true,

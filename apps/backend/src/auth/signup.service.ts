@@ -142,8 +142,49 @@ export class SignupService {
     return { user };
   }
 
-  async verifyOtp(email: string, otp: string) {
-    return this.auth0Service.verifyEmailOtp(this.normalizeEmail(email), otp);
+  async verifyOtp(body: {
+    email?: string;
+    phone_number?: string;
+    otp: string;
+  }) {
+    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
+    const phone = body.phone_number?.trim()
+      ? this.normalizePhone(body.phone_number)
+      : '';
+    if ((email && phone) || (!email && !phone)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Provide exactly one of email or phone_number with otp',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (email) {
+      return this.resolveEmailVerification(email, body.otp);
+    }
+    return this.resolvePhoneVerification(phone, body.otp);
+  }
+
+  private isTestUser(identifier: string, isPhone: boolean): boolean {
+    if (!this.auth0Service.isTestUsersEnabled()) return false;
+    return isPhone
+      ? this.auth0Service.isTestPhone(identifier)
+      : this.auth0Service.isTestEmail(identifier);
+  }
+
+  private resolveEmailVerification(email: string, otp: string) {
+    if (this.isTestUser(email, false)) {
+      return this.auth0Service.verifyTestUserEmail(email);
+    }
+    return this.auth0Service.verifyEmailOtp(email, otp);
+  }
+
+  private resolvePhoneVerification(phone: string, otp: string) {
+    if (this.isTestUser(phone, true)) {
+      return this.auth0Service.verifyTestUserPhone(phone);
+    }
+    return this.auth0Service.verifySmsOtp(phone, otp);
   }
 
   async completeSignup(userId: string, auth0User: any): Promise<{ user: any }> {
