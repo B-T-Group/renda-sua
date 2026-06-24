@@ -733,20 +733,22 @@ const BusinessItemsPage: React.FC = () => {
           >
             {t('business.items.addFromImage', 'Create new item')}
           </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<DownloadIcon />}
-            onClick={handleOpenFacebookExportSelect}
-            size="small"
-            sx={{ borderRadius: 0 }}
-            disabled={loading || (items?.length ?? 0) === 0}
-          >
-            {t(
-              'business.items.facebookExport.button',
-              'Export for Facebook (CSV)'
-            )}
-          </Button>
+          {isPlatformAdmin && (
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<DownloadIcon />}
+              onClick={handleOpenFacebookExportSelect}
+              size="small"
+              sx={{ borderRadius: 0 }}
+              disabled={loading || (items?.length ?? 0) === 0}
+            >
+              {t(
+                'business.items.facebookExport.button',
+                'Export for Facebook (CSV)'
+              )}
+            </Button>
+          )}
         </Stack>
       </Stack>
 
