@@ -122,22 +122,25 @@ export class Auth0Service {
     return phoneNumber.replace(/\D/g, '').endsWith(config.phoneSuffix);
   }
 
-  private testUserEmail(identifier: string, isPhone: boolean): string {
-    if (!isPhone) return identifier.trim().toLowerCase();
+  private async ensureTestUser(
+    connection: string,
+    recipient: { email: string } | { phone_number: string }
+  ): Promise<void> {
     const config = this.getTestUsersConfig();
-    const digits = identifier.replace(/\D/g, '');
-    return `${digits}@${config?.emailDomain}`;
-  }
-
-  private async ensureTestUser(email: string): Promise<void> {
-    const config = this.getTestUsersConfig();
+    if (!config) {
+      throw new Error('Auth0 test user configuration is missing');
+    }
     const client = this.getManagementClient();
+    const verified =
+      'email' in recipient
+        ? { email_verified: true }
+        : { phone_verified: true };
     try {
       await client.users.create({
-        connection: config!.connection,
-        email,
-        password: config!.password,
-        email_verified: true,
+        connection,
+        password: config.password,
+        ...verified,
+        ...recipient,
       });
     } catch (error: any) {
       const status = error?.statusCode || error?.response?.status;
@@ -148,6 +151,7 @@ export class Auth0Service {
   }
 
   private async passwordRealmLogin(
+    connection: string,
     username: string
   ): Promise<Auth0TokenResponse> {
     const auth0 = this.configService.get('auth0');
@@ -163,7 +167,7 @@ export class Auth0Service {
       client_secret: clientSecret,
       username,
       password: config.password,
-      realm: config.connection,
+      realm: connection,
       audience: auth0.audience,
       scope: 'openid profile email offline_access',
     });
@@ -171,15 +175,17 @@ export class Auth0Service {
   }
 
   async verifyTestUserEmail(email: string): Promise<Auth0TokenResponse> {
-    const username = this.testUserEmail(email, false);
-    await this.ensureTestUser(username);
-    return this.passwordRealmLogin(username);
+    const connection = this.getTestUsersConfig()?.emailConnection || '';
+    const username = email.trim().toLowerCase();
+    await this.ensureTestUser(connection, { email: username });
+    return this.passwordRealmLogin(connection, username);
   }
 
   async verifyTestUserPhone(phoneNumber: string): Promise<Auth0TokenResponse> {
-    const username = this.testUserEmail(phoneNumber, true);
-    await this.ensureTestUser(username);
-    return this.passwordRealmLogin(username);
+    const connection = this.getTestUsersConfig()?.phoneConnection || '';
+    const username = phoneNumber.trim();
+    await this.ensureTestUser(connection, { phone_number: username });
+    return this.passwordRealmLogin(connection, username);
   }
 
   async deleteAuth0User(sub: string): Promise<void> {

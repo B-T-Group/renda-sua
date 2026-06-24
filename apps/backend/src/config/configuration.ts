@@ -101,7 +101,8 @@ export interface AirtelMoneyConfig {
 
 export interface Auth0TestUsersConfig {
   enabled: boolean;
-  connection: string;
+  emailConnection: string;
+  phoneConnection: string;
   password: string;
   emailDomain: string;
   phoneSuffix: string;
@@ -478,7 +479,10 @@ export default (): Configuration => {
           process.env.AUTH0_TEST_USERS_ENABLED !== undefined
             ? process.env.AUTH0_TEST_USERS_ENABLED === 'true'
             : process.env.NODE_ENV !== 'production',
-        connection: process.env.AUTH0_TEST_USERS_CONNECTION || 'Test-Users',
+        emailConnection:
+          process.env.AUTH0_TEST_USERS_EMAIL_CONNECTION || 'Email-Test-Users',
+        phoneConnection:
+          process.env.AUTH0_TEST_USERS_PHONE_CONNECTION || 'Phone-Test-Users',
         password: process.env.AUTH0_TEST_USER_PASSWORD || 'Rendasu@21',
         emailDomain:
           process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
