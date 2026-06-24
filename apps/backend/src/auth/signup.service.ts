@@ -34,6 +34,14 @@ interface SignupStartPayload {
   };
 }
 
+interface UpdateContactPayload {
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string | null;
+  phone_number?: string | null;
+}
+
 export interface SignupCreatedUser {
   id: string;
   email: string | null;
@@ -92,6 +100,36 @@ export class SignupService {
     return (result.users?.length || 0) > 0;
   }
 
+  async isEmailTakenByOther(email: string, excludeId: string): Promise<boolean> {
+    const normalized = this.normalizeEmail(email);
+    const query = `
+      query EmailTakenByOther($email: String!, $id: uuid!) {
+        users(where: { email: { _eq: $email }, id: { _neq: $id } }, limit: 1) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(query, { email: normalized, id: excludeId });
+    return (result.users?.length || 0) > 0;
+  }
+
+  async isPhoneTakenByOther(phoneNumber: string, excludeId: string): Promise<boolean> {
+    const phone = this.normalizePhone(phoneNumber);
+    const query = `
+      query PhoneTakenByOther($phone: String!, $id: uuid!) {
+        users(where: { phone_number: { _eq: $phone }, id: { _neq: $id } }, limit: 1) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(query, { phone, id: excludeId });
+    return (result.users?.length || 0) > 0;
+  }
+
   async startSignup(payload: SignupStartPayload): Promise<{ user: SignupCreatedUser }> {
     const email = this.normalizeEmail(payload.email);
     const phoneNumber = this.normalizePhone(payload.phone_number);
@@ -140,6 +178,143 @@ export class SignupService {
       }
     }
     return { user };
+  }
+
+  async updateContact(body: UpdateContactPayload): Promise<{ user: SignupCreatedUser }> {
+    const userId = String(body.user_id || '').trim();
+    if (!userId) {
+      throw new HttpException(
+        { success: false, error: 'user_id is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const email = this.normalizeEmail(body.email);
+    const phoneNumber = this.normalizePhone(body.phone_number);
+    if (!email && !phoneNumber) {
+      throw new HttpException(
+        { success: false, error: 'Email or phone number is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const existing = await this.loadUnverifiedUser(userId);
+    await this.assertContactAvailable(email, phoneNumber, userId);
+    return this.runUpdateContact(userId, {
+      email: email || null,
+      phone_number: phoneNumber || null,
+      first_name: body.first_name?.trim() || existing.first_name,
+      last_name: body.last_name?.trim() || existing.last_name,
+    });
+  }
+
+  private async loadUnverifiedUser(userId: string): Promise<{
+    first_name: string;
+    last_name: string;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: {
+        first_name: string;
+        last_name: string;
+        email_verified: boolean;
+        phone_number_verified: boolean;
+      } | null;
+    }>(
+      `
+      query GetSignupUser($id: uuid!) {
+        users_by_pk(id: $id) {
+          first_name
+          last_name
+          email_verified
+          phone_number_verified
+        }
+      }
+    `,
+      { id: userId }
+    );
+    const user = result.users_by_pk;
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'Signup user not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (user.email_verified || user.phone_number_verified) {
+      throw new HttpException(
+        { success: false, error: 'Account already verified' },
+        HttpStatus.CONFLICT
+      );
+    }
+    return { first_name: user.first_name, last_name: user.last_name };
+  }
+
+  private async assertContactAvailable(
+    email: string,
+    phoneNumber: string,
+    excludeId: string
+  ): Promise<void> {
+    if (email && (await this.isEmailTakenByOther(email, excludeId))) {
+      throw new HttpException(
+        { success: false, error: 'Email is already taken' },
+        HttpStatus.CONFLICT
+      );
+    }
+    if (phoneNumber && (await this.isPhoneTakenByOther(phoneNumber, excludeId))) {
+      throw new HttpException(
+        { success: false, error: 'Phone number is already taken' },
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async runUpdateContact(
+    userId: string,
+    set: {
+      email: string | null;
+      phone_number: string | null;
+      first_name: string;
+      last_name: string;
+    }
+  ): Promise<{ user: SignupCreatedUser }> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_users_by_pk: SignupCreatedUser | null;
+    }>(
+      `
+      mutation UpdateSignupContact(
+        $id: uuid!
+        $email: String
+        $phone_number: String
+        $first_name: String!
+        $last_name: String!
+      ) {
+        update_users_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            email: $email
+            phone_number: $phone_number
+            first_name: $first_name
+            last_name: $last_name
+            email_verified: false
+            phone_number_verified: false
+          }
+        ) {
+          id
+          email
+          first_name
+          last_name
+          user_type_id
+          phone_number
+          email_verified
+        }
+      }
+    `,
+      { id: userId, ...set }
+    );
+    if (!result.update_users_by_pk) {
+      throw new HttpException(
+        { success: false, error: 'Failed to update contact' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return { user: result.update_users_by_pk };
   }
 
   async verifyOtp(body: {

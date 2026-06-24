@@ -59,6 +59,34 @@ export class SignupController {
   }
 
   @Public()
+  @Post('signup/update-contact')
+  @ApiOperation({
+    summary: 'Update email/phone of an unverified pending signup user',
+  })
+  @ApiResponse({ status: 201, description: 'Contact updated' })
+  @ApiResponse({ status: 404, description: 'Signup user not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Account already verified or contact already taken',
+  })
+  async signupUpdateContact(
+    @Body()
+    body: {
+      user_id: string;
+      first_name?: string;
+      last_name?: string;
+      email?: string | null;
+      phone_number?: string | null;
+    }
+  ): Promise<{ success: boolean; user: SignupCreatedUser }> {
+    const result = await this.signupService.updateContact(body);
+    return {
+      success: true,
+      user: result.user,
+    };
+  }
+
+  @Public()
   @Post('signup/verify-otp')
   @ApiOperation({ summary: 'Verify signup OTP via Auth0 (email or phone)' })
   async verifyOtp(
