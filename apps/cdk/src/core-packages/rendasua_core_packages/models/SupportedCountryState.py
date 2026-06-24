@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 import datetime
 from enum import Enum
 from pydantic import BaseModel
@@ -15,6 +15,5 @@ class SupportedCountryState(BaseModel):
     launch_date: Optional[datetime.date] | None = None
     service_status: str
     state_name: str
-    supported_payment_methods: Optional[List[str]] | None = None
     updated_at: Optional[datetime.datetime] | None = None
     updated_by: Optional[str] | None = None

@@ -22,6 +22,7 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { Public } from '../auth/public.decorator';
 import {
     DeliveryConfigService,
     FastDeliveryConfig,
@@ -162,7 +163,6 @@ export class LocationsController {
             currency_code
             service_status
             delivery_enabled
-            supported_payment_methods
             launch_date
           }
         }
@@ -170,6 +170,8 @@ export class LocationsController {
 
       const response = await this.hasuraService.executeQuery(query);
       const locations = response.supported_country_states || [];
+      const paymentMethodsByCountry =
+        await this.getActivePaymentMethodsByCountry();
 
       // Get fast delivery configs for each unique country
       const countryCodes = [
@@ -222,7 +224,8 @@ export class LocationsController {
               maxHours: fastDeliveryConfig.sla,
               operatingHours: fastDeliveryConfig.serviceHours,
             },
-            supportedPaymentMethods: loc.supported_payment_methods || [],
+            supportedPaymentMethods:
+              paymentMethodsByCountry.get(loc.country_code) || [],
             launchDate: loc.launch_date,
           };
         }
@@ -313,7 +316,6 @@ export class LocationsController {
               service_status
               delivery_enabled
               fast_delivery
-              supported_payment_methods
             }
           }
         `;
@@ -333,7 +335,6 @@ export class LocationsController {
               service_status
               delivery_enabled
               fast_delivery
-              supported_payment_methods
             }
           }
         `;
@@ -385,6 +386,11 @@ export class LocationsController {
       const supported =
         location.service_status === 'active' && location.delivery_enabled;
 
+      const supportedPaymentMethods =
+        (await this.getActivePaymentMethodsByCountry()).get(
+          location.country_code
+        ) || [];
+
       return {
         success: true,
         supported,
@@ -420,7 +426,7 @@ export class LocationsController {
             },
           },
           restrictions: {
-            supportedPaymentMethods: location.supported_payment_methods || [],
+            supportedPaymentMethods,
           },
         },
       };
@@ -438,6 +444,125 @@ export class LocationsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('supported-countries')
+  @Public()
+  @ApiOperation({
+    summary: 'Get supported countries (Public)',
+    description:
+      'Public endpoint returning countries where service is available, including the active payment methods sourced from supported_payment_systems. Used to restrict country-code pickers.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Supported countries retrieved successfully',
+  })
+  async getPublicSupportedCountries(): Promise<{
+    success: boolean;
+    countries: Array<{
+      code: string;
+      name: string;
+      currencyCode: string;
+      serviceStatus: string;
+      deliveryEnabled: boolean;
+      supportedPaymentMethods: string[];
+    }>;
+  }> {
+    try {
+      const query = `
+        query GetSupportedCountriesPublic {
+          supported_country_states(
+            where: { service_status: { _in: ["active", "coming_soon"] } }
+            order_by: { country_code: asc }
+          ) {
+            country_code
+            country_name
+            currency_code
+            service_status
+            delivery_enabled
+          }
+        }
+      `;
+
+      const response = await this.hasuraService.executeQuery(query);
+      const paymentMethodsByCountry =
+        await this.getActivePaymentMethodsByCountry();
+      const countries = this.aggregateSupportedCountries(
+        response.supported_country_states || [],
+        paymentMethodsByCountry
+      );
+
+      return { success: true, countries };
+    } catch (error: any) {
+      this.logger.error('Failed to fetch supported countries (public)', error);
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Failed to fetch supported countries',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  private async getActivePaymentMethodsByCountry(): Promise<
+    Map<string, string[]>
+  > {
+    const query = `
+      query GetActivePaymentSystems {
+        supported_payment_systems(where: { active: { _eq: true } }) {
+          name
+          country
+        }
+      }
+    `;
+
+    const response = await this.hasuraService.executeQuery(query);
+    const systems = response.supported_payment_systems || [];
+    const map = new Map<string, string[]>();
+
+    for (const system of systems) {
+      const list = map.get(system.country) || [];
+      list.push(system.name);
+      map.set(system.country, list);
+    }
+
+    return map;
+  }
+
+  private aggregateSupportedCountries(
+    rows: any[],
+    paymentMethodsByCountry: Map<string, string[]>
+  ): Array<{
+    code: string;
+    name: string;
+    currencyCode: string;
+    serviceStatus: string;
+    deliveryEnabled: boolean;
+    supportedPaymentMethods: string[];
+  }> {
+    const countryMap = new Map<string, any>();
+
+    for (const row of rows) {
+      const existing = countryMap.get(row.country_code);
+      if (existing) {
+        existing.deliveryEnabled =
+          existing.deliveryEnabled || row.delivery_enabled;
+        continue;
+      }
+
+      countryMap.set(row.country_code, {
+        code: row.country_code,
+        name: row.country_name,
+        currencyCode: row.currency_code,
+        serviceStatus: row.service_status,
+        deliveryEnabled: row.delivery_enabled,
+        supportedPaymentMethods:
+          paymentMethodsByCountry.get(row.country_code) || [],
+      });
+    }
+
+    return Array.from(countryMap.values());
   }
 
   @Get('countries')

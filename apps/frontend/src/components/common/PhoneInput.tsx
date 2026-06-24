@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import PhoneInputBase from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { environment } from '../../config/environment';
+import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 
 /** Dev-only phone numbers for dropdown when useDevPhoneDropdown and isDevelopment */
 export const DEV_PHONE_NUMBERS = [
@@ -76,8 +77,18 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   ...props
 }) => {
   const { t } = useTranslation();
+  const { supportedIsos } = useSupportedCountries();
   const useDropdown =
     useDevPhoneDropdown && environment.isDevelopment;
+
+  // Restrict to supported countries unless the caller passed an explicit list.
+  const effectiveCountries =
+    onlyCountries ?? (supportedIsos.length > 0 ? supportedIsos : undefined);
+  // Keep the default country valid for the restricted list.
+  const effectiveDefaultCountry =
+    effectiveCountries && !effectiveCountries.includes(defaultCountry)
+      ? effectiveCountries[0]
+      : defaultCountry;
 
   if (useDropdown) {
     return (
@@ -216,7 +227,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
         <Box sx={phoneFieldStyles}>
           <PhoneInputBase
             international
-            defaultCountry={defaultCountry as any}
+            defaultCountry={effectiveDefaultCountry as any}
             country={country as any}
             value={value || ''}
             onChange={onChange as any}
@@ -224,7 +235,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
             placeholder={placeholder}
             disabled={disabled}
             required={required}
-            countries={onlyCountries as any}
+            countries={effectiveCountries as any}
             countrySelectProps={{ disabled: disableCountrySelect }}
           />
         </Box>
