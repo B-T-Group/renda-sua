@@ -1,10 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-import {
-  INVENTORY_ANONYMOUS_COUNTRY_CODES,
-} from './useInventoryItems';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
+import { useSupportedCountries } from './useSupportedCountries';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 
 export interface TopInventoryLocationRow {
@@ -21,6 +19,7 @@ export function useTopInventoryLocations(options: {
   anonymousOrigin?: PublicBrowserGeo | null;
 }) {
   const { isAuthenticated } = useAuth0();
+  const { supportedIsos } = useSupportedCountries();
   const api = useApiClient();
   const [locations, setLocations] = useState<TopInventoryLocationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +39,7 @@ export function useTopInventoryLocations(options: {
           ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
           : null;
       const code = detected?.toUpperCase();
-      if (code && INVENTORY_ANONYMOUS_COUNTRY_CODES.includes(code)) {
+      if (code && supportedIsos.includes(code)) {
         country_code = code;
       }
     }
@@ -70,7 +69,14 @@ export function useTopInventoryLocations(options: {
     } finally {
       setLoading(false);
     }
-  }, [api, isAuthenticated, limit, includeUnavailable, anonymousOrigin]);
+  }, [
+    api,
+    isAuthenticated,
+    supportedIsos,
+    limit,
+    includeUnavailable,
+    anonymousOrigin,
+  ]);
 
   useEffect(() => {
     void fetchTop();

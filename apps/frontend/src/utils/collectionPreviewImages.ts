@@ -1,7 +1,6 @@
 import type { AxiosInstance } from 'axios';
 import type { CollectionSummary } from '../hooks/useCollections';
 import type { InventoryItem } from '../hooks/useInventoryItems';
-import { INVENTORY_ANONYMOUS_COUNTRY_CODES } from '../hooks/useInventoryItems';
 import { DETECTED_COUNTRY_STORAGE_KEY } from '../hooks/useDetectedCountry';
 import type { PublicBrowserGeo } from '../hooks/usePublicBrowserGeo';
 
@@ -15,14 +14,17 @@ function primaryInventoryImageUrl(item: InventoryItem): string | undefined {
   return url || undefined;
 }
 
-function resolveCountryCode(isAuthenticated: boolean): string | undefined {
+function resolveCountryCode(
+  isAuthenticated: boolean,
+  supportedIsos: string[]
+): string | undefined {
   if (isAuthenticated) return undefined;
   const detected =
     typeof window !== 'undefined'
       ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
       : null;
   const code = detected?.toUpperCase();
-  if (code && INVENTORY_ANONYMOUS_COUNTRY_CODES.includes(code)) {
+  if (code && supportedIsos.includes(code)) {
     return code;
   }
   return undefined;
@@ -34,9 +36,13 @@ async function fetchCollectionPreviewImageUrls(
   options: {
     isAuthenticated: boolean;
     anonymousOrigin?: PublicBrowserGeo | null;
+    supportedIsos: string[];
   }
 ): Promise<string[]> {
-  const country_code = resolveCountryCode(options.isAuthenticated);
+  const country_code = resolveCountryCode(
+    options.isAuthenticated,
+    options.supportedIsos
+  );
   const response = await apiClient.get<{
     success: boolean;
     data: { items: InventoryItem[] };
@@ -88,6 +94,7 @@ export async function enrichCollectionsWithPreviewImages(
   options: {
     isAuthenticated: boolean;
     anonymousOrigin?: PublicBrowserGeo | null;
+    supportedIsos: string[];
   }
 ): Promise<CollectionSummary[]> {
   return Promise.all(

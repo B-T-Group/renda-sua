@@ -3,6 +3,7 @@ import { ImageType } from '../types/image';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
+import { useSupportedCountries } from './useSupportedCountries';
 
 export interface InventoryItem {
   id: string;
@@ -153,10 +154,9 @@ export interface ApiResponse {
   message: string;
 }
 
-export const INVENTORY_ANONYMOUS_COUNTRY_CODES = ['CM', 'GA'];
-
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { isAuthenticated } = useAuth0();
+  const { supportedIsos } = useSupportedCountries();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +182,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     setError(null);
 
     // Logged-in: backend uses user address; do not pass country_code/state.
-    // Anonymous: pass country_code only if detected and CM or GA.
+    // Anonymous: pass country_code only if detected and supported.
     let country_code: string | undefined;
     let state: string | undefined;
     if (isAuthenticated) {
@@ -194,7 +194,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
           : null;
       const code = detected?.toUpperCase();
-      if (code && INVENTORY_ANONYMOUS_COUNTRY_CODES.includes(code)) {
+      if (code && supportedIsos.includes(code)) {
         country_code = code;
       }
       state = undefined;
@@ -272,6 +272,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     }
   }, [
     isAuthenticated,
+    supportedIsos,
     query.page,
     query.limit,
     query.is_active,

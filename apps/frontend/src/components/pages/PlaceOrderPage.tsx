@@ -689,6 +689,7 @@ const PlaceOrderPage: React.FC = () => {
   const {
     isCountrySupported,
     supportedCountries,
+    paymentSystems,
     loading: paymentSystemsLoading,
   } = useSupportedPaymentSystems();
 
@@ -1608,6 +1609,20 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
+  // When the item's country supports Stripe, payment is by card and the
+  // customer's phone number country is irrelevant, so we skip the mobile-money
+  // "supported phone country" restriction.
+  const itemCountrySupportsStripe = useMemo(() => {
+    const itemCountry =
+      selectedItem?.business_location?.address?.country?.toUpperCase();
+    if (!itemCountry) return false;
+    return paymentSystems.some(
+      (system) =>
+        system.country?.toUpperCase() === itemCountry &&
+        system.name?.toLowerCase() === 'stripe'
+    );
+  }, [selectedItem, paymentSystems]);
+
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
     const phoneToValidate = useDifferentPhone
@@ -1647,7 +1662,9 @@ const PlaceOrderPage: React.FC = () => {
       const countryCode = parsedPhone.country;
       const isSupported = countryCode ? isCountrySupported(countryCode) : false;
 
-      if (!isSupported) {
+      // Stripe-supported item countries pay by card; don't enforce the
+      // mobile-money supported-phone-country restriction.
+      if (!isSupported && !itemCountrySupportsStripe) {
         return {
           isValid: false,
           countryCode,
@@ -1676,6 +1693,7 @@ const PlaceOrderPage: React.FC = () => {
     overridePhoneNumber,
     profile?.phone_number,
     isCountrySupported,
+    itemCountrySupportsStripe,
     supportedCountries,
     t,
   ]);

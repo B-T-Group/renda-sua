@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from './useApiClient';
-import { INVENTORY_ANONYMOUS_COUNTRY_CODES } from './useInventoryItems';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
+import { useSupportedCountries } from './useSupportedCountries';
 import { useAuth0 } from '@auth0/auth0-react';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 import { enrichCollectionsWithPreviewImages } from '../utils/collectionPreviewImages';
@@ -29,6 +29,7 @@ export interface UseCollectionsOptions {
 export function useCollections(options: UseCollectionsOptions = {}) {
   const { i18n } = useTranslation();
   const { isAuthenticated } = useAuth0();
+  const { supportedIsos } = useSupportedCountries();
   const apiClient = useApiClient();
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +46,7 @@ export function useCollections(options: UseCollectionsOptions = {}) {
           ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
           : null;
       const code = detected?.toUpperCase();
-      if (code && INVENTORY_ANONYMOUS_COUNTRY_CODES.includes(code)) {
+      if (code && supportedIsos.includes(code)) {
         country_code = code;
       }
     }
@@ -73,7 +74,11 @@ export function useCollections(options: UseCollectionsOptions = {}) {
         const withPreviews = await enrichCollectionsWithPreviewImages(
           rows,
           apiClient,
-          { isAuthenticated, anonymousOrigin: options.anonymousOrigin }
+          {
+            isAuthenticated,
+            anonymousOrigin: options.anonymousOrigin,
+            supportedIsos,
+          }
         );
         setCollections(withPreviews);
       } else {
@@ -91,6 +96,7 @@ export function useCollections(options: UseCollectionsOptions = {}) {
     apiClient,
     i18n.language,
     isAuthenticated,
+    supportedIsos,
     options.anonymousOrigin,
     options.enabled,
     options.featured,
