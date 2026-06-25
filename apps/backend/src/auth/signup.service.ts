@@ -42,6 +42,13 @@ interface UpdateContactPayload {
   phone_number?: string | null;
 }
 
+interface PendingSignupContact {
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone_number: string | null;
+}
+
 export interface SignupCreatedUser {
   id: string;
   email: string | null;
@@ -182,38 +189,56 @@ export class SignupService {
 
   async updateContact(body: UpdateContactPayload): Promise<{ user: SignupCreatedUser }> {
     const userId = String(body.user_id || '').trim();
+    this.assertUpdateContactUserId(userId);
+
+    const existing = await this.loadUnverifiedUser(userId);
+    const hasEmailUpdate = this.hasPayloadField(body, 'email');
+    const hasPhoneUpdate = this.hasPayloadField(body, 'phone_number');
+    const email = hasEmailUpdate ? this.normalizeEmail(body.email) : '';
+    const phoneNumber = hasPhoneUpdate ? this.normalizePhone(body.phone_number) : '';
+    this.assertContactUpdateHasValue(email, phoneNumber);
+    await this.assertContactAvailable(email, phoneNumber, userId);
+
+    return this.runUpdateContact(userId, {
+      email: hasEmailUpdate ? email || null : existing.email,
+      phone_number: hasPhoneUpdate ? phoneNumber || null : existing.phone_number,
+      first_name: body.first_name?.trim() || existing.first_name,
+      last_name: body.last_name?.trim() || existing.last_name,
+    });
+  }
+
+  private assertUpdateContactUserId(userId: string): void {
     if (!userId) {
       throw new HttpException(
         { success: false, error: 'user_id is required' },
         HttpStatus.BAD_REQUEST
       );
     }
-    const email = this.normalizeEmail(body.email);
-    const phoneNumber = this.normalizePhone(body.phone_number);
+  }
+
+  private hasPayloadField(
+    body: UpdateContactPayload,
+    key: 'email' | 'phone_number'
+  ): boolean {
+    return Object.prototype.hasOwnProperty.call(body, key);
+  }
+
+  private assertContactUpdateHasValue(email: string, phoneNumber: string): void {
     if (!email && !phoneNumber) {
       throw new HttpException(
         { success: false, error: 'Email or phone number is required' },
         HttpStatus.BAD_REQUEST
       );
     }
-    const existing = await this.loadUnverifiedUser(userId);
-    await this.assertContactAvailable(email, phoneNumber, userId);
-    return this.runUpdateContact(userId, {
-      email: email || null,
-      phone_number: phoneNumber || null,
-      first_name: body.first_name?.trim() || existing.first_name,
-      last_name: body.last_name?.trim() || existing.last_name,
-    });
   }
 
-  private async loadUnverifiedUser(userId: string): Promise<{
-    first_name: string;
-    last_name: string;
-  }> {
+  private async loadUnverifiedUser(userId: string): Promise<PendingSignupContact> {
     const result = await this.hasuraSystemService.executeQuery<{
       users_by_pk: {
         first_name: string;
         last_name: string;
+        email: string | null;
+        phone_number: string | null;
         email_verified: boolean;
         phone_number_verified: boolean;
       } | null;
@@ -223,6 +248,8 @@ export class SignupService {
         users_by_pk(id: $id) {
           first_name
           last_name
+          email
+          phone_number
           email_verified
           phone_number_verified
         }
@@ -243,7 +270,12 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
-    return { first_name: user.first_name, last_name: user.last_name };
+    return {
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      phone_number: user.phone_number,
+    };
   }
 
   private async assertContactAvailable(
