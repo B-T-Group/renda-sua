@@ -359,13 +359,30 @@ export class StripePaymentsController {
     if (!isNew) {
       return { received: true, duplicate: true };
     }
-    if (event.type === 'account.updated') {
-      const account = event.data.object as Stripe.Account;
-      await this.connectService.syncFromStripe(account.id);
+    const accountId = this.extractConnectAccountId(event);
+    if (accountId) {
+      await this.connectService.syncFromStripe(accountId);
     } else {
       this.logger.debug(`Unhandled Stripe connect event: ${event.type}`);
     }
     await this.databaseService.markEventProcessed(event.id);
     return { received: true };
+  }
+
+  /**
+   * Resolve the connected account id from either the classic v1
+   * `account.updated` event (`data.object`) or a v2 "thin" account event
+   * (`v2.core.account[...]`), which carries the account in `related_object`.
+   */
+  private extractConnectAccountId(event: Stripe.Event): string | null {
+    if (event.type === 'account.updated') {
+      return (event.data?.object as Stripe.Account)?.id ?? null;
+    }
+    const related = (
+      event as unknown as {
+        related_object?: { id?: string; type?: string };
+      }
+    ).related_object;
+    return related?.id?.startsWith('acct_') ? related.id : null;
   }
 }
