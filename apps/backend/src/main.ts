@@ -15,7 +15,7 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
+import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
@@ -106,6 +106,10 @@ async function bootstrap() {
   await loadSecrets();
 
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+  // Stripe webhooks require the raw, unparsed request body for signature
+  // verification, so they must be registered BEFORE the global JSON parser.
+  app.use('/api/stripe-payments/webhook', raw({ type: '*/*' }));
+  app.use('/api/stripe-payments/connect/webhook', raw({ type: '*/*' }));
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 

@@ -35,6 +35,7 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { PersonaId } from '../users/persona.types';
 import {
   isActivePersona,
@@ -338,7 +339,8 @@ export class OrdersService {
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryPinService: DeliveryPinService,
     private readonly orderRefundsService: OrderRefundsService,
-    private readonly loyaltyService: LoyaltyService
+    private readonly loyaltyService: LoyaltyService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
 
   private requireActivePersona(
@@ -6545,10 +6547,28 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
+    // Resolve the payment rail for the receiving business owner. Stripe-country
+    // orders are NOT pushed to mobile money; the client pays via hosted Checkout.
+    const businessOwnerUserId =
+      businessInventories[0]?.business_location?.business?.user?.id;
+    const paymentRail = businessOwnerUserId
+      ? await this.paymentRoutingService.resolveRailForUser(businessOwnerUserId)
+      : 'mobile_money';
+    const useStripeRail =
+      paymentTiming === 'pay_now' &&
+      !canPayWithWallet &&
+      !isZeroOrNegativeOrder &&
+      paymentRail === 'stripe';
+
     let paymentTransaction: any = null;
     let transaction: any = null;
 
-    if (paymentTiming === 'pay_now' && !canPayWithWallet && !isZeroOrNegativeOrder) {
+    if (
+      paymentTiming === 'pay_now' &&
+      !canPayWithWallet &&
+      !isZeroOrNegativeOrder &&
+      !useStripeRail
+    ) {
       try {
         transaction =
           await this.mobilePaymentsDatabaseService.createTransaction({
@@ -7061,6 +7081,24 @@ export class OrdersService {
       };
     }
 
+    if (useStripeRail) {
+      // Stripe-country order: created in pending_payment; the client completes
+      // payment via Stripe hosted Checkout initiated by the client app.
+      return {
+        ...order,
+        total_amount: total_amount,
+        delivery_window: deliveryWindow,
+        payment_rail: 'stripe' as const,
+        payment_transaction: {
+          success: true,
+          transaction_id: null,
+          message: 'Awaiting Stripe payment',
+          mode: 'stripe' as const,
+        },
+        database_transaction: null,
+      };
+    }
+
     if (paymentTiming === 'pay_now' && !canPayWithWallet && !isZeroOrNegativeOrder) {
       // For mobile payments, schedule payment timeout
       try {
@@ -7081,6 +7119,7 @@ export class OrdersService {
         total_amount: total_amount,
         delivery_window: deliveryWindow,
         payment_source: 'mobile_money' as const,
+        payment_rail: 'mobile_money' as const,
         payment_transaction: {
           success: paymentTransaction.success,
           transaction_id: paymentTransaction.transactionId,

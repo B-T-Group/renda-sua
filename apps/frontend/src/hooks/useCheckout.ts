@@ -32,6 +32,7 @@ interface OrderResult {
   currency: string;
   current_status: string;
   business_id: string;
+  payment_rail?: 'stripe' | 'mobile_money';
 }
 
 function buildMetaPixelPurchaseFromCart(

@@ -11,11 +11,14 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeConnectService } from '../stripe-payments/stripe-connect.service';
 import { AcceptMerchantAgreementDto } from './dto/accept-merchant-agreement.dto';
 
 export type VerificationNextAction =
   | 'sign_agreement'
   | 'upload_id'
+  | 'setup_stripe_connect'
   | 'pending_review'
   | 'complete';
 
@@ -26,7 +29,9 @@ export class BusinessVerificationService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly pdfService: PdfService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly stripeConnectService: StripeConnectService
   ) {}
 
   async getStatus() {
@@ -130,16 +135,72 @@ export class BusinessVerificationService {
   }
 
   private async buildStatus(businessId: string, user: any) {
-    const isVerified = user.business?.is_verified === true;
     const agreement = await this.getAgreementStep(businessId, user.business);
+    const rail = await this.paymentRoutingService.resolveRailForUser(user.id);
+    if (rail === 'stripe') {
+      return this.buildStripeStatus(user, agreement);
+    }
+    return this.buildMobileMoneyStatus(user, agreement);
+  }
+
+  private async buildMobileMoneyStatus(
+    user: any,
+    agreement: { complete: boolean }
+  ) {
+    const adminVerified = user.business?.is_verified === true;
     const identity = await this.getIdentityStep(user.id);
-    const nextAction = this.resolveNextAction(isVerified, agreement, identity);
+    const nextAction = this.resolveNextAction(adminVerified, agreement, identity);
     return {
-      is_verified: isVerified,
+      is_verified: adminVerified,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, identity },
       nextAction,
+      paymentRail: 'mobile_money' as const,
     };
+  }
+
+  private async buildStripeStatus(
+    user: any,
+    agreement: { complete: boolean }
+  ) {
+    const adminVerified = user.business?.is_verified === true;
+    const stripeConnect = await this.getStripeConnectStep(user.id);
+    const isVerified =
+      adminVerified || (agreement.complete && stripeConnect.complete);
+    const nextAction = this.resolveStripeNextAction(
+      isVerified,
+      agreement,
+      stripeConnect
+    );
+    return {
+      is_verified: isVerified,
+      accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+      steps: { agreement, stripeConnect },
+      nextAction,
+      paymentRail: 'stripe' as const,
+    };
+  }
+
+  private async getStripeConnectStep(userId: string) {
+    const account = await this.stripeConnectService.getByUserId(userId);
+    const complete =
+      !!account && account.charges_enabled && account.payouts_enabled;
+    return {
+      complete,
+      status: account?.status ?? 'not_started',
+      connected: !!account,
+    };
+  }
+
+  private resolveStripeNextAction(
+    isVerified: boolean,
+    agreement: { complete: boolean },
+    stripeConnect: { complete: boolean }
+  ): VerificationNextAction {
+    if (isVerified) return 'complete';
+    if (!agreement.complete) return 'sign_agreement';
+    if (!stripeConnect.complete) return 'setup_stripe_connect';
+    return 'complete';
   }
 
   private async getAgreementStep(businessId: string, business: any) {

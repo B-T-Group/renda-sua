@@ -907,6 +907,8 @@
       "stepAgreement": "Agreement",
       "stepIdentity": "ID document",
       "stepReview": "Review",
+      "stepPayouts": "Payouts",
+      "stepActive": "Active",
       "signAgreement": "Sign merchant agreement",
       "uploadId": "Upload identification",
       "pendingReview": "Documents submitted. Rendasua head office will review your account shortly.",
@@ -4198,6 +4200,29 @@
       "withdrawDescription": "Enter the mobile money phone number where you want to receive your funds. We pre-fill your profile phone number, but you can change it before withdrawing.",
       "withdrawCompleteMessage": "Your withdrawal request has been sent in this demo. In the real app you will see a confirmation and the transaction in your history.",
       "completeDemo": "Complete demo"
+    }
+  },
+  "stripe": {
+    "connect": {
+      "title": "Payouts with Stripe",
+      "description": "Connect a Stripe account to receive payouts. A valid Stripe account also activates your business.",
+      "active": "Active",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "payoutsEnabled": "Payouts enabled",
+      "payoutsPending": "Payouts pending",
+      "setup": "Set up payouts",
+      "continueSetup": "Continue setup",
+      "dashboard": "Open Stripe dashboard"
+    },
+    "return": {
+      "pendingTitle": "Confirming your payment",
+      "pendingBody": "Please wait while we confirm your payment with Stripe.",
+      "successTitle": "Payment successful",
+      "successBody": "Your payment was received. Thank you!",
+      "failedTitle": "Payment not completed",
+      "failedBody": "Your payment was not completed. You can try again.",
+      "continue": "Continue"
     }
   }
 }

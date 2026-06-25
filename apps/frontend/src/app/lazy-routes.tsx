@@ -110,6 +110,9 @@ export const CategoriesManagementPage = lazy(() =>
 export const CheckoutPage = lazy(() =>
   import('../components/pages/CheckoutPage')
 );
+export const StripeReturnPage = lazy(() =>
+  import('../components/pages/StripeReturnPage')
+);
 export const CompleteProfile = lazy(() =>
   import('../components/pages/CompleteProfile')
 );

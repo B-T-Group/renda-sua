@@ -196,6 +196,25 @@ export interface FreemopayConfig {
   callbackUrl: string;
 }
 
+export interface StripeConfig {
+  /** Secret API key (sk_...). */
+  secretKey: string;
+  /** Publishable key (pk_...) exposed to clients. */
+  publishableKey: string;
+  /** Webhook signing secret for the main payments webhook (whsec_...). */
+  webhookSecret: string;
+  /** Webhook signing secret for the Connect account webhook (whsec_...). */
+  connectWebhookSecret: string;
+  /** Connect platform client id (ca_...), optional for OAuth flows. */
+  connectClientId: string;
+  /** Stripe API version pinned for the SDK. */
+  apiVersion: string;
+  /** Base public web app URL used to build hosted-page return/refresh URLs. */
+  appBaseUrl: string;
+  /** ISO 3166-1 alpha-2 country codes routed to Stripe (uppercase). */
+  enabledCountries: string[];
+}
+
 export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
@@ -264,6 +283,7 @@ export interface Configuration {
   airtelMoney: AirtelMoneyConfig;
   mypvit: MyPVitConfig;
   freemopay: FreemopayConfig;
+  stripe: StripeConfig;
   order: OrderConfig;
   agentTracking: AgentTrackingConfig;
   auth0: Auth0Config;
@@ -353,6 +373,25 @@ export default (): Configuration => {
       secretKey: process.env.FREEMOPAY_SECRET_KEY || '',
       callbackUrl: process.env.FREEMOPAY_CALLBACK_URL || '',
     },
+    stripe: {
+      secretKey: process.env.STRIPE_SECRET_KEY || '',
+      publishableKey:
+        process.env.STRIPE_PUBLISHABLE_KEY ||
+        'pk_test_51TmILnLBaKicCErK28cHNMBxBBgho2lxbim2RfW7x4Zy5iVD8e1J9a16CvLiSdKvtTjjdQYxC4dcsxmSxIqb8Jj0009QRBgqT2',
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+      connectWebhookSecret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET || '',
+      connectClientId: process.env.STRIPE_CONNECT_CLIENT_ID || 'ca_UlqXfWRsY9mhe2wRVzdnvLLB7LlCjqx4',
+      apiVersion: process.env.STRIPE_API_VERSION || '2024-06-20',
+      appBaseUrl: (
+        process.env.STRIPE_APP_BASE_URL ||
+        process.env.PUBLIC_WEB_APP_URL ||
+        'https://rendasua.com'
+      ).replace(/\/$/, ''),
+      enabledCountries: (process.env.STRIPE_ENABLED_COUNTRIES || 'CA,US')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
+    },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),
       nodeEnv: process.env.NODE_ENV || 'development',
@@ -360,7 +399,8 @@ export default (): Configuration => {
     },
     database: {
       url:
-        process.env.DATABASE_URL || 'postgresql://username:password@localhost:5432/rendasua',
+        process.env.DATABASE_URL ||
+        'postgresql://username:password@localhost:5432/rendasua',
     },
     hasura: {
       endpoint:
@@ -468,10 +508,8 @@ export default (): Configuration => {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
       audience:
         process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
-      clientId:
-        process.env.AUTH0_CLIENT_ID,
-      clientSecret:
-        process.env.AUTH0_CLIENT_SECRET,
+      clientId: process.env.AUTH0_CLIENT_ID,
+      clientSecret: process.env.AUTH0_CLIENT_SECRET,
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
       testUsers: {
@@ -484,8 +522,7 @@ export default (): Configuration => {
         phoneConnection:
           process.env.AUTH0_TEST_USERS_PHONE_CONNECTION || 'Phone-Test-Users',
         password: process.env.AUTH0_TEST_USER_PASSWORD || 'Rendasu@21',
-        emailDomain:
-          process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
+        emailDomain: process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
         phoneSuffix: process.env.AUTH0_TEST_PHONE_SUFFIX || '0000',
       },
     },

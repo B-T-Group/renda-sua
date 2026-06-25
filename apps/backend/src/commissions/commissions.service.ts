@@ -4,6 +4,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { WalletCreditCommissionType } from '../notifications/wallet-credit-push.messages';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripePayoutService } from '../stripe-payments/stripe-payout.service';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
 
@@ -15,7 +17,9 @@ export class CommissionsService {
     private readonly accountsService: AccountsService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly giveChangePayoutService: GiveChangePayoutService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly stripePayoutService: StripePayoutService
   ) {}
 
   /**
@@ -790,37 +794,58 @@ export class CommissionsService {
   }): Promise<void> {
     if (ctx.amount <= 0) return;
 
-    let phone: string;
-    let mtnUserId: string;
+    const eligibility = await this.resolveAutoWithdrawEligibility(ctx);
+    if (!eligibility) return;
 
-    if (ctx.recipientType === 'business' && ctx.businessLocationId) {
-      const loc = await this.getLocationAutoWithdraw(ctx.businessLocationId);
-      if (!loc || loc.auto_withdraw_commissions === false) return;
-      phone = (loc.phone ?? '').trim();
-      if (!phone) return;
-      mtnUserId = ctx.recipientUserId;
-    } else if (ctx.recipientType === 'agent') {
-      const ag = await this.getAgentAutoWithdraw(ctx.recipientUserId);
-      if (!ag || ag.auto_withdraw_commissions !== true) return;
-      phone = (ag.phone ?? '').trim();
-      if (!phone) return;
-      mtnUserId = ctx.recipientUserId;
-    } else {
+    const rail = await this.paymentRoutingService.resolveRailForUser(
+      ctx.recipientUserId
+    );
+    if (rail === 'stripe') {
+      await this.stripePayoutService.executePayout(
+        {
+          amount: ctx.amount,
+          currency: ctx.currency,
+          accountId: ctx.accountId,
+          userId: ctx.recipientUserId,
+          description: `Comm order ${ctx.order.order_number}`,
+          withdrawalMemoPrefix: 'Auto payout',
+        },
+        { throwOnFailure: false }
+      );
       return;
     }
 
+    if (!eligibility.phone) return;
     await this.giveChangePayoutService.executeGiveChangePayout(
       {
         amount: ctx.amount,
         currency: ctx.currency,
         description: `Comm order ${ctx.order.order_number}`,
-        customerPhone: phone,
+        customerPhone: eligibility.phone,
         accountId: ctx.accountId,
-        mtnUserId,
+        mtnUserId: ctx.recipientUserId,
         withdrawalMemoPrefix: 'Auto payout',
       },
       { throwOnWithdrawalFailure: false }
     );
+  }
+
+  private async resolveAutoWithdrawEligibility(ctx: {
+    recipientUserId: string;
+    recipientType: 'partner' | 'rendasua' | 'agent' | 'business';
+    businessLocationId?: string | null;
+  }): Promise<{ phone: string } | null> {
+    if (ctx.recipientType === 'business' && ctx.businessLocationId) {
+      const loc = await this.getLocationAutoWithdraw(ctx.businessLocationId);
+      if (!loc || loc.auto_withdraw_commissions === false) return null;
+      return { phone: (loc.phone ?? '').trim() };
+    }
+    if (ctx.recipientType === 'agent') {
+      const ag = await this.getAgentAutoWithdraw(ctx.recipientUserId);
+      if (!ag || ag.auto_withdraw_commissions !== true) return null;
+      return { phone: (ag.phone ?? '').trim() };
+    }
+    return null;
   }
 
   private async getLocationAutoWithdraw(

@@ -896,6 +896,8 @@
       "stepAgreement": "Contrat",
       "stepIdentity": "Pièce d'identité",
       "stepReview": "Examen",
+      "stepPayouts": "Versements",
+      "stepActive": "Actif",
       "signAgreement": "Signer le contrat marchand",
       "uploadId": "Téléverser une pièce d'identité",
       "pendingReview": "Documents soumis. Le siège Rendasua examinera votre compte sous peu.",
@@ -4187,6 +4189,29 @@
       "withdrawDescription": "Saisissez le numéro de téléphone mobile money sur lequel vous souhaitez recevoir vos fonds. Nous pré-remplissons le numéro de votre profil, mais vous pouvez le modifier avant de retirer.",
       "withdrawCompleteMessage": "Votre demande de retrait a été envoyée dans cette démo. Dans l’application réelle, vous verrez une confirmation et la transaction dans votre historique.",
       "completeDemo": "Terminer la démo"
+    }
+  },
+  "stripe": {
+    "connect": {
+      "title": "Versements avec Stripe",
+      "description": "Connectez un compte Stripe pour recevoir vos versements. Un compte Stripe valide active aussi votre entreprise.",
+      "active": "Actif",
+      "connected": "Connecté",
+      "notConnected": "Non connecté",
+      "payoutsEnabled": "Versements activés",
+      "payoutsPending": "Versements en attente",
+      "setup": "Configurer les versements",
+      "continueSetup": "Continuer la configuration",
+      "dashboard": "Ouvrir le tableau de bord Stripe"
+    },
+    "return": {
+      "pendingTitle": "Confirmation de votre paiement",
+      "pendingBody": "Veuillez patienter pendant que nous confirmons votre paiement avec Stripe.",
+      "successTitle": "Paiement réussi",
+      "successBody": "Votre paiement a été reçu. Merci !",
+      "failedTitle": "Paiement non finalisé",
+      "failedBody": "Votre paiement n'a pas été finalisé. Vous pouvez réessayer.",
+      "continue": "Continuer"
     }
   }
 }

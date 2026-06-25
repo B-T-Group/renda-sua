@@ -4,6 +4,7 @@ import { useApiClient } from './useApiClient';
 export type VerificationNextAction =
   | 'sign_agreement'
   | 'upload_id'
+  | 'setup_stripe_connect'
   | 'pending_review'
   | 'complete';
 
@@ -11,12 +12,18 @@ export interface BusinessVerificationStatus {
   is_verified: boolean;
   accountFullName: string;
   nextAction: VerificationNextAction;
+  paymentRail?: 'stripe' | 'mobile_money';
   steps: {
     agreement: { complete: boolean; version?: string | null; acceptedAt?: string | null };
-    identity: {
+    identity?: {
       complete: boolean;
       status: 'missing' | 'pending' | 'approved';
       uploadId?: string | null;
+    };
+    stripeConnect?: {
+      complete: boolean;
+      status: string;
+      connected: boolean;
     };
   };
 }

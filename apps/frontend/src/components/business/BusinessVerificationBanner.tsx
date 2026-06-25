@@ -13,6 +13,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
+import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
 
 export const BusinessVerificationBanner: React.FC = () => {
   const { t } = useTranslation();
@@ -23,10 +24,12 @@ export const BusinessVerificationBanner: React.FC = () => {
     return null;
   }
 
+  const isStripe = status.paymentRail === 'stripe';
+  const secondStepAction = isStripe ? 'setup_stripe_connect' : 'upload_id';
   const activeStep =
     status.nextAction === 'sign_agreement'
       ? 0
-      : status.nextAction === 'upload_id'
+      : status.nextAction === secondStepAction
         ? 1
         : 2;
 
@@ -46,10 +49,18 @@ export const BusinessVerificationBanner: React.FC = () => {
           <StepLabel>{t('business.verification.stepAgreement', 'Agreement')}</StepLabel>
         </Step>
         <Step>
-          <StepLabel>{t('business.verification.stepIdentity', 'ID document')}</StepLabel>
+          <StepLabel>
+            {isStripe
+              ? t('business.verification.stepPayouts', 'Payouts')
+              : t('business.verification.stepIdentity', 'ID document')}
+          </StepLabel>
         </Step>
         <Step>
-          <StepLabel>{t('business.verification.stepReview', 'Review')}</StepLabel>
+          <StepLabel>
+            {isStripe
+              ? t('business.verification.stepActive', 'Active')
+              : t('business.verification.stepReview', 'Review')}
+          </StepLabel>
         </Step>
       </Stepper>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -76,6 +87,11 @@ export const BusinessVerificationBanner: React.FC = () => {
           </Typography>
         ) : null}
       </Stack>
+      {status.nextAction === 'setup_stripe_connect' ? (
+        <Box sx={{ mt: 2 }}>
+          <StripeConnectOnboardingCard />
+        </Box>
+      ) : null}
     </Alert>
   );
 };

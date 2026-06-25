@@ -7,6 +7,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
@@ -29,6 +30,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
+    StripePaymentsModule,
   ],
   controllers: [
     OrderRefundsController,
