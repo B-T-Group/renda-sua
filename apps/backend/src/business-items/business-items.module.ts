@@ -7,6 +7,7 @@ import { ItemDealsService } from '../item-deals/item-deals.service';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { ItemsModule } from '../items/items.module';
+import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ItemsModule } from '../items/items.module';
     BusinessImagesModule,
     AiGenerationModule,
     ItemsModule,
+    StripePaymentsModule,
   ],
   controllers: [BusinessItemsController],
   providers: [BusinessItemsService, BusinessItemsAccessService, ItemDealsService],

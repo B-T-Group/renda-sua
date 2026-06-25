@@ -36,6 +36,7 @@ import AdminBusinessSelector from '../business/AdminBusinessSelector';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
+import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import { useItems, type Item } from '../../hooks/useItems';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import ItemsFilterBar, {
@@ -234,12 +235,31 @@ const BusinessItemsPage: React.FC = () => {
   const apiClient = useApiClient();
   const {
     items,
+    businessLocations,
     loading: pageDataLoading,
     error: pageDataError,
     refetch: refetchPageData,
     mergeItemIntoList,
     refreshListItem,
   } = useBusinessItemsPageData(effectiveBusinessId);
+
+  const { paymentSystems } = useSupportedPaymentSystems();
+
+  // Offline payment flows (pay at delivery / store pickup) are unavailable in
+  // card-payment (Stripe) markets; derive support from the business country.
+  const offlinePaymentsSupported = useMemo(() => {
+    const country = (
+      businessLocations?.find((loc: any) => loc.is_primary) ??
+      businessLocations?.[0]
+    )?.address?.country?.toUpperCase();
+    if (!country) return true;
+    const supportsStripe = paymentSystems.some(
+      (system) =>
+        system.country?.toUpperCase() === country &&
+        system.name?.toLowerCase() === 'stripe'
+    );
+    return !supportsStripe;
+  }, [businessLocations, paymentSystems]);
 
   const {
     brands,
@@ -878,6 +898,13 @@ const BusinessItemsPage: React.FC = () => {
                       sm: '1 1 calc(50% - 12px)',
                       md: '1 1 calc(33.333% - 16px)',
                     },
+                    // Cap width to the column basis so a single card doesn't
+                    // grow to fill the whole row.
+                    maxWidth: {
+                      xs: '100%',
+                      sm: 'calc(50% - 12px)',
+                      md: 'calc(33.333% - 16px)',
+                    },
                   }}
                 >
                   <BusinessItemCardView
@@ -896,6 +923,7 @@ const BusinessItemsPage: React.FC = () => {
                     onToggleItemActive={handleToggleItemActive}
                     onTogglePayOnDelivery={handleTogglePayOnDelivery}
                     onTogglePayAtPickup={handleTogglePayAtPickup}
+                    offlinePaymentsSupported={offlinePaymentsSupported}
                     onToggleFavorite={handleToggleFavorite}
                     onManageCollections={
                       canSuperUserActions

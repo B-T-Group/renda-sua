@@ -65,6 +65,39 @@ export class PaymentRoutingService {
     return this.resolveRailForCountry(countryCode ?? undefined);
   }
 
+  /** Resolve the rail for a business based on its primary location country. */
+  async resolveRailForBusiness(businessId: string): Promise<PaymentRail> {
+    const countryCode = await this.getBusinessCountryCode(businessId);
+    return this.resolveRailForCountry(countryCode ?? undefined);
+  }
+
+  /**
+   * Derive a business's ISO alpha-2 country code from its primary (or first
+   * active) business location address.
+   */
+  async getBusinessCountryCode(businessId: string): Promise<string | null> {
+    const query = `
+      query GetBusinessCountry($businessId: uuid!) {
+        businesses_by_pk(id: $businessId) {
+          business_locations(
+            where: { is_active: { _eq: true } }
+            order_by: { is_primary: desc }
+            limit: 1
+          ) {
+            address { country }
+          }
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, {
+      businessId,
+    });
+    return (
+      response.businesses_by_pk?.business_locations?.[0]?.address?.country ??
+      null
+    );
+  }
+
   /**
    * Derive a user's ISO alpha-2 country code from their primary business
    * location address (for businesses) or their personal address (for

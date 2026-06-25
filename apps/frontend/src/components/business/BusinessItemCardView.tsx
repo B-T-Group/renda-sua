@@ -134,6 +134,12 @@ interface BusinessItemCardViewProps {
   ) => void | Promise<void>;
   onToggleFavorite?: (item: Item, favorited: boolean) => void | Promise<void>;
   onManageCollections?: (item: Item) => void;
+  /**
+   * When false, the offline payment toggles (pay at delivery / store pickup)
+   * are hidden because the business operates in a card-payment (Stripe) market
+   * where these flows are disabled server-side.
+   */
+  offlinePaymentsSupported?: boolean;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -150,6 +156,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onTogglePayAtPickup,
   onToggleFavorite,
   onManageCollections,
+  offlinePaymentsSupported = true,
 }) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -609,128 +616,104 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             </Typography>
           </Box>
         )}
-        {(onToggleItemActive ||
-          onTogglePayOnDelivery ||
-          onTogglePayAtPickup) && (
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 2,
-              bgcolor: 'rgba(0, 0, 0, 0.72)',
-              px: 1,
-              py: 0.75,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0.75,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              flexWrap="wrap"
-              gap={0.5}
-            >
-              {onToggleItemActive && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.25,
-                    flex: '1 1 48%',
-                    minWidth: 0,
-                  }}
-                >
-                  <Switch
-                    size="small"
-                    checked={item.is_active}
-                    disabled={togglingActive}
-                    onChange={(_e, checked) => {
-                      void handleListingActiveChange(checked);
-                    }}
-                  />
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'common.white',
-                      lineHeight: 1.2,
-                      fontSize: '0.65rem',
-                    }}
-                  >
-                    {t('business.items.listingActive', 'Listing active')}
-                  </Typography>
-                </Box>
-              )}
-              {onTogglePayOnDelivery && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.25,
-                    flex: '1 1 48%',
-                    minWidth: 0,
-                  }}
-                >
-                  <Switch
-                    size="small"
-                    checked={!!item.pay_on_delivery_enabled}
-                    disabled={togglingPayOnDelivery}
-                    onChange={(_e, checked) => {
-                      void handlePayOnDeliveryChange(checked);
-                    }}
-                  />
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'common.white',
-                      lineHeight: 1.2,
-                      fontSize: '0.65rem',
-                    }}
-                  >
-                    {t(
-                      'business.inventory.payOnDeliveryShort',
-                      'Pay at delivery'
-                    )}
-                  </Typography>
-                </Box>
-              )}
-            </Stack>
-            {onTogglePayAtPickup && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.25,
-                  width: '100%',
-                }}
-              >
-                <Switch
-                  size="small"
-                  checked={!!item.pay_at_pickup_enabled}
-                  disabled={togglingPayAtPickup}
-                  onChange={(_e, checked) => {
-                    void handlePayAtPickupChange(checked);
-                  }}
-                />
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: 'common.white',
-                    lineHeight: 1.2,
-                    fontSize: '0.65rem',
-                  }}
-                >
-                  {t('business.inventory.payAtPickupShort', 'Store pickup')}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
       </Box>
+
+      {(onToggleItemActive ||
+        (offlinePaymentsSupported &&
+          (onTogglePayOnDelivery || onTogglePayAtPickup))) && (
+        <Box
+          onClick={(e) => e.stopPropagation()}
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 0.5,
+            px: 1.5,
+            py: 1,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'grey.50',
+          }}
+        >
+          {onToggleItemActive && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flex: '1 1 45%',
+                minWidth: 140,
+              }}
+            >
+              <Switch
+                size="small"
+                checked={item.is_active}
+                disabled={togglingActive}
+                onChange={(_e, checked) => {
+                  void handleListingActiveChange(checked);
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{ lineHeight: 1.2, fontWeight: 500 }}
+              >
+                {t('business.items.listingActive', 'Listing active')}
+              </Typography>
+            </Box>
+          )}
+          {offlinePaymentsSupported && onTogglePayOnDelivery && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flex: '1 1 45%',
+                minWidth: 140,
+              }}
+            >
+              <Switch
+                size="small"
+                checked={!!item.pay_on_delivery_enabled}
+                disabled={togglingPayOnDelivery}
+                onChange={(_e, checked) => {
+                  void handlePayOnDeliveryChange(checked);
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{ lineHeight: 1.2, fontWeight: 500 }}
+              >
+                {t('business.inventory.payOnDeliveryShort', 'Pay at delivery')}
+              </Typography>
+            </Box>
+          )}
+          {offlinePaymentsSupported && onTogglePayAtPickup && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flex: '1 1 45%',
+                minWidth: 140,
+              }}
+            >
+              <Switch
+                size="small"
+                checked={!!item.pay_at_pickup_enabled}
+                disabled={togglingPayAtPickup}
+                onChange={(_e, checked) => {
+                  void handlePayAtPickupChange(checked);
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{ lineHeight: 1.2, fontWeight: 500 }}
+              >
+                {t('business.inventory.payAtPickupShort', 'Store pickup')}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      )}
 
       {(hasActiveDeal || hasActivePromotion) && (
         <Stack
@@ -968,7 +951,10 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         </Box>
 
         <Stack
+          direction="row"
           spacing={0.5}
+          flexWrap="wrap"
+          useFlexGap
           sx={{
             pt: 0.75,
             mt: 'auto',
@@ -976,7 +962,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             borderColor: 'divider',
           }}
         >
-          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           <Tooltip title={t('business.items.viewItem', 'View Item')}>
             <IconButton
               size="small"
@@ -1088,8 +1073,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               </span>
             </Tooltip>
           )}
-          </Stack>
-          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {onManageCollections && (
             <Tooltip
               title={t(
@@ -1126,7 +1109,6 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             </IconButton>
           </Tooltip>
           )}
-          </Stack>
         </Stack>
       </CardContent>
 

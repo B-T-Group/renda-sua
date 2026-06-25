@@ -15,6 +15,7 @@ import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -615,8 +616,40 @@ export class BusinessItemsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
     private readonly aiService: AiService,
-    private readonly itemsService: ItemsService
+    private readonly itemsService: ItemsService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
+
+  /**
+   * Pay-at-delivery and store-pickup are offline/cash flows incompatible with
+   * card (Stripe) markets, where payment is collected up front via Checkout.
+   * Reject enabling either flag for businesses on the Stripe rail.
+   */
+  private async assertOfflinePaymentAllowed(
+    businessId: string,
+    updates: {
+      pay_on_delivery_enabled?: unknown;
+      pay_at_pickup_enabled?: unknown;
+    }
+  ): Promise<void> {
+    const wantsOffline =
+      updates.pay_on_delivery_enabled === true ||
+      updates.pay_at_pickup_enabled === true;
+    if (!wantsOffline) return;
+    const rail = await this.paymentRoutingService.resolveRailForBusiness(
+      businessId
+    );
+    if (rail === 'stripe') {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'Pay at delivery and store pickup are not available in card-payment (Stripe) countries.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
 
   async getItems(businessId: string) {
     const result = await this.hasuraUserService.executeQuery<{ items: any[] }>(
@@ -1131,6 +1164,7 @@ export class BusinessItemsService {
     businessId: string,
     input: ItemsInsertInput | CreateItemDto
   ): Promise<Record<string, unknown>> {
+    await this.assertOfflinePaymentAllowed(businessId, input);
     return this.itemsService.createItem(
       businessId,
       input as ItemsInsertInput
@@ -1142,6 +1176,7 @@ export class BusinessItemsService {
     itemId: string,
     updates: UpdateItemDto
   ) {
+    await this.assertOfflinePaymentAllowed(businessId, updates);
     return this.itemsService.updateItem(businessId, itemId, updates);
   }
 

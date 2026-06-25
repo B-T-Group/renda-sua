@@ -169,6 +169,38 @@ export class StripeConnectService {
   async syncFromStripe(stripeAccountId: string): Promise<void> {
     const account = await this.stripeService.retrieveAccount(stripeAccountId);
     await this.updateAccountRow(account);
+    await this.syncUserActivation(account);
+  }
+
+  /**
+   * Stripe Connect acts as auto-validation for stripe-rail users: when the
+   * connected account is active (charges + payouts enabled) the linked
+   * business and/or agent are verified; otherwise they are de-verified.
+   */
+  private async syncUserActivation(account: Stripe.Account): Promise<void> {
+    const row = await this.getByStripeAccountId(account.id);
+    if (!row) return;
+    const active = this.deriveStatus(account) === 'active';
+    await this.setUserEntitiesVerified(row.user_id, active);
+  }
+
+  private async setUserEntitiesVerified(
+    userId: string,
+    verified: boolean
+  ): Promise<void> {
+    const mutation = `
+      mutation SetUserVerification($userId: uuid!, $verified: Boolean!) {
+        update_businesses(
+          where: { user_id: { _eq: $userId } }
+          _set: { is_verified: $verified }
+        ) { affected_rows }
+        update_agents(
+          where: { user_id: { _eq: $userId } }
+          _set: { is_verified: $verified }
+        ) { affected_rows }
+      }
+    `;
+    await this.hasuraService.executeMutation(mutation, { userId, verified });
   }
 
   private async updateAccountRow(account: Stripe.Account): Promise<void> {
