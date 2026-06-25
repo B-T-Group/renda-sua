@@ -4223,6 +4223,13 @@
       "failedTitle": "Payment not completed",
       "failedBody": "Your payment was not completed. You can try again.",
       "continue": "Continue"
+    },
+    "success": {
+      "title": "Payment successful",
+      "body": "Thank you! Your payment was received and your order is being processed.",
+      "orderReference": "Order #{{orderNumber}}",
+      "viewOrder": "View order",
+      "viewOrders": "View my orders"
     }
   }
 }

@@ -1235,6 +1235,12 @@ const PlaceOrderPage: React.FC = () => {
         ...(googleCategory && { google_product_category: googleCategory }),
       });
 
+      // Stripe-rail orders must be paid via hosted Checkout before confirmation.
+      if (order.checkout_url) {
+        window.location.href = order.checkout_url;
+        return;
+      }
+
       // Navigate to order confirmation page
       navigate('/orders/confirmation', {
         state: {

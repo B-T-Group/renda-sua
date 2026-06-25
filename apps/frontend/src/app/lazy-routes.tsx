@@ -113,6 +113,9 @@ export const CheckoutPage = lazy(() =>
 export const StripeReturnPage = lazy(() =>
   import('../components/pages/StripeReturnPage')
 );
+export const StripePaymentSuccessPage = lazy(() =>
+  import('../components/pages/StripePaymentSuccessPage')
+);
 export const CompleteProfile = lazy(() =>
   import('../components/pages/CompleteProfile')
 );

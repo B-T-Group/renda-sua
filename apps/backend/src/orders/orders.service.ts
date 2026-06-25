@@ -36,6 +36,7 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import type { PersonaId } from '../users/persona.types';
 import {
   isActivePersona,
@@ -340,7 +341,8 @@ export class OrdersService {
     private readonly deliveryPinService: DeliveryPinService,
     private readonly orderRefundsService: OrderRefundsService,
     private readonly loyaltyService: LoyaltyService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly stripeCheckoutService: StripeCheckoutService
   ) {}
 
   private requireActivePersona(
@@ -7083,15 +7085,25 @@ export class OrdersService {
 
     if (useStripeRail) {
       // Stripe-country order: created in pending_payment; the client completes
-      // payment via Stripe hosted Checkout initiated by the client app.
+      // payment via Stripe hosted Checkout. account.id is set on the transaction
+      // so the webhook credits the wallet + finalizes the order (like mobile money).
+      const checkout = await this.createStripeOrderCheckout({
+        orderNumber,
+        amount: total_amount,
+        currency,
+        accountId: account.id,
+        customerEmail: user.email ?? undefined,
+      });
       return {
         ...order,
         total_amount: total_amount,
         delivery_window: deliveryWindow,
         payment_rail: 'stripe' as const,
+        checkout_url: checkout?.paymentUrl,
+        payment_reference: checkout?.reference,
         payment_transaction: {
           success: true,
-          transaction_id: null,
+          transaction_id: checkout?.transactionId ?? null,
           message: 'Awaiting Stripe payment',
           mode: 'stripe' as const,
         },
@@ -7151,6 +7163,46 @@ export class OrdersService {
       },
       database_transaction: null,
     };
+  }
+
+  /**
+   * Create a Stripe Checkout session for a Stripe-rail order. Failures are
+   * logged and swallowed so the order is still created (payment can be retried).
+   */
+  private async createStripeOrderCheckout(params: {
+    orderNumber: string;
+    amount: number;
+    currency: string;
+    accountId: string;
+    customerEmail?: string;
+  }): Promise<{
+    transactionId: string;
+    reference: string;
+    paymentUrl?: string;
+  } | null> {
+    try {
+      const result = await this.stripeCheckoutService.createCheckout({
+        amount: params.amount,
+        currency: params.currency,
+        description: `Order ${params.orderNumber}`,
+        accountId: params.accountId,
+        paymentEntity: 'order',
+        entityId: params.orderNumber,
+        customerEmail: params.customerEmail,
+      });
+      return {
+        transactionId: result.transactionId,
+        reference: result.reference,
+        paymentUrl: result.paymentUrl,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe checkout for order ${params.orderNumber}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
   }
 
   /**

@@ -28,6 +28,7 @@ import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
 import { WithdrawStripeDto } from './dto/withdraw-stripe.dto';
+import { StripeCheckoutService } from './stripe-checkout.service';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripePaymentCallbackProcessor } from './stripe-payment-callback.processor';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
@@ -46,14 +47,9 @@ export class StripePaymentsController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly callbackProcessor: StripePaymentCallbackProcessor,
     private readonly connectService: StripeConnectService,
-    private readonly payoutService: StripePayoutService
+    private readonly payoutService: StripePayoutService,
+    private readonly checkoutService: StripeCheckoutService
   ) {}
-
-  private generateReference(): string {
-    const timestamp = Date.now().toString().slice(-8);
-    const random = Math.random().toString(36).slice(2, 6);
-    return `ST${timestamp}${random}`;
-  }
 
   @Post('initiate')
   @ApiBearerAuth()
@@ -66,54 +62,19 @@ export class StripePaymentsController {
   async initiate(@Body() body: InitiateStripePaymentDto) {
     try {
       const email = body.customerEmail || (await this.resolveUserEmail());
-      const reference = this.generateReference();
-      const base = process.env.STRIPE_APP_BASE_URL || '';
-      const successUrl =
-        body.successUrl ||
-        `${base}/payment/return?reference=${reference}&status=success`;
-      const cancelUrl =
-        body.cancelUrl ||
-        `${base}/payment/return?reference=${reference}&status=cancel`;
-
-      const transaction = await this.databaseService.createTransaction({
-        reference,
+      const result = await this.checkoutService.createCheckout({
         amount: body.amount,
         currency: body.currency,
         description: body.description,
-        account_id: body.accountId,
-        transaction_type: 'PAYMENT',
-        payment_entity: body.paymentEntity,
-        entity_id: body.entityId,
-        customer_email: email,
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-      });
-
-      const session = await this.stripeService.createCheckoutSession({
-        amount: body.amount,
-        currency: body.currency,
-        description: body.description,
-        reference,
         customerEmail: email,
-        successUrl,
-        cancelUrl,
-        metadata: this.buildMetadata(reference, body),
+        accountId: body.accountId,
+        paymentEntity: body.paymentEntity,
+        entityId: body.entityId,
+        successUrl: body.successUrl,
+        cancelUrl: body.cancelUrl,
       });
 
-      await this.databaseService.updateTransaction(transaction.id, {
-        stripe_session_id: session.id,
-        payment_url: session.url ?? undefined,
-      });
-
-      return {
-        success: true,
-        data: {
-          transactionId: transaction.id,
-          reference,
-          sessionId: session.id,
-          paymentUrl: session.url,
-        },
-      };
+      return { success: true, data: result };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       this.logger.error(`Failed to initiate Stripe payment: ${error.message}`);
@@ -144,17 +105,6 @@ export class StripePaymentsController {
       { throwOnFailure: true }
     );
     return { success: result.success, data: result.data };
-  }
-
-  private buildMetadata(
-    reference: string,
-    body: InitiateStripePaymentDto
-  ): Record<string, string> {
-    const metadata: Record<string, string> = { reference };
-    if (body.paymentEntity) metadata.paymentEntity = body.paymentEntity;
-    if (body.entityId) metadata.entityId = body.entityId;
-    if (body.accountId) metadata.accountId = body.accountId;
-    return metadata;
   }
 
   private async resolveUserEmail(): Promise<string | undefined> {

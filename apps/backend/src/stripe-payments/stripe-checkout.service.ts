@@ -1,0 +1,118 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { StripeConfig } from '../config/configuration';
+import {
+  StripePaymentEntity,
+  StripePaymentsDatabaseService,
+} from './stripe-payments-database.service';
+import { StripeService } from './stripe.service';
+
+export interface CreateCheckoutParams {
+  amount: number;
+  currency: string;
+  description: string;
+  customerEmail?: string;
+  accountId?: string;
+  paymentEntity?: StripePaymentEntity;
+  entityId?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface CreateCheckoutResult {
+  transactionId: string;
+  reference: string;
+  sessionId: string;
+  paymentUrl?: string;
+}
+
+@Injectable()
+export class StripeCheckoutService {
+  constructor(
+    private readonly stripeService: StripeService,
+    private readonly databaseService: StripePaymentsDatabaseService,
+    private readonly configService: ConfigService
+  ) {}
+
+  private generateReference(): string {
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.random().toString(36).slice(2, 6);
+    return `ST${timestamp}${random}`;
+  }
+
+  private get appBaseUrl(): string {
+    return this.configService.get<StripeConfig>('stripe')?.appBaseUrl || '';
+  }
+
+  private buildSuccessUrl(params: CreateCheckoutParams, reference: string): string {
+    if (params.successUrl) return params.successUrl;
+    const orderSuffix =
+      params.paymentEntity === 'order' && params.entityId
+        ? `&order=${encodeURIComponent(params.entityId)}`
+        : '';
+    return `${this.appBaseUrl}/payment/success?reference=${reference}${orderSuffix}`;
+  }
+
+  private buildCancelUrl(params: CreateCheckoutParams, reference: string): string {
+    return (
+      params.cancelUrl ||
+      `${this.appBaseUrl}/payment/return?reference=${reference}&status=cancel`
+    );
+  }
+
+  private buildMetadata(
+    params: CreateCheckoutParams,
+    reference: string
+  ): Record<string, string> {
+    const metadata: Record<string, string> = { reference };
+    if (params.paymentEntity) metadata.paymentEntity = params.paymentEntity;
+    if (params.entityId) metadata.entityId = params.entityId;
+    if (params.accountId) metadata.accountId = params.accountId;
+    return metadata;
+  }
+
+  async createCheckout(
+    params: CreateCheckoutParams
+  ): Promise<CreateCheckoutResult> {
+    const reference = this.generateReference();
+    const successUrl = this.buildSuccessUrl(params, reference);
+    const cancelUrl = this.buildCancelUrl(params, reference);
+
+    const transaction = await this.databaseService.createTransaction({
+      reference,
+      amount: params.amount,
+      currency: params.currency,
+      description: params.description,
+      account_id: params.accountId,
+      transaction_type: 'PAYMENT',
+      payment_entity: params.paymentEntity,
+      entity_id: params.entityId,
+      customer_email: params.customerEmail,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+
+    const session = await this.stripeService.createCheckoutSession({
+      amount: params.amount,
+      currency: params.currency,
+      description: params.description,
+      reference,
+      customerEmail: params.customerEmail,
+      successUrl,
+      cancelUrl,
+      metadata: this.buildMetadata(params, reference),
+    });
+
+    await this.databaseService.updateTransaction(transaction.id, {
+      stripe_session_id: session.id,
+      payment_url: session.url ?? undefined,
+    });
+
+    return {
+      transactionId: transaction.id,
+      reference,
+      sessionId: session.id,
+      paymentUrl: session.url ?? undefined,
+    };
+  }
+}

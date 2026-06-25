@@ -4212,6 +4212,13 @@
       "failedTitle": "Paiement non finalisé",
       "failedBody": "Votre paiement n'a pas été finalisé. Vous pouvez réessayer.",
       "continue": "Continuer"
+    },
+    "success": {
+      "title": "Paiement réussi",
+      "body": "Merci ! Votre paiement a été reçu et votre commande est en cours de traitement.",
+      "orderReference": "Commande #{{orderNumber}}",
+      "viewOrder": "Voir la commande",
+      "viewOrders": "Voir mes commandes"
     }
   }
 }

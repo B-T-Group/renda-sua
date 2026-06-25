@@ -33,7 +33,6 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
-import { useStripePayments } from '../../hooks/useStripePayments';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -649,7 +648,6 @@ const CheckoutPage: React.FC = () => {
     loading: checkoutLoading,
     error: checkoutError,
   } = useCheckout();
-  const { initiatePayment: initiateStripePayment } = useStripePayments();
 
   // Set default address when addresses load
   useEffect(() => {
@@ -733,36 +731,16 @@ const CheckoutPage: React.FC = () => {
   };
 
   const maybeRedirectToStripeCheckout = async (
-    orders: {
-      order_number: string;
-      total_amount: number;
-      currency: string;
-      payment_rail?: 'stripe' | 'mobile_money';
-    }[]
+    orders: { checkout_url?: string }[]
   ): Promise<boolean> => {
-    const STRIPE_CURRENCIES = ['CAD', 'USD'];
+    // The backend creates the Checkout session for Stripe-rail orders and
+    // returns its URL (with the wallet account_id bound so the webhook can
+    // credit + finalize the order). Multi-order carts are out of scope.
     if (orders.length !== 1) return false;
-    const order = orders[0];
-    // Prefer the backend-resolved rail; fall back to a currency heuristic.
-    const isStripe =
-      order.payment_rail === 'stripe' ||
-      (order.payment_rail == null &&
-        STRIPE_CURRENCIES.includes(order.currency?.toUpperCase()));
-    if (!isStripe) {
-      return false;
-    }
-    const result = await initiateStripePayment({
-      amount: order.total_amount,
-      currency: order.currency,
-      description: `Order ${order.order_number}`,
-      paymentEntity: 'order',
-      entityId: order.order_number,
-    });
-    if (result.success && result.data?.paymentUrl) {
-      window.location.href = result.data.paymentUrl;
-      return true;
-    }
-    return false;
+    const checkoutUrl = orders[0]?.checkout_url;
+    if (!checkoutUrl) return false;
+    window.location.href = checkoutUrl;
+    return true;
   };
 
   const handleBack = () => {

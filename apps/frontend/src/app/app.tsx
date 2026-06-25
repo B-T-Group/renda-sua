@@ -287,6 +287,16 @@ function App() {
               }
             />
 
+            {/* Stripe hosted-checkout success route */}
+            <Route
+              path="/payment/success"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.StripePaymentSuccessPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Place Order route */}
             <Route
               path="/items/:id/place_order"
