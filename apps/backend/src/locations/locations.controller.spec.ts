@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -8,8 +8,12 @@ import { LocationsService } from './locations.service';
 describe('LocationsController', () => {
   let controller: LocationsController;
   let hasuraService: { executeQuery: jest.Mock };
+  let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     hasuraService = { executeQuery: jest.fn() };
     controller = new LocationsController(
       hasuraService as unknown as HasuraSystemService,
@@ -23,6 +27,10 @@ describe('LocationsController', () => {
         getLatestAgentLocation: jest.fn(),
       } as unknown as LocationsService
     );
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   describe('getPublicSupportedCountries', () => {
