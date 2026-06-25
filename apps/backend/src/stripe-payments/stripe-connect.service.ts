@@ -85,8 +85,8 @@ export class StripeConnectService {
     const existing = await this.getByUserId(userId);
     if (existing) return existing;
 
-    const info = await this.paymentRouting.getUserCountryInfo(userId);
-    if (!info) {
+    const countryCode = await this.paymentRouting.getUserCountryCode(userId);
+    if (!countryCode) {
       throw new HttpException(
         { success: false, message: 'Unable to determine user country' },
         HttpStatus.BAD_REQUEST
@@ -94,11 +94,11 @@ export class StripeConnectService {
     }
     const email = await this.getUserEmail(userId);
     const account = await this.stripeService.createExpressAccount({
-      country: info.countryCode,
+      country: countryCode,
       email,
       userId,
     });
-    return this.insertAccountRow(userId, account, info.countryCode);
+    return this.insertAccountRow(userId, account, countryCode);
   }
 
   private async getUserEmail(userId: string): Promise<string | undefined> {

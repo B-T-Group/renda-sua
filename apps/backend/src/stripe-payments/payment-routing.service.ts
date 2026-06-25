@@ -5,12 +5,6 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export type PaymentRail = 'stripe' | 'mobile_money';
 
-export interface UserCountryInfo {
-  countryName: string;
-  countryCode: string;
-  currencyCode: string;
-}
-
 @Injectable()
 export class PaymentRoutingService {
   private readonly logger = new Logger(PaymentRoutingService.name);
@@ -67,22 +61,16 @@ export class PaymentRoutingService {
 
   /** Resolve the rail for a user based on their derived country. */
   async resolveRailForUser(userId: string): Promise<PaymentRail> {
-    const info = await this.getUserCountryInfo(userId);
-    return this.resolveRailForCountry(info?.countryCode);
+    const countryCode = await this.getUserCountryCode(userId);
+    return this.resolveRailForCountry(countryCode ?? undefined);
   }
 
   /**
-   * Derive a user's country from their primary business location address (for
-   * businesses) or their personal address (for agents/clients), matched
-   * against `supported_country_states` to obtain ISO country + currency codes.
+   * Derive a user's ISO alpha-2 country code from their primary business
+   * location address (for businesses) or their personal address (for
+   * agents/clients).
    */
-  async getUserCountryInfo(userId: string): Promise<UserCountryInfo | null> {
-    const countryName = await this.getUserCountryName(userId);
-    if (!countryName) return null;
-    return this.matchCountry(countryName);
-  }
-
-  private async getUserCountryName(userId: string): Promise<string | null> {
+  async getUserCountryCode(userId: string): Promise<string | null> {
     const query = `
       query GetUserCountryName($userId: uuid!) {
         businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
@@ -94,48 +82,42 @@ export class PaymentRoutingService {
             address { country }
           }
         }
-        addresses(
+        business_addresses(
           where: {
-            entity_type: { _eq: "user" }
-            entity_id: { _eq: $userId }
+            business: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
           }
           limit: 1
         ) {
-          country
+          address { country }
+        }
+        client_addresses(
+          where: {
+            client: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+          limit: 1
+        ) {
+          address { country }
+        }
+        agent_addresses(
+          where: {
+            agent: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+          limit: 1
+        ) {
+          address { country }
         }
       }
     `;
     const response = await this.hasuraService.executeQuery(query, { userId });
-    const businessCountry =
-      response.businesses?.[0]?.business_locations?.[0]?.address?.country;
-    const userCountry = response.addresses?.[0]?.country;
-    return businessCountry || userCountry || null;
-  }
-
-  private async matchCountry(
-    countryName: string
-  ): Promise<UserCountryInfo | null> {
-    const query = `
-      query MatchCountry($name: String!) {
-        supported_country_states(
-          where: { country_name: { _ilike: $name } }
-          limit: 1
-        ) {
-          country_code
-          country_name
-          currency_code
-        }
-      }
-    `;
-    const response = await this.hasuraService.executeQuery(query, {
-      name: countryName.trim(),
-    });
-    const row = (response.supported_country_states || [])[0];
-    if (!row) return null;
-    return {
-      countryName: row.country_name,
-      countryCode: row.country_code,
-      currencyCode: row.currency_code,
-    };
+    return (
+      response.businesses?.[0]?.business_locations?.[0]?.address?.country ||
+      response.business_addresses?.[0]?.address?.country ||
+      response.client_addresses?.[0]?.address?.country ||
+      response.agent_addresses?.[0]?.address?.country ||
+      null
+    );
   }
 }
