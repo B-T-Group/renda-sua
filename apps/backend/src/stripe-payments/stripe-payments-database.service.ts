@@ -60,6 +60,19 @@ export interface UpdateStripeTransactionData {
   error_code?: string;
 }
 
+export interface StripeEventRecordResult {
+  shouldProcess: boolean;
+  duplicate: boolean;
+}
+
+interface StripeEventRow {
+  processed_at: string | null;
+}
+
+interface StripeEventByIdResponse {
+  stripe_events: StripeEventRow[];
+}
+
 const TRANSACTION_FIELDS = `
   id
   reference
@@ -86,7 +99,7 @@ export class StripePaymentsDatabaseService {
   constructor(private readonly hasuraService: HasuraSystemService) {}
 
   async createTransaction(
-    data: CreateStripeTransactionData
+    data: CreateStripeTransactionData,
   ): Promise<StripePaymentTransaction> {
     const mutation = `
       mutation CreateStripePaymentTransaction($data: stripe_payment_transactions_insert_input!) {
@@ -103,7 +116,7 @@ export class StripePaymentsDatabaseService {
 
   async updateTransaction(
     id: string,
-    data: UpdateStripeTransactionData
+    data: UpdateStripeTransactionData,
   ): Promise<StripePaymentTransaction> {
     const mutation = `
       mutation UpdateStripePaymentTransaction(
@@ -123,7 +136,7 @@ export class StripePaymentsDatabaseService {
   }
 
   async getTransactionById(
-    id: string
+    id: string,
   ): Promise<StripePaymentTransaction | null> {
     const query = `
       query GetStripeTransactionById($id: uuid!) {
@@ -135,29 +148,29 @@ export class StripePaymentsDatabaseService {
   }
 
   async getTransactionByReference(
-    reference: string
+    reference: string,
   ): Promise<StripePaymentTransaction | null> {
     return this.getTransactionByField('reference', reference);
   }
 
   async getTransactionBySessionId(
-    sessionId: string
+    sessionId: string,
   ): Promise<StripePaymentTransaction | null> {
     return this.getTransactionByField('stripe_session_id', sessionId);
   }
 
   async getTransactionByPaymentIntentId(
-    paymentIntentId: string
+    paymentIntentId: string,
   ): Promise<StripePaymentTransaction | null> {
     return this.getTransactionByField(
       'stripe_payment_intent_id',
-      paymentIntentId
+      paymentIntentId,
     );
   }
 
   private async getTransactionByField(
     field: string,
-    value: string
+    value: string,
   ): Promise<StripePaymentTransaction | null> {
     const query = `
       query GetStripeTransactionByField($value: String!) {
@@ -203,15 +216,15 @@ export class StripePaymentsDatabaseService {
   }
 
   /**
-   * Insert an event row, returning true only when this event is new. Relies on
-   * the unique constraint on event_id for idempotent webhook processing.
+   * Insert the event idempotency row. Previously seen but unprocessed events
+   * must still run so Stripe retries can recover from transient failures.
    */
   async recordEvent(
     eventId: string,
     eventType: string,
     source: 'payments' | 'connect',
-    payload: unknown
-  ): Promise<boolean> {
+    payload: unknown,
+  ): Promise<StripeEventRecordResult> {
     const mutation = `
       mutation RecordStripeEvent($data: stripe_events_insert_input!) {
         insert_stripe_events_one(
@@ -233,9 +246,31 @@ export class StripePaymentsDatabaseService {
         payload,
       },
     });
-    // Hasura returns null on ON CONFLICT DO NOTHING, so a non-null row means
-    // this event was newly inserted (i.e. not previously seen).
-    return !!response.insert_stripe_events_one?.id;
+    if (response.insert_stripe_events_one?.id) {
+      return { shouldProcess: true, duplicate: false };
+    }
+    const existing = await this.getEventByEventId(eventId);
+    return {
+      shouldProcess: !existing?.processed_at,
+      duplicate: true,
+    };
+  }
+
+  private async getEventByEventId(
+    eventId: string,
+  ): Promise<StripeEventRow | null> {
+    const query = `
+      query GetStripeEventByEventId($eventId: String!) {
+        stripe_events(where: { event_id: { _eq: $eventId } }, limit: 1) {
+          processed_at
+        }
+      }
+    `;
+    const response =
+      await this.hasuraService.executeQuery<StripeEventByIdResponse>(query, {
+        eventId,
+      });
+    return response.stripe_events?.[0] || null;
   }
 
   async markEventProcessed(eventId: string): Promise<void> {

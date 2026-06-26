@@ -35,6 +35,15 @@ import { StripePaymentsDatabaseService } from './stripe-payments-database.servic
 import { StripePayoutService } from './stripe-payout.service';
 import { StripeService } from './stripe.service';
 
+interface OwnedStripeAccount {
+  id: string;
+  currency: string;
+}
+
+interface OwnedAccountQueryResponse {
+  accounts: OwnedStripeAccount[];
+}
+
 @ApiTags('stripe-payments')
 @Controller('stripe-payments')
 @Throttle({ short: { limit: 20, ttl: 60000 } })
@@ -48,7 +57,7 @@ export class StripePaymentsController {
     private readonly callbackProcessor: StripePaymentCallbackProcessor,
     private readonly connectService: StripeConnectService,
     private readonly payoutService: StripePayoutService,
-    private readonly checkoutService: StripeCheckoutService
+    private readonly checkoutService: StripeCheckoutService,
   ) {}
 
   @Post('initiate')
@@ -80,7 +89,7 @@ export class StripePaymentsController {
       this.logger.error(`Failed to initiate Stripe payment: ${error.message}`);
       throw new HttpException(
         { success: false, message: 'Failed to initiate Stripe payment' },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -94,6 +103,8 @@ export class StripePaymentsController {
   @HttpCode(HttpStatus.CREATED)
   async withdraw(@Body() body: WithdrawStripeDto) {
     const user = await this.hasuraUserService.getUser();
+    const account = await this.getOwnedAccount(body.accountId, user.id);
+    this.assertCurrencyMatches(account.currency, body.currency);
     const result = await this.payoutService.executePayout(
       {
         amount: body.amount,
@@ -102,9 +113,50 @@ export class StripePaymentsController {
         userId: user.id,
         description: body.description || 'Wallet withdrawal',
       },
-      { throwOnFailure: true }
+      { throwOnFailure: true },
     );
     return { success: result.success, data: result.data };
+  }
+
+  private async getOwnedAccount(
+    accountId: string,
+    userId: string,
+  ): Promise<OwnedStripeAccount> {
+    const query = `
+      query GetOwnedStripeAccount($accountId: uuid!, $userId: uuid!) {
+        accounts(
+          where: { id: { _eq: $accountId }, user_id: { _eq: $userId } }
+          limit: 1
+        ) {
+          id
+          currency
+        }
+      }
+    `;
+    const result =
+      await this.hasuraUserService.executeQuery<OwnedAccountQueryResponse>(
+        query,
+        { accountId, userId },
+      );
+    const account = result.accounts?.[0];
+    if (!account) {
+      throw new HttpException(
+        { success: false, message: 'Account not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return account;
+  }
+
+  private assertCurrencyMatches(
+    accountCurrency: string,
+    requestCurrency: string,
+  ) {
+    if (accountCurrency.toUpperCase() === requestCurrency.toUpperCase()) return;
+    throw new HttpException(
+      { success: false, message: 'Currency does not match account currency' },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   private async resolveUserEmail(): Promise<string | undefined> {
@@ -124,13 +176,13 @@ export class StripePaymentsController {
     if (!tx) {
       throw new HttpException(
         { success: false, message: 'Transaction not found' },
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
     let status = tx.status;
     if (status === 'pending' && tx.stripe_session_id) {
       const session = await this.stripeService.retrieveCheckoutSession(
-        tx.stripe_session_id
+        tx.stripe_session_id,
       );
       if (session.payment_status === 'paid') status = 'success';
       else if (session.status === 'expired') status = 'cancelled';
@@ -149,7 +201,7 @@ export class StripePaymentsController {
     if (!tx) {
       throw new HttpException(
         { success: false, message: 'Transaction not found' },
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
     if (tx.status !== 'pending') {
@@ -172,7 +224,7 @@ export class StripePaymentsController {
     if (!tx) {
       throw new HttpException(
         { success: false, message: 'Transaction not found' },
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
     return { success: true, data: tx };
@@ -186,7 +238,7 @@ export class StripePaymentsController {
     if (!tx) {
       throw new HttpException(
         { success: false, message: 'Transaction not found' },
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
     return { success: true, data: tx };
@@ -199,7 +251,7 @@ export class StripePaymentsController {
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
     @Query('limit') limit?: string,
-    @Query('offset') offset?: string
+    @Query('offset') offset?: string,
   ) {
     const data = await this.databaseService.listTransactions({
       accountId,
@@ -216,16 +268,16 @@ export class StripePaymentsController {
   @ApiOperation({ summary: 'Stripe payments webhook' })
   async webhook(
     @Headers('stripe-signature') signature: string,
-    @Req() req: Request
+    @Req() req: Request,
   ) {
     const event = this.verifyEvent(req, signature, 'payments');
-    const isNew = await this.databaseService.recordEvent(
+    const eventRecord = await this.databaseService.recordEvent(
       event.id,
       event.type,
       'payments',
-      event as unknown
+      event as unknown,
     );
-    if (!isNew) {
+    if (!eventRecord.shouldProcess) {
       return { received: true, duplicate: true };
     }
     await this.dispatchPaymentEvent(event, req);
@@ -236,54 +288,56 @@ export class StripePaymentsController {
   private verifyEvent(
     req: Request,
     signature: string,
-    source: 'payments' | 'connect'
+    source: 'payments' | 'connect',
   ): Stripe.Event {
     try {
       return this.stripeService.constructEvent(
         (req as unknown as { body: Buffer }).body,
         signature,
-        source
+        source,
       );
     } catch (error: any) {
-      this.logger.error(`Stripe signature verification failed: ${error.message}`);
+      this.logger.error(
+        `Stripe signature verification failed: ${error.message}`,
+      );
       throw new HttpException(
         { received: false, message: 'Invalid signature' },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
   }
 
   private async dispatchPaymentEvent(
     event: Stripe.Event,
-    req: Request
+    req: Request,
   ): Promise<void> {
     switch (event.type) {
       case 'checkout.session.completed':
         await this.callbackProcessor.onCheckoutSessionCompleted(
           event.data.object as Stripe.Checkout.Session,
-          req
+          req,
         );
         break;
       case 'checkout.session.expired':
         await this.callbackProcessor.onSessionExpired(
           event.data.object as Stripe.Checkout.Session,
-          req
+          req,
         );
         break;
       case 'payment_intent.payment_failed':
         await this.callbackProcessor.onPaymentFailed(
           event.data.object as Stripe.PaymentIntent,
-          req
+          req,
         );
         break;
       case 'charge.refunded':
         await this.callbackProcessor.onChargeRefunded(
-          event.data.object as Stripe.Charge
+          event.data.object as Stripe.Charge,
         );
         break;
       case 'charge.dispute.created':
         await this.callbackProcessor.onDisputeCreated(
-          event.data.object as Stripe.Dispute
+          event.data.object as Stripe.Dispute,
         );
         break;
       default:
@@ -297,16 +351,16 @@ export class StripePaymentsController {
   @ApiOperation({ summary: 'Stripe Connect account webhook' })
   async connectWebhook(
     @Headers('stripe-signature') signature: string,
-    @Req() req: Request
+    @Req() req: Request,
   ) {
     const event = this.verifyEvent(req, signature, 'connect');
-    const isNew = await this.databaseService.recordEvent(
+    const eventRecord = await this.databaseService.recordEvent(
       event.id,
       event.type,
       'connect',
-      event as unknown
+      event as unknown,
     );
-    if (!isNew) {
+    if (!eventRecord.shouldProcess) {
       return { received: true, duplicate: true };
     }
     const accountId = this.extractConnectAccountId(event);
