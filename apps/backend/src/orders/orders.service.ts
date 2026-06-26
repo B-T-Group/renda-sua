@@ -1304,9 +1304,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const holdAmount = (order.subtotal * holdPercentage) / 100;
+    const holdAmount = await this.resolveOrderHoldAmount(order);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -1317,7 +1315,8 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // When hold is 0 (e.g. internal agent), skip balance checks
+    // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
+    // balance checks
     if (holdAmount > 0) {
       if (Number(agentAccount.available_balance) < 0) {
         throw new HttpException(
@@ -1438,12 +1437,12 @@ export class OrdersService {
       );
     }
 
-    // Get hold percentage and calculate required amount
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const holdAmount = (order.subtotal * holdPercentage) / 100;
+    // Calculate required hold amount (0 for internal agents and
+    // Stripe-enabled orders, which do not require a caution/hold)
+    const holdAmount = await this.resolveOrderHoldAmount(order);
 
-    // When hold is 0 (e.g. internal agent), skip payment and assign directly
+    // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
+    // payment and assign directly
     if (holdAmount === 0) {
       const orderHold = await this.getOrCreateOrderHold(order.id);
       await this.updateOrderHold(orderHold.id, {
@@ -4032,12 +4031,8 @@ export class OrdersService {
         platformHeader
       );
     } catch (error: any) {
-      const holdPercentage =
-        await this.agentHoldService.getHoldPercentageForAgent();
       const order = await this.getOrderWithItems(orderId);
-      const holdAmount = order
-        ? (order.subtotal * holdPercentage) / 100
-        : 0;
+      const holdAmount = await this.resolveOrderHoldAmount(order);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         error?.response?.error ??
@@ -4050,9 +4045,7 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
 
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const holdAmount = (order.subtotal * holdPercentage) / 100;
+    const holdAmount = await this.resolveOrderHoldAmount(order);
 
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
@@ -6105,6 +6098,30 @@ export class OrdersService {
       orderId,
     });
     return result.orders_by_pk;
+  }
+
+  /**
+   * Compute the agent hold (caution) amount for an order. Orders for items
+   * from a Stripe-enabled country are settled via Stripe, so no caution/hold
+   * is applicable and the hold amount is always 0.
+   */
+  private async resolveOrderHoldAmount(
+    order: Orders | null
+  ): Promise<number> {
+    if (!order) {
+      return 0;
+    }
+    const rail = order.business_id
+      ? await this.paymentRoutingService.resolveRailForBusiness(
+          order.business_id
+        )
+      : 'mobile_money';
+    if (rail === 'stripe') {
+      return 0;
+    }
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    return (order.subtotal * holdPercentage) / 100;
   }
 
   private createClaimAvailabilityFailure(

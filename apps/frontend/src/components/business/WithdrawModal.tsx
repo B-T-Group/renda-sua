@@ -47,6 +47,12 @@ interface WithdrawModalProps {
   /** When set, shown as helper text under the phone field (e.g. for location account withdrawals). */
   withdrawalPhoneNote?: string;
   requirePin?: boolean;
+  /**
+   * Withdrawal rail. In `stripe` mode the dialog only collects the amount
+   * (no phone number, no PIN, no minimum) and the payout is wired to the
+   * user's Stripe Connect account by the caller.
+   */
+  mode?: 'mobile_money' | 'stripe';
 }
 
 const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -59,6 +65,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   loading = false,
   withdrawalPhoneNote,
   requirePin = false,
+  mode = 'mobile_money',
 }) => {
   const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -69,6 +76,9 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const [showResult, setShowResult] = useState(false);
 
   const [paymentMethod] = useState<PaymentMethod>('airtel-money');
+
+  const isStripe = mode === 'stripe';
+  const minWithdrawAmount = isStripe ? 0 : MIN_WITHDRAW_AMOUNT;
 
   useEffect(() => {
     if (userPhoneNumber) {
@@ -95,19 +105,21 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     [note, cmGaHint].filter(Boolean).join(' ') || cmGaHint;
 
   const handleConfirm = async () => {
-    if (!phoneNumber.trim()) {
-      setError(t('accounts.phoneNumberRequired'));
-      return;
-    }
+    if (!isStripe) {
+      if (!phoneNumber.trim()) {
+        setError(t('accounts.phoneNumberRequired'));
+        return;
+      }
 
-    if (!isCmOrGaPhone(phoneNumber)) {
-      setError(
-        t(
-          'accounts.withdrawPhoneCmGaOnly',
-          'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
-        )
-      );
-      return;
+      if (!isCmOrGaPhone(phoneNumber)) {
+        setError(
+          t(
+            'accounts.withdrawPhoneCmGaOnly',
+            'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
+          )
+        );
+        return;
+      }
     }
 
     if (!amount.trim() || parseFloat(amount) <= 0) {
@@ -116,7 +128,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
 
     const amountValue = parseFloat(amount);
-    if (amountValue < MIN_WITHDRAW_AMOUNT) {
+    if (!isStripe && amountValue < MIN_WITHDRAW_AMOUNT) {
       setError(
         t(
           'accounts.minWithdrawAmount',
@@ -132,7 +144,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
       return;
     }
 
-    if (requirePin && !/^\d{4}$/.test(pin.trim())) {
+    if (!isStripe && requirePin && !/^\d{4}$/.test(pin.trim())) {
       setError(
         t(
           'accounts.withdrawalPinRequired',
@@ -150,7 +162,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
         phoneNumber,
         amount,
         paymentMethod,
-        requirePin ? pin.trim() : undefined
+        !isStripe && requirePin ? pin.trim() : undefined
       );
       if (ok) {
         setSuccess(t('accounts.withdrawRequestSent'));
@@ -183,11 +195,14 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const parsedAmount = parseFloat(amount);
   const amountOk =
     Number.isFinite(parsedAmount) &&
-    parsedAmount >= MIN_WITHDRAW_AMOUNT &&
+    parsedAmount > 0 &&
+    parsedAmount >= minWithdrawAmount &&
     parsedAmount <= availableBalance;
-  const balanceAllowsWithdraw = availableBalance >= MIN_WITHDRAW_AMOUNT;
-  const phoneOk = phoneNumber.trim() && isCmOrGaPhone(phoneNumber);
-  const pinOk = !requirePin || /^\d{4}$/.test(pin.trim());
+  const balanceAllowsWithdraw = isStripe
+    ? availableBalance > 0
+    : availableBalance >= MIN_WITHDRAW_AMOUNT;
+  const phoneOk = isStripe || (phoneNumber.trim() && isCmOrGaPhone(phoneNumber));
+  const pinOk = isStripe || !requirePin || /^\d{4}$/.test(pin.trim());
   const canSubmit =
     balanceAllowsWithdraw &&
     phoneOk &&
@@ -199,7 +214,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const amountNumericInvalid =
     !amount.trim() ||
     !Number.isFinite(parsedAmount) ||
-    parsedAmount < MIN_WITHDRAW_AMOUNT ||
+    parsedAmount <= 0 ||
+    parsedAmount < minWithdrawAmount ||
     parsedAmount > availableBalance;
   const amountFieldError = !!error && amountNumericInvalid;
 
@@ -207,7 +223,11 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6">{t('accounts.withdrawRequest')}</Typography>
+          <Typography variant="h6">
+            {isStripe
+              ? t('accounts.stripeWithdrawTitle', 'Withdraw to Stripe')
+              : t('accounts.withdrawRequest')}
+          </Typography>
           <IconButton onClick={handleClose} disabled={loading}>
             <CloseIcon />
           </IconButton>
@@ -238,7 +258,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </Typography>
             </Box>
 
-            {!balanceAllowsWithdraw && (
+            {!balanceAllowsWithdraw && !isStripe && (
               <Alert severity="info" sx={{ mb: 2 }}>
                 {t(
                   'accounts.withdrawBalanceBelowMin',
@@ -248,16 +268,27 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </Alert>
             )}
 
-            <PhoneInput
-              value={phoneNumber}
-              onChange={(value) => setPhoneNumber(value || '')}
-              label={t('accounts.phoneNumber')}
-              placeholder={t('accounts.phoneNumberPlaceholder')}
-              helperText={getPhoneNumberHint()}
-              disabled={loading || !balanceAllowsWithdraw}
-              defaultCountry="CM"
-              onlyCountries={['CM', 'GA']}
-            />
+            {isStripe && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t(
+                  'accounts.stripeWithdrawHelper',
+                  'Funds will be transferred to your connected Stripe account.'
+                )}
+              </Alert>
+            )}
+
+            {!isStripe && (
+              <PhoneInput
+                value={phoneNumber}
+                onChange={(value) => setPhoneNumber(value || '')}
+                label={t('accounts.phoneNumber')}
+                placeholder={t('accounts.phoneNumberPlaceholder')}
+                helperText={getPhoneNumberHint()}
+                disabled={loading || !balanceAllowsWithdraw}
+                defaultCountry="CM"
+                onlyCountries={['CM', 'GA']}
+              />
+            )}
 
             <TextField
               fullWidth
@@ -270,6 +301,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               helperText={
                 amountFieldError
                   ? error
+                  : isStripe
+                  ? undefined
                   : t(
                       'accounts.withdrawAmountHelper',
                       'Minimum withdrawal: {{min}} {{currency}}',
@@ -277,7 +310,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
                     )
               }
               inputProps={{
-                min: MIN_WITHDRAW_AMOUNT,
+                min: minWithdrawAmount,
                 max: availableBalance,
                 step: 0.01,
               }}
@@ -285,7 +318,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               disabled={loading || !balanceAllowsWithdraw}
             />
 
-            {requirePin ? (
+            {!isStripe && requirePin ? (
               <TextField
                 fullWidth
                 label={t('accounts.withdrawalPin', 'Withdrawal PIN')}

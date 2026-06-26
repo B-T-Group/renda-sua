@@ -34,6 +34,8 @@ import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
+import { useStripeConnect } from '../../hooks/useStripeConnect';
+import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
 
@@ -112,6 +114,25 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const { initiatePayment, loading: mobilePaymentsLoading } =
     useMobilePayments();
   const { loading: airtelLoading } = useAirtelMoney();
+  const { status: connectStatus } = useStripeConnect();
+  const { withdraw: stripeWithdraw, loading: stripeWithdrawLoading } =
+    useStripeWithdraw();
+
+  // Stripe-enabled countries withdraw to a connected Stripe account instead of
+  // mobile money. The control is only enabled once Connect is active.
+  const isStripeRail = connectStatus?.paymentRail === 'stripe';
+  const stripeReady =
+    !!connectStatus?.connected &&
+    (connectStatus?.status === 'active' ||
+      (!!connectStatus?.chargesEnabled && !!connectStatus?.payoutsEnabled));
+  const withdrawDisabled = loading || (isStripeRail && !stripeReady);
+  const withdrawTooltip =
+    isStripeRail && !stripeReady
+      ? t(
+          'accounts.stripePayoutSetupRequired',
+          'Set up and activate Stripe payouts to withdraw.'
+        )
+      : t('accounts.withdraw');
 
   // GraphQL hook for transactions
   const { execute: executeTransactionsQuery } = useGraphQLRequest(
@@ -329,6 +350,21 @@ const UserAccount: React.FC<UserAccountProps> = ({
     pin?: string
   ): Promise<boolean> => {
     try {
+      if (isStripeRail) {
+        const result = await stripeWithdraw({
+          amount: parseFloat(amount),
+          currency: account.currency,
+          accountId: account.id,
+          description: 'Withdrawal',
+        });
+        if (!result.success) {
+          console.error('Stripe withdrawal failed:', result.message);
+          return false;
+        }
+        setShowWithdrawSuccess(true);
+        return true;
+      }
+
       await initiatePayment({
         amount: parseFloat(amount),
         currency: account.currency,
@@ -391,16 +427,18 @@ const UserAccount: React.FC<UserAccountProps> = ({
             </IconButton>
           </Tooltip>
           {account.available_balance > 0 && (
-            <Tooltip title={t('accounts.withdraw')}>
-              <IconButton
-                onClick={handleWithdraw}
-                disabled={loading}
-                color="error"
-                size="small"
-                sx={{ p: 0.5 }}
-              >
-                <RemoveIcon fontSize="small" />
-              </IconButton>
+            <Tooltip title={withdrawTooltip}>
+              <span>
+                <IconButton
+                  onClick={handleWithdraw}
+                  disabled={withdrawDisabled}
+                  color="error"
+                  size="small"
+                  sx={{ p: 0.5 }}
+                >
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           )}
         </Box>
@@ -485,15 +523,17 @@ const UserAccount: React.FC<UserAccountProps> = ({
                 </IconButton>
               </Tooltip>
               {account.available_balance > 0 && (
-                <Tooltip title={t('accounts.withdraw')}>
-                  <IconButton
-                    onClick={handleWithdraw}
-                    disabled={loading}
-                    color="error"
-                    size="small"
-                  >
-                    <RemoveIcon />
-                  </IconButton>
+                <Tooltip title={withdrawTooltip}>
+                  <span>
+                    <IconButton
+                      onClick={handleWithdraw}
+                      disabled={withdrawDisabled}
+                      color="error"
+                      size="small"
+                    >
+                      <RemoveIcon />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               )}
             </Box>
@@ -532,9 +572,10 @@ const UserAccount: React.FC<UserAccountProps> = ({
         userPhoneNumber={account.business_location?.phone || profile?.phone_number || ''}
         currency={account.currency}
         availableBalance={account.available_balance}
-        loading={mobilePaymentsLoading}
+        loading={isStripeRail ? stripeWithdrawLoading : mobilePaymentsLoading}
         onConfirm={handleWithdrawConfirm}
         requirePin={withdrawRequirePin}
+        mode={isStripeRail ? 'stripe' : 'mobile_money'}
         withdrawalPhoneNote={
           account.business_location
             ? t('accounts.withdrawalPhoneNoteLocation', 'This is the phone number used for withdrawals from this location\'s account.')
