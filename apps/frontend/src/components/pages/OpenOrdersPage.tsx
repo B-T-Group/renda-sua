@@ -335,6 +335,7 @@ const OpenOrdersPage: React.FC = () => {
                       key={order.id}
                       order={order}
                       onClaimSuccess={refetch}
+                      isStripeRail={isStripeRail}
                     />
                   ))}
                 </Box>

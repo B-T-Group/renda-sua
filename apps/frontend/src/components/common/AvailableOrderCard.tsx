@@ -38,6 +38,12 @@ import ConfirmationModal from './ConfirmationModal';
 interface AvailableOrderCardProps {
   order: Order;
   onClaimSuccess?: () => void;
+  /**
+   * When the agent operates in a Stripe-supported country, claiming an order
+   * does not impose any caution / security deposit, so caution references are
+   * hidden from the UI.
+   */
+  isStripeRail?: boolean;
 }
 
 interface ClaimAvailabilityResult {
@@ -52,6 +58,7 @@ interface ClaimAvailabilityResult {
 const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   order,
   onClaimSuccess,
+  isStripeRail = false,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -519,8 +526,9 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               </Box>
             )}
 
-            {/* Claim Cost */}
-            {order.agent_hold_amount !== undefined &&
+            {/* Claim Cost (caution) - not applicable in Stripe-supported countries */}
+            {!isStripeRail &&
+              order.agent_hold_amount !== undefined &&
               order.agent_hold_amount > 0 && (
                 <Box
                   sx={{
@@ -733,7 +741,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         confirmColor="primary"
         loading={claimLoading}
         additionalContent={
-          claimHoldAmount > 0 ||
+          (!isStripeRail && claimHoldAmount > 0) ||
           order.delivery_commission !== undefined ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Stack spacing={0.75}>
@@ -748,7 +756,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
                     )}
                   </Typography>
                 )}
-                {claimHoldAmount > 0 && (
+                {!isStripeRail && claimHoldAmount > 0 && (
                     <Typography variant="body2">
                       {t(
                         'orders.claimOrderHoldAmountInfo',

@@ -58,6 +58,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
+import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
@@ -297,6 +298,10 @@ const ManageOrderPage: React.FC = () => {
   const { profile, userType: activePersona } = useUserProfileContext();
   const { accounts } = useAccountInfo();
   const { enqueueSnackbar } = useSnackbar();
+  const { status: connectStatus } = useStripeConnect();
+  // In Stripe-supported countries claiming an order imposes no caution/hold,
+  // so caution-related notices must be hidden.
+  const isStripeRail = connectStatus?.paymentRail === 'stripe';
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
@@ -1781,16 +1786,17 @@ const ManageOrderPage: React.FC = () => {
                     {/* Persona-specific actions */}
                     {activePersona === 'agent' && (
                       <>
-                        {order.current_status === 'ready_for_pickup' && (
-                          <Alert severity="info" icon={<RefreshIcon />}>
-                            <Typography variant="body2">
-                              {t(
-                                'orders.refreshAfterHoldPayment',
-                                'If you have confirmed the hold payment, please refresh the page using the refresh button at the top to update your account balance.'
-                              )}
-                            </Typography>
-                          </Alert>
-                        )}
+                        {order.current_status === 'ready_for_pickup' &&
+                          !isStripeRail && (
+                            <Alert severity="info" icon={<RefreshIcon />}>
+                              <Typography variant="body2">
+                                {t(
+                                  'orders.refreshAfterHoldPayment',
+                                  'If you have confirmed the hold payment, please refresh the page using the refresh button at the top to update your account balance.'
+                                )}
+                              </Typography>
+                            </Alert>
+                          )}
                         {/* Hide agent actions on mobile - they're shown in sticky bottom bar */}
                         <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                           <AgentActions
