@@ -1784,6 +1784,13 @@
       "cardGalleryNext": "Next photo",
       "inactive": "Inactive",
       "listingActive": "Listing active",
+      "statusLive": "Live",
+      "statusHidden": "Hidden",
+      "tabs": {
+        "overview": "Overview",
+        "inventory": "Inventory",
+        "images": "Images"
+      },
       "activeStatusUpdated": "Listing status updated",
       "activeStatusUpdateError": "Failed to update listing status",
       "payOnDeliveryUpdated": "Payment at delivery setting updated",

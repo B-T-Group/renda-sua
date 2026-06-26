@@ -1773,6 +1773,13 @@
       "cardGalleryNext": "Photo suivante",
       "inactive": "Inactif",
       "listingActive": "Annonce active",
+      "statusLive": "En ligne",
+      "statusHidden": "Masqué",
+      "tabs": {
+        "overview": "Aperçu",
+        "inventory": "Inventaire",
+        "images": "Images"
+      },
       "activeStatusUpdated": "Statut de l’annonce mis à jour",
       "activeStatusUpdateError": "Échec de la mise à jour du statut de l’annonce",
       "payOnDeliveryUpdated": "Option paiement à la livraison mise à jour",
