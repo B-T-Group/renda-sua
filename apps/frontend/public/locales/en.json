@@ -4229,7 +4229,17 @@
       "payoutsPending": "Payouts pending",
       "setup": "Set up payouts",
       "continueSetup": "Continue setup",
-      "dashboard": "Open Stripe dashboard"
+      "dashboard": "Open Stripe dashboard",
+      "return": {
+        "appTitle": "Returning to the app",
+        "appBody": "You can return to the Rendasua app. If it does not open automatically, tap the button below.",
+        "openApp": "Open the app",
+        "title": "Stripe setup updated",
+        "body": "We are syncing your Stripe account. It can take a moment for payouts to activate.",
+        "refreshTitle": "Continue your setup",
+        "refreshBody": "Your onboarding link expired. Return to your account to continue setting up payouts.",
+        "continue": "Continue"
+      }
     },
     "return": {
       "pendingTitle": "Confirming your payment",

@@ -4218,7 +4218,17 @@
       "payoutsPending": "Versements en attente",
       "setup": "Configurer les versements",
       "continueSetup": "Continuer la configuration",
-      "dashboard": "Ouvrir le tableau de bord Stripe"
+      "dashboard": "Ouvrir le tableau de bord Stripe",
+      "return": {
+        "appTitle": "Retour vers l’application",
+        "appBody": "Vous pouvez revenir dans l’application Rendasua. Si elle ne s’ouvre pas automatiquement, appuyez sur le bouton ci-dessous.",
+        "openApp": "Ouvrir l’application",
+        "title": "Configuration Stripe mise à jour",
+        "body": "Nous synchronisons votre compte Stripe. L’activation des versements peut prendre un moment.",
+        "refreshTitle": "Continuer la configuration",
+        "refreshBody": "Votre lien d’intégration a expiré. Retournez à votre compte pour continuer la configuration des versements.",
+        "continue": "Continuer"
+      }
     },
     "return": {
       "pendingTitle": "Confirmation de votre paiement",

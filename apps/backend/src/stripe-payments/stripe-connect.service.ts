@@ -139,14 +139,21 @@ export class StripeConnectService {
 
   async createOnboardingLink(
     userId: string,
-    overrides?: { returnUrl?: string; refreshUrl?: string }
+    overrides?: {
+      returnUrl?: string;
+      refreshUrl?: string;
+      platform?: 'mobile' | 'web';
+    }
   ): Promise<{ url: string }> {
     const account = await this.ensureAccount(userId);
     const base = this.config.appBaseUrl;
+    // Stripe only accepts http(s) return/refresh URLs. For the mobile app we
+    // route to an HTTPS page that deep-links back into the app (?app=mobile).
+    const appFlag = overrides?.platform === 'mobile' ? '?app=mobile' : '';
     const link = await this.stripeService.createAccountLink(
       account.stripe_account_id,
-      overrides?.refreshUrl || `${base}/connect/onboarding/refresh`,
-      overrides?.returnUrl || `${base}/connect/onboarding/return`
+      overrides?.refreshUrl || `${base}/connect/onboarding/refresh${appFlag}`,
+      overrides?.returnUrl || `${base}/connect/onboarding/return${appFlag}`
     );
     return { url: link.url };
   }

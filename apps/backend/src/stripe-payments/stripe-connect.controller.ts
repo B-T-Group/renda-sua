@@ -52,12 +52,18 @@ export class StripeConnectController {
   @ApiOperation({ summary: 'Get a hosted Connect onboarding link' })
   @ApiResponse({ status: 201, description: 'Onboarding link created' })
   async accountLink(
-    @Body() body: { returnUrl?: string; refreshUrl?: string }
+    @Body()
+    body: {
+      returnUrl?: string;
+      refreshUrl?: string;
+      platform?: 'mobile' | 'web';
+    }
   ) {
     const userId = await this.userId();
     const link = await this.connectService.createOnboardingLink(userId, {
       returnUrl: body?.returnUrl,
       refreshUrl: body?.refreshUrl,
+      platform: body?.platform,
     });
     return { success: true, data: link };
   }

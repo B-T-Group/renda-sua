@@ -297,6 +297,17 @@ function App() {
               }
             />
 
+            {/* Stripe Connect onboarding return/refresh (public: also used by the
+                mobile in-app browser, which deep-links back via ?app=mobile) */}
+            <Route
+              path="/connect/onboarding/return"
+              element={<LazyPages.ConnectOnboardingReturnPage />}
+            />
+            <Route
+              path="/connect/onboarding/refresh"
+              element={<LazyPages.ConnectOnboardingReturnPage variant="refresh" />}
+            />
+
             {/* Place Order route */}
             <Route
               path="/items/:id/place_order"
