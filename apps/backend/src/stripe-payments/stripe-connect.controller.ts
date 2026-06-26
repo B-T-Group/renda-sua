@@ -64,7 +64,11 @@ export class StripeConnectController {
 
   @Get('status')
   @ApiOperation({ summary: 'Get the Connect account onboarding/payout status' })
-  @ApiResponse({ status: 200, description: 'Connect status' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Connect status including connected/charges/payouts/details flags and the resolved payment rail (stripe | mobile_money)',
+  })
   async status() {
     const userId = await this.userId();
     const data = await this.connectService.getStatus(userId);

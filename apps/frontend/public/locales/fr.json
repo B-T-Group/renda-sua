@@ -613,8 +613,12 @@
       "accountUnderReview": "Votre compte est en cours d'examen. Vous verrez les commandes disponibles une fois vérifié.",
       "available": "Commandes Disponibles",
       "claimed": "Commandes Déjà Réclamées",
+      "connectStripeToGetVerified": "Connectez votre compte Stripe pour être vérifié et commencer à recevoir des livraisons.",
+      "continueStripeSetup": "Continuer la configuration",
       "goToDocuments": "Aller aux Documents",
       "noOrdersFound": "Aucune commande disponible pour la collecte",
+      "setUpPayouts": "Configurer les paiements",
+      "stripeUnderReview": "Votre compte Stripe est en cours d'examen. Vous verrez les commandes disponibles une fois les paiements activés.",
       "subtitle": "Trouver et réclamer des commandes prêtes pour la collecte et la livraison",
       "title": "Commandes Disponibles",
       "uploadIdToGetVerified": "Téléversez une pièce d'identité (permis de conduire, passeport ou carte d'identité nationale) pour être vérifié et voir les commandes disponibles."

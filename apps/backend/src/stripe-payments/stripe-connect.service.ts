@@ -243,18 +243,21 @@ export class StripeConnectService {
     payoutsEnabled: boolean;
     detailsSubmitted: boolean;
     status: string;
+    paymentRail: 'stripe' | 'mobile_money';
   }> {
     let account = await this.getByUserId(userId);
     if (account) {
       await this.syncFromStripe(account.stripe_account_id);
       account = await this.getByUserId(userId);
     }
+    const paymentRail = await this.paymentRouting.resolveRailForUser(userId);
     return {
       connected: !!account,
       chargesEnabled: account?.charges_enabled ?? false,
       payoutsEnabled: account?.payouts_enabled ?? false,
       detailsSubmitted: account?.details_submitted ?? false,
       status: account?.status ?? 'not_started',
+      paymentRail,
     };
   }
 

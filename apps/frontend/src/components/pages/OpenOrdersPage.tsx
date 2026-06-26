@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentHasIdDocument } from '../../hooks/useAgentHasIdDocument';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { orderModifiedAtMs } from '../../utils/orderListSort';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
@@ -34,9 +35,35 @@ interface OrderFilters {
 
 const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-  const { profile } = useUserProfileContext();
+  const { profile, refetch: refetchProfile } = useUserProfileContext();
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
   const { hasIdDocument } = useAgentHasIdDocument(profile?.user_type_id);
+  const {
+    status: connectStatus,
+    loading: connectLoading,
+    startOnboarding,
+  } = useStripeConnect();
+
+  const isAgent = Boolean(profile?.agent);
+  const isStripeRail = connectStatus?.paymentRail === 'stripe';
+
+  // When the agent returns from Stripe onboarding and the account is active,
+  // the backend has flipped is_verified; refresh the profile so the alert
+  // hides and available orders unlock.
+  useEffect(() => {
+    if (
+      isAgent &&
+      connectStatus?.status === 'active' &&
+      profile?.agent?.is_verified === false
+    ) {
+      void refetchProfile();
+    }
+  }, [
+    isAgent,
+    connectStatus?.status,
+    profile?.agent?.is_verified,
+    refetchProfile,
+  ]);
 
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
@@ -185,31 +212,58 @@ const OpenOrdersPage: React.FC = () => {
             )}
           </Alert>
         )}
-        {profile?.agent && !profile.agent.is_verified && profile?.agent?.status !== 'suspended' && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            {hasIdDocument
-              ? t(
-                  'agent.openOrders.accountUnderReview',
-                  'Your account is under review. You will see available orders once you are verified.'
-                )
-              : t(
-                  'agent.openOrders.uploadIdToGetVerified',
-                  "Upload an ID (driver's license, passport, or national ID) to get verified and see available orders."
-                )}
-            {!hasIdDocument && (
+        {isAgent &&
+          !profile?.agent?.is_verified &&
+          profile?.agent?.status !== 'suspended' &&
+          (isStripeRail ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {connectStatus?.connected
+                ? t(
+                    'agent.openOrders.stripeUnderReview',
+                    "Your Stripe account is being reviewed. You'll see available orders once payouts are enabled."
+                  )
+                : t(
+                    'agent.openOrders.connectStripeToGetVerified',
+                    'Connect your Stripe account to get verified and start receiving deliveries.'
+                  )}
               <Box component="span" sx={{ display: 'block', mt: 1 }}>
                 <Button
-                  component={Link}
-                  to="/documents"
                   variant="outlined"
                   size="small"
+                  onClick={startOnboarding}
+                  disabled={connectLoading}
                 >
-                  {t('agent.openOrders.goToDocuments', 'Go to Documents')}
+                  {connectStatus?.connected
+                    ? t('agent.openOrders.continueStripeSetup', 'Continue setup')
+                    : t('agent.openOrders.setUpPayouts', 'Set up payouts')}
                 </Button>
               </Box>
-            )}
-          </Alert>
-        )}
+            </Alert>
+          ) : (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {hasIdDocument
+                ? t(
+                    'agent.openOrders.accountUnderReview',
+                    'Your account is under review. You will see available orders once you are verified.'
+                  )
+                : t(
+                    'agent.openOrders.uploadIdToGetVerified',
+                    "Upload an ID (driver's license, passport, or national ID) to get verified and see available orders."
+                  )}
+              {!hasIdDocument && (
+                <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                  <Button
+                    component={Link}
+                    to="/documents"
+                    variant="outlined"
+                    size="small"
+                  >
+                    {t('agent.openOrders.goToDocuments', 'Go to Documents')}
+                  </Button>
+                </Box>
+              )}
+            </Alert>
+          ))}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom>
             {getPageTitle()}

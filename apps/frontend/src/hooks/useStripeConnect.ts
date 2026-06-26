@@ -7,6 +7,7 @@ export interface StripeConnectStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   status: string;
+  paymentRail?: 'stripe' | 'mobile_money';
 }
 
 export function useStripeConnect() {

@@ -615,8 +615,12 @@
       "accountUnderReview": "Your account is under review. You will see available orders once you are verified.",
       "available": "Available Orders",
       "claimed": "Already Claimed Orders",
+      "connectStripeToGetVerified": "Connect your Stripe account to get verified and start receiving deliveries.",
+      "continueStripeSetup": "Continue setup",
       "goToDocuments": "Go to Documents",
       "noOrdersFound": "No orders available for pickup",
+      "setUpPayouts": "Set up payouts",
+      "stripeUnderReview": "Your Stripe account is being reviewed. You'll see available orders once payouts are enabled.",
       "subtitle": "Find and claim orders ready for pickup and delivery",
       "title": "Available Orders",
       "uploadIdToGetVerified": "Upload an ID (driver's license, passport, or national ID) to get verified and see available orders."
