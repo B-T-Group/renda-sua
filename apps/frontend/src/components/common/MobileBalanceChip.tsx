@@ -20,8 +20,11 @@ import { useSnackbar } from 'notistack';
 import { useAccountSubscription } from '../../hooks/useAccountSubscription';
 import { useAgentAutoWithdrawCommissions } from '../../hooks/useAgentAutoWithdrawCommissions';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
+import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
 import {
+  Account,
   isLegacyWalletAccount,
   useUserProfileContext,
 } from '../../contexts/UserProfileContext';
@@ -75,6 +78,9 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     refetchAccounts,
   } = useUserProfileContext();
   const { initiatePayment, loading: withdrawLoading } = useMobilePayments();
+  const { withdraw: stripeWithdraw, loading: stripeWithdrawLoading } =
+    useStripeWithdraw();
+  const { isStripeRail, stripeReady } = useIsStripeRail();
   /** Mirrors DB `users.user_type_id` after persona switch (see setActivePersona). */
   const agentAutoWithdrawEnabled = profile?.user_type_id === 'agent';
   const {
@@ -91,7 +97,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
   const [transactionsDrawerOpen, setTransactionsDrawerOpen] = useState(false);
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [liveXafAccount, setLiveXafAccount] = useState<{
+  const [liveAccount, setLiveAccount] = useState<{
     id: string;
     currency: string;
     available_balance: number;
@@ -99,16 +105,25 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     total_balance: number;
   } | null>(null);
 
+  // Mobile-money users transact through their legacy XAF wallet. Stripe-enabled
+  // users have no XAF wallet, so fall back to their first available legacy
+  // wallet (e.g. CAD/USD).
   const xafAccount = accounts.find(
     (a) => a.currency === XAF_CURRENCY && isLegacyWalletAccount(a)
   );
-  const displayAccount = liveXafAccount ?? xafAccount ?? null;
+  const firstStripeWalletAccount: Account | undefined =
+    accounts.find(
+      (a) => isLegacyWalletAccount(a) && a.currency !== XAF_CURRENCY
+    ) ?? accounts.find((a) => isLegacyWalletAccount(a));
+  const walletAccount = isStripeRail ? firstStripeWalletAccount : xafAccount;
+  const displayAccount = liveAccount ?? walletAccount ?? null;
+  const walletCurrency = walletAccount?.currency ?? XAF_CURRENCY;
 
   useAccountSubscription({
-    accountId: xafAccount?.id ?? '',
-    enabled: !!xafAccount?.id,
+    accountId: walletAccount?.id ?? '',
+    enabled: !!walletAccount?.id,
     onAccountUpdate: (account) => {
-      setLiveXafAccount({
+      setLiveAccount({
         id: account.id,
         currency: account.currency,
         available_balance: account.available_balance,
@@ -119,16 +134,8 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
   });
 
   useEffect(() => {
-    if (!xafAccount) setLiveXafAccount(null);
-  }, [xafAccount]);
-
-  const formatBalance = (amount: number) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: XAF_CURRENCY,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    setLiveAccount(null);
+  }, [walletAccount?.id]);
 
   const formatCurrency = (amount: number, currency: string) =>
     new Intl.NumberFormat('en-US', {
@@ -137,6 +144,9 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
+
+  const formatBalance = (amount: number) =>
+    formatCurrency(amount, walletCurrency);
 
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleString(undefined, {
@@ -186,11 +196,11 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
 
   const fetchAccountTransactions = useCallback(
     async (limit = TRANSACTIONS_LIMIT) => {
-      if (!xafAccount) return;
+      if (!walletAccount) return;
       setTransactionsLoading(true);
       try {
         const result = await executeTransactionsQuery({
-          accountId: xafAccount.id,
+          accountId: walletAccount.id,
           limit,
         });
         setTransactions(result?.account_transactions ?? []);
@@ -200,7 +210,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
         setTransactionsLoading(false);
       }
     },
-    [xafAccount, executeTransactionsQuery]
+    [walletAccount, executeTransactionsQuery]
   );
 
   const handleOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -230,14 +240,34 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     amount: string,
     _paymentMethod: string
   ): Promise<boolean> => {
-    if (!xafAccount) return false;
+    if (!walletAccount) return false;
     try {
+      if (isStripeRail) {
+        const result = await stripeWithdraw({
+          amount: parseFloat(amount),
+          currency: walletAccount.currency,
+          accountId: walletAccount.id,
+          description: 'Withdrawal',
+        });
+        if (result.success) {
+          enqueueSnackbar(t('accounts.withdrawSuccess'), {
+            variant: 'success',
+          });
+          await refetchAccounts();
+          return true;
+        }
+        if (result.message) {
+          enqueueSnackbar(result.message, { variant: 'error' });
+        }
+        return false;
+      }
+
       const result = await initiatePayment({
         amount: parseFloat(amount),
-        currency: xafAccount.currency,
+        currency: walletAccount.currency,
         description: 'Withdrawal',
         customerPhone: phoneNumber,
-        accountId: xafAccount.id,
+        accountId: walletAccount.id,
         transactionType: 'GIVE_CHANGE',
       });
       if (result.success) {
@@ -251,7 +281,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     }
   };
 
-  if (!xafAccount && !accountsLoading) return null;
+  if (!walletAccount && !accountsLoading) return null;
 
   return (
     <>
@@ -309,10 +339,35 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
           {t('accounts.viewTransactions')}
         </MenuItem>
         {displayAccount && displayAccount.available_balance > 0 && (
-          <MenuItem onClick={handleWithdrawClick} sx={{ py: 1.5 }}>
+          <MenuItem
+            onClick={handleWithdrawClick}
+            disabled={isStripeRail && !stripeReady}
+            sx={{ py: 1.5 }}
+          >
             {t('accounts.withdraw')}
           </MenuItem>
         )}
+        {isStripeRail &&
+          !stripeReady &&
+          displayAccount &&
+          displayAccount.available_balance > 0 && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                px: 2,
+                py: 0.5,
+                display: 'block',
+                whiteSpace: 'normal',
+                maxWidth: 240,
+              }}
+            >
+              {t(
+                'accounts.stripePayoutSetupRequired',
+                'Set up and activate Stripe payouts to withdraw.'
+              )}
+            </Typography>
+          )}
         {agentAutoWithdrawEnabled && (
           <>
             <Divider sx={{ my: 0.5 }} />
@@ -377,15 +432,19 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
         )}
       </Menu>
 
-      {xafAccount && (
+      {walletAccount && (
         <WithdrawModal
           open={withdrawModalOpen}
           onClose={handleWithdrawClose}
           onConfirm={handleWithdrawConfirm}
           userPhoneNumber={profile?.phone_number || ''}
-          currency={xafAccount.currency}
-          availableBalance={displayAccount?.available_balance ?? xafAccount.available_balance}
-          loading={withdrawLoading}
+          currency={walletAccount.currency}
+          availableBalance={
+            displayAccount?.available_balance ??
+            walletAccount.available_balance
+          }
+          loading={isStripeRail ? stripeWithdrawLoading : withdrawLoading}
+          mode={isStripeRail ? 'stripe' : 'mobile_money'}
         />
       )}
 
@@ -426,13 +485,13 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
               {t('accounts.viewTransactions')}
             </Typography>
             <Chip
-              label={`${displayAccount?.currency ?? xafAccount?.currency ?? XAF_CURRENCY} ${t('accounts.account')}`}
+              label={`${displayAccount?.currency ?? walletCurrency} ${t('accounts.account')}`}
               size="small"
               color="primary"
               variant="outlined"
             />
           </Box>
-          {xafAccount && (
+          {walletAccount && (
             <Box
               sx={{
                 display: 'flex',
@@ -449,7 +508,10 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
                 {t('accounts.availableBalance')}
               </Typography>
               <Typography variant="subtitle1" fontWeight={600} color="success.main">
-                {formatBalance(xafAccount.available_balance)}
+                {formatBalance(
+                  displayAccount?.available_balance ??
+                    walletAccount.available_balance
+                )}
               </Typography>
             </Box>
           )}
@@ -524,7 +586,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
                       {formatTransactionAmount(
                         tx.transaction_type,
                         tx.amount,
-                        tx.account?.currency ?? XAF_CURRENCY
+                        tx.account?.currency ?? walletCurrency
                       )}
                     </Typography>
                   </Box>

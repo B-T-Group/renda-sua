@@ -4,7 +4,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { WalletCreditCommissionType } from '../notifications/wallet-credit-push.messages';
-import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import {
+  PaymentRail,
+  PaymentRoutingService,
+} from '../stripe-payments/payment-routing.service';
 import { StripePayoutService } from '../stripe-payments/stripe-payout.service';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
@@ -797,10 +800,7 @@ export class CommissionsService {
     const eligibility = await this.resolveAutoWithdrawEligibility(ctx);
     if (!eligibility) return;
 
-    const rail = await this.paymentRoutingService.resolveRailForUser(
-      ctx.recipientUserId
-    );
-    if (rail === 'stripe') {
+    if (eligibility.rail === 'stripe') {
       await this.stripePayoutService.executePayout(
         {
           amount: ctx.amount,
@@ -834,18 +834,29 @@ export class CommissionsService {
     recipientUserId: string;
     recipientType: 'partner' | 'rendasua' | 'agent' | 'business';
     businessLocationId?: string | null;
-  }): Promise<{ phone: string } | null> {
+  }): Promise<{ phone: string; rail: PaymentRail } | null> {
+    let phone: string | null = null;
+
     if (ctx.recipientType === 'business' && ctx.businessLocationId) {
       const loc = await this.getLocationAutoWithdraw(ctx.businessLocationId);
       if (!loc || loc.auto_withdraw_commissions === false) return null;
-      return { phone: (loc.phone ?? '').trim() };
-    }
-    if (ctx.recipientType === 'agent') {
+      phone = (loc.phone ?? '').trim();
+    } else if (ctx.recipientType === 'agent') {
       const ag = await this.getAgentAutoWithdraw(ctx.recipientUserId);
       if (!ag || ag.auto_withdraw_commissions !== true) return null;
-      return { phone: (ag.phone ?? '').trim() };
+      phone = (ag.phone ?? '').trim();
+    } else {
+      return null;
     }
-    return null;
+
+    const rail = await this.paymentRoutingService.resolveRailForUser(
+      ctx.recipientUserId
+    );
+    // Stripe-enabled countries pay out to the connected account, so no phone is
+    // required. Mobile-money rails still need a valid phone for the payout.
+    if (rail !== 'stripe' && !phone) return null;
+
+    return { phone, rail };
   }
 
   private async getLocationAutoWithdraw(

@@ -126,6 +126,8 @@
     "stripeWithdrawTitle": "Withdraw to Stripe",
     "stripeWithdrawHelper": "Funds will be transferred to your connected Stripe account.",
     "stripePayoutSetupRequired": "Set up and activate Stripe payouts to withdraw.",
+    "viewStripeAccount": "View Stripe account",
+    "setUpStripePayouts": "Set up Stripe payouts",
     "withdrawalPhoneNoteLocation": "This is the phone number used for withdrawals from this location's account.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Withheld",

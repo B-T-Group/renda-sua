@@ -1,6 +1,7 @@
 import {
   Add as AddIcon,
   History as HistoryIcon,
+  Launch as LaunchIcon,
   Remove as RemoveIcon,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
@@ -114,15 +115,20 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const { initiatePayment, loading: mobilePaymentsLoading } =
     useMobilePayments();
   const { loading: airtelLoading } = useAirtelMoney();
-  const { status: connectStatus } = useStripeConnect();
+  const {
+    status: connectStatus,
+    openDashboard: openStripeDashboard,
+    startOnboarding: startStripeOnboarding,
+  } = useStripeConnect();
   const { withdraw: stripeWithdraw, loading: stripeWithdrawLoading } =
     useStripeWithdraw();
 
   // Stripe-enabled countries withdraw to a connected Stripe account instead of
   // mobile money. The control is only enabled once Connect is active.
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
+  const stripeConnected = !!connectStatus?.connected;
   const stripeReady =
-    !!connectStatus?.connected &&
+    stripeConnected &&
     (connectStatus?.status === 'active' ||
       (!!connectStatus?.chargesEnabled && !!connectStatus?.payoutsEnabled));
   const withdrawDisabled = loading || (isStripeRail && !stripeReady);
@@ -133,6 +139,18 @@ const UserAccount: React.FC<UserAccountProps> = ({
           'Set up and activate Stripe payouts to withdraw.'
         )
       : t('accounts.withdraw');
+  // Give stripe-rail users a clear way to reach their connected Stripe account
+  // (Express dashboard) when linked, or to set it up when not yet connected.
+  const stripeAccessLabel = stripeConnected
+    ? t('accounts.viewStripeAccount', 'View Stripe account')
+    : t('accounts.setUpStripePayouts', 'Set up Stripe payouts');
+  const handleStripeAccess = () => {
+    if (stripeConnected) {
+      void openStripeDashboard();
+    } else {
+      void startStripeOnboarding();
+    }
+  };
 
   // GraphQL hook for transactions
   const { execute: executeTransactionsQuery } = useGraphQLRequest(
@@ -441,6 +459,19 @@ const UserAccount: React.FC<UserAccountProps> = ({
               </span>
             </Tooltip>
           )}
+          {isStripeRail && (
+            <Tooltip title={stripeAccessLabel}>
+              <IconButton
+                onClick={handleStripeAccess}
+                disabled={loading}
+                color="primary"
+                size="small"
+                sx={{ p: 0.5 }}
+              >
+                <LaunchIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
     );
@@ -538,6 +569,20 @@ const UserAccount: React.FC<UserAccountProps> = ({
               )}
             </Box>
           </Box>
+
+          {isStripeRail && (
+            <Box sx={{ mt: 1 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<LaunchIcon />}
+                onClick={handleStripeAccess}
+                disabled={loading}
+              >
+                {stripeAccessLabel}
+              </Button>
+            </Box>
+          )}
 
           {showTransactions && (
             <Box
