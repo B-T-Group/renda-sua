@@ -270,6 +270,12 @@ export class StripePaymentsController {
           req
         );
         break;
+      case 'payment_intent.succeeded':
+        await this.callbackProcessor.onPaymentIntentSucceeded(
+          event.data.object as Stripe.PaymentIntent,
+          req
+        );
+        break;
       case 'payment_intent.payment_failed':
         await this.callbackProcessor.onPaymentFailed(
           event.data.object as Stripe.PaymentIntent,

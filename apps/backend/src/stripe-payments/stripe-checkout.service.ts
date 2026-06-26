@@ -26,6 +26,13 @@ export interface CreateCheckoutResult {
   paymentUrl?: string;
 }
 
+export interface CreatePaymentIntentResult {
+  transactionId: string;
+  reference: string;
+  paymentIntentId: string;
+  clientSecret: string | null;
+}
+
 @Injectable()
 export class StripeCheckoutService {
   constructor(
@@ -113,6 +120,50 @@ export class StripeCheckoutService {
       reference,
       sessionId: session.id,
       paymentUrl: session.url ?? undefined,
+    };
+  }
+
+  /**
+   * Create a PaymentIntent (instead of a hosted Checkout session) for native
+   * client SDKs such as the mobile PaymentSheet. The transaction row carries
+   * the same metadata so the `payment_intent.succeeded` webhook credits the
+   * wallet and finalizes the entity exactly like the hosted flow.
+   */
+  async createPaymentIntent(
+    params: CreateCheckoutParams
+  ): Promise<CreatePaymentIntentResult> {
+    const reference = this.generateReference();
+
+    const transaction = await this.databaseService.createTransaction({
+      reference,
+      amount: params.amount,
+      currency: params.currency,
+      description: params.description,
+      account_id: params.accountId,
+      transaction_type: 'PAYMENT',
+      payment_entity: params.paymentEntity,
+      entity_id: params.entityId,
+      customer_email: params.customerEmail,
+    });
+
+    const paymentIntent = await this.stripeService.createPaymentIntent({
+      amount: params.amount,
+      currency: params.currency,
+      description: params.description,
+      reference,
+      customerEmail: params.customerEmail,
+      metadata: this.buildMetadata(params, reference),
+    });
+
+    await this.databaseService.updateTransaction(transaction.id, {
+      stripe_payment_intent_id: paymentIntent.id,
+    });
+
+    return {
+      transactionId: transaction.id,
+      reference,
+      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret,
     };
   }
 }

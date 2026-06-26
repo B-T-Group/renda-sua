@@ -135,6 +135,12 @@ export class OrdersController {
           description:
             'Client-selected payment timing. pay_now preserves current behavior; pay_at_delivery defers mobile payment until delivery; pay_at_pickup defers payment until business initiates at pickup.',
         },
+        stripe_payment_method: {
+          type: 'string',
+          enum: ['payment_sheet'],
+          description:
+            'When set to payment_sheet on a Stripe-rail pay_now order, the response returns a PaymentIntent client secret for the native mobile PaymentSheet instead of a hosted Checkout URL.',
+        },
         delivery_window: {
           type: 'object',
           properties: {

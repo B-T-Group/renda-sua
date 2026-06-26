@@ -7101,9 +7101,36 @@ export class OrdersService {
     }
 
     if (useStripeRail) {
-      // Stripe-country order: created in pending_payment; the client completes
-      // payment via Stripe hosted Checkout. account.id is set on the transaction
-      // so the webhook credits the wallet + finalizes the order (like mobile money).
+      // Stripe-country order: created in pending_payment; account.id is set on the
+      // transaction so the `checkout.session.completed` / `payment_intent.succeeded`
+      // webhook credits the wallet + finalizes the order (like mobile money).
+      // Native clients (mobile PaymentSheet) request a PaymentIntent client
+      // secret; web clients fall back to a hosted Checkout URL.
+      if (orderData.stripe_payment_method === 'payment_sheet') {
+        const paymentIntent = await this.createStripeOrderPaymentIntent({
+          orderNumber,
+          amount: total_amount,
+          currency,
+          accountId: account.id,
+          customerEmail: user.email ?? undefined,
+        });
+        return {
+          ...order,
+          total_amount: total_amount,
+          delivery_window: deliveryWindow,
+          payment_rail: 'stripe' as const,
+          payment_intent_client_secret: paymentIntent?.clientSecret ?? null,
+          payment_reference: paymentIntent?.reference,
+          payment_transaction: {
+            success: true,
+            transaction_id: paymentIntent?.transactionId ?? null,
+            message: 'Awaiting Stripe payment',
+            mode: 'stripe' as const,
+          },
+          database_transaction: null,
+        };
+      }
+
       const checkout = await this.createStripeOrderCheckout({
         orderNumber,
         amount: total_amount,
@@ -7217,6 +7244,47 @@ export class OrdersService {
         `Failed to create Stripe checkout for order ${params.orderNumber}: ${
           error instanceof Error ? error.message : String(error)
         }`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Create a Stripe PaymentIntent for a Stripe-rail order so native client SDKs
+   * (mobile PaymentSheet) can collect payment in-app. Failures are logged and
+   * swallowed so the order is still created (payment can be retried).
+   */
+  private async createStripeOrderPaymentIntent(params: {
+    orderNumber: string;
+    amount: number;
+    currency: string;
+    accountId: string;
+    customerEmail?: string;
+  }): Promise<{
+    transactionId: string;
+    reference: string;
+    clientSecret: string | null;
+  } | null> {
+    try {
+      const result = await this.stripeCheckoutService.createPaymentIntent({
+        amount: params.amount,
+        currency: params.currency,
+        description: `Order ${params.orderNumber}`,
+        accountId: params.accountId,
+        paymentEntity: 'order',
+        entityId: params.orderNumber,
+        customerEmail: params.customerEmail,
+      });
+      return {
+        transactionId: result.transactionId,
+        reference: result.reference,
+        clientSecret: result.clientSecret,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe PaymentIntent for order ${
+          params.orderNumber
+        }: ${error instanceof Error ? error.message : String(error)}`
       );
       return null;
     }

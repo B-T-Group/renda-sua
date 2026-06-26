@@ -90,6 +90,43 @@ export class StripePaymentCallbackProcessor {
     await this.applySuccess(tx, paymentIntentId, req);
   }
 
+  /**
+   * Finalize a payment collected directly via a PaymentIntent (e.g. the mobile
+   * PaymentSheet). Transactions backed by a hosted Checkout session are skipped
+   * here and finalized by `onCheckoutSessionCompleted` instead, so the wallet is
+   * never credited twice for the same order.
+   */
+  async onPaymentIntentSucceeded(
+    paymentIntent: Stripe.PaymentIntent,
+    req: Request
+  ): Promise<void> {
+    const reference = paymentIntent.metadata?.reference;
+    const tx = reference
+      ? await this.databaseService.getTransactionByReference(reference)
+      : await this.databaseService.getTransactionByPaymentIntentId(
+          paymentIntent.id
+        );
+    if (!tx) {
+      this.logger.warn(
+        `Stripe PaymentIntent succeeded but no transaction for ${
+          reference || paymentIntent.id
+        }`
+      );
+      return;
+    }
+    if (tx.stripe_session_id) {
+      // Settled through the hosted Checkout flow; let the session handler win.
+      return;
+    }
+    if (tx.status !== 'pending') {
+      this.logger.log(
+        `Stripe PaymentIntent skipped (already ${tx.status}): ${tx.id}`
+      );
+      return;
+    }
+    await this.applySuccess(tx, paymentIntent.id, req);
+  }
+
   private async applySuccess(
     tx: StripePaymentTransaction,
     paymentIntentId: string | undefined,

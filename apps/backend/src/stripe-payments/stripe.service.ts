@@ -23,6 +23,15 @@ export interface CreateTransferParams {
   metadata?: Record<string, string>;
 }
 
+export interface CreatePaymentIntentParams {
+  amount: number;
+  currency: string;
+  description: string;
+  reference: string;
+  customerEmail?: string;
+  metadata?: Record<string, string>;
+}
+
 @Injectable()
 export class StripeService {
   private client: Stripe | null = null;
@@ -79,6 +88,27 @@ export class StripeService {
         metadata: { reference: params.reference, ...params.metadata },
       },
       { idempotencyKey: `checkout_${params.reference}` }
+    );
+  }
+
+  /**
+   * Create a PaymentIntent on the platform account for native client SDKs
+   * (e.g. the mobile PaymentSheet). Mirrors the Checkout session settlement:
+   * payment lands on the platform, wallets are credited via the webhook.
+   */
+  async createPaymentIntent(
+    params: CreatePaymentIntentParams
+  ): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.create(
+      {
+        amount: this.toMinorUnits(params.amount, params.currency),
+        currency: params.currency.toLowerCase(),
+        description: params.description,
+        receipt_email: params.customerEmail,
+        automatic_payment_methods: { enabled: true },
+        metadata: { reference: params.reference, ...params.metadata },
+      },
+      { idempotencyKey: `pi_${params.reference}` }
     );
   }
 
