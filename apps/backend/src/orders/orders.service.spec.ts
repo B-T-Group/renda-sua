@@ -16,6 +16,8 @@ import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payment
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
@@ -165,6 +167,20 @@ describe('OrdersService', () => {
         { provide: DeliveryPinService, useValue: {} },
         { provide: OrderRefundsService, useValue: {} },
         { provide: LoyaltyService, useValue: {} },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
+            resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+          },
+        },
+        {
+          provide: StripeCheckoutService,
+          useValue: {
+            createCheckout: jest.fn(),
+            createPaymentIntent: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
