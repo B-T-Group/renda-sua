@@ -3742,6 +3742,8 @@ export class OrdersService {
             quantity
             total_price
             special_instructions
+            item_variant_id
+            variant_snapshot
             item {
               sku
               currency
