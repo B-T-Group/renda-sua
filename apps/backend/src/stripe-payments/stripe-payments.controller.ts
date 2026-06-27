@@ -25,7 +25,9 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { Public } from '../auth/public.decorator';
+import type { GetAccountByIdForUserQuery } from '../generated/graphql';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
 import { WithdrawStripeDto } from './dto/withdraw-stripe.dto';
 import { StripeCheckoutService } from './stripe-checkout.service';
@@ -94,6 +96,7 @@ export class StripePaymentsController {
   @HttpCode(HttpStatus.CREATED)
   async withdraw(@Body() body: WithdrawStripeDto) {
     const user = await this.hasuraUserService.getUser();
+    await this.assertWithdrawAccountBelongsToUser(body.accountId, user.id);
     const result = await this.payoutService.executePayout(
       {
         amount: body.amount,
@@ -105,6 +108,30 @@ export class StripePaymentsController {
       { throwOnFailure: true }
     );
     return { success: result.success, data: result.data };
+  }
+
+  private async assertWithdrawAccountBelongsToUser(
+    accountId: string,
+    userId: string
+  ): Promise<void> {
+    const result =
+      await this.hasuraUserService.executeQuery<GetAccountByIdForUserQuery>(
+        GET_ACCOUNT_BY_ID_FOR_USER,
+        { accountId, userId }
+      );
+    const account = result.accounts?.[0];
+    if (!account) {
+      throw new HttpException(
+        { success: false, message: 'Account not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (account.is_active === false) {
+      throw new HttpException(
+        { success: false, message: 'Account is inactive' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   private async resolveUserEmail(): Promise<string | undefined> {
