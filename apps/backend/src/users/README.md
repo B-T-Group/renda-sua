@@ -34,12 +34,24 @@ Retrieves the current user based on the identifier from the JWT token.
     "first_name": "John",
     "last_name": "Doe",
     "user_type_id": "client",
+    "country": "CM",
+    "is_stripe_enabled": false,
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
   "identifier": "user123"
 }
 ```
+
+The `user` object also includes:
+
+- `country`: ISO alpha-2 country code derived from the user's primary address, or
+  their most recently created address (falls back to the persona's derived
+  country, e.g. a business's primary location). `null` when no country can be
+  resolved.
+- `is_stripe_enabled`: `true` when the resolved `country` supports Stripe payments
+  (configured Stripe country with an active `stripe` entry in
+  `supported_payment_systems`); otherwise `false` (mobile-money rail).
 
 **Error Response Example:**
 

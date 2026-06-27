@@ -5,11 +5,18 @@ import { PermissionService } from '../auth/permission.service';
 import { AwsModule } from '../aws/aws.module';
 import { AgentsModule } from '../agents/agents.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AccountDeletionService } from './account-deletion.service';
 import { UsersController } from './users.controller';
 
 @Module({
-  imports: [HasuraModule, AwsModule, AddressesModule, AgentsModule],
+  imports: [
+    HasuraModule,
+    AwsModule,
+    AddressesModule,
+    AgentsModule,
+    StripePaymentsModule,
+  ],
   controllers: [UsersController],
   providers: [Auth0Service, PermissionService, AccountDeletionService],
 })

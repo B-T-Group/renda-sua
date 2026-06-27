@@ -22,6 +22,7 @@ import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -122,17 +123,28 @@ export class UsersController {
     private readonly awsService: AwsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly accountDeletionService: AccountDeletionService
+    private readonly accountDeletionService: AccountDeletionService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
 
   @Get('me')
   async getCurrentUser(@CurrentUser() auth0User: any) {
     try {
       const user = await this.hasuraUserService.getUser();
+      const country = await this.resolveUserCountry(user);
+      const isStripeEnabled = country
+        ? (await this.paymentRoutingService.resolveRailForCountry(country)) ===
+          'stripe'
+        : false;
 
       return {
         success: true,
-        user: { ...user, personas: derivePersonas(user) },
+        user: {
+          ...user,
+          personas: derivePersonas(user),
+          country,
+          is_stripe_enabled: isStripeEnabled,
+        },
         userId: this.hasuraUserService.getUserId(),
         auth0User: {
           sub: auth0User.sub,
@@ -152,6 +164,35 @@ export class UsersController {
         HttpStatus.NOT_FOUND
       );
     }
+  }
+
+  /**
+   * Resolves the user's ISO alpha-2 country from their primary address (or most
+   * recently created address), falling back to their derived persona country.
+   */
+  private async resolveUserCountry(user: {
+    id: string;
+    addresses?: Array<{
+      country?: string | null;
+      is_primary?: boolean | null;
+      created_at?: string | null;
+    }>;
+  }): Promise<string | null> {
+    const withCountry = (user.addresses ?? []).filter((a) =>
+      a?.country?.trim()
+    );
+    const primary = withCountry.find((a) => a.is_primary);
+    const mostRecent = [...withCountry].sort(
+      (a, b) =>
+        new Date(b.created_at ?? 0).getTime() -
+        new Date(a.created_at ?? 0).getTime()
+    )[0];
+    const fromAddress = (primary ?? mostRecent)?.country?.trim();
+    if (fromAddress) return fromAddress.toUpperCase();
+    const derived = await this.paymentRoutingService.getUserCountryCode(
+      user.id
+    );
+    return derived ? derived.trim().toUpperCase() : null;
   }
 
   @Post('me/personas/:persona')
