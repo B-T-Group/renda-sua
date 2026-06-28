@@ -208,6 +208,140 @@ describe('SignupService', () => {
     });
   });
 
+  describe('updateContact', () => {
+    const existingPendingUser = {
+      first_name: 'Pending',
+      last_name: 'Signup',
+      email: 'old@example.com',
+      phone_number: '+237600000001',
+      email_verified: false,
+      phone_number_verified: false,
+    };
+
+    it('requires a pending signup user id before querying Hasura', async () => {
+      await expect(
+        service.updateContact({ user_id: '', email: 'new@example.com' })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'user_id is required' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+    });
+
+    it('rejects updates that do not include a new email or phone number', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        users_by_pk: existingPendingUser,
+      });
+
+      await expect(
+        service.updateContact({ user_id: 'user-123', first_name: 'Updated' })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Email or phone number is required' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects contact updates for already verified signup users', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        users_by_pk: { ...existingPendingUser, email_verified: true },
+      });
+
+      await expect(
+        service.updateContact({ user_id: 'user-123', email: 'new@example.com' })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Account already verified' },
+          HttpStatus.CONFLICT
+        )
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects an email already owned by another user', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
+        .mockResolvedValueOnce({ users: [{ id: 'other-user' }] });
+
+      await expect(
+        service.updateContact({
+          user_id: 'user-123',
+          email: 'taken@example.com',
+        })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Email is already taken' },
+          HttpStatus.CONFLICT
+        )
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('preserves an omitted phone number when updating only email', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
+        .mockResolvedValueOnce({ users: [] });
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({
+        update_users_by_pk: {
+          ...insertedUser,
+          email: 'new@example.com',
+          phone_number: '+237600000001',
+        },
+      });
+
+      const result = await service.updateContact({
+        user_id: ' user-123 ',
+        first_name: ' Renamed ',
+        email: ' New@Example.COM ',
+      });
+
+      expect(result.user.email).toBe('new@example.com');
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('UpdateSignupContact'),
+        {
+          id: 'user-123',
+          email: 'new@example.com',
+          phone_number: '+237600000001',
+          first_name: 'Renamed',
+          last_name: 'Signup',
+        }
+      );
+    });
+
+    it('preserves an omitted email when updating only phone number', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
+        .mockResolvedValueOnce({ users: [] });
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({
+        update_users_by_pk: {
+          ...insertedUser,
+          email: 'old@example.com',
+          phone_number: '+237699999999',
+        },
+      });
+
+      await service.updateContact({
+        user_id: 'user-123',
+        phone_number: ' +237699999999 ',
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('UpdateSignupContact'),
+        {
+          id: 'user-123',
+          email: 'old@example.com',
+          phone_number: '+237699999999',
+          first_name: 'Pending',
+          last_name: 'Signup',
+        }
+      );
+    });
+  });
+
   describe('verifyOtp', () => {
     it('normalizes email before delegating OTP verification to Auth0', async () => {
       const auth0Token = {
@@ -284,6 +418,26 @@ describe('SignupService', () => {
       expect(auth0Service.verifyTestUserPhone).toHaveBeenCalledWith(
         '+23700000000'
       );
+      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
+    });
+
+    it('rejects requests that provide both email and phone number', async () => {
+      await expect(
+        service.verifyOtp({
+          email: 'new@example.com',
+          phone_number: '+237600000001',
+          otp: '123456',
+        })
+      ).rejects.toThrow(
+        new HttpException(
+          {
+            success: false,
+            error: 'Provide exactly one of email or phone_number with otp',
+          },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
       expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
     });
   });
