@@ -16,7 +16,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { AddressesService } from '../addresses/addresses.service';
+import {
+  AddressResponse,
+  AddressesService,
+} from '../addresses/addresses.service';
 import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
@@ -999,7 +1002,7 @@ export class UsersController {
         { userId: uid }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_clients_one.id,
           'client',
@@ -1034,7 +1037,7 @@ export class UsersController {
         { userId: uid, vt }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_agents_one.id,
           'agent',
@@ -1080,7 +1083,7 @@ export class UsersController {
         { userId: uid, name, mi }
       );
       if (source) {
-        await this.addressesService.seedDefaultAddressForNewPersona(
+        await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_businesses_one.id,
           'business',
@@ -1091,6 +1094,43 @@ export class UsersController {
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
+  }
+
+  private async seedAddressOrRollbackPersona(
+    userId: string,
+    entityId: string,
+    persona: PersonaId,
+    source: AddressResponse,
+    businessName?: string
+  ): Promise<void> {
+    try {
+      const args: [string, string, PersonaId, AddressResponse, string?] =
+        businessName === undefined
+          ? [userId, entityId, persona, source]
+          : [userId, entityId, persona, source, businessName];
+      await this.addressesService.seedDefaultAddressForNewPersona(...args);
+    } catch (error: any) {
+      await this.rollbackNewPersona(persona, entityId);
+      throw error;
+    }
+  }
+
+  private async rollbackNewPersona(
+    persona: PersonaId,
+    entityId: string
+  ): Promise<void> {
+    const tables: Record<PersonaId, string> = {
+      client: 'clients',
+      agent: 'agents',
+      business: 'businesses',
+    };
+    const table = tables[persona];
+    await this.hasuraSystemService.executeMutation(
+      `mutation RollbackPersona($id: uuid!) {
+        delete_${table}_by_pk(id: $id) { id }
+      }`,
+      { id: entityId }
+    );
   }
 
   private normalizeEmailForUpdate(raw?: string | null): string {
