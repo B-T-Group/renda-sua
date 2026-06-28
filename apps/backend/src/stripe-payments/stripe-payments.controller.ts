@@ -26,6 +26,7 @@ import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
 import { WithdrawStripeDto } from './dto/withdraw-stripe.dto';
 import { StripeCheckoutService } from './stripe-checkout.service';
@@ -94,6 +95,7 @@ export class StripePaymentsController {
   @HttpCode(HttpStatus.CREATED)
   async withdraw(@Body() body: WithdrawStripeDto) {
     const user = await this.hasuraUserService.getUser();
+    await this.assertAccountBelongsToUser(body.accountId, user.id);
     const result = await this.payoutService.executePayout(
       {
         amount: body.amount,
@@ -105,6 +107,22 @@ export class StripePaymentsController {
       { throwOnFailure: true }
     );
     return { success: result.success, data: result.data };
+  }
+
+  private async assertAccountBelongsToUser(
+    accountId: string,
+    userId: string
+  ): Promise<void> {
+    const result = await this.hasuraUserService.executeQuery<{
+      accounts: Array<{ id: string }>;
+    }>(GET_ACCOUNT_BY_ID_FOR_USER, { accountId, userId });
+
+    if (!result.accounts?.[0]) {
+      throw new HttpException(
+        { success: false, message: 'Account not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
   }
 
   private async resolveUserEmail(): Promise<string | undefined> {
