@@ -31,6 +31,9 @@ describe('OrdersService', () => {
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
+  let notificationsService: jest.Mocked<
+    Pick<NotificationsService, 'sendNewOrderMessagePush'>
+  >;
 
   const mockUser = {
     id: 'user-123',
@@ -124,6 +127,10 @@ describe('OrdersService', () => {
       updateOrderStatus: jest.fn(),
     };
 
+    const mockNotificationsService = {
+      sendNewOrderMessagePush: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
@@ -155,7 +162,7 @@ describe('OrdersService', () => {
         { provide: AddressesService, useValue: {} },
         { provide: MobilePaymentsService, useValue: {} },
         { provide: MobilePaymentsDatabaseService, useValue: {} },
-        { provide: NotificationsService, useValue: {} },
+        { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {} },
@@ -175,6 +182,7 @@ describe('OrdersService', () => {
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
+    notificationsService = module.get(NotificationsService);
   });
 
   describe('confirmOrder', () => {
@@ -1073,6 +1081,52 @@ describe('OrdersService', () => {
           HttpStatus.BAD_REQUEST
         )
       );
+    });
+  });
+
+  describe('createOrderMessage', () => {
+    it('notifies each other order participant once after creating a message', async () => {
+      const orderWithDuplicateRecipients = {
+        ...mockOrder,
+        business_id: 'business-123',
+        client: { user_id: 'client-456' },
+        business: { user_id: 'user-123' },
+        assigned_agent: { user_id: 'user-123' },
+      };
+      const createdMessage = {
+        id: 'message-123',
+        user: { first_name: 'Client', last_name: 'User' },
+      };
+
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: orderWithDuplicateRecipients,
+      });
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({
+        insert_user_messages_one: createdMessage,
+      });
+
+      const result = await service.createOrderMessage('order-123', ' Hello ');
+
+      expect(result).toBe(createdMessage);
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderMessage'),
+        {
+          user_id: 'client-456',
+          entity_type: 'order',
+          entity_id: 'order-123',
+          message: 'Hello',
+        }
+      );
+      expect(notificationsService.sendNewOrderMessagePush).toHaveBeenCalledTimes(
+        1
+      );
+      expect(notificationsService.sendNewOrderMessagePush).toHaveBeenCalledWith({
+        recipientUserId: 'user-123',
+        orderId: 'order-123',
+        orderNumber: 'ORD-20241201-000001',
+        senderName: 'Client User',
+      });
     });
   });
 
