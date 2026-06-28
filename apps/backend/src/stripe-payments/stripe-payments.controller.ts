@@ -32,7 +32,10 @@ import { WithdrawStripeDto } from './dto/withdraw-stripe.dto';
 import { StripeCheckoutService } from './stripe-checkout.service';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripePaymentCallbackProcessor } from './stripe-payment-callback.processor';
-import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
+import {
+  StripePaymentsDatabaseService,
+  type StripePaymentTransaction,
+} from './stripe-payments-database.service';
 import { StripePayoutService } from './stripe-payout.service';
 import { StripeService } from './stripe.service';
 
@@ -125,6 +128,19 @@ export class StripePaymentsController {
     }
   }
 
+  private async assertTransactionBelongsToUser(
+    tx: StripePaymentTransaction,
+    userId: string
+  ): Promise<void> {
+    if (!tx.account_id) {
+      throw new HttpException(
+        { success: false, message: 'Transaction not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.assertAccountBelongsToUser(tx.account_id, userId);
+  }
+
   private async resolveUserEmail(): Promise<string | undefined> {
     try {
       const user = await this.hasuraUserService.getUser();
@@ -138,6 +154,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction status (live sync)' })
   async getStatus(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -145,6 +162,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     let status = tx.status;
     if (status === 'pending' && tx.stripe_session_id) {
       const session = await this.stripeService.retrieveCheckoutSession(
@@ -163,6 +181,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a pending Stripe checkout session' })
   async cancel(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -170,6 +189,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     if (tx.status !== 'pending') {
       return { success: true, data: { status: tx.status } };
     }
@@ -186,6 +206,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by reference' })
   async getByReference(@Param('reference') reference: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionByReference(reference);
     if (!tx) {
       throw new HttpException(
@@ -193,6 +214,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     return { success: true, data: tx };
   }
 
@@ -200,6 +222,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by id' })
   async getById(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -207,6 +230,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     return { success: true, data: tx };
   }
 
@@ -219,6 +243,14 @@ export class StripePaymentsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string
   ) {
+    if (!accountId) {
+      throw new HttpException(
+        { success: false, message: 'accountId is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const user = await this.hasuraUserService.getUser();
+    await this.assertAccountBelongsToUser(accountId, user.id);
     const data = await this.databaseService.listTransactions({
       accountId,
       status,

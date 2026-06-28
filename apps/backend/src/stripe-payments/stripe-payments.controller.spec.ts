@@ -8,6 +8,10 @@ describe('StripePaymentsController', () => {
     getUser: jest.Mock;
     executeQuery: jest.Mock;
   };
+  let databaseService: {
+    getTransactionById: jest.Mock;
+    listTransactions: jest.Mock;
+  };
   let payoutService: {
     executePayout: jest.Mock;
   };
@@ -17,13 +21,17 @@ describe('StripePaymentsController', () => {
       getUser: jest.fn().mockResolvedValue({ id: 'user-123' }),
       executeQuery: jest.fn(),
     };
+    databaseService = {
+      getTransactionById: jest.fn(),
+      listTransactions: jest.fn(),
+    };
     payoutService = {
       executePayout: jest.fn(),
     };
 
     controller = new StripePaymentsController(
       {} as any,
-      {} as any,
+      databaseService as any,
       hasuraUserService as any,
       {} as any,
       {} as any,
@@ -84,6 +92,45 @@ describe('StripePaymentsController', () => {
         },
         { throwOnFailure: true }
       );
+    });
+  });
+
+  describe('getById', () => {
+    it('rejects transactions whose account is not owned by the user', async () => {
+      databaseService.getTransactionById.mockResolvedValue({
+        id: 'transaction-123',
+        account_id: 'foreign-account',
+      });
+      hasuraUserService.executeQuery.mockResolvedValue({ accounts: [] });
+
+      let error: HttpException | undefined;
+      try {
+        await controller.getById('transaction-123');
+      } catch (caught: any) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error?.getStatus()).toBe(HttpStatus.NOT_FOUND);
+      expect(hasuraUserService.executeQuery).toHaveBeenCalledWith(
+        GET_ACCOUNT_BY_ID_FOR_USER,
+        { accountId: 'foreign-account', userId: 'user-123' }
+      );
+    });
+  });
+
+  describe('list', () => {
+    it('requires accountId before listing Stripe transactions', async () => {
+      let error: HttpException | undefined;
+      try {
+        await controller.list(undefined, undefined, undefined, undefined);
+      } catch (caught: any) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error?.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(databaseService.listTransactions).not.toHaveBeenCalled();
     });
   });
 });
