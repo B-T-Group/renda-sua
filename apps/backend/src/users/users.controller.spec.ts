@@ -30,6 +30,10 @@ describe('UsersController', () => {
     resolveSourceAddressForPersonaSeed: jest.Mock;
     seedDefaultAddressForNewPersona: jest.Mock;
   };
+  let paymentRoutingService: {
+    resolveRailForCountry: jest.Mock;
+    getUserCountryCode: jest.Mock;
+  };
 
   const currentUser = {
     id: 'user-123',
@@ -57,6 +61,10 @@ describe('UsersController', () => {
       resolveSourceAddressForPersonaSeed: jest.fn().mockResolvedValue(null),
       seedDefaultAddressForNewPersona: jest.fn().mockResolvedValue(undefined),
     };
+    paymentRoutingService = {
+      resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
+      getUserCountryCode: jest.fn().mockResolvedValue(null),
+    };
     controller = new UsersController(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -64,8 +72,83 @@ describe('UsersController', () => {
       addressesService as any,
       {} as any,
       {} as any,
-      {} as any
+      {} as any,
+      {} as any,
+      paymentRoutingService as any
     );
+  });
+
+  describe('getCurrentUser', () => {
+    const auth0User = {
+      sub: 'auth0|user-123',
+      email: 'current@example.com',
+      email_verified: true,
+    };
+
+    it('uses the primary address country and exposes Stripe availability', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        client: { id: 'client-123' },
+        addresses: [
+          {
+            country: 'CA',
+            is_primary: false,
+            created_at: '2026-06-01T00:00:00Z',
+          },
+          {
+            country: ' cm ',
+            is_primary: true,
+            created_at: '2026-05-01T00:00:00Z',
+          },
+        ],
+      });
+      paymentRoutingService.resolveRailForCountry.mockResolvedValue('stripe');
+
+      await expect(controller.getCurrentUser(auth0User)).resolves.toMatchObject({
+        success: true,
+        user: {
+          id: currentUser.id,
+          personas: ['client'],
+          country: 'CM',
+          is_stripe_enabled: true,
+        },
+        userId: currentUser.id,
+        auth0User,
+      });
+      expect(paymentRoutingService.getUserCountryCode).not.toHaveBeenCalled();
+      expect(paymentRoutingService.resolveRailForCountry).toHaveBeenCalledWith(
+        'CM'
+      );
+    });
+
+    it('falls back to persona-derived country when addresses lack country', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...currentUser,
+        addresses: [
+          {
+            country: ' ',
+            is_primary: true,
+            created_at: '2026-06-01T00:00:00Z',
+          },
+        ],
+      });
+      paymentRoutingService.getUserCountryCode.mockResolvedValue(' ca ');
+
+      await expect(controller.getCurrentUser(auth0User)).resolves.toMatchObject({
+        success: true,
+        user: {
+          id: currentUser.id,
+          country: 'CA',
+          is_stripe_enabled: false,
+        },
+      });
+      expect(paymentRoutingService.getUserCountryCode).toHaveBeenCalledWith(
+        currentUser.id
+      );
+      expect(paymentRoutingService.resolveRailForCountry).toHaveBeenCalledWith(
+        'CA'
+      );
+    });
   });
 
   describe('addPersona', () => {
