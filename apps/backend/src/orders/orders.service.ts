@@ -6850,12 +6850,14 @@ export class OrdersService {
         : canPayWithWallet || isZeroOrNegativeOrder
           ? 'paid'
           : 'pending';
-    const payment_source: 'wallet' | 'mobile_payment' =
+    const payment_source: 'wallet' | 'mobile_payment' | 'credit_card' =
       paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
         ? 'mobile_payment'
         : canPayWithWallet || isZeroOrNegativeOrder
           ? 'wallet'
-          : 'mobile_payment';
+          : useStripeRail
+            ? 'credit_card'
+            : 'mobile_payment';
     const special_instructions = orderData.special_instructions || '';
     const estimated_delivery_time = null;
     const preferred_delivery_time = null;
