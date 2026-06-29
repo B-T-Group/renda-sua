@@ -1171,6 +1171,83 @@ export class OrdersController {
     return this.ordersService.claimOrderWithTopup(request, platform);
   }
 
+  @Get(':orderId/offer')
+  @ApiOperation({
+    summary: 'Get the active delivery offer for the authenticated agent',
+    description:
+      'Returns the full-screen delivery offer payload (pickup, drop-off area, distance, estimated earnings, ETA, countdown expiry) and whether the offer is still active. Re-validated server-side.',
+  })
+  @ApiParam({ name: 'orderId', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Offer details',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        active: { type: 'boolean' },
+        offer: { type: 'object', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Only agents can view offers' })
+  async getOrderOffer(@Param('orderId') orderId: string) {
+    return this.ordersService.getOrderOffer(orderId);
+  }
+
+  @Post('offer/accept')
+  @ApiOperation({
+    summary: 'Accept a delivery offer (atomic claim)',
+    description:
+      'Accepts an active delivery offer. Requires a non-expired offer, then atomically claims the order using the same funds/hold logic as the open-orders list. The first agent to accept wins; others receive 409 ALREADY_ASSIGNED.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Offer accepted and order assigned' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Offer expired (OFFER_EXPIRED) or order already assigned (ALREADY_ASSIGNED)',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Insufficient balance or permissions',
+  })
+  async acceptOrderOffer(
+    @Body() request: GetOrderRequest,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
+  ) {
+    return this.ordersService.acceptOrderOffer(request, platform);
+  }
+
+  @Post('offer/decline')
+  @ApiOperation({
+    summary: 'Decline a delivery offer',
+    description:
+      'Marks the authenticated agent\'s delivery offer as declined. The order remains available in the open-orders list.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Offer declined' })
+  @ApiResponse({ status: 403, description: 'Only agents can decline offers' })
+  async declineOrderOffer(@Body() request: GetOrderRequest) {
+    return this.ordersService.declineOrderOffer(request);
+  }
+
   @Post('cancel-claim-request')
   @ApiOperation({
     summary: 'Cancel pending claim request',

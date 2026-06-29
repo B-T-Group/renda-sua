@@ -50,6 +50,7 @@ import {
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
+import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
@@ -342,7 +343,8 @@ export class OrdersService {
     private readonly orderRefundsService: OrderRefundsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly stripeCheckoutService: StripeCheckoutService
+    private readonly stripeCheckoutService: StripeCheckoutService,
+    private readonly orderOffersService: OrderOffersService
   ) {}
 
   private requireActivePersona(
@@ -1347,28 +1349,37 @@ export class OrdersService {
       );
     }
 
-    const orderHold = await this.getOrCreateOrderHold(order.id);
-
-    await this.updateOrderHold(orderHold.id, {
-      agent_hold_amount: holdAmount,
-      agent_id: agent.id,
-    });
-
-    if (holdAmount > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: holdAmount,
-        transactionType: 'hold',
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-    }
-
+    // Atomically claim the order first so only the first agent wins the race.
+    // The hold is only registered after a successful assignment; if that fails
+    // we revert the assignment so the order returns to the open pool.
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
       agent.id,
       'assigned_to_agent'
     );
+
+    try {
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+
+      await this.updateOrderHold(orderHold.id, {
+        agent_hold_amount: holdAmount,
+        agent_id: agent.id,
+      });
+
+      if (holdAmount > 0) {
+        await this.accountsService.registerTransaction({
+          accountId: agentAccount.id,
+          amount: holdAmount,
+          transactionType: 'hold',
+          memo: `Hold for order ${order.order_number}`,
+          referenceId: order.id,
+        });
+      }
+    } catch (error) {
+      await this.revertOrderAssignment(request.orderId);
+      throw error;
+    }
+
     await this.createStatusHistoryEntry(
       request.orderId,
       'assigned_to_agent',
@@ -1376,12 +1387,92 @@ export class OrdersService {
       'agent',
       user.id
     );
+    await this.orderOffersService.handleOrderAssigned(
+      request.orderId,
+      agent.id
+    );
     return {
       success: true,
       order: updatedOrder,
       holdAmount,
       message: 'Order assigned successfully',
     };
+  }
+
+  /**
+   * Return the active delivery offer details for the authenticated agent so the
+   * mobile app can render the full-screen offer (re-validated server-side).
+   */
+  async getOrderOffer(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can view delivery offers'
+    );
+    const agent = this.requireAgentRecord(user);
+    return this.orderOffersService.getOfferDetailsForAgent(orderId, agent.id);
+  }
+
+  /**
+   * Accept a delivery offer. Requires an active (non-expired) offer, then runs
+   * the same atomic claim as the open-orders list (funds/hold included). If the
+   * order was already taken, the offer is marked expired and 409 is returned.
+   */
+  async acceptOrderOffer(request: GetOrderRequest, platformHeader?: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can accept delivery offers'
+    );
+    const agent = this.requireAgentRecord(user);
+
+    const activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+      request.orderId,
+      agent.id
+    );
+    if (!activeOffer) {
+      throw new HttpException(
+        {
+          message:
+            'This delivery offer has expired. Check the available orders list.',
+          error: 'OFFER_EXPIRED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
+    try {
+      return await this.claimOrder(request, platformHeader);
+    } catch (error: any) {
+      const responseError =
+        error instanceof HttpException
+          ? (error.getResponse() as any)?.error
+          : undefined;
+      if (responseError === 'ALREADY_ASSIGNED') {
+        await this.orderOffersService.markOfferExpired(
+          request.orderId,
+          agent.id
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Decline a delivery offer for the authenticated agent.
+   */
+  async declineOrderOffer(request: GetOrderRequest) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can decline delivery offers'
+    );
+    const agent = this.requireAgentRecord(user);
+    await this.orderOffersService.declineOffer(request.orderId, agent.id);
+    return { success: true, message: 'Offer declined' };
   }
 
   async claimOrderWithTopup(request: GetOrderRequest, platformHeader?: string) {
@@ -1444,22 +1535,31 @@ export class OrdersService {
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
     if (holdAmount === 0) {
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-      await this.updateOrderHold(orderHold.id, {
-        agent_hold_amount: 0,
-        agent_id: agent.id,
-      });
       const updatedOrder = await this.assignOrderToAgent(
         request.orderId,
         agent.id,
         'assigned_to_agent'
       );
+      try {
+        const orderHold = await this.getOrCreateOrderHold(order.id);
+        await this.updateOrderHold(orderHold.id, {
+          agent_hold_amount: 0,
+          agent_id: agent.id,
+        });
+      } catch (error) {
+        await this.revertOrderAssignment(request.orderId);
+        throw error;
+      }
       await this.createStatusHistoryEntry(
         request.orderId,
         'assigned_to_agent',
         `Order assigned to agent ${user.first_name} ${user.last_name}`,
         'agent',
         user.id
+      );
+      await this.orderOffersService.handleOrderAssigned(
+        request.orderId,
+        agent.id
       );
       return {
         success: true,
@@ -5768,6 +5868,11 @@ export class OrdersService {
         user.id
       );
 
+      await this.orderOffersService.handleOrderAssigned(
+        order.id,
+        user.agent.id
+      );
+
       this.logger.log(
         `Successfully processed claim order payment for order ${order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
       );
@@ -7457,6 +7562,12 @@ export class OrdersService {
     return result.update_order_holds_by_pk;
   }
 
+  /**
+   * Atomically assign an order to an agent. The update only succeeds when the
+   * order is still `ready_for_pickup` and has no agent assigned, so concurrent
+   * claims/offer accepts cannot both win (first successful request wins).
+   * Throws 409 ALREADY_ASSIGNED when the order was already taken.
+   */
   private async assignOrderToAgent(
     orderId: string,
     agentId: string,
@@ -7464,19 +7575,28 @@ export class OrdersService {
   ): Promise<any> {
     const mutation = `
       mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!, $status: order_status!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { 
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: "ready_for_pickup" } }
+              { assigned_agent_id: { _is_null: true } }
+            ]
+          }
+          _set: {
             current_status: $status,
             assigned_agent_id: $agentId,
             updated_at: "now()"
           }
         ) {
-          id
-          order_number
-          current_status
-          assigned_agent_id
-          updated_at
+          affected_rows
+          returning {
+            id
+            order_number
+            current_status
+            assigned_agent_id
+            updated_at
+          }
         }
       }
     `;
@@ -7485,7 +7605,54 @@ export class OrdersService {
       agentId,
       status,
     });
-    return result.update_orders_by_pk;
+    const affectedRows = result?.update_orders?.affected_rows ?? 0;
+    if (affectedRows !== 1) {
+      throw new HttpException(
+        {
+          message:
+            'This order has already been assigned to another agent. Please choose another order.',
+          error: 'ALREADY_ASSIGNED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return result.update_orders.returning[0];
+  }
+
+  /**
+   * Revert an order back to the open pool after a failed claim (e.g. the hold
+   * could not be registered). Only reverts an order that is still assigned to
+   * an agent and in `assigned_to_agent` status.
+   */
+  private async revertOrderAssignment(orderId: string): Promise<void> {
+    const mutation = `
+      mutation RevertOrderAssignment($orderId: uuid!) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: "assigned_to_agent" } }
+            ]
+          }
+          _set: {
+            current_status: "ready_for_pickup",
+            assigned_agent_id: null,
+            updated_at: "now()"
+          }
+        ) {
+          affected_rows
+        }
+      }
+    `;
+    try {
+      await this.hasuraSystemService.executeMutation(mutation, { orderId });
+    } catch (error) {
+      this.logger.error(
+        `Failed to revert order assignment for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   private async createStatusHistoryEntry(

@@ -11,6 +11,7 @@ import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module'
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
+import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
 import { OrderRefundsController } from './order-refunds.controller';
 import { OrderRefundsService } from './order-refunds.service';
@@ -43,6 +44,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderRefundsService,
     OrderStatusService,
     OrderQueueService,
+    OrderOffersService,
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
     OrderPaymentCallbackHandler,

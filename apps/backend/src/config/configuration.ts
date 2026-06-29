@@ -219,6 +219,14 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+/** Push-based delivery offers to the closest eligible agents. */
+export interface OrderOffersConfig {
+  /** Seconds an offer remains acceptable before it expires. */
+  ttlSeconds: number;
+  /** Maximum number of closest agents that receive the offer per round. */
+  maxAgents: number;
+}
+
 /** Shared secret for Lambda → Nest internal notification routes (e.g. SMS). */
 export interface NotificationsInternalConfig {
   apiKey: string;
@@ -294,6 +302,7 @@ export interface Configuration {
   deepseek: DeepseekConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
+  orderOffers: OrderOffersConfig;
   push: PushConfig;
   sms: SmsConfig;
   mtnSms: MtnSmsConfig;
@@ -574,6 +583,10 @@ export default (): Configuration => {
     },
     notificationsInternal: {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+    },
+    orderOffers: {
+      ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '30', 10),
+      maxAgents: parseInt(process.env.OFFER_MAX_AGENTS ?? '5', 10),
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

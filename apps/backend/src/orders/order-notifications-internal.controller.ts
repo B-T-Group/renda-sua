@@ -10,6 +10,7 @@ import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import type { Configuration } from '../config/configuration';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrderOffersService } from './order-offers.service';
 import { OrderStatusService } from './order-status.service';
 
 @ApiTags('Notifications')
@@ -18,6 +19,7 @@ export class OrderNotificationsInternalController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly orderStatusService: OrderStatusService,
+    private readonly orderOffersService: OrderOffersService,
     private readonly configService: ConfigService<Configuration>
   ) {}
 
@@ -84,6 +86,13 @@ export class OrderNotificationsInternalController {
         previousStatus,
         { actorUserId: body.actorUserId }
       );
+
+      // When an order becomes claimable, fan out a high-priority delivery
+      // offer to the closest eligible agents (fire-and-forget; idempotent).
+      if (orderDetails.orderStatus === 'ready_for_pickup') {
+        void this.orderOffersService.dispatchOrderOffers(orderId);
+      }
+
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

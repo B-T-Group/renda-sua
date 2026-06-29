@@ -60,6 +60,17 @@ export type {
   RentalPeriodEndedEmailPayload
 } from './notification-types';
 
+/**
+ * Optional Expo push delivery options applied per message (high-priority offers,
+ * custom sound, Android channel routing, TTL).
+ */
+export interface ExpoPushOptions {
+  priority?: 'default' | 'normal' | 'high';
+  sound?: string | null;
+  channelId?: string;
+  ttlSeconds?: number;
+}
+
 function escapeHtmlForEmail(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -1087,7 +1098,8 @@ export class NotificationsService {
     userId: string,
     title: string,
     body: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    pushOptions?: ExpoPushOptions
   ): Promise<{ webSent: number; expoSent: number }> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     if (!pushConfig?.enabled) return { webSent: 0, expoSent: 0 };
@@ -1096,9 +1108,66 @@ export class NotificationsService {
       userId,
       title,
       body,
-      data
+      data,
+      pushOptions
     );
     return { webSent, expoSent };
+  }
+
+  /**
+   * Send a high-priority "New Delivery" offer push to an agent's user.
+   * Uses the dedicated `order_offers` Android channel and a sound so it can
+   * interrupt the agent even when the app is backgrounded/locked.
+   */
+  async sendOrderOfferPush(params: {
+    userId: string;
+    title: string;
+    body: string;
+    orderId: string;
+    expiresAt: string;
+    ttlSeconds?: number;
+  }): Promise<{ webSent: number; expoSent: number }> {
+    return this.sendPushNotificationByUserId(
+      params.userId,
+      params.title,
+      params.body,
+      {
+        type: 'order_offer',
+        orderId: params.orderId,
+        expiresAt: params.expiresAt,
+      },
+      {
+        priority: 'high',
+        sound: 'default',
+        channelId: 'order_offers',
+        ttlSeconds: params.ttlSeconds,
+      }
+    );
+  }
+
+  /**
+   * Notify a previously-offered agent that the order was taken by another
+   * courier, so the app can dismiss the active offer screen.
+   */
+  async sendOrderOfferCancelledPush(params: {
+    userId: string;
+    title: string;
+    body: string;
+    orderId: string;
+  }): Promise<{ webSent: number; expoSent: number }> {
+    return this.sendPushNotificationByUserId(
+      params.userId,
+      params.title,
+      params.body,
+      {
+        type: 'order_offer_cancelled',
+        orderId: params.orderId,
+      },
+      {
+        priority: 'high',
+        channelId: 'order_offers',
+      }
+    );
   }
 
   /**
@@ -1108,7 +1177,8 @@ export class NotificationsService {
     userId: string,
     title: string,
     body: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    pushOptions?: ExpoPushOptions
   ): Promise<number> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     const tokenQuery = `
@@ -1147,6 +1217,12 @@ export class NotificationsService {
         title,
         body,
         data: data ?? {},
+        ...(pushOptions?.priority ? { priority: pushOptions.priority } : {}),
+        ...(pushOptions?.sound !== undefined ? { sound: pushOptions.sound } : {}),
+        ...(pushOptions?.channelId ? { channelId: pushOptions.channelId } : {}),
+        ...(pushOptions?.ttlSeconds !== undefined
+          ? { ttl: pushOptions.ttlSeconds }
+          : {}),
       }));
       const chunks = expo.chunkPushNotifications(messages);
       let sent = 0;
