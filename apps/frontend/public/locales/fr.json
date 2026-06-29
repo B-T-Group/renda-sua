@@ -3710,6 +3710,8 @@
       "subtitle": "Découvrez des produits incroyables d'entreprises locales",
       "title": "Parcourir les Articles",
       "heroTitle": "Achetez des produits locaux près de chez vous",
+      "agentsNearby_one": "{{count}} livreur près de chez vous",
+      "agentsNearby_other": "{{count}} livreurs près de chez vous",
       "results": {
         "loading": "Chargement des articles…",
         "none": "Aucun article à afficher",

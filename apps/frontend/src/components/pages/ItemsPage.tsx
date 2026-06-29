@@ -32,6 +32,7 @@ import {
     InventorySortMode,
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { useNearbyAgents } from '../../hooks/useNearbyAgents';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
@@ -367,6 +368,8 @@ const ItemsPage: React.FC = () => {
     profile?.client !== null &&
     profile?.client !== undefined;
 
+  const { count: nearbyAgentsCount } = useNearbyAgents(isClient);
+
   // Filter orders that require action based on user type and status
   const ordersRequiringAction = React.useMemo(() => {
     if (!orders || !profile?.user_type_id) return [];
@@ -610,7 +613,28 @@ const ItemsPage: React.FC = () => {
                     )}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                flexWrap: 'wrap',
+              }}
+            >
+              {isClient && nearbyAgentsCount > 0 && (
+                <Chip
+                  size="small"
+                  icon={<LocalShipping />}
+                  color="success"
+                  variant="filled"
+                  label={t(
+                    'public.items.agentsNearby',
+                    '{{count}} delivery agents near you',
+                    { count: nearbyAgentsCount }
+                  )}
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
               {isAuthenticated && user?.email_verified && (
                 <StatusBadge type="verified" />
               )}

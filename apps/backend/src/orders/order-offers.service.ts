@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  addressesMatchRegion,
+  haversineDistanceKm,
+} from '../common/agent-proximity.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -430,7 +434,7 @@ export class OrderOffersService {
     if (pLat == null || pLon == null || dLat == null || dLon == null) {
       return null;
     }
-    const distanceKm = this.calculateDistance(pLat, pLon, dLat, dLon);
+    const distanceKm = haversineDistanceKm(pLat, pLon, dLat, dLon);
     // Assume ~25 km/h average in-city speed plus a 10 minute handling buffer.
     return Math.round((distanceKm / 25) * 60) + 10;
   }
@@ -580,11 +584,17 @@ export class OrderOffersService {
       if (agent.status === 'suspended') continue;
       if (order.verified_agent_delivery && !agent.is_internal) continue;
 
-      if (!this.agentMatchesRegion(agent, businessCountry, businessState)) {
+      if (
+        !addressesMatchRegion(
+          agent.agent_addresses,
+          businessCountry,
+          businessState
+        )
+      ) {
         continue;
       }
 
-      const distanceKm = this.calculateDistance(
+      const distanceKm = haversineDistanceKm(
         pickupLat,
         pickupLon,
         Number(row.latitude),
@@ -600,20 +610,6 @@ export class OrderOffersService {
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
     withPushToken.sort((a, b) => a.distanceKm - b.distanceKm);
     return withPushToken.slice(0, this.maxAgents);
-  }
-
-  private agentMatchesRegion(
-    agent: NonNullable<EligibleAgentRow['agent']>,
-    businessCountry?: string | null,
-    businessState?: string | null
-  ): boolean {
-    const addresses = agent.agent_addresses ?? [];
-    if (addresses.length === 0) return false;
-    const primary =
-      addresses.find((a) => a.address?.is_primary) ?? addresses[0];
-    const country = primary.address?.country;
-    const state = primary.address?.state;
-    return country === businessCountry && state === businessState;
   }
 
   private async filterAgentsWithPushToken(
@@ -769,26 +765,4 @@ export class OrderOffersService {
     return result?.update_order_offers?.returning ?? [];
   }
 
-  private toRad(value: number): number {
-    return (value * Math.PI) / 180;
-  }
-
-  /** Haversine distance in kilometers. */
-  private calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ): number {
-    const R = 6371;
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
 }

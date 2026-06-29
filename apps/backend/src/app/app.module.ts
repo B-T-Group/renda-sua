@@ -19,6 +19,7 @@ import { BusinessItemsModule } from '../business-items/business-items.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { BusinessVerificationModule } from '../business-verification/business-verification.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { ClientsModule } from '../clients/clients.module';
 import { CollectionsModule } from '../collections/collections.module';
 import configuration from '../config/configuration';
 import { DatabaseModule } from '../database/database.module';
@@ -117,6 +118,7 @@ import { AppService } from './app.service';
     ItemViewsModule,
     SiteEventsModule,
     AgentsModule,
+    ClientsModule,
     AwsModule,
     MtnMomoModule,
     OrangeMomoModule,

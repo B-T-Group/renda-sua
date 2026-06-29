@@ -3721,6 +3721,8 @@
       "subtitle": "Discover amazing products from local businesses",
       "title": "Browse Items",
       "heroTitle": "Shop local products near you",
+      "agentsNearby_one": "{{count}} delivery agent near you",
+      "agentsNearby_other": "{{count}} delivery agents near you",
       "results": {
         "loading": "Loading items…",
         "none": "No items to show",
