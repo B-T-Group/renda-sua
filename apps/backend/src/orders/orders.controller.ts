@@ -1171,6 +1171,28 @@ export class OrdersController {
     return this.ordersService.claimOrderWithTopup(request, platform);
   }
 
+  @Get('offers/pending')
+  @ApiOperation({
+    summary: 'Get the current user\'s pending delivery offer (any persona)',
+    description:
+      'Returns the most recent active delivery offer for the authenticated user, independent of the active persona, so the app can surface a pending offer on open. Returns active=false when there is none or the user has no agent profile.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending offer details (or active=false)',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        active: { type: 'boolean' },
+        offer: { type: 'object', nullable: true },
+      },
+    },
+  })
+  async getPendingOffer() {
+    return this.ordersService.getPendingOffer();
+  }
+
   @Get(':orderId/offer')
   @ApiOperation({
     summary: 'Get the active delivery offer for the authenticated agent',

@@ -585,7 +585,7 @@ export default (): Configuration => {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
     },
     orderOffers: {
-      ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '30', 10),
+      ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '180', 10),
       maxAgents: parseInt(process.env.OFFER_MAX_AGENTS ?? '5', 10),
     },
     push: {

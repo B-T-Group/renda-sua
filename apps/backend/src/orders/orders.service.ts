@@ -1405,13 +1405,26 @@ export class OrdersService {
    */
   async getOrderOffer(orderId: string) {
     const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'agent',
-      'Only agent users can view delivery offers'
+    if (!user.agent?.id) {
+      return { success: true, active: false, offer: null };
+    }
+    return this.orderOffersService.getOfferDetailsForAgent(
+      orderId,
+      user.agent.id
     );
-    const agent = this.requireAgentRecord(user);
-    return this.orderOffersService.getOfferDetailsForAgent(orderId, agent.id);
+  }
+
+  /**
+   * Return the caller's most recent active delivery offer (across all orders),
+   * independent of the active persona, so the app can surface a pending offer
+   * on open. Returns inactive when the user has no agent profile.
+   */
+  async getPendingOffer() {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent?.id) {
+      return { success: true, active: false, offer: null };
+    }
+    return this.orderOffersService.getPendingOfferForAgent(user.agent.id);
   }
 
   /**
@@ -1465,13 +1478,10 @@ export class OrdersService {
    */
   async declineOrderOffer(request: GetOrderRequest) {
     const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'agent',
-      'Only agent users can decline delivery offers'
-    );
-    const agent = this.requireAgentRecord(user);
-    await this.orderOffersService.declineOffer(request.orderId, agent.id);
+    if (!user.agent?.id) {
+      return { success: true, message: 'Offer declined' };
+    }
+    await this.orderOffersService.declineOffer(request.orderId, user.agent.id);
     return { success: true, message: 'Offer declined' };
   }
 

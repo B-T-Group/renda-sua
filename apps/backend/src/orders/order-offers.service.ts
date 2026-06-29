@@ -51,6 +51,34 @@ interface CandidateAgent {
   distanceKm: number;
 }
 
+interface OfferAddress {
+  address_line_1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+}
+
+interface OfferRow {
+  status: string;
+  distance_km: number | string | null;
+  estimated_earnings: number | string | null;
+  currency: string | null;
+  expires_at: string;
+  order: {
+    id: string;
+    order_number: string;
+    current_status: string;
+    assigned_agent_id: string | null;
+    business?: { name?: string | null } | null;
+    business_location?: {
+      name?: string | null;
+      address?: OfferAddress | null;
+    } | null;
+    delivery_address?: OfferAddress | null;
+  } | null;
+}
+
 export interface OfferDetailsResponse {
   success: boolean;
   active: boolean;
@@ -279,7 +307,71 @@ export class OrderOffersService {
       orderId,
       agentId,
     });
-    const row = result?.order_offers?.[0];
+    return this.mapOfferRow(result?.order_offers?.[0]);
+  }
+
+  /**
+   * Returns the caller's most recent active offer (across all orders) so the
+   * app can surface a pending offer on open, regardless of active persona.
+   */
+  async getPendingOfferForAgent(agentId: string): Promise<OfferDetailsResponse> {
+    const query = `
+      query PendingOffer($agentId: uuid!, $now: timestamptz!) {
+        order_offers(
+          where: {
+            _and: [
+              { agent_id: { _eq: $agentId } }
+              { status: { _eq: "offered" } }
+              { expires_at: { _gt: $now } }
+              { order: { current_status: { _eq: "ready_for_pickup" } } }
+              { order: { assigned_agent_id: { _is_null: true } } }
+            ]
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) {
+          status
+          distance_km
+          estimated_earnings
+          currency
+          expires_at
+          order {
+            id
+            order_number
+            current_status
+            assigned_agent_id
+            business {
+              name
+            }
+            business_location {
+              name
+              address {
+                address_line_1
+                city
+                state
+                latitude
+                longitude
+              }
+            }
+            delivery_address {
+              city
+              state
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+      now: new Date().toISOString(),
+    });
+    return this.mapOfferRow(result?.order_offers?.[0]);
+  }
+
+  /** Map a raw order_offers row (with joined order) to the offer payload. */
+  private mapOfferRow(row: OfferRow | undefined): OfferDetailsResponse {
     if (!row || !row.order) {
       return { success: true, active: false, offer: null };
     }
@@ -328,8 +420,8 @@ export class OrderOffersService {
   }
 
   private estimateDeliveryMinutes(
-    pickupAddr: { latitude?: number | null; longitude?: number | null } | null,
-    dropoffAddr: { latitude?: number | null; longitude?: number | null } | null
+    pickupAddr: OfferAddress | null | undefined,
+    dropoffAddr: OfferAddress | null | undefined
   ): number | null {
     const pLat = pickupAddr?.latitude ? Number(pickupAddr.latitude) : null;
     const pLon = pickupAddr?.longitude ? Number(pickupAddr.longitude) : null;
