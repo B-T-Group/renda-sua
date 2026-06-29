@@ -5,6 +5,7 @@ import {
 } from '../common/agent-proximity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { LocationsService } from '../locations/locations.service';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 
 const MAX_NEARBY_AGENTS = 10;
@@ -14,6 +15,18 @@ interface ClientCoords {
   longitude: number;
   country: string;
   state: string;
+}
+
+interface ClientAddress {
+  id?: string | null;
+  address_line_1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  is_primary?: boolean | null;
 }
 
 interface NearbyAgentRow {
@@ -37,7 +50,8 @@ interface NearbyAgentRow {
 export class ClientsService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly locationsService: LocationsService
   ) {}
 
   /**
@@ -75,23 +89,58 @@ export class ClientsService {
     return this.toCoords(user.addresses);
   }
 
-  private toCoords(addresses: any[] | undefined): ClientCoords | null {
+  private async toCoords(
+    addresses: ClientAddress[] | undefined
+  ): Promise<ClientCoords | null> {
     const list = addresses ?? [];
     const primary = list.find((a) => a?.is_primary) ?? list[0];
-    if (
-      !primary?.latitude ||
-      !primary?.longitude ||
-      !primary?.country ||
-      !primary?.state
-    ) {
+    if (!primary?.country || !primary?.state) {
       return null;
     }
+
+    const coords = await this.resolvePrimaryCoordinates(primary);
+    if (!coords) {
+      return null;
+    }
+
     return {
-      latitude: Number(primary.latitude),
-      longitude: Number(primary.longitude),
+      latitude: coords.latitude,
+      longitude: coords.longitude,
       country: primary.country,
       state: primary.state,
     };
+  }
+
+  /**
+   * Returns the primary address coordinates, geocoding and persisting them when
+   * they are missing but the full street address is available.
+   */
+  private async resolvePrimaryCoordinates(
+    primary: ClientAddress
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    if (primary.latitude && primary.longitude) {
+      return {
+        latitude: Number(primary.latitude),
+        longitude: Number(primary.longitude),
+      };
+    }
+    if (!primary.id || !this.hasGeocodableAddress(primary)) {
+      return null;
+    }
+    return this.locationsService.ensureAddressHasCoordinates(
+      primary.id,
+      primary
+    );
+  }
+
+  private hasGeocodableAddress(address: ClientAddress): boolean {
+    return Boolean(
+      address?.address_line_1 &&
+        address?.city &&
+        address?.state &&
+        address?.country &&
+        address?.postal_code
+    );
   }
 
   private async fetchAgentLocations(): Promise<NearbyAgentRow[]> {

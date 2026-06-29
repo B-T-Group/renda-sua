@@ -52,6 +52,26 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+  - role: client
+    permission:
+      columns:
+        - agent_id
+        - latitude
+        - longitude
+        - updated_at
+      filter:
+        agent:
+          orders:
+            _and:
+              - client:
+                  user:
+                    id:
+                      _eq: X-Hasura-User-Id
+              - current_status:
+                  _in:
+                    - picked_up
+                    - in_transit
+                    - out_for_delivery
 update_permissions:
   - role: agent
     permission:

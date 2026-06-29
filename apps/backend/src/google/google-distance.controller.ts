@@ -7,6 +7,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from './google-distance.service';
 
@@ -16,6 +17,7 @@ interface DistanceMatrixRequest {
   origin_address?: string; // Pre-formatted address string (lat,lng or full address)
 }
 
+@ApiTags('google')
 @Controller('google')
 export class GoogleDistanceController {
   constructor(
@@ -163,6 +165,75 @@ export class GoogleDistanceController {
         success: false,
         error: error.message,
       };
+    }
+  }
+
+  @Get('places-autocomplete')
+  @ApiOperation({
+    summary: 'Google Places address predictions for an input string',
+  })
+  @ApiQuery({ name: 'input', description: 'Partial address text (min 3 chars)' })
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: '2-letter ISO country code to restrict predictions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of address predictions',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        predictions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              place_id: { type: 'string' },
+              description: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async placesAutocomplete(
+    @Query('input') input: string,
+    @Query('country') country?: string
+  ) {
+    if (!input || input.trim().length < 3) {
+      return { success: true, predictions: [] };
+    }
+    try {
+      const predictions = await this.googleDistanceService.placesAutocomplete(
+        input,
+        country
+      );
+      return { success: true, predictions };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Get('place-details')
+  @ApiOperation({
+    summary: 'Resolve a Google place_id into a structured address',
+  })
+  @ApiQuery({ name: 'place_id', description: 'Google Places place_id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Structured address for the place',
+  })
+  async placeDetails(@Query('place_id') placeId: string) {
+    if (!placeId || !placeId.trim()) {
+      throw new HttpException('place_id is required', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      const result = await this.googleDistanceService.placeDetails(placeId);
+      return { success: true, result };
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   }
 }

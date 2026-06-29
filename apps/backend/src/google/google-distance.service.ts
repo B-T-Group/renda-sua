@@ -10,6 +10,13 @@ export interface GeocodingResult {
   state: string;
   country: string;
   postal_code: string;
+  address_line_1?: string;
+  country_code?: string;
+}
+
+export interface PlacePrediction {
+  place_id: string;
+  description: string;
 }
 
 @Injectable()
@@ -269,13 +276,92 @@ export class GoogleDistanceService {
     }
   }
 
+  /**
+   * Google Places Autocomplete (text predictions), optionally restricted to a
+   * 2-letter country code.
+   */
+  async placesAutocomplete(
+    input: string,
+    country?: string
+  ): Promise<PlacePrediction[]> {
+    const trimmed = (input || '').trim();
+    if (trimmed.length < 3) {
+      return [];
+    }
+    const url =
+      'https://maps.googleapis.com/maps/api/place/autocomplete/json';
+    const params: Record<string, string> = { input: trimmed, key: this.apiKey };
+    if (country && country.trim().length === 2) {
+      params.components = `country:${country.trim().toLowerCase()}`;
+    }
+    try {
+      const response = await axios.get(url, { params });
+      const status = response.data.status;
+      if (status !== 'OK' && status !== 'ZERO_RESULTS') {
+        this.logger.warn(`Places autocomplete failed: ${status}`);
+        return [];
+      }
+      return (response.data.predictions || []).map((p: any) => ({
+        place_id: p.place_id,
+        description: p.description,
+      }));
+    } catch (error: any) {
+      this.logger.error(`Places autocomplete error: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Resolve a Google place_id into a structured address.
+   */
+  async placeDetails(placeId: string): Promise<GeocodingResult> {
+    const url = 'https://maps.googleapis.com/maps/api/place/details/json';
+    const params = {
+      place_id: placeId,
+      fields: 'address_component,formatted_address',
+      key: this.apiKey,
+    };
+    const response = await axios.get(url, { params });
+    if (response.data.status !== 'OK' || !response.data.result) {
+      throw new HttpException(
+        response.data.error_message || 'Google Place Details API error',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return this.parsePlaceDetails(response.data.result);
+  }
+
+  private parsePlaceDetails(result: any): GeocodingResult {
+    const components = result.address_components || [];
+    const streetNumber = this.getAddressComponent(components, [
+      'street_number',
+    ]);
+    const route = this.getAddressComponent(components, ['route']);
+    const addressLine1 = [streetNumber, route].filter(Boolean).join(' ');
+    return {
+      formatted_address: result.formatted_address || '',
+      city:
+        this.getAddressComponent(components, ['locality', 'sublocality']) || '',
+      state:
+        this.getAddressComponent(components, [
+          'administrative_area_level_1',
+        ]) || '',
+      country: this.getAddressComponent(components, ['country']) || '',
+      country_code:
+        this.getAddressComponent(components, ['country'], true) || '',
+      postal_code: this.getAddressComponent(components, ['postal_code']) || '',
+      address_line_1: addressLine1,
+    };
+  }
+
   private getAddressComponent(
     components: any[],
-    types: string[]
+    types: string[],
+    shortName = false
   ): string | null {
     for (const component of components) {
       if (component.types.some((type: string) => types.includes(type))) {
-        return component.long_name;
+        return shortName ? component.short_name : component.long_name;
       }
     }
     return null;
