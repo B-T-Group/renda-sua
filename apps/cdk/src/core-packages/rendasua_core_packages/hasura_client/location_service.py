@@ -26,7 +26,7 @@ def get_all_agent_locations(
     """
     query = """
     query GetAgentLocations {
-      agent_locations {
+      agent_locations(where: { agent: { is_available: { _eq: true } } }) {
         id
         agent_id
         latitude

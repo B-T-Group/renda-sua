@@ -33,6 +33,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         is_internal
         onboarding_complete
         status
+        is_available
         agent_code
         location_tracking_consent_ios
         location_tracking_consent_android

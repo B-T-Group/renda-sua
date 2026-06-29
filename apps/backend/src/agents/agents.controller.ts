@@ -28,6 +28,7 @@ import {
   type LocationConsentPlatform,
   UpdateLocationTrackingConsentDto,
 } from './dto/update-location-tracking-consent.dto';
+import { UpdateAgentAvailabilityDto } from './dto/update-agent-availability.dto';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -819,6 +820,63 @@ export class AgentsController {
         {
           success: false,
           error: error.message || 'Failed to update preference',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Patch('me/availability')
+  @ApiOperation({
+    summary: 'Update whether the agent is available for new orders',
+    description:
+      'Defaults to available. The agent can only become unavailable when they have no active assigned orders. When unavailable, the agent is not notified of nearby orders.',
+  })
+  @ApiBody({ type: UpdateAgentAvailabilityDto })
+  @ApiResponse({ status: 200, description: 'Availability updated' })
+  @ApiResponse({
+    status: 409,
+    description: 'Cannot become unavailable while active orders are assigned',
+  })
+  @ApiResponse({ status: 403, description: 'Not an agent' })
+  async updateAvailability(@Body() body: UpdateAgentAvailabilityDto) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+
+      if (body.available === false) {
+        const activeOrderCount =
+          await this.hasuraSystemService.countAgentActiveOrders(agentId);
+        if (activeOrderCount > 0) {
+          throw new HttpException(
+            {
+              success: false,
+              error: 'Cannot become unavailable while you have active orders',
+            },
+            HttpStatus.CONFLICT
+          );
+        }
+      }
+
+      const agent = await this.hasuraSystemService.updateAgentAvailability(
+        agentId,
+        body.available
+      );
+      if (!agent) {
+        throw new HttpException(
+          { success: false, error: 'Agent not found or could not be updated' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+      return { success: true, agent };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update availability',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

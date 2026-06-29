@@ -127,6 +127,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - is_available
         - auto_withdraw_commissions
         - location_tracking_consent_ios
         - location_tracking_consent_android
@@ -148,6 +149,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - is_available
         - auto_withdraw_commissions
       filter:
         user:
@@ -166,6 +168,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - is_available
         - auto_withdraw_commissions
       filter:
         user:
@@ -184,6 +187,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - is_available
         - auto_withdraw_commissions
       filter:
         user:

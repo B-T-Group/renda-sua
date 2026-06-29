@@ -583,6 +583,48 @@ export class HasuraSystemService {
     return result.update_agents_by_pk;
   }
 
+  async updateAgentAvailability(
+    agentId: string,
+    available: boolean
+  ): Promise<{ id: string; is_available: boolean } | null> {
+    const mutation = `
+      mutation UpdateAgentAvailability($id: uuid!, $available: Boolean!) {
+        update_agents_by_pk(
+          pk_columns: { id: $id }
+          _set: { is_available: $available }
+        ) {
+          id
+          is_available
+        }
+      }
+    `;
+    const result = await this.executeMutation<{
+      update_agents_by_pk: { id: string; is_available: boolean } | null;
+    }>(mutation, { id: agentId, available });
+    return result.update_agents_by_pk;
+  }
+
+  async countAgentActiveOrders(agentId: string): Promise<number> {
+    const query = `
+      query GetAgentActiveOrderCount($agentId: uuid!) {
+        orders_aggregate(
+          where: {
+            assigned_agent_id: { _eq: $agentId }
+            current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
+          }
+        ) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+    const result = await this.executeQuery<{
+      orders_aggregate: { aggregate: { count: number } | null } | null;
+    }>(query, { agentId });
+    return result.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
   /**
    * Get all user addresses by user ID and user type
    */
