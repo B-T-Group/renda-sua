@@ -152,6 +152,8 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     hasuraImage: string
   ): string[] {
     const isProd = props.environment === 'prod';
+    // Extract region from secret ARN (format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME)
+    const secretRegion = props.dbSecretArn.split(':')[3];
     return [
       '#!/bin/bash',
       'set -euxo pipefail',
@@ -161,9 +163,9 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'systemctl enable docker',
       'systemctl start docker',
       'mkdir -p /opt/hasura',
-      `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${props.dbSecretArn}' --query SecretString --output text --region '${this.region}')"`,
-      `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.adminSecretArn}' --query SecretString --output text --region '${this.region}')"`,
-      `JWT_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.jwtSecretArn}' --query SecretString --output text --region '${this.region}')"`,
+      `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${props.dbSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
+      `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.adminSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
+      `JWT_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.jwtSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
       // Docker --env-file requires one line per KEY=value; pretty-printed JSON breaks parsing.
       `JWT_ONE_LINE="$(printf '%s' "$JWT_SECRET" | python3 -c 'import json,sys; print(json.dumps(json.loads(sys.stdin.read())))')"`,
       'cat > /opt/hasura/.env <<EOF',
