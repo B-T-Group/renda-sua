@@ -238,8 +238,10 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const groupRails = new Map<string, 'stripe' | 'mobile_money'>();
     for (const [businessId, group] of businessMap) {
-      const rail = group.ownerId
-        ? await this.paymentRoutingService.resolveRailForUser(group.ownerId)
+      // Resolve rail from the seller's country (already on the inventory row),
+      // not via a user-level address lookup which can miss records.
+      const rail = group.sellerCountry
+        ? await this.paymentRoutingService.resolveRailForCountry(group.sellerCountry)
         : 'mobile_money';
       groupRails.set(businessId, rail);
     }
