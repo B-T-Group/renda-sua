@@ -23,8 +23,13 @@ import { ConfigurationsService } from '../admin/configurations.service';
 import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
 import { Public } from '../auth/public.decorator';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
-import type { CreateOrderRequest } from '../hasura/hasura-user.service';
+import { HasuraUserService, type CreateOrderRequest } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { CheckoutPreflightService } from './checkout-preflight.service';
+import {
+  CheckoutPreflightDto,
+  CheckoutPreflightResponseDto,
+} from './dto/checkout-preflight.dto';
 import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
@@ -49,8 +54,31 @@ export class OrdersController {
     private readonly orderStatusService: OrderStatusService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configurationsService: ConfigurationsService,
-    private readonly loyaltyService: LoyaltyService
+    private readonly loyaltyService: LoyaltyService,
+    private readonly checkoutPreflightService: CheckoutPreflightService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
+
+  // -------------------------------------------------------------------------
+  // Checkout preflight — registered BEFORE any parametric routes like /:id
+  // -------------------------------------------------------------------------
+
+  @Post('checkout/preflight')
+  @Public()
+  @Throttle({ short: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Resolve checkout method and validate cart before order creation',
+    description:
+      'Returns the authoritative checkout method (STRIPE vs MOBILE_MONEY), verification method for guests, per-seller payment rails, allowed payment timings, and any blocking errors. Works for both guest (unauthenticated) and authenticated requests. Does NOT create any orders or transactions.',
+  })
+  @ApiBody({ type: CheckoutPreflightDto })
+  @ApiResponse({ status: 200, type: CheckoutPreflightResponseDto })
+  async resolveCheckoutPreflight(
+    @Body() dto: CheckoutPreflightDto
+  ): Promise<CheckoutPreflightResponseDto> {
+    const isAuthenticated = this.hasuraUserService.isConfigured();
+    return this.checkoutPreflightService.resolve(dto, isAuthenticated);
+  }
 
   @Get('discount-codes/validate')
   @ApiOperation({ summary: 'Validate a discount code for checkout' })

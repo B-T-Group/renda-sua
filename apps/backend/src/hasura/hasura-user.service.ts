@@ -54,6 +54,12 @@ export interface CreateOrderRequest {
   discount_code?: string;
   /** Client-selected payment timing. Defaults to pay_now when omitted. */
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+  /**
+   * When set to `payment_sheet` on a Stripe-rail pay_now order, the response
+   * returns a PaymentIntent client secret for the native mobile PaymentSheet
+   * instead of a hosted Checkout URL.
+   */
+  stripe_payment_method?: 'payment_sheet';
   delivery_window?: {
     slot_id: string;
     preferred_date: string;

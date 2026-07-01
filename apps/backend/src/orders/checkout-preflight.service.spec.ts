@@ -1,0 +1,353 @@
+/**
+ * Unit tests for CheckoutPreflightService
+ *
+ * These tests verify that:
+ *  - EMAIL verification is returned for Stripe seller groups
+ *  - PHONE verification is returned for Mobile Money seller groups
+ *  - Seller/business-owner rail is the authoritative checkout method
+ *    (not buyer /stripe-connect/status)
+ *  - Item country vs guest country mismatch is blocked
+ *  - Delivery country mismatch is blocked
+ *  - Mixed-country carts are blocked
+ *  - Missing payment capabilities are blocked
+ */
+import { Test, TestingModule } from '@nestjs/testing';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { CheckoutPreflightService } from './checkout-preflight.service';
+import {
+  CheckoutMethod,
+  CheckoutPreflightDto,
+  VerificationMethod,
+} from './dto/checkout-preflight.dto';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeInventoryRow(overrides: {
+  id?: string;
+  businessId?: string;
+  ownerUserId?: string;
+  sellerCountry?: string;
+  businessName?: string;
+  currency?: string;
+  payOnDelivery?: boolean;
+  payAtPickup?: boolean;
+  available?: number;
+  price?: number;
+  itemName?: string;
+} = {}) {
+  return {
+    id: overrides.id ?? 'inv-1',
+    selling_price: overrides.price ?? 1000,
+    computed_available_quantity: overrides.available ?? 10,
+    is_active: true,
+    business_location: {
+      business_id: overrides.businessId ?? 'biz-1',
+      business: {
+        id: overrides.businessId ?? 'biz-1',
+        name: overrides.businessName ?? 'Test Business',
+        user: { id: overrides.ownerUserId ?? 'owner-1' },
+      },
+      address: { country: overrides.sellerCountry ?? 'CM' },
+    },
+    item: {
+      id: 'item-1',
+      name: overrides.itemName ?? 'Test Item',
+      currency: overrides.currency ?? 'XAF',
+      weight: 0,
+      max_order_quantity: null,
+      pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
+      pay_at_pickup_enabled: overrides.payAtPickup ?? false,
+      item_variants: [],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
+
+describe('CheckoutPreflightService', () => {
+  let service: CheckoutPreflightService;
+  let hasuraSystemService: jest.Mocked<HasuraSystemService>;
+  let hasuraUserService: jest.Mocked<HasuraUserService>;
+  let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
+  let mobilePaymentsService: jest.Mocked<MobilePaymentsService>;
+  let loyaltyService: jest.Mocked<LoyaltyService>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutPreflightService,
+        {
+          provide: HasuraSystemService,
+          useValue: {
+            executeQuery: jest.fn(),
+            getAccount: jest.fn().mockResolvedValue({ available_balance: 0 }),
+          },
+        },
+        {
+          provide: HasuraUserService,
+          useValue: {
+            isConfigured: jest.fn().mockReturnValue(false),
+            getUser: jest.fn(),
+          },
+        },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+            resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
+          },
+        },
+        {
+          provide: MobilePaymentsService,
+          useValue: {
+            getProvider: jest.fn().mockReturnValue('freemopay'),
+          },
+        },
+        {
+          provide: LoyaltyService,
+          useValue: {
+            validateDiscountCode: jest.fn().mockResolvedValue({ valid: false }),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<CheckoutPreflightService>(CheckoutPreflightService);
+    hasuraSystemService = module.get(HasuraSystemService);
+    hasuraUserService = module.get(HasuraUserService);
+    paymentRoutingService = module.get(PaymentRoutingService);
+    mobilePaymentsService = module.get(MobilePaymentsService);
+    loyaltyService = module.get(LoyaltyService);
+  });
+
+  function mockInventory(rows: ReturnType<typeof makeInventoryRow>[]) {
+    (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+      (query: string) => {
+        if (query.includes('GetInventoryForPreflight')) {
+          return Promise.resolve({ business_inventory: rows });
+        }
+        if (query.includes('GetAddressCountry')) {
+          return Promise.resolve({ addresses_by_pk: null });
+        }
+        return Promise.resolve({});
+      }
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 1. Returns EMAIL + STRIPE for Stripe seller/order groups
+  // -------------------------------------------------------------------------
+  it('returns EMAIL verification and STRIPE checkout method for Stripe seller groups', async () => {
+    mockInventory([makeInventoryRow({ ownerUserId: 'owner-ca', sellerCountry: 'CA' })]);
+    (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CA',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
+    expect(result.verification_method).toBe(VerificationMethod.EMAIL);
+    expect(result.can_proceed).toBe(true);
+    expect(result.blocking_errors).toHaveLength(0);
+    expect(result.groups[0].payment_rail).toBe('stripe');
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. Returns PHONE + MOBILE_MONEY for Mobile Money seller groups
+  // -------------------------------------------------------------------------
+  it('returns PHONE verification and MOBILE_MONEY checkout method for MM seller groups', async () => {
+    mockInventory([makeInventoryRow({ ownerUserId: 'owner-cm', sellerCountry: 'CM' })]);
+    (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('mobile_money');
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.checkout_method).toBe(CheckoutMethod.MOBILE_MONEY);
+    expect(result.verification_method).toBe(VerificationMethod.PHONE);
+    expect(result.can_proceed).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. Uses SELLER rail (not buyer rail) as authoritative checkout method
+  // -------------------------------------------------------------------------
+  it('uses seller/business-owner rail as the authoritative checkout method, not buyer rail', async () => {
+    // Seller is in a Stripe country
+    mockInventory([makeInventoryRow({ ownerUserId: 'owner-ca', sellerCountry: 'CA' })]);
+    (paymentRoutingService.resolveRailForUser as jest.Mock)
+      .mockImplementation((userId: string) => {
+        if (userId === 'owner-ca') return Promise.resolve('stripe');
+        // Buyer rail would be mobile_money (if this were checked)
+        return Promise.resolve('mobile_money');
+      });
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CA',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    // Seller is Stripe ? checkout is Stripe, regardless of buyer rail
+    expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
+    expect(result.verification_method).toBe(VerificationMethod.EMAIL);
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. Blocks item country vs guest country mismatch
+  // -------------------------------------------------------------------------
+  it('blocks checkout when guest shopping country does not match seller country', async () => {
+    mockInventory([makeInventoryRow({ sellerCountry: 'CM' })]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CA', // guest is in Canada, item is in Cameroon
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find(
+      (e) => e.code === 'UNSUPPORTED_COUNTRY_COMBINATION'
+    );
+    expect(blocker).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. Blocks delivery country mismatch
+  // -------------------------------------------------------------------------
+  it('blocks checkout when delivery address country does not match seller country', async () => {
+    mockInventory([makeInventoryRow({ sellerCountry: 'CM' })]);
+    (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+      (query: string) => {
+        if (query.includes('GetInventoryForPreflight')) {
+          return Promise.resolve({ business_inventory: [makeInventoryRow({ sellerCountry: 'CM' })] });
+        }
+        if (query.includes('GetAddressCountry')) {
+          return Promise.resolve({ addresses_by_pk: { country: 'CA' } });
+        }
+        return Promise.resolve({});
+      }
+    );
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      delivery_address_id: 'addr-canada',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find(
+      (e) => e.code === 'DELIVERY_COUNTRY_MISMATCH'
+    );
+    expect(blocker).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Blocks mixed-country carts
+  // -------------------------------------------------------------------------
+  it('blocks checkout for mixed-country carts', async () => {
+    const row1 = makeInventoryRow({ id: 'inv-1', businessId: 'biz-1', sellerCountry: 'CM', ownerUserId: 'owner-1' });
+    const row2 = makeInventoryRow({ id: 'inv-2', businessId: 'biz-2', sellerCountry: 'CA', ownerUserId: 'owner-2' });
+    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
+      business_inventory: [row1, row2],
+    });
+
+    const dto: CheckoutPreflightDto = {
+      items: [
+        { business_inventory_id: 'inv-1', quantity: 1 },
+        { business_inventory_id: 'inv-2', quantity: 1 },
+      ],
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find((e) => e.code === 'MIXED_COUNTRY_CART');
+    expect(blocker).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. Missing payment capability (inventory not found)
+  // -------------------------------------------------------------------------
+  it('blocks checkout when inventory items are not found', async () => {
+    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
+      business_inventory: [],
+    });
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'non-existent', quantity: 1 }],
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find(
+      (e) => e.code === 'INVENTORY_NOT_FOUND'
+    );
+    expect(blocker).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Returns can_proceed = false on inventory fetch failure
+  // -------------------------------------------------------------------------
+  it('returns can_proceed false when inventory fetch throws', async () => {
+    (hasuraSystemService.executeQuery as jest.Mock).mockRejectedValue(
+      new Error('Network error')
+    );
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.success).toBe(true);
+    expect(result.can_proceed).toBe(false);
+    expect(result.blocking_errors[0]?.code).toBe('INVENTORY_FETCH_FAILED');
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Pay at delivery not allowed for Stripe rail
+  // -------------------------------------------------------------------------
+  it('blocks pay_at_delivery for Stripe-rail sellers', async () => {
+    const row = makeInventoryRow({
+      sellerCountry: 'CA',
+      ownerUserId: 'owner-ca',
+      payOnDelivery: true,
+    });
+    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
+      business_inventory: [row],
+    });
+    (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CA',
+      payment_timing: 'pay_at_delivery',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find(
+      (e) => e.code === 'PAY_AT_DELIVERY_STRIPE_NOT_SUPPORTED'
+    );
+    expect(blocker).toBeDefined();
+  });
+});

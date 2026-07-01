@@ -8,6 +8,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
@@ -48,6 +49,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
     OrderPaymentCallbackHandler,
+    CheckoutPreflightService,
   ],
   exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler],
 })
