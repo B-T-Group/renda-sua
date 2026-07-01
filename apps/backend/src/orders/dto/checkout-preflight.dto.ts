@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsBoolean,
-  IsEnum,
   IsIn,
   IsISO31661Alpha2,
   IsNotEmpty,

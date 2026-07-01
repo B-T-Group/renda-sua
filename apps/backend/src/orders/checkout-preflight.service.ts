@@ -273,7 +273,6 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     // 7. Build per-group summaries
     // -----------------------------------------------------------------------
-    const now = new Date().toISOString();
     const groups: CheckoutGroupDto[] = [];
     let requiresPaymentPhoneOverall = false;
 
