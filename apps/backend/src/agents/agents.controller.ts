@@ -452,6 +452,19 @@ export class AgentsController {
         }
       `;
 
+      // 3c) Agent personal wallet currency (account with no business_location)
+      const agentWalletCurrencyQuery = `
+        query GetAgentWalletCurrency($agentUserId: uuid!) {
+          accounts(
+            where: { user_id: { _eq: $agentUserId }, business_location_id: { _is_null: true } }
+            order_by: { created_at: asc }
+            limit: 1
+          ) {
+            currency
+          }
+        }
+      `;
+
       // 4) Active order count (in-progress statuses)
       const activeCountQuery = `
         query GetAgentActiveOrderCount($agentId: uuid!) {
@@ -473,6 +486,7 @@ export class AgentsController {
         recentDeliveredResult,
         activeCountResult,
         agentDepositsResult,
+        agentWalletResult,
       ] = await Promise.all([
         this.hasuraSystemService.executeQuery(deliveredTodayQuery, {
           agentUserId,
@@ -488,6 +502,9 @@ export class AgentsController {
         this.hasuraSystemService.executeQuery(agentDepositsQuery, {
           agentUserId,
         }),
+        this.hasuraSystemService.executeQuery(agentWalletCurrencyQuery, {
+          agentUserId,
+        }),
       ]);
 
       const deliveredTodayHistoryRows =
@@ -499,17 +516,24 @@ export class AgentsController {
       const depositTransactions: Array<{ amount: number; memo: string | null }> =
         agentDepositsResult.account_transactions || [];
 
+      // Wallet currency is the canonical currency for this agent (set at account creation
+      // and reflects their country/payment rail). Fall back to the first delivered order's
+      // currency only when no wallet account exists yet.
+      const walletCurrency: string =
+        (agentWalletResult.accounts?.[0]?.currency as string | undefined) ?? '';
+
       const seenTodayOrderIds = new Set<string>();
       const todayOrderNumbers: string[] = [];
-      let currency = 'XAF';
+      let orderCurrency = 'XAF';
       for (const row of deliveredTodayHistoryRows) {
         if (seenTodayOrderIds.has(row.order_id)) continue;
         seenTodayOrderIds.add(row.order_id);
         const orderNumber = row.order?.order_number;
         if (orderNumber) todayOrderNumbers.push(orderNumber);
-        if (row.order?.currency && currency === 'XAF')
-          currency = row.order.currency;
+        if (row.order?.currency && orderCurrency === 'XAF')
+          orderCurrency = row.order.currency;
       }
+      const currency = walletCurrency || orderCurrency;
       const todayDeliveryCount = seenTodayOrderIds.size;
       const todayEarnings = todayOrderNumbers.reduce(
         (sum, orderNumber) =>
