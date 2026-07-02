@@ -247,6 +247,12 @@ export interface SmsConfig {
   twilioPhoneNumber: string;
 }
 
+export interface TwilioVerifyConfig {
+  accountSid: string;
+  authToken: string;
+  serviceSid: string;
+}
+
 /** MTN SMS v3 API (api.mtn.com) — OAuth + short code from opco. */
 export interface MtnSmsConfig {
   clientId: string;
@@ -305,6 +311,7 @@ export interface Configuration {
   orderOffers: OrderOffersConfig;
   push: PushConfig;
   sms: SmsConfig;
+  twilioVerify: TwilioVerifyConfig;
   mtnSms: MtnSmsConfig;
   orangeSms: OrangeSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
@@ -599,6 +606,11 @@ export default (): Configuration => {
       twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
       twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
       twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER ?? '',
+    },
+    twilioVerify: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+      authToken: process.env.TWILIO_ACCOUNT_TOKEN ?? '',
+      serviceSid: process.env.TWILIO_VERIFY_SERVICE_SID ?? '',
     },
     mtnSms: {
       clientId: process.env.MTN_SMS_CLIENT_ID ?? '',

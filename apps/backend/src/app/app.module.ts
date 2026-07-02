@@ -53,6 +53,7 @@ import { ServicesModule } from '../services/services.module';
 import { SmsModule } from '../sms/sms.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
 import { SupportModule } from '../support/support.module';
+import { TwilioVerifyModule } from '../twilio-verify/twilio-verify.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
 import { AppController } from './app.controller';
@@ -138,6 +139,7 @@ import { AppService } from './app.service';
     DashboardModule,
     DeliveryModule,
     SupportModule,
+    TwilioVerifyModule,
   ],
   controllers: [
     AppController,
