@@ -1,0 +1,10 @@
+table:
+  name: message_recipients
+  schema: public
+object_relationships:
+  - name: message
+    using:
+      foreign_key_constraint_on: message_id
+  - name: recipient_user
+    using:
+      foreign_key_constraint_on: recipient_user_id

@@ -2470,6 +2470,16 @@
     "orderStartPreparingSuccess": "Order preparation started successfully",
     "orderStatusUpdateError": "Failed to update order status",
     "orderStatusUpdated": "Order status updated to ${pendingAction.label}",
+    "collapse": "Collapse messages",
+    "expand": "Expand messages",
+    "mentionAriaLabel": "Mention {{name}}, {{persona}}",
+    "mentionInvalidSelf": "You cannot mention yourself",
+    "mentionInvalidNotParticipant": "This user is not a participant of this order",
+    "mentionInvalidPersona": "You cannot mention this participant",
+    "mentionNoResults": "No one to mention yet",
+    "mentionPlaceholder": "Type your message... Use @ to mention",
+    "mentionSomeone": "Mention someone",
+    "mentionedYou": "{{name}} mentioned you in Order {{orderNumber}}",
     "placeholder": "Type your message...",
     "send": "Send",
     "sending": "Sending...",
@@ -2702,13 +2712,37 @@
       "overwriteLabel": "Or overwrite code",
       "enterPinOrOverwrite": "Enter the 4-digit PIN from the client or the overwrite code from the business.",
       "enterOneOnly": "Enter either the PIN or the overwrite code, not both.",
-      "submit": "Complete delivery"
+      "submit": "Complete delivery",
+      "resolvingPin": "Looking for shared delivery PIN…",
+      "usingSharedPin": "Using the delivery PIN shared by the client in order chat.",
+      "enterManually": "Enter PIN manually instead"
     },
     "deliveryPin": {
       "title": "Delivery PIN",
       "viewPin": "View delivery PIN",
       "shareWithAgent": "Share this PIN with your delivery agent. They will enter it to complete the delivery.",
       "unavailable": "Delivery PIN is no longer available (already viewed or expired)."
+    },
+    "messaging": {
+      "deliveryPin": {
+        "sendPin": "Send delivery PIN",
+        "sendA11y": "Send delivery PIN to assigned agent",
+        "sendSuccess": "Delivery PIN sent to your agent in the order chat.",
+        "sentConfirmation": "PIN shared in order chat. Your agent will be notified.",
+        "resend": "Send again",
+        "resendCooldown": "You can send again in {{seconds}}s",
+        "title": "Delivery PIN",
+        "shared": "Delivery PIN sent to {{agentName}}",
+        "cardA11y": "Delivery PIN message",
+        "pinA11y": "Delivery PIN {{pin}}",
+        "active": "Active",
+        "superseded": "Superseded",
+        "revoked": "No longer valid",
+        "maskedActive": "Delivery PIN shared with {{agent}}",
+        "maskedInactive": "Delivery PIN (hidden)",
+        "sharedTo": "Shared with {{name}}",
+        "agentNoPin": "The client has not shared a delivery PIN in the order chat yet. Ask them to tap Send delivery PIN, or enter the PIN manually below."
+      }
     },
     "overwriteCode": {
       "button": "Generate overwrite code",

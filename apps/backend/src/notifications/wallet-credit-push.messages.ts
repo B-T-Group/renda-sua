@@ -100,3 +100,43 @@ export function buildBusinessOrderCreatedPushMessage(params: {
     body: `Order ${params.orderNumber} from ${client}`,
   };
 }
+
+export function buildMentionPushMessage(params: {
+  orderNumber: string;
+  senderName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const sender =
+    params.senderName?.trim() || (locale === 'fr' ? 'Quelqu'un' : 'Someone');
+  if (locale === 'fr') {
+    return {
+      title: `Vous avez été mentionné · Commande ${params.orderNumber}`,
+      body: `${sender} vous a mentionné dans la commande ${params.orderNumber}`,
+    };
+  }
+  return {
+    title: `You were mentioned · Order ${params.orderNumber}`,
+    body: `${sender} mentioned you in Order ${params.orderNumber}`,
+  };
+}
+
+export function buildDeliveryPinSharedPushMessage(params: {
+  orderNumber: string;
+  senderName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const sender =
+    params.senderName?.trim() || (locale === 'fr' ? 'Le client' : 'The client');
+  if (locale === 'fr') {
+    return {
+      title: 'Code PIN de livraison partagé',
+      body: `${sender} a partagé le code PIN de livraison pour la commande ${params.orderNumber}`,
+    };
+  }
+  return {
+    title: 'Delivery PIN shared',
+    body: `${sender} shared the delivery PIN for order ${params.orderNumber}`,
+  };
+}

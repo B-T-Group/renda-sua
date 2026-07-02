@@ -1,40 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { DeliveryPinStorageService } from './delivery-pin-storage.service';
 
-const PIN_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days; cleared when order is completed
 const MAX_PIN_ATTEMPTS = 3;
-
-interface CacheEntry {
-  pin: string;
-  expiresAt: number;
-}
 
 @Injectable()
 export class DeliveryPinService {
-  private readonly pinCache = new Map<string, CacheEntry>();
+  constructor(private readonly storage: DeliveryPinStorageService) {}
 
-  /**
-   * Generate a random 4-digit PIN (e.g. "0123" to "9999")
-   */
   generatePin(): string {
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    return pin;
+    return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-  /**
-   * Hash PIN with order-scoped salt (orderId). SHA-256.
-   */
   hashPin(orderId: string, pin: string): string {
-    const salt = orderId;
     return crypto
       .createHash('sha256')
-      .update(salt + pin, 'utf8')
+      .update(orderId + pin, 'utf8')
       .digest('hex');
   }
 
-  /**
-   * Verify PIN against stored hash.
-   */
   verifyPin(orderId: string, pin: string, hash: string): boolean {
     if (!hash || !pin) return false;
     const computed = this.hashPin(orderId, pin);
@@ -44,9 +28,6 @@ export class DeliveryPinService {
     );
   }
 
-  /**
-   * Hash overwrite code (same pattern as PIN).
-   */
   hashOverwriteCode(orderId: string, code: string): string {
     return crypto
       .createHash('sha256')
@@ -54,11 +35,7 @@ export class DeliveryPinService {
       .digest('hex');
   }
 
-  verifyOverwriteCode(
-    orderId: string,
-    code: string,
-    hash: string
-  ): boolean {
+  verifyOverwriteCode(orderId: string, code: string, hash: string): boolean {
     if (!hash || !code) return false;
     const computed = this.hashOverwriteCode(orderId, code);
     return crypto.timingSafeEqual(
@@ -67,43 +44,24 @@ export class DeliveryPinService {
     );
   }
 
-  /**
-   * Store plain PIN in memory for client retrieval. Cleared when order is completed (not on first get).
-   */
-  setPinForClient(orderId: string, pin: string): void {
-    this.pinCache.set(orderId, {
-      pin,
-      expiresAt: Date.now() + PIN_CACHE_TTL_MS,
-    });
+  async setPinForClient(orderId: string, pin: string): Promise<void> {
+    await this.storage.persistEncryptedPin(orderId, pin);
   }
 
-  /**
-   * Retrieve PIN for client (multiple retrievals allowed). Returns null if not found or expired.
-   * PIN is only cleared when order is completed via clearPinForOrder.
-   */
-  getPinForClient(orderId: string): string | null {
-    this.cleanExpired();
-    const entry = this.pinCache.get(orderId);
-    if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
-      this.pinCache.delete(orderId);
-      return null;
-    }
-    return entry.pin;
+  async getPinForClient(orderId: string): Promise<string | null> {
+    return this.storage.getPin(orderId);
   }
 
-  /**
-   * Clear stored PIN for an order (call when order is completed so PIN is no longer available).
-   */
-  clearPinForOrder(orderId: string): void {
-    this.pinCache.delete(orderId);
+  async clearPinForOrder(orderId: string): Promise<void> {
+    await this.storage.clearPersistedPin(orderId);
   }
 
-  private cleanExpired(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.pinCache.entries()) {
-      if (now > entry.expiresAt) this.pinCache.delete(key);
-    }
+  encryptPinForMessage(pin: string): string {
+    return this.storage.encryptForPayload(pin);
+  }
+
+  decryptPinFromMessage(ciphertext: string): string | null {
+    return this.storage.decryptFromPayload(ciphertext);
   }
 
   getMaxPinAttempts(): number {

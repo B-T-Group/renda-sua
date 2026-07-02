@@ -49,6 +49,8 @@ export interface CompleteDeliveryRequest {
   orderId: string;
   pin?: string;
   overwriteCode?: string;
+  pinMessageId?: string;
+  useLatestSharedPin?: boolean;
 }
 
 export interface ConfirmOrderData {
@@ -926,6 +928,50 @@ export const useBackendOrders = () => {
     return response.data;
   };
 
+  const sendDeliveryPin = async (orderId: string): Promise<void> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.post<{ success: boolean }>(
+      `/orders/${orderId}/messages/delivery-pin`,
+      {}
+    );
+
+    if (!response.data?.success) {
+      throw new Error('Failed to send delivery PIN');
+    }
+  };
+
+  const getActiveDeliveryPin = async (
+    orderId: string
+  ): Promise<{
+    messageId: string;
+    pin: string;
+    pinVersion: number;
+    sharedAt: string;
+  } | null> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.get<{
+      success: boolean;
+      activePin: {
+        messageId: string;
+        pin: string;
+        pinVersion: number;
+        sharedAt: string;
+      } | null;
+    }>(`/orders/${orderId}/messages/active-delivery-pin`);
+
+    return response.data?.activePin ?? null;
+  };
+
   const generateDeliveryOverwriteCode = async (
     orderId: string
   ): Promise<{ overwriteCode: string }> => {
@@ -981,6 +1027,8 @@ export const useBackendOrders = () => {
     markPaidInCashException,
     reconcileCashException,
     getDeliveryPin,
+    sendDeliveryPin,
+    getActiveDeliveryPin,
     generateDeliveryOverwriteCode,
 
     loading: false, // Loading is now handled globally

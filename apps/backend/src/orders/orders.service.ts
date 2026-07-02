@@ -50,6 +50,7 @@ import {
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
+import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
@@ -112,6 +113,8 @@ export interface CompleteDeliveryRequest {
   orderId: string;
   pin?: string;
   overwriteCode?: string;
+  pinMessageId?: string;
+  useLatestSharedPin?: boolean;
 }
 
 /** order_holds row including settlement timestamps (GraphQL schema after migration). */
@@ -340,6 +343,7 @@ export class OrdersService {
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryPinService: DeliveryPinService,
+    private readonly deliveryPinShareService: DeliveryPinShareService,
     private readonly orderRefundsService: OrderRefundsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly paymentRoutingService: PaymentRoutingService,
@@ -2003,15 +2007,38 @@ export class OrdersService {
       'Only agent users can complete delivery'
     );
     const agent = this.requireAgentRecord(user);
-    const hasPin = !!request.pin?.trim();
+    let pinToUse = request.pin?.trim();
     const hasOverwrite = !!request.overwriteCode?.trim();
+    const hasPin = !!pinToUse;
     if (!hasPin && !hasOverwrite) {
+      if (request.useLatestSharedPin || request.pinMessageId) {
+        const resolved = await this.deliveryPinShareService.resolvePinForCompletion(
+          request.orderId,
+          user.id,
+          {
+            pinMessageId: request.pinMessageId,
+            useLatestSharedPin: request.useLatestSharedPin,
+          }
+        );
+        if (resolved) {
+          pinToUse = resolved.pin;
+          request.pinMessageId = resolved.messageId;
+        } else if (request.useLatestSharedPin) {
+          throw new HttpException(
+            'No valid delivery PIN found in the order chat. Ask the client to send the delivery PIN.',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
+    }
+    const hasResolvedPin = !!pinToUse;
+    if (!hasResolvedPin && !hasOverwrite) {
       throw new HttpException(
         'Either pin or overwriteCode is required',
         HttpStatus.BAD_REQUEST
       );
     }
-    if (hasPin && hasOverwrite) {
+    if (hasResolvedPin && hasOverwrite) {
       throw new HttpException(
         'Provide either pin or overwriteCode, not both',
         HttpStatus.BAD_REQUEST
@@ -2045,7 +2072,7 @@ export class OrdersService {
 
     const attempts = (order as any).delivery_pin_attempts ?? 0;
     if (attempts >= this.deliveryPinService.getMaxPinAttempts()) {
-      if (hasPin) {
+      if (hasResolvedPin) {
         throw new HttpException(
           'Maximum PIN attempts reached for this order. Use an overwrite code from the business if available.',
           HttpStatus.FORBIDDEN
@@ -2053,7 +2080,7 @@ export class OrdersService {
       }
     }
 
-    if (hasPin) {
+    if (hasResolvedPin) {
       const hash = (order as any).delivery_pin_hash;
       if (!hash) {
         throw new HttpException(
@@ -2063,7 +2090,7 @@ export class OrdersService {
       }
       const valid = this.deliveryPinService.verifyPin(
         request.orderId,
-        request.pin!,
+        pinToUse!,
         hash
       );
       if (!valid) {
@@ -2110,12 +2137,25 @@ export class OrdersService {
     await this.createStatusHistoryEntry(
       request.orderId,
       'complete',
-      hasPin
+      hasResolvedPin
         ? 'Order completed by agent (PIN verified)'
         : 'Order completed by agent (overwrite code used)',
       'agent',
       user.id
     );
+
+    if (request.pinMessageId && hasResolvedPin) {
+      try {
+        await this.deliveryPinShareService.markPinConsumed(
+          request.orderId,
+          request.pinMessageId
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to mark PIN message consumed: ${error?.message}`
+        );
+      }
+    }
 
     try {
       const orderItems = order.order_items || [];
@@ -2145,7 +2185,7 @@ export class OrdersService {
       );
     }
 
-    this.deliveryPinService.clearPinForOrder(order.id);
+    await this.deliveryPinService.clearPinForOrder(order.id);
 
     return {
       success: true,
@@ -3282,22 +3322,20 @@ export class OrdersService {
         HttpStatus.GONE
       );
     }
-    let pin = this.deliveryPinService.getPinForClient(orderId);
+    const pin = await this.deliveryPinService.getPinForClient(orderId);
     if (!pin) {
       const orderHasPinFlow = !!(order as { delivery_pin_hash?: string })
         ?.delivery_pin_hash;
       if (orderHasPinFlow) {
-        pin = this.deliveryPinService.generatePin();
-        const deliveryPinHash = this.deliveryPinService.hashPin(orderId, pin);
-        await this.setOrderDeliveryPinHash(orderId, deliveryPinHash);
-        await this.resetOrderDeliveryPinAttempts(orderId);
-        this.deliveryPinService.setPinForClient(orderId, pin);
-      } else {
         throw new HttpException(
-          'Delivery PIN is not available. If the order was just paid, try again in a moment.',
-          HttpStatus.NOT_FOUND
+          'Delivery PIN is temporarily unavailable. Please try again in a moment.',
+          HttpStatus.SERVICE_UNAVAILABLE
         );
       }
+      throw new HttpException(
+        'Delivery PIN is not available. If the order was just paid, try again in a moment.',
+        HttpStatus.NOT_FOUND
+      );
     }
     return { pin };
   }
@@ -5746,7 +5784,7 @@ export class OrdersService {
     const deliveryPinHash =
       this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
-    this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
 
     try {
       const notificationsEnabled =

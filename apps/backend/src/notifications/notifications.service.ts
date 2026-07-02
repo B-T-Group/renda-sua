@@ -41,7 +41,9 @@ import {
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildBusinessOrderCreatedPushMessage,
+  buildMentionPushMessage,
   buildNewOrderMessagePushMessage,
+  buildDeliveryPinSharedPushMessage,
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
@@ -278,6 +280,7 @@ export class NotificationsService {
     orderId: string;
     orderNumber: string;
     senderName: string;
+    messageId?: string;
   }): Promise<void> {
     const recipientUserId = params.recipientUserId?.trim();
     if (!recipientUserId) return;
@@ -295,11 +298,83 @@ export class NotificationsService {
         url: `/orders/${params.orderId}`,
         orderId: params.orderId,
         orderNumber: params.orderNumber,
-        event: 'order_message',
+        messageId: params.messageId,
+        type: 'order_message',
       });
     } catch (error: any) {
       this.logger.warn(
         `sendNewOrderMessagePush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendMentionPush(params: {
+    recipientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    senderName: string;
+    messageId?: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildMentionPushMessage({
+      orderNumber: params.orderNumber,
+      senderName: params.senderName,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        messageId: params.messageId,
+        type: 'order_message_mention',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendMentionPush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendDeliveryPinSharedPush(params: {
+    recipientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    senderName: string;
+    messageId?: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildDeliveryPinSharedPushMessage({
+      orderNumber: params.orderNumber,
+      senderName: params.senderName,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    const highlight = params.messageId ?? '';
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/orders/${params.orderId}?messages=1&highlight=${highlight}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        messageId: params.messageId,
+        type: 'order_delivery_pin_shared',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendDeliveryPinSharedPush failed for order ${params.orderNumber}: ${
           error?.message ?? String(error)
         }`
       );

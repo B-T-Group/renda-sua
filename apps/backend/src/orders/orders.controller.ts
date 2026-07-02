@@ -25,6 +25,8 @@ import { Public } from '../auth/public.decorator';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraUserService, type CreateOrderRequest } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MessagingService } from '../messaging/messaging.service';
+import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import {
   CheckoutPreflightDto,
@@ -56,7 +58,9 @@ export class OrdersController {
     private readonly configurationsService: ConfigurationsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly checkoutPreflightService: CheckoutPreflightService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly messagingService: MessagingService,
+    private readonly deliveryPinShareService: DeliveryPinShareService
   ) {}
 
   // -------------------------------------------------------------------------
@@ -1576,9 +1580,10 @@ export class OrdersController {
 
   @Get(':orderId/messages')
   @ApiOperation({ summary: 'Get all messages for a specific order' })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
   @ApiResponse({
     status: 200,
-    description: 'Messages retrieved successfully',
+    description: 'Messages retrieved successfully. Each message includes sender_persona and an optional mention object.',
     schema: {
       type: 'object',
       properties: {
@@ -1595,6 +1600,18 @@ export class OrdersController {
               message: { type: 'string' },
               created_at: { type: 'string', format: 'date-time' },
               updated_at: { type: 'string', format: 'date-time' },
+              sender_persona: { type: 'string', enum: ['client', 'agent', 'business'] },
+              mention: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  mentionedUserId: { type: 'string', format: 'uuid' },
+                  persona: { type: 'string', enum: ['client', 'agent', 'business'] },
+                  displayName: { type: 'string' },
+                  textOffset: { type: 'integer', nullable: true },
+                  textLength: { type: 'integer', nullable: true },
+                },
+              },
               user: {
                 type: 'object',
                 properties: {
@@ -1610,73 +1627,42 @@ export class OrdersController {
       },
     },
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Order not found',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Unauthorized to access messages for this order',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-    },
-  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized to access messages for this order' })
   async getOrderMessages(@Param('orderId') orderId: string) {
     try {
-      const messages = await this.ordersService.getOrderMessages(orderId);
-      return {
-        success: true,
-        messages,
-      };
+      const messages = await this.messagingService.getOrderMessages(orderId);
+      return { success: true, messages };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Internal server error';
-      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      if (errorMessage.includes('not found')) {
-        statusCode = HttpStatus.NOT_FOUND;
-      } else if (errorMessage.includes('Unauthorized')) {
-        statusCode = HttpStatus.FORBIDDEN;
-      }
-
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        statusCode
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
   @Post(':orderId/messages')
   @ApiOperation({ summary: 'Create a new message for a specific order' })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         message: { type: 'string', description: 'The message content' },
+        mentionedUserId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'Optional user ID to @mention (must be an order participant)',
+          nullable: true,
+        },
       },
       required: ['message'],
     },
   })
   @ApiResponse({
     status: 201,
-    description: 'Message created successfully',
+    description: 'Message created successfully. Includes sender_persona and mention when applicable.',
     schema: {
       type: 'object',
       properties: {
@@ -1689,93 +1675,173 @@ export class OrdersController {
             entity_type: { type: 'string' },
             entity_id: { type: 'string', format: 'uuid' },
             message: { type: 'string' },
+            sender_persona: { type: 'string', enum: ['client', 'agent', 'business'] },
+            mention: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                mentionedUserId: { type: 'string', format: 'uuid' },
+                persona: { type: 'string' },
+                displayName: { type: 'string' },
+              },
+            },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' },
-            user: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', format: 'uuid' },
-                email: { type: 'string' },
-                first_name: { type: 'string' },
-                last_name: { type: 'string' },
-              },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request — empty message or invalid mention' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized to post messages for this order' })
+  async createOrderMessage(
+    @Param('orderId') orderId: string,
+    @Body() body: { message: string; mentionedUserId?: string }
+  ) {
+    try {
+      const createdMessage = await this.messagingService.createOrderMessage(
+        orderId,
+        body.message,
+        body.mentionedUserId
+      );
+      return { success: true, message: createdMessage };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':orderId/mentionable-participants')
+  @ApiOperation({
+    summary: 'Get participants the current user is allowed to @mention in this order',
+    description:
+      'Returns the subset of order participants that the authenticated user may mention, filtered by the allowed-mention map (client→agent/business, business→client/agent, agent→client/business). Self is always excluded. Requires the same access as reading messages.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Mentionable participants list',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        participants: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string', format: 'uuid' },
+              persona: { type: 'string', enum: ['client', 'agent', 'business'] },
+              displayName: { type: 'string' },
             },
           },
         },
       },
     },
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Invalid data or empty message',
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  async getMentionableParticipants(@Param('orderId') orderId: string) {
+    try {
+      const participants =
+        await this.messagingService.getMentionableParticipants(orderId);
+      return { success: true, participants };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':orderId/messages/delivery-pin')
+  @ApiOperation({
+    summary: 'Share delivery PIN with assigned agent via order chat',
+    description:
+      'Client-only. Creates a structured DELIVERY_PIN message, auto-mentions the assigned agent, and sends a targeted push notification.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({ status: 201, description: 'Delivery PIN shared successfully' })
+  @ApiResponse({ status: 400, description: 'No assigned agent or invalid order status' })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'PIN not available' })
+  async shareDeliveryPin(@Param('orderId') orderId: string) {
+    try {
+      const message = await this.deliveryPinShareService.shareDeliveryPin(orderId);
+      return { success: true, message };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':orderId/messages/active-delivery-pin')
+  @ApiOperation({
+    summary: 'Get the latest active delivery PIN shared in order chat (agent only)',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({ status: 200, description: 'Active PIN or null' })
+  @ApiResponse({ status: 403, description: 'Agent only' })
+  async getActiveDeliveryPin(@Param('orderId') orderId: string) {
+    try {
+      const active =
+        await this.deliveryPinShareService.getActiveDeliveryPinForAgent(orderId);
+      return { success: true, activePin: active };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':orderId/messages/read')
+  @ApiOperation({
+    summary: 'Mark messages as read up to a given message',
+    description:
+      'Bulk-upserts read receipts for all messages in the order thread up to and including lastReadMessageId for the current user. Uses ON CONFLICT DO NOTHING — safe to call repeatedly (idempotent).',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean' },
-        error: { type: 'string' },
+        lastReadMessageId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'ID of the last message the user has seen',
+        },
       },
+      required: ['lastReadMessageId'],
     },
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Order not found',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Unauthorized to post messages for this order',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-    },
-  })
-  async createOrderMessage(
+  @ApiResponse({ status: 200, description: 'Read receipts recorded' })
+  @ApiResponse({ status: 404, description: 'Order or message not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  async markMessagesRead(
     @Param('orderId') orderId: string,
-    @Body() body: { message: string }
+    @Body() body: { lastReadMessageId: string }
   ) {
     try {
-      const createdMessage = await this.ordersService.createOrderMessage(
+      await this.messagingService.markMessagesRead(
         orderId,
-        body.message
+        body.lastReadMessageId
       );
-      return {
-        success: true,
-        message: createdMessage,
-      };
+      return { success: true };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Internal server error';
-      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      if (errorMessage.includes('not found')) {
-        statusCode = HttpStatus.NOT_FOUND;
-      } else if (errorMessage.includes('Unauthorized')) {
-        statusCode = HttpStatus.FORBIDDEN;
-      } else if (
-        errorMessage.includes('empty') ||
-        errorMessage.includes('required')
-      ) {
-        statusCode = HttpStatus.BAD_REQUEST;
-      }
-
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        statusCode
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

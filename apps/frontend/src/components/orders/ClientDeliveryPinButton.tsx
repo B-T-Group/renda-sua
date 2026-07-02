@@ -1,16 +1,16 @@
-import { Key } from '@mui/icons-material';
+import { Key, Send } from '@mui/icons-material';
 import {
   Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  Link,
+  Stack,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
+
+const RESEND_COOLDOWN_MS = 60_000;
 
 export interface ClientDeliveryPinButtonProps {
   orderId: string;
@@ -21,6 +21,7 @@ export interface ClientDeliveryPinButtonProps {
     message: string,
     severity: 'success' | 'error' | 'warning' | 'info'
   ) => void;
+  onSent?: () => void;
 }
 
 export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = ({
@@ -29,20 +30,42 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
   size = 'large',
   variant = 'contained',
   onShowNotification,
+  onSent,
 }) => {
   const { t } = useTranslation();
-  const { getDeliveryPin } = useBackendOrders();
+  const { sendDeliveryPin } = useBackendOrders();
   const [loading, setLoading] = useState(false);
-  const [pinDialogOpen, setPinDialogOpen] = useState(false);
-  const [deliveryPin, setDeliveryPin] = useState<string | null>(null);
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
-  const handleViewDeliveryPin = async () => {
+  const startCooldown = useCallback(() => {
+    const now = Date.now();
+    setSentAt(now);
+    setCooldownRemaining(RESEND_COOLDOWN_MS);
+    const interval = setInterval(() => {
+      const remaining = RESEND_COOLDOWN_MS - (Date.now() - now);
+      if (remaining <= 0) {
+        setCooldownRemaining(0);
+        clearInterval(interval);
+      } else {
+        setCooldownRemaining(remaining);
+      }
+    }, 1000);
+  }, []);
+
+  const handleSendDeliveryPin = async () => {
     setLoading(true);
-    setDeliveryPin(null);
     try {
-      const { pin } = await getDeliveryPin(orderId);
-      setDeliveryPin(pin);
-      setPinDialogOpen(true);
+      await sendDeliveryPin(orderId);
+      onShowNotification?.(
+        t(
+          'orders.messaging.deliveryPin.sendSuccess',
+          'Delivery PIN sent to your agent in the order chat.'
+        ),
+        'success'
+      );
+      startCooldown();
+      onSent?.();
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -57,18 +80,23 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
     }
   };
 
+  const cooldownActive = cooldownRemaining > 0;
+  const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
+
   return (
-    <>
+    <Stack spacing={1} sx={{ width: fullWidth ? '100%' : undefined }}>
       <Button
         variant={variant}
         color="primary"
         size={size}
-        onClick={handleViewDeliveryPin}
+        onClick={handleSendDeliveryPin}
         disabled={loading}
         fullWidth={fullWidth}
         startIcon={
           loading ? (
             <CircularProgress size={20} color="inherit" />
+          ) : sentAt ? (
+            <Send />
           ) : (
             <Key />
           )
@@ -78,55 +106,42 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
           fontWeight: 600,
           boxShadow: variant === 'contained' ? 2 : undefined,
         }}
+        aria-label={t(
+          'orders.messaging.deliveryPin.sendA11y',
+          'Send delivery PIN to assigned agent'
+        )}
+        aria-busy={loading}
       >
-        {t('orders.deliveryPin.viewPin', 'View delivery PIN')}
+        {t('orders.messaging.deliveryPin.sendPin', 'Send delivery PIN')}
       </Button>
-
-      <Dialog
-        open={pinDialogOpen}
-        onClose={() => {
-          setPinDialogOpen(false);
-          setDeliveryPin(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          {t('orders.deliveryPin.title', 'Delivery PIN')}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t(
-              'orders.deliveryPin.shareWithAgent',
-              'Share this PIN with your delivery agent. They will enter it to complete the delivery.'
-            )}
-          </Typography>
-          {deliveryPin && (
-            <Typography
-              variant="h4"
-              component="div"
-              sx={{
-                fontFamily: 'monospace',
-                letterSpacing: 4,
-                textAlign: 'center',
-                py: 2,
-              }}
-            >
-              {deliveryPin}
-            </Typography>
+      {sentAt && !loading ? (
+        <Typography variant="caption" color="text.secondary">
+          {t(
+            'orders.messaging.deliveryPin.sentConfirmation',
+            'PIN shared in order chat. Your agent will be notified.'
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setPinDialogOpen(false);
-              setDeliveryPin(null);
-            }}
-          >
-            {t('common.close', 'Close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+        </Typography>
+      ) : null}
+      {sentAt && cooldownActive ? (
+        <Typography variant="caption" color="text.secondary">
+          {t(
+            'orders.messaging.deliveryPin.resendCooldown',
+            'You can send again in {{seconds}}s',
+            { seconds: cooldownSeconds }
+          )}
+        </Typography>
+      ) : sentAt && !cooldownActive ? (
+        <Link
+          component="button"
+          type="button"
+          variant="caption"
+          onClick={handleSendDeliveryPin}
+          disabled={loading}
+          sx={{ alignSelf: 'flex-start' }}
+        >
+          {t('orders.messaging.deliveryPin.resend', 'Send again')}
+        </Link>
+      ) : null}
+    </Stack>
   );
 };

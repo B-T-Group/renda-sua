@@ -1,6 +1,28 @@
 table:
   name: user_messages
   schema: public
+array_relationships:
+  - name: mentions
+    using:
+      foreign_key_constraint_on:
+        column: message_id
+        table:
+          name: message_mentions
+          schema: public
+  - name: recipients
+    using:
+      foreign_key_constraint_on:
+        column: message_id
+        table:
+          name: message_recipients
+          schema: public
+  - name: reads
+    using:
+      foreign_key_constraint_on:
+        column: message_id
+        table:
+          name: message_reads
+          schema: public
 object_relationships:
   - name: entity_type_info
     using:
@@ -63,6 +85,8 @@ select_permissions:
         - entity_type
         - entity_id
         - message
+        - message_type
+        - is_immutable
         - created_at
         - updated_at
       filter:
@@ -77,6 +101,8 @@ select_permissions:
         - entity_type
         - entity_id
         - message
+        - message_type
+        - is_immutable
         - created_at
         - updated_at
       filter:
@@ -91,6 +117,8 @@ select_permissions:
         - entity_type
         - entity_id
         - message
+        - message_type
+        - is_immutable
         - created_at
         - updated_at
       filter:

@@ -1,6 +1,28 @@
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
+export type PersonaId = 'client' | 'agent' | 'business';
+
+export interface MessageMention {
+  mentionedUserId: string;
+  persona: PersonaId;
+  displayName: string;
+  textOffset?: number | null;
+  textLength?: number | null;
+}
+
+export interface DeliveryPinStructuredContent {
+  status: 'active' | 'superseded' | 'revoked';
+  pinVersion: number;
+  sharedToUserId: string;
+  sharedToDisplayName?: string;
+  pin?: string;
+  maskedDisplay: string;
+  supersededByMessageId?: string;
+  revokedAt?: string;
+  revokedReason?: string;
+}
+
 export interface OrderMessage {
   id: string;
   user_id: string;
@@ -9,9 +31,13 @@ export interface OrderMessage {
   message: string;
   created_at: string;
   updated_at: string;
+  sender_persona?: PersonaId;
+  message_type?: string;
+  structured_content?: DeliveryPinStructuredContent | null;
+  mention?: MessageMention | null;
   user: {
     id: string;
-    identifier: string;
+    identifier?: string;
     email: string;
     first_name: string;
     last_name: string;
@@ -20,6 +46,12 @@ export interface OrderMessage {
     id: string;
     comment: string;
   };
+}
+
+export interface MentionableParticipant {
+  userId: string;
+  persona: PersonaId;
+  displayName: string;
 }
 
 export interface OrderMessagesResponse {
@@ -34,13 +66,20 @@ export interface CreateOrderMessageResponse {
   error?: string;
 }
 
+export interface MentionableParticipantsResponse {
+  success: boolean;
+  participants: MentionableParticipant[];
+  error?: string;
+}
+
 export interface UseOrderMessagesReturn {
   messages: OrderMessage[];
   loading: boolean;
   error: string | null;
   fetchMessages: (orderId: string) => Promise<void>;
-  sendMessage: (orderId: string, message: string) => Promise<boolean>;
+  sendMessage: (orderId: string, message: string, mentionedUserId?: string) => Promise<boolean>;
   refetch: (orderId: string) => Promise<void>;
+  markMessagesRead: (orderId: string, lastReadMessageId: string) => Promise<void>;
 }
 
 export const useOrderMessages = (): UseOrderMessagesReturn => {
@@ -71,7 +110,6 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
           setMessages([]);
         }
       } catch (err: any) {
-        console.error('Error fetching order messages:', err);
         setError(
           err.response?.data?.error ||
             err.message ||
@@ -86,7 +124,11 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
   );
 
   const sendMessage = useCallback(
-    async (orderId: string, message: string): Promise<boolean> => {
+    async (
+      orderId: string,
+      message: string,
+      mentionedUserId?: string
+    ): Promise<boolean> => {
       if (!apiClient || !orderId || !message.trim()) {
         setError('API client not available, order ID missing, or message is empty');
         return false;
@@ -96,13 +138,19 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
       setError(null);
 
       try {
+        const payload: { message: string; mentionedUserId?: string } = {
+          message: message.trim(),
+        };
+        if (mentionedUserId) {
+          payload.mentionedUserId = mentionedUserId;
+        }
+
         const response = await apiClient.post<CreateOrderMessageResponse>(
           `/orders/${orderId}/messages`,
-          { message: message.trim() }
+          payload
         );
 
         if (response.data.success && response.data.message) {
-          // Add the new message to the list
           setMessages((prev) => [response.data.message, ...prev]);
           return true;
         } else {
@@ -110,7 +158,6 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
           return false;
         }
       } catch (err: any) {
-        console.error('Error sending order message:', err);
         setError(
           err.response?.data?.error ||
             err.message ||
@@ -131,6 +178,20 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
     [fetchMessages]
   );
 
+  const markMessagesRead = useCallback(
+    async (orderId: string, lastReadMessageId: string): Promise<void> => {
+      if (!apiClient || !orderId || !lastReadMessageId) return;
+      try {
+        await apiClient.post(`/orders/${orderId}/messages/read`, {
+          lastReadMessageId,
+        });
+      } catch {
+        // Best-effort — do not surface read-receipt failures
+      }
+    },
+    [apiClient]
+  );
+
   return {
     messages,
     loading,
@@ -138,6 +199,6 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
     fetchMessages,
     sendMessage,
     refetch,
+    markMessagesRead,
   };
 };
-

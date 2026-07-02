@@ -1353,7 +1353,7 @@ export class RentalsService {
     const pin = this.deliveryPinService.generatePin();
     const hash = this.deliveryPinService.hashPin(bookingId, pin);
     await this.setBookingPinHash(bookingId, hash);
-    this.deliveryPinService.setPinForClient(bookingId, pin);
+    await this.deliveryPinService.setPinForClient(bookingId, pin);
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
   }
 
@@ -1528,7 +1528,7 @@ export class RentalsService {
     await this.releaseHoldIfNeeded(bookingId, booking);
     await this.updateBookingStatus(bookingId, 'cancelled');
     await this.logHistory(bookingId, 'cancelled', 'confirmed', user.id, isClient ? 'client' : 'business', 'Cancelled');
-    this.deliveryPinService.clearPinForOrder(bookingId);
+    await this.deliveryPinService.clearPinForOrder(bookingId);
     return { success: true };
   }
 
@@ -1544,13 +1544,12 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('PIN only for confirmed bookings', HttpStatus.GONE);
     }
-    let pin = this.deliveryPinService.getPinForClient(bookingId);
+    let pin = await this.deliveryPinService.getPinForClient(bookingId);
     if (!pin) {
-      pin = this.deliveryPinService.generatePin();
-      const h = this.deliveryPinService.hashPin(bookingId, pin);
-      await this.setBookingPinHash(bookingId, h);
-      await this.resetPinAttempts(bookingId);
-      this.deliveryPinService.setPinForClient(bookingId, pin);
+      throw new HttpException(
+        'Delivery PIN is temporarily unavailable. Please try again in a moment.',
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
     }
     return { pin };
   }
@@ -1637,7 +1636,7 @@ export class RentalsService {
       'business',
       'Return confirmed'
     );
-    this.deliveryPinService.clearPinForOrder(bookingId);
+    await this.deliveryPinService.clearPinForOrder(bookingId);
     return { success: true };
   }
 

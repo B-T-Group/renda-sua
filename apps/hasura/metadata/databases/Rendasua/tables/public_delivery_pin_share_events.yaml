@@ -1,0 +1,3 @@
+table:
+  name: delivery_pin_share_events
+  schema: public

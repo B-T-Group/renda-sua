@@ -240,6 +240,16 @@ export interface PushConfig {
   expoAccessToken?: string;
 }
 
+export interface MessagingConfig {
+  /**
+   * When true, order-message push notifications are targeted to the resolved
+   * recipient only (mentioned user or default route). When false (default),
+   * the legacy broadcast-to-all-participants behavior is preserved.
+   * Enable in staging first; flip to true in production after verification.
+   */
+  targetedRoutingEnabled: boolean;
+}
+
 export interface SmsConfig {
   enabled: boolean;
   twilioAccountSid: string;
@@ -310,6 +320,7 @@ export interface Configuration {
   notificationsInternal: NotificationsInternalConfig;
   orderOffers: OrderOffersConfig;
   push: PushConfig;
+  messaging: MessagingConfig;
   sms: SmsConfig;
   twilioVerify: TwilioVerifyConfig;
   mtnSms: MtnSmsConfig;
@@ -600,6 +611,10 @@ export default (): Configuration => {
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
       enabled: process.env.PUSH_NOTIFICATIONS_ENABLED === 'true',
       expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
+    },
+    messaging: {
+      targetedRoutingEnabled:
+        process.env.MESSAGING_TARGETED_ROUTING_ENABLED === 'true',
     },
     sms: {
       enabled: process.env.SMS_ENABLED === 'true',

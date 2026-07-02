@@ -17,6 +17,7 @@ import { MobilePaymentsService } from '../mobile-payments/mobile-payments.servic
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
+import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
@@ -163,6 +164,13 @@ describe('OrdersService', () => {
         { provide: OrderQueueService, useValue: {} },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         { provide: DeliveryPinService, useValue: {} },
+        {
+          provide: DeliveryPinShareService,
+          useValue: {
+            resolvePinForCompletion: jest.fn(),
+            markPinConsumed: jest.fn(),
+          },
+        },
         { provide: OrderRefundsService, useValue: {} },
         { provide: LoyaltyService, useValue: {} },
       ],

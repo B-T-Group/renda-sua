@@ -1,0 +1,22 @@
+table:
+  name: message_types
+  schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
