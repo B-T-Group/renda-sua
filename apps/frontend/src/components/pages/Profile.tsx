@@ -54,6 +54,7 @@ import AddressManager from '../common/AddressManager';
 import MissingEmailBanner from '../common/MissingEmailBanner';
 import PhoneInput from '../common/PhoneInput';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
+import { PhoneVerificationDialog } from '../dialogs/PhoneVerificationDialog';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -191,8 +192,9 @@ const Profile: React.FC = () => {
   const [personaConfirmTarget, setPersonaConfirmTarget] =
     useState<UserType | null>(null);
   const [missingEmailOpen, setMissingEmailOpen] = useState(false);
+  const [phoneVerifyDialogOpen, setPhoneVerifyDialogOpen] = useState(false);
   const [verifyComingSoonTarget, setVerifyComingSoonTarget] = useState<
-    'email' | 'phone' | null
+    'email' | null
   >(null);
   const [profileEditError, setProfileEditError] = useState<string | null>(null);
 
@@ -460,6 +462,12 @@ const Profile: React.FC = () => {
         open={missingEmailOpen}
         onSkip={handleSkipMissingEmail}
         onSaved={() => void handleSavedMissingEmail()}
+      />
+      <PhoneVerificationDialog
+        open={phoneVerifyDialogOpen}
+        phoneNumber={profile?.phone_number || ''}
+        onClose={() => setPhoneVerifyDialogOpen(false)}
+        onVerified={() => void refreshUserProfile()}
       />
       <Dialog
         open={verifyComingSoonTarget !== null}
@@ -770,7 +778,7 @@ const Profile: React.FC = () => {
                         <Button
                           size="small"
                           variant="text"
-                          onClick={() => setVerifyComingSoonTarget('phone')}
+                          onClick={() => setPhoneVerifyDialogOpen(true)}
                         >
                           {t('profile.verifyPhoneAction', 'Verify phone number')}
                         </Button>
