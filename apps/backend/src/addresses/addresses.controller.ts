@@ -330,6 +330,23 @@ export class AddressesController {
     description: 'Forbidden - Access denied',
   })
   @ApiResponse({
+    status: 409,
+    description: 'Conflict - Cannot update address due to safeguards',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+        code: {
+          type: 'string',
+          enum: ['ADDRESS_PRIMARY_REPLACEMENT_REQUIRED'],
+          description:
+            'Cannot demote the primary address without another address to promote.',
+        },
+      },
+    },
+  })
+  @ApiResponse({
     status: 401,
     description: 'Unauthorized',
   })
@@ -382,6 +399,26 @@ export class AddressesController {
   @ApiResponse({
     status: 403,
     description: 'Forbidden - Access denied',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Cannot delete address due to safeguards',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+        code: {
+          type: 'string',
+          enum: [
+            'ADDRESS_MINIMUM_REQUIRED',
+            'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
+          ],
+          description:
+            'ADDRESS_MINIMUM_REQUIRED: Cannot delete the only address. ADDRESS_PRIMARY_DELETE_FORBIDDEN: Cannot delete the primary address.',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 401,

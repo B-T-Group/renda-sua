@@ -201,6 +201,12 @@
     "messages": {
       "updateSuccess": "Adresse mise à jour avec succès",
       "deleteSuccess": "Adresse supprimée avec succès"
+    },
+    "errors": {
+      "minimumRequired": "Impossible de supprimer la seule adresse. Chaque persona doit avoir au moins une adresse.",
+      "primaryDeleteForbidden": "Impossible de supprimer l'adresse principale. Veuillez d'abord définir une autre adresse comme principale.",
+      "primaryReplacementRequired": "Impossible de rétrograder l'adresse principale sans une autre adresse à promouvoir.",
+      "unknown": "Une erreur s'est produite lors du traitement de votre demande."
     }
   },
   "admin": {

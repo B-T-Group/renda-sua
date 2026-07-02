@@ -140,6 +140,46 @@ export class BusinessItemsController {
     return { success: true, data: { business_location: location } };
   }
 
+  @Delete('locations/:locationId')
+  @ApiOperation({
+    summary: 'Delete a business location with safeguards (only/primary location rejected)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Location deleted successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Location not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Cannot delete location due to safeguards',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+        code: {
+          type: 'string',
+          enum: [
+            'ADDRESS_MINIMUM_REQUIRED',
+            'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
+          ],
+          description:
+            'ADDRESS_MINIMUM_REQUIRED: Cannot delete the only location. ADDRESS_PRIMARY_DELETE_FORBIDDEN: Cannot delete the primary location.',
+        },
+      },
+    },
+  })
+  async deleteLocation(
+    @Param('locationId') locationId: string,
+    @Query('businessId') businessId: string | undefined
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const result = await this.businessItemsService.deleteBusinessLocation(
+      ctx.targetBusinessId,
+      locationId
+    );
+    return { success: result.success, message: result.message };
+  }
+
   @Get('locations')
   @ApiOperation({ summary: 'Get business locations for the current business' })
   @ApiQuery({ name: 'businessId', required: false })

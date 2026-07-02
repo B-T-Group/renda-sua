@@ -68,6 +68,7 @@ export interface AddressUpdateResponse {
 export interface AddressDeleteResponse {
   success: boolean;
   message: string;
+  code?: string;
 }
 
 export type EntityType = 'agent' | 'client' | 'business';

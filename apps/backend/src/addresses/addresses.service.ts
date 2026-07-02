@@ -1038,6 +1038,24 @@ export class AddressesService {
 
       if (addressData.is_primary === true) {
         await this.ensureSinglePrimaryAddress(user.id, persona, addressId);
+      } else if (addressData.is_primary === false) {
+        // Check if trying to demote the current primary address
+        if (existingAddress.is_primary) {
+          // Get all active addresses for the current persona
+          const allAddresses = await this.getUserAddresses();
+          // Count other addresses that could be promoted
+          const otherAddresses = allAddresses.filter((a) => a.id !== addressId);
+          if (otherAddresses.length === 0) {
+            throw new HttpException(
+              {
+                success: false,
+                error: 'Cannot demote the primary address without another address to promote.',
+                code: 'ADDRESS_PRIMARY_REPLACEMENT_REQUIRED',
+              },
+              HttpStatus.CONFLICT
+            );
+          }
+        }
       }
 
       // Build update object
@@ -1166,7 +1184,9 @@ export class AddressesService {
   }
 
   /**
-   * Delete an address
+   * Delete an address with safeguards:
+   * - Reject if it's the only address for the active persona
+   * - Reject if it's the primary address (unless another address can be promoted)
    */
   async deleteAddress(addressId: string): Promise<{
     success: boolean;
@@ -1175,6 +1195,34 @@ export class AddressesService {
     try {
       // Verify address belongs to user
       await this.getAddress(addressId);
+
+      // Get all active addresses for the current persona
+      const allAddresses = await this.getUserAddresses();
+
+      // Check if this is the only address
+      if (allAddresses.length === 1) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Cannot delete the only address. Each persona must have at least one address.',
+            code: 'ADDRESS_MINIMUM_REQUIRED',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+
+      // Check if this is the primary address
+      const addressToDelete = allAddresses.find((a) => a.id === addressId);
+      if (addressToDelete?.is_primary) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Cannot delete the primary address. Please set another address as primary first.',
+            code: 'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
 
       const deleteMutation = `
         mutation SoftDeleteAddress($addressId: uuid!) {

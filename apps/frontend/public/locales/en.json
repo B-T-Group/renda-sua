@@ -201,6 +201,12 @@
     "messages": {
       "updateSuccess": "Address updated successfully",
       "deleteSuccess": "Address deleted successfully"
+    },
+    "errors": {
+      "minimumRequired": "Cannot delete the only address. Each persona must have at least one address.",
+      "primaryDeleteForbidden": "Cannot delete the primary address. Please set another address as primary first.",
+      "primaryReplacementRequired": "Cannot demote the primary address without another address to promote.",
+      "unknown": "An error occurred while processing your request."
     }
   },
   "admin": {

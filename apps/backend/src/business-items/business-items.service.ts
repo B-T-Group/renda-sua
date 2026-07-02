@@ -906,6 +906,108 @@ export class BusinessItemsService {
     return result?.update_business_locations_by_pk ?? null;
   }
 
+  /**
+   * Delete a business location with safeguards:
+   * - Reject if it's the only location for the business
+   * - Reject if it's the primary location
+   */
+  async deleteBusinessLocation(
+    businessId: string,
+    locationId: string
+  ): Promise<{ success: boolean; message: string }> {
+    // Verify location belongs to business
+    const locationQuery = `
+      query GetLocation($locationId: uuid!, $businessId: uuid!) {
+        business_locations_by_pk(id: $locationId) {
+          id
+          business_id
+          is_primary
+        }
+      }
+    `;
+
+    const locationResult = await this.hasuraUserService.executeQuery<{
+      business_locations_by_pk: {
+        id: string;
+        business_id: string;
+        is_primary: boolean;
+      } | null;
+    }>(locationQuery, { locationId });
+
+    const location = locationResult.business_locations_by_pk;
+    if (!location || location.business_id !== businessId) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Business location not found or access denied',
+        },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    // Get all active locations for this business
+    const allLocationsQuery = `
+      query GetBusinessLocations($businessId: uuid!) {
+        business_locations(where: {business_id: {_eq: $businessId}, is_active: {_eq: true}}) {
+          id
+          is_primary
+        }
+      }
+    `;
+
+    const allLocationsResult = await this.hasuraUserService.executeQuery<{
+      business_locations: Array<{ id: string; is_primary: boolean }>;
+    }>(allLocationsQuery, { businessId });
+
+    const allLocations = allLocationsResult.business_locations ?? [];
+
+    // Check if this is the only location
+    if (allLocations.length === 1) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Cannot delete the only location. Each business must have at least one location.',
+          code: 'ADDRESS_MINIMUM_REQUIRED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
+    // Check if this is the primary location
+    if (location.is_primary) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Cannot delete the primary location. Please set another location as primary first.',
+          code: 'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
+    // Soft delete the location
+    const deleteLocationMutation = `
+      mutation DeleteLocation($locationId: uuid!) {
+        update_business_locations_by_pk(
+          pk_columns: { id: $locationId },
+          _set: { is_active: false }
+        ) {
+          id
+          is_active
+        }
+      }
+    `;
+
+    await this.hasuraUserService.executeMutation(deleteLocationMutation, {
+      locationId,
+    });
+
+    return {
+      success: true,
+      message: 'Business location deleted successfully',
+    };
+  }
+
   async getSingleItem(businessId: string, itemId: string) {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: any | null;

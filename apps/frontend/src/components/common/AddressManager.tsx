@@ -14,6 +14,7 @@ import {
   IconButton,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
@@ -30,6 +31,11 @@ import AddressDialog, {
   AddressFormData as DialogAddressFormData,
 } from '../dialogs/AddressDialog';
 import ConfirmationModal from './ConfirmationModal';
+import {
+  checkAddressDeletionEligibility,
+  mapAddressErrorCodeToMessage,
+  extractErrorCode,
+} from '../../utils/addressDeletionPolicy';
 
 interface AddressManagerProps {
   entityType: EntityType;
@@ -153,6 +159,15 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
   // Handle delete address
   const handleDeleteAddress = (address: Address) => {
+    const eligibilityError = checkAddressDeletionEligibility(
+      address.id,
+      addresses.map((a) => a.address)
+    );
+    if (eligibilityError) {
+      // Show error message in snackbar or alert
+      setError(mapAddressErrorCodeToMessage(eligibilityError.code, t));
+      return;
+    }
     setAddressToDelete(address);
     setDeleteConfirmOpen(true);
   };
@@ -196,8 +211,13 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       await deleteAddress(addressToDelete.id);
       setDeleteConfirmOpen(false);
       setAddressToDelete(null);
-    } catch (error) {
-      // Error is handled by the hook
+    } catch (error: unknown) {
+      // Map backend error codes to localized messages
+      const errorCode = extractErrorCode(error);
+      if (errorCode) {
+        // Error is already set by the hook, but we can enhance it
+        console.error('Address deletion error:', errorCode);
+      }
       console.error('Error deleting address:', error);
     }
   };
@@ -403,15 +423,40 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                           >
                             <EditIcon />
                           </IconButton>
-                          {allowDelete && (
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteAddress(address)}
-                              disabled={loading}
-                              color="error"
+                          {allowDelete && addresses.length > 1 && (
+                            <Tooltip
+                              title={
+                                checkAddressDeletionEligibility(
+                                  address.id,
+                                  addresses.map((a) => a.address)
+                                )
+                                  ? mapAddressErrorCodeToMessage(
+                                      checkAddressDeletionEligibility(
+                                        address.id,
+                                        addresses.map((a) => a.address)
+                                      )?.code,
+                                      t
+                                    )
+                                  : ''
+                              }
                             >
-                              <DeleteIcon />
-                            </IconButton>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDeleteAddress(address)}
+                                  disabled={
+                                    loading ||
+                                    !!checkAddressDeletionEligibility(
+                                      address.id,
+                                      addresses.map((a) => a.address)
+                                    )
+                                  }
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
                           )}
                         </Box>
                       </Box>
