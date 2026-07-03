@@ -51,7 +51,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     });
 
     // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
-    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2Instance`, {
+    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2InstanceV2`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.micro'),
