@@ -844,7 +844,7 @@ def trigger_stripe_refund_safe(
     except Exception as e:
         log_error(
             "Error triggering Stripe refund",
-            error=e,
+            e,
             order_id=order_id,
             cancelled_by=cancelled_by
         )

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
+import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
 export class StripeRefundService {
@@ -8,7 +9,8 @@ export class StripeRefundService {
 
   constructor(
     private readonly stripeService: StripeService,
-    private readonly databaseService: StripePaymentsDatabaseService
+    private readonly databaseService: StripePaymentsDatabaseService,
+    private readonly ordersService: OrdersService
   ) {}
 
   async initiateOrderRefund(params: {
@@ -21,9 +23,33 @@ export class StripeRefundService {
         `Initiating Stripe refund for order ${params.orderId}, cancelled by ${params.cancelledBy}`
       );
 
-      // Look up the successful Stripe payment transaction for this order
+      // Fetch the order to get the order number
+      let order;
+      try {
+        order = await this.ordersService.getOrderById(params.orderId);
+      } catch (error: any) {
+        this.logger.warn(
+          `Could not fetch order ${params.orderId}: ${error.message}`
+        );
+        return {
+          success: false,
+          message: 'Order not found',
+        };
+      }
+
+      if (!order || !order.order_number) {
+        this.logger.warn(
+          `Order ${params.orderId} has no order number`
+        );
+        return {
+          success: false,
+          message: 'Order number not found',
+        };
+      }
+
+      // Look up the successful Stripe payment transaction by order number
       const transaction = await this.databaseService.getTransactionByEntityId(
-        params.orderId
+        order.order_number
       );
 
       if (!transaction) {
