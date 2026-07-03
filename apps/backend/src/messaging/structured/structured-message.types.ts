@@ -1,3 +1,6 @@
+import type { PersonaId } from '../../users/persona.types';
+import type { MessagingOrder } from '../messaging.types';
+
 export const MESSAGE_TYPES = [
   'TEXT',
   'DELIVERY_PIN',
@@ -27,6 +30,7 @@ export interface DeliveryPinPayloadV1 {
   supersededByMessageId?: string;
   revokedAt?: string;
   revokedReason?: DeliveryPinRevokedReason;
+  [key: string]: unknown;
 }
 
 export interface DeliveryPinStructuredContent {
@@ -39,6 +43,7 @@ export interface DeliveryPinStructuredContent {
   supersededByMessageId?: string;
   revokedAt?: string;
   revokedReason?: DeliveryPinRevokedReason;
+  [key: string]: unknown;
 }
 
 export interface StructuredMessageDisplayRef {
@@ -49,14 +54,14 @@ export interface StructuredMessageDisplayRef {
 export interface StructuredMessageCreateContext {
   orderId: string;
   senderUserId: string;
-  senderPersona: import('../users/persona.types').PersonaId;
-  order: import('./messaging.types').MessagingOrder;
+  senderPersona: PersonaId;
+  order: MessagingOrder;
 }
 
 export interface StructuredMessageEnrichContext {
   viewerUserId: string;
-  viewerPersona: import('../users/persona.types').PersonaId;
-  order: import('./messaging.types').MessagingOrder;
+  viewerPersona: PersonaId;
+  order: MessagingOrder;
 }
 
 export interface StructuredMessageHandler {
@@ -68,7 +73,7 @@ export interface StructuredMessageHandler {
     ctx: StructuredMessageEnrichContext
   ): Record<string, unknown> | null;
   resolveRecipients?(
-    order: import('./messaging.types').MessagingOrder,
+    order: MessagingOrder,
     payload: Record<string, unknown>
   ): Array<{ userId: string; type: 'mentioned' | 'default_route' }>;
   pushNotificationType?: string;

@@ -2304,10 +2304,6 @@ export class RentalsService {
     });
   }
 
-  private async resetPinAttempts(id: string) {
-    await this.patchBooking(id, { rental_start_pin_attempts: 0 });
-  }
-
   private async verifyPinAttempt(bookingId: string, booking: any, pin: string) {
     const hash = booking.rental_start_pin_hash;
     if (!hash) {

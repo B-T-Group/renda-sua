@@ -3,15 +3,15 @@ import {
   HttpStatus,
   Injectable,
 } from '@nestjs/common';
-import { DeliveryPinService } from '../../delivery-pin/delivery-pin.service';
-import type { MessagingOrder } from '../messaging.types';
+import { DeliveryPinService } from '../../../delivery-pin/delivery-pin.service';
+import type { MessagingOrder } from '../../messaging.types';
 import type {
   DeliveryPinPayloadV1,
   DeliveryPinStructuredContent,
   StructuredMessageCreateContext,
   StructuredMessageEnrichContext,
   StructuredMessageHandler,
-} from './structured-message.types';
+} from '../structured-message.types';
 
 @Injectable()
 export class DeliveryPinMessageHandler implements StructuredMessageHandler {

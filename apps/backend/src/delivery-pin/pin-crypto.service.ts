@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import type { Configuration } from '../config/configuration';
+import type { Configuration, JwtConfig } from '../config/configuration';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -13,7 +13,7 @@ export class PinCryptoService {
   constructor(private readonly configService: ConfigService<Configuration>) {
     const secret =
       process.env.DELIVERY_PIN_ENCRYPTION_KEY ||
-      this.configService.get<string>('jwt.secret') ||
+      this.configService.get<JwtConfig>('jwt')?.secret ||
       'delivery-pin-dev-key-change-me';
     this.key = crypto.createHash('sha256').update(secret, 'utf8').digest();
   }

@@ -108,7 +108,7 @@ export function buildMentionPushMessage(params: {
 }): { title: string; body: string } {
   const locale = normalizeLanguage(params.preferredLanguage);
   const sender =
-    params.senderName?.trim() || (locale === 'fr' ? 'Quelqu'un' : 'Someone');
+    params.senderName?.trim() || (locale === 'fr' ? "Quelqu'un" : 'Someone');
   if (locale === 'fr') {
     return {
       title: `Vous avez été mentionné · Commande ${params.orderNumber}`,

@@ -440,9 +440,9 @@ export class MessagingService {
   assertMessagingAccess(
     user: {
       id: string;
-      business?: { id?: string; is_admin?: boolean } | null;
+      business?: { id?: string; is_admin?: boolean | null } | null;
       agent?: { id?: string } | null;
-      active_persona?: string | null;
+      user_type_id?: string | null;
     },
     order: MessagingOrder
   ): void {
@@ -478,7 +478,7 @@ export class MessagingService {
   }
 
   private resolvePersona(
-    user: { id: string; active_persona?: string | null },
+    user: { id: string; user_type_id?: string | null },
     order: MessagingOrder
   ): PersonaId {
     if (isActivePersona(user, 'client') && order.client?.user_id === user.id) {
@@ -496,7 +496,7 @@ export class MessagingService {
     ) {
       return 'agent';
     }
-    const active = (user.active_persona ?? '') as PersonaId;
+    const active = (user.user_type_id ?? '') as PersonaId;
     return (['client', 'business', 'agent'] as PersonaId[]).includes(active)
       ? active
       : 'client';

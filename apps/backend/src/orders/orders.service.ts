@@ -6127,20 +6127,6 @@ export class OrdersService {
     });
   }
 
-  private async resetOrderDeliveryPinAttempts(orderId: string): Promise<void> {
-    const mutation = `
-      mutation ResetDeliveryPinAttempts($orderId: uuid!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { delivery_pin_attempts: 0 }
-        ) {
-          id
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, { orderId });
-  }
-
   /**
    * Update order status and payment status
    */
