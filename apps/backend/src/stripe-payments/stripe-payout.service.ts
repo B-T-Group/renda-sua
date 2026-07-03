@@ -87,6 +87,17 @@ export class StripePayoutService {
   private async runPrechecks(
     params: StripePayoutParams
   ): Promise<{ status: HttpStatus; body: Record<string, unknown> } | null> {
+    const ownsAccount = await this.accountsService.accountBelongsToUser(
+      params.accountId,
+      params.userId
+    );
+    if (!ownsAccount) {
+      return {
+        status: HttpStatus.FORBIDDEN,
+        body: { success: false, error: 'ACCOUNT_NOT_OWNED' },
+      };
+    }
+
     const balance = await this.accountsService.getAccountBalance(
       params.accountId
     );

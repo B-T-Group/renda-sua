@@ -439,4 +439,12 @@ export class AccountsService {
       isActive: account.is_active,
     };
   }
+
+  async accountBelongsToUser(
+    accountId: string,
+    userId: string
+  ): Promise<boolean> {
+    const account = await this.getAccountById(accountId);
+    return account?.user_id === userId && account.is_active === true;
+  }
 }
