@@ -1,0 +1,20 @@
+# Business persona changes must cover both platforms
+
+When implementing any feature, fix, or update that touches the **business persona**
+(business owners, business locations, business settings, business orders,
+business catalog, business accounts), the change MUST be reflected on **both**:
+
+- `apps/frontend/src/` (React web app)
+- `mobile-rendasua/src/` (Expo React Native mobile app)
+
+Do not implement a business-facing change on only one platform without explicitly
+noting why the other platform is intentionally excluded.
+
+## Examples
+
+**Good**: Commission field is now admin-only on both web and mobile.
+
+**Bad**: Commission field is admin-only on web but still editable on mobile.
+
+**Acceptable with explanation**: Auto-withdraw is hidden for Stripe rail on web,
+but mobile doesn't support Stripe rail yet (documented in PR).

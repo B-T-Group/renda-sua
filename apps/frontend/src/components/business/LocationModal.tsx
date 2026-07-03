@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAws } from '../../hooks/useAws';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   AddBusinessLocationData,
   BusinessLocation,
@@ -78,9 +79,11 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { generateImageUploadUrl } = useAws();
+  const { isStripeRail } = useIsStripeRail();
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
+  const isAdmin = profile?.business?.is_admin === true;
   const isEditing = !!location;
   const effectiveCountry = isEditing
     ? location?.address?.country
@@ -224,7 +227,15 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const handleSave = async () => {
     if (!formData.name.trim()) return;
 
-    const commission = formData.rendasua_item_commission_percentage ?? null;
+    const commission = isAdmin ? formData.rendasua_item_commission_percentage : null;
+    const payload = {
+      ...formData,
+      rendasua_item_commission_percentage: commission,
+      logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
+    };
+    if (isStripeRail) {
+      payload.auto_withdraw_commissions = false;
+    }
 
     if (isEditing) {
       if (
@@ -236,9 +247,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         return;
       }
       await onSave({
-        ...formData,
-        rendasua_item_commission_percentage: commission,
-        logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
+        ...payload,
         address: {
           ...addressData,
           postal_code: addressData.postal_code?.trim() || '',
@@ -250,11 +259,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     }
 
     if (reuseProfileAddress && formData.address_id) {
-      await onSave({
-        ...formData,
-        rendasua_item_commission_percentage: commission,
-        logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
-      });
+      await onSave(payload);
       return;
     }
 
@@ -268,9 +273,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     }
 
     await onSave({
-      ...formData,
-      rendasua_item_commission_percentage: commission,
-      logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
+      ...payload,
       address: {
         ...addressData,
         postal_code: addressData.postal_code?.trim() || '',
@@ -499,29 +502,33 @@ const LocationModal: React.FC<LocationModalProps> = ({
               />
             </Box>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.auto_withdraw_commissions !== false}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      auto_withdraw_commissions: e.target.checked,
-                    }))
+            {!isStripeRail && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.auto_withdraw_commissions !== false}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          auto_withdraw_commissions: e.target.checked,
+                        }))
+                      }
+                    />
                   }
+                  label={t(
+                    'business.locations.autoWithdrawCommissions',
+                    'Automatically send payouts to this phone'
+                  )}
                 />
-              }
-              label={t(
-                'business.locations.autoWithdrawCommissions',
-                'Automatically send payouts to this phone'
-              )}
-            />
-            <Typography variant="caption" color="text.secondary" display="block">
-              {t(
-                'business.locations.autoWithdrawCommissionsHint',
-                'Requires a valid phone number above. You can turn this off anytime.'
-              )}
-            </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t(
+                    'business.locations.autoWithdrawCommissionsHint',
+                    'Requires a valid phone number above. You can turn this off anytime.'
+                  )}
+                </Typography>
+              </>
+            )}
 
             <TextField
               label={t('business.locations.commissionLabel', 'RendaSua commission')}
@@ -536,11 +543,16 @@ const LocationModal: React.FC<LocationModalProps> = ({
                     num != null && !Number.isNaN(num) ? num : null,
                 }));
               }}
-              inputProps={{ min: 0, max: 100, step: 0.01 }}
-              helperText={t(
-                'business.locations.commissionHelper',
-                'Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).'
-              )}
+              inputProps={{ min: 0, max: 100, step: 0.01, readOnly: !isAdmin }}
+              disabled={!isAdmin}
+              helperText={
+                !isAdmin
+                  ? t('business.locations.commissionAdminOnly', 'Commission is managed by RendaSua admin.')
+                  : t(
+                      'business.locations.commissionHelper',
+                      'Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).'
+                    )
+              }
               fullWidth
               sx={{ maxWidth: 240 }}
             />

@@ -10,6 +10,7 @@ import { CreateItemDto } from '../items/dto/create-item.dto';
 import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { PermissionService } from '../auth/permission.service';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
@@ -617,7 +618,8 @@ export class BusinessItemsService {
     private readonly businessImagesService: BusinessImagesService,
     private readonly aiService: AiService,
     private readonly itemsService: ItemsService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly permissionService: PermissionService
   ) {}
 
   /**
@@ -881,6 +883,13 @@ export class BusinessItemsService {
     const setInput: Record<string, unknown> = { ...data };
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
+    }
+
+    // Strip commission percentage for non-admin users
+    const userId = this.hasuraUserService.getUserId();
+    const isAdmin = await this.permissionService.isBusinessAdmin(userId);
+    if (!isAdmin && 'rendasua_item_commission_percentage' in setInput) {
+      delete setInput.rendasua_item_commission_percentage;
     }
     const updateMutation = `
       mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {

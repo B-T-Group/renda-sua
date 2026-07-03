@@ -1969,6 +1969,7 @@
       "commissionLabel": "RendaSua commission",
       "commissionDefault": "5% (default)",
       "commissionHelper": "Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).",
+      "commissionAdminOnly": "Commission is managed by RendaSua admin.",
       "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addAddressFirst": "Add a business address first before adding locations.",
