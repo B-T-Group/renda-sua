@@ -29,12 +29,16 @@ import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
 import { WithdrawStripeDto } from './dto/withdraw-stripe.dto';
 import { StripeCheckoutService } from './stripe-checkout.service';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripePaymentCallbackProcessor } from './stripe-payment-callback.processor';
-import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
+import {
+  StripePaymentsDatabaseService,
+  type StripePaymentTransaction,
+} from './stripe-payments-database.service';
 import { StripePayoutService } from './stripe-payout.service';
 import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
@@ -100,6 +104,7 @@ export class StripePaymentsController {
   @HttpCode(HttpStatus.CREATED)
   async withdraw(@Body() body: WithdrawStripeDto) {
     const user = await this.hasuraUserService.getUser();
+    await this.assertAccountBelongsToUser(body.accountId, user.id);
     const result = await this.payoutService.executePayout(
       {
         amount: body.amount,
@@ -111,6 +116,35 @@ export class StripePaymentsController {
       { throwOnFailure: true }
     );
     return { success: result.success, data: result.data };
+  }
+
+  private async assertAccountBelongsToUser(
+    accountId: string,
+    userId: string
+  ): Promise<void> {
+    const result = await this.hasuraUserService.executeQuery<{
+      accounts: Array<{ id: string }>;
+    }>(GET_ACCOUNT_BY_ID_FOR_USER, { accountId, userId });
+
+    if (!result.accounts?.[0]) {
+      throw new HttpException(
+        { success: false, message: 'Account not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  private async assertTransactionBelongsToUser(
+    tx: StripePaymentTransaction,
+    userId: string
+  ): Promise<void> {
+    if (!tx.account_id) {
+      throw new HttpException(
+        { success: false, message: 'Transaction not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.assertAccountBelongsToUser(tx.account_id, userId);
   }
 
   private async resolveUserEmail(): Promise<string | undefined> {
@@ -126,6 +160,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction status (live sync)' })
   async getStatus(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -133,6 +168,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     let status = tx.status;
     if (status === 'pending' && tx.stripe_session_id) {
       const session = await this.stripeService.retrieveCheckoutSession(
@@ -151,6 +187,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a pending Stripe checkout session' })
   async cancel(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -158,6 +195,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     if (tx.status !== 'pending') {
       return { success: true, data: { status: tx.status } };
     }
@@ -174,6 +212,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by reference' })
   async getByReference(@Param('reference') reference: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionByReference(reference);
     if (!tx) {
       throw new HttpException(
@@ -181,6 +220,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     return { success: true, data: tx };
   }
 
@@ -188,6 +228,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by id' })
   async getById(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -195,6 +236,7 @@ export class StripePaymentsController {
         HttpStatus.NOT_FOUND
       );
     }
+    await this.assertTransactionBelongsToUser(tx, user.id);
     return { success: true, data: tx };
   }
 
@@ -207,6 +249,14 @@ export class StripePaymentsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string
   ) {
+    if (!accountId) {
+      throw new HttpException(
+        { success: false, message: 'accountId is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const user = await this.hasuraUserService.getUser();
+    await this.assertAccountBelongsToUser(accountId, user.id);
     const data = await this.databaseService.listTransactions({
       accountId,
       status,
