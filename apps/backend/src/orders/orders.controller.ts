@@ -1717,7 +1717,7 @@ export class OrdersController {
 
   @Get(':orderId/mentionable-participants')
   @ApiOperation({
-    summary: 'Get participants the current user is allowed to @mention in this order',
+    summary: 'Get participants the current user is allowed to @mention in this order. Requires the same access as reading messages.',
     description:
       'Returns the subset of order participants that the authenticated user may mention, filtered by the allowed-mention map (client→agent/business, business→client/agent, agent→client/business). Self is always excluded. Requires the same access as reading messages.',
   })
