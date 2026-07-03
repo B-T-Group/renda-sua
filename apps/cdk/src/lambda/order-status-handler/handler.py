@@ -7,10 +7,7 @@ from rendasua_core_packages.models import Order
 from rendasua_core_packages.utilities import format_full_address
 from typing import Dict, Any, Optional
 from rendasua_core_packages.hasura_client import (
-    HasuraClient,
-    HasuraClientConfig,
     get_order_with_location,
-    get_all_agent_locations,
     get_complete_order_details,
     get_order_details_for_notification,
     get_platform_order_lifecycle_counts,
@@ -24,8 +21,6 @@ from rendasua_core_packages.hasura_client import (
 )
 from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
 from slack_notifications import send_slack_for_order_event
-from rendasua_core_packages.commission_handler import distribute_commissions
-from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
 @dataclass
@@ -362,197 +357,6 @@ def handle_order_created(event: Dict[str, Any]) -> Dict[str, Any]:
     _send_slack_order_alert_safe(message.orderId, "order.created", environment)
     # Order status will be fetched from the order in process_order_event
     return process_order_event(message.orderId, "order.created", environment, order_status=None)
-
-
-def release_hold_and_process_payment(
-    order_id: str,
-    hasura_endpoint: str,
-    hasura_admin_secret: str
-) -> Dict[str, Any]:
-    """
-    Legacy single-step settlement (deprecated). Item and delivery settlement now run in NestJS
-    (processOrderPayment on pickup, processOrderDeliveryPayment on complete). Not invoked from
-    order.completed handler.
-    
-    Args:
-        order_id: Order ID
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
-        
-    Returns:
-        Result dictionary with success status
-    """
-    try:
-        log_info("Starting release hold and process payment", order_id=order_id)
-        
-        # Get complete order details
-        order = get_complete_order_details(order_id, hasura_endpoint, hasura_admin_secret)
-        
-        if not order:
-            log_error("Order not found", order_id=order_id)
-            return {"success": False, "error": "Order not found"}
-        
-        if not order.business or not order.business.user_id:
-            log_error("Business user not found", order_id=order_id)
-            return {"success": False, "error": "Business user not found"}
-        
-        if not order.client_id or not order.client or not order.client.user_id:
-            log_error("Client not found", order_id=order_id)
-            return {"success": False, "error": "Client not found"}
-        
-        # Get or create order hold
-        order_hold = get_or_create_order_hold(order_id, order, hasura_endpoint, hasura_admin_secret)
-        
-        if not order_hold:
-            log_error("Failed to get or create order hold", order_id=order_id)
-            return {"success": False, "error": "Failed to get or create order hold"}
-        
-        log_info("Order hold retrieved", order_id=order_id, hold_id=order_hold.id)
-        
-        # Release agent hold if agent is assigned
-        if order.assigned_agent and order.assigned_agent.user_id:
-            agent_user_id = order.assigned_agent.user_id
-            agent_account = get_account_by_user_and_currency(
-                agent_user_id,
-                order.currency,
-                hasura_endpoint,
-                hasura_admin_secret
-            )
-            
-            if agent_account:
-                agent_hold_amount = order_hold.agent_hold_amount
-                log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
-                transaction_id = register_account_transaction(
-                    agent_account.id,
-                    agent_hold_amount,
-                    "release",
-                    f"Hold released for order {order.order_number}",
-                    order_id,
-                    hasura_endpoint,
-                    hasura_admin_secret
-                )
-                if transaction_id:
-                    log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
-                else:
-                    log_error("Failed to release agent hold", order_id=order_id)
-            else:
-                log_error("Agent account not found", order_id=order_id, agent_user_id=agent_user_id)
-        
-        # Get client account
-        client_user_id = order.client.user_id
-        client_account = get_account_by_user_and_currency(
-            client_user_id,
-            order.currency,
-            hasura_endpoint,
-            hasura_admin_secret
-        )
-        
-        if not client_account:
-            log_error("Client account not found", order_id=order_id, client_user_id=client_user_id)
-            return {"success": False, "error": "Client account not found"}
-        
-        # Release client hold
-        client_hold_amount = order_hold.client_hold_amount
-        if client_hold_amount > 0:
-            log_info("Releasing client hold", order_id=order_id, amount=client_hold_amount)
-            transaction_id = register_account_transaction(
-                client_account.id,
-                client_hold_amount,
-                "release",
-                f"Hold released for order {order.order_number}",
-                order_id,
-                hasura_endpoint,
-                hasura_admin_secret
-            )
-            if transaction_id:
-                log_info("Client hold released successfully", order_id=order_id, transaction_id=transaction_id)
-            else:
-                log_error("Failed to release client hold", order_id=order_id)
-        
-        # Release delivery fees hold
-        delivery_fees = order_hold.delivery_fees
-        if delivery_fees > 0:
-            log_info("Releasing delivery fees hold", order_id=order_id, amount=delivery_fees)
-            transaction_id = register_account_transaction(
-                client_account.id,
-                delivery_fees,
-                "release",
-                f"Hold released for order {order.order_number} delivery fee",
-                order_id,
-                hasura_endpoint,
-                hasura_admin_secret
-            )
-            if transaction_id:
-                log_info("Delivery fees hold released successfully", order_id=order_id, transaction_id=transaction_id)
-            else:
-                log_error("Failed to release delivery fees hold", order_id=order_id)
-        
-        # Process payment transaction
-        total_amount = order.total_amount
-        log_info("Processing payment transaction", order_id=order_id, amount=total_amount)
-        transaction_id = register_account_transaction(
-            client_account.id,
-            total_amount,
-            "payment",
-            f"Order payment received for order {order.order_number}",
-            order_id,
-            hasura_endpoint,
-            hasura_admin_secret
-        )
-        
-        if not transaction_id:
-            log_error("Failed to process payment transaction", order_id=order_id)
-            return {"success": False, "error": "Failed to process payment transaction"}
-        
-        log_info("Payment transaction processed successfully", order_id=order_id, transaction_id=transaction_id)
-        
-        # Distribute commissions
-        log_info("Starting commission distribution", order_id=order_id)
-        
-        # Create HasuraClient instance for commission distribution
-        hasura_client = HasuraClient(
-            HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
-        )
-        
-        commission_result = distribute_commissions(
-            client=hasura_client,
-            order_id=order_id
-        )
-        
-        if not commission_result.get("success"):
-            log_error(
-                "Commission distribution failed",
-                order_id=order_id,
-                error=commission_result.get("error"),
-            )
-            # Don't fail the entire process if commission distribution fails
-            # Log the error but continue with order hold status update
-        else:
-            log_info(
-                "Commission distribution completed successfully",
-                order_id=order_id,
-            )
-        
-        # Update order hold status to completed
-        success = update_order_hold_status(
-            order_hold.id,
-            "completed",
-            hasura_endpoint,
-            hasura_admin_secret
-        )
-        
-        if not success:
-            log_error("Failed to update order hold status", order_id=order_id)
-            return {"success": False, "error": "Failed to update order hold status"}
-        
-        log_info("Release hold and process payment completed successfully", order_id=order_id)
-        return {"success": True, "message": "Payment processed successfully"}
-        
-    except Exception as e:
-        log_error("Error in release hold and process payment", error=e, order_id=order_id)
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
 
 
 def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:

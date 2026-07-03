@@ -250,6 +250,8 @@ def get_complete_order_details(
             log_error("Order not found", order_id=order_id)
             return None
 
+        log_info("Raw order data fetched", order_id=order_id, order_data=order_data)
+
         client_data = order_data.get("client")
         business_data = order_data.get("business")
         assigned_agent_data = order_data.get("assigned_agent")
