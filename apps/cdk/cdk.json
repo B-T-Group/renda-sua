@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts src/main.ts",
+  "app": "yarn ts-node --prefer-ts-exts src/main.ts",
   "watch": {
     "include": ["src/**"],
     "exclude": [

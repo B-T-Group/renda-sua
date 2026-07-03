@@ -35,13 +35,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: "yarn"
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
 
       - name: Install AWS CDK
-        run: npm install -g aws-cdk
+        run: yarn global add aws-cdk
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -52,7 +52,7 @@ jobs:
       - name: Bootstrap CDK (if needed)
         run: |
           cd apps/cdk
-          cdk bootstrap --require-approval never || echo "CDK already bootstrapped"
+          yarn cdk bootstrap --require-approval never || echo "CDK already bootstrapped"
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -72,19 +72,19 @@ jobs:
       - name: Build CDK app
         run: |
           cd apps/cdk
-          npm run build
+          yarn build
 
       - name: Show deployment plan
         run: |
           cd apps/cdk
-          cdk diff RendasuaInfrastructure-production HasuraEc2InfrastructureProd --context environment=production --context hasuraEnvironment=prod
+          yarn cdk diff RendasuaInfrastructure-production HasuraEc2InfrastructureProd --context environment=production --context hasuraEnvironment=prod
         env:
           SLACK_ORDER_WEBHOOK_URL: ${{ secrets.SLACK_ORDER_WEBHOOK_URL }}
           NOTIFICATIONS_INTERNAL_API_KEY: ${{ secrets.NOTIFICATIONS_INTERNAL_API_KEY }}
       - name: Deploy CDK infrastructure to production
         run: |
           cd apps/cdk
-          cdk deploy RendasuaInfrastructure-production HasuraEc2InfrastructureProd --context environment=production --context hasuraEnvironment=prod --require-approval never
+          yarn cdk deploy RendasuaInfrastructure-production HasuraEc2InfrastructureProd --context environment=production --context hasuraEnvironment=prod --require-approval never
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
@@ -98,4 +98,4 @@ jobs:
           echo "Region: ${{ env.AWS_REGION }}"
           echo "Deployed resources:"
           cd apps/cdk
-          cdk list --context environment=production
+          yarn cdk list --context environment=production

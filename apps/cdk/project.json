@@ -40,28 +40,28 @@
     "deploy": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cdk deploy",
+        "command": "yarn cdk deploy",
         "cwd": "apps/cdk"
       }
     },
     "destroy": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cdk destroy",
+        "command": "yarn cdk destroy",
         "cwd": "apps/cdk"
       }
     },
     "diff": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cdk diff",
+        "command": "yarn cdk diff",
         "cwd": "apps/cdk"
       }
     },
     "synth": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cdk synth",
+        "command": "yarn cdk synth",
         "cwd": "apps/cdk"
       }
     }
