@@ -439,7 +439,7 @@ export class StripePaymentsController {
       throw new UnauthorizedException('Invalid or missing internal API key');
     }
 
-    if (!orderId || !body.cancellationFee || !body.cancelledBy) {
+    if (!orderId || body.cancellationFee === undefined || body.cancellationFee === null || !body.cancelledBy) {
       throw new HttpException(
         { success: false, message: 'Missing required fields' },
         HttpStatus.BAD_REQUEST
