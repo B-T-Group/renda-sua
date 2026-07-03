@@ -235,6 +235,21 @@ def process_order_event(
             event_type=event_type,
             environment=environment,
         )
+
+        # Short-circuit: if the status is known upfront and has no handler, skip
+        # the expensive DB + Google Maps fetch entirely.
+        if order_status is not None and order_status != "ready_for_pickup":
+            log_info(
+                "No handler for status - doing nothing",
+                order_id=order_id,
+                status=order_status,
+            )
+            return {
+                "success": True,
+                "message": f"No action required for status: {order_status}",
+                "notifications_sent": 0,
+                "order_status": order_status,
+            }
         
         # Get configuration
         hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
@@ -253,7 +268,6 @@ def process_order_event(
             }
         
         # Get secrets
-        log_info("Retrieving secrets from AWS Secrets Manager", environment=environment)
         try:
             hasura_admin_secret = get_hasura_admin_secret(environment)
         except ValueError as e:
@@ -263,8 +277,6 @@ def process_order_event(
                 "error": "Failed to retrieve Hasura admin secret",
             }
         google_maps_api_key = get_google_maps_api_key(environment)
-        
-        log_info("Successfully retrieved secrets")
         
         # Fetch order with location
         log_info("Fetching order with location data", order_id=order_id)
@@ -407,6 +419,13 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
             notify_order_status_change_via_nest_api,
         )
 
+        log_info(
+            "Calling Nest order status notify",
+            order_id=message.orderId,
+            previous_status=prev,
+            new_status=message.status,
+            actor_user_id=message.actorUserId,
+        )
         ok, detail = notify_order_status_change_via_nest_api(
             message.orderId,
             prev,
@@ -414,7 +433,14 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
         )
         nest_notify_ok = ok
         nest_notify_detail = detail
-        if not ok:
+        if ok:
+            log_info(
+                "Nest order status notify succeeded",
+                order_id=message.orderId,
+                previous_status=prev,
+                new_status=message.status,
+            )
+        else:
             log_error(
                 "Nest order status notify failed",
                 detail=detail,
