@@ -1662,7 +1662,7 @@ export class BusinessItemsService {
       ...(hasPrice && { price }),
       ...(currency && { currency }),
       min_order_quantity: 1,
-      max_order_quantity: 1,
+      max_order_quantity: 10,
       is_active: false,
     };
 

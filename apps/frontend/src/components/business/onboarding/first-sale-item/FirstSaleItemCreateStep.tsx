@@ -19,9 +19,11 @@ import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import { useApiClient } from '../../../../hooks/useApiClient';
 import { useBrands } from '../../../../hooks/useBrands';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
+import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useCategories, useSubcategories } from '../../../../hooks/useCategories';
 import { useCreateItemFromImage } from '../../../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
+import { useSupportedCountries } from '../../../../hooks/useSupportedCountries';
 import { Item, useItems } from '../../../../hooks/useItems';
 
 export interface CreatedSaleItemSummary {
@@ -68,6 +70,8 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const { updateItem } = useItems(profile?.business?.id, {
     skipInitialItemsFetch: true,
   });
+  const { primaryAddressCountry } = useBusinessLocations(profile?.business?.id);
+  const { countries } = useSupportedCountries();
   const primaryId = imageIds[0] ?? '';
   const extraIds = imageIds.slice(1);
   const [aiTrigger, setAiTrigger] = useState(0);
@@ -168,6 +172,16 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     );
     setCurrency(suggestions.currency || 'XAF');
   }, [suggestions, itemForEdit, existingItem?.id, skipAiHydrate]);
+
+  useEffect(() => {
+    if (!primaryAddressCountry || !countries.length) return;
+    const match = countries.find(
+      (c) => c.code?.toUpperCase() === primaryAddressCountry.toUpperCase()
+    );
+    if (match?.currencyCode) {
+      setCurrency(match.currencyCode.toUpperCase());
+    }
+  }, [primaryAddressCountry, countries]);
 
   useEffect(() => {
     if (!sugError) return;
@@ -459,7 +473,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
           disabled={formDisabled}
-          sx={{ width: { sm: 120 } }}
+          sx={{ width: { sm: 120 }, height: { sm: 56 } }}
         />
       </Stack>
       <Button

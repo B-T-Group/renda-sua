@@ -12,9 +12,12 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { BusinessImage } from '../../hooks/useBusinessImages';
+import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useCreateItemFromImage } from '../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../hooks/useImageItemSuggestions';
+import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
 
 interface CreateItemFromImageDialogProps {
@@ -29,6 +32,9 @@ export const CreateItemFromImageDialog: React.FC<
 > = ({ open, image, onClose, onCreated }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
+  const { profile } = useUserProfileContext();
+  const { primaryAddressCountry } = useBusinessLocations(profile?.business?.id);
+  const { countries } = useSupportedCountries();
   const [name, setName] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [subCategoryName, setSubCategoryName] = useState('');
@@ -76,6 +82,16 @@ export const CreateItemFromImageDialog: React.FC<
       setCurrency('XAF');
     }
   }, [open, image, suggestions]);
+
+  useEffect(() => {
+    if (!primaryAddressCountry || !countries.length) return;
+    const match = countries.find(
+      (c) => c.code?.toUpperCase() === primaryAddressCountry.toUpperCase()
+    );
+    if (match?.currencyCode) {
+      setCurrency(match.currencyCode.toUpperCase());
+    }
+  }, [primaryAddressCountry, countries]);
 
   useEffect(() => {
     if (suggestionsError) {
