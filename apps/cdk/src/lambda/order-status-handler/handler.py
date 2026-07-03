@@ -804,7 +804,7 @@ def trigger_stripe_refund_safe(
             return {"success": True, "skipped": True, "reason": "Business cancellation"}
         
         # Call internal refund endpoint
-        url = f"{backend_endpoint}/stripe-payments/refund/order/{order_id}"
+        url = f"{backend_endpoint}/api/stripe-payments/refund/order/{order_id}"
         headers = {
             "x-rendasua-internal-key": internal_api_key,
             "Content-Type": "application/json",
