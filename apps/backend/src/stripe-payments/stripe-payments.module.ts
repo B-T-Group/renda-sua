@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { OrdersModule } from '../orders/orders.module';
 import { PaymentCallbackRegistryService } from '../mobile-payments/payment-callback/payment-callback-registry.service';
 import { PaymentRoutingService } from './payment-routing.service';
 import { StripeCheckoutService } from './stripe-checkout.service';
@@ -13,7 +12,6 @@ import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
 
 @Module({
-  imports: [OrdersModule],
   controllers: [StripePaymentsController, StripeConnectController],
   providers: [
     StripeService,

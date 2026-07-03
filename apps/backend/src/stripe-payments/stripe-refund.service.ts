@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
-import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
 export class StripeRefundService {
@@ -9,52 +8,27 @@ export class StripeRefundService {
 
   constructor(
     private readonly stripeService: StripeService,
-    private readonly databaseService: StripePaymentsDatabaseService,
-    private readonly ordersService: OrdersService
+    private readonly databaseService: StripePaymentsDatabaseService
   ) {}
 
   async initiateOrderRefund(params: {
-    orderId: string;
+    orderNumber: string;
     cancellationFee: number;
     cancelledBy: string;
   }): Promise<{ success: boolean; refundId?: string; message: string }> {
     try {
       this.logger.log(
-        `Initiating Stripe refund for order ${params.orderId}, cancelled by ${params.cancelledBy}`
+        `Initiating Stripe refund for order ${params.orderNumber}, cancelled by ${params.cancelledBy}`
       );
-
-      // Fetch the order to get the order number
-      let order;
-      try {
-        order = await this.ordersService.getOrderById(params.orderId);
-      } catch (error: any) {
-        this.logger.warn(
-          `Could not fetch order ${params.orderId}: ${error.message}`
-        );
-        return {
-          success: false,
-          message: 'Order not found',
-        };
-      }
-
-      if (!order || !order.order_number) {
-        this.logger.warn(
-          `Order ${params.orderId} has no order number`
-        );
-        return {
-          success: false,
-          message: 'Order number not found',
-        };
-      }
 
       // Look up the successful Stripe payment transaction by order number
       const transaction = await this.databaseService.getTransactionByEntityId(
-        order.order_number
+        params.orderNumber
       );
 
       if (!transaction) {
         this.logger.warn(
-          `No Stripe payment transaction found for order ${params.orderId}`
+          `No Stripe payment transaction found for order ${params.orderNumber}`
         );
         return {
           success: false,
@@ -64,7 +38,7 @@ export class StripeRefundService {
 
       if (transaction.status !== 'success') {
         this.logger.warn(
-          `Stripe payment transaction for order ${params.orderId} is not in success status: ${transaction.status}`
+          `Stripe payment transaction for order ${params.orderNumber} is not in success status: ${transaction.status}`
         );
         return {
           success: false,
@@ -87,7 +61,7 @@ export class StripeRefundService {
 
       if (refundAmount <= 0) {
         this.logger.log(
-          `Refund amount is zero or negative for order ${params.orderId}, skipping Stripe refund`
+          `Refund amount is zero or negative for order ${params.orderNumber}, skipping Stripe refund`
         );
         return {
           success: true,
@@ -104,13 +78,13 @@ export class StripeRefundService {
         amount: refundAmountMinor,
         reason: 'requested_by_customer',
         metadata: {
-          orderId: params.orderId,
+          orderNumber: params.orderNumber,
           cancelledBy: params.cancelledBy,
         },
       });
 
       this.logger.log(
-        `Stripe refund created: ${stripeRefund.id} for order ${params.orderId}`
+        `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
       );
 
       // Insert refund record into database with pending status
@@ -118,20 +92,20 @@ export class StripeRefundService {
         stripe_refund_id: stripeRefund.id,
         stripe_payment_intent_id: transaction.stripe_payment_intent_id,
         stripe_payment_transaction_id: transaction.id,
-        order_id: params.orderId,
+        order_id: params.orderNumber,
         amount: refundAmount,
         currency: transaction.currency,
         reason: 'requested_by_customer',
         cancellation_fee: params.cancellationFee,
         cancelled_by: params.cancelledBy,
         metadata: {
-          orderId: params.orderId,
+          orderNumber: params.orderNumber,
           cancelledBy: params.cancelledBy,
         },
       });
 
       this.logger.log(
-        `Refund record created: ${refundRecord.id} for order ${params.orderId}`
+        `Refund record created: ${refundRecord.id} for order ${params.orderNumber}`
       );
 
       return {
@@ -141,7 +115,7 @@ export class StripeRefundService {
       };
     } catch (error: any) {
       this.logger.error(
-        `Failed to initiate Stripe refund for order ${params.orderId}: ${error.message}`,
+        `Failed to initiate Stripe refund for order ${params.orderNumber}: ${error.message}`,
         error.stack
       );
       return {

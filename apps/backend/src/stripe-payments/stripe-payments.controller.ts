@@ -446,8 +446,37 @@ export class StripePaymentsController {
       );
     }
 
+    // Fetch order number from Hasura
+    let orderNumber: string;
+    try {
+      const query = `
+        query GetOrderNumber($id: uuid!) {
+          orders_by_pk(id: $id) {
+            order_number
+          }
+        }
+      `;
+      const response = await this.hasuraUserService.executeQuery<{
+        orders_by_pk: { order_number: string } | null;
+      }>(query, { id: orderId });
+      
+      if (!response.orders_by_pk?.order_number) {
+        throw new HttpException(
+          { success: false, message: 'Order not found' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+      orderNumber = response.orders_by_pk.order_number;
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch order number for ${orderId}: ${error.message}`);
+      throw new HttpException(
+        { success: false, message: 'Failed to fetch order details' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
     return this.refundService.initiateOrderRefund({
-      orderId,
+      orderNumber,
       cancellationFee: body.cancellationFee,
       cancelledBy: body.cancelledBy,
     });
