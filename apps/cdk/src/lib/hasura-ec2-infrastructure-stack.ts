@@ -2,6 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import { Construct } from 'constructs';
 
 export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
@@ -13,11 +16,11 @@ export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
   readonly dbSecretArn: string;
   readonly adminSecretArn: string;
   readonly jwtSecretArn: string;
-  readonly letsEncryptEmail: string;
+  readonly acmCertificateArn: string; // Required: AWS Certificate Manager certificate ARN for HTTPS
+  readonly letsEncryptEmail?: string; // Optional: Email for Let's Encrypt (no longer used)
   readonly sshCidr?: string;
   readonly instanceType?: string;
   readonly hasuraImage?: string;
-  readonly acmCertificateArn?: string; // Optional: AWS Certificate Manager certificate ARN
 }
 
 export class HasuraEc2EnvironmentStack extends cdk.Stack {
@@ -44,21 +47,46 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       domainName: props.hostedZoneDomain,
     });
 
-    const securityGroup = this.createSecurityGroup(vpc, props, namePrefix);
-    const role = this.createEc2Role(namePrefix, props);
-    const eip = new ec2.CfnEIP(this, `${namePrefix}Eip`, {
-      domain: 'vpc',
-      tags: [{ key: 'Name', value: `hasura-${props.environment}-eip` }],
+    // Create ALB security group (public-facing)
+    const albSecurityGroup = new ec2.SecurityGroup(this, `${namePrefix}AlbSg`, {
+      vpc,
+      description: `Security group for ${namePrefix} ALB`,
+      allowAllOutbound: true,
     });
+    albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
+    albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
+
+    // Create EC2 security group (private backend)
+    const ec2SecurityGroup = new ec2.SecurityGroup(this, `${namePrefix}Ec2Sg`, {
+      vpc,
+      description: `Security group for ${namePrefix} EC2 backend`,
+      allowAllOutbound: true,
+    });
+    // Allow inbound from ALB on port 80 only
+    ec2SecurityGroup.addIngressRule(
+      ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
+      ec2.Port.tcp(80),
+      'HTTP from ALB'
+    );
+    // Allow SSH if specified
+    if (props.sshCidr) {
+      ec2SecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(props.sshCidr),
+        ec2.Port.tcp(22),
+        'Restricted SSH'
+      );
+    }
+
+    const role = this.createEc2Role(namePrefix, props);
 
     // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
-    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2Instance`, {
+    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2InstanceV6`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.small'),
       machineImage: this.ubuntuArm64Image(),
       role,
-      securityGroup,
+      securityGroup: ec2SecurityGroup,
       blockDevices: [
         {
           deviceName: '/dev/sda1',
@@ -74,15 +102,53 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       ...this.renderUserData(props, props.hasuraImage ?? 'hasura/graphql-engine:v2.48.3')
     );
 
-    new ec2.CfnEIPAssociation(this, `${namePrefix}EipAssociation`, {
-      allocationId: eip.attrAllocationId,
-      instanceId: instance.instanceId,
+    // Create Application Load Balancer
+    const alb = new elbv2.ApplicationLoadBalancer(this, `${namePrefix}Alb`, {
+      vpc,
+      internetFacing: true,
+      securityGroup: albSecurityGroup,
     });
 
+    // Create target group pointing to EC2 instance on port 80
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, `${namePrefix}Tg`, {
+      vpc,
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targets: [new targets.InstanceTarget(instance, 80)],
+      healthCheck: {
+        path: '/',
+        healthyHttpCodes: '200,301,302',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
+    });
+
+    // HTTP listener: redirect to HTTPS
+    alb.addListener('HttpListener', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+        permanent: true,
+      }),
+    });
+
+    // HTTPS listener: forward to target group with ACM certificate
+    alb.addListener('HttpsListener', {
+      port: 443,
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      certificates: [elbv2.ListenerCertificate.fromArn(props.acmCertificateArn)],
+      defaultAction: elbv2.ListenerAction.forward([targetGroup]),
+    });
+
+    // Update Route53 to point to ALB instead of Elastic IP
     new route53.ARecord(this, `${namePrefix}DnsRecord`, {
       zone,
       recordName: this.recordNameForZone(props.domainName, zone.zoneName),
-      target: route53.RecordTarget.fromIpAddresses(eip.ref),
+      target: route53.RecordTarget.fromAlias(new route53targets.LoadBalancerTarget(alb)),
       ttl: cdk.Duration.minutes(5),
     });
 
@@ -90,36 +156,14 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       value: `https://${props.domainName}`,
       description: `Hasura ${props.environment} public URL`,
     });
-    new cdk.CfnOutput(this, `${namePrefix}PublicIp`, {
-      value: eip.ref,
-      description: `Hasura ${props.environment} Elastic IP`,
+    new cdk.CfnOutput(this, `${namePrefix}AlbDns`, {
+      value: alb.loadBalancerDnsName,
+      description: `Hasura ${props.environment} ALB DNS name`,
     });
     new cdk.CfnOutput(this, `${namePrefix}InstanceId`, {
       value: instance.instanceId,
       description: `Hasura ${props.environment} EC2 instance ID`,
     });
-  }
-
-  private createSecurityGroup(
-    vpc: ec2.IVpc,
-    props: HasuraEc2EnvironmentStackProps,
-    namePrefix: string
-  ): ec2.SecurityGroup {
-    const securityGroup = new ec2.SecurityGroup(this, `${namePrefix}Sg`, {
-      vpc,
-      description: `Security group for ${namePrefix} Hasura host`,
-      allowAllOutbound: true,
-    });
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
-    if (props.sshCidr) {
-      securityGroup.addIngressRule(
-        ec2.Peer.ipv4(props.sshCidr),
-        ec2.Port.tcp(22),
-        'Restricted SSH'
-      );
-    }
-    return securityGroup;
   }
 
   private createEc2Role(
@@ -154,13 +198,12 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
   ): string[] {
     const isProd = props.environment === 'prod';
     const secretRegion = props.dbSecretArn.split(':')[3];
-    const useAcm = !!props.acmCertificateArn;
     
     return [
       '#!/bin/bash',
-      'set -euxo pipefail',
+      'set -uo pipefail',
       'apt-get update -y',
-      'apt-get install -y docker.io nginx certbot python3-certbot-nginx curl unzip',
+      'apt-get install -y docker.io nginx curl unzip',
       'if ! command -v aws >/dev/null 2>&1; then curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip"; unzip -q /tmp/awscliv2.zip -d /tmp; /tmp/aws/install --update; fi',
       'systemctl enable docker',
       'systemctl start docker',
@@ -197,25 +240,6 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'server {',
       '  listen 80;',
       `  server_name ${props.domainName};`,
-      useAcm ? '  return 301 https://$server_name$request_uri;' : '  location / {',
-      useAcm ? '}' : '    proxy_pass http://127.0.0.1:8080;',
-      useAcm ? '' : '    proxy_http_version 1.1;',
-      useAcm ? '' : '    proxy_set_header Host \\$host;',
-      useAcm ? '' : '    proxy_set_header X-Real-IP \\$remote_addr;',
-      useAcm ? '' : '    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;',
-      useAcm ? '' : '    proxy_set_header X-Forwarded-Proto \\$scheme;',
-      useAcm ? '' : '    proxy_set_header Upgrade \\$http_upgrade;',
-      useAcm ? '' : '    proxy_set_header Connection \\$connection_upgrade;',
-      useAcm ? '' : '    proxy_read_timeout 86400;',
-      useAcm ? '' : '  }',
-      '}',
-      'server {',
-      '  listen 443 ssl http2;',
-      `  server_name ${props.domainName};`,
-      useAcm ? '  ssl_certificate /etc/nginx/ssl/acm-cert.pem;' : '  ssl_certificate /etc/letsencrypt/live/${props.domainName}/fullchain.pem;',
-      useAcm ? '  ssl_certificate_key /etc/nginx/ssl/acm-key.pem;' : '  ssl_certificate_key /etc/letsencrypt/live/${props.domainName}/privkey.pem;',
-      '  ssl_protocols TLSv1.2 TLSv1.3;',
-      '  ssl_ciphers HIGH:!aNULL:!MD5;',
       '  location / {',
       '    proxy_pass http://127.0.0.1:8080;',
       '    proxy_http_version 1.1;',
@@ -233,15 +257,6 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'rm -f /etc/nginx/sites-enabled/default',
       'nginx -t',
       'systemctl restart nginx',
-      // Generate self-signed certificate as fallback
-      'mkdir -p /etc/nginx/ssl',
-      `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/hasura.key -out /etc/nginx/ssl/hasura.crt -subj "/CN=${props.domainName}" || true`,
-      // If using ACM, download certificate from AWS Secrets Manager (where ACM stores it)
-      useAcm ? `aws secretsmanager get-secret-value --secret-id '${props.acmCertificateArn}' --query SecretString --output text --region '${secretRegion}' > /etc/nginx/ssl/acm-cert.pem || echo "ACM cert not found in Secrets Manager"` : '',
-      // Try to get Let's Encrypt certificate if not using ACM
-      useAcm ? '' : `certbot --nginx --non-interactive --agree-tos --email '${props.letsEncryptEmail}' -d '${props.domainName}' --redirect || echo "Certbot failed, using self-signed certificate"`,
-      'systemctl enable certbot.timer || true',
-      'systemctl restart certbot.timer || true',
     ].filter(line => line !== ''); // Remove empty lines
   }
 
