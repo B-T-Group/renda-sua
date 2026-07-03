@@ -94,6 +94,15 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: stripe_refunds
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: stripe_refunds
+          schema: public
 insert_permissions:
   - role: client
     permission:
@@ -178,6 +187,10 @@ select_permissions:
         - discount_amount
         - first_order_delivery_fee_promo
         - first_order_base_delivery_discount_amount
+        - cancelled_at
+        - cancelled_by
+        - cancellation_reason_id
+        - cancellation_notes
       filter:
         assigned_agent:
           user:
@@ -226,6 +239,10 @@ select_permissions:
         - discount_amount
         - first_order_delivery_fee_promo
         - first_order_base_delivery_discount_amount
+        - cancelled_at
+        - cancelled_by
+        - cancellation_reason_id
+        - cancellation_notes
       filter:
         business:
           user:
@@ -273,6 +290,10 @@ select_permissions:
         - discount_amount
         - first_order_delivery_fee_promo
         - first_order_base_delivery_discount_amount
+        - cancelled_at
+        - cancelled_by
+        - cancellation_reason_id
+        - cancellation_notes
       filter:
         client:
           user:

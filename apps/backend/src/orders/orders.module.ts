@@ -9,6 +9,7 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { CancellationPolicyService } from './cancellation-policy.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
@@ -52,8 +53,9 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     FailedDeliveriesService,
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
+    CancellationPolicyService,
   ],
   // MessagingService is available via MessagingModule export
-  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler],
+  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService],
 })
 export class OrdersModule {}

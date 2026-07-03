@@ -51,6 +51,7 @@ import {
 } from '../users/user-timezone.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
+import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
@@ -61,6 +62,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
+  cancellationReasonId?: number; // FK to order_cancellation_reasons
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -348,7 +350,8 @@ export class OrdersService {
     private readonly loyaltyService: LoyaltyService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeCheckoutService: StripeCheckoutService,
-    private readonly orderOffersService: OrderOffersService
+    private readonly orderOffersService: OrderOffersService,
+    private readonly cancellationPolicyService: CancellationPolicyService
   ) {}
 
   private requireActivePersona(
@@ -3582,7 +3585,12 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Store previous status for async handler
+    // Create appropriate status history entry based on who cancelled
+    const cancelledBy = isBusinessOwner ? 'business' : 'client';
+    const cancelMessage = isBusinessOwner
+      ? 'Order cancelled by business'
+      : 'Order cancelled by client';
+
     const previousStatus = order.current_status;
 
     // Update order status to cancelled
@@ -3591,11 +3599,43 @@ export class OrdersService {
       'cancelled'
     );
 
-    // Create appropriate status history entry based on who cancelled
-    const cancelledBy = isBusinessOwner ? 'business' : 'client';
-    const cancelMessage = isBusinessOwner
-      ? 'Order cancelled by business'
-      : 'Order cancelled by client';
+    // Persist cancellation metadata on the orders row
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation SetCancellationFields(
+          $orderId: uuid!,
+          $cancelledBy: String!,
+          $cancelledAt: timestamptz!,
+          $cancellationReasonId: Int,
+          $cancellationNotes: String
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId },
+            _set: {
+              cancelled_by: $cancelledBy,
+              cancelled_at: $cancelledAt,
+              cancellation_reason_id: $cancellationReasonId,
+              cancellation_notes: $cancellationNotes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId: request.orderId,
+          cancelledBy,
+          cancelledAt: new Date().toISOString(),
+          cancellationReasonId: request.cancellationReasonId ?? null,
+          cancellationNotes: request.notes ?? null,
+        }
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to persist cancellation metadata: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
 
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -3643,13 +3683,55 @@ export class OrdersService {
     };
   }
 
+  async getCancellationPreview(orderId: string): Promise<CancellationPolicy> {
+    const user = await this.hasuraUserService.getUser();
+
+    if (!isActivePersona(user, 'client') && !isActivePersona(user, 'business'))
+      throw new HttpException(
+        'Only clients and business users can preview cancellation',
+        HttpStatus.FORBIDDEN
+      );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+
+    const isBusinessOwner =
+      isActivePersona(user, 'business') && order.business.user_id === user.id;
+    const isOrderOwner =
+      isActivePersona(user, 'client') && order.client?.user_id === user.id;
+
+    if (!isBusinessOwner && !isOrderOwner)
+      throw new HttpException(
+        'Unauthorized to view cancellation preview for this order',
+        HttpStatus.FORBIDDEN
+      );
+
+    const persona = isBusinessOwner ? 'business' : 'client';
+    const countryCode =
+      (order.business_location as any)?.address?.country ?? 'GA';
+
+    const orderForPolicy = {
+      id: order.id,
+      current_status: order.current_status,
+      assigned_agent_id: order.assigned_agent_id,
+      total_amount: order.total_amount,
+      currency: order.currency,
+      payment_source: (order as any).payment_source,
+      payment_status: order.payment_status,
+      payment_timing: (order as any).payment_timing,
+      business_location: { country_code: countryCode },
+    };
+
+    return this.cancellationPolicyService.getPolicy(orderForPolicy, persona);
+  }
+
   async refundOrder(request: OrderStatusChangeRequest) {
     return this.orderRefundsService.legacyDirectFullRefund(
       request.orderId,
       request.notes
     );
   }
-
   /**
    * Normalize filters to convert 'status' field to 'current_status'
    * This handles cases where filters are passed with the incorrect field name

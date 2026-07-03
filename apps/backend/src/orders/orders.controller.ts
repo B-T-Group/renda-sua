@@ -620,6 +620,54 @@ export class OrdersController {
     return this.ordersService.generateDeliveryOverwriteCode(orderId);
   }
 
+  @Get(':orderId/cancellation-preview')
+  @ApiOperation({
+    summary: 'Get cancellation preview for an order',
+    description:
+      'Returns cancellation eligibility, refund details, consequences, and available reasons WITHOUT cancelling the order. Call this before showing the cancellation confirmation UI.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation preview returned',
+    schema: {
+      type: 'object',
+      properties: {
+        canCancel: { type: 'boolean' },
+        reasonIfBlocked: { type: 'string' },
+        refundType: {
+          type: 'string',
+          enum: ['full', 'partial', 'none', 'wallet_credit'],
+        },
+        refundAmount: { type: 'number' },
+        refundCurrency: { type: 'string' },
+        cancellationFee: { type: 'number' },
+        estimatedRefundProcessingTime: { type: 'string' },
+        paymentSource: { type: 'string' },
+        cancellationConsequences: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        availableCancellationReasons: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              value: { type: 'string' },
+              display: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getCancellationPreview(@Param('orderId') orderId: string) {
+    return this.ordersService.getCancellationPreview(orderId);
+  }
+
   @Post('cancel')
   @ApiOperation({
     summary: 'Cancel an order',
@@ -636,10 +684,15 @@ export class OrdersController {
           description: 'Order ID to cancel',
           example: 'order-123',
         },
+        cancellationReasonId: {
+          type: 'number',
+          description: 'ID from order_cancellation_reasons lookup table',
+          example: 1,
+        },
         notes: {
           type: 'string',
-          description: 'Optional cancellation notes',
-          example: 'Customer requested cancellation',
+          description: 'Optional free-text notes (required when reason is "other")',
+          example: 'Changed my mind after thinking it over',
         },
       },
       required: ['orderId'],
