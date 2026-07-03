@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import { Construct } from 'constructs';
 
 export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
@@ -80,7 +80,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     const role = this.createEc2Role(namePrefix, props);
 
     // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
-    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2InstanceV6`, {
+    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2Instance`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.small'),
