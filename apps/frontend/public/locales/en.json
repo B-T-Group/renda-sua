@@ -2668,6 +2668,12 @@
     "cancellationFree": "Free Cancellation",
     "cancellationFreeMessage": "You can cancel this order for free since it has not been confirmed yet.",
     "cancelling": "Cancelling...",
+    "stripe": {
+      "cancellationFeeExplained": "A cancellation fee applies because your order was already confirmed.",
+      "feeAmount": "Fee: {{amount}} {{currency}}",
+      "refundTimeline": "Your refund will be credited to your card within 3–5 business days.",
+      "refundTimelineFreeCancellation": "If you paid by card, your refund will appear within 3–5 business days."
+    },
     "pickingUp": "Picking up order...",
     "cannotCancelOrder": "This order cannot be cancelled as it has already been picked up by a delivery agent.",
     "category": "Category",
@@ -4310,6 +4316,26 @@
       "orderReference": "Order #{{orderNumber}}",
       "viewOrder": "View order",
       "viewOrders": "View my orders"
+    },
+    "refunds": {
+      "title": "Refund History",
+      "subtitle": "Track the status of refunds for this order",
+      "noRefunds": "No refunds found for this order",
+      "loadError": "Failed to load refunds",
+      "columns": {
+        "amount": "Amount",
+        "fee": "Fee Deducted",
+        "netRefund": "Net Refund",
+        "status": "Status",
+        "refundId": "Refund ID",
+        "date": "Date"
+      },
+      "status": {
+        "pending": "Pending",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
     }
   }
 }

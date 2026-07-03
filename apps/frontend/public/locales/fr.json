@@ -2657,6 +2657,12 @@
     "cancellationFree": "Annulation Gratuite",
     "cancellationFreeMessage": "Vous pouvez annuler cette commande gratuitement car elle n'a pas encore été confirmée.",
     "cancelling": "Annulation en cours...",
+    "stripe": {
+      "cancellationFeeExplained": "Un frais d'annulation s'applique car votre commande a déjà été confirmée.",
+      "feeAmount": "Frais : {{amount}} {{currency}}",
+      "refundTimeline": "Votre remboursement sera crédité sur votre carte dans 3 à 5 jours ouvrables.",
+      "refundTimelineFreeCancellation": "Si vous avez payé par carte, votre remboursement apparaîtra dans 3 à 5 jours ouvrables."
+    },
     "pickingUp": "Récupération de la commande...",
     "cannotCancelOrder": "Cette commande ne peut pas être annulée car elle a déjà été récupérée par un agent de livraison.",
     "category": "Catégorie",
@@ -4296,6 +4302,26 @@
       "orderReference": "Commande #{{orderNumber}}",
       "viewOrder": "Voir la commande",
       "viewOrders": "Voir mes commandes"
+    },
+    "refunds": {
+      "title": "Historique des Remboursements",
+      "subtitle": "Suivez l'état des remboursements pour cette commande",
+      "noRefunds": "Aucun remboursement trouvé pour cette commande",
+      "loadError": "Impossible de charger les remboursements",
+      "columns": {
+        "amount": "Montant",
+        "fee": "Frais Déduits",
+        "netRefund": "Remboursement Net",
+        "status": "Statut",
+        "refundId": "ID de Remboursement",
+        "date": "Date"
+      },
+      "status": {
+        "pending": "En Attente",
+        "succeeded": "Réussi",
+        "failed": "Échoué",
+        "cancelled": "Annulé"
+      }
     }
   }
 }

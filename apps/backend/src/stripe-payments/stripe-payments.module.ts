@@ -8,6 +8,7 @@ import { StripePaymentCallbackProcessor } from './stripe-payment-callback.proces
 import { StripePaymentsController } from './stripe-payments.controller';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 import { StripePayoutService } from './stripe-payout.service';
+import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
 
 @Module({
@@ -18,6 +19,7 @@ import { StripeService } from './stripe.service';
     StripeCheckoutService,
     StripeConnectService,
     StripePayoutService,
+    StripeRefundService,
     StripePaymentCallbackProcessor,
     PaymentCallbackRegistryService,
     PaymentRoutingService,
@@ -27,7 +29,9 @@ import { StripeService } from './stripe.service';
     StripeCheckoutService,
     StripePayoutService,
     StripeConnectService,
+    StripeRefundService,
     PaymentRoutingService,
   ],
 })
 export class StripePaymentsModule {}
+

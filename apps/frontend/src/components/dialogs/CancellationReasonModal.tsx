@@ -69,6 +69,9 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const [currency, setCurrency] = useState<string>('XAF');
   const [loadingFeeData, setLoadingFeeData] = useState(false);
 
+  // Check if order was paid via Stripe (credit card)
+  const isStripePaid = order.payment_source === 'credit_card';
+
   // Check if order can be cancelled for free
   const canCancelForFree = ['pending_payment', 'pending'].includes(
     order.current_status
@@ -333,12 +336,22 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
             </Box>
 
             {canCancelForFree ? (
-              <Typography variant="body2" color="success.dark">
-                {t(
-                  'orders.cancellationFreeMessage',
-                  'You can cancel this order for free since it has not been confirmed yet.'
+              <Box>
+                <Typography variant="body2" color="success.dark">
+                  {t(
+                    'orders.cancellationFreeMessage',
+                    'You can cancel this order for free since it has not been confirmed yet.'
+                  )}
+                </Typography>
+                {isStripePaid && (
+                  <Typography variant="caption" color="success.dark" display="block" sx={{ mt: 1 }}>
+                    {t(
+                      'orders.stripe.refundTimelineFreeCancellation',
+                      'If you paid by card, your refund will appear within 3–5 business days.'
+                    )}
+                  </Typography>
                 )}
-              </Typography>
+              </Box>
             ) : (
               <Box>
                 {loadingFeeData ? (
@@ -360,34 +373,76 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
                   </Typography>
                 ) : cancellationFee !== null ? (
                   <Box>
-                    <Typography
-                      variant="body2"
-                      color="warning.dark"
-                      sx={{ mb: 1 }}
-                    >
-                      {t(
-                        'orders.cancellationFeeMessage',
-                        'A cancellation fee will be deducted from your refund:'
-                      )}
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      fontWeight="bold"
-                      color="warning.dark"
-                    >
-                      {cancellationFee.toLocaleString()} {currency}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                      sx={{ mt: 0.5 }}
-                    >
-                      {t(
-                        'orders.cancellationFeeNote',
-                        'This fee will be deducted from your refund amount.'
-                      )}
-                    </Typography>
+                    {isStripePaid ? (
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          color="warning.dark"
+                          sx={{ mb: 1 }}
+                        >
+                          {t(
+                            'orders.stripe.cancellationFeeExplained',
+                            'A cancellation fee applies because your order was already confirmed.'
+                          )}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          fontWeight="bold"
+                          color="warning.dark"
+                        >
+                          {t(
+                            'orders.stripe.feeAmount',
+                            'Fee: {{amount}} {{currency}}',
+                            {
+                              amount: cancellationFee.toLocaleString(),
+                              currency,
+                            }
+                          )}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          sx={{ mt: 1 }}
+                        >
+                          {t(
+                            'orders.stripe.refundTimeline',
+                            'Your refund will be credited to your card within 3–5 business days.'
+                          )}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          color="warning.dark"
+                          sx={{ mb: 1 }}
+                        >
+                          {t(
+                            'orders.cancellationFeeMessage',
+                            'A cancellation fee will be deducted from your refund:'
+                          )}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          fontWeight="bold"
+                          color="warning.dark"
+                        >
+                          {cancellationFee.toLocaleString()} {currency}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          sx={{ mt: 0.5 }}
+                        >
+                          {t(
+                            'orders.cancellationFeeNote',
+                            'This fee will be deducted from your refund amount.'
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
                 ) : (
                   <Typography variant="body2" color="warning.dark">

@@ -1,0 +1,7 @@
+table:
+  name: stripe_refunds
+  schema: public
+object_relationships:
+  - name: stripe_payment_transaction
+    using:
+      foreign_key_constraint_on: stripe_payment_transaction_id

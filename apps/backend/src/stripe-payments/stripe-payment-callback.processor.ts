@@ -256,7 +256,24 @@ export class StripePaymentCallbackProcessor {
         paymentIntentId
       );
     if (!tx || tx.status === 'refunded') return;
+
     const refundedMajor = Math.min((charge.amount_refunded ?? 0) / 100, tx.amount);
+
+    // Check if we already have a refund record for this charge to avoid double-crediting
+    // If a refund record exists with succeeded status, skip wallet reversal
+    if (charge.refunded && charge.refunds?.data && charge.refunds.data.length > 0) {
+      const stripeRefundId = charge.refunds.data[0].id;
+      const existingRefund = await this.databaseService.getRefundByStripeId(
+        stripeRefundId
+      );
+      if (existingRefund && existingRefund.status === 'succeeded') {
+        this.logger.log(
+          `Refund ${stripeRefundId} already processed, skipping wallet reversal`
+        );
+        return;
+      }
+    }
+
     await this.reverseWalletForRefund(tx, refundedMajor);
     await this.databaseService.updateTransaction(tx.id, {
       status: 'refunded',
@@ -304,6 +321,80 @@ export class StripePaymentCallbackProcessor {
     this.logger.warn(
       `Stripe dispute opened for tx ${tx.id}: ${dispute.id} (${dispute.reason})`
     );
+  }
+
+  async onRefundCreated(refund: Stripe.Refund): Promise<void> {
+    const paymentIntentId =
+      typeof refund.payment_intent === 'string'
+        ? refund.payment_intent
+        : (refund.payment_intent?.id ?? undefined);
+
+    if (!paymentIntentId || !refund.id) {
+      this.logger.warn('Refund created event missing payment_intent or refund id');
+      return;
+    }
+
+    // Check if we already have this refund recorded
+    const existingRefund = await this.databaseService.getRefundByStripeId(refund.id);
+    if (existingRefund) {
+      this.logger.log(`Refund ${refund.id} already recorded, skipping`);
+      return;
+    }
+
+    // Update refund status based on Stripe refund status
+    const refundStatus = refund.status === 'succeeded' ? 'succeeded' : 'pending';
+    await this.databaseService.updateRefundByStripeId(refund.id, {
+      status: refundStatus,
+    });
+
+    this.logger.log(
+      `Stripe refund created: ${refund.id}, status: ${refundStatus}`
+    );
+  }
+
+  async onRefundUpdated(refund: Stripe.Refund): Promise<void> {
+    const paymentIntentId =
+      typeof refund.payment_intent === 'string'
+        ? refund.payment_intent
+        : (refund.payment_intent?.id ?? undefined);
+
+    if (!paymentIntentId || !refund.id) {
+      this.logger.warn('Refund updated event missing payment_intent or refund id');
+      return;
+    }
+
+    // Get the refund record to find the transaction
+    const existingRefund = await this.databaseService.getRefundByStripeId(refund.id);
+    if (!existingRefund) {
+      this.logger.warn(`Refund ${refund.id} not found in database`);
+      return;
+    }
+
+    // Update refund status
+    const refundStatus = refund.status === 'succeeded' ? 'succeeded' : 'failed';
+    const failureReason = refund.failure_reason || undefined;
+
+    await this.databaseService.updateRefundByStripeId(refund.id, {
+      status: refundStatus,
+      failure_reason: failureReason,
+    });
+
+    // If refund succeeded, credit the wallet
+    if (refundStatus === 'succeeded') {
+      const tx = await this.databaseService.getTransactionByPaymentIntentId(
+        paymentIntentId
+      );
+      if (tx) {
+        await this.reverseWalletForRefund(tx, existingRefund.amount);
+        this.logger.log(
+          `Wallet credited for refund ${refund.id}: ${existingRefund.amount} ${tx.currency}`
+        );
+      }
+    } else if (refundStatus === 'failed') {
+      this.logger.warn(
+        `Stripe refund failed: ${refund.id}, reason: ${failureReason}`
+      );
+    }
   }
 
   private async runHandlerFailure(

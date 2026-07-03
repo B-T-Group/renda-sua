@@ -1,6 +1,7 @@
 """Main Lambda handler for order status notifications."""
 import json
 import os
+import requests
 from dataclasses import dataclass
 from rendasua_core_packages.models import Order
 from rendasua_core_packages.utilities import format_full_address
@@ -900,13 +901,115 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         log_error("Cancellation financial processing failed", order_id=message.orderId, error=financial_result.get("error"))
         # Continue even if financial processing fails - order is already cancelled
 
+    # Trigger Stripe refund if order was paid via credit card
+    stripe_refund_result = trigger_stripe_refund_safe(
+        message.orderId,
+        message.cancelledBy,
+        financial_result.get("cancellation_fee", 0),
+        environment
+    )
+
     # Cancellation emails are sent by the backend when status is updated to cancelled
 
     return {
         "success": financial_result.get("success", False),
         "financial_processing": financial_result,
         "cancellation_fee": financial_result.get("cancellation_fee", 0),
+        "stripe_refund": stripe_refund_result,
     }
+
+
+def trigger_stripe_refund_safe(
+    order_id: str,
+    cancelled_by: str,
+    cancellation_fee: float,
+    environment: str
+) -> Dict[str, Any]:
+    """
+    Trigger Stripe refund for order cancellation via internal NestJS API.
+    Logs errors but does not raise - refund failure should not block cancellation.
+    """
+    try:
+        backend_endpoint = os.environ.get("BACKEND_ENDPOINT")
+        internal_api_key = os.environ.get("INTERNAL_API_KEY")
+        
+        if not backend_endpoint or not internal_api_key:
+            log_info("Backend endpoint or internal API key not configured, skipping Stripe refund trigger")
+            return {"success": False, "skipped": True, "reason": "Missing configuration"}
+        
+        # Fetch order to check payment_source
+        hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+        hasura_admin_secret = get_hasura_admin_secret(environment)
+        
+        order = get_complete_order_details(order_id, hasura_endpoint, hasura_admin_secret)
+        if not order:
+            log_error("Order not found for Stripe refund trigger", order_id=order_id)
+            return {"success": False, "error": "Order not found"}
+        
+        payment_source = getattr(order, 'payment_source', None)
+        if payment_source != 'credit_card':
+            log_info(
+                "Order not paid via credit card, skipping Stripe refund",
+                order_id=order_id,
+                payment_source=payment_source
+            )
+            return {"success": True, "skipped": True, "reason": f"Payment source is {payment_source}"}
+        
+        # Only trigger refund for client cancellations
+        if cancelled_by != 'client':
+            log_info(
+                "Order cancelled by business, skipping Stripe refund",
+                order_id=order_id,
+                cancelled_by=cancelled_by
+            )
+            return {"success": True, "skipped": True, "reason": "Business cancellation"}
+        
+        # Call internal refund endpoint
+        url = f"{backend_endpoint}/stripe-payments/refund/order/{order_id}"
+        headers = {
+            "x-rendasua-internal-key": internal_api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "cancellationFee": cancellation_fee,
+            "cancelledBy": cancelled_by,
+        }
+        
+        log_info(
+            "Calling Stripe refund endpoint",
+            order_id=order_id,
+            url=url,
+            cancellation_fee=cancellation_fee
+        )
+        
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code in (200, 201):
+            result = response.json()
+            log_info(
+                "Stripe refund triggered successfully",
+                order_id=order_id,
+                refund_id=result.get("refundId"),
+                message=result.get("message")
+            )
+            return {"success": True, "refund_id": result.get("refundId"), "message": result.get("message")}
+        else:
+            log_error(
+                "Stripe refund endpoint returned error",
+                order_id=order_id,
+                status_code=response.status_code,
+                response=response.text
+            )
+            return {"success": False, "error": f"HTTP {response.status_code}: {response.text}"}
+    
+    except Exception as e:
+        log_error(
+            "Error triggering Stripe refund",
+            error=e,
+            order_id=order_id,
+            cancelled_by=cancelled_by
+        )
+        return {"success": False, "error": str(e)}
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

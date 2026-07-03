@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   Req,
+  UnauthorizedException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -24,6 +25,8 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
+import { ConfigService } from '@nestjs/config';
+import type { Configuration } from '../config/configuration';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
@@ -33,6 +36,7 @@ import { StripeConnectService } from './stripe-connect.service';
 import { StripePaymentCallbackProcessor } from './stripe-payment-callback.processor';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 import { StripePayoutService } from './stripe-payout.service';
+import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
 
 @ApiTags('stripe-payments')
@@ -48,7 +52,9 @@ export class StripePaymentsController {
     private readonly callbackProcessor: StripePaymentCallbackProcessor,
     private readonly connectService: StripeConnectService,
     private readonly payoutService: StripePayoutService,
-    private readonly checkoutService: StripeCheckoutService
+    private readonly checkoutService: StripeCheckoutService,
+    private readonly refundService: StripeRefundService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   @Post('initiate')
@@ -292,6 +298,16 @@ export class StripePaymentsController {
           event.data.object as Stripe.Dispute
         );
         break;
+      case 'refund.created':
+        await this.callbackProcessor.onRefundCreated(
+          event.data.object as Stripe.Refund
+        );
+        break;
+      case 'refund.updated':
+        await this.callbackProcessor.onRefundUpdated(
+          event.data.object as Stripe.Refund
+        );
+        break;
       default:
         this.logger.debug(`Unhandled Stripe payment event: ${event.type}`);
     }
@@ -340,5 +356,67 @@ export class StripePaymentsController {
       }
     ).related_object;
     return related?.id?.startsWith('acct_') ? related.id : null;
+  }
+
+  @Public()
+  @Post('refund/order/:orderId')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Internal: Initiate Stripe refund for cancelled order',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['cancellationFee', 'cancelledBy'],
+      properties: {
+        cancellationFee: { type: 'number', description: 'Cancellation fee in major units' },
+        cancelledBy: { type: 'string', enum: ['client', 'business'] },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Refund initiated' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  async initiateRefund(
+    @Param('orderId') orderId: string,
+    @Body() body: { cancellationFee: number; cancelledBy: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ): Promise<{ success: boolean; refundId?: string; message: string }> {
+    const expected =
+      this.configService.get<Configuration['notificationsInternal']>(
+        'notificationsInternal'
+      )?.apiKey ?? '';
+    if (!expected || internalKey !== expected) {
+      throw new UnauthorizedException('Invalid or missing internal API key');
+    }
+
+    if (!orderId || !body.cancellationFee || !body.cancelledBy) {
+      throw new HttpException(
+        { success: false, message: 'Missing required fields' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    return this.refundService.initiateOrderRefund({
+      orderId,
+      cancellationFee: body.cancellationFee,
+      cancelledBy: body.cancelledBy,
+    });
+  }
+
+  @Get('refund/order/:orderId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List refunds for an order' })
+  @ApiResponse({ status: 200, description: 'Refunds retrieved' })
+  async listOrderRefunds(@Param('orderId') orderId: string) {
+    try {
+      const refunds = await this.databaseService.listRefundsForOrder(orderId);
+      return { success: true, data: refunds };
+    } catch (error: any) {
+      this.logger.error(`Failed to list refunds for order ${orderId}: ${error.message}`);
+      throw new HttpException(
+        { success: false, message: 'Failed to retrieve refunds' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

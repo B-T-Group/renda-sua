@@ -200,4 +200,24 @@ export class StripeService {
       { idempotencyKey: `transfer_${params.reference}` }
     );
   }
+
+  async createRefund(params: {
+    paymentIntentId: string;
+    amount?: number;
+    reason?: Stripe.RefundCreateParams.Reason;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Refund> {
+    const refundParams: Stripe.RefundCreateParams = {
+      payment_intent: params.paymentIntentId,
+      reason: params.reason || 'requested_by_customer',
+      metadata: params.metadata,
+    };
+
+    if (params.amount !== undefined) {
+      refundParams.amount = params.amount;
+    }
+
+    const idempotencyKey = `refund_${params.metadata?.orderId ?? params.paymentIntentId}`;
+    return this.getClient().refunds.create(refundParams, { idempotencyKey });
+  }
 }
