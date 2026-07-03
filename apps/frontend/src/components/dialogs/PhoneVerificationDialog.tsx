@@ -13,7 +13,7 @@ import {
   Stack,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useTwilioVerify } from '../hooks/useTwilioVerify';
+import { useTwilioVerify } from '../../hooks/useTwilioVerify';
 
 interface PhoneVerificationDialogProps {
   open: boolean;

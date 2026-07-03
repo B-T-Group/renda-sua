@@ -269,5 +269,39 @@ export const typography = {
       fontSize: { xs: '0.875rem', md: '0.95rem' },
       fontWeight: 600,
     },
+    // Marketing-only display scale — used on homepage hero/section headlines only
+    display: {
+      fontSize: { xs: '2.5rem', sm: '3.5rem', md: '4.5rem' },
+      fontWeight: 800,
+      letterSpacing: '-0.03em',
+      lineHeight: 1.05,
+    },
+    displaySm: {
+      fontSize: { xs: '2rem', sm: '2.75rem', md: '3.5rem' },
+      fontWeight: 700,
+      letterSpacing: '-0.025em',
+      lineHeight: 1.1,
+    },
   },
+} as const;
+
+/**
+ * Marketing-only gradient tokens — used exclusively on homepage/marketing surfaces.
+ * Product dashboards and catalog pages keep the neutral palette.
+ */
+export const marketingGradients = {
+  // Hero background gradient
+  hero: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 40%, #1d4ed8 70%, #2563eb 100%)',
+  // Accent overlay used atop hero for depth
+  heroOverlay:
+    'radial-gradient(ellipse at 20% 50%, rgba(99,102,241,0.25) 0%, transparent 55%), radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.15) 0%, transparent 50%)',
+  // Subtle tinted section backgrounds
+  sectionBlue: 'linear-gradient(180deg, rgba(30,64,175,0.04) 0%, rgba(30,64,175,0) 100%)',
+  sectionGreen: 'linear-gradient(180deg, rgba(22,163,74,0.04) 0%, rgba(22,163,74,0) 100%)',
+  // Card accent (for bento tiles)
+  cardAccent: 'linear-gradient(135deg, rgba(30,64,175,0.06) 0%, rgba(37,99,235,0.02) 100%)',
+  // CTA pill/button gradient
+  ctaPill: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+  // Download section dark background
+  download: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
 } as const;

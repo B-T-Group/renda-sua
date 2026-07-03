@@ -259,7 +259,7 @@ export class CancellationPolicyService {
       const query = `
         query GetCancellationReasons($persona: String!) {
           order_cancellation_reasons(
-            where: { persona: { _contains: [$persona] } }
+            where: { persona: { _has_key: $persona } }
             order_by: { rank: asc }
           ) {
             id

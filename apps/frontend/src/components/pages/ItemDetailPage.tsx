@@ -1284,6 +1284,28 @@ export default function ItemDetailPage() {
         </Grid>
       </Grid>
 
+      {/* App download note — shown to guests below the order CTAs */}
+      {!isAuthenticated && (
+        <Box
+          sx={{
+            mt: 2,
+            px: 2,
+            py: 1.5,
+            borderRadius: 2,
+            bgcolor: 'rgba(30,64,175,0.04)',
+            border: '1px solid rgba(30,64,175,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }} aria-hidden="true">📱</span>
+          <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
+            {t('items.appTrackingNote', 'Track your order in real time — available in the Rendasua app.')}
+          </Typography>
+        </Box>
+      )}
+
       {/* Product information - full width, dense layout */}
       <Card variant="outlined" sx={{ mt: 3, borderColor: 'divider' }}>
         <CardContent

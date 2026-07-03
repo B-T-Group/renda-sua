@@ -10,6 +10,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import Logo from '../common/Logo';
+import AppStoreBadges from '../common/AppStoreBadges';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const Footer: React.FC = () => {
@@ -37,19 +38,23 @@ const Footer: React.FC = () => {
             alignItems={{ xs: 'center', md: 'flex-start' }}
             spacing={3}
           >
-            {/* Logo and Description */}
+            {/* Logo and Description + App badges */}
             <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
               <Logo variant="compact" color="white" size="medium" />
               <Typography
                 variant="body2"
                 sx={{
                   mt: 1,
-                  maxWidth: 300,
+                  mb: 2.5,
+                  maxWidth: 280,
                   color: theme.palette.grey[400],
                 }}
               >
                 {t('footer.description')}
               </Typography>
+              {!isAuthenticated && (
+                <AppStoreBadges variant="compact" sourceSection="footer" />
+              )}
             </Box>
 
             {/* Quick Links */}
@@ -63,14 +68,41 @@ const Footer: React.FC = () => {
                   {t('footer.platform')}
                 </Typography>
                 <Stack spacing={0.5}>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.forBusinesses')}
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/for-business"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.forBusinesses', 'For Businesses')}
                   </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.forAgents')}
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/become-a-delivery-agent"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.forAgents', 'For Delivery Agents')}
                   </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.forClients')}
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/items"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.forClients', 'Browse Items')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/rentals"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('rentals.title', 'Rentals')}
                   </Typography>
                 </Stack>
               </Box>
@@ -98,14 +130,14 @@ const Footer: React.FC = () => {
                   >
                     {t('footer.support', 'Support')}
                   </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.helpCenter')}
-                  </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.contact')}
-                  </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {t('footer.documentation')}
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component="a"
+                    href="mailto:contact@rendasua.com"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.contact', 'Contact us')}
                   </Typography>
                 </Stack>
               </Box>
@@ -123,18 +155,9 @@ const Footer: React.FC = () => {
                       to="/signup"
                       style={{ textDecoration: 'none', color: 'inherit' }}
                     >
-                      {t('auth.signUp', "S'inscrire")}
+                      {t('auth.signUp', "Sign Up")}
                     </Typography>
                   )}
-                  <Typography
-                    variant="body2"
-                    color="grey.400"
-                    component={RouterLink}
-                    to="/who-we-are"
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    {t('footer.whoWeAre', 'Who we are')}
-                  </Typography>
                   <Typography
                     variant="body2"
                     color="grey.400"
@@ -142,7 +165,7 @@ const Footer: React.FC = () => {
                     to="/about"
                     style={{ textDecoration: 'none', color: 'inherit' }}
                   >
-                    {t('footer.about')}
+                    {t('footer.about', 'About')}
                   </Typography>
                   <Typography
                     variant="body2"
@@ -151,7 +174,7 @@ const Footer: React.FC = () => {
                     to="/privacy"
                     style={{ textDecoration: 'none', color: 'inherit' }}
                   >
-                    {t('footer.privacy')}
+                    {t('footer.privacy', 'Privacy Policy')}
                   </Typography>
                   <Typography
                     variant="body2"
@@ -160,7 +183,7 @@ const Footer: React.FC = () => {
                     to="/terms"
                     style={{ textDecoration: 'none', color: 'inherit' }}
                   >
-                    {t('footer.terms')}
+                    {t('footer.terms', 'Terms of Service')}
                   </Typography>
                   <Typography
                     variant="body2"

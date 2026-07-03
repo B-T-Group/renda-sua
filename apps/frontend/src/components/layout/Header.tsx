@@ -84,7 +84,11 @@ const Header: React.FC = () => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Guest nav has 5 items with long labels — needs more space, so collapse at lg (1200px).
+  // Authenticated nav has 2–3 short items — md (900px) is fine.
+  const guestMobileBreakpoint = theme.breakpoints.down('lg');
+  const authMobileBreakpoint = theme.breakpoints.down('md');
+  const isMobile = useMediaQuery(isAuthenticated ? authMobileBreakpoint : guestMobileBreakpoint);
 
   const personaHeader = useMemo(() => {
     if (!isAuthenticated || userType == null) {
@@ -173,6 +177,9 @@ const Header: React.FC = () => {
       return [
         { label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> },
         { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
+        { label: t('nav.forBusiness', 'For Business'), path: '/for-business', icon: <Dashboard /> },
+        { label: t('nav.becomeAgent', 'Become an Agent'), path: '/become-a-delivery-agent', icon: <Assignment /> },
+        { label: t('footer.about', 'About'), path: '/about', icon: <Assignment /> },
       ];
     }
 
@@ -292,11 +299,12 @@ const Header: React.FC = () => {
         fontSize: '0.875rem',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        px: 2,
+        px: { md: 1.5, lg: 2 },
         py: 1,
         minWidth: 'auto',
         borderRadius: 0,
         transition: 'color 0.2s ease-in-out',
+        whiteSpace: 'nowrap',
         '&:hover': {
           color: '#ffffff',
           backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -332,7 +340,7 @@ const Header: React.FC = () => {
         keepMounted: true, // Better open performance on mobile.
       }}
       sx={{
-        display: { xs: 'block', md: 'none' },
+        display: { xs: 'block', [isAuthenticated ? 'md' : 'lg']: 'none' },
         '& .MuiDrawer-paper': {
           boxSizing: 'border-box',
           width: 280,
@@ -543,25 +551,27 @@ const Header: React.FC = () => {
             sx={{
               minHeight: { xs: 48, md: 48 },
               px: { xs: 2, md: 4 },
-              justifyContent: 'space-between',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             {/* Logo Section */}
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               <RouterLink to="/" style={{ textDecoration: 'none' }}>
                 <Logo variant="compact" color="white" size="small" />
               </RouterLink>
             </Box>
 
-            {/* Desktop Navigation */}
+            {/* Desktop Navigation — flex-centered, no absolute positioning */}
             {!isMobile && (
               <Stack
                 direction="row"
                 spacing={0}
                 sx={{
-                  position: 'absolute',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
+                  flex: 1,
+                  justifyContent: 'center',
+                  mx: 2,
+                  overflow: 'hidden',
                 }}
               >
                 {getMainNavigationItems().map((item) => (
@@ -598,7 +608,7 @@ const Header: React.FC = () => {
             )}
 
             {/* Right Section */}
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: isMobile ? 'auto' : 0 }}>
               {/* XAF balance (view transactions, withdraw) - client/agent only; mobile + desktop */}
               {isAuthenticated &&
                 (userType === 'client' || userType === 'agent') && (
@@ -827,6 +837,29 @@ const Header: React.FC = () => {
                   alignItems="center"
                   sx={{ flexShrink: 0 }}
                 >
+                  {!isMobile && (
+                    <Button
+                      component="a"
+                      href="https://apps.apple.com/ca/app/rendasua/id6760085423"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="small"
+                      sx={{
+                        color: '#fff',
+                        bgcolor: 'rgba(255,255,255,0.15)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                        borderRadius: 2,
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        px: 1.5,
+                        py: 0.5,
+                        textTransform: 'none',
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.22)' },
+                      }}
+                    >
+                      {t('nav.downloadApp', 'Download App')}
+                    </Button>
+                  )}
                   <LoginHeaderButton inverted compact={isMobile} />
                 </Stack>
               )}

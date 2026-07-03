@@ -2076,6 +2076,16 @@
     "landingDescription": "Parcourez les produits de cette collection"
   },
   "common": {
+    "downloadOnAppStore": "Télécharger sur l'App Store",
+    "getOnGooglePlay": "Disponible sur Google Play",
+    "downloadOn": "Télécharger sur",
+    "getItOn": "Disponible sur",
+    "scanToDownload": "Scanner pour télécharger",
+    "stickyBarTitle": "Obtenez une meilleure expérience",
+    "stickyBarSubtitle": "Suivi en temps réel, notifications push et plus encore",
+    "openInApp": "Ouvrir dans l'appli",
+    "dismiss": "Ignorer",
+    "appDownloadBannerLabel": "Bannière de téléchargement de l'appli",
     "actions": "Actions",
     "active": "Actif",
     "admin": "Administrateur",
@@ -2234,7 +2244,15 @@
     "verified": "Vérifié",
     "view": "Voir",
     "weight": "Poids",
-    "yes": "Oui"
+    "yes": "Oui",
+    "bannerTitle": "Obtenez le suivi en temps réel et le paiement plus rapide",
+    "bannerSubtitle": "Téléchargez l'application Rendasua pour la meilleure expérience d'achat",
+    "promoTileTitle": "Mieux dans l'appli",
+    "promoTileTracking": "Suivi de livraison en direct",
+    "promoTilePin": "Livraison PIN sécurisée",
+    "promoTileNotifs": "Notifications instantanées",
+    "downloadFree": "Télécharger gratuitement",
+    "appPromoTileLabel": "Télécharger l'application Rendasua"
   },
   "dashboard": {
     "client": {
@@ -2477,8 +2495,9 @@
     "viewAll": "Voir Tous les Messages"
   },
   "nav": {
-    "rentals": "Locations",
-    "support": "Assistance"
+    "forBusiness": "Pour les entreprises",
+    "becomeAgent": "Devenir agent",
+    "downloadApp": "Télécharger l'appli"
   },
   "orderActions": {
     "cancelOrder": "Annuler la Commande",
@@ -3290,7 +3309,8 @@
       "loadingKeywords": "Rendasua, marketplace, produit",
       "loadingTitle": "Produit | Rendasua",
       "loadingWebPageName": "Produit"
-    }
+    },
+    "appTrackingNote": "Suivez votre commande en temps réel — disponible dans l'application Rendasua."
   },
   "persona": {
     "client": "Client",
@@ -4322,6 +4342,349 @@
         "failed": "Échoué",
         "cancelled": "Annulé"
       }
+    }
+  },
+  "home": {
+    "seo": {
+      "title": "Rendasua — Tout le local, livré",
+      "description": "Parcourez les commerces locaux, passez des commandes en quelques minutes et suivez chaque livraison en temps réel. Téléchargez l'application Rendasua ou créez un compte professionnel aujourd'hui.",
+      "keywords": "application livraison locale, marché, achats en ligne, agent de livraison, vitrine professionnelle, application Rendasua"
+    },
+    "hero": {
+      "eyebrow": "Maintenant disponible sur iOS et Android",
+      "headline": "Tout le local,",
+      "headlineLine2": "livré.",
+      "subheadline": "Parcourez les commerces locaux, commandez en quelques minutes et suivez chaque livraison en temps réel — ou ouvrez une boutique et commencez à vendre aujourd'hui.",
+      "browseItems": "Parcourir les articles",
+      "sellOnRendasua": "Vendre sur Rendasua"
+    },
+    "trust": {
+      "fastDelivery": "Livraison locale rapide",
+      "securePayments": "Paiements sécurisés",
+      "verifiedBusinesses": "Entreprises vérifiées",
+      "availableIos": "Disponible sur iOS",
+      "availableAndroid": "Disponible sur Android"
+    },
+    "overview": {
+      "eyebrow": "Une plateforme. Trois rôles. Une grande expérience.",
+      "title": "Un marché conçu pour tous",
+      "subtitle": "Rendasua connecte acheteurs, commerces locaux et agents de livraison en un écosystème fluide.",
+      "client": {
+        "title": "Acheteurs",
+        "desc": "Parcourez les produits des commerces locaux et faites-les livrer à votre porte."
+      },
+      "business": {
+        "title": "Entreprises",
+        "desc": "Créez une vitrine, gérez l'inventaire et atteignez les clients de votre ville."
+      },
+      "agent": {
+        "title": "Agents de livraison",
+        "desc": "Gagnez de l'argent en livrant des commandes selon votre propre horaire."
+      }
+    },
+    "story": {
+      "eyebrow": "L'expérience complète",
+      "title": "Du tap à la porte.",
+      "subtitle": "Chaque commande raconte une histoire complète — entre acheteur, entreprise et agent.",
+      "stepLabel": "Étape {{n}}",
+      "discover": {
+        "title": "Découvrir",
+        "desc": "Parcourez les produits des commerces locaux de votre ville."
+      },
+      "browse": {
+        "title": "Naviguer",
+        "desc": "Filtrez par catégorie, marque ou distance."
+      },
+      "order": {
+        "title": "Commander",
+        "desc": "Passez votre commande en quelques secondes. Payez en toute sécurité."
+      },
+      "businessReceives": {
+        "title": "L'entreprise prépare",
+        "desc": "L'entreprise reçoit votre commande et commence à la préparer immédiatement."
+      },
+      "agentAccepts": {
+        "title": "L'agent récupère",
+        "desc": "Un agent de livraison à proximité accepte la demande et récupère votre commande."
+      },
+      "tracking": {
+        "title": "Suivre en direct",
+        "desc": "Regardez votre livraison se déplacer sur la carte en temps réel."
+      },
+      "messaging": {
+        "title": "Messagerie instantanée",
+        "desc": "Chattez directement avec l'entreprise ou votre agent à tout moment."
+      },
+      "pin": {
+        "title": "Livraison PIN sécurisée",
+        "desc": "Partagez un code PIN à 4 chiffres avec l'agent pour confirmer la livraison sécurisée."
+      },
+      "success": {
+        "title": "Tout le monde gagne",
+        "desc": "Vous recevez votre commande. L'entreprise grandit. L'agent gagne. Rendasua gagne ensemble."
+      }
+    },
+    "personas": {
+      "title": "Conçu pour chaque rôle",
+      "subtitle": "Que vous achetiez, vendiez ou livriez — Rendasua vous couvre.",
+      "tabsLabel": "Onglets de rôle",
+      "client": {
+        "name": "Acheteur",
+        "tagline": "Achetez local. Recevez rapidement.",
+        "description": "Parcourez des centaines de produits locaux, passez une commande en quelques minutes et suivez votre livraison en temps réel.",
+        "cta": "Télécharger l'appli",
+        "secondaryCta": "Parcourir les articles",
+        "features": {
+          "browse": "Parcourir et commander des produits locaux",
+          "tracking": "Suivi de livraison en temps réel",
+          "chat": "Chattez avec les entreprises et les agents",
+          "pin": "Vérification PIN de livraison sécurisée",
+          "addresses": "Plusieurs adresses de livraison",
+          "notifications": "Notifications push instantanées"
+        }
+      },
+      "business": {
+        "name": "Entreprise",
+        "tagline": "Votre vitrine, en ligne en quelques minutes.",
+        "description": "Créez votre vitrine en ligne, gérez l'inventaire et commencez à recevoir des commandes.",
+        "cta": "Créer un compte professionnel",
+        "secondaryCta": "En savoir plus",
+        "features": {
+          "storefront": "Créer votre vitrine en ligne",
+          "inventory": "Gérer l'inventaire sur plusieurs sites",
+          "ai": "Descriptions de produits assistées par IA",
+          "orders": "Gestion des commandes et livraisons",
+          "messaging": "Messagerie avec clients et agents",
+          "growth": "Analyses et outils de croissance"
+        }
+      },
+      "agent": {
+        "name": "Agent de livraison",
+        "tagline": "Livrez selon votre horaire.",
+        "description": "Acceptez des demandes de livraison, naviguez efficacement et gagnez de l'argent selon vos conditions.",
+        "cta": "Télécharger l'appli",
+        "secondaryCta": "En savoir plus",
+        "features": {
+          "requests": "Recevoir et gérer les demandes de livraison",
+          "navigation": "Navigation intégrée efficace",
+          "chat": "Chattez avec les entreprises et les clients",
+          "pin": "Vérification PIN de livraison sécurisée",
+          "tracking": "Historique et suivi des livraisons",
+          "flexible": "Flexible, fixez vos propres heures"
+        }
+      }
+    },
+    "features": {
+      "title": "Une plateforme pleine de puissance",
+      "subtitle": "Chaque fonctionnalité conçue pour rendre les achats, la vente et la livraison sans faille.",
+      "tracking": {
+        "title": "Suivi de livraison en temps réel",
+        "desc": "Regardez votre livraison se déplacer sur une carte en direct."
+      },
+      "pin": {
+        "title": "PIN de livraison sécurisé",
+        "desc": "Chaque livraison est confirmée avec un PIN à 4 chiffres — sans PIN, pas de remise."
+      },
+      "messaging": {
+        "title": "Messagerie intégrée",
+        "desc": "Chattez instantanément avec l'entreprise ou votre agent de livraison."
+      },
+      "ai": {
+        "title": "Descriptions IA",
+        "desc": "Les entreprises peuvent générer des descriptions de produits en un clic."
+      },
+      "addresses": {
+        "title": "Plusieurs adresses de livraison",
+        "desc": "Sauvegardez maison, bureau et adresses personnalisées."
+      },
+      "notifications": {
+        "title": "Notifications push",
+        "desc": "Recevez des mises à jour instantanées sur le statut des commandes."
+      }
+    },
+    "browse": {
+      "title": "Découvrez ce qui est disponible près de chez vous",
+      "subtitle": "Des centaines de produits locaux, prêts à être livrés à votre porte.",
+      "cta": "Voir tous les articles",
+      "appNote": "Meilleure expérience dans l'appli"
+    },
+    "businessGrowth": {
+      "eyebrow": "Pour les entreprises",
+      "title": "Votre vitrine, en ligne en quelques minutes.",
+      "subtitle": "Rejoignez des centaines de commerces locaux qui vendent déjà sur Rendasua.",
+      "cta": "Créer un compte professionnel",
+      "secondaryCta": "En savoir plus",
+      "features": {
+        "inventory": "Gestion d'inventaire sur plusieurs sites",
+        "ai": "Descriptions de produits assistées par IA",
+        "delivery": "Gestion des commandes et livraisons",
+        "messaging": "Messagerie client intégrée",
+        "analytics": "Analyses et croissance commerciale"
+      }
+    },
+    "agent": {
+      "eyebrow": "Pour les agents de livraison",
+      "title": "Livrez selon votre horaire.",
+      "subtitle": "Rejoignez le réseau de livraison Rendasua. Fixez vos propres horaires, acceptez des commandes près de chez vous.",
+      "learnMore": "En savoir plus",
+      "benefits": {
+        "flexible": "Horaires flexibles — travaillez quand vous voulez",
+        "navigation": "Navigation intégrée efficace",
+        "chat": "Chattez avec les entreprises et les clients",
+        "pin": "Vérification PIN de livraison sécurisée",
+        "tracking": "Historique et suivi des livraisons complets",
+        "earn": "Gagnez par livraison — sans plafond"
+      }
+    },
+    "download": {
+      "eyebrow": "Disponible maintenant",
+      "title": "Rendasua fonctionne mieux dans l'appli.",
+      "subtitle": "Téléchargez l'appli gratuite et débloquez l'expérience Rendasua complète.",
+      "benefits": {
+        "tracking": "Suivi des commandes en temps réel sur une carte en direct",
+        "notifications": "Notifications push instantanées pour chaque mise à jour",
+        "pin": "Vérification PIN de livraison sécurisée",
+        "checkout": "Paiement plus rapide avec les adresses enregistrées"
+      }
+    },
+    "faq": {
+      "title": "Questions fréquemment posées",
+      "subtitle": "Tout ce que vous devez savoir pour commencer.",
+      "seeAll": "Voir toutes les FAQ",
+      "whatIsRendasua": {
+        "question": "Qu'est-ce que Rendasua?",
+        "answer": "Rendasua est une application de marché local qui connecte les acheteurs avec les commerces locaux et les agents de livraison."
+      },
+      "howDoIOrder": {
+        "question": "Comment passer une commande?",
+        "answer": "Téléchargez l'application Rendasua, parcourez les produits des commerces locaux, ajoutez des articles à votre panier et passez à la caisse."
+      },
+      "canITrack": {
+        "question": "Puis-je suivre ma livraison en temps réel?",
+        "answer": "Oui! L'application Rendasua fournit un suivi en direct."
+      },
+      "howSellBusiness": {
+        "question": "Comment commencer à vendre en tant qu'entreprise?",
+        "answer": "Créez un compte professionnel gratuit sur rendasua.com, configurez votre vitrine et commencez à recevoir des commandes."
+      },
+      "howBecomeAgent": {
+        "question": "Comment devenir agent de livraison?",
+        "answer": "Téléchargez l'application Rendasua, inscrivez-vous en tant qu'agent de livraison et commencez à accepter des demandes."
+      },
+      "pinDelivery": {
+        "question": "Qu'est-ce que le PIN de livraison?",
+        "answer": "Un PIN de livraison est un code sécurisé à 4 chiffres partagé avec vous lorsque votre commande est en route."
+      },
+      "isItFree": {
+        "question": "L'application Rendasua est-elle gratuite?",
+        "answer": "L'application Rendasua est gratuite à télécharger et à utiliser pour les acheteurs."
+      },
+      "availableWhere": {
+        "question": "Où Rendasua est-il disponible?",
+        "answer": "Rendasua est disponible au Gabon et au Cameroun et s'étend rapidement."
+      }
+    }
+  },
+  "forBusiness": {
+    "seo": {
+      "title": "Vendre sur Rendasua — Ouvrir un compte professionnel",
+      "description": "Créez une vitrine en ligne, gérez l'inventaire et atteignez les clients de votre ville.",
+      "keywords": "vendre en ligne, compte professionnel, vitrine locale, gestion des stocks, commandes en ligne, Rendasua entreprise"
+    },
+    "hero": {
+      "eyebrow": "Pour les entreprises",
+      "headline": "Votre vitrine, en ligne en quelques minutes.",
+      "subheadline": "Rejoignez des centaines de commerces locaux qui vendent déjà sur Rendasua.",
+      "cta": "Créer un compte professionnel",
+      "rentalCta": "Ouvrir un compte de location"
+    },
+    "features": {
+      "title": "Tout ce dont vous avez besoin pour grandir",
+      "subtitle": "Une boîte à outils complète pour les entreprises locales.",
+      "storefront": {
+        "title": "Vitrine en ligne",
+        "desc": "Créez une vitrine professionnelle en quelques minutes."
+      },
+      "inventory": {
+        "title": "Gestion des stocks",
+        "desc": "Suivez les niveaux de stock sur plusieurs sites."
+      },
+      "ai": {
+        "title": "Descriptions IA",
+        "desc": "Générez des descriptions de produits convaincantes instantanément."
+      },
+      "delivery": {
+        "title": "Gestion des livraisons",
+        "desc": "Gérez les commandes et les livraisons depuis un tableau de bord."
+      },
+      "messaging": {
+        "title": "Messagerie clients",
+        "desc": "Chattez directement avec vos clients et agents de livraison."
+      },
+      "analytics": {
+        "title": "Analyses commerciales",
+        "desc": "Suivez les revenus, les commandes et les indicateurs de performance."
+      }
+    },
+    "steps": {
+      "title": "Commencez en 3 étapes",
+      "signup": {
+        "title": "Créez votre compte",
+        "desc": "Inscrivez-vous pour un compte professionnel gratuit."
+      },
+      "add": {
+        "title": "Ajoutez vos produits",
+        "desc": "Téléchargez des photos, fixez des prix et laissez l'IA rédiger vos descriptions."
+      },
+      "sell": {
+        "title": "Commencez à vendre",
+        "desc": "Votre vitrine est en ligne et les clients peuvent commencer à commander."
+      }
+    },
+    "cta": {
+      "title": "Prêt à développer votre activité?",
+      "subtitle": "Rejoignez le marché Rendasua aujourd'hui. Moins de 5 minutes pour configurer votre vitrine.",
+      "button": "Créer un compte professionnel"
+    }
+  },
+  "becomeAgent": {
+    "seo": {
+      "title": "Devenir agent de livraison — Rendasua",
+      "description": "Gagnez de l'argent en livrant des commandes selon votre propre horaire.",
+      "keywords": "agent de livraison, gagner de l'argent, travail flexible, emploi de livraison, agent Rendasua"
+    },
+    "hero": {
+      "eyebrow": "Pour les agents de livraison",
+      "headline": "Livrez selon votre horaire. Gagnez selon vos conditions.",
+      "subheadline": "Rejoignez le réseau de livraison Rendasua et commencez à gagner en livrant des commandes."
+    },
+    "benefits": {
+      "title": "Pourquoi livrer avec Rendasua?",
+      "flexible": "Horaires flexibles — travaillez quand ça vous convient",
+      "earn": "Gagnez par livraison sans plafond de revenus",
+      "navigation": "Navigation intégrée efficace vers chaque retrait et dépôt",
+      "chat": "Chattez avec les entreprises et les clients en temps réel",
+      "pin": "PIN de livraison sécurisé — chaque remise est vérifiée",
+      "tracking": "Historique complet des livraisons et suivi des gains"
+    },
+    "steps": {
+      "title": "Comment commencer",
+      "download": {
+        "title": "Téléchargez l'appli",
+        "desc": "Obtenez l'application Rendasua sur iOS ou Android."
+      },
+      "signup": {
+        "title": "Inscrivez-vous en tant qu'agent",
+        "desc": "Créez votre compte et sélectionnez le rôle d'agent de livraison."
+      },
+      "start": {
+        "title": "Commencez à livrer",
+        "desc": "Complétez l'intégration dans l'appli et commencez à accepter des demandes."
+      }
+    },
+    "cta": {
+      "title": "Prêt à commencer à livrer?",
+      "subtitle": "Téléchargez l'appli et commencez à gagner aujourd'hui."
     }
   }
 }

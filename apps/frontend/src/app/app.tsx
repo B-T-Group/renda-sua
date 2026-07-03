@@ -24,6 +24,7 @@ import AppRedirect from '../components/pages/AppRedirect';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
+import StickyDownloadBar from '../components/common/StickyDownloadBar';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
@@ -85,10 +86,13 @@ function App() {
     }
   }, [completeOnboarding, refetch]);
 
+  const isHomePage = location.pathname === '/' && !isAuthenticated;
+
   // Determine which bottom nav should be visible (only one at a time)
   const showAgentBottomNav = userType === 'agent' && isMobile;
   const showClientBottomNav = userType === 'client' && isMobile;
-  const showGuestBottomNav = !isAuthenticated && isMobile;
+  // Suppress guest bottom nav on homepage — it competes with the scroll story
+  const showGuestBottomNav = !isAuthenticated && isMobile && !isHomePage;
   const hasMobileBottomNav =
     showAgentBottomNav || showClientBottomNav || showGuestBottomNav;
   const whatsappBottomOffset = hasMobileBottomNav ? 92 : 24;
@@ -180,23 +184,27 @@ function App() {
       <Box
         sx={{
           flex: 1,
-          py: isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4,
+          py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
           // Add bottom padding when any bottom nav is visible to prevent content overlap
           paddingBottom:
             showAgentBottomNav || showClientBottomNav || showGuestBottomNav
               ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
-              : isBusinessItemsCatalog
-                ? { xs: 1, sm: 1.5 }
-                : 4,
+              : isHomePage
+                ? 0
+                : isBusinessItemsCatalog
+                  ? { xs: 1, sm: 1.5 }
+                  : 4,
         }}
       >
         <Container
-          maxWidth="xl"
+          maxWidth={isHomePage ? false : 'xl'}
+          disableGutters={isHomePage}
           sx={{
-            px:
-              location.pathname === '/items' ||
-              location.pathname.startsWith('/items/') ||
-              isBusinessItemsCatalog
+            px: isHomePage
+              ? 0
+              : location.pathname === '/items' ||
+                location.pathname.startsWith('/items/') ||
+                isBusinessItemsCatalog
                 ? { xs: 0.5, sm: 1 }
                 : { xs: 1.5, sm: 2, md: 3 },
           }}
@@ -204,7 +212,10 @@ function App() {
           <Suspense fallback={<RouteSuspenseFallback />}>
             <Routes>
             <Route path="/" element={<SmartHome />} />
-            <Route path="/who-we-are" element={<LazyPages.LandingPage />} />
+            {/* Legacy marketing page — redirect to homepage */}
+            <Route path="/who-we-are" element={<Navigate to="/" replace />} />
+            <Route path="/for-business" element={<LazyPages.ForBusinessPage />} />
+            <Route path="/become-a-delivery-agent" element={<LazyPages.AgentLandingPage />} />
             <Route
               path="/auth/login"
               element={<Navigate to="/" replace />}
@@ -834,6 +845,8 @@ function App() {
         onAccept={() => void setWebLocationConsent('accepted')}
         onDefer={() => void setWebLocationConsent('deferred')}
       />
+
+      <StickyDownloadBar />
     </Box>
   );
 }

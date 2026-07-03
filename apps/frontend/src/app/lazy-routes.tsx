@@ -204,8 +204,11 @@ export const CollectionsIndexPage = lazy(() =>
 export const CollectionLandingPage = lazy(() =>
   import('../components/pages/CollectionLandingPage')
 );
-export const LandingPage = lazy(() =>
-  import('../components/pages/LandingPage')
+export const ForBusinessPage = lazy(() =>
+  import('../components/pages/ForBusinessPage')
+);
+export const AgentLandingPage = lazy(() =>
+  import('../components/pages/AgentLandingPage')
 );
 export const ManageOrderPage = lazy(() =>
   import('../components/pages/ManageOrderPage')

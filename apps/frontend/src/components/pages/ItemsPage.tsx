@@ -45,6 +45,8 @@ import {
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
 import AddressAlert from '../common/AddressAlert';
+import AppDownloadBanner from '../common/AppDownloadBanner';
+import InGridAppPromoTile from '../common/InGridAppPromoTile';
 import DashboardItemCard from '../common/DashboardItemCard';
 import { FeaturedCollectionsRow } from '../common/FeaturedCollectionsRow';
 import { useCollections } from '../../hooks/useCollections';
@@ -550,6 +552,13 @@ const ItemsPage: React.FC = () => {
         description={t('seo.public-items.description')}
         keywords={t('seo.public-items.keywords')}
       />
+
+      {/* App download banner — dismissible, guests only */}
+      {!isAuthenticated && (
+        <Box sx={{ px: { xs: 1, sm: 2 }, pt: 1 }}>
+          <AppDownloadBanner sourceSection="items_page_top" />
+        </Box>
+      )}
 
       {/* Header / Hero */}
       <Box sx={{ mb: 2.5, px: { xs: 1, sm: 2 } }}>
@@ -1141,24 +1150,29 @@ const ItemsPage: React.FC = () => {
         ) : (
           <>
             <Box sx={ITEMS_CATALOG_GRID_SX}>
-              {inventoryItems.map((inventoryItem) => (
-                <DashboardItemCard
-                  key={inventoryItem.id}
-                  item={inventoryItem}
-                  viewsCount={inventoryItem.viewsCount}
-                  formatCurrency={formatCurrency}
-                  onOrderClick={handleOrderClick}
-                  onAddToCart={handleAddToCart}
-                  estimatedDistance={inventoryItem.distance_text}
-                  estimatedDuration={inventoryItem.duration_text}
-                  isPublicView={!isAuthenticated}
-                  canOrder={!isAuthenticated || isClientUser}
-                  showCartButtons={isAuthenticated && isClientUser}
-                  loginButtonText={t('public.items.login', 'Sign In to Order')}
-                  orderButtonText={t('common.orderNow', 'Order Now')}
-                  addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                  buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                />
+              {inventoryItems.map((inventoryItem, index) => (
+                <React.Fragment key={inventoryItem.id}>
+                  {/* Inject in-grid app promo tile after 12th item (guests only) */}
+                  {!isAuthenticated && index === 12 && (
+                    <InGridAppPromoTile />
+                  )}
+                  <DashboardItemCard
+                    item={inventoryItem}
+                    viewsCount={inventoryItem.viewsCount}
+                    formatCurrency={formatCurrency}
+                    onOrderClick={handleOrderClick}
+                    onAddToCart={handleAddToCart}
+                    estimatedDistance={inventoryItem.distance_text}
+                    estimatedDuration={inventoryItem.duration_text}
+                    isPublicView={!isAuthenticated}
+                    canOrder={!isAuthenticated || isClientUser}
+                    showCartButtons={isAuthenticated && isClientUser}
+                    loginButtonText={t('public.items.login', 'Sign In to Order')}
+                    orderButtonText={t('common.orderNow', 'Order Now')}
+                    addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                    buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+                  />
+                </React.Fragment>
               ))}
             </Box>
 

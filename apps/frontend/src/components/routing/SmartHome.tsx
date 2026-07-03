@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 
+const HomePage = lazy(() => import('../pages/HomePage'));
+
 /**
- * Root path `/`: clients and anonymous users go to the catalog; agents and
- * businesses go to the dashboard. Aligns with onboarding and persona selection.
+ * Root path `/`: anonymous visitors see the marketing homepage; authenticated
+ * clients go to the catalog; agents and businesses go to the dashboard.
  */
 const SmartHome: React.FC = () => {
   const location = useLocation();
@@ -30,10 +32,9 @@ const SmartHome: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <Navigate
-        to={{ pathname: '/items', search: location.search }}
-        replace
-      />
+      <Suspense fallback={<LoadingPage message="Loading" subtitle="Please wait" showProgress />}>
+        <HomePage />
+      </Suspense>
     );
   }
 
