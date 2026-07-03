@@ -1,7 +1,8 @@
-import { AlternateEmail, CircularProgress } from '@mui/icons-material';
+import { AlternateEmail } from '@mui/icons-material';
 import {
   Avatar,
   Box,
+  CircularProgress,
   List,
   ListItem,
   ListItemAvatar,
