@@ -66,6 +66,7 @@ if (hasuraEc2Enabled) {
       ...commonProps,
       environment: 'dev',
       domainName: hasuraDevDomain,
+      acmCertificateArn: required('hasuraDevAcmCertificateArn'),
       graphqlCorsDomain: String(
         app.node.tryGetContext('hasuraDevGraphqlCorsDomain') || hasuraDevCorsDefault
       ),
@@ -93,6 +94,7 @@ if (hasuraEc2Enabled) {
           't4g.small'
       ),
       domainName: hasuraProdDomain,
+      acmCertificateArn: required('hasuraProdAcmCertificateArn'),
       graphqlCorsDomain: String(
         app.node.tryGetContext('hasuraProdGraphqlCorsDomain') ||
           hasuraProdCorsDefault
