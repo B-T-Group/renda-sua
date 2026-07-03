@@ -29,6 +29,7 @@ class Order(BaseModel):
     order_hold: Optional[OrderHold] | None = None
     order_number: str
     payment_method: Optional[str] | None = None
+    payment_source: Optional[str] | None = None
     payment_status: Optional[str] | None = None
     per_km_delivery_fee: float
     preferred_delivery_time: Optional[datetime.datetime] | None = None
