@@ -24,6 +24,8 @@
     "hasuraProdAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-admin-H1onlM",
     "hasuraDevJwtSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-jwt-secret-dev-RcX0vs",
     "hasuraProdJwtSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-jwt-secret-prod-1tHs8K",
+    "hasuraProdAcmCertificateArn": "arn:aws:acm:us-east-1:235680477887:certificate/211105bd-5a9b-49ff-b87d-9f50c62eeaf9",
+    "hasuraDevAcmCertificateArn": "arn:aws:acm:us-east-1:235680477887:certificate/92956210-8d59-4291-9b50-33c782e01ce9",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],

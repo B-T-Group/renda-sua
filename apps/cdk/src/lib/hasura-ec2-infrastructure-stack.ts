@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
@@ -17,6 +18,7 @@ export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
   readonly sshCidr?: string;
   readonly instanceType?: string;
   readonly hasuraImage?: string;
+  readonly acmCertificateArn?: string; // Optional: AWS Certificate Manager certificate ARN
 }
 
 export class HasuraEc2EnvironmentStack extends cdk.Stack {
@@ -152,8 +154,9 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     hasuraImage: string
   ): string[] {
     const isProd = props.environment === 'prod';
-    // Extract region from secret ARN (format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME)
     const secretRegion = props.dbSecretArn.split(':')[3];
+    const useAcm = !!props.acmCertificateArn;
+    
     return [
       '#!/bin/bash',
       'set -euxo pipefail',
@@ -166,7 +169,6 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${props.dbSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
       `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.adminSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
       `JWT_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.jwtSecretArn}' --query SecretString --output text --region '${secretRegion}')"`,
-      // Docker --env-file requires one line per KEY=value; pretty-printed JSON breaks parsing.
       `JWT_ONE_LINE="$(printf '%s' "$JWT_SECRET" | python3 -c 'import json,sys; print(json.dumps(json.loads(sys.stdin.read())))')"`,
       'cat > /opt/hasura/.env <<EOF',
       'PG_DATABASE_URL=${DB_URL}',
@@ -175,7 +177,6 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'HASURA_GRAPHQL_ADMIN_SECRET=${ADMIN_SECRET}',
       'HASURA_GRAPHQL_UNAUTHORIZED_ROLE=anonymous',
       'HASURA_GRAPHQL_JWT_SECRET=${JWT_ONE_LINE}',
-      // Console + introspection enabled in prod (restrict access via admin secret, network, or nginx auth).
       'HASURA_GRAPHQL_ENABLE_CONSOLE=true',
       `HASURA_GRAPHQL_ENABLE_TELEMETRY=${isProd ? 'false' : 'true'}`,
       'HASURA_GRAPHQL_ENABLE_INTROSPECTION=true',
@@ -187,7 +188,6 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'docker rm -f hasura || true',
       'docker run -d --name hasura --restart unless-stopped --env-file /opt/hasura/.env -p 127.0.0.1:8080:8080 ' +
         hasuraImage,
-      // WebSocket GraphQL (graphql-ws) requires Upgrade headers; map avoids breaking normal HTTP on same path.
       'cat > /etc/nginx/conf.d/hasura-ws-upgrade.conf <<\'ENDHASURAMAP\'',
       'map $http_upgrade $connection_upgrade {',
       '    default upgrade;',
@@ -198,26 +198,23 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'server {',
       '  listen 80;',
       `  server_name ${props.domainName};`,
-      '  location / {',
-      '    proxy_pass http://127.0.0.1:8080;',
-      '    proxy_http_version 1.1;',
-      '    proxy_set_header Host \\$host;',
-      '    proxy_set_header X-Real-IP \\$remote_addr;',
-      '    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;',
-      '    proxy_set_header X-Forwarded-Proto \\$scheme;',
-      '    proxy_set_header Upgrade \\$http_upgrade;',
-      '    proxy_set_header Connection \\$connection_upgrade;',
-      '    proxy_read_timeout 86400;',
-      '  }',
+      useAcm ? '  return 301 https://$server_name$request_uri;' : '  location / {',
+      useAcm ? '}' : '    proxy_pass http://127.0.0.1:8080;',
+      useAcm ? '' : '    proxy_http_version 1.1;',
+      useAcm ? '' : '    proxy_set_header Host \\$host;',
+      useAcm ? '' : '    proxy_set_header X-Real-IP \\$remote_addr;',
+      useAcm ? '' : '    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;',
+      useAcm ? '' : '    proxy_set_header X-Forwarded-Proto \\$scheme;',
+      useAcm ? '' : '    proxy_set_header Upgrade \\$http_upgrade;',
+      useAcm ? '' : '    proxy_set_header Connection \\$connection_upgrade;',
+      useAcm ? '' : '    proxy_read_timeout 86400;',
+      useAcm ? '' : '  }',
       '}',
       'server {',
       '  listen 443 ssl http2;',
       `  server_name ${props.domainName};`,
-      '  ssl_certificate /etc/letsencrypt/live/${props.domainName}/fullchain.pem;',
-      '  ssl_certificate_key /etc/letsencrypt/live/${props.domainName}/privkey.pem;',
-      '  # Fallback to self-signed if Let\'s Encrypt cert not available',
-      '  ssl_certificate /etc/nginx/ssl/hasura.crt;',
-      '  ssl_certificate_key /etc/nginx/ssl/hasura.key;',
+      useAcm ? '  ssl_certificate /etc/nginx/ssl/acm-cert.pem;' : '  ssl_certificate /etc/letsencrypt/live/${props.domainName}/fullchain.pem;',
+      useAcm ? '  ssl_certificate_key /etc/nginx/ssl/acm-key.pem;' : '  ssl_certificate_key /etc/letsencrypt/live/${props.domainName}/privkey.pem;',
       '  ssl_protocols TLSv1.2 TLSv1.3;',
       '  ssl_ciphers HIGH:!aNULL:!MD5;',
       '  location / {',
@@ -237,14 +234,16 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'rm -f /etc/nginx/sites-enabled/default',
       'nginx -t',
       'systemctl restart nginx',
-      // Generate self-signed certificate as fallback if certbot fails
+      // Generate self-signed certificate as fallback
       'mkdir -p /etc/nginx/ssl',
-      'openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/hasura.key -out /etc/nginx/ssl/hasura.crt -subj "/CN=${props.domainName}" || true',
-      // Try to get Let\'s Encrypt certificate; if it fails, nginx will use self-signed
-      `certbot --nginx --non-interactive --agree-tos --email '${props.letsEncryptEmail}' -d '${props.domainName}' --redirect || echo "Certbot failed, using self-signed certificate"`,
+      `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/hasura.key -out /etc/nginx/ssl/hasura.crt -subj "/CN=${props.domainName}" || true`,
+      // If using ACM, download certificate from AWS Secrets Manager (where ACM stores it)
+      useAcm ? `aws secretsmanager get-secret-value --secret-id '${props.acmCertificateArn}' --query SecretString --output text --region '${secretRegion}' > /etc/nginx/ssl/acm-cert.pem || echo "ACM cert not found in Secrets Manager"` : '',
+      // Try to get Let's Encrypt certificate if not using ACM
+      useAcm ? '' : `certbot --nginx --non-interactive --agree-tos --email '${props.letsEncryptEmail}' -d '${props.domainName}' --redirect || echo "Certbot failed, using self-signed certificate"`,
       'systemctl enable certbot.timer || true',
       'systemctl restart certbot.timer || true',
-    ];
+    ].filter(line => line !== ''); // Remove empty lines
   }
 
   private ubuntuArm64Image(): ec2.IMachineImage {
