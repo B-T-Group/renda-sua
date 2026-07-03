@@ -46,7 +46,7 @@ if (hasuraEc2Enabled) {
     sshCidr: app.node.tryGetContext('hasuraSshCidr')
       ? String(app.node.tryGetContext('hasuraSshCidr'))
       : undefined,
-    instanceType: String(app.node.tryGetContext('hasuraInstanceType') || 't4g.micro'),
+    instanceType: String(app.node.tryGetContext('hasuraInstanceType') || 't4g.small'),
     hasuraImage: String(
       app.node.tryGetContext('hasuraImage') || 'hasura/graphql-engine:v2.48.3'
     ),
