@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
@@ -53,7 +52,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     });
 
     // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
-    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2Instance`, {
+    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2InstanceV1`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.small'),
