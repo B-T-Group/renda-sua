@@ -17,6 +17,7 @@
   "context": {
     "hasuraEc2Enabled": "true",
     "hasuraLetsEncryptEmail": "tech@rendasua.com",
+    "hasuraDevInstanceType": "t4g.small",
     "hasuraDevDbSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-db-7R53Sp",
     "hasuraDevAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9",
     "hasuraProdDbSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-db-VmDPN2",
