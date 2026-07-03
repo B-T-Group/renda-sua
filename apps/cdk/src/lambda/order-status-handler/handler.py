@@ -930,8 +930,8 @@ def trigger_stripe_refund_safe(
     Logs errors but does not raise - refund failure should not block cancellation.
     """
     try:
-        backend_endpoint = os.environ.get("BACKEND_ENDPOINT")
-        internal_api_key = os.environ.get("INTERNAL_API_KEY")
+        backend_endpoint = os.environ.get("BACKEND_INTERNAL_API_BASE_URL")
+        internal_api_key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY")
         
         if not backend_endpoint or not internal_api_key:
             log_info("Backend endpoint or internal API key not configured, skipping Stripe refund trigger")
