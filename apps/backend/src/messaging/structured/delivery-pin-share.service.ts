@@ -331,7 +331,7 @@ export class DeliveryPinShareService {
         user_messages(
           where: {
             entity_id: { _eq: $orderId }
-            entity_type: { _eq: "order" }
+            entity_type: { _eq: order }
             message_type: { _eq: "DELIVERY_PIN" }
           }
           order_by: { created_at: desc }
@@ -363,7 +363,7 @@ export class DeliveryPinShareService {
         user_messages(
           where: {
             entity_id: { _eq: $orderId }
-            entity_type: { _eq: "order" }
+            entity_type: { _eq: order }
             message_type: { _eq: "DELIVERY_PIN" }
           }
           order_by: { created_at: desc }
@@ -404,7 +404,7 @@ export class DeliveryPinShareService {
           where: {
             id: { _eq: $messageId }
             entity_id: { _eq: $orderId }
-            entity_type: { _eq: "order" }
+            entity_type: { _eq: order }
             message_type: { _eq: "DELIVERY_PIN" }
           }
           limit: 1
