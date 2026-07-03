@@ -1,0 +1,37 @@
+---
+description: Rebuild Lambda layers after CDK core-packages changes
+globs: apps/cdk/src/core-packages/**/*.py,apps/cdk/src/lambda/**/*.py
+alwaysApply: false
+---
+
+# CDK Core Packages — Rebuild Lambda Layer After Changes
+
+Whenever you modify any file under `apps/cdk/src/core-packages/` (models, services, utilities, etc.) or any Lambda handler under `apps/cdk/src/lambda/`, you **must** rebuild the Lambda layer so the deployed Lambda picks up the changes.
+
+## Required command
+
+```bash
+cd apps/cdk && yarn build:layer
+```
+
+Run this from the workspace root:
+
+```bash
+nx run cdk:build:layer
+```
+
+or directly:
+
+```bash
+cd apps/cdk && yarn build:layer
+```
+
+## When to run
+
+- After editing any file in `apps/cdk/src/core-packages/rendasua_core_packages/` (models, hasura_client, utilities, etc.)
+- After editing any Lambda handler in `apps/cdk/src/lambda/`
+- Before deploying the CDK stack or pushing changes
+
+## What it does
+
+`build:layer` runs `src/lambda-layer/build-core-packages-layer.sh`, which packages `rendasua_core_packages` into a zip that AWS Lambda loads as a layer. Without rebuilding, Lambda will continue running stale code.
