@@ -15,6 +15,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -25,9 +26,9 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
-import { ConfigService } from '@nestjs/config';
-import type { Configuration } from '../config/configuration';
 import { Public } from '../auth/public.decorator';
+import type { Configuration } from '../config/configuration';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { InitiateStripePaymentDto } from './dto/initiate-stripe-payment.dto';
@@ -53,6 +54,7 @@ export class StripePaymentsController {
     private readonly stripeService: StripeService,
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService,
     private readonly callbackProcessor: StripePaymentCallbackProcessor,
     private readonly connectService: StripeConnectService,
     private readonly payoutService: StripePayoutService,
@@ -122,7 +124,7 @@ export class StripePaymentsController {
     accountId: string,
     userId: string
   ): Promise<void> {
-    const result = await this.hasuraUserService.executeQuery<{
+    const result = await this.hasuraSystemService.executeQuery<{
       accounts: Array<{ id: string }>;
     }>(GET_ACCOUNT_BY_ID_FOR_USER, { accountId, userId });
 
@@ -456,7 +458,7 @@ export class StripePaymentsController {
           }
         }
       `;
-      const response = await this.hasuraUserService.executeQuery<{
+      const response = await this.hasuraSystemService.executeQuery<{
         orders_by_pk: { order_number: string } | null;
       }>(query, { id: orderId });
       
