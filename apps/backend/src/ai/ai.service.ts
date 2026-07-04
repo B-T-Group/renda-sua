@@ -350,28 +350,31 @@ export class AiService {
 
   private buildCleanupPrompt(issues?: CleanupProductImageIssue[]): string {
     const base =
-      'Clean up this product image for e-commerce. Keep the product as the clear focal point. Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
+      'Clean up the background of this product image for e-commerce. ' +
+      'IMPORTANT: Do NOT alter, replace, or reimagine the product itself — keep the exact same product, shape, color, and details. ' +
+      'Only improve the background and lighting around the product. ' +
+      'Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
     const hints: string[] = [];
     const codes = new Set((issues ?? []).map((i) => i.code));
     if (codes.has('IMAGE_BLURRY')) {
-      hints.push('Sharpen the product and reduce blur.');
+      hints.push('Sharpen the image and reduce blur while keeping the product unchanged.');
     }
     if (codes.has('CLUTTERED_BACKGROUND') || codes.has('POOR_LIGHTING')) {
       hints.push(
-        'Remove background clutter. Use a simple, well-lit background with subtle complementary props.'
+        'Replace the cluttered background with a clean, simple, well-lit background. Do not touch the product.'
       );
     }
     if (codes.has('PRODUCT_TOO_SMALL')) {
       hints.push(
-        'Crop tighter on the product so it fills most of the frame.'
+        'Crop tighter so the existing product fills most of the frame — do not change the product itself.'
       );
     }
     if (codes.has('TOO_MUCH_TEXT')) {
-      hints.push('Remove promotional text overlays and watermarks.');
+      hints.push('Remove promotional text overlays and watermarks from the background only.');
     }
     if (!hints.length) {
       hints.push(
-        'Remove background clutter. Add a simple background with a few subtle items or props for color.'
+        'Replace the background with a clean, minimal, well-lit surface. Keep the product completely unchanged.'
       );
     }
     return `${base} ${hints.join(' ')}`;
