@@ -353,6 +353,8 @@ export class AiService {
       'Clean up the background of this product image for e-commerce. ' +
       'IMPORTANT: Do NOT alter, replace, or reimagine the product itself — keep the exact same product, shape, color, and details. ' +
       'Only improve the background and lighting around the product. ' +
+      'Choose a background tone (light, dark, or mid-tone) that best complements and contrasts with the product colors — ' +
+      'for example a dark background for light-colored products, or a light background for dark products. ' +
       'Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
     const hints: string[] = [];
     const codes = new Set((issues ?? []).map((i) => i.code));
@@ -361,7 +363,7 @@ export class AiService {
     }
     if (codes.has('CLUTTERED_BACKGROUND') || codes.has('POOR_LIGHTING')) {
       hints.push(
-        'Replace the cluttered background with a clean, simple, well-lit background. Do not touch the product.'
+        'Replace the cluttered or poorly lit background with a clean, well-lit background chosen to best complement the product. Do not touch the product.'
       );
     }
     if (codes.has('PRODUCT_TOO_SMALL')) {
@@ -374,7 +376,7 @@ export class AiService {
     }
     if (!hints.length) {
       hints.push(
-        'Replace the background with a clean, minimal, well-lit surface. Keep the product completely unchanged.'
+        'Replace the background with a clean, minimal surface whose tone (light or dark) best complements the product. Keep the product completely unchanged.'
       );
     }
     return `${base} ${hints.join(' ')}`;
