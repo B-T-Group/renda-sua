@@ -89,8 +89,10 @@ const UserAccount: React.FC<UserAccountProps> = ({
   onRefresh,
 }) => {
   const { t } = useTranslation();
-  const { profile } = useUserProfileContext();
+  const { profile, personas } = useUserProfileContext();
   const apiClient = useApiClient();
+
+  const isClientPersona = personas.length > 0 && personas.every((p) => p === 'client');
 
   // Use the new hook to fetch account data
   const { account, loading, error, subscriptionFailed } =
@@ -449,7 +451,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
               <span>
                 <IconButton
                   onClick={handleWithdraw}
-                  disabled={withdrawDisabled}
+                  disabled={withdrawDisabled || isClientPersona}
                   color="error"
                   size="small"
                   sx={{ p: 0.5 }}
@@ -553,7 +555,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
                   <AddIcon />
                 </IconButton>
               </Tooltip>
-              {account.available_balance > 0 && (
+              {account.available_balance > 0 && !isClientPersona && (
                 <Tooltip title={withdrawTooltip}>
                   <span>
                     <IconButton
