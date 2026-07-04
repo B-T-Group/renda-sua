@@ -478,6 +478,7 @@ export class StripePaymentsController {
     }
 
     return this.refundService.initiateOrderRefund({
+      orderId,
       orderNumber,
       cancellationFee: body.cancellationFee,
       cancelledBy: body.cancelledBy,

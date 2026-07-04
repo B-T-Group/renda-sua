@@ -1,0 +1,54 @@
+# Order ID vs Order Number
+
+## Rule
+
+`orders.id` and `orders.order_number` are two distinct fields and must never be confused.
+
+## `orders.id` — UUID primary key
+
+- Type: `uuid`
+- Used for: **all table relationships and foreign keys** (`order_id` columns in any table)
+- Examples of correct usage:
+  - `stripe_refunds.order_id` → must be `orders.id`
+  - `order_items.order_id` → must be `orders.id`
+  - GraphQL queries: `orders_by_pk(id: $id)` → `$id` must be the UUID
+  - Any `WHERE order_id = ?` clause
+
+## `orders.order_number` — human-readable identifier
+
+- Type: `text` / integer sequence (e.g. `"12041661"`)
+- Used for: **display in client-facing UIs only** — what the customer sees on receipts, emails, and the mobile app
+- Examples of correct usage:
+  - Showing order reference to a user: `"Order #12041661"`
+  - Stripe `entity_id` field in `stripe_payment_transactions` (stored as order number for display)
+  - Search by human-readable reference
+- **Never use as a foreign key** or in `_by_pk` / `WHERE id = ?` queries
+
+## Common mistakes to avoid
+
+```typescript
+// ❌ WRONG — order_id in a FK column must be the UUID
+createRefundRecord({ order_id: order.order_number })
+
+// ✅ CORRECT
+createRefundRecord({ order_id: order.id })
+
+// ❌ WRONG — looking up by primary key using order_number
+orders_by_pk(id: orderNumber)
+
+// ✅ CORRECT
+orders_by_pk(id: orderId)  // orderId is a UUID
+```
+
+## When you need both
+
+Some operations (e.g. Stripe refunds) need both values for different purposes:
+
+```typescript
+{
+  orderId: order.id,           // UUID → stored as FK in stripe_refunds.order_id
+  orderNumber: order.order_number, // human-readable → used to look up stripe_payment_transactions.entity_id
+}
+```
+
+Always explicitly name variables `orderId` (UUID) vs `orderNumber` (human-readable) — never use a generic `id` that could be ambiguous.

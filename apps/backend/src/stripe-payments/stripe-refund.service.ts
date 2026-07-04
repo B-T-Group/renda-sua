@@ -12,16 +12,18 @@ export class StripeRefundService {
   ) {}
 
   async initiateOrderRefund(params: {
+    orderId: string;
     orderNumber: string;
     cancellationFee: number;
     cancelledBy: string;
   }): Promise<{ success: boolean; refundId?: string; message: string }> {
     try {
       this.logger.log(
-        `Initiating Stripe refund for order ${params.orderNumber}, cancelled by ${params.cancelledBy}`
+        `Initiating Stripe refund for order ${params.orderNumber} (${params.orderId}), cancelled by ${params.cancelledBy}`
       );
 
       // Look up the successful Stripe payment transaction by order number
+      // (order.number is used as entity_id in stripe_payment_transactions)
       const transaction = await this.databaseService.getTransactionByEntityId(
         params.orderNumber
       );
@@ -78,6 +80,7 @@ export class StripeRefundService {
         amount: refundAmountMinor,
         reason: 'requested_by_customer',
         metadata: {
+          orderId: params.orderId,
           orderNumber: params.orderNumber,
           cancelledBy: params.cancelledBy,
         },
@@ -87,18 +90,19 @@ export class StripeRefundService {
         `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
       );
 
-      // Insert refund record into database with pending status
+      // Insert refund record — order_id is the UUID FK to orders table
       const refundRecord = await this.databaseService.createRefundRecord({
         stripe_refund_id: stripeRefund.id,
         stripe_payment_intent_id: transaction.stripe_payment_intent_id,
         stripe_payment_transaction_id: transaction.id,
-        order_id: params.orderNumber,
+        order_id: params.orderId,
         amount: refundAmount,
         currency: transaction.currency,
         reason: 'requested_by_customer',
         cancellation_fee: params.cancellationFee,
         cancelled_by: params.cancelledBy,
         metadata: {
+          orderId: params.orderId,
           orderNumber: params.orderNumber,
           cancelledBy: params.cancelledBy,
         },
