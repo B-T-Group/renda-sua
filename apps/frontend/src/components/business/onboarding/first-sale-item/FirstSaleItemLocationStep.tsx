@@ -26,7 +26,7 @@ import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 
 interface FirstSaleItemLocationStepProps {
   item: CreatedSaleItemSummary;
-  onComplete: () => void;
+  onComplete: (locationName?: string) => void;
 }
 
 const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
@@ -117,7 +117,8 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
         ),
         { variant: 'success' }
       );
-      onComplete();
+      const selectedLoc = list.find((l: { id: string; name: string }) => l.id === locationId);
+      onComplete(selectedLoc?.name);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message ||

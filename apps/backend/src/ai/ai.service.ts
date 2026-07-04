@@ -269,6 +269,7 @@ export class AiService {
         model: 'gpt-image-1.5',
         n: 1,
         output_format: 'png',
+        output_size: '1024x1024',
         background: 'opaque',
       };
 
@@ -281,7 +282,7 @@ export class AiService {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          timeout: 60000, // 60s for image processing
+          timeout: 120000,
           maxBodyLength: 50 * 1024 * 1024,
         }
       );
@@ -349,7 +350,7 @@ export class AiService {
 
   private buildCleanupPrompt(issues?: CleanupProductImageIssue[]): string {
     const base =
-      'Clean up this product image for e-commerce. Keep the product as the clear focal point.';
+      'Clean up this product image for e-commerce. Keep the product as the clear focal point. Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
     const hints: string[] = [];
     const codes = new Set((issues ?? []).map((i) => i.code));
     if (codes.has('IMAGE_BLURRY')) {

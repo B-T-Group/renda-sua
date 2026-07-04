@@ -46,7 +46,7 @@ const getEnvironment = () => {
       process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
       'AIzaSyDpI80RcSNpjLNybedvZ62QFyV4485tiyI',
     /** AI image cleanup (OpenAI); business + rental library endpoints */
-    imageCleanupRequestTimeoutMs: 120_000,
+    imageCleanupRequestTimeoutMs: 180_000,
     enableDebugLogging: isDevelopment,
     enableAnalytics: process.env.NODE_ENV === 'production',
   };

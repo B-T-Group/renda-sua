@@ -6,6 +6,10 @@ import {
   Box,
   Button,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   LinearProgress,
   Paper,
   Typography,
@@ -27,7 +31,6 @@ import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 export type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 export interface FirstSaleItemFlowProps {
-  /** `first`: onboarding copy & exit to dashboard. `additional`: catalog copy & exit to items. */
   intent?: SaleItemFromImageIntent;
 }
 
@@ -45,6 +48,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [item, setItem] = useState<CreatedSaleItemSummary | null>(null);
+  const [locationName, setLocationName] = useState<string | undefined>(undefined);
+  const [exitDialogOpen, setExitDialogOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -63,7 +68,15 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
     t('business.onboarding.firstSale.steps.done', 'Done'),
   ];
   const stepCount = labels.length;
-  const progressPct = ((step + 1) / stepCount) * 100;
+  const progressPct = (step / stepCount) * 100;
+
+  const handleBackClick = () => {
+    if (step === 0) {
+      navigate(exitPath);
+    } else {
+      setExitDialogOpen(true);
+    }
+  };
 
   return (
     <Container
@@ -75,43 +88,32 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         pb: { xs: 'max(16px, env(safe-area-inset-bottom))', sm: 4 },
       }}
     >
-      <Button
-        startIcon={<BackIcon />}
-        onClick={() => navigate(exitPath)}
-        sx={{
-          mb: { xs: 1.5, sm: 2 },
-          minHeight: 44,
-          px: { xs: 1, sm: 2 },
-        }}
-      >
-        {isFirst
-          ? t('business.onboarding.firstSale.back', 'Back')
-          : t(
-              'business.onboarding.firstSale.backToItems',
-              'Back to items'
-            )}
-      </Button>
+      {/* Only show top exit button on step 0 (no dual-back confusion on later steps) */}
+      {step < 3 && (
+        <Button
+          startIcon={<BackIcon />}
+          onClick={handleBackClick}
+          sx={{ mb: { xs: 1.5, sm: 2 }, minHeight: 44, px: { xs: 1, sm: 2 } }}
+        >
+          {step === 0
+            ? isFirst
+              ? t('business.onboarding.firstSale.back', 'Back')
+              : t('business.onboarding.firstSale.backToItems', 'Back to items')
+            : t('business.onboarding.firstSale.exitFlow', 'Exit')}
+        </Button>
+      )}
+
       <Typography
         variant="h5"
         component="h1"
         gutterBottom
-        sx={{
-          fontWeight: 600,
-          fontSize: { xs: '1.35rem', sm: '2rem' },
-          lineHeight: 1.3,
-          mb: 2,
-        }}
+        sx={{ fontWeight: 600, fontSize: { xs: '1.35rem', sm: '2rem' }, lineHeight: 1.3, mb: 2 }}
       >
         {isFirst
-          ? t(
-              'business.onboarding.firstSale.title',
-              'Add your first product'
-            )
-          : t(
-              'business.onboarding.firstSale.titleAdditional',
-              'Add a product from photos'
-            )}
+          ? t('business.onboarding.firstSale.title', 'Add your first product')
+          : t('business.onboarding.firstSale.titleAdditional', 'Add a product from photos')}
       </Typography>
+
       <Box sx={{ mb: { xs: 2, sm: 3 } }}>
         <Typography
           variant="caption"
@@ -141,12 +143,14 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             bgcolor: 'action.hover',
             '& .MuiLinearProgress-bar': { borderRadius: 1 },
           }}
-          aria-label={labels[step]}
+          aria-label={t('business.onboarding.firstSale.stepProgressLabel', 'Step {{current}} of {{total}}: {{label}}', { current: step + 1, total: stepCount, label: labels[step] })}
           aria-valuenow={step + 1}
           aria-valuemin={1}
           aria-valuemax={stepCount}
         />
       </Box>
+
+      {/* Previous step button only on steps 1–2 (replaces top back for navigation within flow) */}
       {step > 0 && step < 3 && (
         <Button
           type="button"
@@ -156,12 +160,10 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           fullWidth={isNarrow}
           sx={{ mb: { xs: 1.5, sm: 2 }, minHeight: 44 }}
         >
-          {t(
-            'business.onboarding.firstSale.previousStep',
-            'Previous step'
-          )}
+          {t('business.onboarding.firstSale.previousStep', 'Previous step')}
         </Button>
       )}
+
       <Paper
         elevation={isNarrow ? 0 : 1}
         sx={{
@@ -203,13 +205,43 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         {step === 2 && item && (
           <FirstSaleItemLocationStep
             item={item}
-            onComplete={() => setStep(3)}
+            onComplete={(locName) => {
+              setLocationName(locName);
+              setStep(3);
+            }}
           />
         )}
         {step === 3 && item && (
-          <FirstSaleItemSuccessStep item={item} intent={intent} />
+          <FirstSaleItemSuccessStep item={item} intent={intent} locationName={locationName} />
         )}
       </Paper>
+
+      <Dialog open={exitDialogOpen} onClose={() => setExitDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {t('business.onboarding.firstSale.exitTitle', 'Leave this flow?')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'business.onboarding.firstSale.exitBody',
+              'Your progress on step {{step}} will be lost if you leave now.',
+              { step: step + 1 }
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExitDialogOpen(false)}>
+            {t('business.onboarding.firstSale.exitStay', 'Stay')}
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => { setExitDialogOpen(false); navigate(exitPath); }}
+          >
+            {t('business.onboarding.firstSale.exitLeave', 'Leave')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
