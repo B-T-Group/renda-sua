@@ -291,4 +291,10 @@ export class CheckoutPreflightResponseDto {
       'True when Stripe retry is not yet supported for orders that fail payment. Consumers should surface this to guide the user to pay from order details.',
   })
   stripe_retry_unsupported?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when Stripe manual capture is enabled (card authorized at checkout, charged after agent assignment).',
+  })
+  stripe_manual_capture?: boolean;
 }

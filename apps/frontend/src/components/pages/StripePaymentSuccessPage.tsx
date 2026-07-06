@@ -36,13 +36,13 @@ const StripePaymentSuccessPage: React.FC = () => {
           <CheckCircleIcon color="success" sx={{ fontSize: 72 }} />
 
           <Typography variant="h5">
-            {t('stripe.success.title', 'Payment successful')}
+            {t('stripe.success.title', 'Card authorized')}
           </Typography>
 
           <Typography variant="body1" color="text.secondary">
             {t(
               'stripe.success.body',
-              'Thank you! Your payment was received and your order is being processed.'
+              'Your card has been authorized. You will only be charged after the business confirms your order and a delivery agent is assigned.'
             )}
           </Typography>
 

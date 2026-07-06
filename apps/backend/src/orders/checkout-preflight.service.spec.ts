@@ -12,6 +12,7 @@
  *  - Missing payment capabilities are blocked
  */
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
@@ -117,6 +118,17 @@ describe('CheckoutPreflightService', () => {
             validateDiscountCode: jest.fn().mockResolvedValue({ valid: false }),
           },
         },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'stripe') {
+                return { manualCaptureEnabled: false };
+              }
+              return undefined;
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -147,6 +159,7 @@ describe('CheckoutPreflightService', () => {
   // -------------------------------------------------------------------------
   it('returns EMAIL verification and STRIPE checkout method for Stripe seller groups', async () => {
     mockInventory([makeInventoryRow({ ownerUserId: 'owner-ca', sellerCountry: 'CA' })]);
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
     (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
 
     const dto: CheckoutPreflightDto = {
@@ -188,6 +201,7 @@ describe('CheckoutPreflightService', () => {
   it('uses seller/business-owner rail as the authoritative checkout method, not buyer rail', async () => {
     // Seller is in a Stripe country
     mockInventory([makeInventoryRow({ ownerUserId: 'owner-ca', sellerCountry: 'CA' })]);
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
     (paymentRoutingService.resolveRailForUser as jest.Mock)
       .mockImplementation((userId: string) => {
         if (userId === 'owner-ca') return Promise.resolve('stripe');
@@ -334,6 +348,7 @@ describe('CheckoutPreflightService', () => {
     (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
       business_inventory: [row],
     });
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
     (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
 
     const dto: CheckoutPreflightDto = {

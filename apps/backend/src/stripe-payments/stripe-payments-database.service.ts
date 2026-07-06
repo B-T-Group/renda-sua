@@ -10,11 +10,16 @@ export type StripePaymentEntity =
 
 export type StripeTransactionStatus =
   | 'pending'
+  | 'authorized'
+  | 'capture_pending'
   | 'success'
   | 'failed'
   | 'cancelled'
+  | 'expired'
   | 'refunded'
   | 'disputed';
+
+export type StripeCaptureMethod = 'automatic' | 'manual';
 
 export interface StripePaymentTransaction {
   id: string;
@@ -24,6 +29,7 @@ export interface StripePaymentTransaction {
   description?: string;
   status: StripeTransactionStatus;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
+  capture_method?: StripeCaptureMethod;
   stripe_session_id?: string;
   stripe_payment_intent_id?: string;
   payment_url?: string;
@@ -33,6 +39,9 @@ export interface StripePaymentTransaction {
   customer_email?: string;
   error_message?: string;
   error_code?: string;
+  authorized_at?: string;
+  captured_at?: string;
+  authorization_expires_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +58,7 @@ export interface CreateStripeTransactionData {
   customer_email?: string;
   success_url?: string;
   cancel_url?: string;
+  capture_method?: StripeCaptureMethod;
 }
 
 export interface UpdateStripeTransactionData {
@@ -58,6 +68,9 @@ export interface UpdateStripeTransactionData {
   payment_url?: string;
   error_message?: string;
   error_code?: string;
+  authorized_at?: string;
+  captured_at?: string;
+  authorization_expires_at?: string;
 }
 
 const TRANSACTION_FIELDS = `
@@ -68,6 +81,7 @@ const TRANSACTION_FIELDS = `
   description
   status
   transaction_type
+  capture_method
   stripe_session_id
   stripe_payment_intent_id
   payment_url
@@ -77,6 +91,9 @@ const TRANSACTION_FIELDS = `
   customer_email
   error_message
   error_code
+  authorized_at
+  captured_at
+  authorization_expires_at
   created_at
   updated_at
 `;

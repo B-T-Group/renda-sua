@@ -179,6 +179,17 @@ export class StripePaymentsController {
       if (session.payment_status === 'paid') status = 'success';
       else if (session.status === 'expired') status = 'cancelled';
     }
+    if (
+      status === 'pending' &&
+      tx.stripe_payment_intent_id &&
+      tx.capture_method === 'manual'
+    ) {
+      const pi = await this.stripeService.retrievePaymentIntent(
+        tx.stripe_payment_intent_id
+      );
+      if (pi.status === 'requires_capture') status = 'authorized';
+      else if (pi.status === 'succeeded') status = 'success';
+    }
     return {
       success: true,
       data: { transactionId: tx.id, reference: tx.reference, status },
@@ -330,6 +341,18 @@ export class StripePaymentsController {
         break;
       case 'payment_intent.succeeded':
         await this.callbackProcessor.onPaymentIntentSucceeded(
+          event.data.object as Stripe.PaymentIntent,
+          req
+        );
+        break;
+      case 'payment_intent.amount_capturable_updated':
+        await this.callbackProcessor.onPaymentIntentAmountCapturableUpdated(
+          event.data.object as Stripe.PaymentIntent,
+          req
+        );
+        break;
+      case 'payment_intent.canceled':
+        await this.callbackProcessor.onPaymentIntentCanceled(
           event.data.object as Stripe.PaymentIntent,
           req
         );

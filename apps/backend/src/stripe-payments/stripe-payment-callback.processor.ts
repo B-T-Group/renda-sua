@@ -13,6 +13,7 @@ import {
   StripePaymentsDatabaseService,
   type StripePaymentTransaction,
 } from './stripe-payments-database.service';
+import { StripeService } from './stripe.service';
 
 @Injectable()
 export class StripePaymentCallbackProcessor {
@@ -21,8 +22,13 @@ export class StripePaymentCallbackProcessor {
   constructor(
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
-    private readonly paymentCallbackRegistry: PaymentCallbackRegistryService
+    private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
+    private readonly stripeService: StripeService
   ) {}
+
+  private isManualCapture(tx: StripePaymentTransaction): boolean {
+    return tx.capture_method === 'manual';
+  }
 
   private async resolveHandlers(
     req: Request
@@ -31,10 +37,17 @@ export class StripePaymentCallbackProcessor {
     return this.paymentCallbackRegistry.getHandlers(contextId);
   }
 
-  /** Map a Stripe transaction onto the shared callback transaction shape. */
   private toCallbackTransaction(
     tx: StripePaymentTransaction
   ): MobilePaymentTransaction {
+    const normalizedStatus =
+      tx.status === 'authorized' || tx.status === 'capture_pending'
+        ? 'pending'
+        : tx.status === 'refunded' ||
+            tx.status === 'disputed' ||
+            tx.status === 'expired'
+          ? 'failed'
+          : tx.status;
     return {
       id: tx.id,
       reference: tx.reference,
@@ -43,10 +56,7 @@ export class StripePaymentCallbackProcessor {
       description: tx.description ?? '',
       provider: 'stripe',
       payment_method: 'card',
-      status:
-        tx.status === 'refunded' || tx.status === 'disputed'
-          ? 'failed'
-          : tx.status,
+      status: normalizedStatus,
       transaction_id: tx.stripe_payment_intent_id,
       customer_email: tx.customer_email,
       account_id: tx.account_id,
@@ -78,56 +88,130 @@ export class StripePaymentCallbackProcessor {
       typeof session.payment_intent === 'string'
         ? session.payment_intent
         : session.payment_intent?.id;
-    if (tx.status !== 'pending') {
+    if (tx.status !== 'pending' && tx.status !== 'authorized') {
       this.logger.log(
         `Stripe checkout skipped (already ${tx.status}): ${tx.id}`
       );
       return;
     }
-    if (session.payment_status !== 'paid') {
+
+    if (this.isManualCapture(tx)) {
+      const pi = paymentIntentId
+        ? await this.stripeService.retrievePaymentIntent(paymentIntentId)
+        : null;
+      if (pi?.status === 'requires_capture') {
+        await this.applyAuthorized(tx, paymentIntentId, req);
+      } else if (pi?.status === 'succeeded') {
+        await this.applyCaptured(tx, paymentIntentId, req);
+      }
       return;
     }
-    await this.applySuccess(tx, paymentIntentId, req);
+
+    if (session.payment_status !== 'paid') return;
+    await this.applyCaptured(tx, paymentIntentId, req);
   }
 
-  /**
-   * Finalize a payment collected directly via a PaymentIntent (e.g. the mobile
-   * PaymentSheet). Transactions backed by a hosted Checkout session are skipped
-   * here and finalized by `onCheckoutSessionCompleted` instead, so the wallet is
-   * never credited twice for the same order.
-   */
+  async onPaymentIntentAmountCapturableUpdated(
+    paymentIntent: Stripe.PaymentIntent,
+    req: Request
+  ): Promise<void> {
+    if (paymentIntent.status !== 'requires_capture') return;
+    const tx = await this.resolveTransaction(paymentIntent);
+    if (!tx || !this.isManualCapture(tx)) return;
+    if (tx.status !== 'pending') return;
+    await this.applyAuthorized(tx, paymentIntent.id, req);
+  }
+
   async onPaymentIntentSucceeded(
     paymentIntent: Stripe.PaymentIntent,
     req: Request
   ): Promise<void> {
-    const reference = paymentIntent.metadata?.reference;
-    const tx = reference
-      ? await this.databaseService.getTransactionByReference(reference)
-      : await this.databaseService.getTransactionByPaymentIntentId(
-          paymentIntent.id
-        );
+    const tx = await this.resolveTransaction(paymentIntent);
     if (!tx) {
       this.logger.warn(
-        `Stripe PaymentIntent succeeded but no transaction for ${
-          reference || paymentIntent.id
-        }`
+        `Stripe PaymentIntent succeeded but no transaction for ${paymentIntent.id}`
       );
       return;
     }
-    if (tx.stripe_session_id) {
-      // Settled through the hosted Checkout flow; let the session handler win.
+    if (tx.stripe_session_id && !this.isManualCapture(tx)) {
       return;
     }
-    if (tx.status !== 'pending') {
+    if (tx.status === 'success') {
+      this.logger.log(`Stripe PI skipped (already success): ${tx.id}`);
+      return;
+    }
+    if (this.isManualCapture(tx)) {
+      if (tx.status !== 'authorized' && tx.status !== 'capture_pending') {
+        this.logger.log(
+          `Manual capture PI succeeded but tx status is ${tx.status}: ${tx.id}`
+        );
+        return;
+      }
+    } else if (tx.status !== 'pending') {
       this.logger.log(
         `Stripe PaymentIntent skipped (already ${tx.status}): ${tx.id}`
       );
       return;
     }
-    await this.applySuccess(tx, paymentIntent.id, req);
+    await this.applyCaptured(tx, paymentIntent.id, req);
   }
 
-  private async applySuccess(
+  async onPaymentIntentCanceled(
+    paymentIntent: Stripe.PaymentIntent,
+    req: Request
+  ): Promise<void> {
+    const tx = await this.resolveTransaction(paymentIntent);
+    if (!tx) return;
+    if (!['pending', 'authorized', 'capture_pending'].includes(tx.status)) {
+      return;
+    }
+    const isExpired = paymentIntent.cancellation_reason === 'automatic';
+    await this.databaseService.updateTransaction(tx.id, {
+      status: isExpired ? 'expired' : 'cancelled',
+      stripe_payment_intent_id: paymentIntent.id,
+      error_message: isExpired
+        ? 'Payment authorization expired'
+        : 'Payment authorization cancelled',
+    });
+    await this.runHandlerFailure(
+      tx,
+      isExpired ? 'Payment authorization expired' : 'Payment authorization cancelled',
+      req
+    );
+  }
+
+  private async resolveTransaction(
+    paymentIntent: Stripe.PaymentIntent
+  ): Promise<StripePaymentTransaction | null> {
+    const reference = paymentIntent.metadata?.reference;
+    return reference
+      ? await this.databaseService.getTransactionByReference(reference)
+      : await this.databaseService.getTransactionByPaymentIntentId(
+          paymentIntent.id
+        );
+  }
+
+  private async applyAuthorized(
+    tx: StripePaymentTransaction,
+    paymentIntentId: string | undefined,
+    req: Request
+  ): Promise<void> {
+    if (tx.payment_entity === 'order_cash_reconciliation') {
+      return;
+    }
+    const authorizedAt = new Date().toISOString();
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'authorized',
+      stripe_payment_intent_id: paymentIntentId,
+      authorized_at: authorizedAt,
+    });
+    this.logger.log(
+      `stripe_payment_authorized entity=${tx.payment_entity} ref=${tx.reference} tx=${tx.id}`
+    );
+    await this.runHandlerAuthorized(tx, req);
+  }
+
+  private async applyCaptured(
     tx: StripePaymentTransaction,
     paymentIntentId: string | undefined,
     req: Request
@@ -136,9 +220,11 @@ export class StripePaymentCallbackProcessor {
       await this.settleCashReconciliation(tx, paymentIntentId, req);
       return;
     }
+    const capturedAt = new Date().toISOString();
     await this.databaseService.updateTransaction(tx.id, {
       status: 'success',
       stripe_payment_intent_id: paymentIntentId,
+      captured_at: capturedAt,
     });
     await this.creditWalletIfNeeded(tx);
     await this.runHandlerSuccess(tx, req);
@@ -164,6 +250,25 @@ export class StripePaymentCallbackProcessor {
     this.logger.log(
       `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
     );
+  }
+
+  private async runHandlerAuthorized(
+    tx: StripePaymentTransaction,
+    req: Request
+  ): Promise<void> {
+    try {
+      const handlers = await this.resolveHandlers(req);
+      const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
+      if (handler?.onPaymentAuthorized) {
+        await handler.onPaymentAuthorized(this.toCallbackTransaction(tx));
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Stripe authorization finalize failed for ${tx.id}: ${String(
+          error?.message || error
+        )}`
+      );
+    }
   }
 
   private async runHandlerSuccess(
@@ -212,13 +317,8 @@ export class StripePaymentCallbackProcessor {
     paymentIntent: Stripe.PaymentIntent,
     req: Request
   ): Promise<void> {
-    const reference = paymentIntent.metadata?.reference;
-    const tx = reference
-      ? await this.databaseService.getTransactionByReference(reference)
-      : await this.databaseService.getTransactionByPaymentIntentId(
-          paymentIntent.id
-        );
-    if (!tx || tx.status !== 'pending') return;
+    const tx = await this.resolveTransaction(paymentIntent);
+    if (!tx || !['pending', 'authorized', 'capture_pending'].includes(tx.status)) return;
     const message =
       paymentIntent.last_payment_error?.message || 'Payment failed';
     await this.databaseService.updateTransaction(tx.id, {
@@ -259,8 +359,6 @@ export class StripePaymentCallbackProcessor {
 
     const refundedMajor = Math.min((charge.amount_refunded ?? 0) / 100, tx.amount);
 
-    // Check if we already have a refund record for this charge to avoid double-crediting
-    // If a refund record exists with succeeded status, skip wallet reversal
     if (charge.refunded && charge.refunds?.data && charge.refunds.data.length > 0) {
       const stripeRefundId = charge.refunds.data[0].id;
       const existingRefund = await this.databaseService.getRefundByStripeId(
@@ -334,14 +432,12 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    // Check if we already have this refund recorded
     const existingRefund = await this.databaseService.getRefundByStripeId(refund.id);
     if (existingRefund) {
       this.logger.log(`Refund ${refund.id} already recorded, skipping`);
       return;
     }
 
-    // Update refund status based on Stripe refund status
     const refundStatus = refund.status === 'succeeded' ? 'succeeded' : 'pending';
     await this.databaseService.updateRefundByStripeId(refund.id, {
       status: refundStatus,
@@ -363,14 +459,12 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    // Get the refund record to find the transaction
     const existingRefund = await this.databaseService.getRefundByStripeId(refund.id);
     if (!existingRefund) {
       this.logger.warn(`Refund ${refund.id} not found in database`);
       return;
     }
 
-    // Update refund status
     const refundStatus = refund.status === 'succeeded' ? 'succeeded' : 'failed';
     const failureReason = refund.failure_reason || undefined;
 
@@ -379,7 +473,6 @@ export class StripePaymentCallbackProcessor {
       failure_reason: failureReason,
     });
 
-    // If refund succeeded, credit the wallet
     if (refundStatus === 'succeeded') {
       const tx = await this.databaseService.getTransactionByPaymentIntentId(
         paymentIntentId

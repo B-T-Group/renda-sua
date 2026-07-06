@@ -213,6 +213,14 @@ export interface StripeConfig {
   appBaseUrl: string;
   /** ISO 3166-1 alpha-2 country codes routed to Stripe (uppercase). */
   enabledCountries: string[];
+  /** When true, pay-now order payments use manual capture (authorize then capture on agent assign). */
+  manualCaptureEnabled: boolean;
+  /** Optional ISO country allowlist for manual capture; empty = all Stripe-enabled countries. */
+  manualCaptureCountries: string[];
+  /** Hours before auth expiry to warn / auto-cancel uncaptured authorized orders. */
+  authExpiryGraceHours: number;
+  /** Hours an authorized order may stay ready_for_pickup without agent before auto-cancel. */
+  authorizedNoAgentTimeoutHours: number;
 }
 
 export interface NotificationConfig {
@@ -418,6 +426,20 @@ export default (): Configuration => {
         .split(',')
         .map((c) => c.trim().toUpperCase())
         .filter((c) => c.length === 2),
+      manualCaptureEnabled:
+        process.env.STRIPE_MANUAL_CAPTURE_ENABLED === 'true',
+      manualCaptureCountries: (process.env.STRIPE_MANUAL_CAPTURE_COUNTRIES || '')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
+      authExpiryGraceHours: parseInt(
+        process.env.STRIPE_AUTH_EXPIRY_GRACE_HOURS || '24',
+        10
+      ),
+      authorizedNoAgentTimeoutHours: parseInt(
+        process.env.STRIPE_AUTHORIZED_NO_AGENT_TIMEOUT_HOURS || '48',
+        10
+      ),
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),

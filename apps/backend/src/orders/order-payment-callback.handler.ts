@@ -37,6 +37,14 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     }
   }
 
+  async onPaymentAuthorized(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (transaction.payment_entity === 'order') {
+      await this.ordersService.finalizeOrderAfterAuthorization(transaction);
+    }
+  }
+
   async onPaymentFailure(
     transaction: MobilePaymentTransaction,
     message: string

@@ -4574,8 +4574,8 @@
       "continue": "Continue"
     },
     "success": {
-      "title": "Payment successful",
-      "body": "Thank you! Your payment was received and your order is being processed.",
+      "title": "Card authorized",
+      "body": "Your card has been authorized. You will only be charged after the business confirms your order and a delivery agent is assigned.",
       "orderReference": "Order #{{orderNumber}}",
       "viewOrder": "View order",
       "viewOrders": "View my orders"

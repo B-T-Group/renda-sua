@@ -4317,8 +4317,8 @@
       "continue": "Continuer"
     },
     "success": {
-      "title": "Paiement réussi",
-      "body": "Merci ! Votre paiement a été reçu et votre commande est en cours de traitement.",
+      "title": "Carte autorisée",
+      "body": "Votre carte a été autorisée. Le débit n'interviendra qu'après confirmation par le commerce et assignation d'un livreur.",
       "orderReference": "Commande #{{orderNumber}}",
       "viewOrder": "Voir la commande",
       "viewOrders": "Voir mes commandes"

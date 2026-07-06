@@ -8,6 +8,7 @@ export interface PaymentCallbackHandler {
     transaction: MobilePaymentTransaction
   ): Promise<void>;
   onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void>;
+  onPaymentAuthorized?(transaction: MobilePaymentTransaction): Promise<void>;
   onPaymentFailure(
     transaction: MobilePaymentTransaction,
     message: string

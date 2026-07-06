@@ -34,7 +34,14 @@ export interface StripePaymentResponse {
 export interface StripeTransactionStatus {
   transactionId: string;
   reference: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status:
+    | 'pending'
+    | 'authorized'
+    | 'capture_pending'
+    | 'success'
+    | 'failed'
+    | 'cancelled'
+    | 'expired';
 }
 
 export function useStripePayments() {

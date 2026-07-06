@@ -17,6 +17,7 @@ export interface CreateCheckoutParams {
   entityId?: string;
   successUrl?: string;
   cancelUrl?: string;
+  captureMethod?: 'automatic' | 'manual';
 }
 
 export interface CreateCheckoutResult {
@@ -97,6 +98,7 @@ export class StripeCheckoutService {
       customer_email: params.customerEmail,
       success_url: successUrl,
       cancel_url: cancelUrl,
+      capture_method: params.captureMethod ?? 'automatic',
     });
 
     const session = await this.stripeService.createCheckoutSession({
@@ -108,6 +110,7 @@ export class StripeCheckoutService {
       successUrl,
       cancelUrl,
       metadata: this.buildMetadata(params, reference),
+      captureMethod: params.captureMethod,
     });
 
     await this.databaseService.updateTransaction(transaction.id, {
@@ -144,6 +147,7 @@ export class StripeCheckoutService {
       payment_entity: params.paymentEntity,
       entity_id: params.entityId,
       customer_email: params.customerEmail,
+      capture_method: params.captureMethod ?? 'automatic',
     });
 
     const paymentIntent = await this.stripeService.createPaymentIntent({
@@ -153,6 +157,7 @@ export class StripeCheckoutService {
       reference,
       customerEmail: params.customerEmail,
       metadata: this.buildMetadata(params, reference),
+      captureMethod: params.captureMethod,
     });
 
     await this.databaseService.updateTransaction(transaction.id, {

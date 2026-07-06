@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PaymentCallbackRegistryService } from '../mobile-payments/payment-callback/payment-callback-registry.service';
 import { PaymentRoutingService } from './payment-routing.service';
+import { StripeAuthReconcilerService } from './stripe-auth-reconciler.service';
+import { StripeCaptureService } from './stripe-capture.service';
 import { StripeCheckoutService } from './stripe-checkout.service';
 import { StripeConnectController } from './stripe-connect.controller';
 import { StripeConnectService } from './stripe-connect.service';
@@ -20,6 +22,8 @@ import { StripeService } from './stripe.service';
     StripeConnectService,
     StripePayoutService,
     StripeRefundService,
+    StripeCaptureService,
+    StripeAuthReconcilerService,
     StripePaymentCallbackProcessor,
     PaymentCallbackRegistryService,
     PaymentRoutingService,
@@ -30,8 +34,8 @@ import { StripeService } from './stripe.service';
     StripePayoutService,
     StripeConnectService,
     StripeRefundService,
+    StripeCaptureService,
     PaymentRoutingService,
   ],
 })
 export class StripePaymentsModule {}
-

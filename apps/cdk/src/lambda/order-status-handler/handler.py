@@ -786,6 +786,7 @@ def trigger_stripe_refund_safe(
             return {"success": False, "error": "Order not found"}
         
         payment_source = getattr(order, 'payment_source', None)
+        payment_status = getattr(order, 'payment_status', None)
         if payment_source != 'credit_card':
             log_info(
                 "Order not paid via credit card, skipping Stripe refund",
@@ -793,6 +794,14 @@ def trigger_stripe_refund_safe(
                 payment_source=payment_source
             )
             return {"success": True, "skipped": True, "reason": f"Payment source is {payment_source}"}
+
+        if payment_status in ('authorized', 'pending', 'cancelled'):
+            log_info(
+                "Order payment not captured, skipping Stripe refund",
+                order_id=order_id,
+                payment_status=payment_status
+            )
+            return {"success": True, "skipped": True, "reason": "Payment not captured"}
         
         # Only trigger refund for client cancellations
         if cancelled_by != 'client':

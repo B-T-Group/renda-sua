@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
-export type RefundType = 'full' | 'partial' | 'none' | 'wallet_credit';
+export type RefundType = 'full' | 'partial' | 'none' | 'wallet_credit' | 'authorization_release';
 export type CancelledBy = 'client' | 'business' | 'agent' | 'system';
 
 export interface CancellationReason {
@@ -123,6 +123,7 @@ export class CancellationPolicyService {
 
     const refundType = this.resolveRefundType(
       order.payment_source ?? null,
+      order.payment_status ?? null,
       cancellationFee,
       order.total_amount
     );
@@ -137,7 +138,8 @@ export class CancellationPolicyService {
       refundCurrency: order.currency,
       cancellationFee,
       estimatedRefundProcessingTime: this.resolveProcessingTime(
-        order.payment_source ?? null
+        order.payment_source ?? null,
+        order.payment_status
       ),
       paymentSource: order.payment_source ?? 'unknown',
       cancellationConsequences: consequences,
@@ -170,7 +172,8 @@ export class CancellationPolicyService {
       refundCurrency: order.currency,
       cancellationFee: 0,
       estimatedRefundProcessingTime: this.resolveProcessingTime(
-        order.payment_source ?? null
+        order.payment_source ?? null,
+        order.payment_status
       ),
       paymentSource: order.payment_source ?? 'unknown',
       cancellationConsequences: consequences,
@@ -200,17 +203,33 @@ export class CancellationPolicyService {
 
   private resolveRefundType(
     paymentSource: string | null,
+    paymentStatus: string | null,
     cancellationFee: number,
     total: number
   ): RefundType {
     if (cancellationFee >= total) return 'none';
+    if (
+      paymentSource === 'credit_card' &&
+      (paymentStatus === 'authorized' || paymentStatus === 'pending')
+    ) {
+      return 'authorization_release';
+    }
     if (paymentSource === 'credit_card') {
       return cancellationFee > 0 ? 'partial' : 'full';
     }
     return 'wallet_credit';
   }
 
-  private resolveProcessingTime(paymentSource: string | null): string {
+  private resolveProcessingTime(
+    paymentSource: string | null,
+    paymentStatus?: string | null
+  ): string {
+    if (
+      paymentSource === 'credit_card' &&
+      (paymentStatus === 'authorized' || paymentStatus === 'pending')
+    ) {
+      return 'authorization_release_immediate';
+    }
     if (paymentSource === 'credit_card') return 'stripe_5_10_business_days';
     if (paymentSource === 'mobile_payment') return 'mobile_money_provider';
     return 'wallet_immediate';

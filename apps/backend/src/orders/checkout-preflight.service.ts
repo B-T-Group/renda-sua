@@ -9,10 +9,12 @@
  * If you change a rule in one, change it in both.
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { StripeConfig } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   CheckoutBlockerDto,
@@ -78,7 +80,8 @@ export class CheckoutPreflightService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly loyaltyService: LoyaltyService
+    private readonly loyaltyService: LoyaltyService,
+    private readonly configService: ConfigService
   ) {}
 
   async resolve(
@@ -487,6 +490,8 @@ export class CheckoutPreflightService {
     // 10. Assemble response
     // -----------------------------------------------------------------------
     const canProceed = blockers.length === 0;
+    const stripeManualCapture =
+      this.configService.get<StripeConfig>('stripe')?.manualCaptureEnabled ?? false;
 
     return {
       success: true,
@@ -503,7 +508,8 @@ export class CheckoutPreflightService {
       wallet_balance: walletBalance,
       requires_address_for_payment: fulfillment === 'delivery',
       requires_payment_phone: requiresPaymentPhoneOverall,
-      stripe_retry_unsupported: true,
+      stripe_retry_unsupported: !stripeManualCapture,
+      stripe_manual_capture: stripeManualCapture,
     };
   }
 
@@ -531,6 +537,7 @@ export class CheckoutPreflightService {
       requires_address_for_payment: dto.fulfillment_method !== 'pickup',
       requires_payment_phone: false,
       stripe_retry_unsupported: true,
+      stripe_manual_capture: false,
     };
   }
 

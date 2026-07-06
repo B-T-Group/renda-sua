@@ -38,6 +38,30 @@ export class StripeRefundService {
         };
       }
 
+      if (transaction.status === 'authorized' || transaction.status === 'capture_pending') {
+        if (!transaction.stripe_payment_intent_id) {
+          return {
+            success: false,
+            message: 'No payment intent ID found for authorized transaction',
+          };
+        }
+        this.logger.log(
+          `Stripe payment for order ${params.orderNumber} is authorized; cancelling authorization instead of refund`
+        );
+        await this.stripeService.cancelPaymentIntent(
+          transaction.stripe_payment_intent_id,
+          `cancel_refund_${params.orderId}`
+        );
+        await this.databaseService.updateTransaction(transaction.id, {
+          status: 'cancelled',
+          error_message: 'Authorization cancelled on order cancellation',
+        });
+        return {
+          success: true,
+          message: 'Payment authorization released (no charge was made)',
+        };
+      }
+
       if (transaction.status !== 'success') {
         this.logger.warn(
           `Stripe payment transaction for order ${params.orderNumber} is not in success status: ${transaction.status}`

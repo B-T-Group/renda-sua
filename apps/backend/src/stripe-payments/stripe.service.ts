@@ -12,6 +12,7 @@ export interface CreateCheckoutSessionParams {
   successUrl: string;
   cancelUrl: string;
   metadata?: Record<string, string>;
+  captureMethod?: 'automatic' | 'manual';
 }
 
 export interface CreateTransferParams {
@@ -30,6 +31,7 @@ export interface CreatePaymentIntentParams {
   reference: string;
   customerEmail?: string;
   metadata?: Record<string, string>;
+  captureMethod?: 'automatic' | 'manual';
 }
 
 @Injectable()
@@ -67,6 +69,7 @@ export class StripeService {
   async createCheckoutSession(
     params: CreateCheckoutSessionParams
   ): Promise<Stripe.Checkout.Session> {
+    const captureMethod = params.captureMethod ?? 'automatic';
     return this.getClient().checkout.sessions.create(
       {
         mode: 'payment',
@@ -84,7 +87,10 @@ export class StripeService {
             },
           },
         ],
-        payment_intent_data: { metadata: params.metadata },
+        payment_intent_data: {
+          capture_method: captureMethod,
+          metadata: params.metadata,
+        },
         metadata: { reference: params.reference, ...params.metadata },
       },
       { idempotencyKey: `checkout_${params.reference}` }
@@ -99,16 +105,40 @@ export class StripeService {
   async createPaymentIntent(
     params: CreatePaymentIntentParams
   ): Promise<Stripe.PaymentIntent> {
+    const captureMethod = params.captureMethod ?? 'automatic';
     return this.getClient().paymentIntents.create(
       {
         amount: this.toMinorUnits(params.amount, params.currency),
         currency: params.currency.toLowerCase(),
         description: params.description,
         receipt_email: params.customerEmail,
+        capture_method: captureMethod,
         automatic_payment_methods: { enabled: true },
         metadata: { reference: params.reference, ...params.metadata },
       },
       { idempotencyKey: `pi_${params.reference}` }
+    );
+  }
+
+  async capturePaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string
+  ): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.capture(
+      paymentIntentId,
+      {},
+      { idempotencyKey }
+    );
+  }
+
+  async cancelPaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string
+  ): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.cancel(
+      paymentIntentId,
+      {},
+      { idempotencyKey }
     );
   }
 

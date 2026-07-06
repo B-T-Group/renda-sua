@@ -36,6 +36,7 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import type { PersonaId } from '../users/persona.types';
 import {
@@ -350,6 +351,7 @@ export class OrdersService {
     private readonly loyaltyService: LoyaltyService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeCheckoutService: StripeCheckoutService,
+    private readonly stripeCaptureService: StripeCaptureService,
     private readonly orderOffersService: OrderOffersService,
     private readonly cancellationPolicyService: CancellationPolicyService
   ) {}
@@ -1398,6 +1400,7 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
+    await this.captureStripeOrderAfterAssignment(order);
     return {
       success: true,
       order: updatedOrder,
@@ -1578,6 +1581,7 @@ export class OrdersService {
         request.orderId,
         agent.id
       );
+      await this.captureStripeOrderAfterAssignment(order);
       return {
         success: true,
         order: updatedOrder,
@@ -3593,6 +3597,8 @@ export class OrdersService {
 
     const previousStatus = order.current_status;
 
+    await this.releaseStripeAuthorizationIfNeeded(order);
+
     // Update order status to cancelled
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
@@ -5591,6 +5597,79 @@ export class OrdersService {
    * Pay-at-delivery: mobile credit is already on the client wallet; settlement debits the client and
    * distributes to business/agent via commission flows (no client hold/release).
    */
+  async finalizeOrderAfterAuthorization(transaction: any): Promise<void> {
+    try {
+      const orderNumber = transaction.entity_id || transaction.reference;
+      const order = await this.getOrderByNumber(orderNumber);
+      const paymentTiming = (order as any).payment_timing as
+        | 'pay_now'
+        | 'pay_at_delivery'
+        | 'pay_at_pickup'
+        | undefined;
+      if (paymentTiming !== 'pay_now') return;
+      if ((order as any).payment_status === 'authorized') return;
+
+      const at = new Date().toISOString();
+      const paymentIntentId = transaction.transaction_id ?? null;
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation AuthorizeOrderPayment(
+          $orderId: uuid!
+          $at: timestamptz!
+          $paymentIntentId: String
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: {
+              current_status: pending
+              payment_status: "authorized"
+              payment_authorized_at: $at
+              stripe_payment_intent_id: $paymentIntentId
+              updated_at: $at
+            }
+          ) {
+            id
+          }
+        }
+      `,
+        {
+          orderId: order.id,
+          at,
+          paymentIntentId,
+        }
+      );
+
+      await this.createStatusHistoryEntry(
+        order.id,
+        'pending',
+        'Card authorized; awaiting business confirmation',
+        'system',
+        order.client?.user_id ?? order.client_id,
+        undefined
+      );
+
+      const orderWithDetails = await this.getOrderByNumber(order.order_number);
+      const deliveryPin = this.deliveryPinService.generatePin();
+      const deliveryPinHash = this.deliveryPinService.hashPin(
+        orderWithDetails.id,
+        deliveryPin
+      );
+      await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
+      await this.deliveryPinService.setPinForClient(
+        orderWithDetails.id,
+        deliveryPin
+      );
+      await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
+    } catch (error) {
+      this.logger.error(
+        `Failed to authorize order payment: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
   async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
       const orderNumber = transaction.entity_id || transaction.reference;
@@ -5600,6 +5679,13 @@ export class OrdersService {
         | 'pay_at_delivery'
         | 'pay_at_pickup'
         | undefined;
+
+      if (
+        paymentTiming === 'pay_now' &&
+        (order as any).payment_status === 'paid'
+      ) {
+        return;
+      }
 
       if (
         paymentTiming === 'pay_at_delivery' ||
@@ -5835,6 +5921,8 @@ export class OrdersService {
     order: Orders,
     accountId: string
   ): Promise<void> {
+    const wasAuthorized = (order as any).payment_status === 'authorized';
+
     await this.accountsService.registerTransaction({
       accountId,
       amount: order.subtotal,
@@ -5862,12 +5950,36 @@ export class OrdersService {
 
     await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
 
+    const capturedAt = new Date().toISOString();
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation SetPaymentCapturedAt($orderId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { payment_captured_at: $at, updated_at: $at }
+        ) { id }
+      }
+    `,
+      { orderId: order.id, at: capturedAt }
+    );
+
+    if (wasAuthorized) {
+      return;
+    }
+
     const deliveryPin = this.deliveryPinService.generatePin();
     const deliveryPinHash =
       this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
 
+    await this.sendOrderPlacedNotifications(order, 'pending');
+  }
+
+  private async sendOrderPlacedNotifications(
+    order: Orders,
+    orderStatus: string
+  ): Promise<void> {
     try {
       const notificationsEnabled =
         this.configService.get('notification').orderStatusChangeEnabled;
@@ -5909,8 +6021,7 @@ export class OrdersService {
         agentPreferredLanguage: (
           order.assigned_agent?.user as { preferred_language?: string }
         )?.preferred_language,
-        // DB was just set to pending in updateOrderStatusAndPaymentStatus above
-        orderStatus: 'pending',
+        orderStatus,
         orderItems:
           order.order_items?.map((item: any) => ({
             name: item.item_name || 'Unknown Item',
@@ -5938,6 +6049,59 @@ export class OrdersService {
         `Failed to send order creation notifications: ${
           error instanceof Error ? error.message : String(error)
         }`
+      );
+    }
+  }
+
+  private async captureStripeOrderAfterAssignment(order: Orders): Promise<void> {
+    const paymentSource = (order as any).payment_source;
+    const paymentTiming = (order as any).payment_timing;
+    if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
+      return;
+    }
+    if ((order as any).payment_status !== 'authorized') {
+      return;
+    }
+
+    const result = await this.stripeCaptureService.captureOrderPaymentIntent({
+      orderId: order.id,
+      orderNumber: order.order_number,
+    });
+    if (!result.success) {
+      await this.revertOrderAssignment(order.id);
+      throw new HttpException(
+        result.message || 'Failed to capture payment for this order',
+        HttpStatus.PAYMENT_REQUIRED
+      );
+    }
+    if (result.captured) {
+      const account = await this.hasuraSystemService.getAccount(
+        order.client?.user_id ?? '',
+        order.currency
+      );
+      if (account) {
+        await this.finalizeOrderAfterIncomingPayment({
+          entity_id: order.order_number,
+          account_id: account.id,
+        });
+      }
+    }
+  }
+
+  private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
+    if ((order as any).payment_source !== 'credit_card') return;
+    const ps = (order as any).payment_status;
+    if (ps !== 'authorized' && ps !== 'pending') return;
+
+    const cancelResult = await this.stripeCaptureService.cancelOrderPaymentIntent(
+      {
+        orderNumber: order.order_number,
+        orderId: order.id,
+      }
+    );
+    if (!cancelResult.success && !cancelResult.skipped) {
+      this.logger.warn(
+        `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
       );
     }
   }
@@ -7326,11 +7490,14 @@ export class OrdersService {
     }
 
     if (useStripeRail) {
-      // Stripe-country order: created in pending_payment; account.id is set on the
-      // transaction so the `checkout.session.completed` / `payment_intent.succeeded`
-      // webhook credits the wallet + finalizes the order (like mobile money).
-      // Native clients (mobile PaymentSheet) request a PaymentIntent client
-      // secret; web clients fall back to a hosted Checkout URL.
+      const sellerCountry = await this.paymentRoutingService.getBusinessCountryCode(
+        business_id
+      );
+      const captureMethod =
+        this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
+          sellerCountry ?? undefined
+        );
+
       if (orderData.stripe_payment_method === 'payment_sheet') {
         const paymentIntent = await this.createStripeOrderPaymentIntent({
           orderNumber,
@@ -7338,6 +7505,7 @@ export class OrdersService {
           currency,
           accountId: account.id,
           customerEmail: user.email ?? undefined,
+          captureMethod,
         });
         return {
           ...order,
@@ -7362,6 +7530,7 @@ export class OrdersService {
         currency,
         accountId: account.id,
         customerEmail: user.email ?? undefined,
+        captureMethod,
       });
       return {
         ...order,
@@ -7444,6 +7613,7 @@ export class OrdersService {
     currency: string;
     accountId: string;
     customerEmail?: string;
+    captureMethod?: 'automatic' | 'manual';
   }): Promise<{
     transactionId: string;
     reference: string;
@@ -7458,6 +7628,7 @@ export class OrdersService {
         paymentEntity: 'order',
         entityId: params.orderNumber,
         customerEmail: params.customerEmail,
+        captureMethod: params.captureMethod,
       });
       return {
         transactionId: result.transactionId,
@@ -7485,6 +7656,7 @@ export class OrdersService {
     currency: string;
     accountId: string;
     customerEmail?: string;
+    captureMethod?: 'automatic' | 'manual';
   }): Promise<{
     transactionId: string;
     reference: string;
@@ -7499,6 +7671,7 @@ export class OrdersService {
         paymentEntity: 'order',
         entityId: params.orderNumber,
         customerEmail: params.customerEmail,
+        captureMethod: params.captureMethod,
       });
       return {
         transactionId: result.transactionId,
