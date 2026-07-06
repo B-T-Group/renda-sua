@@ -5938,7 +5938,10 @@ export class OrdersService {
       delivery_fees: totalDeliveryFees,
     });
 
-    await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
+    await this.markOrderPaidAfterPaymentFinalize(
+      order.id,
+      order.current_status
+    );
 
     const capturedAt = new Date().toISOString();
     await this.hasuraSystemService.executeMutation(
@@ -6443,6 +6446,21 @@ export class OrdersService {
       orderId,
       deliveryPinHash,
     });
+  }
+
+  /**
+   * After payment is captured or confirmed: set payment_status to paid.
+   * Only moves pending_payment → pending; never regresses later statuses.
+   */
+  private async markOrderPaidAfterPaymentFinalize(
+    orderId: string,
+    currentStatus: string
+  ): Promise<void> {
+    if (currentStatus === 'pending_payment') {
+      await this.updateOrderStatusAndPaymentStatus(orderId, 'pending', 'paid');
+      return;
+    }
+    await this.updateOrderPaymentStatusOnly(orderId, 'paid');
   }
 
   /**

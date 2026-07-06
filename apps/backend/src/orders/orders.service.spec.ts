@@ -1281,6 +1281,42 @@ describe('OrdersService', () => {
       updateOrderHoldSpy.mockRestore();
     });
 
+    it('finalizeClientOrderPayment does not regress assigned_to_agent to pending', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const statusAndPaymentSpy = jest
+        .spyOn(service as any, 'updateOrderStatusAndPaymentStatus')
+        .mockResolvedValue(undefined);
+      const paymentOnlySpy = jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'assigned_to_agent',
+          payment_status: 'authorized',
+          subtotal: 40,
+          base_delivery_fee: 5,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(statusAndPaymentSpy).not.toHaveBeenCalled();
+      expect(paymentOnlySpy).toHaveBeenCalledWith('order-123', 'paid');
+
+      statusAndPaymentSpy.mockRestore();
+      paymentOnlySpy.mockRestore();
+      updateOrderHoldSpy.mockRestore();
+    });
+
     it('finalizeOrderAfterIncomingPayment loads order without agent API transform', async () => {
       const rawOrder = {
         id: 'order-123',
