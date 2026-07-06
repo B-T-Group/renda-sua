@@ -183,4 +183,21 @@ describe('CancellationPolicyService', () => {
       expect(policy.cancellationConsequences).toContain('consequences.cannotBeUndone');
     });
   });
+
+  describe('manual capture authorization', () => {
+    it('returns authorization_release for authorized credit_card pay_now', async () => {
+      const policy = await service.getPolicy(
+        {
+          ...baseOrder,
+          current_status: 'confirmed',
+          payment_status: 'authorized',
+        },
+        'client'
+      );
+      expect(policy.refundType).toBe('authorization_release');
+      expect(policy.estimatedRefundProcessingTime).toBe(
+        'authorization_release_immediate'
+      );
+    });
+  });
 });

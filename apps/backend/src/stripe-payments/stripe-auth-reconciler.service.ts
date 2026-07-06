@@ -39,6 +39,7 @@ export class StripeAuthReconcilerService {
 
     await this.reconcilePendingTransactions();
     await this.expireStaleAuthorizedOrders();
+    await this.flagExpiredAssignedAuthorizations();
   }
 
   private async reconcilePendingTransactions(): Promise<void> {
@@ -55,6 +56,7 @@ export class StripeAuthReconcilerService {
           id
           reference
           entity_id
+          reference
           stripe_payment_intent_id
           status
         }
@@ -65,7 +67,11 @@ export class StripeAuthReconcilerService {
       const rows = response.stripe_payment_transactions ?? [];
       for (const row of rows) {
         if (!row.stripe_payment_intent_id) continue;
-        await this.syncTransactionFromStripe(row.id, row.stripe_payment_intent_id);
+        await this.syncTransactionFromStripe(
+          row.id,
+          row.stripe_payment_intent_id,
+          row.entity_id ?? row.reference
+        );
       }
     } catch (error: any) {
       this.logger.error(`Reconcile pending txs failed: ${error?.message}`);
@@ -74,7 +80,8 @@ export class StripeAuthReconcilerService {
 
   private async syncTransactionFromStripe(
     txId: string,
-    paymentIntentId: string
+    paymentIntentId: string,
+    orderNumber?: string
   ): Promise<void> {
     try {
       const pi = await this.stripeService.retrievePaymentIntent(paymentIntentId);
@@ -91,10 +98,91 @@ export class StripeAuthReconcilerService {
           status: 'expired',
           error_message: 'Payment authorization expired or cancelled',
         });
+        if (orderNumber) {
+          await this.handleStripeAuthorizationLapsed(orderNumber);
+        }
       }
     } catch (error: any) {
       this.logger.warn(
         `Could not sync PI ${paymentIntentId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async handleStripeAuthorizationLapsed(
+    orderNumber: string
+  ): Promise<void> {
+    const query = `
+      query AssignedAuthorizedOrder($orderNumber: String!) {
+        orders(where: { order_number: { _eq: $orderNumber } }, limit: 1) {
+          id
+          order_number
+          current_status
+          payment_status
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        orderNumber,
+      });
+      const order = response.orders?.[0];
+      if (!order) return;
+      if (order.payment_status !== 'authorized') return;
+      if (order.current_status !== 'assigned_to_agent') return;
+
+      this.logger.warn(
+        `stripe_auth_lapsed_assigned order=${order.order_number} id=${order.id}`
+      );
+      await this.ordersService.onOrderPaymentFailed(
+        order.id,
+        'Payment authorization expired before pickup'
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `handleStripeAuthorizationLapsed failed for ${orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
+  /** Orders assigned to an agent but still authorized — surface if auth is stale. */
+  private async flagExpiredAssignedAuthorizations(): Promise<void> {
+    const query = `
+      query AssignedAuthorizedOrders {
+        orders(
+          where: {
+            payment_status: { _eq: "authorized" }
+            payment_source: { _eq: credit_card }
+            current_status: { _eq: "assigned_to_agent" }
+          }
+          limit: 20
+        ) {
+          id
+          order_number
+          payment_authorized_at
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {});
+      const orders = response.orders ?? [];
+      for (const order of orders) {
+        const tx = await this.databaseService.getTransactionByEntityId(
+          order.order_number
+        );
+        if (tx?.status === 'expired' || tx?.status === 'cancelled') {
+          this.logger.warn(
+            `Assigned order ${order.order_number} has lapsed Stripe authorization`
+          );
+          await this.ordersService.onOrderPaymentFailed(
+            order.id,
+            'Payment authorization expired before pickup'
+          );
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `flagExpiredAssignedAuthorizations failed: ${error?.message}`
       );
     }
   }

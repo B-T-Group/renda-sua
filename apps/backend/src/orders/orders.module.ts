@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommissionsModule } from '../commissions/commissions.module';
@@ -9,6 +9,7 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { StripeAuthReconcilerService } from '../stripe-payments/stripe-auth-reconciler.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
@@ -35,7 +36,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
-    forwardRef(() => StripePaymentsModule),
+    StripePaymentsModule,
   ],
   controllers: [
     OrderRefundsController,
@@ -54,6 +55,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
     CancellationPolicyService,
+    StripeAuthReconcilerService,
   ],
   // MessagingService is available via MessagingModule export
   exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService],

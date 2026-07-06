@@ -2196,8 +2196,11 @@
       "pending": "En attente",
       "pending_payment": "Paiement en attente",
       "paid": "Payé",
+      "authorized": "Carte autorisée",
+      "capture_pending": "Paiement en cours",
       "failed": "Échec du paiement",
-      "refunded": "Remboursé"
+      "refunded": "Remboursé",
+      "cancelled": "Annulé"
     },
     "orderNumber": "Commande #{{orderNumber}}",
     "orders": "Commandes",
@@ -4318,7 +4321,7 @@
     },
     "success": {
       "title": "Carte autorisée",
-      "body": "Votre carte a été autorisée. Le débit n'interviendra qu'après confirmation par le commerce et assignation d'un livreur.",
+      "body": "Votre carte a été autorisée. Le débit n'interviendra que lorsque le livreur récupérera votre commande chez le commerce.",
       "orderReference": "Commande #{{orderNumber}}",
       "viewOrder": "Voir la commande",
       "viewOrders": "Voir mes commandes"

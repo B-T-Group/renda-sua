@@ -1403,7 +1403,6 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
-    await this.captureStripeAuthorizedOrderIfNeeded(order);
     return {
       success: true,
       order: updatedOrder,
@@ -1584,7 +1583,6 @@ export class OrdersService {
         request.orderId,
         agent.id
       );
-      await this.captureStripeAuthorizedOrderIfNeeded(order);
       return {
         success: true,
         order: updatedOrder,
@@ -1853,6 +1851,7 @@ export class OrdersService {
       paymentTiming !== 'pay_at_delivery' &&
       paymentTiming !== 'pay_at_pickup'
     ) {
+      await this.captureStripeAuthorizedOrderIfNeeded(order);
       await this.processOrderPayment(request.orderId);
     }
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
@@ -6035,8 +6034,8 @@ export class OrdersService {
   }
 
   /**
-   * Capture an authorized Stripe manual-capture order (delivery: on agent assign;
-   * pickup: when business marks ready_for_pickup).
+   * Capture an authorized Stripe manual-capture order (delivery: on agent pickup;
+   * customer pickup: when business marks ready_for_pickup).
    */
   private async captureStripeAuthorizedOrderIfNeeded(
     order: Orders
@@ -6055,9 +6054,6 @@ export class OrdersService {
       orderNumber: order.order_number,
     });
     if (!result.success) {
-      if ((order as any).assigned_agent_id) {
-        await this.revertOrderAssignment(order.id);
-      }
       throw new HttpException(
         result.message || 'Failed to capture payment for this order',
         HttpStatus.PAYMENT_REQUIRED

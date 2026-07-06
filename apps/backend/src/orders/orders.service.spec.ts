@@ -23,6 +23,11 @@ import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
+import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { CancellationPolicyService } from './cancellation-policy.service';
+import { OrderOffersService } from './order-offers.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -32,6 +37,7 @@ describe('OrdersService', () => {
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
+  let stripeCaptureService: jest.Mocked<StripeCaptureService>;
 
   const mockUser = {
     id: 'user-123',
@@ -155,7 +161,7 @@ describe('OrdersService', () => {
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
         { provide: MobilePaymentsService, useValue: {} },
-        { provide: MobilePaymentsDatabaseService, useValue: {} },
+        { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
@@ -173,6 +179,26 @@ describe('OrdersService', () => {
         },
         { provide: OrderRefundsService, useValue: {} },
         { provide: LoyaltyService, useValue: {} },
+        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        { provide: StripeCheckoutService, useValue: {} },
+        {
+          provide: StripeCaptureService,
+          useValue: {
+            captureOrderPaymentIntent: jest.fn(),
+            creditWalletForCapturedOrder: jest.fn(),
+          },
+        },
+        {
+          provide: OrderOffersService,
+          useValue: {
+            handleOrderAssigned: jest.fn(),
+            getOfferDetailsForAgent: jest.fn(),
+            getPendingOfferForAgent: jest.fn(),
+            getActiveOfferForAgent: jest.fn(),
+            markOfferExpired: jest.fn(),
+          },
+        },
+        { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
       ],
     }).compile();
 
@@ -183,6 +209,7 @@ describe('OrdersService', () => {
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
+    stripeCaptureService = module.get(StripeCaptureService);
   });
 
   describe('confirmOrder', () => {
@@ -434,17 +461,27 @@ describe('OrdersService', () => {
   });
 
   describe('pickUpOrder', () => {
+    const assignedOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'agent-123',
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'pending',
+      subtotal: 80,
+      base_delivery_fee: 5,
+      per_km_delivery_fee: 0,
+      business: { user_id: 'user-123', id: 'business-123' },
+      client: { user_id: 'client-456', id: 'client-123' },
+      order_items: [],
+    };
+
     it('should pick up order successfully', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...mockOrder,
-          current_status: 'assigned_to_agent',
-          assigned_agent_id: 'agent-123',
-        },
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: assignedOrder,
       });
       orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
+        ...assignedOrder,
         current_status: 'picked_up',
       });
       hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
@@ -456,6 +493,48 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('picked_up');
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('captures authorized Stripe payment at pickup', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...assignedOrder,
+          payment_timing: 'pay_now',
+          payment_source: 'credit_card',
+          payment_status: 'authorized',
+        },
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        order_holds: [{ id: 'hold-1', item_settlement_completed_at: '2024-01-02' }],
+      });
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: true,
+      });
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeStripeCapturedOrderPayment')
+        .mockResolvedValue(undefined);
+      const processSpy = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...assignedOrder,
+        current_status: 'picked_up',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      await service.pickUpOrder({ orderId: 'order-123' });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: assignedOrder.order_number,
+      });
+      expect(finalizeSpy).toHaveBeenCalledWith(assignedOrder.order_number);
+      expect(processSpy).toHaveBeenCalledWith('order-123');
+      finalizeSpy.mockRestore();
+      processSpy.mockRestore();
     });
 
     it('should throw error if user is not an agent', async () => {
@@ -473,10 +552,9 @@ describe('OrdersService', () => {
 
     it('should throw error if order is not assigned to agent', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
+      hasuraSystemService.executeQuery.mockResolvedValue({
         orders_by_pk: {
-          ...mockOrder,
-          current_status: 'assigned_to_agent',
+          ...assignedOrder,
           assigned_agent_id: 'different-agent',
         },
       });

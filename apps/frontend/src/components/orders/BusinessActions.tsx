@@ -31,7 +31,10 @@ import {
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
-import { businessMayCancelDeferredUncollectedOrder } from '../../utils/orderUtils';
+import {
+  businessMayCancelDeferredUncollectedOrder,
+  isRefundablePaymentStatus,
+} from '../../utils/orderUtils';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
@@ -417,7 +420,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'delivered':
         // Completion is done by agent with PIN. Refund option only.
-        if (order.payment_status !== 'pending') {
+        if (isRefundablePaymentStatus(order.payment_status)) {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),
             action: handleRefundOrder,
@@ -428,7 +431,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'complete':
-        if (order.payment_status !== 'pending') {
+        if (isRefundablePaymentStatus(order.payment_status)) {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),
             action: handleRefundOrder,
@@ -456,8 +459,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'failed':
       case 'cancelled':
-        // Only show refund option if payment is not pending
-        if (order.payment_status !== 'pending') {
+        if (isRefundablePaymentStatus(order.payment_status)) {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),
             action: handleRefundOrder,
@@ -480,7 +482,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             'refund_approved_replace',
             'refund_rejected',
           ].includes(order.current_status) &&
-          order.payment_status !== 'pending'
+          isRefundablePaymentStatus(order.payment_status)
         ) {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),

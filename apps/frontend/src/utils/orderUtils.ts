@@ -1,5 +1,23 @@
 import type { OrderData } from '../hooks/useOrderById';
 
+export type PaymentStatusChipColor = 'success' | 'error' | 'info' | 'warning';
+
+export function getPaymentStatusChipColor(
+  status: string | null | undefined
+): PaymentStatusChipColor {
+  if (status === 'paid') return 'success';
+  if (status === 'failed') return 'error';
+  if (status === 'authorized' || status === 'capture_pending') return 'info';
+  return 'warning';
+}
+
+/** True when funds were captured and a refund may apply. */
+export function isRefundablePaymentStatus(
+  status: string | null | undefined
+): boolean {
+  return status === 'paid' || status === 'refunded';
+}
+
 const BUSINESS_EARLY_CANCEL_STATUSES = [
   'pending_payment',
   'pending',

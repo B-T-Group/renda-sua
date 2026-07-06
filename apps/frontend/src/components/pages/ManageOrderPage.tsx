@@ -75,6 +75,7 @@ import ClientActions from '../orders/ClientActions';
 import { ClientDeliveryPinButton } from '../orders/ClientDeliveryPinButton';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
 import SEOHead from '../seo/SEOHead';
+import { getPaymentStatusChipColor } from '../../utils/orderUtils';
 
 // Custom Step Connector
 const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
@@ -1598,13 +1599,7 @@ const ManageOrderPage: React.FC = () => {
                         order.payment_status || 'Pending'
                       )}
                       size="small"
-                      color={
-                        order.payment_status === 'paid'
-                          ? 'success'
-                          : order.payment_status === 'failed'
-                            ? 'error'
-                            : 'warning'
-                      }
+                      color={getPaymentStatusChipColor(order.payment_status)}
                     />
                   </Box>
 

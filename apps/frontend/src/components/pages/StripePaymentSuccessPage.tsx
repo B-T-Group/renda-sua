@@ -42,7 +42,7 @@ const StripePaymentSuccessPage: React.FC = () => {
           <Typography variant="body1" color="text.secondary">
             {t(
               'stripe.success.body',
-              'Your card has been authorized. You will only be charged after the business confirms your order and a delivery agent is assigned.'
+              'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
             )}
           </Typography>
 

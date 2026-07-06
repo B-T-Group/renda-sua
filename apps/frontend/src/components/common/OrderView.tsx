@@ -23,6 +23,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { OrderData } from '../../hooks/useOrderById';
 import rendasuaLogo from '../../assets/rendasua.svg';
 import DeliveryTimeWindowDisplay from './DeliveryTimeWindowDisplay';
+import { getPaymentStatusChipColor } from '../../utils/orderUtils';
 
 interface OrderViewProps {
   order: OrderData;
@@ -188,13 +189,12 @@ const OrderView: React.FC<OrderViewProps> = ({
                 <Typography variant="body1" fontWeight="600" sx={{ ml: 3 }}>
                   {(order as any).payment_method || 'Not specified'}
                   <Chip
-                    label={(order as any).payment_status || 'pending'}
+                    label={t(
+                      `common.paymentStatus.${(order as any).payment_status || 'pending'}`,
+                      (order as any).payment_status || 'pending'
+                    )}
                     size="small"
-                    color={
-                      (order as any).payment_status === 'paid'
-                        ? 'success'
-                        : 'warning'
-                    }
+                    color={getPaymentStatusChipColor((order as any).payment_status)}
                     sx={{ ml: 1, height: 20, fontSize: '0.75rem' }}
                   />
                 </Typography>
