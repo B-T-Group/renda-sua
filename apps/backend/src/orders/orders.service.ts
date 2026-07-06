@@ -5580,7 +5580,7 @@ export class OrdersService {
   async finalizeOrderAfterAuthorization(transaction: any): Promise<void> {
     try {
       const orderNumber = transaction.entity_id || transaction.reference;
-      const order = await this.getOrderByNumber(orderNumber);
+      const order = await this.requireOrderDetailsByNumber(orderNumber);
       const paymentTiming = (order as any).payment_timing as
         | 'pay_now'
         | 'pay_at_delivery'
@@ -5628,7 +5628,9 @@ export class OrdersService {
         undefined
       );
 
-      const orderWithDetails = await this.getOrderByNumber(order.order_number);
+      const orderWithDetails = await this.requireOrderDetailsByNumber(
+        order.order_number
+      );
       const deliveryPin = this.deliveryPinService.generatePin();
       const deliveryPinHash = this.deliveryPinService.hashPin(
         orderWithDetails.id,
@@ -5653,7 +5655,7 @@ export class OrdersService {
   async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
       const orderNumber = transaction.entity_id || transaction.reference;
-      const order = await this.getOrderByNumber(orderNumber);
+      const order = await this.requireOrderDetailsByNumber(orderNumber);
       const paymentTiming = (order as any).payment_timing as
         | 'pay_now'
         | 'pay_at_delivery'
@@ -5911,14 +5913,13 @@ export class OrdersService {
       referenceId: order.id,
     });
 
-    const totalDeliveryFees =
-      order.base_delivery_fee + order.per_km_delivery_fee;
+    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
 
     await this.accountsService.registerTransaction({
       accountId,
       amount: totalDeliveryFees,
       transactionType: 'hold',
-      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee}, per-km: ${order.per_km_delivery_fee})`,
+      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
       referenceId: order.id,
     });
 
@@ -6174,7 +6175,7 @@ export class OrdersService {
   async processClaimOrderPayment(transaction: any): Promise<void> {
     try {
       // Get order details by order number (reference)
-      const order = await this.getOrderByNumber(transaction.entity_id);
+      const order = await this.requireOrderDetailsByNumber(transaction.entity_id);
 
       const account = await this.hasuraSystemService.getAccountById(
         transaction.account_id
@@ -7896,15 +7897,17 @@ export class OrdersService {
         _set: {
           status: updates.status ?? undefined,
           client_hold_amount:
-            updates.client_hold_amount != null
-              ? updates.client_hold_amount
+            updates.client_hold_amount !== undefined
+              ? this.finiteHoldNumeric(updates.client_hold_amount)
               : undefined,
           agent_hold_amount:
-            updates.agent_hold_amount != null
-              ? updates.agent_hold_amount
+            updates.agent_hold_amount !== undefined
+              ? this.finiteHoldNumeric(updates.agent_hold_amount)
               : undefined,
           delivery_fees:
-            updates.delivery_fees != null ? updates.delivery_fees : undefined,
+            updates.delivery_fees !== undefined
+              ? this.finiteHoldNumeric(updates.delivery_fees)
+              : undefined,
           agent_id: updates.agent_id ?? undefined,
           item_settlement_completed_at:
             updates.item_settlement_completed_at !== undefined
@@ -8291,6 +8294,32 @@ export class OrdersService {
 
   private roundCurrency(amount: number): number {
     return Math.round(amount * 100) / 100;
+  }
+
+  /** Sum delivery fees from an order row (never NaN). */
+  private orderDeliveryFeesTotal(order: {
+    base_delivery_fee?: number | null;
+    per_km_delivery_fee?: number | null;
+  }): number {
+    return (
+      Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0)
+    );
+  }
+
+  /** Coerce hold/payment numerics; GraphQL numeric rejects null/NaN. */
+  private finiteHoldNumeric(value: number | null | undefined): number {
+    const n = Number(value ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  private async requireOrderDetailsByNumber(
+    orderNumber: string
+  ): Promise<Orders> {
+    const order = await this.getOrderDetailsByNumber(orderNumber);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    return order;
   }
 
   private async clientHasAnyOrders(clientId: string): Promise<boolean> {
