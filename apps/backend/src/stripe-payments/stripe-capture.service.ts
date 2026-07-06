@@ -61,7 +61,7 @@ export class StripeCaptureService {
       return { success: true, message: 'Automatic capture order', captured: true };
     }
     if (tx.status === 'success') {
-      return { success: true, message: 'Already captured', captured: true };
+      return { success: true, message: 'Already captured', captured: false };
     }
     if (tx.status !== 'authorized' && tx.status !== 'capture_pending') {
       return {
@@ -111,6 +111,9 @@ export class StripeCaptureService {
     if (!tx?.account_id || tx.transaction_type !== 'PAYMENT') {
       return tx?.account_id ?? null;
     }
+    if (await this.hasStripePaymentDeposit(tx)) {
+      return tx.account_id;
+    }
     const result = await this.accountsService.registerTransaction({
       accountId: tx.account_id,
       amount: tx.amount,
@@ -119,6 +122,9 @@ export class StripeCaptureService {
       referenceId: tx.id,
     });
     if (!result.success) {
+      if (await this.hasStripePaymentDeposit(tx)) {
+        return tx.account_id;
+      }
       this.logger.error(
         `Failed to credit account ${tx.account_id}: ${result.error}`
       );
@@ -128,6 +134,13 @@ export class StripeCaptureService {
       `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
     );
     return tx.account_id;
+  }
+
+  private async hasStripePaymentDeposit(
+    tx: StripePaymentTransaction
+  ): Promise<boolean> {
+    if (!tx.account_id) return false;
+    return this.databaseService.hasStripePaymentDeposit(tx.account_id, tx.id);
   }
 
   async cancelOrderPaymentIntent(params: {
