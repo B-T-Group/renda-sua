@@ -2,9 +2,11 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateRatingDto, RatingType } from './dto/create-rating.dto';
 
 // User Profile Types
@@ -60,7 +62,12 @@ export interface RatingAggregate {
 
 @Injectable()
 export class RatingsService {
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  private readonly logger = new Logger(RatingsService.name);
+
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly notificationsService: NotificationsService
+  ) {}
 
   async createRating(
     createRatingDto: CreateRatingDto,
@@ -152,10 +159,132 @@ export class RatingsService {
         mutation,
         variables
       );
-      return response.insert_ratings_one;
+      const rating = response.insert_ratings_one as Rating;
+      void this.notifyRatedEntityRecipient(
+        createRatingDto,
+        order,
+        userProfile,
+        rating
+      );
+      return rating;
     } catch (error: any) {
       console.error('Error creating rating:', error);
       throw new BadRequestException('Failed to create rating');
+    }
+  }
+
+  private async notifyRatedEntityRecipient(
+    dto: CreateRatingDto,
+    order: OrderData,
+    rater: UserProfile,
+    rating: Rating
+  ): Promise<void> {
+    try {
+      const recipientUserId = await this.resolveRatedEntityRecipientUserId(
+        dto.ratedEntityType,
+        dto.ratedEntityId
+      );
+      if (!recipientUserId) return;
+
+      const raterName = `${rater.first_name ?? ''} ${rater.last_name ?? ''}`.trim();
+      const recipient = await this.getUserPreferredLanguage(recipientUserId);
+
+      await this.notificationsService.sendRatingReceivedPush({
+        recipientUserId,
+        raterUserId: rating.rater_user_id,
+        orderId: dto.orderId,
+        orderNumber: order.order_number,
+        ratingType: dto.ratingType,
+        ratedEntityType: dto.ratedEntityType,
+        rating: dto.rating,
+        raterName: raterName || undefined,
+        preferredLanguage: recipient,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Rating push failed for order ${order.order_number}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  private async resolveRatedEntityRecipientUserId(
+    entityType: string,
+    entityId: string
+  ): Promise<string | null> {
+    const query = this.buildRecipientLookupQuery(entityType);
+    if (!query) return null;
+
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      entityId,
+    });
+    return this.extractRecipientUserId(entityType, response);
+  }
+
+  private buildRecipientLookupQuery(entityType: string): string | null {
+    switch (entityType) {
+      case 'agent':
+        return `
+          query RatedAgentRecipient($entityId: uuid!) {
+            agents_by_pk(id: $entityId) { user_id }
+          }
+        `;
+      case 'client':
+        return `
+          query RatedClientRecipient($entityId: uuid!) {
+            clients_by_pk(id: $entityId) { user_id }
+          }
+        `;
+      case 'item':
+        return `
+          query RatedItemRecipient($entityId: uuid!) {
+            items_by_pk(id: $entityId) {
+              business { user_id }
+            }
+          }
+        `;
+      default:
+        return null;
+    }
+  }
+
+  private extractRecipientUserId(
+    entityType: string,
+    response: Record<string, any>
+  ): string | null {
+    if (entityType === 'agent') {
+      return response.agents_by_pk?.user_id ?? null;
+    }
+    if (entityType === 'client') {
+      return response.clients_by_pk?.user_id ?? null;
+    }
+    if (entityType === 'item') {
+      return response.items_by_pk?.business?.user_id ?? null;
+    }
+    return null;
+  }
+
+  private async getUserPreferredLanguage(
+    userId: string
+  ): Promise<string | null> {
+    const query = `
+      query RatingRecipientLanguage($userId: uuid!) {
+        users_by_pk(id: $userId) { preferred_language }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        userId,
+      });
+      return response.users_by_pk?.preferred_language ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not load preferred language for ${userId}: ${
+          error?.message ?? String(error)
+        }`
+      );
+      return null;
     }
   }
 

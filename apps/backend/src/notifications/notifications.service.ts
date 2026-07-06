@@ -47,6 +47,8 @@ import {
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
+import { buildRatingReceivedPushMessage } from './rating-push.messages';
+import type { RatingType } from '../ratings/dto/create-rating.dto';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -448,6 +450,50 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendWalletCreditPush failed for user ${userId}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  /** Push when a client, agent, or item receives a new rating. */
+  async sendRatingReceivedPush(params: {
+    recipientUserId: string;
+    raterUserId: string;
+    orderId: string;
+    orderNumber: string;
+    ratingType: RatingType;
+    ratedEntityType: string;
+    rating: number;
+    raterName?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (recipientUserId === params.raterUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const { title, body } = buildRatingReceivedPushMessage({
+      ratingType: params.ratingType,
+      rating: params.rating,
+      orderNumber: params.orderNumber,
+      raterName: params.raterName,
+      preferredLanguage: params.preferredLanguage,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        type: 'rating_received',
+        ratingType: params.ratingType,
+        ratedEntityType: params.ratedEntityType,
+        rating: String(params.rating),
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendRatingReceivedPush failed for order ${params.orderNumber}: ${
           error?.message ?? String(error)
         }`
       );
