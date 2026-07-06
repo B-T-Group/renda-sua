@@ -1231,4 +1231,86 @@ describe('OrdersService', () => {
       );
     });
   });
+
+  describe('order settlement numerics', () => {
+    it('updateOrderHold coerces NaN delivery_fees to 0 for GraphQL numeric', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds_by_pk: { id: 'hold-1' },
+      });
+
+      await service.updateOrderHold('hold-1', { delivery_fees: Number.NaN });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation UpdateOrderHold'),
+        {
+          orderHoldId: 'hold-1',
+          _set: { delivery_fees: 0 },
+        }
+      );
+    });
+
+    it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest
+        .spyOn(service as any, 'updateOrderStatusAndPaymentStatus')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'authorized',
+        },
+        'account-1'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 0, transactionType: 'hold' })
+      );
+      expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
+        client_hold_amount: 0,
+        delivery_fees: 0,
+      });
+
+      updateOrderHoldSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterIncomingPayment loads order without agent API transform', async () => {
+      const rawOrder = {
+        id: 'order-123',
+        order_number: 'ORD-1',
+        payment_timing: 'pay_now',
+        payment_status: 'pending',
+        subtotal: 50,
+        base_delivery_fee: 3,
+        per_km_delivery_fee: 2,
+      };
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue(rawOrder);
+      const getByNumberSpy = jest.spyOn(service, 'getOrderByNumber');
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+
+      await service.finalizeOrderAfterIncomingPayment({
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+      });
+
+      expect(requireSpy).toHaveBeenCalledWith('ORD-1');
+      expect(getByNumberSpy).not.toHaveBeenCalled();
+      expect(finalizeSpy).toHaveBeenCalledWith(rawOrder, 'account-1');
+
+      requireSpy.mockRestore();
+      getByNumberSpy.mockRestore();
+      finalizeSpy.mockRestore();
+    });
+  });
 });

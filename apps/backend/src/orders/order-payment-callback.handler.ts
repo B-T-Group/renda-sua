@@ -59,7 +59,9 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     }
     if (transaction.payment_entity === 'order') {
       const orderNumber = transaction.entity_id || transaction.reference;
-      const order = await this.ordersService.getOrderByNumber(orderNumber);
+      const order = await this.ordersService.getOrderForProcessingByNumber(
+        orderNumber
+      );
       await this.ordersService.onOrderPaymentFailed(order.id, message);
       return;
     }

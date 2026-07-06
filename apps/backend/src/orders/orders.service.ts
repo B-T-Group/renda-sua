@@ -5540,7 +5540,8 @@ export class OrdersService {
   }
 
   /**
-   * Get order details by order number (public method for controllers)
+   * Get order by number for HTTP clients. Applies agent API transforms (hides
+   * financial fields). Do not use for settlement, holds, or payment callbacks.
    */
   async getOrderByNumber(orderNumber: string): Promise<Orders> {
     if (!orderNumber) {
@@ -5570,6 +5571,14 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  /**
+   * Full order row by number for settlement, notifications, and webhooks.
+   * Never applies agent API transforms.
+   */
+  async getOrderForProcessingByNumber(orderNumber: string): Promise<Orders> {
+    return this.requireOrderDetailsByNumber(orderNumber);
   }
 
   /**
@@ -5789,12 +5798,12 @@ export class OrdersService {
   private async finalizePayAtDeliveryPaymentAndComplete(
     order: Orders
   ): Promise<void> {
-    const totalDeliveryFees =
-      (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
+    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
+    const subtotal = this.orderSubtotal(order);
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: order.subtotal,
+      client_hold_amount: subtotal,
       delivery_fees: totalDeliveryFees,
     });
 
@@ -5904,16 +5913,16 @@ export class OrdersService {
     accountId: string
   ): Promise<void> {
     const wasAuthorized = (order as any).payment_status === 'authorized';
+    const subtotal = this.orderSubtotal(order);
+    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
 
     await this.accountsService.registerTransaction({
       accountId,
-      amount: order.subtotal,
+      amount: subtotal,
       transactionType: 'hold',
       memo: `Hold for order ${order.order_number}`,
       referenceId: order.id,
     });
-
-    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
 
     await this.accountsService.registerTransaction({
       accountId,
@@ -5925,7 +5934,7 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: order.subtotal,
+      client_hold_amount: subtotal,
       delivery_fees: totalDeliveryFees,
     });
 
@@ -7464,7 +7473,9 @@ export class OrdersService {
         const notificationsEnabled =
           this.configService.get('notification').orderStatusChangeEnabled;
         if (notificationsEnabled) {
-          const orderWithDetails = await this.getOrderByNumber(order.order_number);
+          const orderWithDetails = await this.requireOrderDetailsByNumber(
+            order.order_number
+          );
           const notifyAddress =
             orderWithDetails?.delivery_address ||
             (orderWithDetails as any)?.business_location?.address;
@@ -7655,7 +7666,9 @@ export class OrdersService {
 
     // For wallet-funded or zero-amount orders, finalize payment immediately.
     // Fetch full order (with business_location, delivery_address, client) so notifications have required data.
-    const orderWithDetails = await this.getOrderByNumber(order.order_number);
+    const orderWithDetails = await this.requireOrderDetailsByNumber(
+      order.order_number
+    );
     await this.finalizeClientOrderPayment(orderWithDetails, account.id);
 
     return {
@@ -8304,6 +8317,11 @@ export class OrdersService {
     return (
       Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0)
     );
+  }
+
+  /** Order subtotal for holds/settlement (never NaN). */
+  private orderSubtotal(order: { subtotal?: number | null }): number {
+    return this.finiteHoldNumeric(order.subtotal);
   }
 
   /** Coerce hold/payment numerics; GraphQL numeric rejects null/NaN. */
