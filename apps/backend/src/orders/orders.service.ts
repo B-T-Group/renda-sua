@@ -1241,6 +1241,9 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    if ((order as any).fulfillment_method === 'pickup') {
+      await this.captureStripeAuthorizedOrderIfNeeded(order);
+    }
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup'
@@ -1400,7 +1403,7 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
-    await this.captureStripeOrderAfterAssignment(order);
+    await this.captureStripeAuthorizedOrderIfNeeded(order);
     return {
       success: true,
       order: updatedOrder,
@@ -1581,7 +1584,7 @@ export class OrdersService {
         request.orderId,
         agent.id
       );
-      await this.captureStripeOrderAfterAssignment(order);
+      await this.captureStripeAuthorizedOrderIfNeeded(order);
       return {
         success: true,
         order: updatedOrder,
@@ -3652,35 +3655,13 @@ export class OrdersService {
       request.notes
     );
 
-    // Update reserved quantities - decrement since order is cancelled
-    try {
-      const orderItems = order.order_items || [];
-      await this.updateReservedQuantities(orderItems, 'decrement');
-    } catch (error) {
-      this.logger.error(
-        `Failed to update reserved quantities after order cancellation: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      // Don't fail the cancellation if reserved quantity update fails
-    }
-
-    // Send cancellation message to async FIFO queue
-    try {
-      await this.orderQueueService.sendOrderCancelledMessage(
-        request.orderId,
-        cancelledBy,
-        request.notes,
-        previousStatus
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to send order.cancelled message to SQS: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      // Don't fail the cancellation if SQS message fails
-    }
+    await this.runOrderCancellationSideEffects(
+      order,
+      request.orderId,
+      previousStatus,
+      cancelledBy,
+      request.notes
+    );
 
     return {
       success: true,
@@ -6053,7 +6034,13 @@ export class OrdersService {
     }
   }
 
-  private async captureStripeOrderAfterAssignment(order: Orders): Promise<void> {
+  /**
+   * Capture an authorized Stripe manual-capture order (delivery: on agent assign;
+   * pickup: when business marks ready_for_pickup).
+   */
+  private async captureStripeAuthorizedOrderIfNeeded(
+    order: Orders
+  ): Promise<void> {
     const paymentSource = (order as any).payment_source;
     const paymentTiming = (order as any).payment_timing;
     if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
@@ -6068,23 +6055,102 @@ export class OrdersService {
       orderNumber: order.order_number,
     });
     if (!result.success) {
-      await this.revertOrderAssignment(order.id);
+      if ((order as any).assigned_agent_id) {
+        await this.revertOrderAssignment(order.id);
+      }
       throw new HttpException(
         result.message || 'Failed to capture payment for this order',
         HttpStatus.PAYMENT_REQUIRED
       );
     }
     if (result.captured) {
-      const account = await this.hasuraSystemService.getAccount(
-        order.client?.user_id ?? '',
-        order.currency
+      await this.finalizeStripeCapturedOrderPayment(order.order_number);
+    }
+  }
+
+  private async finalizeStripeCapturedOrderPayment(
+    orderNumber: string
+  ): Promise<void> {
+    const accountId =
+      await this.stripeCaptureService.creditWalletForCapturedOrder(orderNumber);
+    if (!accountId) {
+      this.logger.error(
+        `Stripe capture succeeded but no wallet account for order ${orderNumber}`
       );
-      if (account) {
-        await this.finalizeOrderAfterIncomingPayment({
-          entity_id: order.order_number,
-          account_id: account.id,
-        });
+      return;
+    }
+    await this.finalizeOrderAfterIncomingPayment({
+      entity_id: orderNumber,
+      account_id: accountId,
+    });
+  }
+
+  /** System-initiated cancel for stale authorized orders (reconciler). */
+  async cancelStaleAuthorizedOrderAsSystem(orderId: string): Promise<void> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order || order.current_status === 'cancelled') {
+      return;
+    }
+
+    const previousStatus = order.current_status;
+    await this.releaseStripeAuthorizationIfNeeded(order);
+
+    await this.orderStatusService.updateOrderStatus(orderId, 'cancelled');
+
+    const at = new Date().toISOString();
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation CancelStaleAuthorizedOrder($orderId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            cancelled_by: "system"
+            cancelled_at: $at
+            payment_status: "cancelled"
+            updated_at: $at
+          }
+        ) { id }
       }
+    `,
+      { orderId, at }
+    );
+
+    await this.runOrderCancellationSideEffects(
+      order,
+      orderId,
+      previousStatus,
+      'system',
+      'Auto-cancelled: no agent claimed within timeout'
+    );
+  }
+
+  private async runOrderCancellationSideEffects(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    cancelledBy: 'client' | 'business' | 'system',
+    notes?: string
+  ): Promise<void> {
+    try {
+      const orderItems = order.order_items || [];
+      await this.updateReservedQuantities(orderItems, 'decrement');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update reserved quantities after cancellation: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        orderId,
+        cancelledBy,
+        notes,
+        previousStatus
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send order.cancelled message to SQS: ${error?.message}`
+      );
     }
   }
 
@@ -6463,7 +6529,13 @@ export class OrdersService {
           business_id
           verified_agent_delivery
           fulfillment_method
+          payment_source
+          payment_timing
+          payment_status
           business {
+            user_id
+          }
+          client {
             user_id
           }
           assigned_agent_id

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AccountsService } from '../accounts/accounts.service';
 import { StripeConfig } from '../config/configuration';
 import {
   StripePaymentsDatabaseService,
@@ -16,7 +17,8 @@ export class StripeCaptureService {
   constructor(
     private readonly stripeService: StripeService,
     private readonly databaseService: StripePaymentsDatabaseService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly accountsService: AccountsService
   ) {}
 
   private get config(): StripeConfig {
@@ -101,6 +103,33 @@ export class StripeCaptureService {
     }
   }
 
+  /** Credit client wallet after synchronous capture (webhook skips when tx is already success). */
+  async creditWalletForCapturedOrder(
+    orderNumber: string
+  ): Promise<string | null> {
+    const tx = await this.databaseService.getTransactionByEntityId(orderNumber);
+    if (!tx?.account_id || tx.transaction_type !== 'PAYMENT') {
+      return tx?.account_id ?? null;
+    }
+    const result = await this.accountsService.registerTransaction({
+      accountId: tx.account_id,
+      amount: tx.amount,
+      transactionType: 'deposit',
+      memo: `Stripe payment deposit - ${tx.reference}`,
+      referenceId: tx.id,
+    });
+    if (!result.success) {
+      this.logger.error(
+        `Failed to credit account ${tx.account_id}: ${result.error}`
+      );
+      return null;
+    }
+    this.logger.log(
+      `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
+    );
+    return tx.account_id;
+  }
+
   async cancelOrderPaymentIntent(params: {
     orderNumber: string;
     orderId?: string;
@@ -123,19 +152,23 @@ export class StripeCaptureService {
     }
 
     try {
-      await this.stripeService.cancelPaymentIntent(
-        tx.stripe_payment_intent_id,
-        `cancel_${params.orderId ?? params.orderNumber}`
-      );
       await this.databaseService.updateTransaction(tx.id, {
         status: 'cancelled',
         error_message: 'Payment authorization cancelled',
       });
+      await this.stripeService.cancelPaymentIntent(
+        tx.stripe_payment_intent_id,
+        `cancel_${params.orderId ?? params.orderNumber}`
+      );
       this.logger.log(
         `stripe_authorization_cancelled order=${params.orderNumber} tx=${tx.id}`
       );
       return { success: true };
     } catch (error: any) {
+      await this.databaseService.updateTransaction(tx.id, {
+        status: tx.status,
+        error_message: error?.message || 'Cancel failed',
+      });
       this.logger.error(
         `Cancel PI failed for order ${params.orderNumber}: ${error?.message}`
       );

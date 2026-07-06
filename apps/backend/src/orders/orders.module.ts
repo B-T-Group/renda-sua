@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommissionsModule } from '../commissions/commissions.module';
@@ -35,7 +35,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
-    StripePaymentsModule,
+    forwardRef(() => StripePaymentsModule),
   ],
   controllers: [
     OrderRefundsController,

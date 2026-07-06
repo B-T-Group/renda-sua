@@ -114,7 +114,7 @@ export class OrderQueueService {
    */
   async sendOrderCancelledMessage(
     orderId: string,
-    cancelledBy: 'client' | 'business',
+    cancelledBy: 'client' | 'business' | 'system',
     cancellationReason?: string,
     previousStatus?: string
   ): Promise<void> {

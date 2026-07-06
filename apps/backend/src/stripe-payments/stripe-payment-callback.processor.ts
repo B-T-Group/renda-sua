@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { AccountsService } from '../accounts/accounts.service';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   findPaymentCallbackHandler,
   type PaymentCallbackHandler,
@@ -23,7 +24,8 @@ export class StripePaymentCallbackProcessor {
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
-    private readonly stripeService: StripeService
+    private readonly stripeService: StripeService,
+    private readonly hasuraSystemService: HasuraSystemService
   ) {}
 
   private isManualCapture(tx: StripePaymentTransaction): boolean {
@@ -162,6 +164,9 @@ export class StripePaymentCallbackProcessor {
   ): Promise<void> {
     const tx = await this.resolveTransaction(paymentIntent);
     if (!tx) return;
+    if (tx.status === 'cancelled' || tx.status === 'expired') {
+      return;
+    }
     if (!['pending', 'authorized', 'capture_pending'].includes(tx.status)) {
       return;
     }
@@ -173,11 +178,45 @@ export class StripePaymentCallbackProcessor {
         ? 'Payment authorization expired'
         : 'Payment authorization cancelled',
     });
+    if (await this.shouldSkipCanceledIntentFailureHandler(tx)) {
+      return;
+    }
     await this.runHandlerFailure(
       tx,
       isExpired ? 'Payment authorization expired' : 'Payment authorization cancelled',
       req
     );
+  }
+
+  private async shouldSkipCanceledIntentFailureHandler(
+    tx: StripePaymentTransaction
+  ): Promise<boolean> {
+    if (tx.payment_entity !== 'order') return false;
+    const orderNumber = (tx.entity_id || tx.reference || '').trim();
+    if (!orderNumber) return false;
+    const query = `
+      query OrderCancelState($orderNumber: String!) {
+        orders(where: { order_number: { _eq: $orderNumber } }, limit: 1) {
+          current_status
+          payment_status
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        orderNumber,
+      });
+      const row = response.orders?.[0];
+      if (!row) return false;
+      return (
+        row.current_status === 'cancelled' || row.payment_status === 'cancelled'
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not load order cancel state for ${orderNumber}: ${error?.message}`
+      );
+      return false;
+    }
   }
 
   private async resolveTransaction(

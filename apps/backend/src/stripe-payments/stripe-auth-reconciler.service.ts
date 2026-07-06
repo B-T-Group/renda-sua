@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { StripeConfig } from '../config/configuration';
-import { StripeCaptureService } from './stripe-capture.service';
+import { OrdersService } from '../orders/orders.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 import { StripeService } from './stripe.service';
 
@@ -12,7 +12,6 @@ interface StaleAuthorizedOrderRow {
   order_number: string;
   payment_status: string;
   current_status: string;
-  payment_authorized_at: string | null;
   updated_at: string;
 }
 
@@ -24,8 +23,9 @@ export class StripeAuthReconcilerService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly stripeService: StripeService,
-    private readonly captureService: StripeCaptureService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => OrdersService))
+    private readonly ordersService: OrdersService
   ) {}
 
   private get config(): StripeConfig {
@@ -113,7 +113,8 @@ export class StripeAuthReconcilerService {
             payment_source: { _eq: credit_card }
             current_status: { _eq: "ready_for_pickup" }
             assigned_agent_id: { _is_null: true }
-            payment_authorized_at: { _lt: $cutoff }
+            fulfillment_method: { _neq: pickup }
+            updated_at: { _lt: $cutoff }
           }
           limit: 20
         ) {
@@ -121,7 +122,6 @@ export class StripeAuthReconcilerService {
           order_number
           payment_status
           current_status
-          payment_authorized_at
           updated_at
         }
       }
@@ -143,27 +143,6 @@ export class StripeAuthReconcilerService {
     this.logger.log(
       `Auto-cancelling stale authorized order ${order.order_number} (no agent)`
     );
-    await this.captureService.cancelOrderPaymentIntent({
-      orderNumber: order.order_number,
-      orderId: order.id,
-    });
-    const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation CancelStaleAuthorizedOrder($orderId: uuid!, $at: timestamptz!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            current_status: cancelled
-            payment_status: "cancelled"
-            cancelled_by: "system"
-            cancelled_at: $at
-            updated_at: $at
-          }
-        ) { id }
-      }
-    `,
-      { orderId: order.id, at }
-    );
+    await this.ordersService.cancelStaleAuthorizedOrderAsSystem(order.id);
   }
 }
