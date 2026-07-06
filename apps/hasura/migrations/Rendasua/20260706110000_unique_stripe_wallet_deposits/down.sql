@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.account_transactions_unique_stripe_payment_deposit;

@@ -139,7 +139,8 @@ export class StripePaymentCallbackProcessor {
       return;
     }
     if (tx.status === 'success') {
-      this.logger.log(`Stripe PI skipped (already success): ${tx.id}`);
+      this.logger.log(`Stripe PI success side effects retry: ${tx.id}`);
+      await this.applyCaptured(tx, paymentIntent.id, req);
       return;
     }
     if (this.isManualCapture(tx)) {
@@ -265,14 +266,18 @@ export class StripePaymentCallbackProcessor {
       stripe_payment_intent_id: paymentIntentId,
       captured_at: capturedAt,
     });
-    await this.creditWalletIfNeeded(tx);
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      throw new Error(`Failed to credit wallet for Stripe transaction ${tx.id}`);
+    }
     await this.runHandlerSuccess(tx, req);
   }
 
   private async creditWalletIfNeeded(
     tx: StripePaymentTransaction
-  ): Promise<void> {
-    if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return;
+  ): Promise<boolean> {
+    if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return true;
+    if (await this.hasStripePaymentDeposit(tx)) return true;
     const result = await this.accountsService.registerTransaction({
       accountId: tx.account_id,
       amount: tx.amount,
@@ -281,14 +286,23 @@ export class StripePaymentCallbackProcessor {
       referenceId: tx.id,
     });
     if (!result.success) {
+      if (await this.hasStripePaymentDeposit(tx)) return true;
       this.logger.error(
         `Failed to credit account ${tx.account_id}: ${result.error}`
       );
-      return;
+      return false;
     }
     this.logger.log(
       `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
     );
+    return true;
+  }
+
+  private async hasStripePaymentDeposit(
+    tx: StripePaymentTransaction
+  ): Promise<boolean> {
+    if (!tx.account_id) return false;
+    return this.databaseService.hasStripePaymentDeposit(tx.account_id, tx.id);
   }
 
   private async runHandlerAuthorized(

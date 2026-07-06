@@ -407,6 +407,23 @@ export class OrdersService {
     return user.business;
   }
 
+  private isPayNowCreditCardOrder(order: Orders): boolean {
+    return (
+      (order as any).payment_source === 'credit_card' &&
+      (order as any).payment_timing === 'pay_now'
+    );
+  }
+
+  private assertPayNowCardPaymentReady(order: Orders): void {
+    if (!this.isPayNowCreditCardOrder(order)) return;
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus === 'authorized' || paymentStatus === 'paid') return;
+    throw new HttpException(
+      'Card payment is not authorized for fulfillment',
+      HttpStatus.PAYMENT_REQUIRED
+    );
+  }
+
   private computeUnitPriceFromBase(
     base: number,
     deal?: { discount_type: string; discount_value: number }
@@ -1151,6 +1168,7 @@ export class OrdersService {
         `Cannot confirm order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    this.assertPayNowCardPaymentReady(order);
 
     // Validate that delivery window is provided
     if (!request.delivery_time_window_id && !request.delivery_window_details) {
@@ -1241,6 +1259,7 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    this.assertPayNowCardPaymentReady(order);
     if ((order as any).fulfillment_method === 'pickup') {
       await this.captureStripeAuthorizedOrderIfNeeded(order);
     }
@@ -1318,6 +1337,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    this.assertPayNowCardPaymentReady(order);
     const holdAmount = await this.resolveOrderHoldAmount(order);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
@@ -1403,7 +1423,10 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
-    await this.captureStripeAuthorizedOrderIfNeeded(order);
+    await this.captureStripeAuthorizedOrderIfNeeded({
+      ...order,
+      assigned_agent_id: agent.id,
+    } as Orders);
     return {
       success: true,
       order: updatedOrder,
@@ -1550,6 +1573,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    this.assertPayNowCardPaymentReady(order);
 
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
@@ -1584,7 +1608,10 @@ export class OrdersService {
         request.orderId,
         agent.id
       );
-      await this.captureStripeAuthorizedOrderIfNeeded(order);
+      await this.captureStripeAuthorizedOrderIfNeeded({
+        ...order,
+        assigned_agent_id: agent.id,
+      } as Orders);
       return {
         success: true,
         order: updatedOrder,
@@ -6046,8 +6073,18 @@ export class OrdersService {
     if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
       return;
     }
-    if ((order as any).payment_status !== 'authorized') {
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus === 'paid') {
       return;
+    }
+    if (paymentStatus !== 'authorized') {
+      if ((order as any).assigned_agent_id) {
+        await this.revertOrderAssignment(order.id);
+      }
+      throw new HttpException(
+        'Card payment is not authorized for fulfillment',
+        HttpStatus.PAYMENT_REQUIRED
+      );
     }
 
     const result = await this.stripeCaptureService.captureOrderPaymentIntent({

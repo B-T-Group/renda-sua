@@ -225,6 +225,32 @@ export class StripePaymentsDatabaseService {
     return response.stripe_payment_transactions || [];
   }
 
+  async hasStripePaymentDeposit(
+    accountId: string,
+    referenceId: string
+  ): Promise<boolean> {
+    const query = `
+      query HasStripePaymentDeposit($accountId: uuid!, $referenceId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $referenceId }
+            transaction_type: { _eq: deposit }
+            memo: { _like: "Stripe payment deposit - %" }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, {
+      accountId,
+      referenceId,
+    });
+    return !!response.account_transactions?.[0];
+  }
+
   /**
    * Insert an event row, returning true only when this event is new. Relies on
    * the unique constraint on event_id for idempotent webhook processing.
