@@ -165,6 +165,29 @@ export class AccountsService {
     }
   }
 
+  async hasTransactionForReference(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'transactionType' | 'referenceId'
+    >
+  ): Promise<boolean> {
+    if (!request.referenceId) return false;
+    const query = `
+      query HasAccountTransaction($accountId: uuid!, $transactionType: transaction_type_enum!, $referenceId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            transaction_type: { _eq: $transactionType }
+            reference_id: { _eq: $referenceId }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, request);
+    return (result.account_transactions?.length ?? 0) > 0;
+  }
+
   /**
    * Determine if transaction is credit/debit and calculate balance updates
    */

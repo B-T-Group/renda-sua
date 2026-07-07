@@ -111,6 +111,14 @@ export class StripeCaptureService {
     if (!tx?.account_id || tx.transaction_type !== 'PAYMENT') {
       return tx?.account_id ?? null;
     }
+    const alreadyCredited =
+      await this.accountsService.hasTransactionForReference({
+        accountId: tx.account_id,
+        transactionType: 'deposit',
+        referenceId: tx.id,
+      });
+    if (alreadyCredited) return tx.account_id;
+
     const result = await this.accountsService.registerTransaction({
       accountId: tx.account_id,
       amount: tx.amount,
