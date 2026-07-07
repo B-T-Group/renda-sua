@@ -1,6 +1,8 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddressesService } from '../addresses/addresses.service';
+import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { BusinessReferralsService } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { Auth0Service } from './auth0.service';
 import { SignupService } from './signup.service';
@@ -10,6 +12,8 @@ describe('SignupService', () => {
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let auth0Service: jest.Mocked<Auth0Service>;
   let addressesService: jest.Mocked<AddressesService>;
+  let businessReferralsService: jest.Mocked<BusinessReferralsService>;
+  let agentReferralsService: jest.Mocked<AgentReferralsService>;
 
   const insertedUser = {
     id: 'user-123',
@@ -51,6 +55,20 @@ describe('SignupService', () => {
             createAddressForSignup: jest.fn(),
           },
         },
+        {
+          provide: BusinessReferralsService,
+          useValue: {
+            resolveBusinessReferralCode: jest.fn().mockResolvedValue(null),
+            getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
+            notifyAgentOfBusinessReferral: jest.fn(),
+          },
+        },
+        {
+          provide: AgentReferralsService,
+          useValue: {
+            creditAgentReferralIfPresent: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -58,6 +76,8 @@ describe('SignupService', () => {
     hasuraSystemService = module.get(HasuraSystemService);
     auth0Service = module.get(Auth0Service);
     addressesService = module.get(AddressesService);
+    businessReferralsService = module.get(BusinessReferralsService);
+    agentReferralsService = module.get(AgentReferralsService);
   });
 
   describe('availability checks', () => {
@@ -167,6 +187,11 @@ describe('SignupService', () => {
         'agent-123',
         'agent',
         address
+      );
+      expect(agentReferralsService.creditAgentReferralIfPresent).toHaveBeenCalledWith(
+        'agent-123',
+        undefined,
+        'CM'
       );
     });
   });

@@ -84,6 +84,29 @@ export class AgentReferralsService {
     }
   }
 
+  async creditAgentReferralIfPresent(
+    newAgentId: string,
+    referralAgentCode?: string,
+    countryCode?: string
+  ): Promise<void> {
+    const normalizedCode = referralAgentCode?.trim();
+    if (!normalizedCode || !countryCode) {
+      return;
+    }
+
+    const referringAgent = await this.findAgentByCode(normalizedCode);
+    if (!referringAgent || referringAgent.status !== 'active') {
+      return;
+    }
+
+    await this.creditReferral(
+      referringAgent.agentId,
+      newAgentId,
+      countryCode,
+      normalizedCode
+    );
+  }
+
   async creditReferral(
     referringAgentId: string,
     referredAgentId: string,

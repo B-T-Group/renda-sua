@@ -82,5 +82,7 @@
   "client_rental_request_rejected": "4718fe54-acfa-435d-9d2d-0d554e58fbee",
   "business_rental_booking_request_fr": "6a2bee7e-1e97-4323-b241-b928fa7c8454",
   "client_rental_request_accepted_fr": "abc47d42-5616-4240-ad16-f68b2c46444e",
-  "client_rental_request_rejected_fr": "98d1e83d-6525-406e-ada7-b4707218f8d8"
+  "client_rental_request_rejected_fr": "98d1e83d-6525-406e-ada7-b4707218f8d8",
+  "agent_business_referred": "2f37b23f-5d59-4e27-bea9-96c32faabcea",
+  "agent_business_referred_fr": "ac2d5347-a14b-4293-9566-91abd8f2f8d8"
 }

@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
+import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { BusinessReferralsService, ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
@@ -60,7 +61,8 @@ export class SignupService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
     private readonly addressesService: AddressesService,
-    private readonly businessReferralsService: BusinessReferralsService
+    private readonly businessReferralsService: BusinessReferralsService,
+    private readonly agentReferralsService: AgentReferralsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -210,6 +212,15 @@ export class SignupService {
           businessOwnerName: `${payload.first_name} ${payload.last_name}`.trim(),
         },
         businessReferral
+      );
+    }
+
+    const agentEntity = entities.find((e) => e.type === 'agent');
+    if (agentEntity) {
+      await this.agentReferralsService.creditAgentReferralIfPresent(
+        agentEntity.id,
+        payload.referral_agent_code,
+        payload.address?.country
       );
     }
 

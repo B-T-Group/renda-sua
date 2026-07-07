@@ -916,7 +916,7 @@ export class UsersController {
           }
         }
         if (inserted.agent?.id) {
-          await this.handleAgentReferralIfPresent(
+          await this.agentReferralsService.creditAgentReferralIfPresent(
             inserted.agent.id,
             userData.referral_agent_code,
             userData.address?.country
@@ -1251,30 +1251,5 @@ export class UsersController {
       update_users_by_pk: Record<string, unknown>;
     }>(GQL_UPDATE_USER_EMAIL, { id: userId, email });
     return { success: true, user: result.update_users_by_pk };
-  }
-
-  private async handleAgentReferralIfPresent(
-    newAgentId: string,
-    referralAgentCode?: string,
-    countryCode?: string
-  ): Promise<void> {
-    const normalizedCode = referralAgentCode?.trim();
-    if (!normalizedCode || !countryCode) {
-      return;
-    }
-
-    const referringAgent = await this.agentReferralsService.findAgentByCode(
-      normalizedCode
-    );
-    if (!referringAgent || referringAgent.status !== 'active') {
-      return;
-    }
-
-    await this.agentReferralsService.creditReferral(
-      referringAgent.agentId,
-      newAgentId,
-      countryCode,
-      normalizedCode
-    );
   }
 }
