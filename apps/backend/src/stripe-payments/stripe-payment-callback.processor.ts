@@ -139,6 +139,10 @@ export class StripePaymentCallbackProcessor {
       return;
     }
     if (tx.status === 'success') {
+      if (this.isManualCapture(tx)) {
+        await this.retryManualCaptureSuccessSideEffects(tx, req);
+        return;
+      }
       this.logger.log(`Stripe PI skipped (already success): ${tx.id}`);
       return;
     }
@@ -156,6 +160,17 @@ export class StripePaymentCallbackProcessor {
       return;
     }
     await this.applyCaptured(tx, paymentIntent.id, req);
+  }
+
+  private async retryManualCaptureSuccessSideEffects(
+    tx: StripePaymentTransaction,
+    req: Request
+  ): Promise<void> {
+    this.logger.log(`Retrying manual capture side effects for tx ${tx.id}`);
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (credited) {
+      await this.runHandlerSuccess(tx, req);
+    }
   }
 
   async onPaymentIntentCanceled(
@@ -265,14 +280,24 @@ export class StripePaymentCallbackProcessor {
       stripe_payment_intent_id: paymentIntentId,
       captured_at: capturedAt,
     });
-    await this.creditWalletIfNeeded(tx);
-    await this.runHandlerSuccess(tx, req);
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (credited) {
+      await this.runHandlerSuccess(tx, req);
+    }
   }
 
   private async creditWalletIfNeeded(
     tx: StripePaymentTransaction
-  ): Promise<void> {
-    if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return;
+  ): Promise<boolean> {
+    if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return true;
+    const alreadyCredited =
+      await this.accountsService.hasTransactionForReference({
+        accountId: tx.account_id,
+        transactionType: 'deposit',
+        referenceId: tx.id,
+      });
+    if (alreadyCredited) return true;
+
     const result = await this.accountsService.registerTransaction({
       accountId: tx.account_id,
       amount: tx.amount,
@@ -284,11 +309,12 @@ export class StripePaymentCallbackProcessor {
       this.logger.error(
         `Failed to credit account ${tx.account_id}: ${result.error}`
       );
-      return;
+      return false;
     }
     this.logger.log(
       `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
     );
+    return true;
   }
 
   private async runHandlerAuthorized(
