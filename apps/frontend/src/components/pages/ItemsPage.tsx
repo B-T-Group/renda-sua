@@ -44,6 +44,10 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
+import {
+  filterExcludedCatalogItems,
+  pickUniqueCatalogItems,
+} from '../../utils/catalogSectionDedup';
 import AddressAlert from '../common/AddressAlert';
 import AppDownloadBanner from '../common/AppDownloadBanner';
 import InGridAppPromoTile from '../common/InGridAppPromoTile';
@@ -57,7 +61,6 @@ import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
-import deliveryPricingBanner from '../../assets/delivery-pricing-banner.png';
 
 // ItemCardSkeleton component for better loading UX
 const ItemCardSkeleton: React.FC = () => (
@@ -290,7 +293,7 @@ const ItemsPage: React.FC = () => {
 
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
     page: 1,
-    limit: 12,
+    limit: 24,
     is_active: true,
     sort: 'deals',
     business_location_id: businessLocationId ?? undefined,
@@ -299,7 +302,7 @@ const ItemsPage: React.FC = () => {
 
   const { inventoryItems: topRatedItems, loading: topRatedLoading } = useInventoryItems({
     page: 1,
-    limit: 12,
+    limit: 24,
     is_active: true,
     sort: 'top_rated',
     business_location_id: businessLocationId ?? undefined,
@@ -308,7 +311,7 @@ const ItemsPage: React.FC = () => {
 
   const { inventoryItems: popularItems, loading: popularLoading } = useInventoryItems({
     page: 1,
-    limit: 12,
+    limit: 24,
     is_active: true,
     sort: 'relevance',
     business_location_id: businessLocationId ?? undefined,
@@ -517,6 +520,40 @@ const ItemsPage: React.FC = () => {
       collectionSlug ||
       businessLocationId
   );
+
+  const {
+    dealsDisplay,
+    topRatedDisplay,
+    popularDisplay,
+    catalogDisplay,
+  } = useMemo(() => {
+    if (hasActiveFilters) {
+      return {
+        dealsDisplay: dealsItems,
+        topRatedDisplay: topRatedItems,
+        popularDisplay: popularItems,
+        catalogDisplay: inventoryItems,
+      };
+    }
+
+    const seen = new Set<string>();
+    const dealsDisplay = pickUniqueCatalogItems(dealsItems, seen, 8);
+    const topRatedDisplay = pickUniqueCatalogItems(topRatedItems, seen, 8);
+    const popularDisplay = pickUniqueCatalogItems(popularItems, seen, 8);
+    const catalogDisplay =
+      currentPage === 1
+        ? filterExcludedCatalogItems(inventoryItems, seen)
+        : inventoryItems;
+
+    return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
+  }, [
+    hasActiveFilters,
+    currentPage,
+    dealsItems,
+    topRatedItems,
+    popularItems,
+    inventoryItems,
+  ]);
 
   const handleClearAllFilters = () => {
     setSearchTerm('');
@@ -958,28 +995,6 @@ const ItemsPage: React.FC = () => {
           })}
         </Box>
 
-        <Box sx={{ mb: 2 }}>
-          <Box
-            component="img"
-            src={deliveryPricingBanner}
-            alt={t(
-              'public.items.deliveryPricingBannerAlt',
-              'RendaSua delivery fees from 700 to 2000 FCFA'
-            )}
-            sx={{
-              display: 'block',
-              width: { xs: '100%', md: '50%' },
-              maxWidth: '100%',
-              height: 'auto',
-              mx: 'auto',
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-            loading="lazy"
-          />
-        </Box>
-
         {/* Featured collections */}
         {!hasActiveFilters && (featuredCollections.length > 0 || collectionsLoading) ? (
           <Box sx={{ px: { xs: 1, sm: 2 } }}>
@@ -1001,7 +1016,7 @@ const ItemsPage: React.FC = () => {
               'public.items.sections.dealsSubtitle',
               'Limited-time discounts from verified sellers'
             )}
-            items={dealsItems}
+            items={dealsDisplay}
             loading={dealsLoading}
             formatCurrency={formatCurrency}
             onOrderClick={handleOrderClick}
@@ -1021,7 +1036,7 @@ const ItemsPage: React.FC = () => {
               'public.items.sections.topRatedSubtitle',
               'Products customers love'
             )}
-            items={topRatedItems}
+            items={topRatedDisplay}
             loading={topRatedLoading}
             formatCurrency={formatCurrency}
             onOrderClick={handleOrderClick}
@@ -1041,7 +1056,7 @@ const ItemsPage: React.FC = () => {
               'public.items.sections.popularSubtitle',
               'Recommended based on what people browse and buy'
             )}
-            items={popularItems}
+            items={popularDisplay}
             loading={popularLoading}
             formatCurrency={formatCurrency}
             onOrderClick={handleOrderClick}
@@ -1090,7 +1105,7 @@ const ItemsPage: React.FC = () => {
               <ItemCardSkeleton key={index} />
             ))}
           </Box>
-        ) : inventoryItems.length === 0 ? (
+        ) : catalogDisplay.length === 0 ? (
           /* Enhanced Empty State */
           <Box
             sx={{
@@ -1150,7 +1165,7 @@ const ItemsPage: React.FC = () => {
         ) : (
           <>
             <Box sx={ITEMS_CATALOG_GRID_SX}>
-              {inventoryItems.map((inventoryItem, index) => (
+              {catalogDisplay.map((inventoryItem, index) => (
                 <React.Fragment key={inventoryItem.id}>
                   {/* Inject in-grid app promo tile after 12th item (guests only) */}
                   {!isAuthenticated && index === 12 && (
