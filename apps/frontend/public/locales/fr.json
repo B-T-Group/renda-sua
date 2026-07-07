@@ -905,6 +905,11 @@
       "upload": "Téléverser",
       "uploading": "Téléversement en cours..."
     },
+    "referrals": {
+      "referralCodeLabel": "Code agent de parrainage (optionnel)",
+      "referralCodeHelp": "Entrez le code de l'agent Rendasua qui vous accompagne pour démarrer.",
+      "invalidCodeLength": "Le code agent doit comporter 6 caractères."
+    },
     "verification": {
       "noticeTitle": "Vérification du compte requise",
       "notice": "Votre compte entreprise doit être vérifié avant que vos articles soient visibles par les clients. Complétez les étapes ci-dessous.",

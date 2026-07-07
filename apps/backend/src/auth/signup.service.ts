@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
+import { BusinessReferralsService, ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
@@ -32,6 +33,7 @@ interface SignupStartPayload {
     city: string;
     state: string;
   };
+  referral_agent_code?: string;
 }
 
 interface UpdateContactPayload {
@@ -57,7 +59,8 @@ export class SignupService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
-    private readonly addressesService: AddressesService
+    private readonly addressesService: AddressesService,
+    private readonly businessReferralsService: BusinessReferralsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -161,11 +164,27 @@ export class SignupService {
       }
     }
 
-    const { user, entities } = await this.createPendingUser({
+    const personas = this.normalizeSignupPersonas({
       ...payload,
       email: email || null,
       phone_number: phoneNumber || null,
     });
+    let businessReferral: ResolvedBusinessReferral | null = null;
+    if (personas.includes('business')) {
+      businessReferral =
+        await this.businessReferralsService.resolveBusinessReferralCode(
+          payload.referral_agent_code
+        );
+    }
+
+    const { user, entities } = await this.createPendingUser(
+      {
+        ...payload,
+        email: email || null,
+        phone_number: phoneNumber || null,
+      },
+      businessReferral
+    );
     if (payload.address && entities.length > 0) {
       const uid = user.id;
       for (const entity of entities) {
@@ -177,6 +196,23 @@ export class SignupService {
         );
       }
     }
+
+    const businessEntity = entities.find((e) => e.type === 'business');
+    if (businessEntity && businessReferral) {
+      const businessName =
+        payload.profile?.name?.trim() ||
+        `${payload.first_name}'s Business`;
+      await this.businessReferralsService.notifyAgentOfBusinessReferral(
+        {
+          businessId: businessEntity.id,
+          countryCode: payload.address?.country,
+          businessName,
+          businessOwnerName: `${payload.first_name} ${payload.last_name}`.trim(),
+        },
+        businessReferral
+      );
+    }
+
     return { user };
   }
 
@@ -453,7 +489,8 @@ export class SignupService {
   }
 
   private async createPendingUser(
-    payload: SignupStartPayload
+    payload: SignupStartPayload,
+    businessReferral: ResolvedBusinessReferral | null = null
   ): Promise<{
     user: SignupCreatedUser;
     entities: Array<{ id: string; type: PersonaId }>;
@@ -472,6 +509,9 @@ export class SignupService {
       vehicle_type_id: payload.profile?.vehicle_type_id,
       business_name: businessName,
       main_interest: payload.profile?.main_interest ?? 'sell_items',
+      ...this.businessReferralsService.getBusinessInsertReferralFields(
+        businessReferral
+      ),
     });
     const u = inserted.user;
     const user: SignupCreatedUser = {

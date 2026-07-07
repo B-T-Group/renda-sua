@@ -51,6 +51,7 @@ import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
+import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import MissingEmailBanner from '../common/MissingEmailBanner';
 import PhoneInput from '../common/PhoneInput';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
@@ -412,6 +413,7 @@ const Profile: React.FC = () => {
   const isPhoneVerified = profile?.phone_number_verified === true;
   const hasEmailValue = Boolean(profile?.email?.trim());
   const hasPhoneValue = Boolean(profile?.phone_number?.trim());
+  const agentCode = profile?.agent?.agent_code?.trim() || '';
 
   return (
     <Container
@@ -861,6 +863,9 @@ const Profile: React.FC = () => {
                 </Stack>
               </Card>
             )}
+            {agentCode ? (
+              <AgentReferralCodeCard agentCode={agentCode} />
+            ) : null}
             {/* Manage Documents */}
             <Card
               component={RouterLink}

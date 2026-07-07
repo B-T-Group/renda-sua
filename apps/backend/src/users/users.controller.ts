@@ -22,6 +22,10 @@ import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
+import {
+  BusinessReferralsService,
+  ResolvedBusinessReferral,
+} from '../business-referrals/business-referrals.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -123,6 +127,7 @@ export class UsersController {
     private readonly awsService: AwsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly agentReferralsService: AgentReferralsService,
+    private readonly businessReferralsService: BusinessReferralsService,
     private readonly accountDeletionService: AccountDeletionService,
     private readonly paymentRoutingService: PaymentRoutingService
   ) {}
@@ -204,6 +209,7 @@ export class UsersController {
       vehicle_type_id?: string;
       name?: string;
       main_interest?: 'sell_items' | 'rent_items';
+      referral_agent_code?: string;
     }
   ) {
     const persona = personaParam?.trim().toLowerCase();
@@ -213,6 +219,9 @@ export class UsersController {
     try {
       return await this.ensurePersonaRecord(persona, body);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         { success: false, error: error.message || 'Failed to add persona' },
         HttpStatus.BAD_REQUEST
@@ -856,6 +865,13 @@ export class UsersController {
         if (mi !== 'sell_items' && mi !== 'rent_items') {
           throw new Error('main_interest must be sell_items or rent_items');
         }
+        let businessReferral: ResolvedBusinessReferral | null = null;
+        if (personas.includes('business')) {
+          businessReferral =
+            await this.businessReferralsService.resolveBusinessReferralCode(
+              userData.referral_agent_code
+            );
+        }
         const inserted = await this.hasuraSystemService.insertUserWithPersonas({
           email: userData.email,
           first_name: userData.first_name,
@@ -868,6 +884,9 @@ export class UsersController {
             userData.profile?.name?.trim() ||
             `${userData.first_name}'s Business`,
           main_interest: mi,
+          ...this.businessReferralsService.getBusinessInsertReferralFields(
+            businessReferral
+          ),
         });
         if (addressData) {
           const uid = inserted.user.id;
@@ -903,6 +922,20 @@ export class UsersController {
             userData.address?.country
           );
         }
+        if (inserted.business?.id && businessReferral) {
+          await this.businessReferralsService.notifyAgentOfBusinessReferral(
+            {
+              businessId: inserted.business.id,
+              countryCode: userData.address?.country,
+              businessName:
+                userData.profile?.name?.trim() ||
+                `${userData.first_name}'s Business`,
+              businessOwnerName:
+                `${userData.first_name} ${userData.last_name}`.trim(),
+            },
+            businessReferral
+          );
+        }
         return {
           success: true,
           user: inserted.user,
@@ -926,6 +959,9 @@ export class UsersController {
         userId: this.hasuraUserService.getUserId(),
       };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,
@@ -971,6 +1007,7 @@ export class UsersController {
       vehicle_type_id?: string;
       name?: string;
       main_interest?: 'sell_items' | 'rent_items';
+      referral_agent_code?: string;
     }
   ) {
     const uid = this.hasuraUserService.getUserId();
@@ -1062,10 +1099,45 @@ export class UsersController {
       if (mi !== 'sell_items' && mi !== 'rent_items') {
         throw new HttpException('Invalid main_interest', HttpStatus.BAD_REQUEST);
       }
+      const businessReferral =
+        await this.businessReferralsService.resolveBusinessReferralCode(
+          body.referral_agent_code,
+          uid
+        );
+      const referralFields =
+        this.businessReferralsService.getBusinessInsertReferralFields(
+          businessReferral
+        );
+      const hasReferral = Boolean(referralFields.business_referral_agent_id);
       const r = await this.hasuraSystemService.executeMutation<{
         insert_businesses_one: { id: string };
       }>(
-        `
+        hasReferral
+          ? `
+        mutation AddBusiness(
+          $userId: uuid!
+          $name: String!
+          $mi: business_main_interest_enum!
+          $agentId: uuid!
+          $referralCode: String!
+        ) {
+          insert_businesses_one(object: {
+            user_id: $userId
+            name: $name
+            main_interest: $mi
+            referred_by_agent_id: $agentId
+            referral_code_used: $referralCode
+          }) {
+            id
+            user_id
+            name
+            main_interest
+            created_at
+            updated_at
+          }
+        }
+      `
+          : `
         mutation AddBusiness($userId: uuid!, $name: String!, $mi: business_main_interest_enum!) {
           insert_businesses_one(object: { user_id: $userId, name: $name, main_interest: $mi }) {
             id
@@ -1077,7 +1149,15 @@ export class UsersController {
           }
         }
       `,
-        { userId: uid, name, mi }
+        hasReferral
+          ? {
+              userId: uid,
+              name,
+              mi,
+              agentId: referralFields.business_referral_agent_id,
+              referralCode: referralFields.business_referral_code_used,
+            }
+          : { userId: uid, name, mi }
       );
       if (source) {
         await this.addressesService.seedDefaultAddressForNewPersona(
@@ -1086,6 +1166,19 @@ export class UsersController {
           'business',
           source,
           name
+        );
+      }
+      const countryCode = await this.resolveUserCountry(user);
+      if (businessReferral) {
+        await this.businessReferralsService.notifyAgentOfBusinessReferral(
+          {
+            businessId: r.insert_businesses_one.id,
+            countryCode: source?.country ?? countryCode ?? undefined,
+            businessName: name,
+            businessOwnerName:
+              `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+          },
+          businessReferral
         );
       }
       return { success: true, business: r.insert_businesses_one };
@@ -1173,7 +1266,7 @@ export class UsersController {
     const referringAgent = await this.agentReferralsService.findAgentByCode(
       normalizedCode
     );
-    if (!referringAgent) {
+    if (!referringAgent || referringAgent.status !== 'active') {
       return;
     }
 

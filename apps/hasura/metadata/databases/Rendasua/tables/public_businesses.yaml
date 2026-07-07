@@ -2,6 +2,9 @@ table:
   name: businesses
   schema: public
 object_relationships:
+  - name: referring_agent
+    using:
+      foreign_key_constraint_on: referred_by_agent_id
   - name: user
     using:
       foreign_key_constraint_on: user_id
@@ -166,7 +169,12 @@ select_permissions:
         - image_cleanup_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
-      filter: {}
+        - referred_by_agent_id
+        - referral_code_used
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:

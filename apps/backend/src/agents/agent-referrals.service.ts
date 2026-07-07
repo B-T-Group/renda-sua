@@ -12,7 +12,12 @@ interface AgentLookupResult {
   userId: string;
   userFirstName: string;
   userLastName: string;
+  userEmail: string;
+  status: string;
+  preferredLanguage: string;
 }
+
+export type { AgentLookupResult };
 
 @Injectable()
 export class AgentReferralsService {
@@ -23,8 +28,16 @@ export class AgentReferralsService {
     private readonly accountsService: AccountsService
   ) {}
 
+  normalizeAgentCode(agentCode: string): string | null {
+    const normalized = agentCode.trim().toUpperCase();
+    if (!normalized || !/^[A-Z0-9]{6}$/.test(normalized)) {
+      return null;
+    }
+    return normalized;
+  }
+
   async findAgentByCode(agentCode: string): Promise<AgentLookupResult | null> {
-    const normalizedCode = agentCode.trim().toUpperCase();
+    const normalizedCode = this.normalizeAgentCode(agentCode);
     if (!normalizedCode) {
       return null;
     }
@@ -33,10 +46,13 @@ export class AgentReferralsService {
       query FindAgentByCode($agentCode: String!) {
         agents(where: { agent_code: { _eq: $agentCode } }, limit: 1) {
           id
+          status
           user {
             id
             first_name
             last_name
+            email
+            preferred_language
           }
         }
       }
@@ -56,6 +72,9 @@ export class AgentReferralsService {
         userId: agent.user.id,
         userFirstName: agent.user.first_name,
         userLastName: agent.user.last_name,
+        userEmail: agent.user.email ?? '',
+        status: agent.status ?? 'active',
+        preferredLanguage: agent.user.preferred_language ?? 'en',
       };
     } catch (error: any) {
       this.logger.error(

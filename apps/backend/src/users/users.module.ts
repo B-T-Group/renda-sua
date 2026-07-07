@@ -4,6 +4,7 @@ import { Auth0Service } from '../auth/auth0.service';
 import { PermissionService } from '../auth/permission.service';
 import { AwsModule } from '../aws/aws.module';
 import { AgentsModule } from '../agents/agents.module';
+import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AccountDeletionService } from './account-deletion.service';
@@ -15,6 +16,7 @@ import { UsersController } from './users.controller';
     AwsModule,
     AddressesModule,
     AgentsModule,
+    BusinessReferralsModule,
     StripePaymentsModule,
   ],
   controllers: [UsersController],

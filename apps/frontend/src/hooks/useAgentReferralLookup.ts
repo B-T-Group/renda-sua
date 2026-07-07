@@ -4,6 +4,7 @@ import { useApiClient } from './useApiClient';
 export interface AgentReferralLookupResult {
   agentCode: string;
   fullName: string;
+  firstName?: string;
 }
 
 interface UseAgentReferralLookupState {
@@ -39,9 +40,12 @@ export const useAgentReferralLookup = (
       return;
     }
 
+    setResult(null);
+    setError(null);
+    setLoading(true);
+
     let cancelled = false;
     const timer = setTimeout(async () => {
-      setLoading(true);
       setError(null);
       setResult(null);
 
@@ -50,6 +54,7 @@ export const useAgentReferralLookup = (
           success: boolean;
           agentCode: string;
           fullName: string;
+          firstName?: string;
         }>(`/agents/public/by-code/${trimmed}`);
 
         if (cancelled) return;
@@ -58,6 +63,7 @@ export const useAgentReferralLookup = (
           setResult({
             agentCode: response.data.agentCode,
             fullName: response.data.fullName,
+            firstName: response.data.firstName,
           });
         } else {
           setError('No agent found for this code');

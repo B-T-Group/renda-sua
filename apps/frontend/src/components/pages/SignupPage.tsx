@@ -40,6 +40,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useAgentReferralLookup } from '../../hooks/useAgentReferralLookup';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 import { getCountryStateCity } from '../../utils/countryStateCityLoader';
@@ -49,6 +50,7 @@ import {
   findMatchedStateNameForCountry,
 } from '../../utils/locationAddressMatch';
 import LoginMethodDialog from '../auth/LoginMethodDialog';
+import AgentReferralCodeField from '../common/AgentReferralCodeField';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
 import SignupAccountCreatedAnimation from '../onboarding/SignupAccountCreatedAnimation';
@@ -191,6 +193,19 @@ const SignupPage: React.FC = () => {
         : 'sell_items'
       : 'browse_buy',
   ]);
+  const [referralAgentCode, setReferralAgentCode] = useState('');
+  const {
+    result: referralLookup,
+    loading: referralLookupLoading,
+    error: referralLookupError,
+  } = useAgentReferralLookup(referralAgentCode);
+
+  useEffect(() => {
+    const ref = search.get('ref')?.trim().toUpperCase();
+    if (ref && /^[A-Z0-9]{6}$/.test(ref)) {
+      setReferralAgentCode(ref);
+    }
+  }, [search]);
 
   const steps = useMemo(
     () => [
@@ -514,6 +529,44 @@ const SignupPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      const trimmedReferral = referralAgentCode.trim();
+      if (
+        selectedPersonas.includes('business') &&
+        trimmedReferral.length > 0 &&
+        trimmedReferral.length !== 6
+      ) {
+        setError(
+          t(
+            'business.referrals.invalidCodeLength',
+            'Agent referral code must be 6 characters.'
+          )
+        );
+        setSaving(false);
+        return;
+      }
+      if (
+        selectedPersonas.includes('business') &&
+        trimmedReferral.length === 6
+      ) {
+        if (referralLookupLoading) {
+          setError(
+            t(
+              'agent.referrals.lookupLoading',
+              'Looking up agent... Please wait a moment and try again.'
+            )
+          );
+          setSaving(false);
+          return;
+        }
+        if (!referralLookup || referralLookupError || referralLookup.agentCode !== trimmedReferral.toUpperCase()) {
+          setError(
+            t('agent.referrals.lookupError', 'No agent found for this code')
+          );
+          setSaving(false);
+          return;
+        }
+      }
+
       const personas = selectedPersonas;
       const payload = {
         first_name: form.first_name,
@@ -535,6 +588,9 @@ const SignupPage: React.FC = () => {
           city: form.address.city.trim(),
           state: form.address.state,
         },
+        ...(personas.includes('business') && trimmedReferral
+          ? { referral_agent_code: trimmedReferral }
+          : {}),
       };
       const { data } = await apiClient.post<{ success: boolean; user: SignupStartUser }>(
         '/auth/signup/start',
@@ -547,6 +603,7 @@ const SignupPage: React.FC = () => {
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
+          err?.response?.data?.message ||
           t('signupPage.createAccountError', 'Unable to create account at this time.')
       );
     } finally {
@@ -777,6 +834,17 @@ const SignupPage: React.FC = () => {
                   </MenuItem>
                 </TextField>
               )}
+              <AgentReferralCodeField
+                value={referralAgentCode}
+                onChange={setReferralAgentCode}
+                labelKey="business.referrals.referralCodeLabel"
+                labelDefault="Agent referral code (optional)"
+                helpKey="business.referrals.referralCodeHelp"
+                helpDefault="Enter the code of the Rendasua agent helping you get started."
+                lookupResult={referralLookup}
+                lookupLoading={referralLookupLoading}
+                lookupError={referralLookupError}
+              />
             </>
           )}
         </Stack>
@@ -952,6 +1020,18 @@ const SignupPage: React.FC = () => {
                   `${form.business_name} (${form.main_interest === 'rent_items'
                     ? t('completeProfile.mainInterest.rentItems', 'Renting out items')
                     : t('completeProfile.mainInterest.sellItems', 'Selling products')})`
+                )}
+                {referralAgentCode.trim().length === 6 && referralLookup &&
+                  referralLookup.agentCode === referralAgentCode.trim().toUpperCase() && (
+                  <>
+                    <Divider />
+                    {reviewRow(
+                      t('business.referrals.referralCodeLabel', 'Agent referral code (optional)'),
+                      t('agent.referrals.lookupSuccess', 'Referred by {{name}}', {
+                        name: referralLookup.firstName || referralLookup.fullName,
+                      })
+                    )}
+                  </>
                 )}
               </>
             )}

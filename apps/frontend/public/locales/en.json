@@ -894,7 +894,7 @@
       "yourCode": "Your agent referral code",
       "copyCode": "Copy code",
       "copied": "Copied!",
-      "shareHint": "Share this code with other agents so you can earn referral commissions when they sign up."
+      "shareHint": "Share this code with other agents and businesses so they can enter it when they sign up."
     },
     "unverifiedHoldNote": "Verify your account and add a profile picture to reduce your hold amounts.",
     "orders": {
@@ -1156,6 +1156,11 @@
       "updated": "Updated",
       "upload": "Upload",
       "uploading": "Uploading..."
+    },
+    "referrals": {
+      "referralCodeLabel": "Agent referral code (optional)",
+      "referralCodeHelp": "Enter the code of the Rendasua agent helping you get started.",
+      "invalidCodeLength": "Agent referral code must be 6 characters."
     },
     "verification": {
       "noticeTitle": "Account verification required",

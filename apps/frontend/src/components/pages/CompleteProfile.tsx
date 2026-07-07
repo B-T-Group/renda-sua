@@ -37,12 +37,13 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
-import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useAgentReferralLookup } from '../../hooks/useAgentReferralLookup';
+import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
+import AgentReferralCodeField from '../common/AgentReferralCodeField';
 import PhoneInput from '../common/PhoneInput';
 import {
   type SignupGoalId,
@@ -219,6 +220,16 @@ const CompleteProfile: React.FC = () => {
     [profileData.signup_goal_ids]
   );
 
+  const {
+    result: referralLookup,
+    loading: referralLookupLoading,
+    error: referralLookupError,
+  } = useAgentReferralLookup(
+    selectedPersonas.includes('business') || selectedPersonas.includes('agent')
+      ? profileData.referral_agent_code || ''
+      : ''
+  );
+
   const showBusinessFocusPicker =
     selectedPersonas.includes('business') &&
     profileData.signup_goal_ids.includes('rent_and_earn') &&
@@ -302,12 +313,6 @@ const CompleteProfile: React.FC = () => {
     });
   }, [profileData.signup_goal_ids]);
 
-  const {
-    result: referralLookup,
-    loading: referralLookupLoading,
-    error: referralLookupError,
-  } = useAgentReferralLookup(profileData.referral_agent_code || '');
-
   const handleInputChange =
     (field: keyof ProfileData) =>
     (
@@ -387,6 +392,37 @@ const CompleteProfile: React.FC = () => {
 
     try {
       const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);
+      const trimmedReferral = (profileData.referral_agent_code || '').trim();
+      if (personas.includes('business') && trimmedReferral.length > 0) {
+        if (trimmedReferral.length !== 6) {
+          setError(
+            t(
+              'business.referrals.invalidCodeLength',
+              'Agent referral code must be 6 characters.'
+            )
+          );
+          setLoading(false);
+          return;
+        }
+        if (referralLookupLoading) {
+          setError(
+            t(
+              'agent.referrals.lookupLoading',
+              'Looking up agent... Please wait a moment and try again.'
+            )
+          );
+          setLoading(false);
+          return;
+        }
+        if (!referralLookup || referralLookupError || referralLookup.agentCode !== trimmedReferral.toUpperCase()) {
+          setError(
+            t('agent.referrals.lookupError', 'No agent found for this code')
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
       const createPayload = {
         first_name: profileData.first_name,
         last_name: profileData.last_name,
@@ -406,7 +442,7 @@ const CompleteProfile: React.FC = () => {
             : undefined,
         },
         address: profileData.address,
-        referral_agent_code: profileData.referral_agent_code,
+        ...(trimmedReferral ? { referral_agent_code: trimmedReferral } : {}),
       };
       const { data: createResponse } = await apiClient.post<{
         success: boolean;
@@ -992,57 +1028,44 @@ const CompleteProfile: React.FC = () => {
               </>
             )}
 
-            {selectedPersonas.includes('agent') && (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <TextField
-                  label={t(
-                    'agent.referrals.referralCodeLabel',
-                    'Referral code (optional)'
-                  )}
-                  value={profileData.referral_agent_code || ''}
-                  onChange={handleInputChange('referral_agent_code')}
-                  fullWidth
-                  helperText={t(
-                    'agent.referrals.referralCodeHelp',
-                    'Enter the code of the agent who referred you (if any).'
-                  )}
-                />
-                {profileData.referral_agent_code &&
-                  profileData.referral_agent_code.trim().length === 6 && (
-                    <Box sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                      {referralLookupLoading && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <CircularProgress size={14} />
-                          <span>
-                            {t(
-                              'agent.referrals.lookupLoading',
-                              'Looking up agent...'
-                            )}
-                          </span>
-                        </Box>
-                      )}
-                      {!referralLookupLoading && referralLookup && (
-                        <span>
-                          {t(
-                            'agent.referrals.lookupSuccess',
-                            'Referred by {{name}}',
-                            { name: referralLookup.fullName }
-                          )}
-                        </span>
-                      )}
-                      {!referralLookupLoading &&
-                        !referralLookup &&
-                        referralLookupError && (
-                          <span>
-                            {t(
-                              'agent.referrals.lookupError',
-                              'No agent found for this code'
-                            )}
-                          </span>
-                        )}
-                    </Box>
-                  )}
-              </Box>
+            {(selectedPersonas.includes('agent') ||
+              selectedPersonas.includes('business')) && (
+              <AgentReferralCodeField
+                value={profileData.referral_agent_code || ''}
+                onChange={(code) =>
+                  setProfileData((prev) => ({
+                    ...prev,
+                    referral_agent_code: code,
+                  }))
+                }
+                labelKey={
+                  selectedPersonas.includes('business') &&
+                  !selectedPersonas.includes('agent')
+                    ? 'business.referrals.referralCodeLabel'
+                    : 'agent.referrals.referralCodeLabel'
+                }
+                labelDefault={
+                  selectedPersonas.includes('business') &&
+                  !selectedPersonas.includes('agent')
+                    ? 'Agent referral code (optional)'
+                    : 'Referral code (optional)'
+                }
+                helpKey={
+                  selectedPersonas.includes('business') &&
+                  !selectedPersonas.includes('agent')
+                    ? 'business.referrals.referralCodeHelp'
+                    : 'agent.referrals.referralCodeHelp'
+                }
+                helpDefault={
+                  selectedPersonas.includes('business') &&
+                  !selectedPersonas.includes('agent')
+                    ? 'Enter the code of the Rendasua agent helping you get started.'
+                    : 'Enter the code of the agent who referred you (if any).'
+                }
+                lookupResult={referralLookup}
+                lookupLoading={referralLookupLoading}
+                lookupError={referralLookupError}
+              />
             )}
           </Box>
         );

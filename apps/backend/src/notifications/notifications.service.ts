@@ -14,7 +14,9 @@ import {
   normalizeLanguage,
   type EmailLocale,
 } from './email-template-data';
+import { buildActivationStepsHtml } from '../business-referrals/business-referral-email.util';
 import type {
+  AgentBusinessReferredEmailPayload,
   AgentOrderPaymentFailedEmailPayload,
   BusinessRentalBookingRequestEmailPayload,
   ClientOrderPaymentFailedEmailPayload,
@@ -539,6 +541,98 @@ export class NotificationsService {
         ownRewardPct: 5,
       },
     });
+  }
+
+  async sendAgentBusinessReferredEmail(
+    payload: AgentBusinessReferredEmailPayload
+  ): Promise<void> {
+    if (!payload.to?.trim()) {
+      this.logger.warn('Skipping agent business referred email — no recipient');
+      return;
+    }
+
+    const locale = normalizeLanguage(payload.preferredLanguage);
+    const name =
+      payload.recipientName?.trim() ||
+      (locale === 'fr' ? 'Agent' : 'there');
+    const variables = {
+      recipientName: name,
+      businessName: payload.businessName,
+      businessOwnerName: payload.businessOwnerName,
+      activationStepsHtml: buildActivationStepsHtml(
+        payload.paymentRail,
+        locale
+      ),
+      dashboardUrl: payload.dashboardUrl,
+    };
+    const templateKey = this.mapKeyForLanguage('agent_business_referred', locale);
+    if (this.resendTemplateIds[templateKey]?.trim()) {
+      await this.sendEmail({
+        to: payload.to,
+        templateKey,
+        variables,
+      });
+      return;
+    }
+
+    await this.sendAgentBusinessReferredHtmlFallback(
+      payload.to,
+      locale,
+      variables
+    );
+  }
+
+  private async sendAgentBusinessReferredHtmlFallback(
+    to: string,
+    locale: EmailLocale,
+    variables: Record<string, string>
+  ): Promise<void> {
+    this.initializeResend();
+    if (!this.resendClient) {
+      this.logger.warn('Resend not configured, skipping agent business referred email');
+      return;
+    }
+    const relativePath =
+      locale === 'fr'
+        ? 'fr/agent_business_referred.html'
+        : 'en/agent_business_referred.html';
+    const html = this.renderNotificationHtmlTemplate(relativePath, variables);
+    const subject =
+      locale === 'fr'
+        ? 'Nouveau commerce parrainé — Rendasua'
+        : 'New business referral — Rendasua';
+    const { error } = await this.resendClient.emails.send({
+      from: this.fromEmail,
+      to: [to],
+      subject,
+      html,
+    });
+    if (error) {
+      throw new Error(JSON.stringify(error));
+    }
+    this.logger.log(`Agent business referred email sent to ${to} (HTML fallback)`);
+  }
+
+  private renderNotificationHtmlTemplate(
+    relativePath: string,
+    variables: Record<string, string>
+  ): string {
+    const file = join(__dirname, 'templates', relativePath);
+    let html = readFileSync(file, 'utf8');
+    const trustedKeys = ['activationStepsHtml'];
+    for (const key of trustedKeys) {
+      const value = variables[key];
+      if (value !== undefined) {
+        html = html.replaceAll(`{{{${key}}}}`, value);
+      }
+    }
+    for (const [key, value] of Object.entries(variables)) {
+      if (trustedKeys.includes(key)) {
+        continue;
+      }
+      html = html.replaceAll(`{{{${key}}}}`, escapeHtmlForEmail(value));
+    }
+    return html;
   }
 
   async sendClientOrderPaymentFailedEmail(

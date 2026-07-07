@@ -125,3 +125,13 @@ export interface AgentOrderPaymentFailedEmailPayload {
   orderUrl: string;
   failureMessage: string;
 }
+
+export interface AgentBusinessReferredEmailPayload {
+  to: string;
+  preferredLanguage?: string | null;
+  recipientName: string;
+  businessName: string;
+  businessOwnerName: string;
+  paymentRail: 'stripe' | 'mobile_money';
+  dashboardUrl: string;
+}

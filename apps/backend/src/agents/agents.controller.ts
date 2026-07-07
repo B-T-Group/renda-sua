@@ -162,6 +162,7 @@ export class AgentsController {
         success: { type: 'boolean', example: true },
         agentCode: { type: 'string', example: 'AB12CD' },
         fullName: { type: 'string', example: 'Jane Doe' },
+        firstName: { type: 'string', example: 'Jane' },
       },
     },
   })
@@ -170,8 +171,17 @@ export class AgentsController {
     description: 'No agent found for the provided code',
   })
   async getAgentByReferralCode(@Param('agentCode') agentCode: string) {
-    const lookup = await this.agentReferralsService.findAgentByCode(agentCode);
-    if (!lookup) {
+    const normalized =
+      this.agentReferralsService.normalizeAgentCode(agentCode);
+    if (!normalized) {
+      throw new HttpException(
+        { success: false, error: 'Invalid referral code format' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const lookup = await this.agentReferralsService.findAgentByCode(normalized);
+    if (!lookup || lookup.status !== 'active') {
       throw new HttpException(
         { success: false, error: 'Agent not found' },
         HttpStatus.NOT_FOUND
@@ -181,8 +191,9 @@ export class AgentsController {
     const fullName = `${lookup.userFirstName} ${lookup.userLastName}`.trim();
     return {
       success: true,
-      agentCode: agentCode.trim().toUpperCase(),
+      agentCode: normalized,
       fullName,
+      firstName: lookup.userFirstName,
     };
   }
 

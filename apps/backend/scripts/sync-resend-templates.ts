@@ -113,6 +113,11 @@ function subjectForTemplate(name: string): string {
       ? 'Demande de location refusée — Rendasua'
       : 'Update on your rental request — Rendasua';
   }
+  if (name.includes('agent_business_referred')) {
+    return name.endsWith('_fr')
+      ? 'Nouveau commerce parrainé — Rendasua'
+      : 'New business referral — Rendasua';
+  }
   if (name === 'client_order_created' || name === 'client_order_created_fr') {
     return name.endsWith('_fr')
       ? 'Commande passée — Rendasua'

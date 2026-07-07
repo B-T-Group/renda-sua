@@ -7,10 +7,11 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
 import { SignupCreatedUser, SignupService } from './signup.service';
+import { SignupStartDto } from './dto/signup-start.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -49,8 +50,12 @@ export class SignupController {
   @Post('signup/start')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create pending signup user' })
+  @ApiBody({ type: SignupStartDto })
   @ApiResponse({ status: 201, description: 'User created' })
-  async signupStart(@Body() body: any): Promise<{ success: boolean; user: SignupCreatedUser }> {
+  @ApiResponse({ status: 400, description: 'Invalid referral code' })
+  async signupStart(
+    @Body() body: SignupStartDto
+  ): Promise<{ success: boolean; user: SignupCreatedUser }> {
     const result = await this.signupService.startSignup(body);
     return {
       success: true,

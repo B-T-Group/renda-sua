@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AddressesModule } from '../addresses/addresses.module';
+import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
@@ -12,7 +13,7 @@ import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
 
 @Module({
-  imports: [ConfigModule, HasuraModule, AddressesModule],
+  imports: [ConfigModule, HasuraModule, AddressesModule, BusinessReferralsModule],
   controllers: [SignupController, LoginController],
   providers: [
     AuthGuard,

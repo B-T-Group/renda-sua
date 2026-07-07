@@ -896,6 +896,8 @@ export class HasuraSystemService {
     vehicle_type_id?: string;
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
+    business_referral_agent_id?: string;
+    business_referral_code_used?: string;
   }): Promise<{
     user: any;
     client?: any;
@@ -934,6 +936,8 @@ export class HasuraSystemService {
     vehicle_type_id?: string;
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
+    business_referral_agent_id?: string;
+    business_referral_code_used?: string;
   }): { mutation: string; variables: Record<string, unknown> } {
     const { personas } = params;
     const varDecls: string[] = [
@@ -991,8 +995,20 @@ export class HasuraSystemService {
       varDecls.push('$main_interest: business_main_interest_enum!');
       vars.business_name = params.business_name ?? '';
       vars.main_interest = params.main_interest ?? 'sell_items';
+      const businessDataFields = [
+        'name: $business_name',
+        'main_interest: $main_interest',
+      ];
+      if (params.business_referral_agent_id && params.business_referral_code_used) {
+        varDecls.push('$referred_by_agent_id: uuid!');
+        varDecls.push('$referral_code_used: String!');
+        vars.referred_by_agent_id = params.business_referral_agent_id;
+        vars.referral_code_used = params.business_referral_code_used;
+        businessDataFields.push('referred_by_agent_id: $referred_by_agent_id');
+        businessDataFields.push('referral_code_used: $referral_code_used');
+      }
       objectFields.push(
-        'business: { data: { name: $business_name, main_interest: $main_interest } }'
+        `business: { data: { ${businessDataFields.join(', ')} } }`
       );
       returnSel.push(
         'business { id user_id name main_interest is_admin is_verified created_at updated_at }'
