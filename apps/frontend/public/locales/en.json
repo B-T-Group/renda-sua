@@ -559,6 +559,10 @@
       "merchantAgreement": "Merchant agreement",
       "signerName": "Signer",
       "viewAgreementPdf": "View signed PDF",
+      "boldSignContract": "BoldSign contract",
+      "contractStatus": "Status",
+      "contractVersion": "Version",
+      "resendContract": "Resend contract",
       "noIdDocument": "No ID document uploaded. Ask the business to upload ID from Documents.",
       "idDocuments": "Identity documents",
       "nameMatchConfirm": "Legal name on ID matches account owner name",
@@ -1192,6 +1196,26 @@
       "successBody": "Upload your government ID in Documents to continue verification.",
       "goToDocuments": "Go to Documents",
       "loadError": "Could not load the agreement. Please try again."
+    },
+    "contract": {
+      "pendingTitle": "Sign your merchant agreement",
+      "pendingNotice": "We sent a secure signing link to your email via BoldSign. Open the email and sign electronically to continue.",
+      "statusLabel": "Status",
+      "version": "Version",
+      "resend": "Resend signing email",
+      "resendFailed": "Failed to resend contract",
+      "signedSuccess": "Your merchant agreement has been signed successfully.",
+      "viewStatus": "View signing status",
+      "status": {
+        "not_sent": "Not sent",
+        "sent": "Awaiting signature",
+        "viewed": "Viewed — awaiting signature",
+        "signed": "Signed",
+        "declined": "Declined",
+        "expired": "Expired",
+        "cancelled": "Cancelled",
+        "failed": "Failed to send"
+      }
     },
     "lifecycle": {
       "active": "Active",

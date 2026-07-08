@@ -1932,6 +1932,38 @@ export class NotificationsService {
     });
   }
 
+  async sendAdminContractDeclinedEmail(params: {
+    businessId: string;
+    signerEmail: string;
+  }): Promise<void> {
+    const adminTo =
+      process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: 'Merchant declined partnership agreement',
+      html: `
+        <p>Business <strong>${params.businessId}</strong> declined the merchant agreement.</p>
+        <p>Signer: ${params.signerEmail}</p>
+      `,
+    });
+  }
+
+  async sendAdminContractProcessingFailedEmail(params: {
+    businessId: string;
+    reason: string;
+  }): Promise<void> {
+    const adminTo =
+      process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: 'Merchant contract processing failed',
+      html: `
+        <p>Contract processing failed for business <strong>${params.businessId}</strong>.</p>
+        <p>Reason: ${params.reason}</p>
+      `,
+    });
+  }
+
   private async sendSimpleLifecycleEmail(params: {
     to: string;
     subject: string;

@@ -19,6 +19,7 @@ import { BusinessAgentsModule } from '../business-agents/business-agents.module'
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { BusinessVerificationModule } from '../business-verification/business-verification.module';
+import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { ClientsModule } from '../clients/clients.module';
 import { CollectionsModule } from '../collections/collections.module';
@@ -135,6 +136,7 @@ import { AppService } from './app.service';
     BusinessImagesModule,
     ImageValidationModule,
     BusinessVerificationModule,
+    BusinessContractsModule,
     CategoriesModule,
     SubcategoriesModule,
     AiModule,

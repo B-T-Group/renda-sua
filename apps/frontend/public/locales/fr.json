@@ -318,6 +318,10 @@
       "merchantAgreement": "Contrat marchand",
       "signerName": "Signataire",
       "viewAgreementPdf": "Voir le PDF signé",
+      "boldSignContract": "Contrat BoldSign",
+      "contractStatus": "Statut",
+      "contractVersion": "Version",
+      "resendContract": "Renvoyer le contrat",
       "noIdDocument": "Aucune pièce d'identité téléversée. Demandez à l'entreprise de téléverser une pièce dans Documents.",
       "idDocuments": "Pièces d'identité",
       "nameMatchConfirm": "Le nom légal sur la pièce correspond au nom du propriétaire du compte",
@@ -940,6 +944,26 @@
       "successBody": "Téléversez votre pièce d'identité dans Documents pour poursuivre la vérification.",
       "goToDocuments": "Aller aux Documents",
       "loadError": "Impossible de charger le contrat. Veuillez réessayer."
+    },
+    "contract": {
+      "pendingTitle": "Signez votre contrat marchand",
+      "pendingNotice": "Nous avons envoyé un lien de signature sécurisé à votre courriel via BoldSign. Ouvrez le courriel et signez électroniquement pour continuer.",
+      "statusLabel": "Statut",
+      "version": "Version",
+      "resend": "Renvoyer le courriel de signature",
+      "resendFailed": "Échec du renvoi du contrat",
+      "signedSuccess": "Votre contrat marchand a été signé avec succès.",
+      "viewStatus": "Voir le statut de signature",
+      "status": {
+        "not_sent": "Non envoyé",
+        "sent": "En attente de signature",
+        "viewed": "Consulté — en attente de signature",
+        "signed": "Signé",
+        "declined": "Refusé",
+        "expired": "Expiré",
+        "cancelled": "Annulé",
+        "failed": "Échec d'envoi"
+      }
     },
     "lifecycle": {
       "active": "Actif",

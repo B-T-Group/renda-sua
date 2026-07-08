@@ -63,6 +63,23 @@ interface BusinessVerificationDetails {
     accepted_at: string;
     pdf_upload_id?: string | null;
   } | null;
+  latestContract?: {
+    complete: boolean;
+    status: string | null;
+    version: string | null;
+    acceptedAt: string | null;
+    contractId: string | null;
+    canDownload: boolean;
+    boldSignEnabled: boolean;
+  };
+  contracts?: Array<{
+    id: string;
+    status: string;
+    contract_version: string;
+    signer_name?: string | null;
+    signed_at?: string | null;
+    boldsign_document_id: string;
+  }>;
   identityDocuments: BusinessIdDocument[];
   paymentAccounts?: Array<{
     id: string;
@@ -107,6 +124,7 @@ const AdminManageBusinesses: React.FC = () => {
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectMessage, setRejectMessage] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [contractActionLoading, setContractActionLoading] = useState(false);
 
   const current = useMemo(
     () => businesses.find((b) => b.id === editingId),
@@ -202,6 +220,35 @@ const AdminManageBusinesses: React.FC = () => {
       }
     },
     [apiClient]
+  );
+
+  const handleResendContract = useCallback(async () => {
+    if (!apiClient || !verificationBusinessId) return;
+    setContractActionLoading(true);
+    try {
+      await apiClient.post(`/admin/businesses/${verificationBusinessId}/contract/resend`);
+      await fetchVerificationDetails(verificationBusinessId);
+    } finally {
+      setContractActionLoading(false);
+    }
+  }, [apiClient, verificationBusinessId, fetchVerificationDetails]);
+
+  const handleDownloadContract = useCallback(
+    async (contractId: string) => {
+      if (!apiClient || !verificationBusinessId) return;
+      setContractActionLoading(true);
+      try {
+        const res = await apiClient.get<{ success: boolean; data: { url: string } }>(
+          `/admin/businesses/${verificationBusinessId}/contract/${contractId}/download`
+        );
+        if (res.data.success && res.data.data.url) {
+          window.open(res.data.data.url, '_blank', 'noopener,noreferrer');
+        }
+      } finally {
+        setContractActionLoading(false);
+      }
+    },
+    [apiClient, verificationBusinessId]
   );
 
   useEffect(() => {
@@ -685,7 +732,50 @@ const AdminManageBusinesses: React.FC = () => {
             </Box>
           ) : (
             <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {!verificationDetails?.latestAcceptance ? (
+              {verificationDetails?.latestContract?.boldSignEnabled ? (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {t('admin.businesses.boldSignContract', 'BoldSign contract')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('admin.businesses.contractStatus', 'Status')}:{' '}
+                    {verificationDetails.latestContract.status ?? '—'}
+                  </Typography>
+                  {verificationDetails.latestContract.version ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('admin.businesses.contractVersion', 'Version')}:{' '}
+                      {verificationDetails.latestContract.version}
+                    </Typography>
+                  ) : null}
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={contractActionLoading}
+                      onClick={() => void handleResendContract()}
+                    >
+                      {t('admin.businesses.resendContract', 'Resend contract')}
+                    </Button>
+                    {verificationDetails.latestContract.contractId &&
+                    verificationDetails.latestContract.canDownload ? (
+                      <Button
+                        size="small"
+                        startIcon={<VisibilityIcon />}
+                        disabled={contractActionLoading}
+                        onClick={() =>
+                          void handleDownloadContract(
+                            verificationDetails.latestContract!.contractId!
+                          )
+                        }
+                      >
+                        {t('admin.businesses.viewAgreementPdf', 'View signed PDF')}
+                      </Button>
+                    ) : null}
+                  </Box>
+                </Box>
+              ) : null}
+              {!verificationDetails?.latestAcceptance &&
+              !verificationDetails?.latestContract?.complete ? (
                 <Alert severity="warning">
                   {t(
                     'admin.businesses.noAgreement',

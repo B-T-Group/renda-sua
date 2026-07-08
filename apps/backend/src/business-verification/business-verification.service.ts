@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import Mustache from 'mustache';
 import * as path from 'path';
 import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -33,7 +34,8 @@ export class BusinessVerificationService {
     private readonly notificationsService: NotificationsService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeConnectService: StripeConnectService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly businessContractsService: BusinessContractsService
   ) {}
 
   async getStatus() {
@@ -47,6 +49,9 @@ export class BusinessVerificationService {
       lifecycle_status: lifecycle?.lifecycle_status ?? 'created',
       is_storefront_visible: lifecycle?.is_storefront_visible ?? false,
       can_accept_orders: lifecycle?.can_accept_orders ?? false,
+      contract: await this.businessContractsService.getContractStatus(
+        user.business!.id
+      ),
     };
   }
 
@@ -73,6 +78,11 @@ export class BusinessVerificationService {
     ipAddress: string | undefined,
     userAgent: string | undefined
   ) {
+    if (this.businessContractsService.isBoldSignEnabled()) {
+      throw new BadRequestException(
+        'Agreement must be signed via email. Check your inbox for the BoldSign request.'
+      );
+    }
     const user = await this.requireBusinessUser();
     const business = user.business!;
     if (dto.agreementVersion !== MERCHANT_AGREEMENT_VERSION) {
@@ -219,6 +229,18 @@ export class BusinessVerificationService {
   }
 
   private async getAgreementStep(businessId: string, business: any) {
+    const contract = await this.businessContractsService.getContractStatus(
+      businessId
+    );
+    if (contract.boldSignEnabled) {
+      return {
+        complete: contract.complete,
+        version: contract.version,
+        acceptedAt: contract.acceptedAt,
+        status: contract.status,
+        contractId: contract.contractId,
+      };
+    }
     const version = business?.merchant_agreement_version ?? null;
     const acceptedAt = business?.merchant_agreement_accepted_at ?? null;
     const complete =

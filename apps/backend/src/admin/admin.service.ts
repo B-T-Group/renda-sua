@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { BusinessContractTemplatesService } from '../business-contracts/business-contract-templates.service';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { WithdrawalPinService } from './withdrawal-pin.service';
@@ -190,7 +192,9 @@ export class AdminService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly withdrawalPinService: WithdrawalPinService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly businessContractsService: BusinessContractsService,
+    private readonly contractTemplatesService: BusinessContractTemplatesService
   ) {}
 
   private buildAgentWhere(search: string, unverifiedOnly?: boolean): any {
@@ -610,7 +614,68 @@ export class AdminService {
       latestAcceptance: result.business_merchant_agreement_acceptances?.[0] ?? null,
       identityDocuments: result.user_uploads ?? [],
       paymentAccounts: result.businesses_by_pk?.payment_accounts ?? [],
+      contracts: await this.businessContractsService.listContractsForBusiness(
+        businessId
+      ),
+      latestContract: await this.businessContractsService.getContractStatus(
+        businessId
+      ),
     };
+  }
+
+  async getBusinessContractHistory(businessId: string) {
+    return this.businessContractsService.getContractHistory(businessId);
+  }
+
+  async resendBusinessContract(businessId: string) {
+    return this.businessContractsService.resendContract(businessId);
+  }
+
+  async regenerateBusinessContract(businessId: string) {
+    return this.businessContractsService.ensureContractForBusiness(businessId);
+  }
+
+  async getBusinessContractDownloadUrl(
+    businessId: string,
+    contractId: string,
+    kind: 'pdf' | 'audit'
+  ) {
+    return this.businessContractsService.getDownloadUrl(
+      contractId,
+      businessId,
+      kind
+    );
+  }
+
+  async invalidateBusinessContract(
+    contractId: string,
+    adminUserId: string,
+    reason: string
+  ) {
+    await this.businessContractsService.invalidateContract(
+      contractId,
+      adminUserId,
+      reason
+    );
+  }
+
+  async listContractTemplates() {
+    return this.contractTemplatesService.listTemplates();
+  }
+
+  async createContractTemplate(params: {
+    version: string;
+    boldsignTemplateIdEn: string;
+    boldsignTemplateIdFr?: string;
+    title?: string;
+    changelog?: string;
+    adminUserId?: string;
+  }) {
+    return this.contractTemplatesService.createTemplate(params);
+  }
+
+  async activateContractTemplate(templateId: string) {
+    await this.contractTemplatesService.activateTemplate(templateId);
   }
 
   async verifyBusinessPaymentAccount(

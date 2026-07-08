@@ -8,6 +8,25 @@ export type VerificationNextAction =
   | 'pending_review'
   | 'complete';
 
+export type MerchantContractStatus = {
+  complete: boolean;
+  status:
+    | 'not_sent'
+    | 'sent'
+    | 'viewed'
+    | 'signed'
+    | 'declined'
+    | 'expired'
+    | 'cancelled'
+    | 'failed'
+    | null;
+  version: string | null;
+  acceptedAt: string | null;
+  contractId: string | null;
+  canDownload: boolean;
+  boldSignEnabled: boolean;
+};
+
 export interface BusinessVerificationStatus {
   is_verified: boolean;
   lifecycle_status?:
@@ -22,8 +41,15 @@ export interface BusinessVerificationStatus {
   accountFullName: string;
   nextAction: VerificationNextAction;
   paymentRail?: 'stripe' | 'mobile_money';
+  contract?: MerchantContractStatus;
   steps: {
-    agreement: { complete: boolean; version?: string | null; acceptedAt?: string | null };
+    agreement: {
+      complete: boolean;
+      version?: string | null;
+      acceptedAt?: string | null;
+      status?: string | null;
+      contractId?: string | null;
+    };
     identity?: {
       complete: boolean;
       status: 'missing' | 'pending' | 'approved';

@@ -1,6 +1,7 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { BusinessReferralsService, ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
@@ -57,12 +58,15 @@ export interface SignupCreatedUser {
 
 @Injectable()
 export class SignupService {
+  private readonly logger = new Logger(SignupService.name);
+
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
     private readonly addressesService: AddressesService,
     private readonly businessReferralsService: BusinessReferralsService,
-    private readonly agentReferralsService: AgentReferralsService
+    private readonly agentReferralsService: AgentReferralsService,
+    private readonly businessContractsService: BusinessContractsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -459,12 +463,24 @@ export class SignupService {
           last_name
           user_type_id
           email_verified
+          business { id }
         }
       }
     `,
       { id: userId, email }
     );
-    return { user: update.update_users_by_pk };
+    const user = update.update_users_by_pk;
+    const businessId = user?.business?.id;
+    if (businessId) {
+      this.businessContractsService
+        .ensureContractForBusiness(businessId)
+        .catch((error: any) => {
+          this.logger.warn(
+            `Contract creation after signup failed for ${businessId}: ${error?.message}`
+          );
+        });
+    }
+    return { user };
   }
 
   private normalizeSignupPersonas(payload: SignupStartPayload): PersonaId[] {

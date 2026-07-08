@@ -1,0 +1,35 @@
+table:
+  name: business_contracts
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: contract_template
+    using:
+      foreign_key_constraint_on: contract_template_id
+array_relationships:
+  - name: contract_events
+    using:
+      foreign_key_constraint_on:
+        column: business_contract_id
+        table:
+          name: business_contract_events
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - contract_version
+        - status
+        - signed_at
+        - sent_at
+        - viewed_at
+        - created_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

@@ -1,0 +1,11 @@
+table:
+  name: contract_templates
+  schema: public
+array_relationships:
+  - name: business_contracts
+    using:
+      foreign_key_constraint_on:
+        column: contract_template_id
+        table:
+          name: business_contracts
+          schema: public

@@ -1,5 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -37,7 +37,9 @@ export class MerchantLifecycleService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => PaymentRoutingService))
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    @Inject(forwardRef(() => BusinessContractsService))
+    private readonly businessContractsService: BusinessContractsService
   ) {}
 
   async recompute(
@@ -199,12 +201,15 @@ export class MerchantLifecycleService {
   }
 
   private async isCatalogReady(businessId: string): Promise<boolean> {
+    const agreementSigned =
+      await this.businessContractsService.hasValidSignedContract(businessId);
+    if (!agreementSigned) return false;
+    return this.hasCatalogInventory(businessId);
+  }
+
+  private async hasCatalogInventory(businessId: string): Promise<boolean> {
     const query = `
-      query CatalogReady($businessId: uuid!, $version: String!) {
-        businesses_by_pk(id: $businessId) {
-          merchant_agreement_version
-          merchant_agreement_accepted_at
-        }
+      query CatalogInventory($businessId: uuid!) {
         business_locations_aggregate(
           where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
         ) { aggregate { count } }
@@ -217,15 +222,7 @@ export class MerchantLifecycleService {
         ) { aggregate { count } }
       }
     `;
-    const res = await this.hasuraSystemService.executeQuery(query, {
-      businessId,
-      version: MERCHANT_AGREEMENT_VERSION,
-    });
-    const biz = res.businesses_by_pk;
-    if (!biz?.merchant_agreement_accepted_at) return false;
-    if (biz.merchant_agreement_version !== MERCHANT_AGREEMENT_VERSION) {
-      return false;
-    }
+    const res = await this.hasuraSystemService.executeQuery(query, { businessId });
     const locCount = res.business_locations_aggregate?.aggregate?.count ?? 0;
     const invCount = res.business_inventory_aggregate?.aggregate?.count ?? 0;
     return locCount > 0 && invCount > 0;

@@ -120,7 +120,9 @@ export const BusinessVerificationBanner: React.FC = () => {
             color="warning"
             onClick={() => navigate('/business/merchant-agreement')}
           >
-            {t('business.verification.signAgreement', 'Sign merchant agreement')}
+            {status.contract?.boldSignEnabled
+              ? t('business.contract.viewStatus', 'View signing status')
+              : t('business.verification.signAgreement', 'Sign merchant agreement')}
           </Button>
         ) : null}
         {status.nextAction === 'upload_id' ? (

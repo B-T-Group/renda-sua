@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
@@ -16,6 +17,7 @@ import { BusinessVerificationService } from './business-verification.service';
     NotificationsModule,
     StripePaymentsModule,
     MerchantLifecycleModule,
+    forwardRef(() => BusinessContractsModule),
   ],
   controllers: [BusinessVerificationController],
   providers: [BusinessVerificationService],

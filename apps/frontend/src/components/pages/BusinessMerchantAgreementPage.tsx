@@ -18,6 +18,7 @@ import {
   merchantAgreementPreviewVars,
   renderMerchantAgreementHtml,
 } from '../../utils/renderMerchantAgreementHtml';
+import type { MerchantContractStatus } from '../../hooks/useBusinessVerification';
 
 export const BusinessMerchantAgreementPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -31,6 +32,8 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [contract, setContract] = useState<MerchantContractStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
 
   const defaultName = profile
     ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
@@ -39,6 +42,24 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   useEffect(() => {
     if (defaultName && !legalName) setLegalName(defaultName);
   }, [defaultName, legalName]);
+
+  const loadStatus = useCallback(async () => {
+    if (!apiClient) return;
+    setStatusLoading(true);
+    try {
+      const res = await apiClient.get<{
+        success: boolean;
+        data: { contract?: MerchantContractStatus };
+      }>('/business-verification/status');
+      if (res.data.success) {
+        setContract(res.data.data.contract ?? null);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load contract status');
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [apiClient]);
 
   const loadAgreement = useCallback(async () => {
     if (!apiClient || !profile) return;
@@ -63,8 +84,32 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   }, [apiClient, profile, i18n.language]);
 
   useEffect(() => {
-    void loadAgreement();
-  }, [loadAgreement]);
+    void loadStatus();
+  }, [loadStatus]);
+
+  useEffect(() => {
+    if (!contract?.boldSignEnabled) {
+      void loadAgreement();
+    }
+  }, [contract?.boldSignEnabled, loadAgreement]);
+
+  const resendContract = async () => {
+    if (!apiClient) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post('/business-contracts/resend');
+      await loadStatus();
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.message ||
+          e?.message ||
+          t('business.contract.resendFailed', 'Failed to resend contract')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (!apiClient || !agreed || !legalName.trim()) return;
@@ -87,6 +132,74 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       setBusy(false);
     }
   };
+
+  if (statusLoading) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Typography>{t('common.loading', 'Loading...')}</Typography>
+      </Container>
+    );
+  }
+
+  if (contract?.boldSignEnabled) {
+    if (contract.complete) {
+      return (
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {t(
+              'business.contract.signedSuccess',
+              'Your merchant agreement has been signed successfully.'
+            )}
+          </Alert>
+          <Button variant="contained" onClick={() => navigate('/dashboard')}>
+            {t('business.verification.backToDashboard', 'Back to dashboard')}
+          </Button>
+        </Container>
+      );
+    }
+
+    const statusKey = contract.status ?? 'sent';
+    const statusLabel = t(
+      `business.contract.status.${statusKey}`,
+      statusKey.replace('_', ' ')
+    );
+
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          {t('business.contract.pendingTitle', 'Sign your merchant agreement')}
+        </Typography>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {t(
+            'business.contract.pendingNotice',
+            'We sent a secure signing link to your email via BoldSign. Open the email and sign electronically to continue.'
+          )}
+        </Alert>
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {t('business.contract.statusLabel', 'Status')}
+          </Typography>
+          <Typography variant="h6">{statusLabel}</Typography>
+          {contract.version ? (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              {t('business.contract.version', 'Version')}: {contract.version}
+            </Typography>
+          ) : null}
+        </Paper>
+        {error ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        ) : null}
+        <Button variant="contained" disabled={busy} onClick={() => void resendContract()}>
+          {t('business.contract.resend', 'Resend signing email')}
+        </Button>
+        <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>
+          {t('business.verification.backToDashboard', 'Back to dashboard')}
+        </Button>
+      </Container>
+    );
+  }
 
   if (done) {
     return (

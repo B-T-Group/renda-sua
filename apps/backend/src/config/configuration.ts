@@ -300,6 +300,17 @@ export interface MerchantLifecycleConfig {
   checkoutGateEnabled: boolean;
 }
 
+export interface BoldSignConfig {
+  /** When false, uses legacy in-app agreement flow. */
+  enabled: boolean;
+  apiKey: string;
+  baseUrl: string;
+  webhookSigningSecret: string;
+  webhookSigningSecretPrevious?: string;
+  reminderIntervalDays: number;
+  expirationDays: number;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -340,6 +351,7 @@ export interface Configuration {
   orangeSms: OrangeSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
   merchantLifecycle: MerchantLifecycleConfig;
+  boldsign: BoldSignConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -687,6 +699,22 @@ export default (): Configuration => {
       checkoutGateEnabled:
         process.env.MERCHANT_LIFECYCLE_ENABLED !== 'false' &&
         process.env.MERCHANT_CHECKOUT_GATE_ENABLED !== 'false',
+    },
+    boldsign: {
+      enabled: process.env.BOLDSIGN_ENABLED === 'true',
+      apiKey: process.env.BOLDSIGN_API_KEY || '',
+      baseUrl: (process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com').replace(
+        /\/$/,
+        ''
+      ),
+      webhookSigningSecret: process.env.BOLDSIGN_WEBHOOK_SECRET || '',
+      webhookSigningSecretPrevious:
+        process.env.BOLDSIGN_WEBHOOK_SECRET_PREVIOUS || undefined,
+      reminderIntervalDays: parseInt(
+        process.env.BOLDSIGN_REMINDER_INTERVAL_DAYS || '3',
+        10
+      ),
+      expirationDays: parseInt(process.env.BOLDSIGN_EXPIRATION_DAYS || '30', 10),
     },
   };
 };

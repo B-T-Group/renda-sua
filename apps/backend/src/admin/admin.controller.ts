@@ -419,6 +419,104 @@ export class AdminController {
     return { success: true, data };
   }
 
+  @Get('businesses/:id/contract')
+  @ApiOperation({ summary: 'Get business contract history' })
+  async getBusinessContract(@Param('id') businessId: string) {
+    const data = await this.adminService.getBusinessContractHistory(businessId);
+    return { success: true, data };
+  }
+
+  @Post('businesses/:id/contract/resend')
+  @ApiOperation({ summary: 'Resend merchant contract' })
+  async resendBusinessContract(@Param('id') businessId: string) {
+    const data = await this.adminService.resendBusinessContract(businessId);
+    return { success: true, data };
+  }
+
+  @Post('businesses/:id/contract/regenerate')
+  @ApiOperation({ summary: 'Regenerate merchant contract document' })
+  async regenerateBusinessContract(@Param('id') businessId: string) {
+    await this.adminService.regenerateBusinessContract(businessId);
+    return { success: true };
+  }
+
+  @Get('businesses/:id/contract/:contractId/download')
+  @ApiOperation({ summary: 'Download signed contract PDF (admin)' })
+  async downloadBusinessContract(
+    @Param('id') businessId: string,
+    @Param('contractId') contractId: string
+  ) {
+    const url = await this.adminService.getBusinessContractDownloadUrl(
+      businessId,
+      contractId,
+      'pdf'
+    );
+    return { success: true, data: { url } };
+  }
+
+  @Get('businesses/:id/contract/:contractId/audit-certificate')
+  @ApiOperation({ summary: 'Download contract audit certificate (admin)' })
+  async downloadContractAudit(
+    @Param('id') businessId: string,
+    @Param('contractId') contractId: string
+  ) {
+    const url = await this.adminService.getBusinessContractDownloadUrl(
+      businessId,
+      contractId,
+      'audit'
+    );
+    return { success: true, data: { url } };
+  }
+
+  @Post('businesses/:id/contract/:contractId/invalidate')
+  @ApiOperation({ summary: 'Invalidate a signed contract' })
+  async invalidateContract(
+    @Param('contractId') contractId: string,
+    @Body() body: { reason?: string },
+    @Req() request: RequestWithUser
+  ) {
+    await this.adminService.invalidateBusinessContract(
+      contractId,
+      request.user.id,
+      body?.reason?.trim() || 'Invalidated by admin'
+    );
+    return { success: true };
+  }
+
+  @Get('contract-templates')
+  @ApiOperation({ summary: 'List contract template versions' })
+  async listContractTemplates() {
+    const data = await this.adminService.listContractTemplates();
+    return { success: true, data };
+  }
+
+  @Post('contract-templates')
+  @ApiOperation({ summary: 'Create a contract template version' })
+  async createContractTemplate(
+    @Body()
+    body: {
+      version: string;
+      boldsignTemplateIdEn: string;
+      boldsignTemplateIdFr?: string;
+      title?: string;
+      changelog?: string;
+    },
+    @Req() request: RequestWithUser
+  ) {
+    const data = await this.adminService.createContractTemplate({
+      ...body,
+      adminUserId: request.user.id,
+    });
+    return { success: true, data };
+  }
+
+  @Patch('contract-templates/:id/activate')
+  @ApiOperation({ summary: 'Activate a contract template version' })
+  async activateContractTemplate(@Param('id') templateId: string) {
+    await this.adminService.activateContractTemplate(templateId);
+    return { success: true };
+  }
+
   @Patch('businesses/:id')
   @ApiOperation({
     summary: 'Update a business (admin only)',
