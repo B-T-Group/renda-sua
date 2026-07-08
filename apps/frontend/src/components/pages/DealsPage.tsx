@@ -17,12 +17,13 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
-import DashboardItemCard from '../common/DashboardItemCard';
+import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import SEOHead from '../seo/SEOHead';
 
 const DealsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useAuth0();
+  const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { addToCart } = useCart();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,11 +62,7 @@ const DealsPage: React.FC = () => {
   const { trackAddToCart } = useMetaPixel();
 
   const handleLogin = () => {
-    loginWithRedirect({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    });
+    openLoginDialog();
   };
 
   const handleOrderClick = (item: InventoryItem) => {
@@ -246,6 +243,7 @@ const DealsPage: React.FC = () => {
           </>
         )}
       </Paper>
+      {loginMethodDialog}
     </Container>
   );
 };

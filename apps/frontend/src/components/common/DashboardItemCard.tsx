@@ -96,6 +96,17 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const { t } = useTranslation();
   const { trackSiteEvent } = useTrackSiteEvent();
 
+  const business = inventory.business_location.business;
+  const merchantCanAcceptOrders =
+    business.can_accept_orders ?? business.is_verified ?? false;
+  const isOpeningSoon =
+    (business.is_storefront_visible ?? true) && !merchantCanAcceptOrders;
+  const merchantNotAcceptingLabel = t(
+    'checkout.merchantNotAcceptingOrders',
+    'This merchant is currently completing account setup and is not yet accepting orders.'
+  );
+  const openingSoonLabel = t('business.lifecycle.openingSoonBadge', 'Opening Soon');
+
   const galleryImages = useMemo(
     () => orderedItemImages(inventory.item.item_images),
     [inventory.item.item_images]
@@ -685,6 +696,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               {inventory.business_location.business.is_verified && (
                 <Verified fontSize="small" color="success" />
               )}
+              {isOpeningSoon ? (
+                <Chip
+                  size="small"
+                  color="info"
+                  label={openingSoonLabel}
+                  sx={{ height: 20, fontSize: '0.65rem' }}
+                />
+              ) : null}
               {!inventory.business_location.name?.trim() && (
                 <Typography
                   variant="caption"
@@ -933,6 +952,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {clientsOnlyLabel}
             </Button>
+          ) : !merchantCanAcceptOrders ? (
+            <Button variant="outlined" disabled size="small" sx={{ width: '75%' }}>
+              {merchantNotAcceptingLabel}
+            </Button>
           ) : isPublicView ? (
             <Button
               variant="contained"
@@ -974,6 +997,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               >
                 {resolvedAddToCartButtonText}
               </Button>
+              {!merchantCanAcceptOrders ? (
+                <Button variant="outlined" disabled size="small" fullWidth>
+                  {merchantNotAcceptingLabel}
+                </Button>
+              ) : (
               <Button
                 variant="contained"
                 onClick={() => {
@@ -995,6 +1023,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               >
                 {resolvedBuyNowButtonText}
               </Button>
+              )}
             </Box>
           ) : (
             <Button

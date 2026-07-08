@@ -1,0 +1,25 @@
+table:
+  name: business_payment_accounts
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - provider
+        - capability_status
+        - external_reference
+        - rejection_reason
+        - verified_at
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

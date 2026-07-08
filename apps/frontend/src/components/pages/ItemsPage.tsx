@@ -19,6 +19,8 @@ import {
     Stack,
     Skeleton,
     Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,7 +34,7 @@ import {
     InventorySortMode,
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
-import { useNearbyAgents } from '../../hooks/useNearbyAgents';
+import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
@@ -204,7 +206,8 @@ const ItemsPage: React.FC = () => {
     [setSearchParams]
   );
 
-  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
+  const { isAuthenticated, user } = useAuth0();
+  const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const collectionSlug = useMemo(() => {
@@ -423,11 +426,7 @@ const ItemsPage: React.FC = () => {
   );
 
   const handleLogin = () => {
-    loginWithRedirect({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    });
+    openLoginDialog();
   };
 
   // Check if user is a client (can place orders)
@@ -521,13 +520,16 @@ const ItemsPage: React.FC = () => {
       businessLocationId
   );
 
+  const theme = useTheme();
+  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
+
   const {
     dealsDisplay,
     topRatedDisplay,
     popularDisplay,
     catalogDisplay,
   } = useMemo(() => {
-    if (hasActiveFilters) {
+    if (hasActiveFilters || !showCuratedSections) {
       return {
         dealsDisplay: dealsItems,
         topRatedDisplay: topRatedItems,
@@ -548,6 +550,7 @@ const ItemsPage: React.FC = () => {
     return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
   }, [
     hasActiveFilters,
+    showCuratedSections,
     currentPage,
     dealsItems,
     topRatedItems,
@@ -1105,7 +1108,7 @@ const ItemsPage: React.FC = () => {
               <ItemCardSkeleton key={index} />
             ))}
           </Box>
-        ) : catalogDisplay.length === 0 ? (
+        ) : inventoryItems.length === 0 ? (
           /* Enhanced Empty State */
           <Box
             sx={{
@@ -1164,32 +1167,34 @@ const ItemsPage: React.FC = () => {
           </Box>
         ) : (
           <>
-            <Box sx={ITEMS_CATALOG_GRID_SX}>
-              {catalogDisplay.map((inventoryItem, index) => (
-                <React.Fragment key={inventoryItem.id}>
-                  {/* Inject in-grid app promo tile after 12th item (guests only) */}
-                  {!isAuthenticated && index === 12 && (
-                    <InGridAppPromoTile />
-                  )}
-                  <DashboardItemCard
-                    item={inventoryItem}
-                    viewsCount={inventoryItem.viewsCount}
-                    formatCurrency={formatCurrency}
-                    onOrderClick={handleOrderClick}
-                    onAddToCart={handleAddToCart}
-                    estimatedDistance={inventoryItem.distance_text}
-                    estimatedDuration={inventoryItem.duration_text}
-                    isPublicView={!isAuthenticated}
-                    canOrder={!isAuthenticated || isClientUser}
-                    showCartButtons={isAuthenticated && isClientUser}
-                    loginButtonText={t('public.items.login', 'Sign In to Order')}
-                    orderButtonText={t('common.orderNow', 'Order Now')}
-                    addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                    buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                  />
-                </React.Fragment>
-              ))}
-            </Box>
+            {catalogDisplay.length > 0 ? (
+              <Box sx={ITEMS_CATALOG_GRID_SX}>
+                {catalogDisplay.map((inventoryItem, index) => (
+                  <React.Fragment key={inventoryItem.id}>
+                    {/* Inject in-grid app promo tile after 12th item (guests only) */}
+                    {!isAuthenticated && index === 12 && (
+                      <InGridAppPromoTile />
+                    )}
+                    <DashboardItemCard
+                      item={inventoryItem}
+                      viewsCount={inventoryItem.viewsCount}
+                      formatCurrency={formatCurrency}
+                      onOrderClick={handleOrderClick}
+                      onAddToCart={handleAddToCart}
+                      estimatedDistance={inventoryItem.distance_text}
+                      estimatedDuration={inventoryItem.duration_text}
+                      isPublicView={!isAuthenticated}
+                      canOrder={!isAuthenticated || isClientUser}
+                      showCartButtons={isAuthenticated && isClientUser}
+                      loginButtonText={t('public.items.login', 'Sign In to Order')}
+                      orderButtonText={t('common.orderNow', 'Order Now')}
+                      addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                      buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+                    />
+                  </React.Fragment>
+                ))}
+              </Box>
+            ) : null}
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -1206,6 +1211,7 @@ const ItemsPage: React.FC = () => {
         )}
         </Box>
       </Paper>
+      {loginMethodDialog}
     </Container>
   );
 };

@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { BusinessVerificationController } from './business-verification.controller';
 import { BusinessVerificationService } from './business-verification.service';
@@ -14,6 +15,7 @@ import { BusinessVerificationService } from './business-verification.service';
     PdfModule,
     NotificationsModule,
     StripePaymentsModule,
+    MerchantLifecycleModule,
   ],
   controllers: [BusinessVerificationController],
   providers: [BusinessVerificationService],

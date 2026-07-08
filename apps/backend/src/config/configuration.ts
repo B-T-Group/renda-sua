@@ -295,6 +295,11 @@ export interface PdfEndpointConfig {
   sandbox: boolean;
 }
 
+export interface MerchantLifecycleConfig {
+  /** When false, skips checkout-time merchant eligibility gate (emergency rollback). */
+  checkoutGateEnabled: boolean;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -334,6 +339,7 @@ export interface Configuration {
   mtnSms: MtnSmsConfig;
   orangeSms: OrangeSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
+  merchantLifecycle: MerchantLifecycleConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -676,6 +682,11 @@ export default (): Configuration => {
     pdfEndpoint: {
       apiToken: process.env.PDF_ENDPOINT_TOKEN || '',
       sandbox: process.env.NODE_ENV !== 'production',
+    },
+    merchantLifecycle: {
+      checkoutGateEnabled:
+        process.env.MERCHANT_LIFECYCLE_ENABLED !== 'false' &&
+        process.env.MERCHANT_CHECKOUT_GATE_ENABLED !== 'false',
     },
   };
 };

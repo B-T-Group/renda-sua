@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { WithdrawalPinService } from './withdrawal-pin.service';
 
 const GET_AGENTS_QUERY = `
@@ -188,7 +189,8 @@ const UPDATE_BUSINESS_MUTATION = `
 export class AdminService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly withdrawalPinService: WithdrawalPinService
+    private readonly withdrawalPinService: WithdrawalPinService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   private buildAgentWhere(search: string, unverifiedOnly?: boolean): any {
@@ -335,7 +337,7 @@ export class AdminService {
     const query = `
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_admin is_verified image_cleanup_enabled withdrawal_pin_enabled created_at updated_at
+          id user_id name is_admin is_verified lifecycle_status is_storefront_visible can_accept_orders image_cleanup_enabled withdrawal_pin_enabled created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
@@ -531,7 +533,6 @@ export class AdminService {
     businessUpdates: {
       name?: string;
       is_admin?: boolean;
-      is_verified?: boolean;
       image_cleanup_enabled?: boolean;
       withdrawal_pin_enabled?: boolean;
     }
@@ -553,6 +554,9 @@ export class AdminService {
           id
           name
           is_verified
+          lifecycle_status
+          is_storefront_visible
+          can_accept_orders
           merchant_agreement_version
           merchant_agreement_accepted_at
           user {
@@ -560,6 +564,14 @@ export class AdminService {
             first_name
             last_name
             email
+          }
+          payment_accounts {
+            id
+            provider
+            capability_status
+            external_reference
+            rejection_reason
+            verified_at
           }
         }
         business_merchant_agreement_acceptances(
@@ -597,7 +609,51 @@ export class AdminService {
       business: result.businesses_by_pk,
       latestAcceptance: result.business_merchant_agreement_acceptances?.[0] ?? null,
       identityDocuments: result.user_uploads ?? [],
+      paymentAccounts: result.businesses_by_pk?.payment_accounts ?? [],
     };
+  }
+
+  async verifyBusinessPaymentAccount(
+    businessId: string,
+    provider: 'mobile_money' | 'stripe' | 'paypal' | 'bank_transfer',
+    adminUserId: string
+  ) {
+    await this.merchantLifecycleService.upsertPaymentAccount({
+      businessId,
+      provider,
+      capabilityStatus: 'verified',
+    });
+    return this.merchantLifecycleService.getBusinessSnapshot(businessId);
+  }
+
+  async rejectBusinessPaymentAccount(
+    businessId: string,
+    provider: 'mobile_money' | 'stripe' | 'paypal' | 'bank_transfer',
+    reason: string
+  ) {
+    await this.merchantLifecycleService.upsertPaymentAccount({
+      businessId,
+      provider,
+      capabilityStatus: 'rejected',
+      rejectionReason: reason,
+    });
+    return this.merchantLifecycleService.getBusinessSnapshot(businessId);
+  }
+
+  async suspendBusiness(
+    businessId: string,
+    reason: string,
+    adminUserId: string
+  ) {
+    return this.merchantLifecycleService.suspend(
+      businessId,
+      reason,
+      adminUserId
+    );
+  }
+
+  async reinstateBusiness(businessId: string, adminUserId: string) {
+    return this.merchantLifecycleService.reinstate(businessId, adminUserId);
   }
 
   async setBusinessWithdrawalPin(businessId: string, pin: string) {

@@ -18,6 +18,7 @@ import {
 } from '../../hooks/useInventoryItems';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 import { useCollections } from '../../hooks/useCollections';
@@ -27,7 +28,8 @@ const ITEMS_PER_PAGE = 24;
 const CollectionLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { t } = useTranslation();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useAuth0();
+  const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const [currentPage, setCurrentPage] = useState(1);
@@ -59,7 +61,7 @@ const CollectionLandingPage: React.FC = () => {
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
     if (!isAuthenticated) {
-      loginWithRedirect();
+      openLoginDialog();
       return;
     }
     window.location.href = `/items/${item.id}/place_order`;
@@ -68,7 +70,7 @@ const CollectionLandingPage: React.FC = () => {
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
     if (!isAuthenticated) {
-      loginWithRedirect();
+      openLoginDialog();
       return;
     }
     addToCart({
@@ -154,6 +156,7 @@ const CollectionLandingPage: React.FC = () => {
           />
         </Box>
       ) : null}
+      {loginMethodDialog}
     </Container>
   );
 };

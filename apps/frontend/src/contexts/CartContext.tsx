@@ -36,6 +36,7 @@ export interface CartItem {
     discountedPrice?: number;
     hasActiveDeal?: boolean;
     dealEndAt?: string;
+    merchantCanAcceptOrders?: boolean;
   };
 }
 

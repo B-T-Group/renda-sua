@@ -248,6 +248,7 @@ export class OrdersController {
       if (errorMessage.includes('User not found')) {
         statusCode = HttpStatus.NOT_FOUND;
       } else if (
+        errorMessage.includes('MERCHANT_NOT_ACCEPTING_ORDERS') ||
         errorMessage.includes('No valid items found') ||
         errorMessage.includes('Item') ||
         errorMessage.includes('No account found') ||

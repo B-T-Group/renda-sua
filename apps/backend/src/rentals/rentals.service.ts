@@ -155,7 +155,13 @@ export interface PublicRentalListingRow {
     deleted_at?: string | null;
     rental_category: { id: string; name: string };
     rental_item_images: Array<{ id: string; image_url: string; alt_text?: string }>;
-    business: { id: string; name: string; is_verified?: boolean };
+    business: {
+      id: string;
+      name: string;
+      is_verified?: boolean;
+      is_storefront_visible?: boolean;
+      can_accept_orders?: boolean;
+    };
   };
   business_location: {
     id: string;
@@ -1692,8 +1698,11 @@ export class RentalsService {
     if (listing.moderation_status !== 'approved') {
       throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
     }
-    if (!listing.rental_item?.business?.is_verified) {
-      throw new HttpException('Business not verified', HttpStatus.BAD_REQUEST);
+    if (!listing.rental_item?.business?.can_accept_orders) {
+      throw new HttpException(
+        'This merchant is not yet accepting orders',
+        HttpStatus.BAD_REQUEST
+      );
     }
   }
 
@@ -2389,6 +2398,11 @@ export class RentalsService {
         { moderation_status: { _eq: 'approved' } },
         { deleted_at: { _is_null: true } },
         { rental_item: { deleted_at: { _is_null: true } } },
+        {
+          rental_item: {
+            business: { is_storefront_visible: { _eq: true } },
+          },
+        },
         {
           _not: {
             rental_bookings: {

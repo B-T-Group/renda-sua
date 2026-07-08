@@ -99,6 +99,8 @@ export interface InventoryItem {
       id: string;
       name: string;
       is_verified: boolean;
+      is_storefront_visible?: boolean;
+      can_accept_orders?: boolean;
     };
     address: {
       id: string;

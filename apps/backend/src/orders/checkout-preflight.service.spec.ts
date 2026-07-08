@@ -41,6 +41,7 @@ function makeInventoryRow(overrides: {
   available?: number;
   price?: number;
   itemName?: string;
+  canAcceptOrders?: boolean;
 } = {}) {
   return {
     id: overrides.id ?? 'inv-1',
@@ -52,6 +53,7 @@ function makeInventoryRow(overrides: {
       business: {
         id: overrides.businessId ?? 'biz-1',
         name: overrides.businessName ?? 'Test Business',
+        can_accept_orders: overrides.canAcceptOrders ?? true,
         user: { id: overrides.ownerUserId ?? 'owner-1' },
       },
       address: { country: overrides.sellerCountry ?? 'CM' },
@@ -124,6 +126,9 @@ describe('CheckoutPreflightService', () => {
             get: jest.fn((key: string) => {
               if (key === 'stripe') {
                 return { manualCaptureEnabled: false };
+              }
+              if (key === 'merchantLifecycle') {
+                return { checkoutGateEnabled: true };
               }
               return undefined;
             }),
@@ -364,5 +369,23 @@ describe('CheckoutPreflightService', () => {
       (e) => e.code === 'PAY_AT_DELIVERY_STRIPE_NOT_SUPPORTED'
     );
     expect(blocker).toBeDefined();
+  });
+
+  it('blocks checkout when merchant cannot accept orders', async () => {
+    mockInventory([makeInventoryRow({ canAcceptOrders: false })]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(
+      result.blocking_errors.some(
+        (e) => e.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
+      )
+    ).toBe(true);
   });
 });

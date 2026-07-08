@@ -10,6 +10,15 @@ export type VerificationNextAction =
 
 export interface BusinessVerificationStatus {
   is_verified: boolean;
+  lifecycle_status?:
+    | 'created'
+    | 'catalog_ready'
+    | 'payment_setup_pending'
+    | 'payment_verification_pending'
+    | 'active'
+    | 'suspended';
+  is_storefront_visible?: boolean;
+  can_accept_orders?: boolean;
   accountFullName: string;
   nextAction: VerificationNextAction;
   paymentRail?: 'stripe' | 'mobile_money';

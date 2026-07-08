@@ -79,6 +79,29 @@ function buildMetaPixelPurchaseFromCart(
   };
 }
 
+function parseCheckoutApiError(
+  err: any,
+  t: (key: string, defaultValue: string) => string
+): string {
+  const data = err?.response?.data;
+  if (data?.error === 'MERCHANT_NOT_ACCEPTING_ORDERS') {
+    return (
+      data.message ||
+      t(
+        'checkout.merchantNotAcceptingOrders',
+        'This merchant is currently completing account setup and is not yet accepting orders.'
+      )
+    );
+  }
+  if (typeof data?.message === 'string' && data.message.trim()) {
+    return data.message;
+  }
+  if (typeof data?.error === 'string' && data.error.trim()) {
+    return data.error;
+  }
+  return err?.message || 'Failed to create orders';
+}
+
 export const useCheckout = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +152,36 @@ export const useCheckout = () => {
       setError(null);
 
       try {
+        const preflightResponse = await apiClient.post('/orders/checkout/preflight', {
+          items: cartItems.map((item) => ({
+            business_inventory_id: item.inventoryItemId,
+            quantity: item.quantity,
+            ...(item.variantId && { item_variant_id: item.variantId }),
+          })),
+          delivery_address_id: deliveryAddressId,
+          phone_number: phoneNumber,
+          payment_timing: paymentTiming,
+        });
+
+        const preflight = preflightResponse.data;
+        const merchantBlocker = preflight?.blocking_errors?.find(
+          (b: { code?: string }) => b.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
+        );
+        if (merchantBlocker || preflight?.can_proceed === false) {
+          const message =
+            merchantBlocker?.message ||
+            preflight?.blocking_errors?.[0]?.message ||
+            t('checkout.error', 'Checkout could not proceed');
+          throw Object.assign(new Error(message), {
+            response: {
+              data: {
+                error: merchantBlocker?.code || 'CHECKOUT_BLOCKED',
+                message,
+              },
+            },
+          });
+        }
+
         // Group items by business
         const itemsByBusiness = groupItemsByBusiness(cartItems);
 
@@ -172,7 +225,7 @@ export const useCheckout = () => {
 
         return orders;
       } catch (err: any) {
-        const errorMessage = err.message || 'Failed to create orders';
+        const errorMessage = parseCheckoutApiError(err, t);
         setError(errorMessage);
 
         enqueueSnackbar(
@@ -242,7 +295,7 @@ export const useCheckout = () => {
 
         return response.data.order;
       } catch (err: any) {
-        const errorMessage = err.message || 'Failed to create order';
+        const errorMessage = parseCheckoutApiError(err, t);
         setError(errorMessage);
 
         enqueueSnackbar(

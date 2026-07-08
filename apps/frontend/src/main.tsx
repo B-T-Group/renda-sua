@@ -1,4 +1,5 @@
 import { Auth0Provider } from '@auth0/auth0-react';
+import { SnackbarProvider } from 'notistack';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { StrictMode } from 'react';
@@ -85,9 +86,11 @@ async function bootstrap() {
               <SessionAuthProvider>
                 <UserProfileProvider>
                   <CartProvider>
-                    <ApolloProvider>
-                      <App />
-                    </ApolloProvider>
+                    <SnackbarProvider maxSnack={3} autoHideDuration={4000}>
+                      <ApolloProvider>
+                        <App />
+                      </ApolloProvider>
+                    </SnackbarProvider>
                   </CartProvider>
                 </UserProfileProvider>
               </SessionAuthProvider>

@@ -20,6 +20,8 @@ import BusinessDashboardModuleCard, {
 import BusinessDashboardSection from '../business/BusinessDashboardSection';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
+import { MerchantStatusChip } from '../business/MerchantStatusChip';
+import { useBusinessVerification } from '../../hooks/useBusinessVerification';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
@@ -37,6 +39,7 @@ const BusinessDashboard: React.FC = () => {
     loading: aggregatesLoading,
     error: aggregatesError,
   } = useDashboardAggregates(profile?.business?.id);
+  const { status: verificationStatus } = useBusinessVerification(!!profile?.business?.id);
 
   const mainInterest =
     profile?.business?.main_interest ?? 'sell_items';
@@ -92,7 +95,11 @@ const BusinessDashboard: React.FC = () => {
           {t('business.dashboard.welcome', { name: profile.business.name })}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {profile.business.is_verified && <StatusBadge type="verified" />}
+          <MerchantStatusChip
+            lifecycleStatus={verificationStatus?.lifecycle_status}
+            canAcceptOrders={verificationStatus?.can_accept_orders}
+            isStorefrontVisible={verificationStatus?.is_storefront_visible}
+          />
           {profile.business.is_admin && <StatusBadge type="admin" />}
         </Box>
       </Box>

@@ -1,9 +1,9 @@
 import { Login } from '@mui/icons-material';
 import { Button, IconButton } from '@mui/material';
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
-import LoginMethodDialog from './LoginMethodDialog';
+import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 
 interface LoginHeaderButtonProps {
   /** Use light/outlined style on a dark header */
@@ -15,7 +15,7 @@ interface LoginHeaderButtonProps {
 const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact }) => {
   const { t } = useTranslation();
   const { isAuthenticated } = useSessionAuth();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
 
   if (isAuthenticated) {
     return null;
@@ -26,7 +26,7 @@ const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact
       {compact ? (
         <IconButton
           aria-label={t('auth.signIn', 'Sign In')}
-          onClick={() => setDialogOpen(true)}
+          onClick={openLoginDialog}
           size="small"
           sx={{
             color: inverted ? 'rgba(255,255,255,0.92)' : 'primary.main',
@@ -45,7 +45,7 @@ const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact
           color="primary"
           size="medium"
           startIcon={<Login fontSize="small" />}
-          onClick={() => setDialogOpen(true)}
+          onClick={openLoginDialog}
           sx={{
             borderRadius: 0,
             px: { xs: 1.25, sm: 1.5 },
@@ -68,7 +68,7 @@ const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact
           {t('auth.signIn', 'Sign In')}
         </Button>
       )}
-      <LoginMethodDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      {loginMethodDialog}
     </>
   );
 };

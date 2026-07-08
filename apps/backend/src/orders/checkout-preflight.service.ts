@@ -14,7 +14,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
-import { StripeConfig } from '../config/configuration';
+import { StripeConfig, Configuration } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   CheckoutBlockerDto,
@@ -39,6 +39,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         business {
           id
           name
+          can_accept_orders
           user { id }
         }
         address { country }
@@ -178,6 +179,27 @@ export class CheckoutPreflightService {
       businessMap.get(businessId)!.items.push(line);
       businessMap.get(businessId)!.inventoryRows.push(inv);
     }
+
+    for (const [, group] of businessMap) {
+      const checkoutGateEnabled =
+        this.configService.get<Configuration['merchantLifecycle']>(
+          'merchantLifecycle'
+        )?.checkoutGateEnabled !== false;
+      if (!checkoutGateEnabled) continue;
+
+      const canAccept =
+        group.inventoryRows[0]?.business_location?.business?.can_accept_orders ===
+        true;
+      if (!canAccept) {
+        const label = group.businessName || 'This merchant';
+        blockers.push({
+          code: 'MERCHANT_NOT_ACCEPTING_ORDERS',
+          message: `${label} is currently completing account setup and is not yet accepting orders.`,
+        });
+      }
+    }
+
+    if (blockers.length > 0) return this.earlyExit(blockers, dto);
 
     // -----------------------------------------------------------------------
     // 4. Country mismatch: seller vs guest shopping country

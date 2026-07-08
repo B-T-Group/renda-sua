@@ -17,6 +17,7 @@ import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -338,7 +339,7 @@ const GET_AVAILABLE_ITEMS = `
       where: { 
         is_active: { _eq: true },
         status: { _eq: active },
-        business: { is_verified: { _eq: true } }
+        business: { is_storefront_visible: { _eq: true } }
       }
       order_by: { name: asc }
     ) {
@@ -619,8 +620,16 @@ export class BusinessItemsService {
     private readonly aiService: AiService,
     private readonly itemsService: ItemsService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly permissionService: PermissionService
+    private readonly permissionService: PermissionService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
+
+  private triggerLifecycleRecompute(businessId: string): void {
+    void this.merchantLifecycleService.recompute(
+      businessId,
+      'catalog_change'
+    );
+  }
 
   /**
    * Pay-at-delivery and store-pickup are offline/cash flows incompatible with
@@ -1153,7 +1162,9 @@ export class BusinessItemsService {
       updates,
     });
 
-    return result.update_business_inventory_by_pk;
+    const updated = result.update_business_inventory_by_pk;
+    this.triggerLifecycleRecompute(businessId);
+    return updated;
   }
 
   async createInventoryItem(
@@ -1229,6 +1240,7 @@ export class BusinessItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+    this.triggerLifecycleRecompute(businessId);
     return created;
   }
 
@@ -1276,10 +1288,12 @@ export class BusinessItemsService {
     input: ItemsInsertInput | CreateItemDto
   ): Promise<Record<string, unknown>> {
     await this.assertOfflinePaymentAllowed(businessId, input);
-    return this.itemsService.createItem(
+    const created = await this.itemsService.createItem(
       businessId,
       input as ItemsInsertInput
     );
+    this.triggerLifecycleRecompute(businessId);
+    return created;
   }
 
   async updateItem(
@@ -1288,7 +1302,13 @@ export class BusinessItemsService {
     updates: UpdateItemDto
   ) {
     await this.assertOfflinePaymentAllowed(businessId, updates);
-    return this.itemsService.updateItem(businessId, itemId, updates);
+    const updated = await this.itemsService.updateItem(
+      businessId,
+      itemId,
+      updates
+    );
+    this.triggerLifecycleRecompute(businessId);
+    return updated;
   }
 
   /**
@@ -1319,6 +1339,7 @@ export class BusinessItemsService {
       itemId,
       status: 'deleted',
     });
+    this.triggerLifecycleRecompute(businessId);
   }
 
   async processCsvRows(
@@ -1588,6 +1609,9 @@ export class BusinessItemsService {
     this.logger.log(
       `CSV upload: completed businessId=${businessId} inserted=${insertedCount} updated=${updatedCount} errors=${errorCount}`
     );
+    if (insertedCount > 0 || updatedCount > 0) {
+      this.triggerLifecycleRecompute(businessId);
+    }
     return {
       success: rows.length - errorCount,
       inserted: insertedCount,

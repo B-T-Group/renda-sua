@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
 import AdminUserCard from '../common/AdminUserCard';
+import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { PinCodeFields } from '../common/PinCodeFields';
 
 interface BusinessIdDocument {
@@ -51,6 +52,9 @@ interface BusinessVerificationDetails {
     id: string;
     name: string;
     is_verified: boolean;
+    lifecycle_status?: string;
+    is_storefront_visible?: boolean;
+    can_accept_orders?: boolean;
     user: { first_name: string; last_name: string; email: string };
   };
   latestAcceptance: {
@@ -60,6 +64,12 @@ interface BusinessVerificationDetails {
     pdf_upload_id?: string | null;
   } | null;
   identityDocuments: BusinessIdDocument[];
+  paymentAccounts?: Array<{
+    id: string;
+    provider: string;
+    capability_status: string;
+    rejection_reason?: string | null;
+  }>;
 }
 
 const AdminManageBusinesses: React.FC = () => {
@@ -111,7 +121,6 @@ const AdminManageBusinesses: React.FC = () => {
       phone_number: target?.user.phone_number || '',
       name: target?.name || '',
       is_admin: target?.is_admin || false,
-      is_verified: target?.is_verified || false,
       image_cleanup_enabled: target?.image_cleanup_enabled ?? false,
       withdrawal_pin_enabled: target?.withdrawal_pin_enabled ?? false,
     });
@@ -224,15 +233,42 @@ const AdminManageBusinesses: React.FC = () => {
   );
 
   const handleSetVerified = useCallback(async () => {
-    if (!verificationBusinessId || !nameMatchConfirmed) return;
+    if (!verificationBusinessId || !nameMatchConfirmed || !apiClient) return;
     setVerifyLoading(true);
     try {
-      await updateBusiness(verificationBusinessId, { is_verified: true });
+      await apiClient.post(
+        `/admin/businesses/${verificationBusinessId}/payment-accounts/mobile_money/verify`
+      );
       setVerificationBusinessId(null);
+      await fetchBusinesses();
     } finally {
       setVerifyLoading(false);
     }
-  }, [verificationBusinessId, nameMatchConfirmed, updateBusiness]);
+  }, [verificationBusinessId, nameMatchConfirmed, apiClient, fetchBusinesses]);
+
+  const handleSuspendBusiness = useCallback(
+    async (businessId: string) => {
+      if (!apiClient) return;
+      const reason = window.prompt(
+        t('admin.businesses.suspendReasonPrompt', 'Reason for suspension')
+      );
+      if (!reason?.trim()) return;
+      await apiClient.post(`/admin/businesses/${businessId}/suspend`, {
+        reason: reason.trim(),
+      });
+      await fetchBusinesses();
+    },
+    [apiClient, fetchBusinesses, t]
+  );
+
+  const handleReinstateBusiness = useCallback(
+    async (businessId: string) => {
+      if (!apiClient) return;
+      await apiClient.post(`/admin/businesses/${businessId}/reinstate`);
+      await fetchBusinesses();
+    },
+    [apiClient, fetchBusinesses]
+  );
 
   const handleRejectUpload = useCallback(
     async (uploadId: string) => {
@@ -326,18 +362,23 @@ const AdminManageBusinesses: React.FC = () => {
                   title={b.name}
                   subtitle={`Owner: ${b.user.first_name} ${
                     b.user.last_name
-                  } • Admin: ${b.is_admin ? 'Yes' : 'No'} • Verified: ${
-                    b.is_verified ? 'Yes' : 'No'
+                  } • Admin: ${b.is_admin ? 'Yes' : 'No'} • Lifecycle: ${
+                    b.lifecycle_status ?? 'unknown'
                   }`}
                   accounts={(b.user as any).accounts}
                   addresses={(b as any).addresses}
                   admin={!!b.is_admin}
-                  verified={!!b.is_verified}
+                  verified={!!b.can_accept_orders}
                   userId={b.user.id}
                   userType="business"
                   footer={
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {!b.is_verified && (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <MerchantStatusChip
+                        lifecycleStatus={b.lifecycle_status}
+                        canAcceptOrders={b.can_accept_orders}
+                        isStorefrontVisible={b.is_storefront_visible}
+                      />
+                      {!b.can_accept_orders && (
                         <Button
                           size="small"
                           variant="outlined"
@@ -345,6 +386,24 @@ const AdminManageBusinesses: React.FC = () => {
                           onClick={() => setVerificationBusinessId(b.id)}
                         >
                           {t('admin.businesses.verification', 'Verification')}
+                        </Button>
+                      )}
+                      {b.lifecycle_status === 'suspended' ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => void handleReinstateBusiness(b.id)}
+                        >
+                          {t('admin.businesses.reinstate', 'Reinstate')}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => void handleSuspendBusiness(b.id)}
+                        >
+                          {t('admin.businesses.suspend', 'Suspend')}
                         </Button>
                       )}
                       <Button
@@ -442,26 +501,6 @@ const AdminManageBusinesses: React.FC = () => {
                   gap: 1.25,
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={600}>
-                      {t('admin.businesses.flags.verified', 'Verified')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'admin.businesses.flags.verifiedHelp',
-                        'Verified businesses can have catalog items visible publicly.'
-                      )}
-                    </Typography>
-                  </Box>
-                  <Switch
-                    checked={!!form.is_verified}
-                    onChange={(e) =>
-                      setForm((f: any) => ({ ...f, is_verified: e.target.checked }))
-                    }
-                  />
-                </Box>
-
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography fontWeight={600}>
@@ -765,7 +804,7 @@ const AdminManageBusinesses: React.FC = () => {
                 }
                 onClick={() => void handleSetVerified()}
               >
-                {t('admin.businesses.setAsVerified', 'Set as verified')}
+                {t('admin.businesses.verifyPaymentAccount', 'Verify mobile money payment')}
               </Button>
             )}
         </DialogActions>

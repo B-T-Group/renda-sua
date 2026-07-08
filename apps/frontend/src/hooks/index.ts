@@ -100,7 +100,6 @@ export { default as LoadingPage } from '../components/common/LoadingPage';
 export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
 
 // New export
-export { usePublicItems } from './usePublicItems';
 
 export { useAdminAgents } from './useAdminAgents';
 export { useAdminBusinesses } from './useAdminBusinesses';

@@ -13,6 +13,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeConnectService } from '../stripe-payments/stripe-connect.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { AcceptMerchantAgreementDto } from './dto/accept-merchant-agreement.dto';
 
 export type VerificationNextAction =
@@ -31,12 +32,22 @@ export class BusinessVerificationService {
     private readonly pdfService: PdfService,
     private readonly notificationsService: NotificationsService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly stripeConnectService: StripeConnectService
+    private readonly stripeConnectService: StripeConnectService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async getStatus() {
     const user = await this.requireBusinessUser();
-    return this.buildStatus(user.business!.id, user);
+    const base = await this.buildStatus(user.business!.id, user);
+    const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
+      user.business!.id
+    );
+    return {
+      ...base,
+      lifecycle_status: lifecycle?.lifecycle_status ?? 'created',
+      is_storefront_visible: lifecycle?.is_storefront_visible ?? false,
+      can_accept_orders: lifecycle?.can_accept_orders ?? false,
+    };
   }
 
   async getMerchantAgreementForUser() {
@@ -98,6 +109,10 @@ export class BusinessVerificationService {
       signerLegalName: legalName,
       agreementVersion: MERCHANT_AGREEMENT_VERSION,
     });
+    await this.merchantLifecycleService.recompute(
+      business.id,
+      'merchant_agreement_accepted'
+    );
     return { acceptance, pdfUploadId: pdfUpload.id };
   }
 

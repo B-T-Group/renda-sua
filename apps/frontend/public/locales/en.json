@@ -563,6 +563,10 @@
       "idDocuments": "Identity documents",
       "nameMatchConfirm": "Legal name on ID matches account owner name",
       "setAsVerified": "Set as verified",
+      "verifyPaymentAccount": "Verify mobile money payment",
+      "suspend": "Suspend",
+      "reinstate": "Reinstate",
+      "suspendReasonPrompt": "Reason for suspension",
       "section": {
         "business": "Business",
         "settings": "Settings",
@@ -970,7 +974,7 @@
     "loginMethodSubtitle": "Select how you want to sign in. One-time codes are quick and do not require a password.",
     "loginMethodHintPhone": "We send a short code by SMS—fastest if you use your phone.",
     "loginMethodHintEmailOtp": "Receive a code in your inbox—no password to remember.",
-    "loginMethodHintPassword": "Use your email address and account password with Auth0.",
+    "loginMethodHintPassword": "Sign in with the email and password for your account.",
     "loginMethodDivider": "Or",
     "loginMethodFooterNote": "You can change your mind anytime—we only use your choice to start the right sign-in flow.",
     "loginWithOtp": "Login with one-time password",
@@ -1188,6 +1192,21 @@
       "successBody": "Upload your government ID in Documents to continue verification.",
       "goToDocuments": "Go to Documents",
       "loadError": "Could not load the agreement. Please try again."
+    },
+    "lifecycle": {
+      "active": "Active",
+      "draft": "Draft",
+      "openingSoon": "Live · Opening soon",
+      "openingSoonBadge": "Opening Soon",
+      "verifyingPayments": "Verifying payments",
+      "suspended": "Suspended",
+      "suspendedTitle": "Store suspended",
+      "suspendedNotice": "Your store is hidden and cannot accept orders. Contact support if you believe this is a mistake.",
+      "storeLiveTitle": "Your store is live",
+      "storeLiveNotice": "Customers can discover your products. Complete payment setup to start accepting orders.",
+      "paymentReviewPending": "Payment details submitted. We will notify you when you can accept orders.",
+      "setupTitle": "Finish setting up your store",
+      "setupNotice": "Complete your profile, sign the merchant agreement, and publish at least one product to go live."
     },
     "dashboard": {
       "welcome": "Welcome to your business dashboard",
@@ -4419,7 +4438,8 @@
     "calculatedAtCheckout": "Calculated at checkout",
     "viewCart": "View Cart",
     "maxQuantityReached": "Maximum {{count}} per order for this item",
-    "maxOrderQuantity": "Max {{count}} per order for this item"
+    "maxOrderQuantity": "Max {{count}} per order for this item",
+    "merchantOpeningSoonNotice": "This seller is finishing account setup. You can save items, but checkout opens once they are ready."
   },
   "checkout": {
     "title": "Checkout",
@@ -4453,7 +4473,8 @@
     "total": "Total",
     "multipleOrdersNotice": "Your items will be split into {{count}} separate orders",
     "success": "Orders created successfully!",
-    "error": "Failed to create orders: {{error}}"
+    "error": "Failed to create orders: {{error}}",
+    "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders."
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",

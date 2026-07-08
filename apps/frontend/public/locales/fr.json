@@ -322,6 +322,10 @@
       "idDocuments": "Pièces d'identité",
       "nameMatchConfirm": "Le nom légal sur la pièce correspond au nom du propriétaire du compte",
       "setAsVerified": "Marquer comme vérifié",
+      "verifyPaymentAccount": "Vérifier le paiement mobile money",
+      "suspend": "Suspendre",
+      "reinstate": "Rétablir",
+      "suspendReasonPrompt": "Motif de la suspension",
       "section": {
         "business": "Entreprise",
         "settings": "Paramètres",
@@ -718,7 +722,7 @@
     "loginMethodSubtitle": "Choisissez comment vous connecter. Les codes à usage unique sont rapides et ne nécessitent pas de mot de passe.",
     "loginMethodHintPhone": "Nous envoyons un court code par SMS—le plus rapide si vous utilisez votre téléphone.",
     "loginMethodHintEmailOtp": "Recevez un code dans votre boîte mail—sans mot de passe à retenir.",
-    "loginMethodHintPassword": "Utilisez votre adresse e-mail et le mot de passe de votre compte (Auth0).",
+    "loginMethodHintPassword": "Connectez-vous avec l’e-mail et le mot de passe de votre compte.",
     "loginMethodDivider": "Ou",
     "loginMethodFooterNote": "Vous pouvez changer d’avis à tout moment—ce choix sert uniquement à lancer la bonne méthode de connexion.",
     "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
@@ -936,6 +940,21 @@
       "successBody": "Téléversez votre pièce d'identité dans Documents pour poursuivre la vérification.",
       "goToDocuments": "Aller aux Documents",
       "loadError": "Impossible de charger le contrat. Veuillez réessayer."
+    },
+    "lifecycle": {
+      "active": "Actif",
+      "draft": "Brouillon",
+      "openingSoon": "En ligne · Bientôt ouvert",
+      "openingSoonBadge": "Bientôt ouvert",
+      "verifyingPayments": "Vérification des paiements",
+      "suspended": "Suspendu",
+      "suspendedTitle": "Boutique suspendue",
+      "suspendedNotice": "Votre boutique est masquée et ne peut pas accepter de commandes. Contactez le support si vous pensez qu'il s'agit d'une erreur.",
+      "storeLiveTitle": "Votre boutique est en ligne",
+      "storeLiveNotice": "Les clients peuvent découvrir vos produits. Terminez la configuration des paiements pour accepter les commandes.",
+      "paymentReviewPending": "Les informations de paiement ont été soumises. Nous vous informerons lorsque vous pourrez accepter des commandes.",
+      "setupTitle": "Terminez la configuration de votre boutique",
+      "setupNotice": "Complétez votre profil, signez le contrat marchand et publiez au moins un produit pour être visible."
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",
@@ -4162,7 +4181,8 @@
     "calculatedAtCheckout": "Calculé à la caisse",
     "viewCart": "Voir le Panier",
     "maxQuantityReached": "Maximum {{count}} par commande pour cet article",
-    "maxOrderQuantity": "Max {{count}} par commande pour cet article"
+    "maxOrderQuantity": "Max {{count}} par commande pour cet article",
+    "merchantOpeningSoonNotice": "Ce vendeur finalise la configuration de son compte. Vous pouvez enregistrer des articles, mais le paiement sera disponible une fois prêt."
   },
   "checkout": {
     "title": "Caisse",
@@ -4196,7 +4216,8 @@
     "total": "Total",
     "multipleOrdersNotice": "Vos articles seront divisés en {{count}} commandes séparées",
     "success": "Commandes créées avec succès !",
-    "error": "Échec de la création des commandes : {{error}}"
+    "error": "Échec de la création des commandes : {{error}}",
+    "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes."
   },
   "agentOnboarding": {
     "title": "Comment Fonctionnent les Livraisons",

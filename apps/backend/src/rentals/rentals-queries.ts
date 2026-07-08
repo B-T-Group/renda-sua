@@ -23,7 +23,7 @@ export const GET_LISTING_FOR_REQUEST = `
         currency
         is_active
         deleted_at
-        business { id user_id is_verified }
+        business { id user_id is_verified is_storefront_visible can_accept_orders }
       }
       business_location_id
       business_location { name }
@@ -71,6 +71,8 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
           id
           name
           is_verified
+          is_storefront_visible
+          can_accept_orders
         }
       }
       business_location {
@@ -132,6 +134,8 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
           id
           name
           is_verified
+          is_storefront_visible
+          can_accept_orders
         }
       }
       business_location {

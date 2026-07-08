@@ -1866,6 +1866,94 @@ export class NotificationsService {
     }
   }
 
+  async sendMerchantActivatedEmail(params: {
+    to: string;
+    businessName: string;
+  }): Promise<void> {
+    await this.sendSimpleLifecycleEmail({
+      to: params.to,
+      subject: `Your store is now accepting orders — ${params.businessName}`,
+      html: `
+        <p>Great news! <strong>${params.businessName}</strong> is now active on Rendasua.</p>
+        <p>Customers can browse your products and place orders. Sign in to your dashboard to manage incoming orders.</p>
+        <p>— Rendasua</p>
+      `,
+    });
+  }
+
+  async sendMerchantPaymentReviewPendingEmail(params: {
+    to: string;
+    businessName: string;
+  }): Promise<void> {
+    await this.sendSimpleLifecycleEmail({
+      to: params.to,
+      subject: `Payment setup under review — ${params.businessName}`,
+      html: `
+        <p>Your payment setup for <strong>${params.businessName}</strong> is being reviewed.</p>
+        <p>Your store remains visible to customers, but orders will open once verification is complete.</p>
+        <p>— Rendasua</p>
+      `,
+    });
+  }
+
+  async sendMerchantPaymentVerificationFailedEmail(params: {
+    to: string;
+    businessName: string;
+    reason?: string | null;
+  }): Promise<void> {
+    const reasonLine = params.reason?.trim()
+      ? `<p>Reason: ${params.reason.trim()}</p>`
+      : '';
+    await this.sendSimpleLifecycleEmail({
+      to: params.to,
+      subject: `Payment verification needs attention — ${params.businessName}`,
+      html: `
+        <p>We could not verify payment setup for <strong>${params.businessName}</strong>.</p>
+        ${reasonLine}
+        <p>Your store stays visible, but orders remain paused until verification succeeds. Sign in to update your payment details.</p>
+        <p>— Rendasua</p>
+      `,
+    });
+  }
+
+  async sendAdminMerchantReviewPendingEmail(params: {
+    businessName: string;
+    businessId: string;
+  }): Promise<void> {
+    const adminTo =
+      process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: `Merchant awaiting payment review — ${params.businessName}`,
+      html: `
+        <p>Business <strong>${params.businessName}</strong> (${params.businessId}) needs payment verification review.</p>
+        <p>Check the admin businesses panel to approve or reject.</p>
+      `,
+    });
+  }
+
+  private async sendSimpleLifecycleEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<void> {
+    this.initializeResend();
+    if (!this.resendClient || !params.to) return;
+    try {
+      const { error } = await this.resendClient.emails.send({
+        from: this.fromEmail,
+        to: [params.to],
+        subject: params.subject,
+        html: params.html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (error: any) {
+      this.logger.error(
+        `Lifecycle email failed: ${error?.message ?? error}`
+      );
+    }
+  }
+
   /**
    * Get template key for order status
    */

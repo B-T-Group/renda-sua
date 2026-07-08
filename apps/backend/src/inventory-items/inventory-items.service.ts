@@ -153,6 +153,8 @@ export interface InventoryItem {
       id: string;
       name: string;
       is_verified: boolean;
+      is_storefront_visible?: boolean;
+      can_accept_orders?: boolean;
     };
     address: {
       id: string;
@@ -358,6 +360,8 @@ const CATALOG_INVENTORY_LIST_GQL = `
           id
           name
           is_verified
+          is_storefront_visible
+          can_accept_orders
         }
         address {
           id
@@ -522,6 +526,7 @@ export class InventoryItemsService {
     country_code?: string;
     state?: string;
     collection?: string;
+    requireCanAcceptOrders?: boolean;
   }): Promise<{ unsupported: true } | { where: Record<string, unknown> }> {
     const {
       is_active,
@@ -544,9 +549,15 @@ export class InventoryItemsService {
 
     const whereConditions: any[] = [];
     whereConditions.push({ is_active: { _eq: is_active } });
+    const businessFilter: Record<string, unknown> = {
+      is_storefront_visible: { _eq: true },
+    };
+    if (params.requireCanAcceptOrders) {
+      businessFilter.can_accept_orders = { _eq: true };
+    }
     whereConditions.push({
       business_location: {
-        business: { is_verified: { _eq: true } },
+        business: businessFilter,
       },
     });
     if (!include_unavailable) {
@@ -935,6 +946,7 @@ export class InventoryItemsService {
       country_code,
       state,
       collection,
+      requireCanAcceptOrders: sort === 'deals' || sort === 'top_rated',
     });
     if ('unsupported' in built) {
       return {
@@ -1605,6 +1617,8 @@ export class InventoryItemsService {
               id
               name
               is_verified
+              is_storefront_visible
+              can_accept_orders
             }
             address {
               id
@@ -1628,6 +1642,13 @@ export class InventoryItemsService {
       let item: InventoryItem | null = result.business_inventory_by_pk;
 
       if (!item) {
+        throw new HttpException(
+          'Inventory item not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      if (item.business_location?.business?.is_storefront_visible !== true) {
         throw new HttpException(
           'Inventory item not found',
           HttpStatus.NOT_FOUND
@@ -1855,7 +1876,7 @@ export class InventoryItemsService {
               location_type
               is_primary
               logo_url
-              business { id name is_verified }
+              business { id name is_verified is_storefront_visible can_accept_orders }
               address {
                 id
                 address_line_1
@@ -1877,7 +1898,7 @@ export class InventoryItemsService {
           { computed_available_quantity: { _gt: 0 } },
           {
             business_location: {
-              business: { is_verified: { _eq: true } },
+              business: { is_storefront_visible: { _eq: true } },
             },
           },
           {

@@ -6,6 +6,7 @@ import {
   ShoppingCart,
 } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -151,6 +152,14 @@ const CartPage: React.FC = () => {
                             </Typography>
                           ) : null}
                         </Box>
+                        {item.itemData.merchantCanAcceptOrders === false ? (
+                          <Alert severity="info" sx={{ mb: 1, py: 0 }}>
+                            {t(
+                              'cart.merchantOpeningSoonNotice',
+                              'This seller is finishing account setup. You can save items, but checkout opens once they are ready.'
+                            )}
+                          </Alert>
+                        ) : null}
                         {item.itemData.hasActiveDeal &&
                         typeof item.itemData.originalPrice === 'number' &&
                         typeof item.itemData.discountedPrice === 'number' &&

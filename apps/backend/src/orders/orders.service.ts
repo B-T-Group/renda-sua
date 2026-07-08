@@ -6755,6 +6755,7 @@ export class OrdersService {
               id
               name
               is_verified
+              can_accept_orders
               user {
                 id
                 email
@@ -6855,6 +6856,23 @@ export class OrdersService {
     ];
     if (businessIds.length > 1) {
       throw new Error('All items must be from the same business');
+    }
+
+    const merchantBusiness = businessInventories[0].business_location?.business;
+    const checkoutGateEnabled =
+      this.configService.get<Configuration['merchantLifecycle']>(
+        'merchantLifecycle'
+      )?.checkoutGateEnabled !== false;
+    if (checkoutGateEnabled && !merchantBusiness?.can_accept_orders) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'MERCHANT_NOT_ACCEPTING_ORDERS',
+          message:
+            'This merchant is currently completing account setup and is not yet accepting orders.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
     }
 
     const requestedQuantityByInventoryId =

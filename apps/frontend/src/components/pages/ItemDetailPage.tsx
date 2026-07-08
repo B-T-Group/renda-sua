@@ -565,6 +565,10 @@ export default function ItemDetailPage() {
         variantImageUrl: variantSel.variantImageUrl || undefined,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
+        merchantCanAcceptOrders:
+          item.business_location.business.can_accept_orders ??
+          item.business_location.business.is_verified ??
+          false,
         minOrderQuantity: item.item.min_order_quantity || undefined,
         originalPrice: hasMetaDeal ? lp.strikeOriginal : undefined,
         discountedPrice: hasMetaDeal ? lp.unit : undefined,
@@ -725,8 +729,12 @@ export default function ItemDetailPage() {
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
-  const canOrder =
+  const canAddToCart =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
+  const merchantCanAcceptOrders =
+    business?.can_accept_orders ?? business?.is_verified ?? false;
+  const canCheckout = canAddToCart && merchantCanAcceptOrders;
+  const canOrder = canCheckout;
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
@@ -1199,7 +1207,7 @@ export default function ItemDetailPage() {
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-                {!canOrder ? (
+                {!canAddToCart ? (
                   <Button variant="outlined" disabled size="medium">
                     {inventoryItem.computed_available_quantity === 0
                       ? t('items.outOfStock', 'Out of Stock')
@@ -1230,7 +1238,14 @@ export default function ItemDetailPage() {
                         {t('cart.addToCart', 'Add to Cart')}
                       </Button>
                     )}
-                    {showInlineOrderNow && (
+                    {!merchantCanAcceptOrders ? (
+                      <Button variant="outlined" disabled size="medium" fullWidth>
+                        {t(
+                          'checkout.merchantNotAcceptingOrders',
+                          'This merchant is currently completing account setup and is not yet accepting orders.'
+                        )}
+                      </Button>
+                    ) : showInlineOrderNow ? (
                       <Button
                         variant="contained"
                         startIcon={<MobileMoneyOrderIcon />}
@@ -1252,7 +1267,7 @@ export default function ItemDetailPage() {
                       >
                         {t('common.orderNow', 'Order Now')}
                       </Button>
-                    )}
+                    ) : null}
                   </>
                 )}
               </Stack>

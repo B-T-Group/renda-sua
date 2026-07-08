@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import type Stripe from 'stripe';
 import { StripeConfig } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import { DbPaymentCapabilityStatus } from '../merchant-lifecycle/merchant-lifecycle.types';
 import { PaymentRoutingService } from './payment-routing.service';
 import { StripeService } from './stripe.service';
 
@@ -44,7 +46,8 @@ export class StripeConnectService {
     private readonly stripeService: StripeService,
     private readonly hasuraService: HasuraSystemService,
     private readonly paymentRouting: PaymentRoutingService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   private get config(): StripeConfig {
@@ -180,27 +183,44 @@ export class StripeConnectService {
   }
 
   /**
-   * Stripe Connect acts as auto-validation for stripe-rail users: when the
-   * connected account is active (charges + payouts enabled) the linked
-   * business and/or agent are verified; otherwise they are de-verified.
+   * Stripe Connect updates business payment capability; agents keep legacy is_verified sync.
    */
   private async syncUserActivation(account: Stripe.Account): Promise<void> {
     const row = await this.getByStripeAccountId(account.id);
     if (!row) return;
-    const active = this.deriveStatus(account) === 'active';
-    await this.setUserEntitiesVerified(row.user_id, active);
+
+    const businessId = await this.merchantLifecycleService.getBusinessIdForUser(
+      row.user_id
+    );
+    if (businessId) {
+      await this.merchantLifecycleService.upsertPaymentAccount({
+        businessId,
+        provider: 'stripe',
+        capabilityStatus: this.mapStripeCapabilityStatus(account),
+        externalReference: account.id,
+        rejectionReason: account.requirements?.disabled_reason ?? null,
+      });
+    }
+
+    const agentVerified = this.deriveStatus(account) === 'active';
+    await this.setAgentVerified(row.user_id, agentVerified);
   }
 
-  private async setUserEntitiesVerified(
+  private mapStripeCapabilityStatus(
+    account: Stripe.Account
+  ): DbPaymentCapabilityStatus {
+    if (account.charges_enabled && account.payouts_enabled) return 'verified';
+    if (account.requirements?.disabled_reason) return 'rejected';
+    if (account.details_submitted) return 'verification_pending';
+    return 'in_progress';
+  }
+
+  private async setAgentVerified(
     userId: string,
     verified: boolean
   ): Promise<void> {
     const mutation = `
-      mutation SetUserVerification($userId: uuid!, $verified: Boolean!) {
-        update_businesses(
-          where: { user_id: { _eq: $userId } }
-          _set: { is_verified: $verified }
-        ) { affected_rows }
+      mutation SetAgentVerification($userId: uuid!, $verified: Boolean!) {
         update_agents(
           where: { user_id: { _eq: $userId } }
           _set: { is_verified: $verified }

@@ -79,6 +79,20 @@ array_relationships:
         table:
           name: business_merchant_agreement_acceptances
           schema: public
+  - name: payment_accounts
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_payment_accounts
+          schema: public
+  - name: lifecycle_status_history
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_lifecycle_status_history
+          schema: public
 insert_permissions:
   - role: agent
     permission:
@@ -91,7 +105,6 @@ insert_permissions:
         - created_at
         - updated_at
         - is_admin
-        - is_verified
   - role: business
     permission:
       check:
@@ -103,7 +116,6 @@ insert_permissions:
         - name
         - main_interest
         - is_admin
-        - is_verified
   - role: client
     permission:
       check: {}
@@ -115,7 +127,6 @@ insert_permissions:
         - created_at
         - updated_at
         - is_admin
-        - is_verified
   - role: user
     permission:
       check: {}
@@ -127,7 +138,6 @@ insert_permissions:
         - created_at
         - updated_at
         - is_admin
-        - is_verified
 select_permissions:
   - role: agent
     permission:
@@ -140,6 +150,9 @@ select_permissions:
         - updated_at
         - is_admin
         - is_verified
+        - lifecycle_status
+        - is_storefront_visible
+        - can_accept_orders
         - image_cleanup_enabled
       filter: {}
   - role: anonymous
@@ -151,6 +164,9 @@ select_permissions:
         - updated_at
         - is_admin
         - is_verified
+        - lifecycle_status
+        - is_storefront_visible
+        - can_accept_orders
         - image_cleanup_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
@@ -166,6 +182,9 @@ select_permissions:
         - updated_at
         - is_admin
         - is_verified
+        - lifecycle_status
+        - is_storefront_visible
+        - can_accept_orders
         - image_cleanup_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
@@ -186,6 +205,9 @@ select_permissions:
         - updated_at
         - is_admin
         - is_verified
+        - lifecycle_status
+        - is_storefront_visible
+        - can_accept_orders
         - image_cleanup_enabled
       filter: {}
 update_permissions:
@@ -195,7 +217,6 @@ update_permissions:
         - name
         - updated_at
         - is_admin
-        - is_verified
       filter:
         user:
           id:

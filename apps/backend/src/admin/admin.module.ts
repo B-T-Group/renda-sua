@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
 import { AdminSiteEventsController } from './admin-site-events.controller';
 import { AdminMessageService } from './admin-message.service';
@@ -15,7 +16,7 @@ import { RentalListingModerationService } from './rental-listing-moderation.serv
 import { WithdrawalPinService } from './withdrawal-pin.service';
 
 @Module({
-  imports: [AuthModule, HasuraModule, NotificationsModule, SiteEventsModule],
+  imports: [AuthModule, HasuraModule, NotificationsModule, SiteEventsModule, MerchantLifecycleModule],
   controllers: [AdminController, ConfigurationsController, AdminSiteEventsController],
   providers: [
     AdminMessageService,

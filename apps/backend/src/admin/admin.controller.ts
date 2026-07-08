@@ -361,6 +361,64 @@ export class AdminController {
     }
   }
 
+  @Post('businesses/:id/payment-accounts/:provider/verify')
+  @ApiOperation({ summary: 'Verify business payment account (e.g. mobile money)' })
+  async verifyBusinessPayment(
+    @Param('id') businessId: string,
+    @Param('provider') provider: 'mobile_money' | 'stripe' | 'paypal' | 'bank_transfer',
+    @Req() request: RequestWithUser
+  ) {
+    const data = await this.adminService.verifyBusinessPaymentAccount(
+      businessId,
+      provider,
+      request.user.id
+    );
+    return { success: true, data };
+  }
+
+  @Post('businesses/:id/payment-accounts/:provider/reject')
+  @ApiOperation({ summary: 'Reject business payment account verification' })
+  async rejectBusinessPayment(
+    @Param('id') businessId: string,
+    @Param('provider') provider: 'mobile_money' | 'stripe' | 'paypal' | 'bank_transfer',
+    @Body() body: { reason?: string }
+  ) {
+    const data = await this.adminService.rejectBusinessPaymentAccount(
+      businessId,
+      provider,
+      body?.reason?.trim() || 'Verification rejected'
+    );
+    return { success: true, data };
+  }
+
+  @Post('businesses/:id/suspend')
+  @ApiOperation({ summary: 'Suspend a business merchant account' })
+  async suspendBusiness(
+    @Param('id') businessId: string,
+    @Body() body: { reason?: string },
+    @Req() request: RequestWithUser
+  ) {
+    const data = await this.adminService.suspendBusiness(
+      businessId,
+      body?.reason?.trim() || 'Suspended by admin',
+      request.user.id
+    );
+    return { success: true, data };
+  }
+
+  @Post('businesses/:id/reinstate')
+  @ApiOperation({ summary: 'Reinstate a suspended business merchant account' })
+  async reinstateBusiness(
+    @Param('id') businessId: string,
+    @Req() request: RequestWithUser
+  ) {
+    const data = await this.adminService.reinstateBusiness(
+      businessId,
+      request.user.id
+    );
+    return { success: true, data };
+  }
+
   @Patch('businesses/:id')
   @ApiOperation({
     summary: 'Update a business (admin only)',
@@ -376,7 +434,6 @@ export class AdminController {
         is_admin: { type: 'boolean' },
         image_cleanup_enabled: { type: 'boolean' },
         withdrawal_pin_enabled: { type: 'boolean' },
-        is_verified: { type: 'boolean' },
         first_name: { type: 'string' },
         last_name: { type: 'string' },
         phone_number: { type: 'string' },
@@ -391,7 +448,6 @@ export class AdminController {
     body: {
       name?: string;
       is_admin?: boolean;
-      is_verified?: boolean;
       image_cleanup_enabled?: boolean;
       withdrawal_pin_enabled?: boolean;
       first_name?: string;
@@ -413,14 +469,11 @@ export class AdminController {
       const businessUpdates: {
         name?: string;
         is_admin?: boolean;
-        is_verified?: boolean;
         image_cleanup_enabled?: boolean;
         withdrawal_pin_enabled?: boolean;
       } = {};
       if (typeof body.name === 'string') businessUpdates.name = body.name;
       if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
-      if (typeof body.is_verified === 'boolean')
-        businessUpdates.is_verified = body.is_verified;
       if (typeof body.image_cleanup_enabled === 'boolean')
         businessUpdates.image_cleanup_enabled = body.image_cleanup_enabled;
       if (typeof body.withdrawal_pin_enabled === 'boolean')

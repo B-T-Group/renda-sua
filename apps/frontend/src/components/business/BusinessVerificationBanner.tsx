@@ -20,8 +20,58 @@ export const BusinessVerificationBanner: React.FC = () => {
   const navigate = useNavigate();
   const { status, loading } = useBusinessVerification();
 
-  if (loading || !status || status.is_verified || status.nextAction === 'complete') {
+  if (loading || !status || status.can_accept_orders) {
     return null;
+  }
+
+  if (status.lifecycle_status === 'suspended') {
+    return (
+      <Alert severity="error" sx={{ mb: 3 }}>
+        <AlertTitle>
+          {t('business.lifecycle.suspendedTitle', 'Store suspended')}
+        </AlertTitle>
+        <Typography variant="body2">
+          {t(
+            'business.lifecycle.suspendedNotice',
+            'Your store is hidden and cannot accept orders. Contact support if you believe this is a mistake.'
+          )}
+        </Typography>
+      </Alert>
+    );
+  }
+
+  if (status.is_storefront_visible) {
+    return (
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <AlertTitle>
+          {t('business.lifecycle.storeLiveTitle', 'Your store is live')}
+        </AlertTitle>
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          {t(
+            'business.lifecycle.storeLiveNotice',
+            'Customers can discover your products. Complete payment setup to start accepting orders.'
+          )}
+        </Typography>
+        {status.nextAction === 'setup_stripe_connect' ? (
+          <Box sx={{ mt: 1 }}>
+            <StripeConnectOnboardingCard />
+          </Box>
+        ) : null}
+        {status.nextAction === 'upload_id' ? (
+          <Button variant="contained" onClick={() => navigate('/documents')}>
+            {t('business.verification.uploadId', 'Upload identification')}
+          </Button>
+        ) : null}
+        {status.nextAction === 'pending_review' ? (
+          <Typography variant="body2">
+            {t(
+              'business.lifecycle.paymentReviewPending',
+              'Payment details submitted. We will notify you when you can accept orders.'
+            )}
+          </Typography>
+        ) : null}
+      </Alert>
+    );
   }
 
   const isStripe = status.paymentRail === 'stripe';
@@ -36,12 +86,12 @@ export const BusinessVerificationBanner: React.FC = () => {
   return (
     <Alert severity="warning" sx={{ mb: 3 }}>
       <AlertTitle>
-        {t('business.verification.noticeTitle', 'Account verification required')}
+        {t('business.lifecycle.setupTitle', 'Finish setting up your store')}
       </AlertTitle>
       <Typography variant="body2" sx={{ mb: 2 }}>
         {t(
-          'business.verification.notice',
-          'Your business account must be verified before your items are visible to customers. Complete the steps below.'
+          'business.lifecycle.setupNotice',
+          'Complete your profile, sign the merchant agreement, and publish at least one product to go live.'
         )}
       </Typography>
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
@@ -77,14 +127,6 @@ export const BusinessVerificationBanner: React.FC = () => {
           <Button variant="contained" color="warning" onClick={() => navigate('/documents')}>
             {t('business.verification.uploadId', 'Upload identification')}
           </Button>
-        ) : null}
-        {status.nextAction === 'pending_review' ? (
-          <Typography variant="body2">
-            {t(
-              'business.verification.pendingReview',
-              'Documents submitted. Rendasua head office will review your account shortly.'
-            )}
-          </Typography>
         ) : null}
       </Stack>
       {status.nextAction === 'setup_stripe_connect' ? (
