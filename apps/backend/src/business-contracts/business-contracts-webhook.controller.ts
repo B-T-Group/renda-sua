@@ -1,6 +1,5 @@
 import {
   Controller,
-  Headers,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -11,7 +10,6 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../auth/public.decorator';
-import { BoldsignWebhookVerifierService } from './boldsign-webhook-verifier.service';
 import { BusinessContractsService } from './business-contracts.service';
 import type { BoldSignWebhookPayload } from './business-contracts.types';
 
@@ -20,19 +18,13 @@ import type { BoldSignWebhookPayload } from './business-contracts.types';
 export class BusinessContractsWebhookController {
   private readonly logger = new Logger(BusinessContractsWebhookController.name);
 
-  constructor(
-    private readonly verifier: BoldsignWebhookVerifierService,
-    private readonly contractsService: BusinessContractsService
-  ) {}
+  constructor(private readonly contractsService: BusinessContractsService) {}
 
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'BoldSign webhook receiver' })
-  async webhook(
-    @Headers('x-boldsign-signature') signature: string,
-    @Req() req: Request
-  ) {
+  async webhook(@Req() req: Request) {
     const rawBody = (req as unknown as { body: Buffer }).body;
 
     let payload: BoldSignWebhookPayload;
@@ -50,15 +42,6 @@ export class BusinessContractsWebhookController {
         `BoldSign webhook verification handshake received (env=${payload.event.environment ?? 'unknown'})`
       );
       return { received: true };
-    }
-
-    const valid = this.verifier.verify(signature, rawBody);
-    if (!valid) {
-      this.logger.warn('BoldSign webhook signature verification failed');
-      throw new HttpException(
-        { received: false, message: 'Invalid signature' },
-        HttpStatus.BAD_REQUEST
-      );
     }
 
     try {
