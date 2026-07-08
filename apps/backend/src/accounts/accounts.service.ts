@@ -440,6 +440,23 @@ export class AccountsService {
     };
   }
 
+  async hasTransactionForReference(referenceId: string): Promise<boolean> {
+    const query = `
+      query AccountTransactionByReference($referenceId: uuid!) {
+        account_transactions(
+          where: { reference_id: { _eq: $referenceId } }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      referenceId,
+    });
+    return Boolean(result.account_transactions?.[0]?.id);
+  }
+
   async accountBelongsToUser(
     accountId: string,
     userId: string

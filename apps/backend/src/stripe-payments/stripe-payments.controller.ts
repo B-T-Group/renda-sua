@@ -294,7 +294,7 @@ export class StripePaymentsController {
       'payments',
       event as unknown
     );
-    if (!isNew) {
+    if (!(await this.shouldProcessRecordedEvent(event.id, isNew))) {
       return { received: true, duplicate: true };
     }
     await this.dispatchPaymentEvent(event, req);
@@ -403,7 +403,7 @@ export class StripePaymentsController {
       'connect',
       event as unknown
     );
-    if (!isNew) {
+    if (!(await this.shouldProcessRecordedEvent(event.id, isNew))) {
       return { received: true, duplicate: true };
     }
     const accountId = this.extractConnectAccountId(event);
@@ -414,6 +414,17 @@ export class StripePaymentsController {
     }
     await this.databaseService.markEventProcessed(event.id);
     return { received: true };
+  }
+
+  private async shouldProcessRecordedEvent(
+    eventId: string,
+    isNew: boolean
+  ): Promise<boolean> {
+    if (isNew) return true;
+    const existing = await this.databaseService.getEventByEventId(eventId);
+    if (!existing || existing.processed_at) return false;
+    this.logger.warn(`Retrying unprocessed Stripe webhook event ${eventId}`);
+    return true;
   }
 
   /**
