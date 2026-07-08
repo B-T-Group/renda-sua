@@ -25,7 +25,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../../contexts/CartContext';
@@ -33,12 +33,18 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckout } from '../../hooks/useCheckout';
+import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
+import {
+  CheckoutTaxSummaryLines,
+  checkoutTotalLabelDefault,
+  checkoutTotalLabelKey,
+} from '../common/CheckoutTaxSummaryLines';
 import PhoneInput from '../common/PhoneInput';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
@@ -91,6 +97,7 @@ interface OrderSummaryProps {
   discountPercentage: number;
   discountLoading: boolean;
   discountError: string | null;
+  showTaxAtCheckoutNotice?: boolean;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -107,6 +114,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   discountPercentage,
   discountLoading,
   discountError,
+  showTaxAtCheckoutNotice = false,
 }) => {
   const { t } = useTranslation();
   const { getCartByBusiness } = useCart();
@@ -283,14 +291,29 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
             <Divider sx={{ my: 1.5 }} />
 
+            <CheckoutTaxSummaryLines
+              show={showTaxAtCheckoutNotice}
+              namespace="checkout"
+            />
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography
                 variant={cartByBusiness.size > 1 ? 'body1' : 'h6'}
                 fontWeight="bold"
               >
                 {cartByBusiness.size > 1
-                  ? t('checkout.orderTotal', 'Order Total')
-                  : t('checkout.total', 'Total')}
+                  ? t(
+                      showTaxAtCheckoutNotice
+                        ? 'checkout.orderTotalBeforeTax'
+                        : 'checkout.orderTotal',
+                      showTaxAtCheckoutNotice
+                        ? 'Order total (before tax)'
+                        : 'Order Total'
+                    )
+                  : t(
+                      checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'checkout'),
+                      checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'checkout')
+                    )}
               </Typography>
               <Typography
                 variant={cartByBusiness.size > 1 ? 'body1' : 'h6'}
@@ -307,9 +330,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       {cartByBusiness.size > 1 && (
         <>
           <Divider sx={{ my: 2 }} />
+          <CheckoutTaxSummaryLines
+            show={showTaxAtCheckoutNotice}
+            namespace="checkout"
+          />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" fontWeight="bold">
-              {t('checkout.grandTotal', 'Grand Total')}
+              {t(
+                checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'checkout'),
+                checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'checkout')
+              )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
               {formatCurrency(grandTotalAfterDiscount, currency)}
@@ -402,9 +432,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Typography>
             </Box>
           )}
+          <CheckoutTaxSummaryLines
+            show={showTaxAtCheckoutNotice}
+            namespace="checkout"
+          />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" fontWeight="bold">
-              {t('checkout.total', 'Total')}
+              {t(
+                checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'checkout'),
+                checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'checkout')
+              )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
               {formatCurrency(grandTotalAfterDiscount, currency)}
@@ -524,6 +561,30 @@ const CheckoutPage: React.FC = () => {
   const selectedAddress = addresses.find(
     (addr) => addr.address.id === selectedAddressId
   )?.address;
+
+  const checkoutPreflightRequest = useMemo(() => {
+    if (cartItems.length === 0) return null;
+    return {
+      items: cartItems.map((item) => ({
+        business_inventory_id: item.inventoryItemId,
+        quantity: item.quantity,
+        ...(item.variantId ? { item_variant_id: item.variantId } : {}),
+      })),
+      ...(selectedAddressId
+        ? { delivery_address_id: selectedAddressId, fulfillment_method: 'delivery' as const }
+        : {}),
+      payment_timing: 'pay_now' as const,
+    };
+  }, [cartItems, selectedAddressId]);
+
+  const checkoutPreflight = useCheckoutPreflight(
+    checkoutPreflightRequest,
+    cartItems.length > 0
+  );
+
+  const showTaxAtCheckoutNotice =
+    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
+
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
   const userCountry = selectedAddress?.country?.trim() ?? '';
@@ -1097,6 +1158,7 @@ const CheckoutPage: React.FC = () => {
             discountPercentage={discountPercentage}
             discountLoading={discountLoading}
             discountError={discountError}
+            showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
           />
 
           {/* Place Order Button */}

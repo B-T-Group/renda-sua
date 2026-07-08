@@ -88,6 +88,16 @@ import DeliveryTimeWindowSelector, {
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
+import {
+  CheckoutTaxSummaryLines,
+  checkoutTotalLabelDefault,
+  checkoutTotalLabelKey,
+} from '../common/CheckoutTaxSummaryLines';
+import {
+  CheckoutTaxSummaryLines,
+  checkoutTotalLabelDefault,
+  checkoutTotalLabelKey,
+} from '../common/CheckoutTaxSummaryLines';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
@@ -621,22 +631,17 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
           <Divider sx={{ my: 1.5 }} />
 
-          {showTaxAtCheckoutNotice ? (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mb: 1 }}
-            >
-              {t(
-                'orders.taxAtCheckout',
-                'Sales tax is calculated at checkout'
-              )}
-            </Typography>
-          ) : null}
+          <CheckoutTaxSummaryLines
+            show={showTaxAtCheckoutNotice}
+            namespace="orders"
+          />
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" fontWeight="bold">
-              {t('orders.total', 'Total')}
+              {t(
+                checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'orders'),
+                checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'orders')
+              )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
               {formatCurrency(totalAfterDiscount, selectedItem.item.currency)}
@@ -2505,18 +2510,10 @@ const PlaceOrderPage: React.FC = () => {
 
                     <Divider sx={{ my: 1.5 }} />
 
-                    {showTaxAtCheckoutNotice ? (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', mb: 1 }}
-                      >
-                        {t(
-                          'orders.taxAtCheckout',
-                          'Sales tax is calculated at checkout'
-                        )}
-                      </Typography>
-                    ) : null}
+                    <CheckoutTaxSummaryLines
+                      show={showTaxAtCheckoutNotice}
+                      namespace="orders"
+                    />
 
                     <Box
                       sx={{
@@ -2526,7 +2523,10 @@ const PlaceOrderPage: React.FC = () => {
                       }}
                     >
                       <Typography variant="h6" fontWeight="bold">
-                        {t('orders.total', 'Total')}
+                        {t(
+                          checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'orders'),
+                          checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'orders')
+                        )}
                       </Typography>
                       <Typography
                         variant="h6"

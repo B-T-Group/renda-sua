@@ -6,10 +6,16 @@ import {
   Skeleton,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
+import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
+import {
+  CheckoutTaxSummaryLines,
+  checkoutTotalLabelDefault,
+  checkoutTotalLabelKey,
+} from '../common/CheckoutTaxSummaryLines';
 
 interface CartSummaryProps {
   showCheckoutButton?: boolean;
@@ -37,6 +43,26 @@ const CartSummary: React.FC<CartSummaryProps> = ({
 
   const cartTotal = getCartTotal();
   const cartByBusiness = getCartByBusiness();
+
+  const checkoutPreflightRequest = useMemo(() => {
+    if (cartItems.length === 0) return null;
+    return {
+      items: cartItems.map((item) => ({
+        business_inventory_id: item.inventoryItemId,
+        quantity: item.quantity,
+        ...(item.variantId ? { item_variant_id: item.variantId } : {}),
+      })),
+      payment_timing: 'pay_now' as const,
+    };
+  }, [cartItems]);
+
+  const checkoutPreflight = useCheckoutPreflight(
+    checkoutPreflightRequest,
+    cartItems.length > 0
+  );
+
+  const showTaxAtCheckoutNotice =
+    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
 
   // Get currency from cart items (all items should have the same currency)
   const currency = cartItems.length > 0 ? cartItems[0].itemData.currency : 'USD';
@@ -93,11 +119,16 @@ const CartSummary: React.FC<CartSummaryProps> = ({
         </Box>
       </Box>
 
+      <CheckoutTaxSummaryLines show={showTaxAtCheckoutNotice} namespace="cart" />
+
       <Divider sx={{ my: 2 }} />
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant={compact ? 'body1' : 'h6'}>
-          {t('cart.total', 'Total')}
+          {t(
+            checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'cart'),
+            checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'cart')
+          )}
         </Typography>
         <Typography variant={compact ? 'body1' : 'h6'} color="primary">
           {formatCurrency(cartTotal)}

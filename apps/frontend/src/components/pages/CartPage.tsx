@@ -18,11 +18,17 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { cartLineKey } from '../../contexts/cartLineKey';
 import { useCart } from '../../contexts/CartContext';
+import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
+import {
+  CheckoutTaxSummaryLines,
+  checkoutTotalLabelDefault,
+  checkoutTotalLabelKey,
+} from '../common/CheckoutTaxSummaryLines';
 
 const CartPage: React.FC = () => {
   const { t } = useTranslation();
@@ -37,6 +43,26 @@ const CartPage: React.FC = () => {
 
   const cartByBusiness = getCartByBusiness();
   const cartTotal = getCartTotal();
+
+  const checkoutPreflightRequest = useMemo(() => {
+    if (cartItems.length === 0) return null;
+    return {
+      items: cartItems.map((item) => ({
+        business_inventory_id: item.inventoryItemId,
+        quantity: item.quantity,
+        ...(item.variantId ? { item_variant_id: item.variantId } : {}),
+      })),
+      payment_timing: 'pay_now' as const,
+    };
+  }, [cartItems]);
+
+  const checkoutPreflight = useCheckoutPreflight(
+    checkoutPreflightRequest,
+    cartItems.length > 0
+  );
+
+  const showTaxAtCheckoutNotice =
+    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -353,12 +379,19 @@ const CartPage: React.FC = () => {
               </Box>
             </Box>
 
+            <CheckoutTaxSummaryLines show={showTaxAtCheckoutNotice} namespace="cart" />
+
             <Divider sx={{ my: 2 }} />
 
             <Box
               sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}
             >
-              <Typography variant="h6">{t('cart.total', 'Total')}</Typography>
+              <Typography variant="h6">
+                {t(
+                  checkoutTotalLabelKey(showTaxAtCheckoutNotice, 'cart'),
+                  checkoutTotalLabelDefault(showTaxAtCheckoutNotice, 'cart')
+                )}
+              </Typography>
               <Typography variant="h6" color="primary">
                 {formatCurrency(Number(cartTotal) || 0, cartItems[0].itemData.currency)}
               </Typography>
