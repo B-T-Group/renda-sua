@@ -305,8 +305,6 @@ export interface BoldSignConfig {
   enabled: boolean;
   apiKey: string;
   baseUrl: string;
-  webhookSigningSecret: string;
-  webhookSigningSecretPrevious?: string;
   reminderIntervalDays: number;
   expirationDays: number;
 }
@@ -707,9 +705,6 @@ export default (): Configuration => {
         /\/$/,
         ''
       ),
-      webhookSigningSecret: process.env.BOLDSIGN_WEBHOOK_SECRET || '',
-      webhookSigningSecretPrevious:
-        process.env.BOLDSIGN_WEBHOOK_SECRET_PREVIOUS || undefined,
       reminderIntervalDays: parseInt(
         process.env.BOLDSIGN_REMINDER_INTERVAL_DAYS || '3',
         10
