@@ -7877,6 +7877,7 @@ export class OrdersService {
     customerEmail?: string;
     captureMethod?: 'automatic' | 'manual';
     taxCheckoutParams?: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
+    shippingName?: string;
   }): Promise<{
     transactionId: string;
     reference: string;

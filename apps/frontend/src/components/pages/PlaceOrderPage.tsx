@@ -59,6 +59,7 @@ import {
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
@@ -1644,22 +1645,41 @@ const PlaceOrderPage: React.FC = () => {
     );
   }, [selectedItem, paymentSystems]);
 
-  const showTaxAtCheckoutNotice = useMemo(() => {
-    if (!itemCountrySupportsStripe) return false;
-    if (paymentTiming !== 'pay_now') return false;
-    const country = (
-      isPickupOrder ? itemOriginCountryIso : selectedAddress?.country
-    )
-      ?.trim()
-      .toUpperCase();
-    return country === 'CA';
+  const checkoutPreflightRequest = useMemo(() => {
+    if (!selectedItem) return null;
+    if (!isPickupOrder && !selectedAddressId) return null;
+    return {
+      items: [
+        {
+          business_inventory_id: selectedItem.id,
+          quantity,
+          ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
+        },
+      ],
+      ...(isPickupOrder
+        ? { fulfillment_method: 'pickup' as const, payment_timing: 'pay_at_pickup' as const }
+        : {
+            delivery_address_id: selectedAddressId,
+            fulfillment_method: 'delivery' as const,
+            payment_timing: paymentTiming,
+          }),
+    };
   }, [
-    itemCountrySupportsStripe,
-    paymentTiming,
     isPickupOrder,
-    itemOriginCountryIso,
-    selectedAddress?.country,
+    paymentTiming,
+    quantity,
+    selectedAddressId,
+    selectedItem,
+    selectedVariantId,
   ]);
+
+  const checkoutPreflight = useCheckoutPreflight(
+    checkoutPreflightRequest,
+    Boolean(checkoutPreflightRequest)
+  );
+
+  const showTaxAtCheckoutNotice =
+    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
 
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
