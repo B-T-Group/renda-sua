@@ -72,6 +72,28 @@ export class BusinessContractsDatabaseService {
     return res.business_contracts?.[0] ?? null;
   }
 
+  async getInFlightContract(
+    businessId: string
+  ): Promise<BusinessContractRow | null> {
+    const query = `
+      query InFlightContract($businessId: uuid!) {
+        business_contracts(
+          where: {
+            business_id: { _eq: $businessId }
+            status: { _in: [not_sent, sent, viewed] }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) {
+          id business_id contract_template_id contract_version boldsign_document_id
+          status signer_name signer_email sent_at viewed_at signed_at created_at
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, { businessId });
+    return res.business_contracts?.[0] ?? null;
+  }
+
   async listContracts(businessId: string): Promise<BusinessContractRow[]> {
     const query = `
       query ListContracts($businessId: uuid!) {

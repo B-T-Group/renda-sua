@@ -73,8 +73,12 @@ export class BusinessContractsService {
 
   async ensureContractForBusiness(businessId: string): Promise<void> {
     if (!this.isBoldSignEnabled()) return;
+    const inFlight = await this.db.getInFlightContract(businessId);
+    if (inFlight) {
+      await this.resumeInFlightContract(inFlight);
+      return;
+    }
     const latest = await this.db.getLatestContract(businessId);
-    if (latest && this.isInFlight(latest.status)) return;
     if (latest && !this.isRetryable(latest.status)) return;
     await this.createAndSendContract(businessId);
   }
@@ -218,6 +222,9 @@ export class BusinessContractsService {
   private async createAndSendContract(
     businessId: string
   ): Promise<BusinessContractRow> {
+    const inFlight = await this.db.getInFlightContract(businessId);
+    if (inFlight) return this.resumeInFlightContract(inFlight);
+
     const signer = await this.getSignerForBusiness(businessId);
     const template = await this.db.getActiveTemplate();
     if (!template) {
@@ -237,8 +244,8 @@ export class BusinessContractsService {
       });
     } catch (error: any) {
       if (this.isInFlightConflict(error)) {
-        const latest = await this.db.getLatestContract(businessId);
-        if (latest) return latest;
+        const existing = await this.db.getInFlightContract(businessId);
+        if (existing) return this.resumeInFlightContract(existing);
       }
       throw error;
     }
@@ -251,6 +258,9 @@ export class BusinessContractsService {
     template?: Awaited<ReturnType<BusinessContractsDatabaseService['getActiveTemplate']>>,
     signer?: Awaited<ReturnType<BusinessContractsService['getSignerForBusiness']>>
   ): Promise<BusinessContractRow> {
+    const blocked = await this.resolveInFlightConflict(contract);
+    if (blocked) return blocked;
+
     const resolvedTemplate =
       template ?? (await this.db.getTemplateById(contract.contract_template_id));
     const resolvedSigner =
@@ -276,33 +286,92 @@ export class BusinessContractsService {
         expirationDays: this.config.expirationDays,
         reminderIntervalDays: this.config.reminderIntervalDays,
       });
-      await this.db.updateContract(contract.id, {
-        boldsign_document_id: documentId,
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        failure_reason: null,
-        failed_at: null,
-      });
-      return {
-        ...contract,
-        boldsign_document_id: documentId,
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-      };
+      return await this.markContractSent(contract, documentId);
     } catch (error: any) {
-      this.logger.error(
-        `BoldSign create failed for ${contract.business_id}: ${error?.message}`
+      return this.markContractFailed(contract, error);
+    }
+  }
+
+  private async markContractSent(
+    contract: BusinessContractRow,
+    documentId: string
+  ): Promise<BusinessContractRow> {
+    const sentAt = new Date().toISOString();
+    const patch = {
+      boldsign_document_id: documentId,
+      status: 'sent' as const,
+      sent_at: sentAt,
+      failure_reason: null,
+      failed_at: null,
+    };
+    try {
+      await this.db.updateContract(contract.id, patch);
+      return { ...contract, ...patch };
+    } catch (error: any) {
+      if (!this.isInFlightConflict(error)) throw error;
+      const existing = await this.db.getInFlightContract(contract.business_id);
+      if (existing && existing.id !== contract.id) {
+        await this.cancelSupersededContract(contract.id, existing.id, documentId);
+        return existing;
+      }
+      throw error;
+    }
+  }
+
+  private async markContractFailed(
+    contract: BusinessContractRow,
+    error: any
+  ): Promise<BusinessContractRow> {
+    const reason = error?.message ?? 'Document creation failed';
+    this.logger.error(
+      `BoldSign create failed for ${contract.business_id}: ${reason}`
+    );
+    await this.db.updateContract(contract.id, {
+      status: 'failed',
+      failure_reason: reason,
+      failed_at: new Date().toISOString(),
+    });
+    return { ...contract, status: 'failed', failure_reason: reason };
+  }
+
+  private async resumeInFlightContract(
+    contract: BusinessContractRow
+  ): Promise<BusinessContractRow> {
+    if (
+      contract.status === 'not_sent' &&
+      contract.boldsign_document_id.startsWith('pending:')
+    ) {
+      return this.sendBoldSignForRow(contract);
+    }
+    return contract;
+  }
+
+  private async resolveInFlightConflict(
+    contract: BusinessContractRow
+  ): Promise<BusinessContractRow | null> {
+    const inFlight = await this.db.getInFlightContract(contract.business_id);
+    if (!inFlight || inFlight.id === contract.id) return null;
+    await this.cancelSupersededContract(contract.id, inFlight.id);
+    return this.resumeInFlightContract(inFlight);
+  }
+
+  private async cancelSupersededContract(
+    contractId: string,
+    keptContractId: string,
+    orphanDocumentId?: string
+  ): Promise<void> {
+    const reason = orphanDocumentId
+      ? `Superseded by contract ${keptContractId}; BoldSign doc ${orphanDocumentId}`
+      : `Superseded by contract ${keptContractId}`;
+    await this.db.updateContract(contractId, {
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      failure_reason: reason,
+    });
+    if (orphanDocumentId) {
+      this.logger.warn(
+        `Orphaned BoldSign document ${orphanDocumentId} for cancelled contract ${contractId}`
       );
-      await this.db.updateContract(contract.id, {
-        status: 'failed',
-        failure_reason: error?.message ?? 'Document creation failed',
-        failed_at: new Date().toISOString(),
-      });
-      return {
-        ...contract,
-        status: 'failed',
-        failure_reason: error?.message ?? 'Document creation failed',
-      };
     }
   }
 
@@ -492,10 +561,6 @@ export class BusinessContractsService {
 
   private isRetryable(status: ContractStatus): boolean {
     return ['declined', 'expired', 'cancelled', 'failed'].includes(status);
-  }
-
-  private isInFlight(status: ContractStatus): boolean {
-    return ['not_sent', 'sent', 'viewed'].includes(status);
   }
 
   private isInFlightConflict(error: any): boolean {
