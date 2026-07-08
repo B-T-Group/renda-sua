@@ -11,7 +11,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { AuthGuard } from '../auth/auth.guard';
 import { StripeTaxCodesDatabaseService } from './stripe-tax-codes-database.service';
 import { SearchStripeTaxCodesQueryDto } from './dto/search-stripe-tax-codes.dto';
 import {
@@ -21,7 +21,7 @@ import {
 
 @ApiTags('stripe-tax')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard)
 @Controller('stripe-tax')
 export class StripeTaxController {
   constructor(private readonly database: StripeTaxCodesDatabaseService) {}
