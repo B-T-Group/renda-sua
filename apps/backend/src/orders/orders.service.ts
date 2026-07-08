@@ -7369,6 +7369,8 @@ export class OrdersService {
           per_km_delivery_fee
           subtotal
           tax_amount
+          tax_status
+          pre_tax_total
           total_amount
           discount_code_id
           discount_amount
@@ -7670,6 +7672,9 @@ export class OrdersService {
         fulfillmentMethod,
       });
 
+      const customerDisplayName =
+        `${user.first_name || ''} ${user.last_name || ''}`.trim() || undefined;
+
       if (orderData.stripe_payment_method === 'payment_sheet') {
         const paymentIntent = await this.createStripeOrderPaymentIntent({
           orderNumber,
@@ -7681,8 +7686,8 @@ export class OrdersService {
           taxCheckoutParams,
         });
         return {
-          ...order,
-          total_amount: total_amount,
+          ...this.enrichOrderTaxClientFields(order, tax_status, pre_tax_total),
+          total_amount: pre_tax_total,
           delivery_window: deliveryWindow,
           payment_rail: 'stripe' as const,
           payment_intent_client_secret: paymentIntent?.clientSecret ?? null,
@@ -7705,10 +7710,11 @@ export class OrdersService {
         customerEmail: user.email ?? undefined,
         captureMethod,
         taxCheckoutParams,
+        shippingName: customerDisplayName,
       });
       return {
-        ...order,
-        total_amount: total_amount,
+        ...this.enrichOrderTaxClientFields(order, tax_status, pre_tax_total),
+        total_amount: pre_tax_total,
         delivery_window: deliveryWindow,
         payment_rail: 'stripe' as const,
         checkout_url: checkout?.paymentUrl,
@@ -7845,6 +7851,20 @@ export class OrdersService {
     };
   }
 
+  private enrichOrderTaxClientFields(
+    order: Record<string, unknown>,
+    taxStatus: string,
+    preTaxTotal: number
+  ) {
+    return {
+      ...order,
+      tax_status: order.tax_status ?? taxStatus,
+      pre_tax_total: order.pre_tax_total ?? preTaxTotal,
+      tax_notice:
+        taxStatus === 'estimated' ? ('calculated_at_checkout' as const) : null,
+    };
+  }
+
   /**
    * Create a Stripe Checkout session for a Stripe-rail order. Failures are
    * logged and swallowed so the order is still created (payment can be retried).
@@ -7878,7 +7898,7 @@ export class OrdersService {
               automaticTax: true,
               taxLineItems: tax.taxLineItems,
               customerAddress: tax.customerAddress ?? undefined,
-              allowedShippingCountries: [tax.customerAddress!.country],
+              shippingName: params.shippingName,
             }
           : {}),
       });

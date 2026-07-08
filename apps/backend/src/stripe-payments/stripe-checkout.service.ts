@@ -22,6 +22,7 @@ export interface CreateCheckoutParams {
   customerAddress?: import('../stripe-payments/stripe.service').StripeTaxCustomerAddress;
   automaticTax?: boolean;
   allowedShippingCountries?: string[];
+  shippingName?: string;
 }
 
 export interface CreateCheckoutResult {
@@ -118,7 +119,10 @@ export class StripeCheckoutService {
       taxLineItems: params.taxLineItems,
       customerAddress: params.customerAddress,
       automaticTax: params.automaticTax,
-      allowedShippingCountries: params.allowedShippingCountries,
+      allowedShippingCountries: params.customerAddress
+        ? undefined
+        : params.allowedShippingCountries,
+      shippingName: params.shippingName,
     });
 
     await this.databaseService.updateTransaction(transaction.id, {
