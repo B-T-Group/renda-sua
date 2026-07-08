@@ -1,7 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BoldsignClientService } from './boldsign-client.service';
 import { BusinessContractsDatabaseService } from './business-contracts-database.service';
@@ -10,6 +9,10 @@ import {
   BusinessContractRow,
   ContractTemplateRow,
 } from './business-contracts.types';
+
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
 
 describe('BusinessContractsService', () => {
   let service: BusinessContractsService;
@@ -194,6 +197,6 @@ function buildConfigMock(): ConfigService {
   } as unknown as ConfigService;
 }
 
-function buildMerchantLifecycleMock(): MerchantLifecycleService {
-  return {} as MerchantLifecycleService;
+function buildMerchantLifecycleMock() {
+  return { recompute: jest.fn() };
 }
