@@ -34,14 +34,6 @@ export class BusinessContractsWebhookController {
     @Req() req: Request
   ) {
     const rawBody = (req as unknown as { body: Buffer }).body;
-    const valid = this.verifier.verify(signature, rawBody);
-    if (!valid) {
-      this.logger.warn('BoldSign webhook signature verification failed');
-      throw new HttpException(
-        { received: false, message: 'Invalid signature' },
-        HttpStatus.BAD_REQUEST
-      );
-    }
 
     let payload: BoldSignWebhookPayload;
     try {
@@ -49,6 +41,22 @@ export class BusinessContractsWebhookController {
     } catch (error: any) {
       throw new HttpException(
         { received: false, message: 'Invalid JSON' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (payload.event?.eventType === 'Verification') {
+      this.logger.log(
+        `BoldSign webhook verification handshake received (env=${payload.event.environment ?? 'unknown'})`
+      );
+      return { received: true };
+    }
+
+    const valid = this.verifier.verify(signature, rawBody);
+    if (!valid) {
+      this.logger.warn('BoldSign webhook signature verification failed');
+      throw new HttpException(
+        { received: false, message: 'Invalid signature' },
         HttpStatus.BAD_REQUEST
       );
     }

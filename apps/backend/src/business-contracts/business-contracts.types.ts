@@ -67,7 +67,12 @@ export interface ContractStatusSnapshot {
 }
 
 export interface BoldSignWebhookPayload {
-  event?: { id?: string; created?: number; eventType?: string };
+  event?: {
+    id?: string;
+    created?: number;
+    eventType?: string;
+    environment?: string;
+  };
   data?: {
     documentId?: string;
     messageTitle?: string;
