@@ -74,8 +74,15 @@ export class BusinessContractsService {
   async ensureContractForBusiness(businessId: string): Promise<void> {
     if (!this.isBoldSignEnabled()) return;
     const latest = await this.db.getLatestContract(businessId);
+    if (latest && this.isInFlight(latest.status)) return;
     if (latest && !this.isRetryable(latest.status)) return;
     await this.createAndSendContract(businessId);
+  }
+
+  async resumePendingContract(row: BusinessContractRow): Promise<void> {
+    if (!row.boldsign_document_id.startsWith('pending:')) return;
+    if (row.status !== 'not_sent' && row.status !== 'failed') return;
+    await this.sendBoldSignForRow(row);
   }
 
   async resendContract(businessId: string): Promise<BusinessContractRow> {
@@ -107,12 +114,39 @@ export class BusinessContractsService {
       payload,
       signatureValid,
     });
-    if (!isNew) return;
+    if (!isNew) {
+      await this.retryUnprocessedWebhookEvent(
+        eventId,
+        signatureValid,
+        contract,
+        eventType,
+        payload
+      );
+      return;
+    }
     if (!signatureValid) {
-      await this.db.markEventProcessed(eventId, 'Invalid signature');
+      await this.db.markEventProcessed(eventId, 'Invalid webhook secret');
       return;
     }
 
+    try {
+      await this.applyWebhookEvent(contract, eventType, payload);
+      await this.db.markEventProcessed(eventId);
+    } catch (error: any) {
+      await this.db.markEventProcessed(eventId, error?.message);
+      throw error;
+    }
+  }
+
+  private async retryUnprocessedWebhookEvent(
+    eventId: string,
+    signatureValid: boolean,
+    contract: BusinessContractRow | null,
+    eventType: string,
+    payload: BoldSignWebhookPayload
+  ): Promise<void> {
+    const existing = await this.db.getEventByEventId(eventId);
+    if (!existing || existing.processed_at || !signatureValid) return;
     try {
       await this.applyWebhookEvent(contract, eventType, payload);
       await this.db.markEventProcessed(eventId);
@@ -189,44 +223,86 @@ export class BusinessContractsService {
     if (!template) {
       throw new BadRequestException('No active contract template configured');
     }
-    const templateId = this.resolveTemplateId(template, signer.locale);
-    const title = template.title ?? 'RendaSua Merchant Agreement';
+
+    let contract: BusinessContractRow;
+    try {
+      contract = await this.db.insertContract({
+        business_id: businessId,
+        contract_template_id: template.id,
+        contract_version: template.version,
+        boldsign_document_id: `pending:${businessId}:${Date.now()}`,
+        status: 'not_sent',
+        signer_name: signer.name,
+        signer_email: signer.email,
+      });
+    } catch (error: any) {
+      if (this.isInFlightConflict(error)) {
+        const latest = await this.db.getLatestContract(businessId);
+        if (latest) return latest;
+      }
+      throw error;
+    }
+
+    return this.sendBoldSignForRow(contract, template, signer);
+  }
+
+  private async sendBoldSignForRow(
+    contract: BusinessContractRow,
+    template?: Awaited<ReturnType<BusinessContractsDatabaseService['getActiveTemplate']>>,
+    signer?: Awaited<ReturnType<BusinessContractsService['getSignerForBusiness']>>
+  ): Promise<BusinessContractRow> {
+    const resolvedTemplate =
+      template ?? (await this.db.getTemplateById(contract.contract_template_id));
+    const resolvedSigner =
+      signer ??
+      (await this.getSignerForBusiness(contract.business_id));
+    if (!resolvedTemplate) {
+      throw new BadRequestException('Contract template not found');
+    }
+
+    const templateId = this.resolveTemplateId(
+      resolvedTemplate,
+      resolvedSigner.locale
+    );
+    const title = resolvedTemplate.title ?? 'RendaSua Merchant Agreement';
 
     try {
       const { documentId } = await this.boldsign.sendUsingTemplate({
         templateId,
-        signerName: signer.name,
-        signerEmail: signer.email,
+        signerName: resolvedSigner.name,
+        signerEmail: resolvedSigner.email,
         title,
         message: 'Please review and sign your merchant partnership agreement.',
         expirationDays: this.config.expirationDays,
         reminderIntervalDays: this.config.reminderIntervalDays,
       });
-      return this.db.insertContract({
-        business_id: businessId,
-        contract_template_id: template.id,
-        contract_version: template.version,
+      await this.db.updateContract(contract.id, {
         boldsign_document_id: documentId,
         status: 'sent',
-        signer_name: signer.name,
-        signer_email: signer.email,
         sent_at: new Date().toISOString(),
+        failure_reason: null,
+        failed_at: null,
       });
+      return {
+        ...contract,
+        boldsign_document_id: documentId,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      };
     } catch (error: any) {
       this.logger.error(
-        `BoldSign create failed for ${businessId}: ${error?.message}`
+        `BoldSign create failed for ${contract.business_id}: ${error?.message}`
       );
-      return this.db.insertContract({
-        business_id: businessId,
-        contract_template_id: template.id,
-        contract_version: template.version,
-        boldsign_document_id: `pending:${businessId}:${Date.now()}`,
+      await this.db.updateContract(contract.id, {
         status: 'failed',
-        signer_name: signer.name,
-        signer_email: signer.email,
         failure_reason: error?.message ?? 'Document creation failed',
         failed_at: new Date().toISOString(),
       });
+      return {
+        ...contract,
+        status: 'failed',
+        failure_reason: error?.message ?? 'Document creation failed',
+      };
     }
   }
 
@@ -244,16 +320,20 @@ export class BusinessContractsService {
     if (!nextStatus) return;
     if (!canTransitionContractStatus(contract.status, nextStatus)) return;
 
-    const updates = this.buildStatusUpdates(contract.status, nextStatus, payload);
-    await this.db.updateContract(contract.id, updates);
-
     if (nextStatus === 'signed') {
       await this.storeSignedArtifacts(contract.id, contract.boldsign_document_id);
+      const updates = this.buildStatusUpdates(contract.status, nextStatus, payload);
+      await this.db.updateContract(contract.id, updates);
       await this.merchantLifecycleService.recompute(
         contract.business_id,
         'contract_signed'
       );
+      return;
     }
+
+    const updates = this.buildStatusUpdates(contract.status, nextStatus, payload);
+    await this.db.updateContract(contract.id, updates);
+
     if (nextStatus === 'declined') {
       await this.notificationsService.sendAdminContractDeclinedEmail({
         businessId: contract.business_id,
@@ -412,6 +492,18 @@ export class BusinessContractsService {
 
   private isRetryable(status: ContractStatus): boolean {
     return ['declined', 'expired', 'cancelled', 'failed'].includes(status);
+  }
+
+  private isInFlight(status: ContractStatus): boolean {
+    return ['not_sent', 'sent', 'viewed'].includes(status);
+  }
+
+  private isInFlightConflict(error: any): boolean {
+    const message = String(error?.message ?? '');
+    return (
+      message.includes('Uniqueness violation') ||
+      message.includes('uq_business_contracts_in_flight')
+    );
   }
 
   private async assertContractAccess(

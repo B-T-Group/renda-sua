@@ -146,6 +146,7 @@ export class BusinessContractsDatabaseService {
             business_id: { _eq: $businessId }
             status: { _eq: signed }
             invalidated_at: { _is_null: true }
+            signed_pdf_s3_key: { _is_null: false }
             contract_template: { is_active: { _eq: true }, is_legacy: { _eq: false } }
           }
           limit: 1
@@ -197,24 +198,36 @@ export class BusinessContractsDatabaseService {
         ) { id }
       }
     `;
-    try {
-      await this.hasuraSystemService.executeMutation(mutation, {
-        row: {
-          event_id: params.eventId,
-          event_type: params.eventType,
-          boldsign_document_id: params.documentId,
-          business_contract_id: params.contractId ?? null,
-          payload: params.payload,
-          signature_valid: params.signatureValid,
-        },
-      });
-      return true;
-    } catch (error: any) {
-      if (String(error?.message ?? '').includes('Uniqueness violation')) {
-        return false;
+    const response = await this.hasuraSystemService.executeMutation(mutation, {
+      row: {
+        event_id: params.eventId,
+        event_type: params.eventType,
+        boldsign_document_id: params.documentId,
+        business_contract_id: params.contractId ?? null,
+        payload: params.payload,
+        signature_valid: params.signatureValid,
+      },
+    });
+    return !!response.insert_business_contract_events_one?.id;
+  }
+
+  async getEventByEventId(eventId: string): Promise<{
+    id: string;
+    processed_at?: string | null;
+    signature_valid: boolean;
+  } | null> {
+    const query = `
+      query EventById($eventId: String!) {
+        business_contract_events(
+          where: { event_id: { _eq: $eventId } }
+          limit: 1
+        ) {
+          id processed_at signature_valid
+        }
       }
-      throw error;
-    }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, { eventId });
+    return res.business_contract_events?.[0] ?? null;
   }
 
   async markEventProcessed(eventId: string, error?: string): Promise<void> {
@@ -281,6 +294,34 @@ export class BusinessContractsDatabaseService {
       }
     `;
     const res = await this.hasuraSystemService.executeQuery(query, { cutoff });
+    return res.business_contracts ?? [];
+  }
+
+  async listContractsNeedingReminder(
+    sentBefore: string,
+    remindedBefore: string
+  ): Promise<BusinessContractRow[]> {
+    const query = `
+      query NeedReminder($sentBefore: timestamptz!, $remindedBefore: timestamptz!) {
+        business_contracts(
+          where: {
+            status: { _in: [sent, viewed] }
+            sent_at: { _lt: $sentBefore }
+            _or: [
+              { last_reminded_at: { _is_null: true } }
+              { last_reminded_at: { _lt: $remindedBefore } }
+            ]
+          }
+          limit: 20
+        ) {
+          id boldsign_document_id status sent_at business_id
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      sentBefore,
+      remindedBefore,
+    });
     return res.business_contracts ?? [];
   }
 

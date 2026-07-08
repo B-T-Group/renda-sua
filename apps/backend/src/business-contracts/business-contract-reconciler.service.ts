@@ -37,7 +37,7 @@ export class BusinessContractReconcilerService {
     for (const row of pending) {
       if (!row.boldsign_document_id.startsWith('pending:')) continue;
       try {
-        await this.contractsService.ensureContractForBusiness(row.business_id);
+        await this.contractsService.resumePendingContract(row);
       } catch (error: any) {
         this.logger.warn(
           `Contract retry failed for ${row.business_id}: ${error?.message}`
@@ -57,15 +57,15 @@ export class BusinessContractReconcilerService {
         );
         const status = String((props as { status?: string }).status ?? '');
         if (status.toLowerCase() === 'completed') {
+          await this.contractsService.syncSignedArtifactsFromBoldsign(
+            row.id,
+            row.boldsign_document_id
+          );
           await this.db.updateContract(row.id, {
             status: 'signed',
             signed_at: new Date().toISOString(),
             boldsign_raw_metadata: props,
           });
-          await this.contractsService.syncSignedArtifactsFromBoldsign(
-            row.id,
-            row.boldsign_document_id
-          );
           await this.merchantLifecycleService.recompute(
             row.business_id,
             'contract_reconciled'
@@ -79,12 +79,19 @@ export class BusinessContractReconcilerService {
 
   private async sendReminders(): Promise<void> {
     const days = this.config.reminderIntervalDays || 3;
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-    const stale = await this.db.listStaleSentContracts(cutoff);
+    const sentBefore = new Date(Date.now() - days * 86400000).toISOString();
+    const remindedBefore = sentBefore;
+    const stale = await this.db.listContractsNeedingReminder(
+      sentBefore,
+      remindedBefore
+    );
     for (const row of stale) {
       if (row.boldsign_document_id.startsWith('legacy:')) continue;
       try {
         await this.boldsign.remindDocument(row.boldsign_document_id);
+        await this.db.updateContract(row.id, {
+          last_reminded_at: new Date().toISOString(),
+        });
       } catch (error: any) {
         this.logger.warn(`Reminder failed ${row.id}: ${error?.message}`);
       }
