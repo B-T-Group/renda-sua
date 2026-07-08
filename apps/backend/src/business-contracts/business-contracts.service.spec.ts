@@ -14,33 +14,33 @@ jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
   MerchantLifecycleService: class MerchantLifecycleService {},
 }));
 
+const businessId = 'business-1';
+const signerQueryResult = {
+  businesses_by_pk: {
+    name: 'Test Business',
+    user: {
+      email: 'owner@example.com',
+      first_name: 'Test',
+      last_name: 'Owner',
+      preferred_language: 'en',
+    },
+  },
+};
+const template: ContractTemplateRow = {
+  id: 'template-1',
+  version: '2026-07',
+  boldsign_template_id_en: 'tmpl-en',
+  boldsign_template_id_fr: null,
+  title: 'Merchant Agreement',
+  is_active: true,
+  is_legacy: false,
+};
+
 describe('BusinessContractsService', () => {
   let service: BusinessContractsService;
   let db: jest.Mocked<BusinessContractsDatabaseService>;
   let boldsign: jest.Mocked<BoldsignClientService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
-
-  const businessId = 'business-1';
-  const signerQueryResult = {
-    businesses_by_pk: {
-      name: 'Test Business',
-      user: {
-        email: 'owner@example.com',
-        first_name: 'Test',
-        last_name: 'Owner',
-        preferred_language: 'en',
-      },
-    },
-  };
-  const template: ContractTemplateRow = {
-    id: 'template-1',
-    version: '2026-07',
-    boldsign_template_id_en: 'tmpl-en',
-    boldsign_template_id_fr: null,
-    title: 'Merchant Agreement',
-    is_active: true,
-    is_legacy: false,
-  };
 
   beforeEach(() => {
     db = buildDatabaseMock();
