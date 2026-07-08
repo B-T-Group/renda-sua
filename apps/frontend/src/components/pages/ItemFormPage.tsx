@@ -47,6 +47,8 @@ import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
 import VariantsManagerSection from '../business/variants/VariantsManagerSection';
+import ProductTaxCategorySelect from '../business/ProductTaxCategorySelect';
+import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
 import SEOHead from '../seo/SEOHead';
 
 // Extended types for create options
@@ -110,6 +112,7 @@ interface ItemFormData {
   max_order_quantity: number | null;
   item_sub_category_id: number | null;
   is_active: boolean;
+  stripe_tax_code_id: string;
 }
 
 const ItemFormPage: React.FC = () => {
@@ -149,6 +152,7 @@ const ItemFormPage: React.FC = () => {
     max_order_quantity: null,
     item_sub_category_id: null,
     is_active: true,
+    stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
   });
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
@@ -264,6 +268,9 @@ const ItemFormPage: React.FC = () => {
               item_sub_category_id: foundItem.item_sub_category_id || null,
               is_active:
                 foundItem.is_active !== undefined ? foundItem.is_active : true,
+              stripe_tax_code_id:
+                (foundItem as Item & { stripe_tax_code_id?: string })
+                  .stripe_tax_code_id || STRIPE_TAX_CODE_GENERAL_TANGIBLE,
             });
 
             // Set category and subcategory for edit mode
@@ -1419,6 +1426,14 @@ const ItemFormPage: React.FC = () => {
                       'business.items.specialHandling',
                       'Requires Special Handling'
                     )}
+                  />
+
+                  <ProductTaxCategorySelect
+                    value={formData.stripe_tax_code_id}
+                    onChange={(taxCodeId) =>
+                      handleInputChange('stripe_tax_code_id', taxCodeId)
+                    }
+                    disabled={loading}
                   />
 
                   <FormControlLabel

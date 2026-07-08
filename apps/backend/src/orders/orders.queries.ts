@@ -755,6 +755,8 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       base_delivery_fee
       per_km_delivery_fee
       tax_amount
+      tax_jurisdiction
+      tax_breakdown
       total_amount
       currency
       payment_status

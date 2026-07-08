@@ -16,6 +16,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { StripeConfig, Configuration } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
   CheckoutBlockerDto,
   CheckoutDiscountPreviewDto,
@@ -82,7 +83,8 @@ export class CheckoutPreflightService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly loyaltyService: LoyaltyService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService
   ) {}
 
   async resolve(
@@ -515,6 +517,16 @@ export class CheckoutPreflightService {
     const stripeManualCapture =
       this.configService.get<StripeConfig>('stripe')?.manualCaptureEnabled ?? false;
 
+    const taxCountry =
+      deliveryCountry ?? guestCountry ?? sellerCountries[0] ?? null;
+    const taxNotice =
+      checkoutMethod === 'STRIPE' &&
+      this.taxCheckoutBuilder.isTaxEnabledForCountry(
+        this.taxCheckoutBuilder.normalizeCountryCode(taxCountry)
+      )
+        ? ('calculated_at_checkout' as const)
+        : null;
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -532,6 +544,7 @@ export class CheckoutPreflightService {
       requires_payment_phone: requiresPaymentPhoneOverall,
       stripe_retry_unsupported: !stripeManualCapture,
       stripe_manual_capture: stripeManualCapture,
+      tax_notice: taxNotice,
     };
   }
 

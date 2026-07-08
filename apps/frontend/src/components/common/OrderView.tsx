@@ -758,6 +758,24 @@ const OrderView: React.FC<OrderViewProps> = ({
                         {formatCurrency(order.tax_amount, order.currency)}
                       </Typography>
                     </Box>
+                    {(order as { tax_jurisdiction?: { state?: string; country?: string } })
+                      .tax_jurisdiction?.state ? (
+                      <Box display="flex" justifyContent="space-between" mb={2}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('orders.taxJurisdiction', 'Tax jurisdiction')}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {[
+                            (order as { tax_jurisdiction?: { state?: string } })
+                              .tax_jurisdiction?.state,
+                            (order as { tax_jurisdiction?: { country?: string } })
+                              .tax_jurisdiction?.country,
+                          ]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </Typography>
+                      </Box>
+                    ) : null}
                     <Divider sx={{ my: 2 }} />
                     {order.total_amount !== undefined && (
                       <Box

@@ -8,6 +8,8 @@ export interface OrderReceiptData {
   base_delivery_fee: number;
   per_km_delivery_fee: number;
   tax_amount: number;
+  tax_jurisdiction?: { state?: string; country?: string } | null;
+  tax_breakdown?: Record<string, unknown> | null;
   total_amount: number;
   currency: string;
   payment_status: string;
@@ -78,6 +80,7 @@ export interface ReceiptTemplateData {
   baseDeliveryFee: number;
   perKmDeliveryFee: number;
   taxAmount: number;
+  taxJurisdiction?: string;
   totalAmount: number;
   currency: string;
   paymentStatus: string;

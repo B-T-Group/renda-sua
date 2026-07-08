@@ -297,4 +297,11 @@ export class CheckoutPreflightResponseDto {
       'True when Stripe manual capture is enabled (card authorized at checkout, charged after agent assignment).',
   })
   stripe_manual_capture?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When set, sales tax is calculated at Stripe checkout and is not included in group totals.',
+    enum: ['calculated_at_checkout'],
+  })
+  tax_notice?: 'calculated_at_checkout' | null;
 }

@@ -1,0 +1,69 @@
+table:
+  name: stripe_tax_codes
+  schema: public
+array_relationships:
+  - name: items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: stripe_tax_code_id
+        insertion_order: null
+        remote_table:
+          name: items
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - group_name
+        - is_active
+      filter:
+        is_active:
+          _eq: true
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - group_name
+        - is_active
+      filter:
+        is_active:
+          _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - group_name
+        - is_active
+      filter:
+        is_active:
+          _eq: true
+  - role: client
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - group_name
+        - is_active
+      filter:
+        is_active:
+          _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - group_name
+        - is_active
+      filter:
+        is_active:
+          _eq: true

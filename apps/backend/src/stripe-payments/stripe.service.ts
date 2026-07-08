@@ -13,6 +13,30 @@ export interface CreateCheckoutSessionParams {
   cancelUrl: string;
   metadata?: Record<string, string>;
   captureMethod?: 'automatic' | 'manual';
+  /** When set, replaces single aggregate line item with itemized lines + automatic_tax. */
+  taxLineItems?: StripeCheckoutTaxLineItem[];
+  customerAddress?: StripeTaxCustomerAddress;
+  automaticTax?: boolean;
+  allowedShippingCountries?: string[];
+  /** Recipient name for prefilled Checkout shipping (tax jurisdiction). */
+  shippingName?: string;
+}
+
+export interface StripeCheckoutTaxLineItem {
+  name: string;
+  unitAmount: number;
+  quantity: number;
+  taxCode: string;
+  reference?: string;
+}
+
+export interface StripeTaxCustomerAddress {
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
 }
 
 export interface CreateTransferParams {
@@ -70,14 +94,22 @@ export class StripeService {
     params: CreateCheckoutSessionParams
   ): Promise<Stripe.Checkout.Session> {
     const captureMethod = params.captureMethod ?? 'automatic';
-    return this.getClient().checkout.sessions.create(
-      {
-        mode: 'payment',
-        success_url: params.successUrl,
-        cancel_url: params.cancelUrl,
-        client_reference_id: params.reference,
-        customer_email: params.customerEmail,
-        line_items: [
+    const useTax = params.automaticTax && (params.taxLineItems?.length ?? 0) > 0;
+    const lineItems = useTax
+      ? params.taxLineItems!.map((line) => ({
+          quantity: line.quantity,
+          price_data: {
+            currency: params.currency.toLowerCase(),
+            unit_amount: line.unitAmount,
+            tax_behavior: 'exclusive' as const,
+            product_data: {
+              name: line.name,
+              tax_code: line.taxCode,
+              ...(line.reference ? { metadata: { reference: line.reference } } : {}),
+            },
+          },
+        }))
+      : [
           {
             quantity: 1,
             price_data: {
@@ -86,15 +118,117 @@ export class StripeService {
               product_data: { name: params.description },
             },
           },
-        ],
-        payment_intent_data: {
-          capture_method: captureMethod,
-          metadata: params.metadata,
-        },
-        metadata: { reference: params.reference, ...params.metadata },
-      },
+        ];
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'payment',
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      client_reference_id: params.reference,
+      customer_email: params.customerEmail,
+      line_items: lineItems,
+      metadata: { reference: params.reference, ...params.metadata },
+    };
+
+    const paymentIntentData: Stripe.Checkout.SessionCreateParams.PaymentIntentData =
+      {
+        capture_method: captureMethod,
+        metadata: params.metadata,
+      };
+
+    if (useTax) {
+      sessionParams.automatic_tax = { enabled: true };
+      if (params.customerAddress) {
+        paymentIntentData.shipping = {
+          name:
+            params.shippingName?.trim() ||
+            params.customerEmail?.split('@')[0] ||
+            'Customer',
+          address: {
+            line1: params.customerAddress.line1,
+            line2: params.customerAddress.line2 || undefined,
+            city: params.customerAddress.city,
+            state: params.customerAddress.state,
+            postal_code: params.customerAddress.postal_code,
+            country:
+              params.customerAddress.country as Stripe.AddressParam['country'],
+          },
+        };
+        sessionParams.billing_address_collection = 'auto';
+      } else if (params.allowedShippingCountries?.length) {
+        sessionParams.shipping_address_collection = {
+          allowed_countries:
+            params.allowedShippingCountries as Stripe.Checkout.SessionCreateParams.ShippingAddressCollection.AllowedCountry[],
+        };
+      }
+    }
+
+    sessionParams.payment_intent_data = paymentIntentData;
+
+    return this.getClient().checkout.sessions.create(
+      sessionParams,
       { idempotencyKey: `checkout_${params.reference}` }
     );
+  }
+
+  async listAllTaxCodes(): Promise<Stripe.TaxCode[]> {
+    const client = this.getClient();
+    const all: Stripe.TaxCode[] = [];
+    let startingAfter: string | undefined;
+    for (;;) {
+      const page = await client.taxCodes.list({
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      all.push(...page.data);
+      if (!page.has_more || page.data.length === 0) break;
+      startingAfter = page.data[page.data.length - 1].id;
+    }
+    return all;
+  }
+
+  async retrieveCheckoutSessionExpanded(
+    sessionId: string
+  ): Promise<Stripe.Checkout.Session> {
+    return this.getClient().checkout.sessions.retrieve(sessionId, {
+      expand: ['line_items', 'total_details.breakdown'],
+    });
+  }
+
+  async createTaxCalculation(params: {
+    currency: string;
+    customerAddress: StripeTaxCustomerAddress;
+    lineItems: StripeCheckoutTaxLineItem[];
+  }): Promise<Stripe.Tax.Calculation> {
+    return this.getClient().tax.calculations.create({
+      currency: params.currency.toLowerCase(),
+      customer_details: {
+        address: params.customerAddress,
+        address_source: 'shipping',
+      },
+      line_items: params.lineItems.map((line) => ({
+        amount: line.unitAmount * line.quantity,
+        reference: line.reference ?? line.name,
+        tax_code: line.taxCode,
+        tax_behavior: 'exclusive',
+      })),
+    });
+  }
+
+  async createTaxTransactionFromCalculation(
+    calculationId: string,
+    reference: string
+  ): Promise<Stripe.Tax.Transaction> {
+    return this.getClient().tax.transactions.createFromCalculation({
+      calculation: calculationId,
+      reference,
+    });
+  }
+
+  async retrieveTaxCalculation(
+    calculationId: string
+  ): Promise<Stripe.Tax.Calculation> {
+    return this.getClient().tax.calculations.retrieve(calculationId);
   }
 
   /**
@@ -102,6 +236,31 @@ export class StripeService {
    * (e.g. the mobile PaymentSheet). Mirrors the Checkout session settlement:
    * payment lands on the platform, wallets are credited via the webhook.
    */
+  async updatePaymentIntentAmount(
+    paymentIntentId: string,
+    amount: number,
+    currency: string,
+    idempotencyKey: string
+  ): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.update(
+      paymentIntentId,
+      { amount: this.toMinorUnits(amount, currency) },
+      { idempotencyKey }
+    );
+  }
+
+  async updatePaymentIntentMetadata(
+    paymentIntentId: string,
+    metadata: Record<string, string>,
+    idempotencyKey: string
+  ): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.update(
+      paymentIntentId,
+      { metadata },
+      { idempotencyKey }
+    );
+  }
+
   async createPaymentIntent(
     params: CreatePaymentIntentParams
   ): Promise<Stripe.PaymentIntent> {

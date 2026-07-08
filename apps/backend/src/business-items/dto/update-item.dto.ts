@@ -21,5 +21,6 @@ export class UpdateItemDto {
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
+  stripe_tax_code_id?: string;
 }
 

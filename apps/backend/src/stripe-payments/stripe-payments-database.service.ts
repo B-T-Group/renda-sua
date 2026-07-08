@@ -71,6 +71,10 @@ export interface UpdateStripeTransactionData {
   authorized_at?: string;
   captured_at?: string;
   authorization_expires_at?: string;
+  amount?: number;
+  amount_subtotal?: number;
+  amount_tax?: number;
+  stripe_tax_calculation_id?: string;
 }
 
 const TRANSACTION_FIELDS = `

@@ -35,6 +35,8 @@ import {
 } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
+import ProductTaxCategorySelect from './ProductTaxCategorySelect';
+import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -91,6 +93,7 @@ export default function AddItemDialog({
     pay_at_pickup_enabled: false,
     min_order_quantity: 1,
     max_order_quantity: 1,
+    stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
   });
   const [newBrandData, setNewBrandData] = useState<CreateBrandData>({
     name: '',
@@ -543,6 +546,19 @@ export default function AddItemDialog({
                 </Select>
               </FormControl>
             </Stack>
+
+            <ProductTaxCategorySelect
+              value={
+                newItemData.stripe_tax_code_id ?? STRIPE_TAX_CODE_GENERAL_TANGIBLE
+              }
+              onChange={(taxCodeId) =>
+                setNewItemData({
+                  ...newItemData,
+                  stripe_tax_code_id: taxCodeId,
+                })
+              }
+              disabled={itemsLoading}
+            />
 
             <Stack direction="row" spacing={2}>
               <TextField

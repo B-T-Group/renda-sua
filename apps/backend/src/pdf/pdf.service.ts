@@ -148,6 +148,7 @@ export class PdfService {
         baseDeliveryFee: orderData.base_delivery_fee,
         perKmDeliveryFee: orderData.per_km_delivery_fee,
         taxAmount: orderData.tax_amount,
+        taxJurisdiction: this.formatTaxJurisdiction(orderData.tax_jurisdiction),
         totalAmount: orderData.total_amount,
         currency: orderData.currency,
         paymentStatus: orderData.payment_status,
@@ -450,6 +451,14 @@ export class PdfService {
     ].filter(Boolean);
 
     return parts.join(', ');
+  }
+
+  private formatTaxJurisdiction(
+    jurisdiction?: { state?: string; country?: string } | null
+  ): string | undefined {
+    if (!jurisdiction) return undefined;
+    const parts = [jurisdiction.state, jurisdiction.country].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : undefined;
   }
 
   /**

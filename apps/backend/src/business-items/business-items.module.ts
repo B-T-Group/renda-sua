@@ -9,6 +9,7 @@ import { AiGenerationModule } from '../ai/ai-generation.module';
 import { ItemsModule } from '../items/items.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module'
     AiGenerationModule,
     ItemsModule,
     StripePaymentsModule,
+    StripeTaxModule,
     MerchantLifecycleModule,
   ],
   controllers: [BusinessItemsController],

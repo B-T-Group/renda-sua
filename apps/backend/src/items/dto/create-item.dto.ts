@@ -64,6 +64,6 @@ export class CreateItemDto {
   @ApiPropertyOptional()
   pay_on_delivery_enabled?: boolean;
 
-  @ApiPropertyOptional()
-  pay_at_pickup_enabled?: boolean;
+  @ApiPropertyOptional({ default: 'txcd_99999999' })
+  stripe_tax_code_id?: string;
 }

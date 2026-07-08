@@ -3157,6 +3157,8 @@
       "items": "Articles"
     },
     "tax": "Taxe",
+    "taxAtCheckout": "La taxe de vente est calculée au paiement",
+    "taxJurisdiction": "Juridiction fiscale",
     "totalAmount": "Montant Total",
     "totalQuantity": "Quantité Totale",
     "transactionId": "ID de Transaction",
@@ -3259,6 +3261,12 @@
     "specialProperties": "Propriétés particulières",
     "subcategory": "Sous-catégorie",
     "weight": "Poids",
+    "taxCategory": {
+      "label": "Catégorie fiscale du produit",
+      "help": "Utilisée pour calculer la taxe de vente à la caisse. N'affecte pas les commandes passées.",
+      "change": "Changer la catégorie fiscale",
+      "otherGroup": "Autre"
+    },
     "itemCard": {
       "views": "{{count}} vues",
       "ratingAria": "Note moyenne {{avg}} sur 5, {{count}} avis",

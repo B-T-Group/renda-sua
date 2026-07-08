@@ -229,6 +229,7 @@ interface OrderSummaryProps {
   disabled: boolean;
   isMobile: boolean;
   error?: string | null;
+  showTaxAtCheckoutNotice?: boolean;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -264,6 +265,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   disabled,
   isMobile,
   error,
+  showTaxAtCheckoutNotice = false,
 }) => {
   const { t } = useTranslation();
   const hasDealPrices = resolvedPricing.hasDeal;
@@ -617,6 +619,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
           )}
 
           <Divider sx={{ my: 1.5 }} />
+
+          {showTaxAtCheckoutNotice ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mb: 1 }}
+            >
+              {t(
+                'orders.taxAtCheckout',
+                'Sales tax is calculated at checkout'
+              )}
+            </Typography>
+          ) : null}
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" fontWeight="bold">
@@ -1629,6 +1644,23 @@ const PlaceOrderPage: React.FC = () => {
     );
   }, [selectedItem, paymentSystems]);
 
+  const showTaxAtCheckoutNotice = useMemo(() => {
+    if (!itemCountrySupportsStripe) return false;
+    if (paymentTiming !== 'pay_now') return false;
+    const country = (
+      isPickupOrder ? itemOriginCountryIso : selectedAddress?.country
+    )
+      ?.trim()
+      .toUpperCase();
+    return country === 'CA';
+  }, [
+    itemCountrySupportsStripe,
+    paymentTiming,
+    isPickupOrder,
+    itemOriginCountryIso,
+    selectedAddress?.country,
+  ]);
+
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
     const phoneToValidate = useDifferentPhone
@@ -2453,6 +2485,19 @@ const PlaceOrderPage: React.FC = () => {
 
                     <Divider sx={{ my: 1.5 }} />
 
+                    {showTaxAtCheckoutNotice ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 1 }}
+                      >
+                        {t(
+                          'orders.taxAtCheckout',
+                          'Sales tax is calculated at checkout'
+                        )}
+                      </Typography>
+                    ) : null}
+
                     <Box
                       sx={{
                         display: 'flex',
@@ -2801,6 +2846,7 @@ const PlaceOrderPage: React.FC = () => {
               disabled={!canPlaceOrder}
               isMobile
               error={error}
+              showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
             />
 
             {/* Fixed bottom nav */}
@@ -3660,6 +3706,7 @@ const PlaceOrderPage: React.FC = () => {
               disabled={!canPlaceOrder}
               isMobile={isMobile}
               error={error}
+              showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
             />
           </Grid>
         </Grid>

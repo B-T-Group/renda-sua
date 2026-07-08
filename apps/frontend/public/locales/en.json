@@ -3413,6 +3413,8 @@
       "items": "Items"
     },
     "tax": "Tax",
+    "taxAtCheckout": "Sales tax is calculated at checkout",
+    "taxJurisdiction": "Tax jurisdiction",
     "total": "Total",
     "totalAmount": "Total Amount",
     "totalQuantity": "Total Quantity",
@@ -3516,6 +3518,12 @@
     "specialProperties": "Special properties",
     "subcategory": "Subcategory",
     "weight": "Weight",
+    "taxCategory": {
+      "label": "Product tax category",
+      "help": "Used to calculate sales tax at checkout. Does not affect past orders.",
+      "change": "Change tax category",
+      "otherGroup": "Other"
+    },
     "itemCard": {
       "views": "{{count}} views",
       "ratingAria": "Average rating {{avg}} out of 5, {{count}} ratings",

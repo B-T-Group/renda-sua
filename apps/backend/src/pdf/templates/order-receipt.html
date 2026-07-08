@@ -330,6 +330,12 @@
             <span>Tax Amount:</span>
             <span>{{currency}} {{taxAmount}}</span>
           </div>
+          {{#taxJurisdiction}}
+          <div class="pricing-row">
+            <span>Tax Jurisdiction:</span>
+            <span>{{taxJurisdiction}}</span>
+          </div>
+          {{/taxJurisdiction}}
           <div class="pricing-row">
             <span>Total Amount:</span>
             <span>{{currency}} {{totalAmount}}</span>

@@ -31,6 +31,8 @@ import { useCategories, useSubcategories } from '../../../../hooks/useCategories
 import { useCreateItemFromImage } from '../../../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import { Item, useItems } from '../../../../hooks/useItems';
+import ProductTaxCategorySelect from '../../../business/ProductTaxCategorySelect';
+import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../../../hooks/useStripeTaxCodes';
 
 export interface CreatedSaleItemSummary {
   id: string;
@@ -103,6 +105,9 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [currency, setCurrency] = useState('XAF');
+  const [stripeTaxCodeId, setStripeTaxCodeId] = useState(
+    STRIPE_TAX_CODE_GENERAL_TANGIBLE
+  );
   const [aiOverwriteDialogOpen, setAiOverwriteDialogOpen] = useState(false);
   const [extraLinkWarning, setExtraLinkWarning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -231,6 +236,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
             description: description.trim() || undefined,
             price: numericPrice ?? itemForEdit.price,
             currency: currency.trim() || 'XAF',
+            stripe_tax_code_id: stripeTaxCodeId,
           },
           { skipRefetch: true }
         );
@@ -262,6 +268,13 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     });
     const itemId = res?.item?.id;
     if (!itemId) return;
+    if (stripeTaxCodeId !== STRIPE_TAX_CODE_GENERAL_TANGIBLE) {
+      await updateItem(
+        itemId,
+        { stripe_tax_code_id: stripeTaxCodeId },
+        { skipRefetch: true }
+      );
+    }
     const failedIds = await linkExtraImages(associateImageToItem, itemId, extraIds);
     if (failedIds.length > 0) setExtraLinkWarning(true);
     enqueueSnackbar(
@@ -467,6 +480,11 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         required
         disabled={formDisabled}
         helperText={t('business.onboarding.firstSale.create.descriptionHelper', 'Required — describe what you are renting or selling')}
+      />
+      <ProductTaxCategorySelect
+        value={stripeTaxCodeId}
+        onChange={setStripeTaxCodeId}
+        disabled={formDisabled}
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <TextField

@@ -15,6 +15,7 @@ import {
   type StripePaymentTransaction,
 } from './stripe-payments-database.service';
 import { StripeService } from './stripe.service';
+import { StripeTaxOrderPersistenceService } from '../stripe-tax/stripe-tax-order-persistence.service';
 
 @Injectable()
 export class StripePaymentCallbackProcessor {
@@ -25,7 +26,8 @@ export class StripePaymentCallbackProcessor {
     private readonly accountsService: AccountsService,
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
     private readonly stripeService: StripeService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly taxOrderPersistence: StripeTaxOrderPersistenceService
   ) {}
 
   private isManualCapture(tx: StripePaymentTransaction): boolean {
@@ -104,13 +106,13 @@ export class StripePaymentCallbackProcessor {
       if (pi?.status === 'requires_capture') {
         await this.applyAuthorized(tx, paymentIntentId, req);
       } else if (pi?.status === 'succeeded') {
-        await this.applyCaptured(tx, paymentIntentId, req);
+        await this.applyCaptured(tx, paymentIntentId, req, session);
       }
       return;
     }
 
     if (session.payment_status !== 'paid') return;
-    await this.applyCaptured(tx, paymentIntentId, req);
+    await this.applyCaptured(tx, paymentIntentId, req, session);
   }
 
   async onPaymentIntentAmountCapturableUpdated(
@@ -155,7 +157,7 @@ export class StripePaymentCallbackProcessor {
       );
       return;
     }
-    await this.applyCaptured(tx, paymentIntent.id, req);
+    await this.applyCaptured(tx, paymentIntent.id, req, undefined, paymentIntent);
   }
 
   async onPaymentIntentCanceled(
@@ -253,7 +255,9 @@ export class StripePaymentCallbackProcessor {
   private async applyCaptured(
     tx: StripePaymentTransaction,
     paymentIntentId: string | undefined,
-    req: Request
+    req: Request,
+    checkoutSession?: Stripe.Checkout.Session,
+    paymentIntent?: Stripe.PaymentIntent
   ): Promise<void> {
     if (tx.payment_entity === 'order_cash_reconciliation') {
       await this.settleCashReconciliation(tx, paymentIntentId, req);
@@ -265,8 +269,61 @@ export class StripePaymentCallbackProcessor {
       stripe_payment_intent_id: paymentIntentId,
       captured_at: capturedAt,
     });
-    await this.creditWalletIfNeeded(tx);
-    await this.runHandlerSuccess(tx, req);
+
+    if (tx.payment_entity === 'order') {
+      await this.finalizeOrderTaxIfNeeded(tx, checkoutSession, paymentIntent);
+    }
+
+    const updatedTx =
+      (await this.databaseService.getTransactionById(tx.id)) ?? tx;
+    await this.creditWalletIfNeeded(updatedTx);
+    await this.runHandlerSuccess(updatedTx, req);
+  }
+
+  private async finalizeOrderTaxIfNeeded(
+    tx: StripePaymentTransaction,
+    checkoutSession?: Stripe.Checkout.Session,
+    paymentIntent?: Stripe.PaymentIntent
+  ): Promise<void> {
+    const orderNumber = (tx.entity_id || '').trim();
+    if (!orderNumber) return;
+
+    const taxExpected =
+      checkoutSession?.automatic_tax?.enabled === true ||
+      Boolean(paymentIntent?.metadata?.stripe_tax_calculation_id?.trim());
+
+    if (!taxExpected) return;
+
+    if (checkoutSession?.automatic_tax?.enabled) {
+      await this.taxOrderPersistence.finalizeFromCheckoutSession(
+        orderNumber,
+        checkoutSession,
+        tx.id
+      );
+      return;
+    }
+
+    const calcId = paymentIntent?.metadata?.stripe_tax_calculation_id?.trim();
+    if (!calcId) return;
+
+    const calculation = await this.stripeService.retrieveTaxCalculation(calcId);
+    let taxTransactionId: string | undefined;
+    try {
+      const taxTx =
+        await this.stripeService.createTaxTransactionFromCalculation(
+          calcId,
+          orderNumber
+        );
+      taxTransactionId = taxTx.id;
+    } catch {
+      // Payment may already have created the tax transaction
+    }
+    await this.taxOrderPersistence.finalizeFromTaxCalculation({
+      orderNumber,
+      calculation,
+      transactionId: tx.id,
+      taxTransactionId,
+    });
   }
 
   private async creditWalletIfNeeded(

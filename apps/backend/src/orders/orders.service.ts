@@ -38,6 +38,9 @@ import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.constants';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import type { PersonaId } from '../users/persona.types';
 import {
   isActivePersona,
@@ -352,6 +355,8 @@ export class OrdersService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeCheckoutService: StripeCheckoutService,
     private readonly stripeCaptureService: StripeCaptureService,
+    private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
+    private readonly taxCalculationService: StripeTaxCalculationService,
     private readonly orderOffersService: OrderOffersService,
     private readonly cancellationPolicyService: CancellationPolicyService
   ) {}
@@ -6719,7 +6724,15 @@ export class OrdersService {
         ? orderData.delivery_address_id.trim()
         : '';
 
-    let address: { id: string } | null = null;
+    let address: {
+      id: string;
+      address_line_1: string;
+      address_line_2?: string | null;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    } | null = null;
     if (fulfillmentMethod === 'delivery') {
       if (!clientDeliveryAddressId) {
         throw new HttpException(
@@ -6751,6 +6764,14 @@ export class OrdersService {
           business_location_id
           business_location {
             business_id
+            address {
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
             business {
               id
               name
@@ -6773,6 +6794,7 @@ export class OrdersService {
             currency
             weight
             max_order_quantity
+            stripe_tax_code_id
             item_variants(
               where: { is_active: { _eq: true } }
               order_by: { sort_order: asc }
@@ -7214,7 +7236,19 @@ export class OrdersService {
     const business_location_id = businessInventories[0].business_location_id;
     const delivery_address_id = address?.id ?? null;
     const subtotal = totalAmount;
+    const pre_tax_total = total_amount;
     const tax_amount = 0;
+    const taxCountrySource =
+      fulfillmentMethod === 'delivery' && address?.country
+        ? address.country
+        : businessInventories[0]?.business_location?.address?.country;
+    const tax_status =
+      useStripeRail &&
+      this.taxCheckoutBuilder.isTaxEnabledForCountry(
+        this.taxCheckoutBuilder.normalizeCountryCode(taxCountrySource)
+      )
+        ? 'estimated'
+        : 'none';
     const current_status =
       paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
         ? 'pending'
@@ -7264,6 +7298,8 @@ export class OrdersService {
         $currency: String!,
         $subTotal: numeric!,
         $taxAmount: numeric!,
+        $taxStatus: String!,
+        $preTaxTotal: numeric,
         $baseDeliveryFee: numeric!,
         $perKmDeliveryFee: numeric!,
         $totalAmount: numeric!,
@@ -7302,6 +7338,8 @@ export class OrdersService {
           per_km_delivery_fee: $perKmDeliveryFee,
           subtotal: $subTotal,
           tax_amount: $taxAmount,
+          tax_status: $taxStatus,
+          pre_tax_total: $preTaxTotal,
           total_amount: $totalAmount,
           discount_code_id: $discountCodeId,
           discount_amount: $discountAmount,
@@ -7390,6 +7428,9 @@ export class OrdersService {
           variant_name: variant.name,
           ...(snapshot && { variant_snapshot: snapshot }),
         }),
+        stripe_tax_code_id:
+          businessInventory.item.stripe_tax_code_id ||
+          STRIPE_TAX_CODE_GENERAL_TANGIBLE,
       };
     });
 
@@ -7407,6 +7448,8 @@ export class OrdersService {
         currency: currency,
         subTotal: subtotal,
         taxAmount: tax_amount,
+        taxStatus: tax_status,
+        preTaxTotal: pre_tax_total,
         baseDeliveryFee: deliveryFeeInfo.baseDeliveryFee,
         perKmDeliveryFee: deliveryFeeInfo.perKmDeliveryFee,
         totalAmount: total_amount,
@@ -7614,6 +7657,19 @@ export class OrdersService {
           sellerCountry ?? undefined
         );
 
+      const taxCheckoutParams = this.buildStripeTaxCheckoutParams({
+        currency,
+        orderItemsData,
+        deliveryFee:
+          deliveryFeeInfo.baseDeliveryFee + deliveryFeeInfo.perKmDeliveryFee,
+        discountAmount: discountAmount ?? 0,
+        deliveryAddress:
+          fulfillmentMethod === 'delivery' && address ? address : null,
+        businessLocationAddress:
+          businessInventories[0]?.business_location?.address ?? null,
+        fulfillmentMethod,
+      });
+
       if (orderData.stripe_payment_method === 'payment_sheet') {
         const paymentIntent = await this.createStripeOrderPaymentIntent({
           orderNumber,
@@ -7622,6 +7678,7 @@ export class OrdersService {
           accountId: account.id,
           customerEmail: user.email ?? undefined,
           captureMethod,
+          taxCheckoutParams,
         });
         return {
           ...order,
@@ -7647,6 +7704,7 @@ export class OrdersService {
         accountId: account.id,
         customerEmail: user.email ?? undefined,
         captureMethod,
+        taxCheckoutParams,
       });
       return {
         ...order,
@@ -7721,6 +7779,72 @@ export class OrdersService {
     };
   }
 
+  private buildStripeTaxCheckoutParams(input: {
+    currency: string;
+    orderItemsData: Array<{
+      item_name: string;
+      unit_price: number;
+      quantity: number;
+      stripe_tax_code_id?: string | null;
+      business_inventory_id?: string;
+    }>;
+    deliveryFee: number;
+    discountAmount: number;
+    deliveryAddress: {
+      address_line_1: string;
+      address_line_2?: string | null;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    } | null;
+    businessLocationAddress: {
+      address_line_1: string;
+      address_line_2?: string | null;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    } | null;
+    fulfillmentMethod: 'delivery' | 'pickup';
+  }) {
+    const addressRecord =
+      input.fulfillmentMethod === 'delivery' && input.deliveryAddress
+        ? input.deliveryAddress
+        : input.businessLocationAddress;
+    const customerAddress = addressRecord
+      ? this.taxCheckoutBuilder.addressFromRecord(addressRecord)
+      : null;
+    const taxEnabled =
+      !!customerAddress &&
+      this.taxCheckoutBuilder.isTaxEnabledForCountry(customerAddress.country);
+    const orderItems = input.orderItemsData.map((item) => ({
+      name: item.item_name,
+      unitPrice: Number(item.unit_price),
+      quantity: item.quantity,
+      taxCode: item.stripe_tax_code_id,
+      reference: item.business_inventory_id,
+    }));
+    const taxLineItems = taxEnabled
+      ? this.taxCheckoutBuilder.buildLineItems({
+          currency: input.currency,
+          orderItems,
+          deliveryFee: input.deliveryFee,
+          discountAmount: input.discountAmount,
+          customerAddress,
+        })
+      : undefined;
+    return {
+      taxEnabled,
+      customerAddress,
+      taxLineItems,
+      deliveryAddress: addressRecord,
+      orderItems,
+      deliveryFee: input.deliveryFee,
+      discountAmount: input.discountAmount,
+    };
+  }
+
   /**
    * Create a Stripe Checkout session for a Stripe-rail order. Failures are
    * logged and swallowed so the order is still created (payment can be retried).
@@ -7732,12 +7856,14 @@ export class OrdersService {
     accountId: string;
     customerEmail?: string;
     captureMethod?: 'automatic' | 'manual';
+    taxCheckoutParams?: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
   }): Promise<{
     transactionId: string;
     reference: string;
     paymentUrl?: string;
   } | null> {
     try {
+      const tax = params.taxCheckoutParams;
       const result = await this.stripeCheckoutService.createCheckout({
         amount: params.amount,
         currency: params.currency,
@@ -7747,6 +7873,14 @@ export class OrdersService {
         entityId: params.orderNumber,
         customerEmail: params.customerEmail,
         captureMethod: params.captureMethod,
+        ...(tax?.taxEnabled && tax.taxLineItems?.length
+          ? {
+              automaticTax: true,
+              taxLineItems: tax.taxLineItems,
+              customerAddress: tax.customerAddress ?? undefined,
+              allowedShippingCountries: [tax.customerAddress!.country],
+            }
+          : {}),
       });
       return {
         transactionId: result.transactionId,
@@ -7775,6 +7909,7 @@ export class OrdersService {
     accountId: string;
     customerEmail?: string;
     captureMethod?: 'automatic' | 'manual';
+    taxCheckoutParams?: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
   }): Promise<{
     transactionId: string;
     reference: string;
@@ -7791,6 +7926,34 @@ export class OrdersService {
         customerEmail: params.customerEmail,
         captureMethod: params.captureMethod,
       });
+
+      const tax = params.taxCheckoutParams;
+      if (
+        tax?.taxEnabled &&
+        tax.deliveryAddress &&
+        tax.orderItems.length > 0
+      ) {
+        const taxResult = await this.taxCalculationService.calculateForOrder({
+          orderNumber: params.orderNumber,
+          currency: params.currency,
+          orderItems: tax.orderItems,
+          deliveryFee: tax.deliveryFee,
+          discountAmount: tax.discountAmount,
+          deliveryAddress: tax.deliveryAddress,
+          transactionId: result.transactionId,
+          finalizeOnSuccess: false,
+        });
+        if (taxResult && result.paymentIntentId) {
+          await this.stripeCheckoutService.updatePaymentIntentTax(
+            result.paymentIntentId,
+            taxResult.amountTotal,
+            params.currency,
+            taxResult.calculationId,
+            result.reference
+          );
+        }
+      }
+
       return {
         transactionId: result.transactionId,
         reference: result.reference,

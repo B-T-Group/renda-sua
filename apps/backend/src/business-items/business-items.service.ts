@@ -17,6 +17,8 @@ import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.constants';
+import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 
 const GET_ITEMS = `
@@ -49,6 +51,13 @@ const GET_ITEMS = `
       max_order_quantity
       is_active
       business_id
+      stripe_tax_code_id
+      stripe_tax_code {
+        id
+        name
+        description
+        group_name
+      }
       created_at
       updated_at
       brand {
@@ -218,6 +227,13 @@ const GET_SINGLE_ITEM = `
       max_order_quantity
       is_active
       business_id
+      stripe_tax_code_id
+      stripe_tax_code {
+        id
+        name
+        description
+        group_name
+      }
       created_at
       updated_at
       brand {
@@ -621,7 +637,8 @@ export class BusinessItemsService {
     private readonly itemsService: ItemsService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly permissionService: PermissionService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly stripeTaxCodesService: StripeTaxCodesService
   ) {}
 
   private triggerLifecycleRecompute(businessId: string): void {
@@ -1288,10 +1305,22 @@ export class BusinessItemsService {
     input: ItemsInsertInput | CreateItemDto
   ): Promise<Record<string, unknown>> {
     await this.assertOfflinePaymentAllowed(businessId, input);
-    const created = await this.itemsService.createItem(
-      businessId,
-      input as ItemsInsertInput
-    );
+    const dto = input as CreateItemDto;
+    let stripe_tax_code_id: string;
+    try {
+      stripe_tax_code_id = await this.stripeTaxCodesService.validateTaxCodeId(
+        dto.stripe_tax_code_id
+      );
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, message: error?.message || 'Invalid tax category' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const created = await this.itemsService.createItem(businessId, {
+      ...(input as ItemsInsertInput),
+      stripe_tax_code_id,
+    });
     this.triggerLifecycleRecompute(businessId);
     return created;
   }
@@ -1302,10 +1331,24 @@ export class BusinessItemsService {
     updates: UpdateItemDto
   ) {
     await this.assertOfflinePaymentAllowed(businessId, updates);
+    const payload: UpdateItemDto = { ...updates };
+    if (updates.stripe_tax_code_id !== undefined) {
+      try {
+        payload.stripe_tax_code_id =
+          await this.stripeTaxCodesService.validateTaxCodeId(
+            updates.stripe_tax_code_id
+          );
+      } catch (error: any) {
+        throw new HttpException(
+          { success: false, message: error?.message || 'Invalid tax category' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
     const updated = await this.itemsService.updateItem(
       businessId,
       itemId,
-      updates
+      payload
     );
     this.triggerLifecycleRecompute(businessId);
     return updated;
@@ -1461,6 +1504,7 @@ export class BusinessItemsService {
             name: row.name,
             description: row.description ?? '',
             ...(resolvedSubCategoryIdForInsert !== undefined && { item_sub_category_id: resolvedSubCategoryIdForInsert }),
+            stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
             price: row.price,
             currency: row.currency,
             business_id: businessId,

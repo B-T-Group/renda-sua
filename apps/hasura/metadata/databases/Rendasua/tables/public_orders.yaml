@@ -130,6 +130,12 @@ insert_permissions:
         - per_km_delivery_fee
         - subtotal
         - tax_amount
+        - tax_status
+        - tax_jurisdiction
+        - tax_breakdown
+        - stripe_tax_calculation_id
+        - stripe_tax_transaction_id
+        - pre_tax_total
         - total_amount
         - special_instructions
         - actual_delivery_time
@@ -159,6 +165,12 @@ select_permissions:
         - delivery_address_id
         - fulfillment_method
         - tax_amount
+        - tax_status
+        - tax_jurisdiction
+        - tax_breakdown
+        - stripe_tax_calculation_id
+        - stripe_tax_transaction_id
+        - pre_tax_total
         - currency
         - current_status
         - estimated_delivery_time
@@ -211,6 +223,12 @@ select_permissions:
         - base_delivery_fee
         - per_km_delivery_fee
         - tax_amount
+        - tax_status
+        - tax_jurisdiction
+        - tax_breakdown
+        - stripe_tax_calculation_id
+        - stripe_tax_transaction_id
+        - pre_tax_total
         - total_amount
         - currency
         - current_status
@@ -263,6 +281,12 @@ select_permissions:
         - base_delivery_fee
         - per_km_delivery_fee
         - tax_amount
+        - tax_status
+        - tax_jurisdiction
+        - tax_breakdown
+        - stripe_tax_calculation_id
+        - stripe_tax_transaction_id
+        - pre_tax_total
         - total_amount
         - currency
         - current_status

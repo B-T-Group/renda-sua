@@ -29,6 +29,13 @@ export interface Item {
   min_order_quantity: number;
   max_order_quantity: number | null;
   is_active: boolean;
+  stripe_tax_code_id?: string | null;
+  stripe_tax_code?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    group_name?: string | null;
+  } | null;
   business_id: string;
   created_at: string;
   updated_at: string;
@@ -133,6 +140,7 @@ export interface CreateItemData {
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
+  stripe_tax_code_id?: string;
   business_id: string;
 }
 

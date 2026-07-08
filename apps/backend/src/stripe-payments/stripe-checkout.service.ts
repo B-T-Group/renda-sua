@@ -18,6 +18,10 @@ export interface CreateCheckoutParams {
   successUrl?: string;
   cancelUrl?: string;
   captureMethod?: 'automatic' | 'manual';
+  taxLineItems?: import('../stripe-payments/stripe.service').StripeCheckoutTaxLineItem[];
+  customerAddress?: import('../stripe-payments/stripe.service').StripeTaxCustomerAddress;
+  automaticTax?: boolean;
+  allowedShippingCountries?: string[];
 }
 
 export interface CreateCheckoutResult {
@@ -111,6 +115,10 @@ export class StripeCheckoutService {
       cancelUrl,
       metadata: this.buildMetadata(params, reference),
       captureMethod: params.captureMethod,
+      taxLineItems: params.taxLineItems,
+      customerAddress: params.customerAddress,
+      automaticTax: params.automaticTax,
+      allowedShippingCountries: params.allowedShippingCountries,
     });
 
     await this.databaseService.updateTransaction(transaction.id, {
@@ -170,5 +178,29 @@ export class StripeCheckoutService {
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
     };
+  }
+
+  async updatePaymentIntentTax(
+    paymentIntentId: string,
+    amountTotal: number,
+    currency: string,
+    calculationId: string,
+    reference: string
+  ): Promise<void> {
+    const existing = await this.stripeService.retrievePaymentIntent(paymentIntentId);
+    await this.stripeService.updatePaymentIntentAmount(
+      paymentIntentId,
+      amountTotal,
+      currency,
+      `pi_tax_${reference}`
+    );
+    await this.stripeService.updatePaymentIntentMetadata(
+      paymentIntentId,
+      {
+        ...(existing.metadata ?? {}),
+        stripe_tax_calculation_id: calculationId,
+      },
+      `pi_meta_${reference}`
+    );
   }
 }

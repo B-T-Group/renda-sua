@@ -39,6 +39,7 @@ import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MobilePaymentsCoreModule } from '../mobile-payments/mobile-payments-core.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrangeMomoController } from '../orange-momo/orange-momo.controller';
@@ -128,6 +129,7 @@ import { AppService } from './app.service';
     OrangeMomoModule,
     MobilePaymentsModule,
     StripePaymentsModule,
+    StripeTaxModule,
     AdminModule,
     NotificationsModule,
     BrandsModule,

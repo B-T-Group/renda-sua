@@ -221,6 +221,10 @@ export interface StripeConfig {
   authExpiryGraceHours: number;
   /** Hours an authorized order may stay ready_for_pickup without agent before auto-cancel. */
   authorizedNoAgentTimeoutHours: number;
+  /** When true, Stripe Tax is applied on Stripe-rail checkout for supported countries. */
+  taxEnabled: boolean;
+  /** ISO country codes where Stripe Tax is active (subset of enabledCountries). */
+  taxCountries: string[];
 }
 
 export interface NotificationConfig {
@@ -433,7 +437,9 @@ export default (): Configuration => {
         'pk_test_51TmILnLBaKicCErK28cHNMBxBBgho2lxbim2RfW7x4Zy5iVD8e1J9a16CvLiSdKvtTjjdQYxC4dcsxmSxIqb8Jj0009QRBgqT2',
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
       connectWebhookSecret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET || '',
-      connectClientId: process.env.STRIPE_CONNECT_CLIENT_ID || 'ca_UlqXfWRsY9mhe2wRVzdnvLLB7LlCjqx4',
+      connectClientId:
+        process.env.STRIPE_CONNECT_CLIENT_ID ||
+        'ca_UlqXfWRsY9mhe2wRVzdnvLLB7LlCjqx4',
       apiVersion: process.env.STRIPE_API_VERSION || '2024-06-20',
       appBaseUrl: (
         process.env.STRIPE_APP_BASE_URL ||
@@ -446,7 +452,9 @@ export default (): Configuration => {
         .filter((c) => c.length === 2),
       manualCaptureEnabled:
         process.env.STRIPE_MANUAL_CAPTURE_ENABLED === 'true',
-      manualCaptureCountries: (process.env.STRIPE_MANUAL_CAPTURE_COUNTRIES || '')
+      manualCaptureCountries: (
+        process.env.STRIPE_MANUAL_CAPTURE_COUNTRIES || ''
+      )
         .split(',')
         .map((c) => c.trim().toUpperCase())
         .filter((c) => c.length === 2),
@@ -458,6 +466,11 @@ export default (): Configuration => {
         process.env.STRIPE_AUTHORIZED_NO_AGENT_TIMEOUT_HOURS || '48',
         10
       ),
+      taxEnabled: process.env.STRIPE_TAX_ENABLED === 'true',
+      taxCountries: (process.env.STRIPE_TAX_COUNTRIES || 'CA')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),
@@ -703,16 +716,18 @@ export default (): Configuration => {
     boldsign: {
       enabled: process.env.BOLDSIGN_ENABLED === 'true',
       apiKey: process.env.BOLDSIGN_API_KEY || '',
-      baseUrl: (process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com').replace(
-        /\/$/,
-        ''
-      ),
+      baseUrl: (
+        process.env.BOLDSIGN_BASE_URL || 'https://api-ca.boldsign.com'
+      ).replace(/\/$/, ''),
       webhookSigningSecret: process.env.BOLDSIGN_WEBHOOK_SECRET || '',
       reminderIntervalDays: parseInt(
         process.env.BOLDSIGN_REMINDER_INTERVAL_DAYS || '3',
         10
       ),
-      expirationDays: parseInt(process.env.BOLDSIGN_EXPIRATION_DAYS || '30', 10),
+      expirationDays: parseInt(
+        process.env.BOLDSIGN_EXPIRATION_DAYS || '30',
+        10
+      ),
     },
   };
 };
