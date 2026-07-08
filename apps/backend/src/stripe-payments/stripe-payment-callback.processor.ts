@@ -330,8 +330,18 @@ export class StripePaymentCallbackProcessor {
     tx: StripePaymentTransaction
   ): Promise<void> {
     if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return;
+    if (await this.accountsService.hasTransactionForReference(tx.id)) {
+      this.logger.debug(`Stripe payment deposit already credited for ${tx.id}`);
+      return;
+    }
+    await this.registerStripeDeposit(tx);
+  }
+
+  private async registerStripeDeposit(
+    tx: StripePaymentTransaction
+  ): Promise<void> {
     const result = await this.accountsService.registerTransaction({
-      accountId: tx.account_id,
+      accountId: tx.account_id as string,
       amount: tx.amount,
       transactionType: 'deposit',
       memo: `Stripe payment deposit - ${tx.reference}`,

@@ -265,6 +265,22 @@ export class StripePaymentsDatabaseService {
     return !!response.insert_stripe_events_one?.id;
   }
 
+  async getEventByEventId(eventId: string): Promise<{
+    id: string;
+    processed_at?: string | null;
+  } | null> {
+    const query = `
+      query StripeEventById($eventId: String!) {
+        stripe_events(where: { event_id: { _eq: $eventId } }, limit: 1) {
+          id
+          processed_at
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { eventId });
+    return response.stripe_events?.[0] ?? null;
+  }
+
   async markEventProcessed(eventId: string): Promise<void> {
     const mutation = `
       mutation MarkStripeEventProcessed($eventId: String!) {
