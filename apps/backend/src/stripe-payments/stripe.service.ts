@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { StripeConfig } from '../config/configuration';
+import { STRIPE_TAX_CODE_SHIPPING } from '../stripe-tax/stripe-tax.constants';
 
 export interface CreateCheckoutSessionParams {
   amount: number;
@@ -13,7 +14,8 @@ export interface CreateCheckoutSessionParams {
   cancelUrl: string;
   metadata?: Record<string, string>;
   captureMethod?: 'automatic' | 'manual';
-  /** When set, replaces single aggregate line item with itemized lines + automatic_tax. */
+  /** When set with automatic tax, delivery fee is passed as a shipping option (not a line item). */
+  deliveryFee?: number;
   taxLineItems?: StripeCheckoutTaxLineItem[];
   customerAddress?: StripeTaxCustomerAddress;
   automaticTax?: boolean;
@@ -90,6 +92,24 @@ export class StripeService {
     return Math.round(amount * 100);
   }
 
+  private buildCheckoutShippingOption(
+    deliveryFee: number | undefined,
+    currency: string
+  ): Stripe.Checkout.SessionCreateParams.ShippingOption | null {
+    if (!deliveryFee || deliveryFee <= 0) return null;
+    const amount = this.toMinorUnits(deliveryFee, currency);
+    if (amount <= 0) return null;
+    return {
+      shipping_rate_data: {
+        type: 'fixed_amount',
+        fixed_amount: { amount, currency: currency.toLowerCase() },
+        display_name: 'Delivery',
+        tax_behavior: 'exclusive',
+        tax_code: STRIPE_TAX_CODE_SHIPPING,
+      },
+    };
+  }
+
   async createCheckoutSession(
     params: CreateCheckoutSessionParams
   ): Promise<Stripe.Checkout.Session> {
@@ -138,6 +158,13 @@ export class StripeService {
 
     if (useTax) {
       sessionParams.automatic_tax = { enabled: true };
+      const shippingCost = this.buildCheckoutShippingOption(
+        params.deliveryFee,
+        params.currency
+      );
+      if (shippingCost) {
+        sessionParams.shipping_options = [shippingCost];
+      }
       if (params.customerAddress) {
         paymentIntentData.shipping = {
           name:
@@ -199,6 +226,7 @@ export class StripeService {
     currency: string;
     customerAddress: StripeTaxCustomerAddress;
     lineItems: StripeCheckoutTaxLineItem[];
+    shippingCost?: { amount: number; taxCode: string } | null;
   }): Promise<Stripe.Tax.Calculation> {
     return this.getClient().tax.calculations.create({
       currency: params.currency.toLowerCase(),
@@ -212,6 +240,14 @@ export class StripeService {
         tax_code: line.taxCode,
         tax_behavior: 'exclusive',
       })),
+      ...(params.shippingCost
+        ? {
+            shipping_cost: {
+              amount: params.shippingCost.amount,
+              tax_code: params.shippingCost.taxCode,
+            },
+          }
+        : {}),
     });
   }
 

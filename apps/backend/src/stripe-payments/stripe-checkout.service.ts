@@ -19,6 +19,7 @@ export interface CreateCheckoutParams {
   cancelUrl?: string;
   captureMethod?: 'automatic' | 'manual';
   taxLineItems?: import('../stripe-payments/stripe.service').StripeCheckoutTaxLineItem[];
+  deliveryFee?: number;
   customerAddress?: import('../stripe-payments/stripe.service').StripeTaxCustomerAddress;
   automaticTax?: boolean;
   allowedShippingCountries?: string[];
@@ -117,6 +118,7 @@ export class StripeCheckoutService {
       metadata: this.buildMetadata(params, reference),
       captureMethod: params.captureMethod,
       taxLineItems: params.taxLineItems,
+      deliveryFee: params.deliveryFee,
       customerAddress: params.customerAddress,
       automaticTax: params.automaticTax,
       allowedShippingCountries: params.customerAddress

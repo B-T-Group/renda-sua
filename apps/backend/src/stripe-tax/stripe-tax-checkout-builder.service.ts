@@ -50,23 +50,22 @@ export class StripeTaxCheckoutBuilderService {
       reference: item.reference,
     }));
 
-    const discounted = this.applyProportionalDiscount(
+    return this.applyProportionalDiscount(
       items,
       params.discountAmount,
       params.currency
-    );
+    ).filter((line) => line.unitAmount > 0 && line.quantity > 0);
+  }
 
-    if (params.deliveryFee > 0) {
-      discounted.push({
-        name: 'Delivery',
-        unitAmount: this.toMinorUnits(params.deliveryFee, params.currency),
-        quantity: 1,
-        taxCode: STRIPE_TAX_CODE_SHIPPING,
-        reference: 'delivery',
-      });
-    }
-
-    return discounted.filter((line) => line.unitAmount > 0 && line.quantity > 0);
+  /** Stripe Tax API: shipping must use `shipping_cost`, not a line item tax code. */
+  buildShippingCostForTax(
+    deliveryFee: number,
+    currency: string
+  ): { amount: number; taxCode: string } | null {
+    if (deliveryFee <= 0) return null;
+    const amount = this.toMinorUnits(deliveryFee, currency);
+    if (amount <= 0) return null;
+    return { amount, taxCode: STRIPE_TAX_CODE_SHIPPING };
   }
 
   private applyProportionalDiscount(

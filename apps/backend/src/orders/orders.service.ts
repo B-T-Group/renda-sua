@@ -7835,7 +7835,7 @@ export class OrdersService {
       ? this.taxCheckoutBuilder.buildLineItems({
           currency: input.currency,
           orderItems,
-          deliveryFee: input.deliveryFee,
+          deliveryFee: 0,
           discountAmount: input.discountAmount,
           customerAddress,
         })
@@ -7898,6 +7898,7 @@ export class OrdersService {
           ? {
               automaticTax: true,
               taxLineItems: tax.taxLineItems,
+              deliveryFee: tax.deliveryFee,
               customerAddress: tax.customerAddress ?? undefined,
               shippingName: params.shippingName,
             }

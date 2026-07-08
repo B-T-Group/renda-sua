@@ -12,7 +12,7 @@ describe('StripeTaxCheckoutBuilderService', () => {
 
   const service = new StripeTaxCheckoutBuilderService(configService);
 
-  it('builds itemized lines with default tax code', () => {
+  it('builds itemized product lines with default tax code (no delivery line item)', () => {
     const lines = service.buildLineItems({
       currency: 'CAD',
       orderItems: [
@@ -28,10 +28,15 @@ describe('StripeTaxCheckoutBuilderService', () => {
         country: 'CA',
       },
     });
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(1);
     expect(lines[0].taxCode).toBe(STRIPE_TAX_CODE_GENERAL_TANGIBLE);
     expect(lines[0].unitAmount).toBe(1000);
-    expect(lines[1].name).toBe('Delivery');
+  });
+
+  it('builds shipping cost for Stripe Tax API', () => {
+    const shipping = service.buildShippingCostForTax(5, 'CAD');
+    expect(shipping).toEqual({ amount: 500, taxCode: 'txcd_92010001' });
+    expect(service.buildShippingCostForTax(0, 'CAD')).toBeNull();
   });
 
   it('applies proportional discount across item lines', () => {

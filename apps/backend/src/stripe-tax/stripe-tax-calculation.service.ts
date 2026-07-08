@@ -60,16 +60,22 @@ export class StripeTaxCalculationService {
     const lineItems = this.taxBuilder.buildLineItems({
       currency: params.currency,
       orderItems: params.orderItems,
-      deliveryFee: params.deliveryFee,
+      deliveryFee: 0,
       discountAmount: params.discountAmount,
       customerAddress,
     });
-    if (lineItems.length === 0) return null;
+    if (lineItems.length === 0 && params.deliveryFee <= 0) return null;
+
+    const shippingCost = this.taxBuilder.buildShippingCostForTax(
+      params.deliveryFee,
+      params.currency
+    );
 
     const calculation = await this.stripeService.createTaxCalculation({
       currency: params.currency,
       customerAddress,
       lineItems,
+      shippingCost,
     });
 
     const amountTotal = this.taxBuilder.fromMinorUnits(
