@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { AdminModule } from '../admin/admin.module';
+import { AdminAuthModule } from '../admin/admin-auth.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxAdminController } from './stripe-tax-admin.controller';
 import { StripeTaxCalculationService } from './stripe-tax-calculation.service';
@@ -10,7 +10,7 @@ import { StripeTaxController } from './stripe-tax.controller';
 import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence.service';
 
 @Module({
-  imports: [AdminModule, forwardRef(() => StripePaymentsModule)],
+  imports: [AdminAuthModule, forwardRef(() => StripePaymentsModule)],
   controllers: [StripeTaxController, StripeTaxAdminController],
   providers: [
     StripeTaxCodesDatabaseService,
