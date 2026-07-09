@@ -26,8 +26,14 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
+
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -37,6 +43,7 @@ describe('OrdersService', () => {
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
+  let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
   let stripeCaptureService: jest.Mocked<StripeCaptureService>;
 
   const mockUser = {
@@ -160,14 +167,28 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: {} },
+        {
+          provide: MobilePaymentsService,
+          useValue: {
+            getProvider: jest.fn().mockReturnValue('freemopay'),
+            initiatePayment: jest.fn(),
+          },
+        },
         { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {} },
         { provide: PdfService, useValue: {} },
-        { provide: OrderQueueService, useValue: {} },
+        {
+          provide: OrderQueueService,
+          useValue: {
+            sendOrderCreatedMessage: jest.fn(),
+            sendOrderCompletedMessage: jest.fn(),
+            sendOrderCancelledMessage: jest.fn(),
+            sendOrderStatusUpdatedMessage: jest.fn(),
+          },
+        },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         { provide: DeliveryPinService, useValue: {} },
         {
@@ -178,14 +199,41 @@ describe('OrdersService', () => {
           },
         },
         { provide: OrderRefundsService, useValue: {} },
-        { provide: LoyaltyService, useValue: {} },
-        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        {
+          provide: LoyaltyService,
+          useValue: {
+            validateDiscountCode: jest.fn(),
+            generateDiscountCode: jest.fn(),
+            getCodeOwner: jest.fn(),
+          },
+        },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForBusiness: jest.fn(),
+            resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+            getBusinessCountryCode: jest.fn(),
+          },
+        },
         { provide: StripeCheckoutService, useValue: {} },
         {
           provide: StripeCaptureService,
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
             creditWalletForCapturedOrder: jest.fn(),
+          },
+        },
+        {
+          provide: StripeTaxCheckoutBuilderService,
+          useValue: {
+            isTaxEnabledForCountry: jest.fn().mockReturnValue(false),
+            normalizeCountryCode: jest.fn((country: string) => country),
+          },
+        },
+        {
+          provide: StripeTaxCalculationService,
+          useValue: {
+            createCalculation: jest.fn(),
           },
         },
         {
@@ -209,7 +257,79 @@ describe('OrdersService', () => {
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
+    paymentRoutingService = module.get(PaymentRoutingService);
     stripeCaptureService = module.get(StripeCaptureService);
+  });
+
+  describe('createOrder', () => {
+    function pickupInventoryRow() {
+      return {
+        id: 'inventory-1',
+        computed_available_quantity: 5,
+        selling_price: 25,
+        is_active: true,
+        business_location_id: 'location-1',
+        business_location: {
+          business_id: 'business-123',
+          address: { country: 'CA' },
+          business: {
+            id: 'business-123',
+            name: 'Stripe Seller',
+            can_accept_orders: true,
+            user: { id: 'seller-user-1' },
+          },
+        },
+        item: {
+          id: 'item-1',
+          name: 'Pickup Item',
+          description: 'Pickup eligible item',
+          pay_on_delivery_enabled: false,
+          pay_at_pickup_enabled: true,
+          currency: 'CAD',
+          weight: 0,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+        },
+      };
+    }
+
+    it('blocks pay-at-pickup order creation for Stripe-rail sellers', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 0,
+      });
+      hasuraSystemService.executeQuery.mockImplementation((query: string) => {
+        if (query.includes('GetBusinessInventory')) {
+          return Promise.resolve({ business_inventory: [pickupInventoryRow()] });
+        }
+        if (query.includes('GetActiveItemDeals')) {
+          return Promise.resolve({ item_deals: [] });
+        }
+        return Promise.resolve({});
+      });
+      paymentRoutingService.resolveRailForUser.mockResolvedValue('stripe');
+
+      await expect(
+        service.createOrder({
+          items: [{ business_inventory_id: 'inventory-1', quantity: 1 }],
+          fulfillment_method: 'pickup',
+          payment_timing: 'pay_at_pickup',
+          phone_number: '+14165550123',
+        })
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          error: 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED',
+        }),
+        status: HttpStatus.BAD_REQUEST,
+      });
+
+      expect(paymentRoutingService.resolveRailForUser).toHaveBeenCalledWith(
+        'seller-user-1'
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
   });
 
   describe('confirmOrder', () => {
