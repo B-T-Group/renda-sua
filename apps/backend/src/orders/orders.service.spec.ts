@@ -26,6 +26,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 
@@ -37,6 +39,7 @@ describe('OrdersService', () => {
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
+  let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
   let stripeCaptureService: jest.Mocked<StripeCaptureService>;
 
   const mockUser = {
@@ -160,14 +163,35 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: {} },
-        { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
+        {
+          provide: MobilePaymentsService,
+          useValue: {
+            getProvider: jest.fn().mockReturnValue('freemopay'),
+            initiatePayment: jest.fn(),
+          },
+        },
+        {
+          provide: MobilePaymentsDatabaseService,
+          useValue: {
+            hasPendingClaimOrderForOrderNumber: jest
+              .fn()
+              .mockResolvedValue(false),
+          },
+        },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {} },
         { provide: PdfService, useValue: {} },
-        { provide: OrderQueueService, useValue: {} },
+        {
+          provide: OrderQueueService,
+          useValue: {
+            sendOrderCreatedMessage: jest.fn(),
+            sendOrderCompletedMessage: jest.fn(),
+            sendOrderCancelledMessage: jest.fn(),
+            sendOrderStatusUpdatedMessage: jest.fn(),
+          },
+        },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         { provide: DeliveryPinService, useValue: {} },
         {
@@ -178,14 +202,41 @@ describe('OrdersService', () => {
           },
         },
         { provide: OrderRefundsService, useValue: {} },
-        { provide: LoyaltyService, useValue: {} },
-        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        {
+          provide: LoyaltyService,
+          useValue: {
+            validateDiscountCode: jest.fn(),
+            generateDiscountCode: jest.fn(),
+            getCodeOwner: jest.fn(),
+          },
+        },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForBusiness: jest.fn(),
+            resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+            getBusinessCountryCode: jest.fn(),
+          },
+        },
         { provide: StripeCheckoutService, useValue: {} },
         {
           provide: StripeCaptureService,
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
             creditWalletForCapturedOrder: jest.fn(),
+          },
+        },
+        {
+          provide: StripeTaxCheckoutBuilderService,
+          useValue: {
+            isTaxEnabledForCountry: jest.fn().mockReturnValue(false),
+            normalizeCountryCode: jest.fn((country: string) => country),
+          },
+        },
+        {
+          provide: StripeTaxCalculationService,
+          useValue: {
+            createCalculation: jest.fn(),
           },
         },
         {
@@ -198,7 +249,10 @@ describe('OrdersService', () => {
             markOfferExpired: jest.fn(),
           },
         },
-        { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
+        {
+          provide: CancellationPolicyService,
+          useValue: { getPolicy: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -209,7 +263,81 @@ describe('OrdersService', () => {
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
+    paymentRoutingService = module.get(PaymentRoutingService);
     stripeCaptureService = module.get(StripeCaptureService);
+  });
+
+  describe('createOrder', () => {
+    function pickupInventoryRow() {
+      return {
+        id: 'inventory-1',
+        computed_available_quantity: 5,
+        selling_price: 25,
+        is_active: true,
+        business_location_id: 'location-1',
+        business_location: {
+          business_id: 'business-123',
+          address: { country: 'CA' },
+          business: {
+            id: 'business-123',
+            name: 'Stripe Seller',
+            can_accept_orders: true,
+            user: { id: 'seller-user-1' },
+          },
+        },
+        item: {
+          id: 'item-1',
+          name: 'Pickup Item',
+          description: 'Pickup eligible item',
+          pay_on_delivery_enabled: false,
+          pay_at_pickup_enabled: true,
+          currency: 'CAD',
+          weight: 0,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+        },
+      };
+    }
+
+    it('blocks pay-at-pickup order creation for Stripe-rail sellers', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 0,
+      });
+      hasuraSystemService.executeQuery.mockImplementation((query: string) => {
+        if (query.includes('GetBusinessInventory')) {
+          return Promise.resolve({
+            business_inventory: [pickupInventoryRow()],
+          });
+        }
+        if (query.includes('GetActiveItemDeals')) {
+          return Promise.resolve({ item_deals: [] });
+        }
+        return Promise.resolve({});
+      });
+      paymentRoutingService.resolveRailForUser.mockResolvedValue('stripe');
+
+      await expect(
+        service.createOrder({
+          items: [{ business_inventory_id: 'inventory-1', quantity: 1 }],
+          fulfillment_method: 'pickup',
+          payment_timing: 'pay_at_pickup',
+          phone_number: '+14165550123',
+        }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          error: 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED',
+        }),
+        status: HttpStatus.BAD_REQUEST,
+      });
+
+      expect(paymentRoutingService.resolveRailForUser).toHaveBeenCalledWith(
+        'seller-user-1',
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
   });
 
   describe('confirmOrder', () => {
@@ -233,7 +361,7 @@ describe('OrdersService', () => {
       expect(result.order.current_status).toBe('confirmed');
       expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
         'order-123',
-        'confirmed'
+        'confirmed',
       );
     });
 
@@ -241,12 +369,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' })
+        service.confirmOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Only business users can confirm orders',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
 
@@ -255,9 +383,9 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({ orders_by_pk: null });
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' })
+        service.confirmOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
-        new HttpException('Order not found', HttpStatus.NOT_FOUND)
+        new HttpException('Order not found', HttpStatus.NOT_FOUND),
       );
     });
 
@@ -268,12 +396,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' })
+        service.confirmOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Cannot confirm order in confirmed status',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
   });
@@ -406,8 +534,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Only agent users can get orders',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
 
@@ -420,8 +548,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Cannot get order in pending status',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
 
@@ -437,8 +565,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Insufficient balance. Required: 80 USD, Available: 50 USD',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
 
@@ -454,8 +582,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'No account found for currency USD',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
   });
@@ -493,7 +621,9 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('picked_up');
-      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent,
+      ).not.toHaveBeenCalled();
     });
 
     it('captures authorized Stripe payment at pickup', async () => {
@@ -507,7 +637,9 @@ describe('OrdersService', () => {
         },
       });
       hasuraSystemService.executeMutation.mockResolvedValue({
-        order_holds: [{ id: 'hold-1', item_settlement_completed_at: '2024-01-02' }],
+        order_holds: [
+          { id: 'hold-1', item_settlement_completed_at: '2024-01-02' },
+        ],
       });
       stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
         success: true,
@@ -527,7 +659,9 @@ describe('OrdersService', () => {
 
       await service.pickUpOrder({ orderId: 'order-123' });
 
-      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent,
+      ).toHaveBeenCalledWith({
         orderId: 'order-123',
         orderNumber: assignedOrder.order_number,
       });
@@ -541,12 +675,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
 
       await expect(
-        service.pickUpOrder({ orderId: 'order-123' })
+        service.pickUpOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Only agent users can pick up orders',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
 
@@ -560,12 +694,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.pickUpOrder({ orderId: 'order-123' })
+        service.pickUpOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Only the assigned agent can pick up this order',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
   });
@@ -899,12 +1033,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in delivered status',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
 
@@ -1076,12 +1210,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in preparing status',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
 
@@ -1096,12 +1230,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Unauthorized to cancel this order',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
 
@@ -1114,12 +1248,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockInvalidUser);
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Only business users and clients can cancel orders',
-          HttpStatus.FORBIDDEN
-        )
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
   });
@@ -1152,12 +1286,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.refundOrder({ orderId: 'order-123' })
+        service.refundOrder({ orderId: 'order-123' }),
       ).rejects.toThrow(
         new HttpException(
           'Cannot refund order in pending status',
-          HttpStatus.BAD_REQUEST
-        )
+          HttpStatus.BAD_REQUEST,
+        ),
       );
     });
   });
@@ -1183,14 +1317,14 @@ describe('OrdersService', () => {
           { business_inventory_id: 'inventory-123', quantity: 3 },
           { business_inventory_id: 'inventory-123', quantity: 2 },
         ],
-        'increment'
+        'increment',
       );
 
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledTimes(2);
       expect(hasuraSystemService.executeQuery).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining('mutation UpdateReservedQuantity'),
-        { id: 'inventory-123', reservedQuantity: 7 }
+        { id: 'inventory-123', reservedQuantity: 7 },
       );
     });
 
@@ -1204,7 +1338,7 @@ describe('OrdersService', () => {
       expect(result).toEqual(mockOrder);
       expect(hasuraUserService.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('query GetOrder'),
-        { orderId: 'order-123' }
+        { orderId: 'order-123' },
       );
     });
 
@@ -1217,7 +1351,7 @@ describe('OrdersService', () => {
         'account-123',
         80.0,
         'Hold for order ORD-123',
-        'order-123'
+        'order-123',
       );
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
@@ -1227,7 +1361,7 @@ describe('OrdersService', () => {
           amount: 80.0,
           memo: 'Hold for order ORD-123',
           referenceId: 'order-123',
-        }
+        },
       );
     });
   });
@@ -1245,7 +1379,7 @@ describe('OrdersService', () => {
         {
           orderHoldId: 'hold-1',
           _set: { delivery_fees: 0 },
-        }
+        },
       );
     });
 
@@ -1267,11 +1401,11 @@ describe('OrdersService', () => {
           order_number: 'ORD-1',
           payment_status: 'authorized',
         },
-        'account-1'
+        'account-1',
       );
 
       expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 0, transactionType: 'hold' })
+        expect.objectContaining({ amount: 0, transactionType: 'hold' }),
       );
       expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
         client_hold_amount: 0,
@@ -1306,7 +1440,7 @@ describe('OrdersService', () => {
           base_delivery_fee: 5,
           per_km_delivery_fee: 0,
         },
-        'account-1'
+        'account-1',
       );
 
       expect(statusAndPaymentSpy).not.toHaveBeenCalled();
