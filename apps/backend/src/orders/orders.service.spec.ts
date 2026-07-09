@@ -170,14 +170,7 @@ describe('OrdersService', () => {
             initiatePayment: jest.fn(),
           },
         },
-        {
-          provide: MobilePaymentsDatabaseService,
-          useValue: {
-            hasPendingClaimOrderForOrderNumber: jest
-              .fn()
-              .mockResolvedValue(false),
-          },
-        },
+        { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
@@ -249,10 +242,7 @@ describe('OrdersService', () => {
             markOfferExpired: jest.fn(),
           },
         },
-        {
-          provide: CancellationPolicyService,
-          useValue: { getPolicy: jest.fn() },
-        },
+        { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
       ],
     }).compile();
 
@@ -308,9 +298,7 @@ describe('OrdersService', () => {
       });
       hasuraSystemService.executeQuery.mockImplementation((query: string) => {
         if (query.includes('GetBusinessInventory')) {
-          return Promise.resolve({
-            business_inventory: [pickupInventoryRow()],
-          });
+          return Promise.resolve({ business_inventory: [pickupInventoryRow()] });
         }
         if (query.includes('GetActiveItemDeals')) {
           return Promise.resolve({ item_deals: [] });
@@ -325,7 +313,7 @@ describe('OrdersService', () => {
           fulfillment_method: 'pickup',
           payment_timing: 'pay_at_pickup',
           phone_number: '+14165550123',
-        }),
+        })
       ).rejects.toMatchObject({
         response: expect.objectContaining({
           error: 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED',
@@ -334,7 +322,7 @@ describe('OrdersService', () => {
       });
 
       expect(paymentRoutingService.resolveRailForUser).toHaveBeenCalledWith(
-        'seller-user-1',
+        'seller-user-1'
       );
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     });
@@ -361,7 +349,7 @@ describe('OrdersService', () => {
       expect(result.order.current_status).toBe('confirmed');
       expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
         'order-123',
-        'confirmed',
+        'confirmed'
       );
     });
 
@@ -369,12 +357,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' }),
+        service.confirmOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Only business users can confirm orders',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
 
@@ -383,9 +371,9 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({ orders_by_pk: null });
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' }),
+        service.confirmOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
-        new HttpException('Order not found', HttpStatus.NOT_FOUND),
+        new HttpException('Order not found', HttpStatus.NOT_FOUND)
       );
     });
 
@@ -396,12 +384,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.confirmOrder({ orderId: 'order-123' }),
+        service.confirmOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot confirm order in confirmed status',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
   });
@@ -534,8 +522,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Only agent users can get orders',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
 
@@ -548,8 +536,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Cannot get order in pending status',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
 
@@ -565,8 +553,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'Insufficient balance. Required: 80 USD, Available: 50 USD',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
 
@@ -582,8 +570,8 @@ describe('OrdersService', () => {
       await expect(service.getOrder({ orderId: 'order-123' })).rejects.toThrow(
         new HttpException(
           'No account found for currency USD',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
   });
@@ -621,9 +609,7 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('picked_up');
-      expect(
-        stripeCaptureService.captureOrderPaymentIntent,
-      ).not.toHaveBeenCalled();
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
     });
 
     it('captures authorized Stripe payment at pickup', async () => {
@@ -637,9 +623,7 @@ describe('OrdersService', () => {
         },
       });
       hasuraSystemService.executeMutation.mockResolvedValue({
-        order_holds: [
-          { id: 'hold-1', item_settlement_completed_at: '2024-01-02' },
-        ],
+        order_holds: [{ id: 'hold-1', item_settlement_completed_at: '2024-01-02' }],
       });
       stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
         success: true,
@@ -659,9 +643,7 @@ describe('OrdersService', () => {
 
       await service.pickUpOrder({ orderId: 'order-123' });
 
-      expect(
-        stripeCaptureService.captureOrderPaymentIntent,
-      ).toHaveBeenCalledWith({
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
         orderId: 'order-123',
         orderNumber: assignedOrder.order_number,
       });
@@ -675,12 +657,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
 
       await expect(
-        service.pickUpOrder({ orderId: 'order-123' }),
+        service.pickUpOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Only agent users can pick up orders',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
 
@@ -694,12 +676,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.pickUpOrder({ orderId: 'order-123' }),
+        service.pickUpOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Only the assigned agent can pick up this order',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
   });
@@ -1033,12 +1015,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' }),
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in delivered status',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
 
@@ -1210,12 +1192,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' }),
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in preparing status',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
 
@@ -1230,12 +1212,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' }),
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Unauthorized to cancel this order',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
 
@@ -1248,12 +1230,12 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockInvalidUser);
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' }),
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Only business users and clients can cancel orders',
-          HttpStatus.FORBIDDEN,
-        ),
+          HttpStatus.FORBIDDEN
+        )
       );
     });
   });
@@ -1286,12 +1268,12 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.refundOrder({ orderId: 'order-123' }),
+        service.refundOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot refund order in pending status',
-          HttpStatus.BAD_REQUEST,
-        ),
+          HttpStatus.BAD_REQUEST
+        )
       );
     });
   });
@@ -1317,14 +1299,14 @@ describe('OrdersService', () => {
           { business_inventory_id: 'inventory-123', quantity: 3 },
           { business_inventory_id: 'inventory-123', quantity: 2 },
         ],
-        'increment',
+        'increment'
       );
 
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledTimes(2);
       expect(hasuraSystemService.executeQuery).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining('mutation UpdateReservedQuantity'),
-        { id: 'inventory-123', reservedQuantity: 7 },
+        { id: 'inventory-123', reservedQuantity: 7 }
       );
     });
 
@@ -1338,7 +1320,7 @@ describe('OrdersService', () => {
       expect(result).toEqual(mockOrder);
       expect(hasuraUserService.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('query GetOrder'),
-        { orderId: 'order-123' },
+        { orderId: 'order-123' }
       );
     });
 
@@ -1351,7 +1333,7 @@ describe('OrdersService', () => {
         'account-123',
         80.0,
         'Hold for order ORD-123',
-        'order-123',
+        'order-123'
       );
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
@@ -1361,7 +1343,7 @@ describe('OrdersService', () => {
           amount: 80.0,
           memo: 'Hold for order ORD-123',
           referenceId: 'order-123',
-        },
+        }
       );
     });
   });
@@ -1379,7 +1361,7 @@ describe('OrdersService', () => {
         {
           orderHoldId: 'hold-1',
           _set: { delivery_fees: 0 },
-        },
+        }
       );
     });
 
@@ -1401,11 +1383,11 @@ describe('OrdersService', () => {
           order_number: 'ORD-1',
           payment_status: 'authorized',
         },
-        'account-1',
+        'account-1'
       );
 
       expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 0, transactionType: 'hold' }),
+        expect.objectContaining({ amount: 0, transactionType: 'hold' })
       );
       expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
         client_hold_amount: 0,
@@ -1440,7 +1422,7 @@ describe('OrdersService', () => {
           base_delivery_fee: 5,
           per_km_delivery_fee: 0,
         },
-        'account-1',
+        'account-1'
       );
 
       expect(statusAndPaymentSpy).not.toHaveBeenCalled();
