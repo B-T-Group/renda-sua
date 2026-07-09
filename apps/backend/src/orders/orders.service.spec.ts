@@ -31,6 +31,10 @@ import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checko
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
+
 describe('OrdersService', () => {
   let service: OrdersService;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
