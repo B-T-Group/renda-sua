@@ -2906,7 +2906,9 @@
     "retryPayment": {
       "cta": "Retry payment",
       "helper": "You can also cancel the order if you changed your mind.",
+      "helperStripe": "You will be redirected to complete card payment securely.",
       "success": "Payment retry started. Please check your phone to approve.",
+      "successStripe": "Opening secure card payment…",
       "error": "Failed to retry payment"
     },
     "optionalEmail": {

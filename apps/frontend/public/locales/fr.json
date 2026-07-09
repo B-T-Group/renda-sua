@@ -2647,7 +2647,9 @@
     "retryPayment": {
       "cta": "Réessayer le paiement",
       "helper": "Vous pouvez aussi annuler la commande si vous avez changé d’avis.",
+      "helperStripe": "Vous serez redirigé pour finaliser le paiement par carte en toute sécurité.",
       "success": "Réessai du paiement lancé. Veuillez vérifier votre téléphone pour valider.",
+      "successStripe": "Ouverture du paiement par carte sécurisé…",
       "error": "Impossible de réessayer le paiement"
     },
     "optionalEmail": {

@@ -1569,11 +1569,22 @@ const ManageOrderPage: React.FC = () => {
                           color="warning"
                           onClick={async () => {
                             try {
-                              await retryOrderPayment(order.id);
+                              const isStripeOrder =
+                                order.payment_source === 'credit_card' ||
+                                isStripeRail;
+                              const result = await retryOrderPayment(order.id);
+                              if (isStripeOrder && result.checkout_url) {
+                                window.location.assign(result.checkout_url);
+                                return;
+                              }
                               enqueueSnackbar(
                                 t(
-                                  'orders.retryPayment.success',
-                                  'Payment retry started. Please check your phone to approve.'
+                                  isStripeOrder
+                                    ? 'orders.retryPayment.successStripe'
+                                    : 'orders.retryPayment.success',
+                                  isStripeOrder
+                                    ? 'Opening secure card payment…'
+                                    : 'Payment retry started. Please check your phone to approve.'
                                 ),
                                 { variant: 'success' }
                               );
@@ -1602,8 +1613,12 @@ const ManageOrderPage: React.FC = () => {
                           sx={{ display: 'block', mt: 0.75 }}
                         >
                           {t(
-                            'orders.retryPayment.helper',
-                            'You can also cancel the order if you changed your mind.'
+                            order.payment_source === 'credit_card' || isStripeRail
+                              ? 'orders.retryPayment.helperStripe'
+                              : 'orders.retryPayment.helper',
+                            order.payment_source === 'credit_card' || isStripeRail
+                              ? 'You will be redirected to complete card payment securely.'
+                              : 'You can also cancel the order if you changed your mind.'
                           )}
                         </Typography>
                       </Box>

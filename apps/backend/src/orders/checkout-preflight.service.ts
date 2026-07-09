@@ -554,7 +554,7 @@ export class CheckoutPreflightService {
       wallet_balance: walletBalance,
       requires_address_for_payment: fulfillment === 'delivery',
       requires_payment_phone: requiresPaymentPhoneOverall,
-      stripe_retry_unsupported: !stripeManualCapture,
+      stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
       tax_notice: taxNotice,
     };

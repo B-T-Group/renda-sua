@@ -24,6 +24,7 @@ export interface OrderData {
   requires_fast_delivery: boolean;
   payment_method?: string;
   payment_status: string;
+  payment_source?: 'wallet' | 'mobile_payment' | 'credit_card';
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';
   verified_agent_delivery: boolean;

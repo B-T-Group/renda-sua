@@ -1143,13 +1143,32 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry order payment (client only)',
     description:
-      'Re-initiates a mobile money payment request for an existing order that is pending payment. This does not change the fulfillment status, but resets payment status to pending and creates a new mobile payment transaction.',
+      'Re-initiates payment for a pending_payment pay-now order. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
+  })
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: {
+        stripe_payment_method: {
+          type: 'string',
+          enum: ['payment_sheet'],
+          description:
+            'For Stripe-rail orders, return a PaymentIntent client secret for native PaymentSheet instead of a hosted Checkout URL.',
+        },
+      },
+    },
   })
   @ApiResponse({ status: 200, description: 'Payment retry initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
-  async retryOrderPayment(@Param('id') orderId: string) {
-    return this.ordersService.retryOrderPayment(orderId);
+  async retryOrderPayment(
+    @Param('id') orderId: string,
+    @Body() body?: { stripe_payment_method?: 'payment_sheet' }
+  ) {
+    return this.ordersService.retryOrderPayment(orderId, {
+      stripePaymentMethod: body?.stripe_payment_method,
+    });
   }
 
   @Post('drop_order')

@@ -106,6 +106,10 @@ export interface GetOrderRequest {
   phone_number?: string;
 }
 
+export interface RetryOrderPaymentOptions {
+  stripePaymentMethod?: 'payment_sheet';
+}
+
 export interface ClaimAvailabilityResponse {
   success: boolean;
   orderOpenStatus: boolean;
@@ -2842,9 +2846,12 @@ export class OrdersService {
 
   /**
    * Client: retry pay-now payment for an existing pending-payment order.
-   * Creates a new mobile payment transaction and re-initiates the payment request.
+   * Mobile money: new MM transaction. Stripe: new Checkout session or PaymentIntent.
    */
-  async retryOrderPayment(orderId: string) {
+  async retryOrderPayment(
+    orderId: string,
+    options?: RetryOrderPaymentOptions
+  ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -2883,6 +2890,97 @@ export class OrdersService {
       return { success: true, message: 'Order is already paid' };
     }
 
+    if ((order as any).payment_source === 'credit_card') {
+      return this.retryStripeOrderPayment(order, options);
+    }
+
+    return this.retryMobileMoneyOrderPayment(order, orderId);
+  }
+
+  private async retryStripeOrderPayment(
+    order: Orders,
+    options?: RetryOrderPaymentOptions
+  ) {
+    const account = await this.hasuraSystemService.getAccount(
+      order.client!.user_id,
+      order.currency
+    );
+    if (!account) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
+
+    const captureMethod =
+      this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
+        order.business_location?.address?.country ?? undefined
+      );
+    const amount = Number(order.total_amount);
+    const customerDisplayName =
+      `${order.client?.user?.first_name || ''} ${order.client?.user?.last_name || ''}`.trim() ||
+      undefined;
+
+    if (options?.stripePaymentMethod === 'payment_sheet') {
+      const paymentIntent = await this.createStripeOrderPaymentIntent({
+        orderNumber: order.order_number,
+        amount,
+        currency: order.currency,
+        accountId: account.id,
+        customerEmail: order.client?.user?.email ?? undefined,
+        captureMethod,
+      });
+      if (!paymentIntent?.clientSecret) {
+        throw new HttpException(
+          'Failed to create Stripe payment',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      await this.resetOrderPaymentFailure(order.id);
+      return {
+        success: true,
+        message: 'Stripe payment retry initiated',
+        payment_rail: 'stripe' as const,
+        payment_intent_client_secret: paymentIntent.clientSecret,
+        payment_reference: paymentIntent.reference,
+        payment_transaction: {
+          success: true,
+          transaction_id: paymentIntent.transactionId,
+          message: 'Awaiting Stripe payment',
+          mode: 'stripe' as const,
+        },
+      };
+    }
+
+    const checkout = await this.createStripeOrderCheckout({
+      orderNumber: order.order_number,
+      amount,
+      currency: order.currency,
+      accountId: account.id,
+      customerEmail: order.client?.user?.email ?? undefined,
+      captureMethod,
+      shippingName: customerDisplayName,
+    });
+    if (!checkout?.paymentUrl) {
+      throw new HttpException(
+        'Failed to create Stripe checkout',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.resetOrderPaymentFailure(order.id);
+    return {
+      success: true,
+      message: 'Stripe payment retry initiated',
+      payment_rail: 'stripe' as const,
+      checkout_url: checkout.paymentUrl,
+      payment_reference: checkout.reference,
+      payment_transaction: {
+        success: true,
+        transaction_id: checkout.transactionId,
+        message: 'Awaiting Stripe payment',
+        mode: 'stripe' as const,
+      },
+    };
+  }
+
+  private async retryMobileMoneyOrderPayment(order: Orders, orderId: string) {
     const existing =
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
@@ -2909,9 +3007,12 @@ export class OrdersService {
 
     const provider = this.mobilePaymentsService.getProvider(phoneNumber);
     const account = await this.hasuraSystemService.getAccount(
-      order.client.user_id,
+      order.client!.user_id,
       order.currency
     );
+    if (!account) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
 
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
@@ -2924,8 +3025,8 @@ export class OrdersService {
       provider,
       payment_method: 'mobile_money',
       customer_phone: phoneNumber,
-      ...(order.client.user.email
-        ? { customer_email: order.client.user.email }
+      ...(order.client!.user!.email
+        ? { customer_email: order.client!.user!.email }
         : {}),
       account_id: account.id,
       transaction_type: 'PAYMENT',
@@ -2967,7 +3068,31 @@ export class OrdersService {
       });
     }
 
-    // Clear previous failure markers and set payment back to pending
+    await this.resetOrderPaymentFailure(orderId);
+
+    await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+      'order.created',
+      { order_id: order.id, transaction_id: tx.id }
+    );
+
+    return {
+      success: true,
+      message: 'Payment retry initiated',
+      payment_transaction: {
+        success: true,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: {
+        id: tx.id,
+        reference: tx.reference,
+        status: tx.status,
+      },
+    };
+  }
+
+  private async resetOrderPaymentFailure(orderId: string): Promise<void> {
     const at = new Date().toISOString();
     const mutation = `
       mutation ResetPaymentFailure(
@@ -2994,28 +3119,6 @@ export class OrdersService {
       paymentStatus: 'pending',
       at,
     });
-
-    // Re-schedule the normal payment timeout for this new transaction
-    await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
-      'order.created',
-      { order_id: order.id, transaction_id: tx.id }
-    );
-
-    return {
-      success: true,
-      message: 'Payment retry initiated',
-      payment_transaction: {
-        success: true,
-        transaction_id: paymentTransaction.transactionId,
-        message: paymentTransaction.message,
-        mode: 'mobile_money' as const,
-      },
-      database_transaction: {
-        id: tx.id,
-        reference: tx.reference,
-        status: tx.status,
-      },
-    };
   }
 
   private buildOrderPaymentAttemptReference(orderNumber: string): string {
@@ -3905,6 +4008,7 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_source
           payment_timing
           reconciliation_status
           fulfillment_method
@@ -4430,6 +4534,7 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_source
           payment_timing
           reconciliation_status
           verified_agent_delivery
@@ -4618,6 +4723,7 @@ export class OrdersService {
           requires_fast_delivery
           payment_method
           payment_status
+          payment_source
           payment_timing
           reconciliation_status
           verified_agent_delivery
