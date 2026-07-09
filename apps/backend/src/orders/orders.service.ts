@@ -2909,11 +2909,12 @@ export class OrdersService {
       throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
     }
 
+    const { taxCheckoutParams, checkoutAmount } =
+      await this.buildTaxParamsForOrderRetry(order.id);
     const captureMethod =
       this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
         order.business_location?.address?.country ?? undefined
       );
-    const amount = Number(order.total_amount);
     const customerDisplayName =
       `${order.client?.user?.first_name || ''} ${order.client?.user?.last_name || ''}`.trim() ||
       undefined;
@@ -2921,11 +2922,12 @@ export class OrdersService {
     if (options?.stripePaymentMethod === 'payment_sheet') {
       const paymentIntent = await this.createStripeOrderPaymentIntent({
         orderNumber: order.order_number,
-        amount,
+        amount: checkoutAmount,
         currency: order.currency,
         accountId: account.id,
         customerEmail: order.client?.user?.email ?? undefined,
         captureMethod,
+        taxCheckoutParams,
       });
       if (!paymentIntent?.clientSecret) {
         throw new HttpException(
@@ -2951,11 +2953,12 @@ export class OrdersService {
 
     const checkout = await this.createStripeOrderCheckout({
       orderNumber: order.order_number,
-      amount,
+      amount: checkoutAmount,
       currency: order.currency,
       accountId: account.id,
       customerEmail: order.client?.user?.email ?? undefined,
       captureMethod,
+      taxCheckoutParams,
       shippingName: customerDisplayName,
     });
     if (!checkout?.paymentUrl) {
@@ -7985,6 +7988,109 @@ export class OrdersService {
       tax_notice:
         taxStatus === 'estimated' ? ('calculated_at_checkout' as const) : null,
     };
+  }
+
+  private async buildTaxParamsForOrderRetry(orderId: string): Promise<{
+    taxCheckoutParams: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
+    checkoutAmount: number;
+  }> {
+    const query = `
+      query OrderStripeRetryTax($id: uuid!) {
+        orders_by_pk(id: $id) {
+          currency
+          subtotal
+          total_amount
+          base_delivery_fee
+          per_km_delivery_fee
+          discount_amount
+          fulfillment_method
+          delivery_address {
+            address_line_1 address_line_2 city state postal_code country
+          }
+          business_location {
+            address {
+              address_line_1 address_line_2 city state postal_code country
+            }
+          }
+          order_items {
+            item_name
+            unit_price
+            quantity
+            business_inventory_id
+            business_inventory {
+              item { stripe_tax_code_id }
+            }
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: {
+        currency: string;
+        subtotal: number;
+        total_amount: number;
+        base_delivery_fee: number;
+        per_km_delivery_fee: number;
+        discount_amount?: number | null;
+        fulfillment_method?: string | null;
+        delivery_address?: Record<string, string> | null;
+        business_location?: { address?: Record<string, string> | null } | null;
+        order_items: Array<{
+          item_name: string;
+          unit_price: number;
+          quantity: number;
+          business_inventory_id: string;
+          business_inventory?: { item?: { stripe_tax_code_id?: string | null } };
+        }>;
+      } | null;
+    }>(query, { id: orderId });
+    const row = res.orders_by_pk;
+    if (!row) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    const deliveryFee =
+      Number(row.base_delivery_fee) + Number(row.per_km_delivery_fee);
+    const discountAmount = Number(row.discount_amount ?? 0);
+    const fulfillmentMethod = (row.fulfillment_method ?? 'delivery') as
+      | 'delivery'
+      | 'pickup';
+    const orderItemsData = row.order_items.map((item) => ({
+      item_name: item.item_name,
+      unit_price: Number(item.unit_price),
+      quantity: item.quantity,
+      business_inventory_id: item.business_inventory_id,
+      stripe_tax_code_id:
+        item.business_inventory?.item?.stripe_tax_code_id ??
+        STRIPE_TAX_CODE_GENERAL_TANGIBLE,
+    }));
+    type TaxAddress = {
+      address_line_1: string;
+      address_line_2?: string | null;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    };
+    const deliveryAddress = row.delivery_address as TaxAddress | null | undefined;
+    const businessLocationAddress = row.business_location?.address as
+      | TaxAddress
+      | null
+      | undefined;
+    const taxCheckoutParams = this.buildStripeTaxCheckoutParams({
+      currency: row.currency,
+      orderItemsData,
+      deliveryFee,
+      discountAmount,
+      deliveryAddress:
+        fulfillmentMethod === 'delivery' ? deliveryAddress ?? null : null,
+      businessLocationAddress: businessLocationAddress ?? null,
+      fulfillmentMethod,
+    });
+    const preTaxTotal = Number(row.subtotal) + deliveryFee - discountAmount;
+    const checkoutAmount = taxCheckoutParams.taxEnabled
+      ? preTaxTotal
+      : Number(row.total_amount);
+    return { taxCheckoutParams, checkoutAmount };
   }
 
   /**
