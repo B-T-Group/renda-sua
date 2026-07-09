@@ -35,6 +35,7 @@ import {
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
+import { useNearbyAgents } from '../../hooks/useNearbyAgents';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
