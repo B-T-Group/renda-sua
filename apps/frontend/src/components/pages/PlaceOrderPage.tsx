@@ -93,11 +93,6 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
-import {
-  CheckoutTaxSummaryLines,
-  checkoutTotalLabelDefault,
-  checkoutTotalLabelKey,
-} from '../common/CheckoutTaxSummaryLines';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
@@ -718,7 +713,6 @@ const PlaceOrderPage: React.FC = () => {
   const {
     isCountrySupported,
     supportedCountries,
-    paymentSystems,
     loading: paymentSystemsLoading,
   } = useSupportedPaymentSystems();
 
@@ -973,17 +967,6 @@ const PlaceOrderPage: React.FC = () => {
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
   const isPickupEligible = !!selectedItem?.item?.pay_at_pickup_enabled;
 
-  const itemCountrySupportsStripe = useMemo(() => {
-    const itemCountry =
-      selectedItem?.business_location?.address?.country?.toUpperCase();
-    if (!itemCountry) return false;
-    return paymentSystems.some(
-      (system) =>
-        system.country?.toUpperCase() === itemCountry &&
-        system.name?.toLowerCase() === 'stripe'
-    );
-  }, [selectedItem, paymentSystems]);
-
   useEffect(() => {
     if (!isPayAtDeliveryEligible && paymentTiming === 'pay_at_delivery') {
       setPaymentTiming('pay_now');
@@ -992,13 +975,11 @@ const PlaceOrderPage: React.FC = () => {
 
   useEffect(() => {
     if (pickupAtStore && isPickupEligible) {
-      setPaymentTiming(
-        itemCountrySupportsStripe ? 'pay_now' : 'pay_at_pickup'
-      );
+      setPaymentTiming('pay_at_pickup');
       setRequiresFastDelivery(false);
       setDeliveryWindow(null);
     }
-  }, [pickupAtStore, isPickupEligible, itemCountrySupportsStripe]);
+  }, [pickupAtStore, isPickupEligible]);
 
   useEffect(() => {
     if (!pickupAtStore && paymentTiming === 'pay_at_pickup') {
@@ -1204,9 +1185,64 @@ const PlaceOrderPage: React.FC = () => {
     data?: { error?: string };
   };
 
+  const checkoutPreflightRequest = useMemo(() => {
+    if (!selectedItem) return null;
+    if (!isPickupOrder && !selectedAddressId) return null;
+    return {
+      items: [
+        {
+          business_inventory_id: selectedItem.id,
+          quantity,
+          ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
+        },
+      ],
+      ...(isPickupOrder
+        ? {
+            fulfillment_method: 'pickup' as const,
+            payment_timing: 'pay_now' as const,
+          }
+        : {
+            delivery_address_id: selectedAddressId,
+            fulfillment_method: 'delivery' as const,
+            payment_timing: paymentTiming,
+          }),
+    };
+  }, [
+    isPickupOrder,
+    paymentTiming,
+    quantity,
+    selectedAddressId,
+    selectedItem,
+    selectedVariantId,
+  ]);
+
+  const checkoutPreflight = useCheckoutPreflight(
+    checkoutPreflightRequest,
+    Boolean(checkoutPreflightRequest)
+  );
+
+  const showTaxAtCheckoutNotice =
+    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
+
+  const isStripeStorePickup =
+    isPickupOrder && checkoutPreflight?.checkout_method === 'STRIPE';
+
+  const pickupPaymentTiming = isStripeStorePickup
+    ? ('pay_now' as const)
+    : ('pay_at_pickup' as const);
+
   const handleSubmit = useCallback(async () => {
     if (!selectedItem || !apiClient) return;
     if (!isPickupOrder && !selectedAddressId) return;
+    if (isPickupOrder && !checkoutPreflight) {
+      setError(
+        t(
+          'orders.checkoutPaymentOptionsLoading',
+          'Payment options are still loading. Please try again in a moment.'
+        )
+      );
+      return;
+    }
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -1233,9 +1269,7 @@ const PlaceOrderPage: React.FC = () => {
         ...(isPickupOrder
           ? {
               fulfillment_method: 'pickup' as const,
-              payment_timing: (itemCountrySupportsStripe
-                ? 'pay_now'
-                : 'pay_at_pickup') as const,
+              payment_timing: pickupPaymentTiming,
               requires_fast_delivery: false,
             }
           : {
@@ -1321,12 +1355,13 @@ const PlaceOrderPage: React.FC = () => {
   }, [
     apiClient,
     appliedDiscountCode,
+    checkoutPreflight,
     deliveryWindow,
     isPickupOrder,
-    itemCountrySupportsStripe,
     listingUnitPricing.unit,
     navigate,
     paymentTiming,
+    pickupPaymentTiming,
     quantity,
     requiresFastDelivery,
     specialInstructions,
@@ -1340,7 +1375,7 @@ const PlaceOrderPage: React.FC = () => {
   ]);
 
   const submitWithPhoneGate = useCallback(async () => {
-    if (isPickupOrder && itemCountrySupportsStripe) {
+    if (isStripeStorePickup) {
       await handleSubmit();
       return;
     }
@@ -1366,7 +1401,7 @@ const PlaceOrderPage: React.FC = () => {
     handleSubmit,
     isCountrySupported,
     isPickupOrder,
-    itemCountrySupportsStripe,
+    isStripeStorePickup,
     itemOriginCountryIso,
     profile?.phone_number,
     selectedAddress?.country,
@@ -1665,56 +1700,6 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
-  // When the item's country supports Stripe, payment is by card and the
-  // customer's phone number country is irrelevant, so we skip the mobile-money
-  // "supported phone country" restriction.
-  const checkoutPreflightRequest = useMemo(() => {
-    if (!selectedItem) return null;
-    if (!isPickupOrder && !selectedAddressId) return null;
-    return {
-      items: [
-        {
-          business_inventory_id: selectedItem.id,
-          quantity,
-          ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
-        },
-      ],
-      ...(isPickupOrder
-        ? {
-            fulfillment_method: 'pickup' as const,
-            payment_timing: (itemCountrySupportsStripe
-              ? 'pay_now'
-              : 'pay_at_pickup') as const,
-          }
-        : {
-            delivery_address_id: selectedAddressId,
-            fulfillment_method: 'delivery' as const,
-            payment_timing: paymentTiming,
-          }),
-    };
-  }, [
-    isPickupOrder,
-    itemCountrySupportsStripe,
-    paymentTiming,
-    quantity,
-    selectedAddressId,
-    selectedItem,
-    selectedVariantId,
-  ]);
-
-  const checkoutPreflight = useCheckoutPreflight(
-    checkoutPreflightRequest,
-    Boolean(checkoutPreflightRequest)
-  );
-
-  const showTaxAtCheckoutNotice =
-    checkoutPreflight?.tax_notice === 'calculated_at_checkout';
-
-  const isStripeStorePickup =
-    isPickupOrder &&
-    (checkoutPreflight?.checkout_method === 'STRIPE' ||
-      itemCountrySupportsStripe);
-
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
     const phoneToValidate = useDifferentPhone
@@ -1754,9 +1739,8 @@ const PlaceOrderPage: React.FC = () => {
       const countryCode = parsedPhone.country;
       const isSupported = countryCode ? isCountrySupported(countryCode) : false;
 
-      // Stripe-supported item countries pay by card; don't enforce the
-      // mobile-money supported-phone-country restriction.
-      if (!isSupported && !itemCountrySupportsStripe) {
+      // Stripe pickup pays by card; don't enforce the mobile-money phone country.
+      if (!isSupported && !isStripeStorePickup) {
         return {
           isValid: false,
           countryCode,
@@ -1785,7 +1769,7 @@ const PlaceOrderPage: React.FC = () => {
     overridePhoneNumber,
     profile?.phone_number,
     isCountrySupported,
-    itemCountrySupportsStripe,
+    isStripeStorePickup,
     supportedCountries,
     t,
   ]);

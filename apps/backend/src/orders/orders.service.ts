@@ -7079,8 +7079,6 @@ export class OrdersService {
       );
     }
 
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
-
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
       throw new HttpException(
         `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
@@ -7093,12 +7091,11 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail for the receiving business owner. Stripe-country
-    // orders are NOT pushed to mobile money; the client pays via hosted Checkout.
-    const businessOwnerUserId =
-      businessInventories[0]?.business_location?.business?.user?.id;
-    const paymentRail = businessOwnerUserId
-      ? await this.paymentRoutingService.resolveRailForUser(businessOwnerUserId)
+    // Match checkout preflight: route by the selling location country.
+    const sellerCountry =
+      businessInventories[0]?.business_location?.address?.country;
+    const paymentRail = sellerCountry
+      ? await this.paymentRoutingService.resolveRailForCountry(sellerCountry)
       : 'mobile_money';
     const useStripeRail =
       paymentTiming === 'pay_now' &&
@@ -7127,6 +7124,19 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       !useStripeRail
     ) {
+      if (!phoneNumber.trim()) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Phone number is required for payment',
+            error: 'PHONE_NUMBER_REQUIRED',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+
       try {
         transaction =
           await this.mobilePaymentsDatabaseService.createTransaction({
