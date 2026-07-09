@@ -1,3 +1,7 @@
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
+
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
