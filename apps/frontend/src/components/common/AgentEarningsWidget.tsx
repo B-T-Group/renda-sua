@@ -10,6 +10,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
 function formatCurrency(amount: number, currency: string): string {
   try {
@@ -36,7 +37,11 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const displayCurrency =
+    summary?.currency || profile?.currency || 'XAF';
 
   if (loading) {
     return (
@@ -76,7 +81,7 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
           </Typography>
         </Box>
         <Typography variant="h5" fontWeight="bold" color="primary.main">
-          {formatCurrency(summary.todayEarnings, summary.currency)}
+          {formatCurrency(summary.todayEarnings, displayCurrency)}
         </Typography>
         {summary.recentCommissions.length > 0 && (
           <Box sx={{ mt: 0.5 }}>
@@ -117,7 +122,7 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
                     sx={{ typography: 'body2', fontSize: '0.8125rem' }}
                   >
                     <span>#{rc.orderNumber}</span>
-                    <span style={{ fontWeight: 500 }}>{formatCurrency(rc.amount, summary.currency)}</span>
+                    <span style={{ fontWeight: 500 }}>{formatCurrency(rc.amount, displayCurrency)}</span>
                   </Box>
                 ))}
               </Box>

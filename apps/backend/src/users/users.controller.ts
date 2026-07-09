@@ -137,6 +137,14 @@ export class UsersController {
     try {
       const user = await this.hasuraUserService.getUser();
       const country = await this.resolveUserCountry(user);
+      const currency = country
+        ? await this.addressesService.resolveCurrencyFromCountry(country)
+        : 'XAF';
+      let personalAccountCreated = false;
+      if (country && currency) {
+        personalAccountCreated =
+          await this.addressesService.ensurePersonalAccount(user.id, currency);
+      }
       const isStripeEnabled = country
         ? (await this.paymentRoutingService.resolveRailForCountry(country)) ===
           'stripe'
@@ -148,8 +156,10 @@ export class UsersController {
           ...user,
           personas: derivePersonas(user),
           country,
+          currency,
           is_stripe_enabled: isStripeEnabled,
         },
+        personalAccountCreated,
         userId: this.hasuraUserService.getUserId(),
         auth0User: {
           sub: auth0User.sub,

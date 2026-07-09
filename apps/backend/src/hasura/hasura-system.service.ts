@@ -18,6 +18,7 @@ import {
 } from '../generated/graphql';
 import type { PersonaId } from '../users/persona.types';
 import { legacyUserTypeIdForPersonas } from '../users/persona.util';
+import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
 import {
   GET_ACCOUNT_BY_ID,
   GET_USER_ACCOUNT,
@@ -426,14 +427,9 @@ export class HasuraSystemService {
   }
 
   private async getCurrencyFromCountry(country: string): Promise<string> {
-    try {
-      const countryToCurrency = await import('country-to-currency');
-      const code = (country || '').toUpperCase().slice(0, 2);
-      const currency = (countryToCurrency.default as Record<string, string>)[code];
-      return currency || 'XAF';
-    } catch {
-      return 'XAF';
-    }
+    return resolveCurrencyFromCountry(country, (query, variables) =>
+      this.executeQuery(query, variables)
+    );
   }
 
   /**

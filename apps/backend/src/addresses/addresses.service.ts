@@ -14,6 +14,7 @@ import {
   type UserPersonaShape,
 } from '../users/persona.util';
 import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
+import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
 import { postalCodeForStorage } from './postal-code.util';
 
 export interface CreateAddressDto {
@@ -122,44 +123,57 @@ export class AddressesService {
     }
   }
 
-  private async getCurrencyFromCountry(country: string): Promise<string> {
-    try {
-      const countryToCurrency = await import('country-to-currency');
-      const countryCode = country.toUpperCase();
-      const currency = (countryToCurrency.default as any)[countryCode];
-      if (!currency) {
-        // Default to XAF for Cameroon if country not found
-        return 'XAF';
-      }
-      return currency;
-    } catch (error) {
-      // Default to XAF for Cameroon if any error occurs
-      return 'XAF';
-    }
+  async resolveCurrencyFromCountry(country: string): Promise<string> {
+    return resolveCurrencyFromCountry(country, (query, variables) =>
+      this.hasuraSystemService.executeQuery(query, variables)
+    );
   }
 
-  private async checkExistingAccount(userId: string, currency: string) {
-    const checkExistingAccountQuery = `
-      query CheckExistingAccount($userId: uuid!, $currency: currency_enum!) {
-        accounts(where: {user_id: {_eq: $userId}, currency: {_eq: $currency}}) {
+  async ensurePersonalAccount(
+    userId: string,
+    currency: string
+  ): Promise<boolean> {
+    const hasPersonalAccount = await this.checkExistingPersonalAccount(
+      userId,
+      currency
+    );
+    if (!hasPersonalAccount) {
+      await this.createAccount(userId, currency);
+      return true;
+    }
+    return false;
+  }
+
+  private async getCurrencyFromCountry(country: string): Promise<string> {
+    return this.resolveCurrencyFromCountry(country);
+  }
+
+  /** Legacy wallet only (`business_location_id` null), not location-scoped accounts. */
+  private async checkExistingPersonalAccount(
+    userId: string,
+    currency: string
+  ): Promise<boolean> {
+    const query = `
+      query CheckExistingPersonalAccount($userId: uuid!, $currency: currency_enum!) {
+        accounts(
+          where: {
+            user_id: { _eq: $userId }
+            currency: { _eq: $currency }
+            business_location_id: { _is_null: true }
+          }
+          limit: 1
+        ) {
           id
-          currency
         }
       }
     `;
 
-    const existingAccountResult = await this.hasuraUserService.executeQuery(
-      checkExistingAccountQuery,
-      {
-        userId,
-        currency,
-      }
-    );
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+      currency,
+    });
 
-    return (
-      existingAccountResult.accounts &&
-      existingAccountResult.accounts.length > 0
-    );
+    return (result.accounts?.length ?? 0) > 0;
   }
 
   private async createAccount(userId: string, currency: string) {
@@ -511,12 +525,12 @@ export class AddressesService {
       const currency = await this.getCurrencyFromCountry(addressData.country);
       let accountCreated = null;
 
-      const hasExistingAccount = await this.checkExistingAccount(
+      const hasPersonalAccount = await this.checkExistingPersonalAccount(
         user.id,
         currency
       );
 
-      if (!hasExistingAccount) {
+      if (!hasPersonalAccount) {
         accountCreated = await this.createAccount(user.id, currency);
       }
 
@@ -695,6 +709,9 @@ export class AddressesService {
       );
     }
 
+    const currency = await this.getCurrencyFromCountry(addressData.country);
+    await this.ensurePersonalAccount(userId, currency);
+
     return address as AddressResponse;
   }
 
@@ -861,6 +878,9 @@ export class AddressesService {
         timezoneFromAddressCountryCode(source.country)
       );
     }
+
+    const currency = await this.getCurrencyFromCountry(source.country);
+    await this.ensurePersonalAccount(userId, currency);
   }
 
   /**

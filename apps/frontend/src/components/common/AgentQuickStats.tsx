@@ -8,6 +8,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
 function formatCurrency(amount: number, currency: string): string {
   try {
@@ -34,6 +35,9 @@ const AgentQuickStats: React.FC<AgentQuickStatsProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
+
+  const displayCurrency = summary?.currency || profile?.currency || 'XAF';
 
   if (loading) {
     return (
@@ -78,7 +82,7 @@ const AgentQuickStats: React.FC<AgentQuickStatsProps> = ({
             </Typography>
             <Typography variant="h6" fontWeight="600" component="span">
               {avgCommission != null
-                ? formatCurrency(avgCommission, summary.currency)
+                ? formatCurrency(avgCommission, displayCurrency)
                 : '—'}
             </Typography>
           </Box>

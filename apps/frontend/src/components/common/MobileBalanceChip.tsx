@@ -107,17 +107,24 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
 
   // Mobile-money users transact through their legacy XAF wallet. Stripe-enabled
   // users have no XAF wallet, so fall back to their first available legacy
-  // wallet (e.g. CAD/USD).
-  const xafAccount = accounts.find(
-    (a) => a.currency === XAF_CURRENCY && isLegacyWalletAccount(a)
+  // wallet (e.g. CAD/USD). Prefer /users/me currency when set.
+  const legacyAccounts = accounts.filter(isLegacyWalletAccount);
+  const preferredCurrency = profile?.currency?.trim().toUpperCase();
+  const preferredAccount = preferredCurrency
+    ? legacyAccounts.find((a) => a.currency === preferredCurrency)
+    : undefined;
+  const xafAccount = legacyAccounts.find(
+    (a) => a.currency === XAF_CURRENCY
   );
   const firstStripeWalletAccount: Account | undefined =
-    accounts.find(
-      (a) => isLegacyWalletAccount(a) && a.currency !== XAF_CURRENCY
-    ) ?? accounts.find((a) => isLegacyWalletAccount(a));
-  const walletAccount = isStripeRail ? firstStripeWalletAccount : xafAccount;
+    legacyAccounts.find((a) => a.currency !== XAF_CURRENCY) ??
+    legacyAccounts[0];
+  const walletAccount =
+    preferredAccount ??
+    (isStripeRail ? firstStripeWalletAccount : xafAccount);
   const displayAccount = liveAccount ?? walletAccount ?? null;
-  const walletCurrency = walletAccount?.currency ?? XAF_CURRENCY;
+  const walletCurrency =
+    walletAccount?.currency ?? preferredCurrency ?? XAF_CURRENCY;
 
   useAccountSubscription({
     accountId: walletAccount?.id ?? '',

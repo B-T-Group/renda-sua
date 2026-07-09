@@ -104,12 +104,19 @@ export interface UserProfile {
   updated_at: string;
   /** From GET /users/me when backend sends it */
   personas?: UserType[];
+  /** ISO alpha-2 from primary address */
+  country?: string | null;
+  /** Display currency from supported_country_states */
+  currency?: string | null;
+  is_stripe_enabled?: boolean;
 }
 
 export interface UserProfileResponse {
   success: boolean;
   user: UserProfile;
   message: string;
+  /** True when /me just created a legacy personal wallet for the user's country currency. */
+  personalAccountCreated?: boolean;
 }
 
 export interface GetAccountsResponse {
@@ -660,15 +667,22 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     }
   };
 
-  // Fetch profile when authenticated and API client is available
+  // Fetch profile then accounts so /me can create a wallet before accounts load.
   useEffect(() => {
     if (isLoading) return;
     if (isAuthenticated) {
-      checkProfile();
-      checkAccounts();
-    } else if (!isAuthenticated) {
-      clearProfile();
+      let cancelled = false;
+      void (async () => {
+        await checkProfile();
+        if (!cancelled) {
+          await checkAccounts();
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
+    clearProfile();
   }, [isAuthenticated, isLoading, checkProfile, checkAccounts]);
 
   const value: UserProfileContextType = {

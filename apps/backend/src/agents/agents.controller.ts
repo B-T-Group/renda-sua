@@ -19,6 +19,7 @@ import { Public } from '../auth/public.decorator';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
 import { AgentReferralsService } from './agent-referrals.service';
@@ -139,6 +140,26 @@ export class AgentsController {
       );
     }
     return user.agent.id;
+  }
+
+  private resolveCountryFromUserAddresses(user: {
+    addresses?: Array<{
+      country?: string | null;
+      is_primary?: boolean | null;
+      created_at?: string | null;
+    }>;
+  }): string | null {
+    const withCountry = (user.addresses ?? []).filter((a) =>
+      a?.country?.trim()
+    );
+    const primary = withCountry.find((a) => a.is_primary);
+    const mostRecent = [...withCountry].sort(
+      (a, b) =>
+        new Date(b.created_at ?? 0).getTime() -
+        new Date(a.created_at ?? 0).getTime()
+    )[0];
+    const fromAddress = (primary ?? mostRecent)?.country?.trim();
+    return fromAddress ? fromAddress.toUpperCase() : null;
   }
 
   @Public()
@@ -463,13 +484,12 @@ export class AgentsController {
         }
       `;
 
-      // 3c) Agent personal wallet currency (account with no business_location)
+      // 3c) Agent personal wallet currencies (legacy accounts only)
       const agentWalletCurrencyQuery = `
         query GetAgentWalletCurrency($agentUserId: uuid!) {
           accounts(
             where: { user_id: { _eq: $agentUserId }, business_location_id: { _is_null: true } }
             order_by: { created_at: asc }
-            limit: 1
           ) {
             currency
           }
@@ -527,24 +547,38 @@ export class AgentsController {
       const depositTransactions: Array<{ amount: number; memo: string | null }> =
         agentDepositsResult.account_transactions || [];
 
-      // Wallet currency is the canonical currency for this agent (set at account creation
-      // and reflects their country/payment rail). Fall back to the first delivered order's
-      // currency only when no wallet account exists yet.
-      const walletCurrency: string =
-        (agentWalletResult.accounts?.[0]?.currency as string | undefined) ?? '';
+      const country = this.resolveCountryFromUserAddresses(user);
+      const countryCurrency = country
+        ? await resolveCurrencyFromCountry(country, (query, variables) =>
+            this.hasuraSystemService.executeQuery(query, variables)
+          )
+        : null;
+
+      const walletCurrencies: string[] = (agentWalletResult.accounts ?? []).map(
+        (row: { currency: string }) => row.currency
+      );
 
       const seenTodayOrderIds = new Set<string>();
       const todayOrderNumbers: string[] = [];
-      let orderCurrency = 'XAF';
+      let orderCurrency = '';
       for (const row of deliveredTodayHistoryRows) {
         if (seenTodayOrderIds.has(row.order_id)) continue;
         seenTodayOrderIds.add(row.order_id);
         const orderNumber = row.order?.order_number;
         if (orderNumber) todayOrderNumbers.push(orderNumber);
-        if (row.order?.currency && orderCurrency === 'XAF')
+        if (row.order?.currency && !orderCurrency) {
           orderCurrency = row.order.currency;
+        }
       }
-      const currency = walletCurrency || orderCurrency;
+
+      const currency =
+        (countryCurrency
+          ? walletCurrencies.find((c) => c === countryCurrency)
+          : undefined) ||
+        walletCurrencies[0] ||
+        countryCurrency ||
+        orderCurrency ||
+        'XAF';
       const todayDeliveryCount = seenTodayOrderIds.size;
       const todayEarnings = todayOrderNumbers.reduce(
         (sum, orderNumber) =>
