@@ -38,6 +38,8 @@ describe('OrdersService', () => {
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
   let stripeCaptureService: jest.Mocked<StripeCaptureService>;
+  let mobilePaymentsService: jest.Mocked<any>;
+  let paymentRoutingService: jest.Mocked<any>;
 
   const mockUser = {
     id: 'user-123',
@@ -160,7 +162,7 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: {} },
+        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
         { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
@@ -179,7 +181,14 @@ describe('OrdersService', () => {
         },
         { provide: OrderRefundsService, useValue: {} },
         { provide: LoyaltyService, useValue: {} },
-        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForBusiness: jest.fn(),
+            resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
+            resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+          },
+        },
         { provide: StripeCheckoutService, useValue: {} },
         {
           provide: StripeCaptureService,
@@ -210,6 +219,8 @@ describe('OrdersService', () => {
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
     stripeCaptureService = module.get(StripeCaptureService);
+    mobilePaymentsService = module.get(MobilePaymentsService);
+    paymentRoutingService = module.get(PaymentRoutingService);
   });
 
   describe('confirmOrder', () => {
@@ -1347,6 +1358,88 @@ describe('OrdersService', () => {
       requireSpy.mockRestore();
       getByNumberSpy.mockRestore();
       finalizeSpy.mockRestore();
+    });
+  });
+
+  describe('createOrder payment routing', () => {
+    const pickupInventoryRow = {
+      id: 'inventory-123',
+      computed_available_quantity: 5,
+      selling_price: 100,
+      is_active: true,
+      business_location_id: 'location-123',
+      business_location: {
+        business_id: 'business-123',
+        address: {
+          address_line_1: '1 Market St',
+          address_line_2: null,
+          city: 'Toronto',
+          state: 'ON',
+          postal_code: 'M5V',
+          country: 'CA',
+        },
+        business: {
+          id: 'business-123',
+          name: 'Stripe Country Seller',
+          is_verified: true,
+          can_accept_orders: true,
+          user: {
+            id: 'owner-123',
+            email: 'owner@example.com',
+            first_name: 'Owner',
+            last_name: 'User',
+          },
+        },
+      },
+      item: {
+        id: 'item-123',
+        name: 'Pickup item',
+        description: 'Item available for pickup',
+        pay_on_delivery_enabled: false,
+        pay_at_pickup_enabled: true,
+        currency: 'CAD',
+        weight: 0,
+        max_order_quantity: null,
+        stripe_tax_code_id: null,
+        item_variants: [],
+      },
+    };
+
+    it('routes by seller country and rejects mobile pay-now without a phone', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockClientUser,
+        phone_number: '',
+      });
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ business_inventory: [pickupInventoryRow] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 0,
+      });
+      paymentRoutingService.resolveRailForCountry.mockResolvedValue('mobile_money');
+
+      await expect(
+        service.createOrder({
+          items: [
+            {
+              business_inventory_id: 'inventory-123',
+              quantity: 1,
+            },
+          ],
+          fulfillment_method: 'pickup',
+          payment_timing: 'pay_now',
+        })
+      ).rejects.toMatchObject({
+        response: {
+          error: 'PHONE_NUMBER_REQUIRED',
+        },
+      });
+
+      expect(paymentRoutingService.resolveRailForCountry).toHaveBeenCalledWith('CA');
+      expect(paymentRoutingService.resolveRailForUser).not.toHaveBeenCalled();
+      expect(mobilePaymentsService.getProvider).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     });
   });
 });
