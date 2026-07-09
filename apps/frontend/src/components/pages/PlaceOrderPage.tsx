@@ -93,11 +93,6 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
-import {
-  CheckoutTaxSummaryLines,
-  checkoutTotalLabelDefault,
-  checkoutTotalLabelKey,
-} from '../common/CheckoutTaxSummaryLines';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 
