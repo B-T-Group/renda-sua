@@ -221,6 +221,8 @@ interface OrderSummaryProps {
   pickupSelected?: boolean;
   onPickupChange?: (checked: boolean) => void;
   pickupLocationLabel?: string;
+  /** When true, pickup is paid by card at checkout (Stripe rail). */
+  pickupPayAtCheckout?: boolean;
   /** True when addresses finished loading but none is selected (e.g. user must add one). */
   deliveryAddressMissing?: boolean;
   firstOrderBaseDeliveryDiscountAmount?: number;
@@ -258,6 +260,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   pickupSelected = false,
   onPickupChange,
   pickupLocationLabel,
+  pickupPayAtCheckout = false,
   deliveryAddressMissing = false,
   firstOrderBaseDeliveryDiscountAmount = 0,
   deliveryFeeFullBeforeDiscount,
@@ -475,10 +478,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                       color="text.secondary"
                       sx={{ display: 'block', mt: 0.75 }}
                     >
-                      {t(
-                        'orders.pickup.payAtPickupHint',
-                        'You will pay when you arrive; the business will send a payment request to your phone.'
-                      )}
+                      {pickupPayAtCheckout
+                        ? t(
+                            'orders.pickup.payAtCheckoutHint',
+                            'Pay securely by card when you place your order, then pick up at the store.'
+                          )
+                        : t(
+                            'orders.pickup.payAtPickupHint',
+                            'You will pay when you arrive; the business will send a payment request to your phone.'
+                          )}
                     </Typography>
                   </Box>
                 }
@@ -965,6 +973,17 @@ const PlaceOrderPage: React.FC = () => {
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
   const isPickupEligible = !!selectedItem?.item?.pay_at_pickup_enabled;
 
+  const itemCountrySupportsStripe = useMemo(() => {
+    const itemCountry =
+      selectedItem?.business_location?.address?.country?.toUpperCase();
+    if (!itemCountry) return false;
+    return paymentSystems.some(
+      (system) =>
+        system.country?.toUpperCase() === itemCountry &&
+        system.name?.toLowerCase() === 'stripe'
+    );
+  }, [selectedItem, paymentSystems]);
+
   useEffect(() => {
     if (!isPayAtDeliveryEligible && paymentTiming === 'pay_at_delivery') {
       setPaymentTiming('pay_now');
@@ -973,11 +992,13 @@ const PlaceOrderPage: React.FC = () => {
 
   useEffect(() => {
     if (pickupAtStore && isPickupEligible) {
-      setPaymentTiming('pay_at_pickup');
+      setPaymentTiming(
+        itemCountrySupportsStripe ? 'pay_now' : 'pay_at_pickup'
+      );
       setRequiresFastDelivery(false);
       setDeliveryWindow(null);
     }
-  }, [pickupAtStore, isPickupEligible]);
+  }, [pickupAtStore, isPickupEligible, itemCountrySupportsStripe]);
 
   useEffect(() => {
     if (!pickupAtStore && paymentTiming === 'pay_at_pickup') {
@@ -1212,7 +1233,9 @@ const PlaceOrderPage: React.FC = () => {
         ...(isPickupOrder
           ? {
               fulfillment_method: 'pickup' as const,
-              payment_timing: 'pay_at_pickup' as const,
+              payment_timing: (itemCountrySupportsStripe
+                ? 'pay_now'
+                : 'pay_at_pickup') as const,
               requires_fast_delivery: false,
             }
           : {
@@ -1300,6 +1323,7 @@ const PlaceOrderPage: React.FC = () => {
     appliedDiscountCode,
     deliveryWindow,
     isPickupOrder,
+    itemCountrySupportsStripe,
     listingUnitPricing.unit,
     navigate,
     paymentTiming,
@@ -1316,6 +1340,10 @@ const PlaceOrderPage: React.FC = () => {
   ]);
 
   const submitWithPhoneGate = useCallback(async () => {
+    if (isPickupOrder && itemCountrySupportsStripe) {
+      await handleSubmit();
+      return;
+    }
     // Only gate when using profile phone (not override) and it's missing
     const hasProfilePhone = Boolean(profile?.phone_number?.trim());
     if (!useDifferentPhone && !hasProfilePhone) {
@@ -1338,6 +1366,7 @@ const PlaceOrderPage: React.FC = () => {
     handleSubmit,
     isCountrySupported,
     isPickupOrder,
+    itemCountrySupportsStripe,
     itemOriginCountryIso,
     profile?.phone_number,
     selectedAddress?.country,
@@ -1639,17 +1668,6 @@ const PlaceOrderPage: React.FC = () => {
   // When the item's country supports Stripe, payment is by card and the
   // customer's phone number country is irrelevant, so we skip the mobile-money
   // "supported phone country" restriction.
-  const itemCountrySupportsStripe = useMemo(() => {
-    const itemCountry =
-      selectedItem?.business_location?.address?.country?.toUpperCase();
-    if (!itemCountry) return false;
-    return paymentSystems.some(
-      (system) =>
-        system.country?.toUpperCase() === itemCountry &&
-        system.name?.toLowerCase() === 'stripe'
-    );
-  }, [selectedItem, paymentSystems]);
-
   const checkoutPreflightRequest = useMemo(() => {
     if (!selectedItem) return null;
     if (!isPickupOrder && !selectedAddressId) return null;
@@ -1662,7 +1680,12 @@ const PlaceOrderPage: React.FC = () => {
         },
       ],
       ...(isPickupOrder
-        ? { fulfillment_method: 'pickup' as const, payment_timing: 'pay_at_pickup' as const }
+        ? {
+            fulfillment_method: 'pickup' as const,
+            payment_timing: (itemCountrySupportsStripe
+              ? 'pay_now'
+              : 'pay_at_pickup') as const,
+          }
         : {
             delivery_address_id: selectedAddressId,
             fulfillment_method: 'delivery' as const,
@@ -1671,6 +1694,7 @@ const PlaceOrderPage: React.FC = () => {
     };
   }, [
     isPickupOrder,
+    itemCountrySupportsStripe,
     paymentTiming,
     quantity,
     selectedAddressId,
@@ -1685,6 +1709,11 @@ const PlaceOrderPage: React.FC = () => {
 
   const showTaxAtCheckoutNotice =
     checkoutPreflight?.tax_notice === 'calculated_at_checkout';
+
+  const isStripeStorePickup =
+    isPickupOrder &&
+    (checkoutPreflight?.checkout_method === 'STRIPE' ||
+      itemCountrySupportsStripe);
 
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
@@ -1803,9 +1832,11 @@ const PlaceOrderPage: React.FC = () => {
     (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
   const canPlaceOrder =
     variantSelectionValid &&
-    (useDifferentPhone
-      ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
-      : !hasProfilePhone || phoneValidation.isValid) &&
+    (isStripeStorePickup
+      ? baseCanPlaceOrder
+      : useDifferentPhone
+        ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
+        : !hasProfilePhone || phoneValidation.isValid) &&
     baseCanPlaceOrder;
 
   // Step validation (mobile wizard). Quantity is chosen on the final review step.
@@ -2835,6 +2866,7 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
               pickupEligible={isPickupEligible}
+              pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
               onPickupChange={setPickupAtStore}
               pickupLocationLabel={pickupLocationSummary || undefined}
@@ -3493,6 +3525,7 @@ const PlaceOrderPage: React.FC = () => {
               )}
 
               {/* Payment Information Card */}
+              {!isStripeStorePickup ? (
               <Card>
                 <CardContent sx={{ p: 3 }}>
                   <Box
@@ -3671,6 +3704,7 @@ const PlaceOrderPage: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
+              ) : null}
             </Stack>
           </Grid>
 
@@ -3695,6 +3729,7 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
               pickupEligible={isPickupEligible}
+              pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
               onPickupChange={setPickupAtStore}
               pickupLocationLabel={pickupLocationSummary || undefined}

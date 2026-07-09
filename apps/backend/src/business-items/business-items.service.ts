@@ -649,9 +649,9 @@ export class BusinessItemsService {
   }
 
   /**
-   * Pay-at-delivery and store-pickup are offline/cash flows incompatible with
-   * card (Stripe) markets, where payment is collected up front via Checkout.
-   * Reject enabling either flag for businesses on the Stripe rail.
+   * Pay-at-delivery is an offline/mobile-money flow incompatible with card
+   * (Stripe) markets. Store pickup remains available on Stripe — clients pay
+   * online at checkout and collect the order at the store.
    */
   private async assertOfflinePaymentAllowed(
     businessId: string,
@@ -660,10 +660,7 @@ export class BusinessItemsService {
       pay_at_pickup_enabled?: unknown;
     }
   ): Promise<void> {
-    const wantsOffline =
-      updates.pay_on_delivery_enabled === true ||
-      updates.pay_at_pickup_enabled === true;
-    if (!wantsOffline) return;
+    if (updates.pay_on_delivery_enabled !== true) return;
     const rail = await this.paymentRoutingService.resolveRailForBusiness(
       businessId
     );
@@ -672,7 +669,7 @@ export class BusinessItemsService {
         {
           success: false,
           error:
-            'Pay at delivery and store pickup are not available in card-payment (Stripe) countries.',
+            'Pay at delivery is not available in card-payment (Stripe) countries.',
         },
         HttpStatus.BAD_REQUEST
       );

@@ -6852,9 +6852,13 @@ export class OrdersService {
           ? 'pay_at_pickup'
           : 'pay_now';
 
-    if (fulfillmentMethod === 'pickup' && paymentTiming !== 'pay_at_pickup') {
+    if (
+      fulfillmentMethod === 'pickup' &&
+      paymentTiming !== 'pay_at_pickup' &&
+      paymentTiming !== 'pay_now'
+    ) {
       throw new HttpException(
-        'Pickup orders must use pay_at_pickup payment timing',
+        'Pickup orders must use pay_now or pay_at_pickup payment timing',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -6960,7 +6964,7 @@ export class OrdersService {
       }
     }
 
-    if (paymentTiming === 'pay_at_pickup') {
+    if (fulfillmentMethod === 'pickup') {
       const anyNotPickup = businessInventories.some(
         (inv) => inv?.item?.pay_at_pickup_enabled !== true
       );
@@ -7101,6 +7105,18 @@ export class OrdersService {
       !canPayWithWallet &&
       !isZeroOrNegativeOrder &&
       paymentRail === 'stripe';
+
+    if (paymentTiming === 'pay_at_pickup' && paymentRail === 'stripe') {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Pay at pickup is not supported for card payment sellers. Pay online when placing your order.',
+          error: 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     let paymentTransaction: any = null;
     let transaction: any = null;

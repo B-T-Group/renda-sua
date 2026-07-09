@@ -19,6 +19,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
   CheckoutMethod,
   CheckoutPreflightDto,
@@ -132,6 +133,13 @@ describe('CheckoutPreflightService', () => {
               }
               return undefined;
             }),
+          },
+        },
+        {
+          provide: StripeTaxCheckoutBuilderService,
+          useValue: {
+            isTaxEnabledForCountry: jest.fn().mockReturnValue(false),
+            normalizeCountryCode: jest.fn((c: string) => c),
           },
         },
       ],
@@ -341,9 +349,6 @@ describe('CheckoutPreflightService', () => {
     expect(result.blocking_errors[0]?.code).toBe('INVENTORY_FETCH_FAILED');
   });
 
-  // -------------------------------------------------------------------------
-  // 9. Pay at delivery not allowed for Stripe rail
-  // -------------------------------------------------------------------------
   it('blocks pay_at_delivery for Stripe-rail sellers', async () => {
     const row = makeInventoryRow({
       sellerCountry: 'CA',
@@ -369,6 +374,59 @@ describe('CheckoutPreflightService', () => {
       (e) => e.code === 'PAY_AT_DELIVERY_STRIPE_NOT_SUPPORTED'
     );
     expect(blocker).toBeDefined();
+  });
+
+  it('blocks pay_at_pickup for Stripe-rail sellers', async () => {
+    const row = makeInventoryRow({
+      sellerCountry: 'CA',
+      ownerUserId: 'owner-ca',
+      payAtPickup: true,
+    });
+    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
+      business_inventory: [row],
+    });
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
+    (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'pickup',
+      provisional_country: 'CA',
+      payment_timing: 'pay_at_pickup',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    const blocker = result.blocking_errors.find(
+      (e) => e.code === 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED'
+    );
+    expect(blocker).toBeDefined();
+  });
+
+  it('allows store pickup with pay_now for Stripe-rail sellers', async () => {
+    mockInventory([
+      makeInventoryRow({
+        sellerCountry: 'CA',
+        ownerUserId: 'owner-ca',
+        payAtPickup: true,
+      }),
+    ]);
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
+    (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'pickup',
+      provisional_country: 'CA',
+      payment_timing: 'pay_now',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(true);
+    expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
+    expect(result.groups[0]?.allowed_payment_timings).toEqual(['pay_now']);
   });
 
   it('blocks checkout when merchant cannot accept orders', async () => {

@@ -347,6 +347,18 @@ export class CheckoutPreflightService {
           message: `Pay at delivery is not supported for card payment sellers.`,
         });
       }
+      if (requestedTiming === 'pay_at_pickup' && rail === 'stripe') {
+        blockers.push({
+          code: 'PAY_AT_PICKUP_STRIPE_NOT_SUPPORTED',
+          message: `Pay at pickup is not supported for card payment sellers. Pay online when placing your order.`,
+        });
+      }
+      if (fulfillment === 'pickup' && !allPayAtPickup) {
+        blockers.push({
+          code: 'PICKUP_UNAVAILABLE',
+          message: `Store pickup is not available for all items from ${group.businessName || businessId}.`,
+        });
+      }
 
       // Stock validation
       const quantityByInv = new Map<string, number>();
