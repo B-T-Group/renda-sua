@@ -287,8 +287,11 @@ export class StripePaymentsDatabaseService {
     amount: number;
     currency: string;
     reason?: string;
-    cancellation_fee: number;
-    cancelled_by: string;
+    cancellation_fee?: number | null;
+    cancelled_by?: string | null;
+    refund_type?: string | null;
+    refund_request_id?: string | null;
+    refund_payment_id?: string | null;
     metadata?: Record<string, unknown>;
   }): Promise<{ id: string }> {
     const mutation = `
@@ -298,8 +301,97 @@ export class StripePaymentsDatabaseService {
         }
       }
     `;
-    const response = await this.hasuraService.executeMutation(mutation, { data });
+    const response = await this.hasuraService.executeMutation(mutation, {
+      data: {
+        ...data,
+        cancellation_fee: data.cancellation_fee ?? 0,
+        status: 'pending',
+      },
+    });
     return response.insert_stripe_refunds_one;
+  }
+
+  async linkStripeRefundRecord(
+    refundDbId: string,
+    stripeRefundId: string,
+    status: string
+  ): Promise<void> {
+    const mutation = `
+      mutation LinkStripeRefund($id: uuid!, $data: stripe_refunds_set_input!) {
+        update_stripe_refunds_by_pk(pk_columns: { id: $id }, _set: $data) {
+          id
+        }
+      }
+    `;
+    await this.hasuraService.executeMutation(mutation, {
+      id: refundDbId,
+      data: {
+        stripe_refund_id: stripeRefundId,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+    });
+  }
+
+  async sumSucceededRefundsForOrder(orderId: string): Promise<number> {
+    const query = `
+      query SumRefunds($orderId: uuid!) {
+        stripe_refunds_aggregate(
+          where: { order_id: { _eq: $orderId }, status: { _eq: succeeded } }
+        ) {
+          aggregate { sum { amount } }
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { orderId });
+    const sum = response.stripe_refunds_aggregate?.aggregate?.sum?.amount;
+    return Number(sum ?? 0);
+  }
+
+  async getRefundFullByStripeId(stripeRefundId: string): Promise<{
+    id: string;
+    status: string;
+    amount: number;
+    refund_type: string | null;
+    refund_payment_id: string | null;
+  } | null> {
+    const query = `
+      query GetStripeRefundFull($stripeRefundId: String!) {
+        stripe_refunds(where: { stripe_refund_id: { _eq: $stripeRefundId } }, limit: 1) {
+          id
+          status
+          amount
+          refund_type
+          refund_payment_id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { stripeRefundId });
+    return (response.stripe_refunds || [])[0] || null;
+  }
+
+  async getRefundByRefundPaymentId(refundPaymentId: string): Promise<{
+    id: string;
+    status: string;
+    amount: number;
+    refund_type: string | null;
+    refund_payment_id: string | null;
+  } | null> {
+    const query = `
+      query GetRefundByPayment($paymentId: uuid!) {
+        stripe_refunds(where: { refund_payment_id: { _eq: $paymentId } }, limit: 1) {
+          id
+          status
+          amount
+          refund_type
+          refund_payment_id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, {
+      paymentId: refundPaymentId,
+    });
+    return (response.stripe_refunds || [])[0] || null;
   }
 
   async updateRefundByStripeId(

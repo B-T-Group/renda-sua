@@ -448,6 +448,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/refunds"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminRefundsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/site-events"
               element={
                 <ProtectedRoute>

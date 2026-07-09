@@ -121,6 +121,8 @@ export interface Auth0Config {
 export interface OrderConfig {
   /** Minutes to wait before payment timeout cancellation (default 10). Used by wait-and-execute state machine. */
   paymentTimeoutWaitMinutes?: number;
+  /** When true, post-delivery refunds route to Stripe/wallet engine (default true). */
+  refundsV2Enabled?: boolean;
 }
 
 /** When agent has an active delivery, location update interval in ms (default 60s). */
@@ -577,6 +579,9 @@ export default (): Configuration => {
         process.env.PAYMENT_TIMEOUT_WAIT_MINUTES || '10',
         10
       ),
+      refundsV2Enabled:
+        process.env.REFUNDS_V2_ENABLED !== 'false' &&
+        process.env.REFUNDS_V2_ENABLED !== '0',
     },
     agentTracking: {
       activeDeliveryIntervalMs: parseInt(

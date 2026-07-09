@@ -36,6 +36,51 @@ export interface ApproveReplaceBody {
   businessNote?: string;
 }
 
+export interface RefundTimelineEvent {
+  id: string;
+  event_type: string;
+  created_at: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface RefundPaymentRow {
+  id: string;
+  destination: string;
+  amount: number;
+  currency: string;
+  status: string;
+  failure_reason?: string | null;
+}
+
+export interface RefundEvidenceRow {
+  id: string;
+  file_url: string;
+  mime_type?: string | null;
+}
+
+export interface RefundRequestDetail {
+  id: string;
+  status: string;
+  reason: string;
+  destination?: string | null;
+  rejection_reason?: string | null;
+  approved_amount?: number | null;
+  return_status?: string | null;
+  info_request_message?: string | null;
+  timeline?: RefundTimelineEvent[];
+  payments?: RefundPaymentRow[];
+  evidence?: RefundEvidenceRow[];
+}
+
+export interface RefundRequestResponse {
+  refundRequest: RefundRequestDetail | null;
+  destination?: string;
+  paymentSource?: string | null;
+  timeline?: RefundTimelineEvent[];
+  payments?: RefundPaymentRow[];
+  evidence?: RefundEvidenceRow[];
+}
+
 /** Whether the client may request a refund (same rules as backend). */
 export function isWithinRefundWindow(
   completedAt: string | null | undefined
@@ -232,6 +277,57 @@ export function useOrderRefunds() {
     [apiClient]
   );
 
+  const requestReturn = useCallback(
+    async (orderId: string, instructions?: string) => {
+      if (!apiClient) throw new Error('Not authenticated');
+      const res = await apiClient.post(`/orders/${orderId}/refund-request/request-return`, {
+        instructions,
+      });
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const requestInfo = useCallback(
+    async (orderId: string, message: string) => {
+      if (!apiClient) throw new Error('Not authenticated');
+      const res = await apiClient.post(`/orders/${orderId}/refund-request/request-info`, {
+        message,
+      });
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const addEvidence = useCallback(
+    async (orderId: string, fileUrl: string, mimeType?: string) => {
+      if (!apiClient) throw new Error('Not authenticated');
+      const res = await apiClient.post(`/orders/${orderId}/refund-request/evidence`, {
+        fileUrl,
+        mimeType,
+      });
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const respondToInfo = useCallback(
+    async (orderId: string, message: string) => {
+      if (!apiClient) throw new Error('Not authenticated');
+      const res = await apiClient.post(`/orders/${orderId}/refund-request/messages`, {
+        message,
+      });
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const getPendingCount = useCallback(async () => {
+    if (!apiClient) return 0;
+    const res = await apiClient.get('/orders/refund-requests/count');
+    return res.data?.count ?? 0;
+  }, [apiClient]);
+
   return {
     loading,
     error,
@@ -242,5 +338,10 @@ export function useOrderRefunds() {
     approvePartial,
     approveReplaceItem,
     rejectRefund,
+    requestReturn,
+    requestInfo,
+    addEvidence,
+    respondToInfo,
+    getPendingCount,
   };
 }

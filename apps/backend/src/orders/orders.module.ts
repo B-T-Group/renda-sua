@@ -18,12 +18,11 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
 import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
-import { OrderRefundsController } from './order-refunds.controller';
-import { OrderRefundsService } from './order-refunds.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 @Module({
@@ -39,16 +38,15 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     PdfModule,
     StripePaymentsModule,
     StripeTaxModule,
+    RefundsModule,
   ],
   controllers: [
-    OrderRefundsController,
     OrdersController,
     FailedDeliveriesController,
     OrderNotificationsInternalController,
   ],
   providers: [
     OrdersService,
-    OrderRefundsService,
     OrderStatusService,
     OrderQueueService,
     OrderOffersService,
@@ -59,7 +57,6 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CancellationPolicyService,
     StripeAuthReconcilerService,
   ],
-  // MessagingService is available via MessagingModule export
-  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService],
+  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService, RefundsModule],
 })
 export class OrdersModule {}

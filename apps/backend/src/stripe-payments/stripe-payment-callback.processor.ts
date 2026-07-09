@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ContextIdFactory } from '@nestjs/core';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { AccountsService } from '../accounts/accounts.service';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { RefundPaymentService } from '../orders/refund-payment.service';
 import {
   findPaymentCallbackHandler,
   type PaymentCallbackHandler,
@@ -27,7 +28,9 @@ export class StripePaymentCallbackProcessor {
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
     private readonly stripeService: StripeService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly taxOrderPersistence: StripeTaxOrderPersistenceService
+    private readonly taxOrderPersistence: StripeTaxOrderPersistenceService,
+    @Inject(forwardRef(() => RefundPaymentService))
+    private readonly refundPaymentService: RefundPaymentService
   ) {}
 
   private isManualCapture(tx: StripePaymentTransaction): boolean {
@@ -453,17 +456,39 @@ export class StripePaymentCallbackProcessor {
       );
     if (!tx || tx.status === 'refunded') return;
 
-    const refundedMajor = Math.min((charge.amount_refunded ?? 0) / 100, tx.amount);
+    const refundedMajor = Math.min(
+      this.fromStripeMinorUnits(charge.amount_refunded ?? 0, tx.currency),
+      tx.amount
+    );
 
-    if (charge.refunded && charge.refunds?.data && charge.refunds.data.length > 0) {
-      const stripeRefundId = charge.refunds.data[0].id;
-      const existingRefund = await this.databaseService.getRefundByStripeId(
-        stripeRefundId
+    if (charge.refunds?.data && charge.refunds.data.length > 0) {
+      const stripeRefundObj = charge.refunds.data[0];
+      const stripeRefundId = stripeRefundObj.id;
+      const existingRefund = await this.resolveStripeRefundRecord(
+        stripeRefundId,
+        stripeRefundObj
       );
-      if (existingRefund && existingRefund.status === 'succeeded') {
+      if (existingRefund?.status === 'succeeded') {
         this.logger.log(
           `Refund ${stripeRefundId} already processed, skipping wallet reversal`
         );
+        return;
+      }
+      const refundType =
+        existingRefund?.refund_type ??
+        stripeRefundObj.metadata?.refundType ??
+        null;
+      if (this.isPostDeliveryRefundType(refundType)) {
+        if (existingRefund) {
+          await this.refundPaymentService.completeStripePayment(
+            existingRefund.id,
+            true
+          );
+        }
+        await this.databaseService.updateTransaction(tx.id, {
+          status: charge.refunded ? 'refunded' : tx.status,
+          error_message: `Refunded ${refundedMajor} ${tx.currency} via Stripe`,
+        });
         return;
       }
     }
@@ -555,7 +580,7 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    const existingRefund = await this.databaseService.getRefundByStripeId(refund.id);
+    const existingRefund = await this.resolveStripeRefundRecord(refund.id, refund);
     if (!existingRefund) {
       this.logger.warn(`Refund ${refund.id} not found in database`);
       return;
@@ -568,6 +593,15 @@ export class StripePaymentCallbackProcessor {
       status: refundStatus,
       failure_reason: failureReason,
     });
+
+    if (this.isPostDeliveryRefundType(existingRefund.refund_type)) {
+      await this.refundPaymentService.completeStripePayment(
+        existingRefund.id,
+        refundStatus === 'succeeded',
+        failureReason
+      );
+      return;
+    }
 
     if (refundStatus === 'succeeded') {
       const tx = await this.databaseService.getTransactionByPaymentIntentId(
@@ -584,6 +618,45 @@ export class StripePaymentCallbackProcessor {
         `Stripe refund failed: ${refund.id}, reason: ${failureReason}`
       );
     }
+  }
+
+  private isPostDeliveryRefundType(refundType: string | null | undefined): boolean {
+    return (
+      refundType === 'post_delivery_full' ||
+      refundType === 'post_delivery_partial' ||
+      refundType === 'force_admin'
+    );
+  }
+
+  private async resolveStripeRefundRecord(
+    stripeRefundId: string,
+    stripeRefund: Stripe.Refund
+  ): Promise<{
+    id: string;
+    status: string;
+    amount: number;
+    refund_type: string | null;
+    refund_payment_id: string | null;
+  } | null> {
+    const byStripeId = await this.databaseService.getRefundFullByStripeId(
+      stripeRefundId
+    );
+    if (byStripeId) {
+      return byStripeId;
+    }
+    const refundPaymentId = stripeRefund.metadata?.refundPaymentId;
+    if (refundPaymentId) {
+      return this.databaseService.getRefundByRefundPaymentId(refundPaymentId);
+    }
+    return null;
+  }
+
+  private fromStripeMinorUnits(minor: number, currency: string): number {
+    const zeroDecimal = new Set(['XAF', 'XOF', 'JPY', 'KRW', 'VND', 'CLP']);
+    if (zeroDecimal.has(currency.toUpperCase())) {
+      return minor;
+    }
+    return minor / 100;
   }
 
   private async runHandlerFailure(

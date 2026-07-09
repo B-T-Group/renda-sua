@@ -177,7 +177,17 @@ describe('OrdersService', () => {
             markPinConsumed: jest.fn(),
           },
         },
-        { provide: OrderRefundsService, useValue: {} },
+        {
+          provide: OrderRefundsService,
+          useValue: {
+            legacyDirectFullRefund: jest.fn().mockRejectedValue(
+              new HttpException(
+                'Direct refunds via this endpoint are disabled. Clients should submit a refund request; admins should use POST /admin/refunds/force.',
+                HttpStatus.GONE
+              )
+            ),
+          },
+        },
         { provide: LoyaltyService, useValue: {} },
         { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
         { provide: StripeCheckoutService, useValue: {} },
@@ -1125,38 +1135,16 @@ describe('OrdersService', () => {
   });
 
   describe('refundOrder', () => {
-    it('should refund order successfully', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'delivered' },
-      });
-      orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
-        current_status: 'refunded',
-      });
-      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
-
-      const result = await service.refundOrder({
-        orderId: 'order-123',
-        notes: 'Refunded due to customer complaint',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.order.current_status).toBe('refunded');
-    });
-
-    it('should throw error if order cannot be refunded', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'pending' },
-      });
-
+    it('should reject deprecated direct refund endpoint', async () => {
       await expect(
-        service.refundOrder({ orderId: 'order-123' })
+        service.refundOrder({
+          orderId: 'order-123',
+          notes: 'Refunded due to customer complaint',
+        })
       ).rejects.toThrow(
         new HttpException(
-          'Cannot refund order in pending status',
-          HttpStatus.BAD_REQUEST
+          'Direct refunds via this endpoint are disabled. Clients should submit a refund request; admins should use POST /admin/refunds/force.',
+          HttpStatus.GONE
         )
       );
     });

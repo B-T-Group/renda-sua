@@ -96,4 +96,61 @@ export class OrderRefundsController {
   ) {
     return this.orderRefundsService.rejectRefundRequest(orderId, body);
   }
+
+  @Post(':orderId/refund-request/request-return')
+  @ApiOperation({ summary: 'Request customer return item (business)' })
+  async requestReturn(
+    @Param('orderId') orderId: string,
+    @Body() body: { instructions?: string }
+  ) {
+    return this.orderRefundsService.requestReturn(orderId, body.instructions);
+  }
+
+  @Post(':orderId/refund-request/request-info')
+  @ApiOperation({ summary: 'Request additional information from client (business)' })
+  async requestInfo(
+    @Param('orderId') orderId: string,
+    @Body() body: { message: string }
+  ) {
+    return this.orderRefundsService.requestInfo(orderId, body.message);
+  }
+
+  @Post(':orderId/refund-request/mark-received')
+  @ApiOperation({ summary: 'Mark return item received (business)' })
+  async markReceived(
+    @Param('orderId') orderId: string,
+    @Body() body: { inspectionNotes?: string }
+  ) {
+    return this.orderRefundsService.markReturnReceived(orderId, body.inspectionNotes);
+  }
+
+  @Post(':orderId/refund-request/evidence')
+  @ApiOperation({ summary: 'Upload refund evidence (client)' })
+  async addEvidence(
+    @Param('orderId') orderId: string,
+    @Body() body: { fileUrl: string; mimeType?: string }
+  ) {
+    return this.orderRefundsService.addEvidence(orderId, body.fileUrl, body.mimeType);
+  }
+
+  @Post(':orderId/refund-request/messages')
+  @ApiOperation({ summary: 'Respond to info request (client)' })
+  async respondInfo(
+    @Param('orderId') orderId: string,
+    @Body() body: { message: string }
+  ) {
+    return this.orderRefundsService.respondToInfoRequest(orderId, body.message);
+  }
+
+  @Post(':orderId/refund-request/confirm-return-shipped')
+  @ApiOperation({ summary: 'Client confirms return shipped' })
+  async confirmReturnShipped(@Param('orderId') orderId: string) {
+    return this.orderRefundsService.confirmReturnShipped(orderId);
+  }
+
+  @Get('refund-requests/count')
+  @ApiOperation({ summary: 'Pending refund count (business dashboard badge)' })
+  async pendingCount() {
+    return this.orderRefundsService.listRefundRequestsForBusiness('pending');
+  }
 }

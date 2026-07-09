@@ -219,7 +219,7 @@ export const useClientOrders = (clientId?: string) => {
   const apiClient = useApiClient();
 
   // Use backend order management APIs for client actions
-  const { cancelOrder, refundOrder } = useBackendOrders();
+  const { cancelOrder } = useBackendOrders();
 
   const buildFilters = useCallback(
     (filterParams: OrderFilters) => {
@@ -309,9 +309,6 @@ export const useClientOrders = (clientId?: string) => {
           case 'cancelled':
             response = await cancelOrder({ orderId, notes });
             break;
-          case 'refunded':
-            response = await refundOrder({ orderId, notes });
-            break;
           default:
             throw new Error(`Unsupported status transition: ${newStatus}`);
         }
@@ -341,7 +338,7 @@ export const useClientOrders = (clientId?: string) => {
         throw err;
       }
     },
-    [cancelOrder, refundOrder]
+    [cancelOrder]
   );
 
   // Function to refresh orders when needed

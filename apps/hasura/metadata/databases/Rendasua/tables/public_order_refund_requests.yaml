@@ -11,6 +11,38 @@ object_relationships:
   - name: business
     using:
       foreign_key_constraint_on: business_id
+  - name: order_return
+    using:
+      foreign_key_constraint_on:
+        column: refund_request_id
+        table:
+          name: order_returns
+          schema: public
+  - name: resolved_by_user
+    using:
+      foreign_key_constraint_on: resolved_by_user_id
+array_relationships:
+  - name: order_refund_events
+    using:
+      foreign_key_constraint_on:
+        column: refund_request_id
+        table:
+          name: order_refund_events
+          schema: public
+  - name: order_refund_evidence
+    using:
+      foreign_key_constraint_on:
+        column: refund_request_id
+        table:
+          name: order_refund_evidence
+          schema: public
+  - name: order_refund_payments
+    using:
+      foreign_key_constraint_on:
+        column: refund_request_id
+        table:
+          name: order_refund_payments
+          schema: public
 select_permissions:
   - role: client
     permission:
@@ -30,6 +62,17 @@ select_permissions:
         - created_at
         - updated_at
         - resolved_at
+        - destination
+        - payment_source_snapshot
+        - approved_amount
+        - requested_amount
+        - currency
+        - resolution_type
+        - return_required
+        - return_status
+        - info_request_message
+        - reopen_count
+        - sla_due_at
       filter:
         client:
           user:
@@ -54,6 +97,17 @@ select_permissions:
         - created_at
         - updated_at
         - resolved_at
+        - destination
+        - payment_source_snapshot
+        - approved_amount
+        - requested_amount
+        - currency
+        - resolution_type
+        - return_required
+        - return_status
+        - info_request_message
+        - reopen_count
+        - sla_due_at
       filter:
         business:
           user:

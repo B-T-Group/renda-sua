@@ -74,6 +74,11 @@ import BusinessOrderAlerts from '../orders/BusinessOrderAlerts';
 import ClientActions from '../orders/ClientActions';
 import { ClientDeliveryPinButton } from '../orders/ClientDeliveryPinButton';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
+import {
+  isRefundOrderStatus,
+  RefundProgressCard,
+} from '../orders/RefundProgressCard';
+import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
 import SEOHead from '../seo/SEOHead';
 import { getPaymentStatusChipColor } from '../../utils/orderUtils';
 
@@ -150,94 +155,7 @@ function ColorlibStepIcon(props: StepIconProps) {
   );
 }
 
-const REFUND_ORDER_STATUSES = new Set([
-  'refund_requested',
-  'refund_approved_full',
-  'refund_approved_partial',
-  'refund_approved_replace',
-  'refund_rejected',
-  'refunded',
-]);
-
-function isRefundOrderStatus(status: string): boolean {
-  return REFUND_ORDER_STATUSES.has(status);
-}
-
-function getRefundActiveStep(status: string): number {
-  switch (status) {
-    case 'refund_requested':
-      return 0;
-    case 'refund_approved_full':
-    case 'refund_approved_partial':
-    case 'refund_approved_replace':
-      return 1;
-    case 'refunded':
-    case 'refund_rejected':
-      return 3;
-    default:
-      return 0;
-  }
-}
-
-function RefundProgressCard({ status }: { status: string }) {
-  const { t } = useTranslation();
-  const activeStep = getRefundActiveStep(status);
-  const isRejected = status === 'refund_rejected';
-
-  return (
-    <Card sx={{ mb: 3, overflow: 'visible' }}>
-      <CardContent sx={{ p: { xs: 2, md: 4 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <CurrencyExchange color="primary" sx={{ mr: 1 }} />
-          <Typography variant="h6" fontWeight="bold">
-            {t('orders.refundProgress.title', 'Refund status')}
-          </Typography>
-        </Box>
-        <Stepper
-          alternativeLabel
-          activeStep={activeStep}
-          connector={<ColorlibConnector />}
-          sx={{ display: { xs: 'none', md: 'flex' } }}
-        >
-          <Step>
-            <StepLabel>
-              {t('orders.refundProgress.stepRequested', 'Refund requested')}
-            </StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>
-              {t('orders.refundProgress.stepReview', 'Business review')}
-            </StepLabel>
-          </Step>
-          <Step>
-            <StepLabel error={isRejected}>
-              {isRejected
-                ? t('orders.refundProgress.stepDeclined', 'Request declined')
-                : t('orders.refundProgress.stepRefunded', 'Refunded')}
-            </StepLabel>
-          </Step>
-        </Stepper>
-        <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {t('orders.refundProgress.mobileLabel', 'Refund progress')}:{' '}
-              {Math.round((activeStep / 3) * 100)}%
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={(activeStep / 3) * 100}
-              color={isRejected ? 'error' : 'primary'}
-              sx={{ height: 8, borderRadius: 1 }}
-            />
-          </Box>
-          <Typography variant="body1" fontWeight="medium">
-            {t(`common.orderStatus.${status}`)}
-          </Typography>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
+// Refund progress is rendered via RefundProgressCard component
 
 // Loading Skeleton Component
 const OrderDetailSkeleton: React.FC = () => (
@@ -314,7 +232,6 @@ const ManageOrderPage: React.FC = () => {
 
   const {
     cancelOrder,
-    refundOrder,
     completeOrder,
     retryOrderPayment,
     loading: actionLoading,
@@ -322,6 +239,9 @@ const ManageOrderPage: React.FC = () => {
   } = useBackendOrders();
 
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [refundDetail, setRefundDetail] = useState<RefundRequestDetail | null>(null);
+  const [refundDetailLoading, setRefundDetailLoading] = useState(false);
+  const { getRefundRequest } = useOrderRefunds();
   const [pendingAction, setPendingAction] = useState<{
     action: string;
     label: string;
@@ -452,6 +372,40 @@ const ManageOrderPage: React.FC = () => {
     setActiveTab(0);
   }, [order, activePersona]);
 
+  useEffect(() => {
+    if (!order?.id || !isRefundOrderStatus(order.current_status)) {
+      setRefundDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setRefundDetailLoading(true);
+    getRefundRequest(order.id)
+      .then((data) => {
+        if (cancelled) return;
+        const req = data.refundRequest as RefundRequestDetail | null;
+        setRefundDetail(
+          req
+            ? {
+                ...req,
+                timeline: data.timeline ?? req.timeline,
+                payments: data.payments ?? req.payments,
+                evidence: data.evidence ?? req.evidence,
+                destination: req.destination ?? data.destination,
+              }
+            : null
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRefundDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRefundDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order?.id, order?.current_status, getRefundRequest]);
+
   const handleBack = () => {
     // Navigate back to the smart orders route
     navigate('/orders');
@@ -476,9 +430,6 @@ const ManageOrderPage: React.FC = () => {
       switch (pendingAction.action) {
         case 'cancel':
           response = await cancelOrder(actionData);
-          break;
-        case 'refund':
-          response = await refundOrder(actionData);
           break;
         case 'complete':
           response = await completeOrder(actionData);
@@ -754,7 +705,11 @@ const ManageOrderPage: React.FC = () => {
           )}
 
           {isRefundOrderStatus(order.current_status) && (
-            <RefundProgressCard status={order.current_status} />
+            <RefundProgressCard
+              orderStatus={order.current_status}
+              detail={refundDetail}
+              loading={refundDetailLoading}
+            />
           )}
 
           <Grid container spacing={3}>

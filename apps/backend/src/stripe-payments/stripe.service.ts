@@ -431,6 +431,7 @@ export class StripeService {
     amount?: number;
     reason?: Stripe.RefundCreateParams.Reason;
     metadata?: Record<string, string>;
+    idempotencyKey?: string;
   }): Promise<Stripe.Refund> {
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: params.paymentIntentId,
@@ -442,7 +443,9 @@ export class StripeService {
       refundParams.amount = params.amount;
     }
 
-    const idempotencyKey = `refund_${params.metadata?.orderId ?? params.paymentIntentId}`;
+    const idempotencyKey =
+      params.idempotencyKey ??
+      `refund_${params.metadata?.orderId ?? params.paymentIntentId}`;
     return this.getClient().refunds.create(refundParams, { idempotencyKey });
   }
 }

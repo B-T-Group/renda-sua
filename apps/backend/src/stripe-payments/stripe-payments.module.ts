@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { RefundsModule } from '../orders/refunds.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { PaymentCallbackRegistryService } from '../mobile-payments/payment-callback/payment-callback-registry.service';
@@ -15,7 +16,11 @@ import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
 
 @Module({
-  imports: [forwardRef(() => MerchantLifecycleModule), forwardRef(() => StripeTaxModule)],
+  imports: [
+    forwardRef(() => MerchantLifecycleModule),
+    forwardRef(() => StripeTaxModule),
+    forwardRef(() => RefundsModule),
+  ],
   controllers: [StripePaymentsController, StripeConnectController],
   providers: [
     StripeService,

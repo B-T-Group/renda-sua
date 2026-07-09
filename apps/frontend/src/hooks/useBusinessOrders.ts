@@ -212,7 +212,6 @@ export const useBusinessOrders = (businessId?: string) => {
     confirmOrder,
     completePreparation,
     cancelOrder,
-    refundOrder,
   } = useBackendOrders();
 
   const buildFilters = useCallback(
@@ -327,9 +326,6 @@ export const useBusinessOrders = (businessId?: string) => {
           case 'cancelled':
             response = await cancelOrder({ orderId, notes });
             break;
-          case 'refunded':
-            response = await refundOrder({ orderId, notes });
-            break;
           default:
             throw new Error(`Unsupported status transition: ${newStatus}`);
         }
@@ -363,7 +359,6 @@ export const useBusinessOrders = (businessId?: string) => {
       confirmOrder,
       completePreparation,
       cancelOrder,
-      refundOrder,
     ]
   );
 

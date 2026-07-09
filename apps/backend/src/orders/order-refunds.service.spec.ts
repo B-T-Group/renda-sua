@@ -1,6 +1,12 @@
 import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderRefundsService } from './order-refunds.service';
+import { OrderQueueService } from './order-queue.service';
+import { RefundConfigService } from './refund-config.service';
+import { RefundDestinationRouter } from './refund-destination.router';
+import { RefundEventService } from './refund-event.service';
+import { RefundPaymentService } from './refund-payment.service';
+import { ReturnWorkflowService } from './return-workflow.service';
 
 jest.mock('../accounts/accounts.service', () => ({
   AccountsService: class AccountsService {},
@@ -51,6 +57,9 @@ describe('OrderRefundsService', () => {
     completed_at: new Date().toISOString(),
     client_id: 'c1',
     business_id: 'b1',
+    business_location_id: null,
+    payment_source: 'wallet',
+    payment_status: 'paid',
     client: { user_id: 'u1' },
     business: { user_id: 'biz-user' },
   };
@@ -75,6 +84,15 @@ describe('OrderRefundsService', () => {
         { provide: HasuraSystemService, useValue: mockHasuraSystem },
         { provide: HasuraUserService, useValue: mockHasuraUser },
         { provide: AccountsService, useValue: mockAccounts },
+        { provide: OrderQueueService, useValue: { sendOrderStatusUpdatedMessage: jest.fn() } },
+        { provide: RefundConfigService, useValue: { isV2Enabled: () => false } },
+        { provide: RefundDestinationRouter, useValue: { resolve: () => 'wallet' } },
+        {
+          provide: RefundPaymentService,
+          useValue: { processPayment: jest.fn().mockResolvedValue({ success: true, async: false }) },
+        },
+        { provide: RefundEventService, useValue: { appendEvent: jest.fn(), listEvents: jest.fn() } },
+        { provide: ReturnWorkflowService, useValue: {} },
       ],
     }).compile();
 
@@ -85,7 +103,15 @@ describe('OrderRefundsService', () => {
 
   it('approvePartialRefund rejects amount >= subtotal', async () => {
     hasuraUser.getUser.mockResolvedValue(businessUser as never);
-    hasuraSystem.executeQuery.mockResolvedValue({ orders_by_pk: orderCtx });
+    hasuraSystem.executeQuery.mockImplementation((query: string) => {
+      if (query.includes('orders_by_pk')) {
+        return Promise.resolve({ orders_by_pk: orderCtx });
+      }
+      if (query.includes('order_refund_requests')) {
+        return Promise.resolve({ order_refund_requests: [{ id: 'req-1' }] });
+      }
+      return Promise.resolve({});
+    });
 
     await expect(
       service.approvePartialRefund('o1', {
@@ -97,7 +123,15 @@ describe('OrderRefundsService', () => {
 
   it('approvePartialRefund rejects amount <= 0', async () => {
     hasuraUser.getUser.mockResolvedValue(businessUser as never);
-    hasuraSystem.executeQuery.mockResolvedValue({ orders_by_pk: orderCtx });
+    hasuraSystem.executeQuery.mockImplementation((query: string) => {
+      if (query.includes('orders_by_pk')) {
+        return Promise.resolve({ orders_by_pk: orderCtx });
+      }
+      if (query.includes('order_refund_requests')) {
+        return Promise.resolve({ order_refund_requests: [{ id: 'req-1' }] });
+      }
+      return Promise.resolve({});
+    });
 
     await expect(
       service.approvePartialRefund('o1', {

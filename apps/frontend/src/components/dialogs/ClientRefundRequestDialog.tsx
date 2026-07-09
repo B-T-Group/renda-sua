@@ -71,6 +71,7 @@ const ClientRefundRequestDialog: React.FC<ClientRefundRequestDialogProps> = ({
     itemSubtotal: number;
     deliveryFeeTotal: number;
     currency: string;
+    destination?: string;
   } | null>(null);
 
   const deliveryTotal = useMemo(
@@ -103,6 +104,7 @@ const ClientRefundRequestDialog: React.FC<ClientRefundRequestDialogProps> = ({
         itemSubtotal: data.itemSubtotal ?? order.subtotal ?? 0,
         deliveryFeeTotal: data.deliveryFeeTotal ?? deliveryTotal,
         currency: data.currency ?? order.currency,
+        destination: data.destination,
       });
       setStep(1);
       onSuccess();
@@ -180,6 +182,21 @@ const ClientRefundRequestDialog: React.FC<ClientRefundRequestDialogProps> = ({
             <Typography variant="subtitle1">
               {t('orders.refunds.nextStepsTitle', 'What happens next')}
             </Typography>
+            {nextPayload.destination === 'stripe' ? (
+              <Typography variant="body2" color="info.main">
+                {t(
+                  'orders.refunds.destination.card',
+                  'If approved, your refund will return to your original payment card (typically 5–10 business days).'
+                )}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'orders.refunds.destination.wallet',
+                  'If approved, your refund will be credited to your RendaSua wallet (usually instant).'
+                )}
+              </Typography>
+            )}
             <Typography variant="body2">
               {t(
                 'orders.refunds.bringToBusiness',

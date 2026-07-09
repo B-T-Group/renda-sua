@@ -33,7 +33,6 @@ import {
 import type { OrderData } from '../../hooks/useOrderById';
 import {
   businessMayCancelDeferredUncollectedOrder,
-  isRefundablePaymentStatus,
 } from '../../utils/orderUtils';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
@@ -126,7 +125,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const {
     confirmOrder,
     completePreparation,
-    refundOrder,
     generateDeliveryOverwriteCode,
     reconcileCashException,
   } = useBackendOrders();
@@ -223,26 +221,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
               'messages.orderCompletePreparationError',
               'Failed to complete preparation'
             );
-      onShowNotification?.(errorMessage, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefundOrder = async () => {
-    setLoading(true);
-    try {
-      await refundOrder({ orderId: order.id });
-      onShowNotification?.(
-        t('messages.orderRefundSuccess', 'Order refunded successfully'),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t('messages.orderRefundError', 'Failed to refund order');
       onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
@@ -419,26 +397,9 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'delivered':
-        // Completion is done by agent with PIN. Refund option only.
-        if (isRefundablePaymentStatus(order.payment_status)) {
-          actions.push({
-            label: t('orderActions.refundOrder', 'Refund Order'),
-            action: handleRefundOrder,
-            color: 'warning' as const,
-            icon: <RefundIcon />,
-          });
-        }
         break;
 
       case 'complete':
-        if (isRefundablePaymentStatus(order.payment_status)) {
-          actions.push({
-            label: t('orderActions.refundOrder', 'Refund Order'),
-            action: handleRefundOrder,
-            color: 'warning' as const,
-            icon: <RefundIcon />,
-          });
-        }
         break;
 
       case 'refund_requested':
@@ -459,38 +420,9 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'failed':
       case 'cancelled':
-        if (isRefundablePaymentStatus(order.payment_status)) {
-          actions.push({
-            label: t('orderActions.refundOrder', 'Refund Order'),
-            action: handleRefundOrder,
-            color: 'warning' as const,
-            icon: <RefundIcon />,
-          });
-        }
         break;
 
       default:
-        // For other statuses, businesses can generally refund
-        // But not if payment is still pending
-        if (
-          ![
-            'complete',
-            'refunded',
-            'refund_requested',
-            'refund_approved_full',
-            'refund_approved_partial',
-            'refund_approved_replace',
-            'refund_rejected',
-          ].includes(order.current_status) &&
-          isRefundablePaymentStatus(order.payment_status)
-        ) {
-          actions.push({
-            label: t('orderActions.refundOrder', 'Refund Order'),
-            action: handleRefundOrder,
-            color: 'warning' as const,
-            icon: <RefundIcon />,
-          });
-        }
         break;
     }
 

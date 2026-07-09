@@ -61,6 +61,9 @@ export const BusinessDashboardAdminPage = lazy(() =>
 export const BusinessRefundRequestsPage = lazy(() =>
   import('../components/pages/BusinessRefundRequestsPage')
 );
+export const AdminRefundsPage = lazy(() =>
+  import('../components/pages/AdminRefundsPage')
+);
 export const BusinessImagesPage = lazy(() =>
   import('../components/pages/BusinessImagesPage')
 );

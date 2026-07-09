@@ -8,3 +8,9 @@ object_relationships:
   - name: order
     using:
       foreign_key_constraint_on: order_id
+  - name: refund_payment
+    using:
+      foreign_key_constraint_on: refund_payment_id
+  - name: refund_request
+    using:
+      foreign_key_constraint_on: refund_request_id
