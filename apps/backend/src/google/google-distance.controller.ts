@@ -8,7 +8,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AddressesService } from '../addresses/addresses.service';
+import { Public } from '../auth/public.decorator';
 import { GoogleDistanceService } from './google-distance.service';
 
 interface DistanceMatrixRequest {
@@ -169,8 +171,12 @@ export class GoogleDistanceController {
   }
 
   @Get('places-autocomplete')
+  @Public()
+  @Throttle({ short: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary: 'Google Places address predictions for an input string',
+    description:
+      'Public endpoint for signup and guest flows. Rate-limited per IP.',
   })
   @ApiQuery({ name: 'input', description: 'Partial address text (min 3 chars)' })
   @ApiQuery({
@@ -198,6 +204,7 @@ export class GoogleDistanceController {
       },
     },
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async placesAutocomplete(
     @Query('input') input: string,
     @Query('country') country?: string
@@ -217,14 +224,19 @@ export class GoogleDistanceController {
   }
 
   @Get('place-details')
+  @Public()
+  @Throttle({ short: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'Resolve a Google place_id into a structured address',
+    description:
+      'Public endpoint for signup and guest flows. Rate-limited per IP.',
   })
   @ApiQuery({ name: 'place_id', description: 'Google Places place_id' })
   @ApiResponse({
     status: 200,
     description: 'Structured address for the place',
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async placeDetails(@Query('place_id') placeId: string) {
     if (!placeId || !placeId.trim()) {
       throw new HttpException('place_id is required', HttpStatus.BAD_REQUEST);
