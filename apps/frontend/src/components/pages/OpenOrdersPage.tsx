@@ -48,8 +48,8 @@ const OpenOrdersPage: React.FC = () => {
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
 
   // When the agent returns from Stripe onboarding and the account is active,
-  // the backend has flipped is_verified; refresh the profile so the alert
-  // hides and available orders unlock.
+  // the backend has flipped is_verified; refresh profile and open orders so
+  // canClaim and the order list match verification state.
   useEffect(() => {
     if (
       isAgent &&

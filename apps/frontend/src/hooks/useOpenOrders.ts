@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Order } from './useAgentOrders';
 import { useApiClient } from './useApiClient';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
@@ -13,7 +13,7 @@ export interface OpenOrdersResponse {
 
 export const useOpenOrders = () => {
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
-  const [canClaim, setCanClaim] = useState(true);
+  const [canClaim, setCanClaim] = useState(false);
   const [previewMode, setPreviewMode] = useState<'country' | 'region' | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,13 +50,11 @@ export const useOpenOrders = () => {
         setCanClaim(response.data.canClaim !== false);
         setPreviewMode(response.data.previewMode);
         return orders;
-      } else {
-        setError(response.data.message || 'Failed to fetch open orders');
-        setOpenOrders([]);
-        setCanClaim(true);
-        setPreviewMode(undefined);
-        return [];
       }
+
+      setError(response.data.message || 'Failed to fetch open orders');
+      setOpenOrders([]);
+      return [];
     } catch (err: any) {
       console.error('Error fetching open orders:', err);
       setError(
@@ -65,8 +63,6 @@ export const useOpenOrders = () => {
           'Failed to fetch open orders'
       );
       setOpenOrders([]);
-      setCanClaim(true);
-      setPreviewMode(undefined);
       return [];
     } finally {
       setLoading(false);
@@ -76,6 +72,16 @@ export const useOpenOrders = () => {
   useEffect(() => {
     fetchOpenOrders();
   }, [fetchOpenOrders]);
+
+  const prevVerifiedRef = useRef(profile?.agent?.is_verified);
+  useEffect(() => {
+    const wasVerified = prevVerifiedRef.current === true;
+    const isVerified = profile?.agent?.is_verified === true;
+    prevVerifiedRef.current = profile?.agent?.is_verified;
+    if (isAgent && isVerified && !wasVerified) {
+      void fetchOpenOrders();
+    }
+  }, [fetchOpenOrders, isAgent, profile?.agent?.is_verified]);
 
   const refetch = useCallback(() => {
     return fetchOpenOrders();
