@@ -95,7 +95,7 @@ const OtpAuthPage: React.FC = () => {
       if (flow === 'signup') {
         const userId = sessionStorage.getItem('pendingSignupUserId') || undefined;
         await apiClient.post('/auth/signup/verify-otp', { email, otp, userId });
-        navigate('/');
+        navigate('/app');
         return;
       }
 

@@ -799,7 +799,55 @@
     "accountCreatedBody": "Cliquez sur le bouton ci-dessous pour vérifier votre adresse e-mail. Un code à usage unique sera envoyé à <bold>{{email}}</bold>.",
     "verifyEmailToContinue": "Vérifier mon e-mail pour continuer",
     "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",
-    "createAccountError": "Impossible de créer le compte pour le moment."
+    "createAccountError": "Impossible de créer le compte pour le moment.",
+    "goalSectionHintMulti": "Sélectionnez tout ce qui s'applique—vous pouvez utiliser plusieurs modes sur un même compte.",
+    "primaryBusinessFocus": "Activité principale",
+    "trustContact": "Nous utilisons ces informations uniquement pour vérifier votre compte et vous envoyer les mises à jour de commande.",
+    "whyAccount": "Pourquoi créer un compte ?",
+    "verifyNext": {
+      "client": "Vérifiez pour commencer à acheter",
+      "agent": "Vérifiez pour voir les courses à proximité",
+      "business": "Vérifiez pour configurer votre boutique"
+    },
+    "businessIntentStrip": "Vous vous inscrivez en tant qu'entreprise — voici ce que vous obtenez :"
+  },
+  "signup": {
+    "benefits": {
+      "client": {
+        "headline": "Achetez local, suivez chaque commande",
+        "b1": "Parcourez et achetez auprès des commerces près de chez vous",
+        "b2": "Suivez la livraison en temps réel et discutez avec votre livreur",
+        "b3": "Enregistrez vos adresses et commandez plus vite la prochaine fois"
+      },
+      "agent": {
+        "headline": "Livrez selon votre emploi du temps, soyez payé par course",
+        "b1": "Acceptez des courses à proximité quand cela vous convient",
+        "b2": "Naviguez vers les points de retrait et de livraison dans l'app",
+        "b3": "Soyez payé pour chaque livraison terminée"
+      },
+      "business": {
+        "headline": "Ouvrez votre vitrine et commencez à vendre",
+        "b1": "Publiez des produits avec photos et détails assistés par l'IA",
+        "b2": "Gérez commandes, stock et points de vente en un seul tableau de bord",
+        "b3": "Touchez des acheteurs locaux ; nous gérons la livraison"
+      },
+      "businessRent": {
+        "headline": "Publiez des locations et commencez à gagner",
+        "b1": "Publiez des locations avec photos et détails assistés par l'IA",
+        "b2": "Gérez réservations, stock et emplacements en un seul tableau de bord",
+        "b3": "Touchez des locataires locaux ; nous gérons la coordination"
+      }
+    },
+    "getReady": {
+      "title": "Préparez-vous à vendre",
+      "subtitle": "Complétez ces étapes pour être en ligne et accepter des commandes.",
+      "stepAgreement": "Signer l'accord marchand",
+      "stepPayouts": "Connecter les paiements",
+      "stepFirstItem": "Ajouter votre premier produit",
+      "ctaAgreement": "Signer l'accord",
+      "ctaPayouts": "Configurer les paiements",
+      "ctaFirstItem": "Ajouter un produit"
+    }
   },
   "completeProfile": {
     "added": "Ajouté",
@@ -4751,7 +4799,8 @@
     },
     "cta": {
       "title": "Prêt à commencer à livrer?",
-      "subtitle": "Téléchargez l'appli et commencez à gagner aujourd'hui."
+      "subtitle": "Téléchargez l'appli et commencez à gagner aujourd'hui.",
+      "webSignup": "S'inscrire sur le web"
     }
   }
 }

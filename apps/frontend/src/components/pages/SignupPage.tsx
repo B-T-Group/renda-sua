@@ -54,11 +54,14 @@ import AgentReferralCodeField from '../common/AgentReferralCodeField';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
 import SignupAccountCreatedAnimation from '../onboarding/SignupAccountCreatedAnimation';
+import { PersonaBenefitBullets } from '../onboarding/PersonaBenefitBullets';
 import { SignupGoalIllustration, type SignupGoalId } from '../onboarding/SignupGoalIllustration';
+import { benefitPersonaFromGoalId } from '../../constants/signupBenefits';
 
 const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
 
-type SignupIntent = 'client_buy' | 'business_sell' | 'business_rent';
+type SignupIntent = 'client' | 'agent' | 'business_sell' | 'business_rent';
+type SignupStepKind = 'contact' | 'goal' | 'address' | 'review';
 type UserType = 'client' | 'business' | 'agent';
 type MainInterest = 'sell_items' | 'rent_items';
 
@@ -93,8 +96,24 @@ const intentDefaults = (intent: SignupIntent | null) => {
     return { user_type_id: 'business' as UserType, main_interest: 'sell_items' as const };
   if (intent === 'business_rent')
     return { user_type_id: 'business' as UserType, main_interest: 'rent_items' as const };
+  if (intent === 'agent')
+    return { user_type_id: 'agent' as UserType, main_interest: undefined };
+  if (intent === 'client')
+    return { user_type_id: 'client' as UserType, main_interest: undefined };
   return { user_type_id: 'client' as UserType, main_interest: undefined };
 };
+
+function parseSignupIntent(raw: string | null): SignupIntent | null {
+  if (
+    raw === 'client' ||
+    raw === 'agent' ||
+    raw === 'business_sell' ||
+    raw === 'business_rent'
+  ) {
+    return raw;
+  }
+  return null;
+}
 
 /** Enough structure for a real address; avoids availability calls while the user is still typing. */
 function isValidEmailFormat(email: string): boolean {
@@ -153,7 +172,11 @@ const SignupPage: React.FC = () => {
   const { loginWithRedirect, } = useAuth0();
   const apiClient = useApiClient();
   const defaults = useMemo(
-    () => intentDefaults((search.get('intent') as SignupIntent | null) || null),
+    () => intentDefaults(parseSignupIntent(search.get('intent'))),
+    [search]
+  );
+  const signupIntent = useMemo(
+    () => parseSignupIntent(search.get('intent')),
     [search]
   );
   const [activeStep, setActiveStep] = useState(0);
@@ -187,11 +210,13 @@ const SignupPage: React.FC = () => {
     error: locationHookError,
   } = useCurrentLocation();
   const [selectedGoalIds, setSelectedGoalIds] = useState<SignupGoalId[]>([
-    defaults.user_type_id === 'business'
-      ? defaults.main_interest === 'rent_items'
-        ? 'rent_and_earn'
-        : 'sell_items'
-      : 'browse_buy',
+    defaults.user_type_id === 'agent'
+      ? 'delivery_agent'
+      : defaults.user_type_id === 'business'
+        ? defaults.main_interest === 'rent_items'
+          ? 'rent_and_earn'
+          : 'sell_items'
+        : 'browse_buy',
   ]);
   const [referralAgentCode, setReferralAgentCode] = useState('');
   const {
@@ -207,29 +232,57 @@ const SignupPage: React.FC = () => {
     }
   }, [search]);
 
-  const steps = useMemo(
-    () => [
-      t('signupPage.steps.contact', 'Contact'),
-      t('signupPage.steps.goal', 'Your goal'),
-      t('signupPage.steps.address', 'Address'),
-      t('signupPage.steps.review', 'Review'),
-    ],
-    [t]
+
+  const isClientOnlySignup =
+    selectedGoalIds.length === 1 && selectedGoalIds[0] === 'browse_buy';
+
+  const stepKinds = useMemo((): SignupStepKind[] => {
+    const kinds: SignupStepKind[] = ['contact', 'goal'];
+    if (!isClientOnlySignup) kinds.push('address');
+    kinds.push('review');
+    return kinds;
+  }, [isClientOnlySignup]);
+
+  const wizardSteps = useMemo(
+    () =>
+      stepKinds.map((kind) => {
+        switch (kind) {
+          case 'contact':
+            return t('signupPage.steps.contact', 'Contact');
+          case 'goal':
+            return t('signupPage.steps.goal', 'Your goal');
+          case 'address':
+            return t('signupPage.steps.address', 'Address');
+          default:
+            return t('signupPage.steps.review', 'Review');
+        }
+      }),
+    [stepKinds, t]
   );
 
+  const currentStepKind = stepKinds[activeStep] ?? 'review';
+
+  const primaryVerifyPersona = useMemo((): 'client' | 'agent' | 'business' => {
+    if (selectedGoalIds.includes('sell_items') || selectedGoalIds.includes('rent_and_earn')) {
+      return 'business';
+    }
+    if (selectedGoalIds.includes('delivery_agent')) return 'agent';
+    return 'client';
+  }, [selectedGoalIds]);
+
   const stepSubtitle = useMemo(() => {
-    switch (activeStep) {
-      case 0:
+    switch (currentStepKind) {
+      case 'contact':
         return t(
           'signupPage.contactSubtitle',
           'Enter your name and how we can reach you.'
         );
-      case 1:
+      case 'goal':
         return t(
           'signupPage.goalSubtitle',
           'Choose what fits you—we will configure the right account type.'
         );
-      case 2:
+      case 'address':
         return t(
           'signupPage.addressSubtitle',
           'We use this to tailor delivery and local options.'
@@ -240,7 +293,11 @@ const SignupPage: React.FC = () => {
           'Check everything looks correct, then create your account.'
         );
     }
-  }, [activeStep, t]);
+  }, [currentStepKind, t]);
+
+  useEffect(() => {
+    setActiveStep((s) => Math.min(s, Math.max(0, stepKinds.length - 1)));
+  }, [stepKinds.length]);
 
   const goalOptions: SignupGoalOption[] = useMemo(
     () => [
@@ -295,11 +352,13 @@ const SignupPage: React.FC = () => {
 
   useEffect(() => {
     const initialGoal =
-      defaults.user_type_id === 'business'
-        ? defaults.main_interest === 'rent_items'
-          ? 'rent_and_earn'
-          : 'sell_items'
-        : 'browse_buy';
+      defaults.user_type_id === 'agent'
+        ? 'delivery_agent'
+        : defaults.user_type_id === 'business'
+          ? defaults.main_interest === 'rent_items'
+            ? 'rent_and_earn'
+            : 'sell_items'
+          : 'browse_buy';
     setSelectedGoalIds([initialGoal]);
     setForm((prev) => ({
       ...prev,
@@ -467,8 +526,8 @@ const SignupPage: React.FC = () => {
   }, [apiClient, form.email]);
 
   const canAdvanceFromStep = useCallback((): boolean => {
-    switch (activeStep) {
-      case 0:
+    switch (currentStepKind) {
+      case 'contact':
         return Boolean(
           form.first_name.trim() &&
             form.last_name.trim() &&
@@ -477,14 +536,14 @@ const SignupPage: React.FC = () => {
             !emailTaken &&
             !checkingEmail
         );
-      case 1: {
+      case 'goal': {
         if (selectedPersonas.length === 0) return false;
         if (selectedPersonas.includes('business')) {
           return Boolean(form.business_name.trim() && form.main_interest);
         }
         return selectedGoalIds.length > 0;
       }
-      case 2:
+      case 'address':
         return Boolean(
           form.address.address_line_1.trim() &&
             form.address.country &&
@@ -494,7 +553,14 @@ const SignupPage: React.FC = () => {
       default:
         return true;
     }
-  }, [activeStep, form, emailTaken, checkingEmail, selectedGoalIds, selectedPersonas]);
+  }, [
+    currentStepKind,
+    form,
+    emailTaken,
+    checkingEmail,
+    selectedGoalIds,
+    selectedPersonas,
+  ]);
 
   const redirectToAuthAfterSignup = useCallback(
     async (emailNormalized: string) => {
@@ -582,12 +648,14 @@ const SignupPage: React.FC = () => {
             : undefined,
           vehicle_type_id: personas.includes('agent') ? 'other' : undefined,
         },
-        address: {
-          address_line_1: form.address.address_line_1.trim(),
-          country: form.address.country,
-          city: form.address.city.trim(),
-          state: form.address.state,
-        },
+        address: isClientOnlySignup
+          ? undefined
+          : {
+              address_line_1: form.address.address_line_1.trim(),
+              country: form.address.country,
+              city: form.address.city.trim(),
+              state: form.address.state,
+            },
         ...(personas.includes('business') && trimmedReferral
           ? { referral_agent_code: trimmedReferral }
           : {}),
@@ -613,7 +681,7 @@ const SignupPage: React.FC = () => {
 
   const handleNext = () => {
     if (!canAdvanceFromStep()) return;
-    setActiveStep((s) => Math.min(s + 1, steps.length - 1));
+    setActiveStep((s) => Math.min(s + 1, wizardSteps.length - 1));
   };
 
   const handleBack = () => {
@@ -643,7 +711,7 @@ const SignupPage: React.FC = () => {
   };
 
   const renderStepBody = () => {
-    if (activeStep === 0) {
+    if (currentStepKind === 'contact') {
       return (
         <Stack spacing={{ xs: 2, sm: 2.5 }}>
           <TextField
@@ -724,15 +792,29 @@ const SignupPage: React.FC = () => {
               </InputAdornment>
             }
           />
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.45 }}>
+            {t(
+              'signupPage.trustContact',
+              "We'll only use this to verify your account and send order updates."
+            )}
+          </Typography>
         </Stack>
       );
     }
 
-    if (activeStep === 1) {
+    if (currentStepKind === 'goal') {
       return (
         <Stack spacing={{ xs: 2, sm: 2.5 }}>
+          {(signupIntent === 'business_sell' || signupIntent === 'business_rent') && (
+            <Alert severity="info" sx={{ borderRadius: 0 }}>
+              {t(
+                'signupPage.businessIntentStrip',
+                "You're signing up as a business — here's what you get:"
+              )}
+            </Alert>
+          )}
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            {t('signupPage.goalSectionTitle', 'Choose what you want to do')}
+            {t('signupPage.whyAccount', 'Why create an account?')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
             {t(
@@ -785,9 +867,11 @@ const SignupPage: React.FC = () => {
                     <Typography variant="subtitle2" fontWeight={700} textAlign="center" gutterBottom sx={{ lineHeight: 1.3 }}>
                       {goal.title}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ lineHeight: 1.45, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-                      {goal.description}
-                    </Typography>
+                    <PersonaBenefitBullets
+                      persona={benefitPersonaFromGoalId(goal.id)}
+                      compact
+                      align="center"
+                    />
                   </CardContent>
                 </Card>
               );
@@ -851,7 +935,7 @@ const SignupPage: React.FC = () => {
       );
     }
 
-    if (activeStep === 2) {
+    if (currentStepKind === 'address') {
       return (
         <Stack spacing={{ xs: 2, sm: 2.5 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -1035,17 +1119,21 @@ const SignupPage: React.FC = () => {
                 )}
               </>
             )}
-            <Divider />
-            {reviewRow(t('signupPage.review.address', 'Address'), renderReviewAddress())}
+            {!isClientOnlySignup && (
+              <>
+                <Divider />
+                {reviewRow(t('signupPage.review.address', 'Address'), renderReviewAddress())}
+              </>
+            )}
           </Box>
         </Paper>
       </Stack>
     );
   };
 
-  const lastStep = activeStep === steps.length - 1;
+  const lastStep = activeStep === wizardSteps.length - 1;
   const nextDisabled = !canAdvanceFromStep() || saving;
-  const stepProgressPercent = ((activeStep + 1) / steps.length) * 100;
+  const stepProgressPercent = ((activeStep + 1) / wizardSteps.length) * 100;
   const showAccountCreated = Boolean(postSignupEmail);
 
   return (
@@ -1148,7 +1236,7 @@ const SignupPage: React.FC = () => {
                 <Typography variant="caption" color="text.secondary" fontWeight={700}>
                   {t('signupPage.stepProgress', 'Step {{current}} of {{total}}', {
                     current: activeStep + 1,
-                    total: steps.length,
+                    total: wizardSteps.length,
                   })}
                 </Typography>
                 <Typography
@@ -1157,7 +1245,7 @@ const SignupPage: React.FC = () => {
                   fontWeight={700}
                   sx={{ textAlign: 'right', lineHeight: 1.2, maxWidth: '58%' }}
                 >
-                  {steps[activeStep]}
+                  {wizardSteps[activeStep]}
                 </Typography>
               </Stack>
               <LinearProgress
@@ -1177,7 +1265,7 @@ const SignupPage: React.FC = () => {
               alternativeLabel
               sx={{ py: 1.5, flexWrap: 'wrap' }}
             >
-              {steps.map((label) => (
+              {wizardSteps.map((label) => (
                 <Step key={label}>
                   <StepLabel sx={{ '& .MuiStepLabel-label': { fontSize: '0.75rem' } }}>
                     {label}
@@ -1247,8 +1335,12 @@ const SignupPage: React.FC = () => {
                   sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
                 >
                   {t(
-                    'signupPage.verifyEmailToContinue',
-                    'Verify your email to continue'
+                    `signupPage.verifyNext.${primaryVerifyPersona}`,
+                    primaryVerifyPersona === 'agent'
+                      ? 'Verify to see nearby runs'
+                      : primaryVerifyPersona === 'business'
+                        ? 'Verify to set up your store'
+                        : 'Verify to start shopping'
                   )}
                 </Button>
               ) : (

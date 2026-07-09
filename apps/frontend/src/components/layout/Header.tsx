@@ -47,6 +47,7 @@ import {
 } from '../../contexts/UserProfileContext';
 import { PERSONA_HEADER_COLORS } from '../../constants/personaTheme';
 import LoginHeaderButton from '../auth/LoginHeaderButton';
+import SignupHeaderButton from '../auth/SignupHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
@@ -860,6 +861,7 @@ const Header: React.FC = () => {
                       {t('nav.downloadApp', 'Download App')}
                     </Button>
                   )}
+                  <SignupHeaderButton inverted compact={isMobile} />
                   <LoginHeaderButton inverted compact={isMobile} />
                 </Stack>
               )}

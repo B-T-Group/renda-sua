@@ -1,8 +1,9 @@
 import { CheckCircle } from '@mui/icons-material';
-import { Box, Container, Grid, Stack, Typography, alpha } from '@mui/material';
+import { Box, Button, Container, Grid, Stack, Typography, alpha } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import { SEOHead } from '../seo';
 import { useSEO } from '../../hooks/useSEO';
 import AppStoreBadges from '../common/AppStoreBadges';
@@ -68,7 +69,26 @@ const AgentLandingPage: React.FC = () => {
                 <Typography variant="h6" component="p" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 400, mb: 5, lineHeight: 1.65 }}>
                   {t('becomeAgent.hero.subheadline', 'Join the Rendasua delivery network and start earning by delivering orders from local businesses to customers near you. No fixed shifts, no minimum hours.')}
                 </Typography>
-                <AppStoreBadges variant="dark" sourceSection="agent_landing_hero" />
+                <Stack spacing={2} alignItems={{ xs: 'center', md: 'flex-start' }}>
+                  <AppStoreBadges variant="dark" sourceSection="agent_landing_hero" />
+                  <Button
+                    component={RouterLink}
+                    to="/signup?intent=agent"
+                    variant="outlined"
+                    sx={{
+                      color: '#fff',
+                      borderColor: 'rgba(255,255,255,0.65)',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      '&:hover': {
+                        borderColor: '#fff',
+                        bgcolor: 'rgba(255,255,255,0.08)',
+                      },
+                    }}
+                  >
+                    {t('becomeAgent.cta.webSignup', 'Sign up on the web')}
+                  </Button>
+                </Stack>
               </motion.div>
             </Grid>
 
@@ -168,7 +188,18 @@ const AgentLandingPage: React.FC = () => {
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 4 }}>
               {t('becomeAgent.cta.subtitle', 'Download the app and start earning today.')}
             </Typography>
-            <AppStoreBadges variant="withQr" sourceSection="agent_landing_cta" />
+            <Stack spacing={2} alignItems="center">
+              <AppStoreBadges variant="withQr" sourceSection="agent_landing_cta" />
+              <Button
+                component={RouterLink}
+                to="/signup?intent=agent"
+                variant="outlined"
+                color="primary"
+                sx={{ fontWeight: 600, textTransform: 'none' }}
+              >
+                {t('becomeAgent.cta.webSignup', 'Sign up on the web')}
+              </Button>
+            </Stack>
           </Box>
         </Container>
       </Box>

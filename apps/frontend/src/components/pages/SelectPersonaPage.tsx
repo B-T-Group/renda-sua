@@ -50,22 +50,6 @@ const SelectPersonaPage: React.FC = () => {
         ? t('persona.selectCard.agent.title', 'Delivery agent')
         : t('persona.selectCard.business.title', 'Business');
 
-  const cardDescription = (p: UserType) =>
-    p === 'client'
-      ? t(
-          'persona.selectCard.client.description',
-          'Browse items, place orders, and track deliveries to your door.'
-        )
-      : p === 'agent'
-        ? t(
-            'persona.selectCard.agent.description',
-            'See available runs, complete pickups, and get paid for each delivery.'
-          )
-        : t(
-            'persona.selectCard.business.description',
-            'Manage your catalog, orders, locations, and rentals in one place.'
-          );
-
   if (loading) {
     return (
       <LoadingPage
@@ -183,7 +167,6 @@ const SelectPersonaPage: React.FC = () => {
                   persona={p}
                   accent={colors.main}
                   title={cardLabel(p)}
-                  description={cardDescription(p)}
                   ctaText={t('persona.selectCard.cta', 'Continue as {{label}}', {
                     label: cardLabel(p),
                   })}

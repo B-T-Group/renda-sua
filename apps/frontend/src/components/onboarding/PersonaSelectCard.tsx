@@ -2,10 +2,12 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import { alpha, keyframes } from '@mui/material/styles';
 import React from 'react';
 import type { PersonaSlug } from '../../constants/personaTheme';
+import { benefitPersonaFromUserType } from '../../constants/signupBenefits';
+import { PersonaBenefitBullets } from './PersonaBenefitBullets';
 import { PersonaPickIllustration } from './PersonaPickIllustration';
 
 /** Fixed card height so every persona tile matches (mobile + desktop). */
-const CARD_HEIGHT_PX = { xs: 200, sm: 208 };
+const CARD_HEIGHT_PX = { xs: 260, sm: 272 };
 
 const shimmer = keyframes`
   0% { opacity: 0.45; }
@@ -17,22 +19,22 @@ export interface PersonaSelectCardProps {
   persona: PersonaSlug;
   accent: string;
   title: string;
-  description: string;
   ctaText: string;
   busy: boolean;
   isSelecting: boolean;
   onSelect: () => void;
+  mainInterest?: 'sell_items' | 'rent_items';
 }
 
 export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
   persona,
   accent,
   title,
-  description,
   ctaText,
   busy,
   isSelecting,
   onSelect,
+  mainInterest,
 }) => (
   <Box
     component="button"
@@ -137,25 +139,12 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
       >
         {title}
       </Typography>
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{
-          position: 'relative',
-          flex: 1,
-          minHeight: 0,
-          lineHeight: 1.45,
-          fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-          display: '-webkit-box',
-          WebkitBoxOrient: 'vertical',
-          WebkitLineClamp: 3,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          mb: 1,
-        }}
-      >
-        {description}
-      </Typography>
+      <Box sx={{ position: 'relative', flex: 1, minHeight: 0, mb: 1 }}>
+        <PersonaBenefitBullets
+          persona={benefitPersonaFromUserType(persona, mainInterest)}
+          compact
+        />
+      </Box>
 
       <Box
         sx={{
