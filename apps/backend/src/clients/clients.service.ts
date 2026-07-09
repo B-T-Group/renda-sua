@@ -1,10 +1,11 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import {
-  addressesMatchRegion,
+  agentMatchesRegion,
   haversineDistanceKm,
 } from '../common/agent-proximity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GoogleDistanceService } from '../google/google-distance.service';
 import { LocationsService } from '../locations/locations.service';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 
@@ -51,7 +52,8 @@ export class ClientsService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly locationsService: LocationsService
+    private readonly locationsService: LocationsService,
+    private readonly googleDistanceService: GoogleDistanceService
   ) {}
 
   /**
@@ -63,7 +65,7 @@ export class ClientsService {
     if (!coords) return { count: 0 };
 
     const rows = await this.fetchAgentLocations();
-    const distances = this.eligibleDistances(rows, coords);
+    const distances = await this.eligibleDistances(rows, coords);
     distances.sort((a, b) => a - b);
     return { count: Math.min(distances.length, MAX_NEARBY_AGENTS) };
   }
@@ -168,21 +170,31 @@ export class ClientsService {
     return (result?.agent_locations as NearbyAgentRow[]) ?? [];
   }
 
-  private eligibleDistances(
+  private async eligibleDistances(
     rows: NearbyAgentRow[],
     coords: ClientCoords
-  ): number[] {
+  ): Promise<number[]> {
     const distances: number[] = [];
+    const reverseGeocode = async (lat: number, lng: number) => {
+      const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
+      return { country: geo.country, state: geo.state };
+    };
     for (const row of rows) {
       const agent = row.agent;
       if (!agent) continue;
       if (!agent.is_available || !agent.is_verified) continue;
       if (agent.status === 'suspended') continue;
-      if (
-        !addressesMatchRegion(agent.agent_addresses, coords.country, coords.state)
-      ) {
-        continue;
-      }
+      const matches = await agentMatchesRegion({
+        agentAddresses: agent.agent_addresses,
+        agentLocation: {
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+        },
+        targetCountry: coords.country,
+        targetState: coords.state,
+        reverseGeocode,
+      });
+      if (!matches) continue;
       distances.push(
         haversineDistanceKm(
           coords.latitude,

@@ -6,6 +6,16 @@ export interface RegionAddressEntry {
   } | null;
 }
 
+export interface AgentOperatingRegion {
+  country: string;
+  state: string;
+}
+
+export type ReverseGeocodeFn = (
+  lat: number,
+  lng: number
+) => Promise<{ country: string; state: string }>;
+
 function toRad(value: number): number {
   return (value * Math.PI) / 180;
 }
@@ -27,14 +37,66 @@ export function haversineDistanceKm(
   return R * c;
 }
 
+/** Country/state from profile addresses when available. */
+export function regionFromAddresses(
+  addresses: RegionAddressEntry[] | null | undefined
+): AgentOperatingRegion | null {
+  const list = addresses ?? [];
+  if (list.length === 0) return null;
+  const primary = list.find((a) => a.address?.is_primary) ?? list[0];
+  const country = primary.address?.country;
+  const state = primary.address?.state;
+  if (!country || !state) return null;
+  return { country, state };
+}
+
+/** Profile address first; else reverse-geocode live GPS when provided. */
+export async function resolveAgentOperatingRegion(params: {
+  agentAddresses: RegionAddressEntry[] | null | undefined;
+  agentLocation?: { latitude: number; longitude: number } | null;
+  reverseGeocode?: ReverseGeocodeFn;
+}): Promise<AgentOperatingRegion | null> {
+  const fromAddress = regionFromAddresses(params.agentAddresses);
+  if (fromAddress) return fromAddress;
+
+  const loc = params.agentLocation;
+  if (!loc || !params.reverseGeocode) return null;
+
+  try {
+    const geo = await params.reverseGeocode(loc.latitude, loc.longitude);
+    if (!geo.country?.trim() || !geo.state?.trim()) return null;
+    return { country: geo.country, state: geo.state };
+  } catch {
+    return null;
+  }
+}
+
 /** Whether the entity's primary address shares the given country and state. */
 export function addressesMatchRegion(
   addresses: RegionAddressEntry[] | null | undefined,
   country?: string | null,
   state?: string | null
 ): boolean {
-  const list = addresses ?? [];
-  if (list.length === 0) return false;
-  const primary = list.find((a) => a.address?.is_primary) ?? list[0];
-  return primary.address?.country === country && primary.address?.state === state;
+  const region = regionFromAddresses(addresses);
+  if (!region) return false;
+  return region.country === country && region.state === state;
+}
+
+/** Region match using profile address or GPS reverse-geocode fallback. */
+export async function agentMatchesRegion(params: {
+  agentAddresses: RegionAddressEntry[] | null | undefined;
+  agentLocation?: { latitude: number; longitude: number } | null;
+  targetCountry?: string | null;
+  targetState?: string | null;
+  reverseGeocode?: ReverseGeocodeFn;
+}): Promise<boolean> {
+  const region = await resolveAgentOperatingRegion({
+    agentAddresses: params.agentAddresses,
+    agentLocation: params.agentLocation,
+    reverseGeocode: params.reverseGeocode,
+  });
+  if (!region) return false;
+  return (
+    region.country === params.targetCountry && region.state === params.targetState
+  );
 }

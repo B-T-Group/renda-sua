@@ -55,6 +55,8 @@ import {
 } from '../users/user-timezone.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
+import { resolveAgentOperatingRegion } from '../common/agent-proximity.util';
+import { LocationsService } from '../locations/locations.service';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -362,7 +364,8 @@ export class OrdersService {
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
     private readonly taxCalculationService: StripeTaxCalculationService,
     private readonly orderOffersService: OrderOffersService,
-    private readonly cancellationPolicyService: CancellationPolicyService
+    private readonly cancellationPolicyService: CancellationPolicyService,
+    private readonly locationsService: LocationsService
   ) {}
 
   private requireActivePersona(
@@ -4211,22 +4214,40 @@ export class OrdersService {
       return { success: true, orders: [] };
     }
 
-    // Get agent's address information
+    // Resolve operating region from profile address or live GPS (reverse geocode).
     const agentAddresses = await this.hasuraSystemService.getAllUserAddresses(
       user.id,
       'agent'
     );
+    const agentLocation = await this.locationsService.getLatestAgentLocation(
+      agent.id
+    );
+    const operatingRegion = await resolveAgentOperatingRegion({
+      agentAddresses: (agentAddresses ?? []).map((addr) => ({
+        address: {
+          country: addr.country,
+          state: addr.state,
+          is_primary: addr.is_primary,
+        },
+      })),
+      agentLocation: agentLocation
+        ? {
+            latitude: agentLocation.latitude,
+            longitude: agentLocation.longitude,
+          }
+        : null,
+      reverseGeocode: async (lat, lng) => {
+        const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
+        return { country: geo.country, state: geo.state };
+      },
+    });
 
-    if (!agentAddresses || agentAddresses.length === 0) {
-      // Return empty result if agent has no addresses
+    if (!operatingRegion) {
       return { success: true, orders: [] };
     }
 
-    // Get the primary address or first address
-    const agentAddress =
-      agentAddresses.find((addr) => addr.is_primary) || agentAddresses[0];
-    const agentCountry = agentAddress.country;
-    const agentState = agentAddress.state;
+    const agentCountry = operatingRegion.country;
+    const agentState = operatingRegion.state;
 
     // Query for orders in ready_for_pickup and assigned_agent_id is null
     // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation

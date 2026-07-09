@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
-import AgentAddressPrompt from '../common/AgentAddressPrompt';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
@@ -60,7 +59,6 @@ const AgentDashboard: React.FC = () => {
 
   return (
     <>
-      <AgentAddressPrompt />
       <Container maxWidth="lg" sx={{ py: 1.5, width: '100%' }}>
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>

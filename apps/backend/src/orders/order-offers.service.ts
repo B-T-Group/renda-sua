@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  addressesMatchRegion,
+  agentMatchesRegion,
   haversineDistanceKm,
 } from '../common/agent-proximity.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -114,7 +115,8 @@ export class OrderOffersService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly commissionsService: CommissionsService,
     private readonly notificationsService: NotificationsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly googleDistanceService: GoogleDistanceService
   ) {}
 
   private get ttlSeconds(): number {
@@ -584,15 +586,20 @@ export class OrderOffersService {
       if (agent.status === 'suspended') continue;
       if (order.verified_agent_delivery && !agent.is_internal) continue;
 
-      if (
-        !addressesMatchRegion(
-          agent.agent_addresses,
-          businessCountry,
-          businessState
-        )
-      ) {
-        continue;
-      }
+      const matches = await agentMatchesRegion({
+        agentAddresses: agent.agent_addresses,
+        agentLocation: {
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+        },
+        targetCountry: businessCountry,
+        targetState: businessState,
+        reverseGeocode: async (lat, lng) => {
+          const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
+          return { country: geo.country, state: geo.state };
+        },
+      });
+      if (!matches) continue;
 
       const distanceKm = haversineDistanceKm(
         pickupLat,

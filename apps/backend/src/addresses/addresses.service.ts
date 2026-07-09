@@ -1218,9 +1218,15 @@ export class AddressesService {
 
       // Get all active addresses for the current persona
       const allAddresses = await this.getUserAddresses();
+      const user = await this.hasuraUserService.getUser();
+      const persona = resolveActivePersonaWithDefault(
+        user,
+        this.hasuraUserService.getActivePersonaHeader()
+      );
+      const isAgentPersona = persona === 'agent';
 
-      // Check if this is the only address
-      if (allAddresses.length === 1) {
+      // Check if this is the only address (agents may have zero addresses)
+      if (allAddresses.length === 1 && !isAgentPersona) {
         throw new HttpException(
           {
             success: false,
@@ -1231,9 +1237,9 @@ export class AddressesService {
         );
       }
 
-      // Check if this is the primary address
+      // Check if this is the primary address (when other addresses exist)
       const addressToDelete = allAddresses.find((a) => a.id === addressId);
-      if (addressToDelete?.is_primary) {
+      if (addressToDelete?.is_primary && allAddresses.length > 1) {
         throw new HttpException(
           {
             success: false,

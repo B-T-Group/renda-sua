@@ -4,6 +4,8 @@ import { AgentsModule } from '../agents/agents.module';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
+import { LocationsModule } from '../locations/locations.module';
+import { GoogleModule } from '../google/google.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -39,6 +41,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     StripePaymentsModule,
     StripeTaxModule,
     RefundsModule,
+    LocationsModule,
+    GoogleModule,
   ],
   controllers: [
     OrdersController,

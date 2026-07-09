@@ -60,8 +60,17 @@ import { benefitPersonaFromGoalId } from '../../constants/signupBenefits';
 
 const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
 
+function buildCountryOnlySignupAddress(country: string): SignupAddress {
+  return {
+    address_line_1: '',
+    country: country.trim().toUpperCase(),
+    city: '',
+    state: '',
+  };
+}
+
 type SignupIntent = 'client' | 'agent' | 'business_sell' | 'business_rent';
-type SignupStepKind = 'contact' | 'goal' | 'address' | 'review';
+type SignupStepKind = 'contact' | 'goal' | 'address' | 'country' | 'review';
 type UserType = 'client' | 'business' | 'agent';
 type MainInterest = 'sell_items' | 'rent_items';
 
@@ -233,15 +242,19 @@ const SignupPage: React.FC = () => {
   }, [search]);
 
 
-  const isClientOnlySignup =
-    selectedGoalIds.length === 1 && selectedGoalIds[0] === 'browse_buy';
+  const requiresAddressStep =
+    selectedGoalIds.includes('sell_items') || selectedGoalIds.includes('rent_and_earn');
+
+  const requiresCountryStep =
+    selectedGoalIds.includes('delivery_agent') && !requiresAddressStep;
 
   const stepKinds = useMemo((): SignupStepKind[] => {
     const kinds: SignupStepKind[] = ['contact', 'goal'];
-    if (!isClientOnlySignup) kinds.push('address');
+    if (requiresAddressStep) kinds.push('address');
+    else if (requiresCountryStep) kinds.push('country');
     kinds.push('review');
     return kinds;
-  }, [isClientOnlySignup]);
+  }, [requiresAddressStep, requiresCountryStep]);
 
   const wizardSteps = useMemo(
     () =>
@@ -253,6 +266,8 @@ const SignupPage: React.FC = () => {
             return t('signupPage.steps.goal', 'Your goal');
           case 'address':
             return t('signupPage.steps.address', 'Address');
+          case 'country':
+            return t('signupPage.steps.country', 'Country');
           default:
             return t('signupPage.steps.review', 'Review');
         }
@@ -286,6 +301,11 @@ const SignupPage: React.FC = () => {
         return t(
           'signupPage.addressSubtitle',
           'We use this to tailor delivery and local options.'
+        );
+      case 'country':
+        return t(
+          'signupPage.countrySubtitle',
+          'Where you plan to deliver orders. You can add a full address later in your profile.'
         );
       default:
         return t(
@@ -550,6 +570,8 @@ const SignupPage: React.FC = () => {
             form.address.state &&
             form.address.city.trim()
         );
+      case 'country':
+        return Boolean(form.address.country);
       default:
         return true;
     }
@@ -648,14 +670,16 @@ const SignupPage: React.FC = () => {
             : undefined,
           vehicle_type_id: personas.includes('agent') ? 'other' : undefined,
         },
-        address: isClientOnlySignup
-          ? undefined
-          : {
+        address: requiresAddressStep
+          ? {
               address_line_1: form.address.address_line_1.trim(),
               country: form.address.country,
               city: form.address.city.trim(),
               state: form.address.state,
-            },
+            }
+          : requiresCountryStep
+            ? buildCountryOnlySignupAddress(form.address.country)
+            : undefined,
         ...(personas.includes('business') && trimmedReferral
           ? { referral_agent_code: trimmedReferral }
           : {}),
@@ -1068,6 +1092,43 @@ const SignupPage: React.FC = () => {
       );
     }
 
+    if (currentStepKind === 'country') {
+      return (
+        <Stack spacing={{ xs: 2, sm: 2.5 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            {t('signupPage.countryStepTitle', 'Your country')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+            {t(
+              'signupPage.countryStepHint',
+              'We use this to show you nearby delivery opportunities.'
+            )}
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            required
+            label={t('completeProfile.country', 'Country')}
+            value={form.address.country}
+            onChange={(e) => handleAddressChange('country', e.target.value)}
+            SelectProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <PublicIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          >
+            {SIGNUP_COUNTRY_CODES.map((code) => (
+              <MenuItem key={code} value={code}>
+                {t(`completeProfile.countries.${code}`, code)}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
+      );
+    }
+
     const reviewRow = (label: string, value: string) => (
       <Box sx={{ py: { xs: 1.25, sm: 1 } }}>
         <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.25 }}>
@@ -1119,10 +1180,21 @@ const SignupPage: React.FC = () => {
                 )}
               </>
             )}
-            {!isClientOnlySignup && (
+            {requiresAddressStep && (
               <>
                 <Divider />
                 {reviewRow(t('signupPage.review.address', 'Address'), renderReviewAddress())}
+              </>
+            )}
+            {requiresCountryStep && (
+              <>
+                <Divider />
+                {reviewRow(
+                  t('signupPage.review.country', 'Country'),
+                  form.address.country
+                    ? t(`completeProfile.countries.${form.address.country}`, form.address.country)
+                    : ''
+                )}
               </>
             )}
           </Box>
