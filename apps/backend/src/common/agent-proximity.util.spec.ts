@@ -1,7 +1,9 @@
 import {
   agentMatchesRegion,
+  countryFromAddresses,
   regionFromAddresses,
   resolveAgentOperatingRegion,
+  resolveAgentPreviewCountry,
 } from './agent-proximity.util';
 
 describe('agent-proximity.util', () => {
@@ -42,6 +44,32 @@ describe('agent-proximity.util', () => {
       agentLocation: null,
     });
     expect(region).toBeNull();
+  });
+
+  it('countryFromAddresses returns country when state is empty', () => {
+    expect(
+      countryFromAddresses([
+        { address: { country: 'CM', state: '', is_primary: true } },
+      ])
+    ).toBe('CM');
+  });
+
+  it('resolveAgentPreviewCountry prefers address country over GPS', async () => {
+    const country = await resolveAgentPreviewCountry({
+      agentAddresses: [{ address: { country: 'GA', state: '', is_primary: true } }],
+      agentLocation: { latitude: 1, longitude: 2 },
+      reverseGeocode: async () => ({ country: 'CM', state: 'Centre' }),
+    });
+    expect(country).toBe('GA');
+  });
+
+  it('resolveAgentPreviewCountry falls back to GPS country', async () => {
+    const country = await resolveAgentPreviewCountry({
+      agentAddresses: [],
+      agentLocation: { latitude: 3.8, longitude: 11.5 },
+      reverseGeocode: async () => ({ country: 'CM', state: 'Centre' }),
+    });
+    expect(country).toBe('CM');
   });
 
   it('agentMatchesRegion matches via GPS when addresses absent', async () => {

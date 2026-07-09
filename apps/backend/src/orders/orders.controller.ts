@@ -794,6 +794,25 @@ export class OrdersController {
   }
 
   @Get('open')
+  @ApiOperation({ summary: 'List open orders for the authenticated agent' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Open delivery orders. Unverified agents receive country-level preview with canClaim false.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        orders: { type: 'array', items: { type: 'object' } },
+        canClaim: { type: 'boolean', example: true },
+        previewMode: {
+          type: 'string',
+          enum: ['country', 'region'],
+          nullable: true,
+        },
+      },
+    },
+  })
   async getOpenOrders() {
     return this.ordersService.getOpenOrders();
   }

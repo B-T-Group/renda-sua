@@ -15,12 +15,15 @@ import {
 } from '@mui/material';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { APP_FEATURES } from '../../constants/appFeatures';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   type ClaimAvailabilityResult,
   useAgentOrders,
 } from '../../hooks/useAgentOrders';
+import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -48,7 +51,11 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   mobileView = false,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const { canClaim: ordersCanClaim } = useOpenOrders();
+  const { startOnboarding, status: connectStatus } = useStripeConnect();
+  const isStripeRail = connectStatus?.paymentRail === 'stripe';
   const agentOrders = useAgentOrders({ skipInitialListFetch: true });
   const backendOrders = useBackendOrders();
   const [loading, setLoading] = useState(false);
@@ -143,6 +150,15 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   };
 
   const handleClaim = async () => {
+    if (!ordersCanClaim) {
+      if (isStripeRail) {
+        await startOnboarding();
+      } else {
+        navigate('/documents');
+      }
+      return;
+    }
+
     if (!profile?.id) {
       onShowNotification?.(
         t('messages.agentProfileNotFound', 'Agent profile not found'),
@@ -573,7 +589,9 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     switch (order.current_status) {
       case 'ready_for_pickup':
         actions.push({
-          label: t('orderActions.claimOrder', 'Claim Order'),
+          label: ordersCanClaim
+            ? t('orderActions.claimOrder', 'Claim Order')
+            : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim'),
           action: handleClaim,
           color: 'primary' as const,
           icon: <CheckCircle />,
@@ -584,7 +602,12 @@ const AgentActions: React.FC<AgentActionsProps> = ({
                   'agent.suspendedCannotClaim',
                   'Your account is suspended. You cannot claim orders. Contact support.'
                 )
-              : undefined,
+              : !ordersCanClaim
+                ? t(
+                    'agent.openOrders.previewBanner',
+                    'These deliveries are available in your country. Complete verification to claim them.'
+                  )
+                : undefined,
           isClaim: true,
         });
         break;

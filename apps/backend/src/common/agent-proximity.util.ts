@@ -37,6 +37,17 @@ export function haversineDistanceKm(
   return R * c;
 }
 
+/** Country from profile addresses (state optional — supports country-only signup seed). */
+export function countryFromAddresses(
+  addresses: RegionAddressEntry[] | null | undefined
+): string | null {
+  const list = addresses ?? [];
+  if (list.length === 0) return null;
+  const primary = list.find((a) => a.address?.is_primary) ?? list[0];
+  const country = primary.address?.country?.trim();
+  return country || null;
+}
+
 /** Country/state from profile addresses when available. */
 export function regionFromAddresses(
   addresses: RegionAddressEntry[] | null | undefined
@@ -48,6 +59,26 @@ export function regionFromAddresses(
   const state = primary.address?.state;
   if (!country || !state) return null;
   return { country, state };
+}
+
+/** Profile address country first; else reverse-geocode GPS country only. */
+export async function resolveAgentPreviewCountry(params: {
+  agentAddresses: RegionAddressEntry[] | null | undefined;
+  agentLocation?: { latitude: number; longitude: number } | null;
+  reverseGeocode?: ReverseGeocodeFn;
+}): Promise<string | null> {
+  const fromAddress = countryFromAddresses(params.agentAddresses);
+  if (fromAddress) return fromAddress;
+
+  const loc = params.agentLocation;
+  if (!loc || !params.reverseGeocode) return null;
+
+  try {
+    const geo = await params.reverseGeocode(loc.latitude, loc.longitude);
+    return geo.country?.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Profile address first; else reverse-geocode live GPS when provided. */

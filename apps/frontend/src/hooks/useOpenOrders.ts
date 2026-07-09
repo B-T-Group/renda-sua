@@ -6,11 +6,15 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 export interface OpenOrdersResponse {
   success: boolean;
   orders: Order[];
+  canClaim?: boolean;
+  previewMode?: 'country' | 'region';
   message?: string;
 }
 
 export const useOpenOrders = () => {
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
+  const [canClaim, setCanClaim] = useState(true);
+  const [previewMode, setPreviewMode] = useState<'country' | 'region' | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +27,8 @@ export const useOpenOrders = () => {
     if (!isAgent) {
       setLoading(false);
       setOpenOrders([]);
+      setCanClaim(true);
+      setPreviewMode(undefined);
       return [];
     }
 
@@ -41,10 +47,14 @@ export const useOpenOrders = () => {
       if (response.data.success) {
         const orders = response.data.orders;
         setOpenOrders(orders);
+        setCanClaim(response.data.canClaim !== false);
+        setPreviewMode(response.data.previewMode);
         return orders;
       } else {
         setError(response.data.message || 'Failed to fetch open orders');
         setOpenOrders([]);
+        setCanClaim(true);
+        setPreviewMode(undefined);
         return [];
       }
     } catch (err: any) {
@@ -55,6 +65,8 @@ export const useOpenOrders = () => {
           'Failed to fetch open orders'
       );
       setOpenOrders([]);
+      setCanClaim(true);
+      setPreviewMode(undefined);
       return [];
     } finally {
       setLoading(false);
@@ -71,6 +83,8 @@ export const useOpenOrders = () => {
 
   return {
     openOrders,
+    canClaim,
+    previewMode,
     loading,
     error,
     refetch,

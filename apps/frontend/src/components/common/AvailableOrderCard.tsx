@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { Order } from '../../hooks/useAgentOrders';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useStripeConnect } from '../../hooks/useStripeConnect';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
 import ClaimingOrderOverlay from './ClaimingOrderOverlay';
@@ -44,6 +45,8 @@ interface AvailableOrderCardProps {
    * hidden from the UI.
    */
   isStripeRail?: boolean;
+  /** When false, agent can preview but must complete verification to claim. */
+  canClaimOrders?: boolean;
 }
 
 interface ClaimAvailabilityResult {
@@ -59,12 +62,14 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   order,
   onClaimSuccess,
   isStripeRail = false,
+  canClaimOrders = true,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { profile } = useUserProfileContext();
+  const { startOnboarding, loading: connectLoading } = useStripeConnect();
 
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
@@ -145,6 +150,15 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   };
 
   const handleClaim = async () => {
+    if (!canClaimOrders) {
+      if (isStripeRail) {
+        if (!connectLoading) await startOnboarding();
+      } else {
+        navigate('/documents');
+      }
+      return;
+    }
+
     if (!profile?.agent?.id) {
       setClaimError(
         t('messages.agentProfileNotFound', 'Agent profile not found')
@@ -686,7 +700,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
             {t('orders.viewOrderDetails', 'Details')}
           </Button>
           <Button
-            variant="contained"
+            variant={canClaimOrders ? 'contained' : 'outlined'}
             color="primary"
             size="medium"
             onClick={handleClaim}
@@ -708,7 +722,9 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           >
             {claimLoading
               ? t('orderActions.claiming', 'Claiming...')
-              : t('orderActions.claimOrder', 'Claim Order')}
+              : canClaimOrders
+                ? t('orderActions.claimOrder', 'Claim Order')
+                : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')}
           </Button>
         </Box>
       </CardContent>

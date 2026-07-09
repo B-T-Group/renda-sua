@@ -36,7 +36,7 @@ interface OrderFilters {
 const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
-  const { openOrders: orders, loading, error, refetch } = useOpenOrders();
+  const { openOrders: orders, loading, error, refetch, canClaim: ordersCanClaim, previewMode } = useOpenOrders();
   const { hasIdDocument } = useAgentHasIdDocument(profile?.user_type_id);
   const {
     status: connectStatus,
@@ -215,16 +215,46 @@ const OpenOrdersPage: React.FC = () => {
         {isAgent &&
           !profile?.agent?.is_verified &&
           profile?.agent?.status !== 'suspended' &&
+          ordersCanClaim === false &&
+          availableOrders.length > 0 &&
+          previewMode === 'country' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t(
+                'agent.openOrders.previewBanner',
+                'These deliveries are available in your country. Complete verification to claim them.'
+              )}
+              <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                {isStripeRail ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={startOnboarding}
+                    disabled={connectLoading}
+                  >
+                    {t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')}
+                  </Button>
+                ) : (
+                  <Button component={Link} to="/documents" variant="outlined" size="small">
+                    {t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')}
+                  </Button>
+                )}
+              </Box>
+            </Alert>
+          )}
+        {isAgent &&
+          !profile?.agent?.is_verified &&
+          profile?.agent?.status !== 'suspended' &&
+          !(ordersCanClaim === false && availableOrders.length > 0) &&
           (isStripeRail ? (
             <Alert severity="info" sx={{ mb: 2 }}>
               {connectStatus?.connected
                 ? t(
                     'agent.openOrders.stripeUnderReview',
-                    "Your Stripe account is being reviewed. You'll see available orders once payouts are enabled."
+                    'Your Stripe account is being reviewed. Complete setup to claim deliveries.'
                   )
                 : t(
                     'agent.openOrders.connectStripeToGetVerified',
-                    'Connect your Stripe account to get verified and start receiving deliveries.'
+                    'Connect your Stripe account to get verified and start claiming deliveries.'
                   )}
               <Box component="span" sx={{ display: 'block', mt: 1 }}>
                 <Button
@@ -244,11 +274,11 @@ const OpenOrdersPage: React.FC = () => {
               {hasIdDocument
                 ? t(
                     'agent.openOrders.accountUnderReview',
-                    'Your account is under review. You will see available orders once you are verified.'
+                    'Your account is under review. You can claim deliveries once verified.'
                   )
                 : t(
                     'agent.openOrders.uploadIdToGetVerified',
-                    "Upload an ID (driver's license, passport, or national ID) to get verified and see available orders."
+                    'Upload an ID to get verified and start claiming deliveries.'
                   )}
               {!hasIdDocument && (
                 <Box component="span" sx={{ display: 'block', mt: 1 }}>
@@ -336,6 +366,7 @@ const OpenOrdersPage: React.FC = () => {
                       order={order}
                       onClaimSuccess={refetch}
                       isStripeRail={isStripeRail}
+                      canClaimOrders={ordersCanClaim}
                     />
                   ))}
                 </Box>

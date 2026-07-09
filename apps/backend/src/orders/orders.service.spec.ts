@@ -28,6 +28,7 @@ import { StripeCaptureService } from '../stripe-payments/stripe-capture.service'
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
+import { LocationsService } from '../locations/locations.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -161,11 +162,17 @@ describe('OrdersService', () => {
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
         { provide: MobilePaymentsService, useValue: {} },
-        { provide: MobilePaymentsDatabaseService, useValue: { hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false) } },
+        { provide: MobilePaymentsDatabaseService, useValue: {
+          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
+          getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
+        } },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
-        { provide: CommissionsService, useValue: {} },
+        { provide: CommissionsService, useValue: {
+          getCommissionConfigs: jest.fn().mockResolvedValue({}),
+          calculateAgentEarningsSync: jest.fn().mockReturnValue({ delivery_commission: 500 }),
+        } },
         { provide: PdfService, useValue: {} },
         { provide: OrderQueueService, useValue: {} },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
@@ -209,6 +216,10 @@ describe('OrdersService', () => {
           },
         },
         { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
+        {
+          provide: LocationsService,
+          useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
+        },
       ],
     }).compile();
 
@@ -1335,6 +1346,88 @@ describe('OrdersService', () => {
       requireSpy.mockRestore();
       getByNumberSpy.mockRestore();
       finalizeSpy.mockRestore();
+    });
+  });
+
+  describe('getOpenOrders', () => {
+    const previewAgentUser = {
+      ...mockAgentUser,
+      agent: { id: 'agent-123', user_id: 'agent-123', is_verified: false },
+    };
+
+    const openOrderRow = {
+      order_number: 'ORD-1',
+      business_location: {
+        address: { country: 'CM', state: 'Littoral' },
+      },
+      subtotal: 1000,
+      base_delivery_fee: 100,
+      per_km_delivery_fee: 10,
+      currency: 'XAF',
+      current_status: 'ready_for_pickup',
+      order_items: [],
+    };
+
+    beforeEach(() => {
+      hasuraUserService.getActivePersonaHeader.mockReturnValue('agent');
+      hasuraSystemService.getAllUserAddresses = jest
+        .fn()
+        .mockResolvedValue([
+          { country: 'CM', state: '', is_primary: true },
+        ]);
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetAgentStatus')) {
+          return { agents_by_pk: { status: 'active' } };
+        }
+        if (query.includes('OpenOrders')) {
+          return { orders: [openOrderRow] };
+        }
+        return {};
+      });
+    });
+
+    it('returns country preview with canClaim false for unverified agents', async () => {
+      hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
+
+      const result = await service.getOpenOrders();
+
+      expect(result.canClaim).toBe(false);
+      expect(result.previewMode).toBe('country');
+      expect(result.orders).toHaveLength(1);
+    });
+
+    it('returns empty orders for suspended agents', async () => {
+      hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetAgentStatus')) {
+          return { agents_by_pk: { status: 'suspended' } };
+        }
+        return { orders: [openOrderRow] };
+      });
+
+      const result = await service.getOpenOrders();
+
+      expect(result.orders).toHaveLength(0);
+      expect(result.canClaim).toBe(false);
+    });
+  });
+
+  describe('claimOrder verification', () => {
+    it('rejects unverified agents with AGENT_NOT_VERIFIED', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockAgentUser,
+        agent: { id: 'agent-123', user_id: 'agent-123', is_verified: false },
+      });
+      hasuraUserService.getActivePersonaHeader.mockReturnValue('agent');
+
+      await expect(
+        service.claimOrder({ orderId: 'order-123' })
+      ).rejects.toMatchObject({
+        response: {
+          error: 'AGENT_NOT_VERIFIED',
+        },
+        status: HttpStatus.FORBIDDEN,
+      });
     });
   });
 });

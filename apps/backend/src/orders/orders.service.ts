@@ -55,7 +55,10 @@ import {
 } from '../users/user-timezone.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
-import { resolveAgentOperatingRegion } from '../common/agent-proximity.util';
+import {
+  resolveAgentOperatingRegion,
+  resolveAgentPreviewCountry,
+} from '../common/agent-proximity.util';
 import { LocationsService } from '../locations/locations.service';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
@@ -1291,6 +1294,7 @@ export class OrdersService {
       'Only agent users can get orders'
     );
     const agent = this.requireAgentRecord(user);
+    this.assertAgentVerifiedForClaim(agent);
     await assertMobileLocationConsentAccepted(
       this.hasuraSystemService,
       agent.id,
@@ -1517,6 +1521,7 @@ export class OrdersService {
       'Only agent users can claim orders'
     );
     const agent = this.requireAgentRecord(user);
+    this.assertAgentVerifiedForClaim(agent);
     await assertMobileLocationConsentAccepted(
       this.hasuraSystemService,
       agent.id,
@@ -4210,11 +4215,11 @@ export class OrdersService {
     );
     const agent = this.requireAgentRecord(user);
 
-    if (!agent.is_verified) {
-      return { success: true, orders: [] };
+    const agentStatus = await this.getAgentStatus(agent.id);
+    if (agentStatus === 'suspended') {
+      return { success: true, orders: [], canClaim: false };
     }
 
-    // Resolve operating region from profile address or live GPS (reverse geocode).
     const agentAddresses = await this.hasuraSystemService.getAllUserAddresses(
       user.id,
       'agent'
@@ -4222,32 +4227,53 @@ export class OrdersService {
     const agentLocation = await this.locationsService.getLatestAgentLocation(
       agent.id
     );
-    const operatingRegion = await resolveAgentOperatingRegion({
-      agentAddresses: (agentAddresses ?? []).map((addr) => ({
-        address: {
-          country: addr.country,
-          state: addr.state,
-          is_primary: addr.is_primary,
-        },
-      })),
-      agentLocation: agentLocation
-        ? {
-            latitude: agentLocation.latitude,
-            longitude: agentLocation.longitude,
-          }
-        : null,
-      reverseGeocode: async (lat, lng) => {
-        const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
-        return { country: geo.country, state: geo.state };
+    const mappedAddresses = (agentAddresses ?? []).map((addr) => ({
+      address: {
+        country: addr.country,
+        state: addr.state,
+        is_primary: addr.is_primary,
       },
+    }));
+    const locationCoords = agentLocation
+      ? {
+          latitude: agentLocation.latitude,
+          longitude: agentLocation.longitude,
+        }
+      : null;
+    const reverseGeocode = async (lat: number, lng: number) => {
+      const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
+      return { country: geo.country, state: geo.state };
+    };
+
+    const isVerified = Boolean(agent.is_verified);
+    const operatingRegion = await resolveAgentOperatingRegion({
+      agentAddresses: mappedAddresses,
+      agentLocation: locationCoords,
+      reverseGeocode,
+    });
+    const previewCountry = await resolveAgentPreviewCountry({
+      agentAddresses: mappedAddresses,
+      agentLocation: locationCoords,
+      reverseGeocode,
     });
 
-    if (!operatingRegion) {
-      return { success: true, orders: [] };
-    }
+    let canClaim = false;
+    let previewMode: 'country' | 'region' | undefined;
+    let agentCountry: string | null = null;
+    let agentState: string | null = null;
 
-    const agentCountry = operatingRegion.country;
-    const agentState = operatingRegion.state;
+    if (isVerified && operatingRegion) {
+      canClaim = true;
+      previewMode = 'region';
+      agentCountry = operatingRegion.country;
+      agentState = operatingRegion.state;
+    } else if (!isVerified && previewCountry) {
+      canClaim = false;
+      previewMode = 'country';
+      agentCountry = previewCountry;
+    } else {
+      return { success: true, orders: [], canClaim: false };
+    }
 
     // Query for orders in ready_for_pickup and assigned_agent_id is null
     // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
@@ -4330,7 +4356,6 @@ export class OrdersService {
       (o) => !pendingClaimOrderNumbers.includes(o.order_number)
     );
 
-    // Filter orders based on agent's location matching business location
     const filteredOrders = ordersExcludingPendingClaim.filter((order: any) => {
       const businessLocation = order.business_location;
       if (!businessLocation || !businessLocation.address) {
@@ -4340,8 +4365,13 @@ export class OrdersService {
       const businessCountry = businessLocation.address.country;
       const businessState = businessLocation.address.state;
 
-      // Check if country and state match
-      return businessCountry === agentCountry && businessState === agentState;
+      if (previewMode === 'country') {
+        return businessCountry === agentCountry;
+      }
+
+      return (
+        businessCountry === agentCountry && businessState === agentState
+      );
     });
 
     // Transform orders for agents to show commission amounts
@@ -4360,7 +4390,12 @@ export class OrdersService {
       transformedOrders
     );
 
-    return { success: true, orders: ordersWithAgentCaution };
+    return {
+      success: true,
+      orders: ordersWithAgentCaution,
+      canClaim,
+      previewMode,
+    };
   }
 
   async checkOrderClaimAvailability(
@@ -4374,6 +4409,15 @@ export class OrdersService {
       'Only agent users can claim orders'
     );
     const agent = this.requireAgentRecord(user);
+
+    if (!agent.is_verified) {
+      const order = await this.getOrderWithItems(orderId);
+      const holdAmount = await this.resolveOrderHoldAmount(order);
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'Complete account verification before claiming orders.'
+      );
+    }
 
     try {
       await assertMobileLocationConsentAccepted(
@@ -6754,6 +6798,20 @@ export class OrdersService {
       holdAmount,
       message,
     };
+  }
+
+  private assertAgentVerifiedForClaim(agent: {
+    is_verified?: boolean | null;
+  }): void {
+    if (!agent.is_verified) {
+      throw new HttpException(
+        {
+          error: 'AGENT_NOT_VERIFIED',
+          message: 'Complete account verification before claiming orders.',
+        },
+        HttpStatus.FORBIDDEN
+      );
+    }
   }
 
   /**
