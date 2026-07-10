@@ -20,6 +20,7 @@ interface RentalCreateFields {
   currency: string;
   is_active: boolean;
   tags: string[];
+  operation_mode: 'business_operated' | 'take_home';
 }
 
 export interface RentalItemImage {
@@ -459,6 +460,7 @@ export class RentalItemImagesService {
       currency: dto.currency?.trim() || 'XAF',
       is_active: dto.is_active ?? false,
       tags: this.normalizeRentalTags(dto.tags),
+      operation_mode: dto.operation_mode ?? 'business_operated',
     };
   }
 
@@ -507,6 +509,7 @@ export class RentalItemImagesService {
       currency,
       is_active: dto.is_active ?? false,
       tags,
+      operation_mode: dto.operation_mode ?? 'business_operated',
     };
   }
 
@@ -526,7 +529,7 @@ export class RentalItemImagesService {
         currency: fields.currency,
         is_active: fields.is_active,
         tags: fields.tags,
-        operation_mode: 'business_operated',
+        operation_mode: fields.operation_mode,
       },
     });
     const item = insertResult.insert_rental_items_one;

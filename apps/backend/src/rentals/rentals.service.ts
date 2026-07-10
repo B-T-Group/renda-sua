@@ -74,6 +74,20 @@ export interface ListPublicRentalListingsQuery {
   category_id?: string;
   min_price?: number;
   max_price?: number;
+  operation_mode?: string;
+}
+
+export interface ListBusinessRentalRequestsQuery {
+  page?: number;
+  limit?: number;
+  status?: string;
+}
+
+export interface PaginatedBusinessRentalRequests {
+  requests: any[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface PaginatedPublicRentalListings {
@@ -343,6 +357,14 @@ export class RentalsService {
       parts.push({
         rental_item: {
           rental_category_id: { _eq: query.category_id.trim() },
+        },
+      });
+    }
+    const mode = query.operation_mode?.trim();
+    if (mode === 'business_operated' || mode === 'take_home') {
+      parts.push({
+        rental_item: {
+          operation_mode: { _eq: mode },
         },
       });
     }
@@ -665,12 +687,42 @@ export class RentalsService {
     return r.rental_items ?? [];
   }
 
-  async getBusinessRentalRequests(): Promise<any[]> {
+  async getBusinessRentalRequests(
+    query: ListBusinessRentalRequestsQuery = {}
+  ): Promise<PaginatedBusinessRentalRequests> {
     await this.requireBusinessId();
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const where = this.buildBusinessRequestsWhere(query.status);
     const r = await this.hasuraUserService.executeQuery<{
       rental_requests: any[];
-    }>(Q.GET_BUSINESS_RENTAL_REQUESTS, {});
-    return r.rental_requests ?? [];
+      rental_requests_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.GET_BUSINESS_RENTAL_REQUESTS, { where, limit, offset });
+    return {
+      requests: r.rental_requests ?? [],
+      total: r.rental_requests_aggregate?.aggregate?.count ?? 0,
+      page,
+      limit,
+    };
+  }
+
+  private buildBusinessRequestsWhere(
+    status?: string
+  ): Record<string, unknown> {
+    const trimmed = status?.trim();
+    const allowed = [
+      'pending',
+      'available',
+      'unavailable',
+      'booked',
+      'expired',
+      'cancelled',
+    ];
+    if (trimmed && allowed.includes(trimmed)) {
+      return { status: { _eq: trimmed } };
+    }
+    return {};
   }
 
   async getBusinessRentalSchedule(rentalItemId: string): Promise<any[]> {
@@ -862,7 +914,7 @@ export class RentalsService {
         description: dto.description?.trim() ?? '',
         tags: dto.tags ?? [],
         currency: dto.currency?.trim() || 'XAF',
-        operation_mode: 'business_operated',
+        operation_mode: dto.operation_mode ?? 'business_operated',
         is_active: true,
       },
     });
@@ -1038,6 +1090,9 @@ export class RentalsService {
     }
     if (dto.currency !== undefined) {
       out.currency = dto.currency.trim();
+    }
+    if (dto.operation_mode !== undefined) {
+      out.operation_mode = dto.operation_mode;
     }
     if (dto.is_active !== undefined) {
       out.is_active = dto.is_active;

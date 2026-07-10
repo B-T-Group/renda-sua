@@ -8,6 +8,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
+import { RENTAL_OPERATION_MODES } from '../../rentals/dto/create-business-rental-item.dto';
 
 export type CreateRentalFromImageMode = 'manual' | 'ai';
 
@@ -64,4 +65,15 @@ export class CreateRentalFromImageDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiProperty({
+    required: false,
+    enum: RENTAL_OPERATION_MODES,
+    default: 'business_operated',
+    description:
+      'business_operated: staff-run at location; take_home: client picks up and returns',
+  })
+  @IsOptional()
+  @IsIn(RENTAL_OPERATION_MODES)
+  operation_mode?: (typeof RENTAL_OPERATION_MODES)[number];
 }

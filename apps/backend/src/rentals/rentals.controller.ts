@@ -73,6 +73,12 @@ export class RentalsController {
   @ApiQuery({ name: 'category_id', required: false, description: 'Rental category UUID' })
   @ApiQuery({ name: 'min_price', required: false, description: 'Min hourly price' })
   @ApiQuery({ name: 'max_price', required: false, description: 'Max hourly price' })
+  @ApiQuery({
+    name: 'operation_mode',
+    required: false,
+    enum: ['business_operated', 'take_home'],
+    description: 'Filter by rental operation mode',
+  })
   @ApiResponse({ status: 200, description: 'Listings returned' })
   async listPublicListings(
     @Query('country_code') country_code?: string,
@@ -83,7 +89,8 @@ export class RentalsController {
     @Query('q') q?: string,
     @Query('category_id') category_id?: string,
     @Query('min_price') min_price?: string,
-    @Query('max_price') max_price?: string
+    @Query('max_price') max_price?: string,
+    @Query('operation_mode') operation_mode?: string
   ) {
     const result = await this.rentalsService.listPublicRentalListings({
       country_code,
@@ -95,6 +102,7 @@ export class RentalsController {
       category_id,
       min_price: min_price != null ? Number(min_price) : undefined,
       max_price: max_price != null ? Number(max_price) : undefined,
+      operation_mode,
     });
     return {
       success: true,
@@ -181,11 +189,50 @@ export class RentalsController {
   @ApiOperation({
     summary: 'List rental requests for listings owned by the current business',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (1-based)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Page size (default 50, max 100)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: [
+      'pending',
+      'available',
+      'unavailable',
+      'booked',
+      'expired',
+      'cancelled',
+    ],
+    description: 'Filter by request status',
+  })
   @ApiResponse({ status: 200, description: 'Requests returned' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
-  async getBusinessRequests() {
-    const requests = await this.rentalsService.getBusinessRentalRequests();
-    return { success: true, data: { requests } };
+  async getBusinessRequests(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string
+  ) {
+    const result = await this.rentalsService.getBusinessRentalRequests({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      status,
+    });
+    return {
+      success: true,
+      data: {
+        requests: result.requests,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
   }
 
   @Get('business/schedule')

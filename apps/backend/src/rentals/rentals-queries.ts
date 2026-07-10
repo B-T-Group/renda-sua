@@ -537,6 +537,7 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
       rental_category_id
       is_active
       deleted_at
+      operation_mode
       rental_item_images(order_by: { display_order: asc }) {
         id
         image_url
@@ -728,8 +729,17 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
 `;
 
 export const GET_BUSINESS_RENTAL_REQUESTS = `
-  query GetBusinessRentalRequests {
-    rental_requests(order_by: { created_at: desc }, limit: 50) {
+  query GetBusinessRentalRequests(
+    $where: rental_requests_bool_exp!
+    $limit: Int!
+    $offset: Int!
+  ) {
+    rental_requests(
+      where: $where
+      order_by: { created_at: desc }
+      limit: $limit
+      offset: $offset
+    ) {
       id
       created_at
       status
@@ -774,6 +784,11 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
             alt_text
           }
         }
+      }
+    }
+    rental_requests_aggregate(where: $where) {
+      aggregate {
+        count
       }
     }
   }
