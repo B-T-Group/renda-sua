@@ -565,8 +565,11 @@ export const LIST_ACTIVE_BOOKINGS_PAST_END = `
 `;
 
 export const GET_BUSINESS_RENTAL_ITEMS = `
-  query GetBusinessRentalItems {
-    rental_items(order_by: { updated_at: desc }) {
+  query GetBusinessRentalItems($businessId: uuid!) {
+    rental_items(
+      where: { business_id: { _eq: $businessId }, deleted_at: { _is_null: true } }
+      order_by: { updated_at: desc }
+    ) {
       id
       name
       description
@@ -832,11 +835,12 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
 `;
 
 export const GET_BUSINESS_RENTAL_SCHEDULE = `
-  query GetBusinessRentalSchedule($rentalItemId: uuid) {
+  query GetBusinessRentalSchedule($businessId: uuid!, $rentalItemId: uuid!) {
     rental_bookings(
       where: {
         status: { _in: [proposed, confirmed, active, awaiting_return] }
         rental_location_listing: {
+          rental_item: { business_id: { _eq: $businessId } }
           rental_item_id: { _eq: $rentalItemId }
         }
       }

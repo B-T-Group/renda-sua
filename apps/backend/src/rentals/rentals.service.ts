@@ -765,22 +765,22 @@ export class RentalsService {
   }
 
   async getBusinessRentalItems(): Promise<any[]> {
-    await this.requireBusinessId();
-    const r = await this.hasuraUserService.executeQuery<{
+    const businessId = await this.requireBusinessId();
+    const r = await this.hasuraSystemService.executeQuery<{
       rental_items: any[];
-    }>(Q.GET_BUSINESS_RENTAL_ITEMS, {});
+    }>(Q.GET_BUSINESS_RENTAL_ITEMS, { businessId });
     return r.rental_items ?? [];
   }
 
   async getBusinessRentalRequests(
     query: ListBusinessRentalRequestsQuery = {}
   ): Promise<PaginatedBusinessRentalRequests> {
-    await this.requireBusinessId();
+    const businessId = await this.requireBusinessId();
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
     const offset = (page - 1) * limit;
-    const where = this.buildBusinessRequestsWhere(query.status);
-    const r = await this.hasuraUserService.executeQuery<{
+    const where = this.buildBusinessRequestsWhere(businessId, query.status);
+    const r = await this.hasuraSystemService.executeQuery<{
       rental_requests: any[];
       rental_requests_aggregate: { aggregate: { count: number } | null } | null;
     }>(Q.GET_BUSINESS_RENTAL_REQUESTS, { where, limit, offset });
@@ -793,8 +793,14 @@ export class RentalsService {
   }
 
   private buildBusinessRequestsWhere(
+    businessId: string,
     status?: string
   ): Record<string, unknown> {
+    const where: Record<string, unknown> = {
+      rental_location_listing: {
+        rental_item: { business_id: { _eq: businessId } },
+      },
+    };
     const trimmed = status?.trim();
     const allowed = [
       'pending',
@@ -805,16 +811,16 @@ export class RentalsService {
       'cancelled',
     ];
     if (trimmed && allowed.includes(trimmed)) {
-      return { status: { _eq: trimmed } };
+      where.status = { _eq: trimmed };
     }
-    return {};
+    return where;
   }
 
   async getBusinessRentalSchedule(rentalItemId: string): Promise<any[]> {
-    await this.requireBusinessId();
-    const r = await this.hasuraUserService.executeQuery<{
+    const businessId = await this.requireBusinessId();
+    const r = await this.hasuraSystemService.executeQuery<{
       rental_bookings: any[];
-    }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { rentalItemId });
+    }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { businessId, rentalItemId });
     return r.rental_bookings ?? [];
   }
 
