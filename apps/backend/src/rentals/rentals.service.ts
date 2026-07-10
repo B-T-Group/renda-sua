@@ -38,10 +38,24 @@ import {
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payments-database.service';
 import { isActivePersona } from '../users/persona.util';
 import * as Q from './rentals-queries';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
+
+export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
+
+export interface RentalBookingActionResult {
+  success: true;
+  bookingId: string;
+  payment_rail: RentalPaymentRail;
+  checkout_url?: string;
+  confirmed?: boolean;
+  paymentPending?: boolean;
+}
 
 export type RentalListingsSort =
   | 'relevance'
@@ -252,7 +266,10 @@ export class RentalsService {
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly deliveryPinService: DeliveryPinService,
     private readonly notificationsService: NotificationsService,
-    private readonly activationValidation: ItemActivationValidationService
+    private readonly activationValidation: ItemActivationValidationService,
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly stripeCheckoutService: StripeCheckoutService,
+    private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService
   ) {}
 
   async listPublicRentalListings(
@@ -693,20 +710,39 @@ export class RentalsService {
       throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
     }
     const bookingNumber = booking.booking_number as string | undefined;
-    const paymentPending = bookingNumber
+    const momoPending = bookingNumber
       ? await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
           bookingNumber
         )
       : false;
+    const stripePendingTx = bookingNumber
+      ? await this.stripePaymentsDatabaseService.getPendingRentalBookingPayment(
+          bookingNumber
+        )
+      : null;
+    const stripePending = !!stripePendingTx;
+    const paymentPending = momoPending || stripePending;
+    let payment_rail: RentalPaymentRail | null = null;
+    if (booking.status === 'confirmed' || booking.status === 'active') {
+      payment_rail = 'wallet';
+    } else if (stripePending) {
+      payment_rail = 'stripe';
+    } else if (momoPending) {
+      payment_rail = 'mobile_money';
+    } else if (booking.status === 'proposed') {
+      payment_rail = await this.paymentRoutingService.resolveRailForUser(user.id);
+    }
     return {
       status: booking.status as string,
       paymentPending,
+      payment_rail,
+      checkout_url: stripePendingTx?.payment_url ?? null,
       contractExpiresAt: (booking.contract_expires_at as string | null) ?? null,
       bookingNumber: bookingNumber ?? null,
     };
   }
 
-  async retryBookingPayment(bookingId: string) {
+  async retryBookingPayment(bookingId: string): Promise<RentalBookingActionResult> {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can retry payment', HttpStatus.FORBIDDEN);
@@ -728,13 +764,6 @@ export class RentalsService {
     const bookingNumber = booking.booking_number as string | undefined;
     if (!bookingNumber) {
       throw new HttpException('Missing booking number', HttpStatus.BAD_REQUEST);
-    }
-    const hasPending =
-      await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
-        bookingNumber
-      );
-    if (hasPending) {
-      return { success: true, bookingId, paymentPending: true };
     }
     const snap = booking.rental_pricing_snapshot as RentalPricingSnapshotDto;
     if (!snap || !isValidRentalPricingSnapshot(snap)) {
@@ -758,10 +787,15 @@ export class RentalsService {
         booking.rental_request_id,
         user.id
       );
-      return { success: true, bookingId, confirmed: true };
+      return {
+        success: true,
+        bookingId,
+        payment_rail: 'wallet',
+        confirmed: true,
+      };
     }
-    const paymentReference = this.createRentalPaymentReference();
-    await this.initiateRentalBookingPayment({
+    return this.initiateUnpaidRentalPayment({
+      bookingId,
       bookingNumber,
       amount: total,
       currency: snap.currency,
@@ -769,10 +803,7 @@ export class RentalsService {
       userId: user.id,
       phoneNumber: user.phone_number || '',
       email: user.email,
-      reference: paymentReference,
-      paymentEntity: 'rental_booking',
     });
-    return { success: true, bookingId, paymentPending: true };
   }
 
   async cancelClientRentalRequest(requestId: string): Promise<{ success: boolean }> {
@@ -1397,7 +1428,7 @@ export class RentalsService {
     clientId: string,
     phoneNumber: string,
     email: string | null | undefined
-  ) {
+  ): Promise<RentalBookingActionResult> {
     const bookingId = req.rental_booking?.id as string;
     const bookingNumber = req.rental_booking?.booking_number as string | undefined;
     const exp = req.rental_booking?.contract_expires_at as string | null | undefined;
@@ -1418,20 +1449,15 @@ export class RentalsService {
     if (availableBalance >= total) {
       await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
       await this.finalizeRentalBookingConfirmation(bookingId, requestId, userId);
-      return { success: true, bookingId };
+      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
     }
 
     if (!bookingNumber) {
       throw new HttpException('Missing booking_number for this rental booking', HttpStatus.BAD_REQUEST);
     }
 
-    const hasPending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(bookingNumber);
-    if (hasPending) {
-      return { success: true, bookingId };
-    }
-
-    const paymentReference = this.createRentalPaymentReference();
-    await this.initiateRentalBookingPayment({
+    return this.initiateUnpaidRentalPayment({
+      bookingId,
       bookingNumber,
       amount: total,
       currency: snap.currency,
@@ -1439,12 +1465,7 @@ export class RentalsService {
       userId,
       phoneNumber,
       email,
-      reference: paymentReference,
-      paymentEntity: 'rental_booking',
     });
-
-    // Keep booking in `proposed` until the payment callback confirms it.
-    return { success: true, bookingId };
   }
 
   private async createLegacyRentalBooking(
@@ -1454,7 +1475,7 @@ export class RentalsService {
     clientId: string,
     phoneNumber: string,
     email: string | null | undefined
-  ) {
+  ): Promise<RentalBookingActionResult> {
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
@@ -1483,10 +1504,10 @@ export class RentalsService {
         null,
         'Booking created'
       );
-      return { success: true, bookingId };
+      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
     }
 
-    // Payment path: insert a proposed booking and initiate mobile payment.
+    // Payment path: insert a proposed booking and initiate payment by rail.
     const contractExpiresAt = req.expires_at as string | null | undefined;
     if (!contractExpiresAt) {
       throw new HttpException('Missing contract_expires_at', HttpStatus.BAD_REQUEST);
@@ -1502,29 +1523,118 @@ export class RentalsService {
     const bookingId = bookingRow.insert_rental_bookings_one.id;
     const bookingNumber = bookingRow.insert_rental_bookings_one.booking_number;
 
-    const hasPending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(bookingNumber);
-    if (!hasPending) {
-      try {
-        const paymentReference = this.createRentalPaymentReference();
-        await this.initiateRentalBookingPayment({
-          bookingNumber,
-          amount: total,
-          currency: snap.currency,
-          clientAccountId: clientAccount.id,
-          userId,
-          phoneNumber,
-          email,
-          reference: paymentReference,
-          paymentEntity: 'rental_booking',
-        });
-      } catch (e: any) {
-        await this.deleteBooking(bookingId);
-        throw e;
-      }
+    try {
+      return await this.initiateUnpaidRentalPayment({
+        bookingId,
+        bookingNumber,
+        amount: total,
+        currency: snap.currency,
+        clientAccountId: clientAccount.id,
+        userId,
+        phoneNumber,
+        email,
+      });
+    } catch (e: any) {
+      await this.deleteBooking(bookingId);
+      throw e;
     }
+  }
 
-    // Keep booking in `proposed` until payment callback confirms it.
-    return { success: true, bookingId };
+  /**
+   * Start Stripe Checkout or mobile-money push for an unpaid proposed booking.
+   */
+  private async initiateUnpaidRentalPayment(params: {
+    bookingId: string;
+    bookingNumber: string;
+    amount: number;
+    currency: string;
+    clientAccountId: string;
+    userId: string;
+    phoneNumber: string;
+    email?: string | null;
+  }): Promise<RentalBookingActionResult> {
+    const rail = await this.paymentRoutingService.resolveRailForUser(params.userId);
+    if (rail === 'stripe') {
+      return this.initiateStripeRentalCheckout(params);
+    }
+    const momoPending =
+      await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+        params.bookingNumber
+      );
+    if (momoPending) {
+      return {
+        success: true,
+        bookingId: params.bookingId,
+        payment_rail: 'mobile_money',
+        paymentPending: true,
+      };
+    }
+    const paymentReference = this.createRentalPaymentReference();
+    await this.initiateRentalBookingPayment({
+      bookingNumber: params.bookingNumber,
+      amount: params.amount,
+      currency: params.currency,
+      clientAccountId: params.clientAccountId,
+      userId: params.userId,
+      phoneNumber: params.phoneNumber,
+      email: params.email,
+      reference: paymentReference,
+      paymentEntity: 'rental_booking',
+    });
+    return {
+      success: true,
+      bookingId: params.bookingId,
+      payment_rail: 'mobile_money',
+      paymentPending: true,
+    };
+  }
+
+  private async initiateStripeRentalCheckout(params: {
+    bookingId: string;
+    bookingNumber: string;
+    amount: number;
+    currency: string;
+    clientAccountId: string;
+    userId: string;
+    email?: string | null;
+  }): Promise<RentalBookingActionResult> {
+    const existing =
+      await this.stripePaymentsDatabaseService.getPendingRentalBookingPayment(
+        params.bookingNumber
+      );
+    if (existing?.payment_url) {
+      return {
+        success: true,
+        bookingId: params.bookingId,
+        payment_rail: 'stripe',
+        checkout_url: existing.payment_url,
+        paymentPending: true,
+      };
+    }
+    const checkout = await this.stripeCheckoutService.createCheckout({
+      amount: params.amount,
+      currency: params.currency,
+      description: `Rental booking ${params.bookingNumber}`,
+      accountId: params.clientAccountId,
+      paymentEntity: 'rental_booking',
+      entityId: params.bookingNumber,
+      bookingId: params.bookingId,
+      customerEmail: params.email ?? undefined,
+      captureMethod: 'automatic',
+    });
+    if (!checkout.paymentUrl) {
+      throw new HttpException(
+        'Failed to create Stripe checkout session',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    return {
+      success: true,
+      bookingId: params.bookingId,
+      payment_rail: 'stripe',
+      checkout_url: checkout.paymentUrl,
+      paymentPending: true,
+    };
   }
 
   private async finalizeRentalBookingConfirmation(

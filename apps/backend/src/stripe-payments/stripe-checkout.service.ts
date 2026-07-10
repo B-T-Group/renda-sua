@@ -15,6 +15,8 @@ export interface CreateCheckoutParams {
   accountId?: string;
   paymentEntity?: StripePaymentEntity;
   entityId?: string;
+  /** Rental booking UUID for success-page deep link (entityId stays booking_number). */
+  bookingId?: string;
   successUrl?: string;
   cancelUrl?: string;
   captureMethod?: 'automatic' | 'manual';
@@ -64,14 +66,26 @@ export class StripeCheckoutService {
       params.paymentEntity === 'order' && params.entityId
         ? `&order=${encodeURIComponent(params.entityId)}`
         : '';
-    return `${this.appBaseUrl}/payment/success?reference=${reference}${orderSuffix}`;
+    const rentalSuffix =
+      params.paymentEntity === 'rental_booking'
+        ? [
+            params.entityId
+              ? `&bookingNumber=${encodeURIComponent(params.entityId)}`
+              : '',
+            params.bookingId
+              ? `&booking=${encodeURIComponent(params.bookingId)}`
+              : '',
+          ].join('')
+        : '';
+    return `${this.appBaseUrl}/payment/success?reference=${reference}${orderSuffix}${rentalSuffix}`;
   }
 
   private buildCancelUrl(params: CreateCheckoutParams, reference: string): string {
-    return (
-      params.cancelUrl ||
-      `${this.appBaseUrl}/payment/return?reference=${reference}&status=cancel`
-    );
+    if (params.cancelUrl) return params.cancelUrl;
+    const bookingSuffix = params.bookingId
+      ? `&booking=${encodeURIComponent(params.bookingId)}`
+      : '';
+    return `${this.appBaseUrl}/payment/return?reference=${reference}&status=cancel${bookingSuffix}`;
   }
 
   private buildMetadata(

@@ -340,10 +340,15 @@ export class RentalsController {
   @Post('bookings/:id/retry-payment')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Retry mobile-money payment for a proposed rental booking (client)',
+    summary:
+      'Retry payment for a proposed rental booking (Stripe Checkout, mobile money, or wallet)',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Payment retried or booking confirmed via wallet' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Payment retried (checkout_url for Stripe), pending mobile money, or booking confirmed via wallet',
+  })
   async retryBookingPayment(@Param('id') bookingId: string) {
     return this.rentalsService.retryBookingPayment(bookingId);
   }

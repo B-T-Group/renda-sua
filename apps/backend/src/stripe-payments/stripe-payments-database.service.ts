@@ -198,6 +198,61 @@ export class StripePaymentsDatabaseService {
     return this.getTransactionByField('entity_id', entityId);
   }
 
+  /**
+   * True when a pending (or authorized) Stripe rental_booking payment already
+   * exists for this booking number — used to avoid duplicate Checkout sessions.
+   */
+  async hasPendingRentalBookingPayment(
+    bookingNumber: string
+  ): Promise<boolean> {
+    const query = `
+      query HasPendingStripeRentalBookingPayment($bookingNumber: String!) {
+        stripe_payment_transactions(
+          where: {
+            payment_entity: { _eq: "rental_booking" }
+            entity_id: { _eq: $bookingNumber }
+            status: { _in: ["pending", "authorized", "capture_pending"] }
+          }
+          limit: 1
+        ) {
+          id
+          status
+          stripe_session_id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      stripe_payment_transactions: Array<{
+        id: string;
+        status: string;
+        stripe_session_id?: string | null;
+      }>;
+    }>(query, { bookingNumber });
+    return (response.stripe_payment_transactions ?? []).length > 0;
+  }
+
+  async getPendingRentalBookingPayment(
+    bookingNumber: string
+  ): Promise<StripePaymentTransaction | null> {
+    const query = `
+      query GetPendingStripeRentalBookingPayment($bookingNumber: String!) {
+        stripe_payment_transactions(
+          where: {
+            payment_entity: { _eq: "rental_booking" }
+            entity_id: { _eq: $bookingNumber }
+            status: { _in: ["pending", "authorized", "capture_pending"] }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { ${TRANSACTION_FIELDS} }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, {
+      bookingNumber,
+    });
+    return (response.stripe_payment_transactions || [])[0] || null;
+  }
+
   async listTransactions(filters: {
     accountId?: string;
     status?: string;
