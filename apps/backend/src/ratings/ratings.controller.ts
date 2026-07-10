@@ -98,6 +98,29 @@ export class RatingsController {
     }
   }
 
+  @Get('rental-booking/:bookingId')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get ratings for a specific rental booking' })
+  @ApiResponse({ status: 200, description: 'Ratings retrieved successfully' })
+  async getRentalBookingRatings(@Param('bookingId') bookingId: string) {
+    try {
+      const ratings =
+        await this.ratingsService.getRatingsForRentalBooking(bookingId);
+      return {
+        success: true,
+        message: 'Ratings retrieved successfully',
+        ratings,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to retrieve ratings',
+        ratings: [],
+      };
+    }
+  }
+
   @Public()
   @Get('entity/:entityType/:entityId')
   @HttpCode(HttpStatus.OK)

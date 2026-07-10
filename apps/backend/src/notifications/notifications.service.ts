@@ -50,6 +50,13 @@ import {
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
 import { buildRatingReceivedPushMessage } from './rating-push.messages';
+import {
+  buildRentalBookingConfirmedPush,
+  buildRentalBookingRequestPush,
+  buildRentalPeriodEndedPush,
+  buildRentalRequestAcceptedPush,
+  buildRentalRequestRejectedPush,
+} from './rental-push.messages';
 import type { RatingType } from '../ratings/dto/create-rating.dto';
 
 export type {
@@ -721,33 +728,71 @@ export class NotificationsService {
         this.getUserRowForEmail(payload.clientUserId),
         this.getUserRowForEmail(payload.businessUserId),
       ]);
-      if (!cu?.email || !bu?.email) {
+      if (cu?.email && bu?.email) {
+        const clientLocale = normalizeLanguage(cu.preferred_language);
+        const businessLocale = normalizeLanguage(bu.preferred_language);
+        await this.sendEmail({
+          to: bu.email,
+          templateKey: this.mapKeyForLanguage(
+            'business_rental_period_ended',
+            businessLocale
+          ),
+          variables: vars,
+        });
+        await this.sendEmail({
+          to: cu.email,
+          templateKey: this.mapKeyForLanguage(
+            'client_rental_period_ended',
+            clientLocale
+          ),
+          variables: vars,
+        });
+      } else {
         this.logger.warn('Rental period ended email skipped: missing email');
-        return;
       }
-      const clientLocale = normalizeLanguage(cu.preferred_language);
-      const businessLocale = normalizeLanguage(bu.preferred_language);
-      await this.sendEmail({
-        to: bu.email,
-        templateKey: this.mapKeyForLanguage(
-          'business_rental_period_ended',
-          businessLocale
-        ),
-        variables: vars,
-      });
-      await this.sendEmail({
-        to: cu.email,
-        templateKey: this.mapKeyForLanguage(
-          'client_rental_period_ended',
-          clientLocale
-        ),
-        variables: vars,
-      });
+      await this.sendRentalPeriodEndedPush(payload, cu?.preferred_language, bu?.preferred_language);
     } catch (error: any) {
       this.logger.error(
         `sendRentalPeriodEndedEmails: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  private async sendRentalPeriodEndedPush(
+    payload: RentalPeriodEndedEmailPayload,
+    clientLang?: string | null,
+    businessLang?: string | null
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const data = {
+      type: 'rental_period_ended',
+      rentalBookingId: payload.bookingId,
+      url: `/rentals/bookings/${payload.bookingId}`,
+    };
+    const clientMsg = buildRentalPeriodEndedPush({
+      rentalItemName: payload.rentalItemName,
+      forBusiness: false,
+      preferredLanguage: clientLang,
+    });
+    const businessMsg = buildRentalPeriodEndedPush({
+      rentalItemName: payload.rentalItemName,
+      forBusiness: true,
+      preferredLanguage: businessLang,
+    });
+    await Promise.all([
+      this.sendPushNotificationByUserId(
+        payload.clientUserId,
+        clientMsg.title,
+        clientMsg.body,
+        data
+      ),
+      this.sendPushNotificationByUserId(
+        payload.businessUserId,
+        businessMsg.title,
+        businessMsg.body,
+        data
+      ),
+    ]);
   }
 
   async sendRentalListingApprovedEmail(
@@ -816,29 +861,45 @@ export class NotificationsService {
   ): Promise<void> {
     try {
       const u = await this.getUserRowForEmail(payload.businessUserId);
-      if (!u?.email) {
+      if (u?.email) {
+        const locale = normalizeLanguage(u.preferred_language);
+        await this.sendEmail({
+          to: u.email,
+          templateKey: this.mapKeyForLanguage(
+            'business_rental_booking_request',
+            locale
+          ),
+          variables: {
+            requestId: payload.requestId,
+            listingId: payload.listingId,
+            rentalItemName: payload.rentalItemName,
+            locationName: payload.locationName,
+            requestedStartAt: payload.requestedStartAt,
+            requestedEndAt: payload.requestedEndAt,
+            clientName: payload.clientName,
+          },
+        });
+      } else {
         this.logger.warn(
           'Rental booking request email skipped: missing business email'
         );
-        return;
       }
-      const locale = normalizeLanguage(u.preferred_language);
-      await this.sendEmail({
-        to: u.email,
-        templateKey: this.mapKeyForLanguage(
-          'business_rental_booking_request',
-          locale
-        ),
-        variables: {
-          requestId: payload.requestId,
-          listingId: payload.listingId,
+      if (this.configService.get<Configuration['push']>('push')?.enabled) {
+        const msg = buildRentalBookingRequestPush({
           rentalItemName: payload.rentalItemName,
-          locationName: payload.locationName,
-          requestedStartAt: payload.requestedStartAt,
-          requestedEndAt: payload.requestedEndAt,
-          clientName: payload.clientName,
-        },
-      });
+          preferredLanguage: u?.preferred_language,
+        });
+        await this.sendPushNotificationByUserId(
+          payload.businessUserId,
+          msg.title,
+          msg.body,
+          {
+            type: 'rental_request_new',
+            rentalRequestId: payload.requestId,
+            url: `/business/rentals/requests`,
+          }
+        );
+      }
     } catch (error: any) {
       this.logger.error(
         `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
@@ -851,29 +912,45 @@ export class NotificationsService {
   ): Promise<void> {
     try {
       const u = await this.getUserRowForEmail(payload.clientUserId);
-      if (!u?.email) {
+      if (u?.email) {
+        const locale = normalizeLanguage(u.preferred_language);
+        await this.sendEmail({
+          to: u.email,
+          templateKey: this.mapKeyForLanguage(
+            'client_rental_request_accepted',
+            locale
+          ),
+          variables: {
+            requestId: payload.requestId,
+            rentalItemName: payload.rentalItemName,
+            businessName: payload.businessName,
+            bookingNumber: payload.bookingNumber,
+            contractExpiresAt: payload.contractExpiresAt,
+            requestedStartAt: payload.requestedStartAt,
+            requestedEndAt: payload.requestedEndAt,
+          },
+        });
+      } else {
         this.logger.warn(
           'Rental request accepted email skipped: missing client email'
         );
-        return;
       }
-      const locale = normalizeLanguage(u.preferred_language);
-      await this.sendEmail({
-        to: u.email,
-        templateKey: this.mapKeyForLanguage(
-          'client_rental_request_accepted',
-          locale
-        ),
-        variables: {
-          requestId: payload.requestId,
+      if (this.configService.get<Configuration['push']>('push')?.enabled) {
+        const msg = buildRentalRequestAcceptedPush({
           rentalItemName: payload.rentalItemName,
-          businessName: payload.businessName,
-          bookingNumber: payload.bookingNumber,
-          contractExpiresAt: payload.contractExpiresAt,
-          requestedStartAt: payload.requestedStartAt,
-          requestedEndAt: payload.requestedEndAt,
-        },
-      });
+          preferredLanguage: u?.preferred_language,
+        });
+        await this.sendPushNotificationByUserId(
+          payload.clientUserId,
+          msg.title,
+          msg.body,
+          {
+            type: 'rental_request_accepted',
+            rentalRequestId: payload.requestId,
+            url: `/rentals/requests`,
+          }
+        );
+      }
     } catch (error: any) {
       this.logger.error(
         `sendClientRentalRequestAcceptedEmail: ${error?.message ?? String(error)}`
@@ -886,34 +963,81 @@ export class NotificationsService {
   ): Promise<void> {
     try {
       const u = await this.getUserRowForEmail(payload.clientUserId);
-      if (!u?.email) {
+      if (u?.email) {
+        const locale = normalizeLanguage(u.preferred_language);
+        const reasonHtml = clientRentalRejectionReasonHtml(
+          payload.unavailableReasonCode,
+          payload.businessResponseNote,
+          locale
+        );
+        await this.sendEmail({
+          to: u.email,
+          templateKey: this.mapKeyForLanguage(
+            'client_rental_request_rejected',
+            locale
+          ),
+          variables: {
+            requestId: payload.requestId,
+            rentalItemName: payload.rentalItemName,
+            businessName: payload.businessName,
+            reasonHtml,
+          },
+        });
+      } else {
         this.logger.warn(
           'Rental request rejected email skipped: missing client email'
         );
-        return;
       }
-      const locale = normalizeLanguage(u.preferred_language);
-      const reasonHtml = clientRentalRejectionReasonHtml(
-        payload.unavailableReasonCode,
-        payload.businessResponseNote,
-        locale
-      );
-      await this.sendEmail({
-        to: u.email,
-        templateKey: this.mapKeyForLanguage(
-          'client_rental_request_rejected',
-          locale
-        ),
-        variables: {
-          requestId: payload.requestId,
+      if (this.configService.get<Configuration['push']>('push')?.enabled) {
+        const msg = buildRentalRequestRejectedPush({
           rentalItemName: payload.rentalItemName,
-          businessName: payload.businessName,
-          reasonHtml,
-        },
-      });
+          preferredLanguage: u?.preferred_language,
+        });
+        await this.sendPushNotificationByUserId(
+          payload.clientUserId,
+          msg.title,
+          msg.body,
+          {
+            type: 'rental_request_rejected',
+            rentalRequestId: payload.requestId,
+            url: `/rentals/requests`,
+          }
+        );
+      }
     } catch (error: any) {
       this.logger.error(
         `sendClientRentalRequestRejectedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendRentalBookingConfirmedPush(params: {
+    clientUserId: string;
+    rentalItemName: string;
+    bookingId: string;
+    bookingNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const msg = buildRentalBookingConfirmedPush({
+      rentalItemName: params.rentalItemName,
+      bookingNumber: params.bookingNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(
+        params.clientUserId,
+        msg.title,
+        msg.body,
+        {
+          type: 'rental_booking_confirmed',
+          rentalBookingId: params.bookingId,
+          url: `/rentals/bookings/${params.bookingId}`,
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `sendRentalBookingConfirmedPush: ${error?.message ?? String(error)}`
       );
     }
   }

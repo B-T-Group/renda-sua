@@ -6,23 +6,33 @@ import {
   IsUUID,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export enum RatingType {
   CLIENT_TO_AGENT = 'client_to_agent',
   CLIENT_TO_ITEM = 'client_to_item',
   AGENT_TO_CLIENT = 'agent_to_client',
+  CLIENT_TO_RENTAL_ITEM = 'client_to_rental_item',
+  CLIENT_TO_RENTAL_BUSINESS = 'client_to_rental_business',
 }
 
 export enum RatedEntityType {
   AGENT = 'agent',
   CLIENT = 'client',
   ITEM = 'item',
+  RENTAL_ITEM = 'rental_item',
+  BUSINESS = 'business',
 }
 
 export class CreateRatingDto {
+  @ValidateIf((o: CreateRatingDto) => !o.rentalBookingId)
   @IsUUID()
-  orderId!: string;
+  orderId?: string;
+
+  @ValidateIf((o: CreateRatingDto) => !o.orderId)
+  @IsUUID()
+  rentalBookingId?: string;
 
   @IsEnum(RatingType)
   ratingType!: RatingType;

@@ -40,10 +40,19 @@ export class RentalsController {
   constructor(private readonly rentalsService: RentalsService) {}
 
   @Public()
+  @Get('categories')
+  @ApiOperation({ summary: 'List rental categories (public)' })
+  @ApiResponse({ status: 200, description: 'Categories returned' })
+  async listCategories() {
+    const categories = await this.rentalsService.listRentalCategories();
+    return { success: true, data: { categories } };
+  }
+
+  @Public()
   @Get('listings')
   @ApiOperation({
     summary:
-      'List active rental location listings scoped by client country/state (or supported countries); optional sort',
+      'List active rental location listings scoped by client country/state (or supported countries); optional sort, search, category, pagination',
   })
   @ApiQuery({
     name: 'country_code',
@@ -58,18 +67,45 @@ export class RentalsController {
     enum: ['relevance', 'newest', 'fastest', 'cheapest', 'expensive'],
     description: 'Sort mode (fastest uses distance when user has a primary address)',
   })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (1-based)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size (max 50)' })
+  @ApiQuery({ name: 'q', required: false, description: 'Search query' })
+  @ApiQuery({ name: 'category_id', required: false, description: 'Rental category UUID' })
+  @ApiQuery({ name: 'min_price', required: false, description: 'Min hourly price' })
+  @ApiQuery({ name: 'max_price', required: false, description: 'Max hourly price' })
   @ApiResponse({ status: 200, description: 'Listings returned' })
   async listPublicListings(
     @Query('country_code') country_code?: string,
     @Query('state') state?: string,
-    @Query('sort') sort?: string
+    @Query('sort') sort?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+    @Query('category_id') category_id?: string,
+    @Query('min_price') min_price?: string,
+    @Query('max_price') max_price?: string
   ) {
-    const listings = await this.rentalsService.listPublicRentalListings({
+    const result = await this.rentalsService.listPublicRentalListings({
       country_code,
       state,
       sort,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      q,
+      category_id,
+      min_price: min_price != null ? Number(min_price) : undefined,
+      max_price: max_price != null ? Number(max_price) : undefined,
     });
-    return { success: true, data: { listings } };
+    return {
+      success: true,
+      data: {
+        listings: result.items,
+        items: result.items,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
   }
 
   @Public()
@@ -280,6 +316,36 @@ export class RentalsController {
   async getClientRequests() {
     const requests = await this.rentalsService.getClientRentalRequests();
     return { success: true, data: { requests } };
+  }
+
+  @Get('client/bookings')
+  @ApiOperation({ summary: 'List rental bookings for the current client' })
+  @ApiResponse({ status: 200, description: 'Bookings returned' })
+  @ApiResponse({ status: 403, description: 'Not a client user' })
+  async getClientBookings() {
+    const bookings = await this.rentalsService.getClientRentalBookings();
+    return { success: true, data: { bookings } };
+  }
+
+  @Get('bookings/:id/payment-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get payment status for a proposed rental booking (client)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Payment status returned' })
+  async getBookingPaymentStatus(@Param('id') bookingId: string) {
+    const data = await this.rentalsService.getBookingPaymentStatus(bookingId);
+    return { success: true, data };
+  }
+
+  @Post('bookings/:id/retry-payment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Retry mobile-money payment for a proposed rental booking (client)',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Payment retried or booking confirmed via wallet' })
+  async retryBookingPayment(@Param('id') bookingId: string) {
+    return this.rentalsService.retryBookingPayment(bookingId);
   }
 
   @Post('requests')

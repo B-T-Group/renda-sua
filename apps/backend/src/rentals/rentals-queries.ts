@@ -31,6 +31,16 @@ export const GET_LISTING_FOR_REQUEST = `
   }
 `;
 
+export const LIST_RENTAL_CATEGORIES = `
+  query ListRentalCategories {
+    rental_categories(order_by: { name: asc }) {
+      id
+      name
+      description
+    }
+  }
+`;
+
 export const LIST_PUBLIC_RENTAL_LISTINGS = `
   query ListPublicRentalListings(
     $where: rental_location_listings_bool_exp!
@@ -360,6 +370,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       end_at
       total_amount
       currency
+      contract_expires_at
       rental_pricing_snapshot
       client_id
       business_id
@@ -373,6 +384,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       }
       rental_location_listing {
         rental_item {
+          id
           name
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
@@ -389,6 +401,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
         status
       }
       rental_request {
+        id
         rental_selection_windows
       }
     }
@@ -677,6 +690,38 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         id
         status
         contract_expires_at
+      }
+    }
+  }
+`;
+
+export const GET_CLIENT_RENTAL_BOOKINGS = `
+  query GetClientRentalBookings {
+    rental_bookings(order_by: { created_at: desc }, limit: 50) {
+      id
+      booking_number
+      status
+      start_at
+      end_at
+      total_amount
+      currency
+      contract_expires_at
+      created_at
+      rental_request_id
+      rental_pricing_snapshot
+      rental_location_listing {
+        id
+        business_location {
+          name
+        }
+        rental_item {
+          name
+          currency
+          rental_item_images(order_by: { display_order: asc }, limit: 1) {
+            id
+            image_url
+          }
+        }
       }
     }
   }

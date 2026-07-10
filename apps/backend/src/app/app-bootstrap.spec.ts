@@ -63,7 +63,12 @@ describe('App bootstrap (DI smoke test)', () => {
     const inventory = app.get(InventoryItemsService);
     jest.spyOn(inventory, 'isCatalogLocationSupported').mockResolvedValue(true);
 
-    await expect(rentals.listPublicRentalListings({})).resolves.toEqual([]);
+    await expect(rentals.listPublicRentalListings({})).resolves.toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 20,
+    });
     expect(hasuraSystemMock.executeQuery).toHaveBeenCalled();
   });
 });

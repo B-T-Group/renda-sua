@@ -32,7 +32,8 @@ interface OrderData {
 
 export interface Rating {
   id: string;
-  order_id: string;
+  order_id?: string | null;
+  rental_booking_id?: string | null;
   rating_type: string;
   rater_user_id: string;
   rated_entity_type: string;
@@ -73,8 +74,22 @@ export class RatingsService {
     createRatingDto: CreateRatingDto,
     userId: string
   ): Promise<Rating> {
+    if (createRatingDto.rentalBookingId) {
+      return this.createRentalBookingRating(createRatingDto, userId);
+    }
+    if (!createRatingDto.orderId) {
+      throw new BadRequestException('orderId or rentalBookingId is required');
+    }
+    return this.createOrderRating(createRatingDto, userId);
+  }
+
+  private async createOrderRating(
+    createRatingDto: CreateRatingDto,
+    userId: string
+  ): Promise<Rating> {
+    const orderId = createRatingDto.orderId!;
     // Validate that the order exists and is completed
-    const order = await this.getOrder(createRatingDto.orderId);
+    const order = await this.getOrder(orderId);
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -101,7 +116,7 @@ export class RatingsService {
 
     // Check if user already rated this order for this type
     const existingRating = await this.getExistingRating(
-      createRatingDto.orderId,
+      orderId,
       createRatingDto.ratingType,
       userProfile.id
     );
@@ -126,6 +141,7 @@ export class RatingsService {
         insert_ratings_one(object: $rating) {
           id
           order_id
+          rental_booking_id
           rating_type
           rater_user_id
           rated_entity_type
@@ -142,7 +158,7 @@ export class RatingsService {
 
     const variables = {
       rating: {
-        order_id: createRatingDto.orderId,
+        order_id: orderId,
         rating_type: createRatingDto.ratingType,
         rater_user_id: userProfile.id,
         rated_entity_type: createRatingDto.ratedEntityType,
@@ -173,6 +189,177 @@ export class RatingsService {
     }
   }
 
+  private async createRentalBookingRating(
+    createRatingDto: CreateRatingDto,
+    userId: string
+  ): Promise<Rating> {
+    const bookingId = createRatingDto.rentalBookingId!;
+    const booking = await this.getRentalBooking(bookingId);
+    if (!booking) {
+      throw new NotFoundException('Rental booking not found');
+    }
+    if (booking.status !== 'completed') {
+      throw new BadRequestException('Can only rate completed rental bookings');
+    }
+
+    const userProfile = await this.getUserProfile(userId);
+    if (!userProfile?.client?.id) {
+      throw new ForbiddenException('Only clients can rate rentals');
+    }
+    if (userProfile.client.id !== booking.client_id) {
+      throw new ForbiddenException('You are not authorized to rate this booking');
+    }
+
+    const allowedTypes = [
+      RatingType.CLIENT_TO_RENTAL_ITEM,
+      RatingType.CLIENT_TO_RENTAL_BUSINESS,
+    ];
+    if (!allowedTypes.includes(createRatingDto.ratingType)) {
+      throw new BadRequestException('Invalid rating type for rental booking');
+    }
+
+    const existing = await this.getExistingRentalRating(
+      bookingId,
+      createRatingDto.ratingType,
+      userProfile.id
+    );
+    if (existing) {
+      throw new BadRequestException(
+        'You have already rated this rental for this type'
+      );
+    }
+
+    const entityExists = await this.validateRatedEntity(
+      createRatingDto.ratedEntityType,
+      createRatingDto.ratedEntityId
+    );
+    if (!entityExists) {
+      throw new NotFoundException('Rated entity not found');
+    }
+
+    const mutation = `
+      mutation CreateRentalRating($rating: ratings_insert_input!) {
+        insert_ratings_one(object: $rating) {
+          id
+          order_id
+          rental_booking_id
+          rating_type
+          rater_user_id
+          rated_entity_type
+          rated_entity_id
+          rating
+          comment
+          is_public
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const response = await this.hasuraSystemService.executeMutation(mutation, {
+      rating: {
+        rental_booking_id: bookingId,
+        rating_type: createRatingDto.ratingType,
+        rater_user_id: userProfile.id,
+        rated_entity_type: createRatingDto.ratedEntityType,
+        rated_entity_id: createRatingDto.ratedEntityId,
+        rating: createRatingDto.rating,
+        comment: createRatingDto.comment,
+        is_public: createRatingDto.isPublic ?? true,
+        is_verified: true,
+      },
+    });
+    return response.insert_ratings_one as Rating;
+  }
+
+  async getRatingsForRentalBooking(bookingId: string): Promise<Rating[]> {
+    const query = `
+      query RatingsForRentalBooking($bookingId: uuid!) {
+        ratings(where: { rental_booking_id: { _eq: $bookingId } }) {
+          id
+          order_id
+          rental_booking_id
+          rating_type
+          rater_user_id
+          rated_entity_type
+          rated_entity_id
+          rating
+          comment
+          is_public
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      bookingId,
+    });
+    return (response.ratings as Rating[]) ?? [];
+  }
+
+  private async getRentalBooking(bookingId: string): Promise<{
+    id: string;
+    client_id: string;
+    business_id: string;
+    status: string;
+    rental_location_listing?: {
+      rental_item_id?: string;
+      rental_item?: { id: string } | null;
+    } | null;
+  } | null> {
+    const query = `
+      query RentalBookingForRating($id: uuid!) {
+        rental_bookings_by_pk(id: $id) {
+          id
+          client_id
+          business_id
+          status
+          rental_location_listing {
+            rental_item_id
+            rental_item { id }
+          }
+        }
+      }
+    `;
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      id: bookingId,
+    });
+    return response.rental_bookings_by_pk ?? null;
+  }
+
+  private async getExistingRentalRating(
+    rentalBookingId: string,
+    ratingType: RatingType,
+    raterUserId: string
+  ): Promise<Rating | null> {
+    const query = `
+      query ExistingRentalRating(
+        $rentalBookingId: uuid!
+        $ratingType: rating_type_enum!
+        $raterUserId: uuid!
+      ) {
+        ratings(
+          where: {
+            rental_booking_id: { _eq: $rentalBookingId }
+            rating_type: { _eq: $ratingType }
+            rater_user_id: { _eq: $raterUserId }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      rentalBookingId,
+      ratingType,
+      raterUserId,
+    });
+    return (response.ratings as Rating[])?.[0] ?? null;
+  }
+
   private async notifyRatedEntityRecipient(
     dto: CreateRatingDto,
     order: OrderData,
@@ -192,7 +379,7 @@ export class RatingsService {
       await this.notificationsService.sendRatingReceivedPush({
         recipientUserId,
         raterUserId: rating.rater_user_id,
-        orderId: dto.orderId,
+        orderId: dto.orderId ?? order.id,
         orderNumber: order.order_number,
         ratingType: dto.ratingType,
         ratedEntityType: dto.ratedEntityType,
@@ -244,6 +431,20 @@ export class RatingsService {
             }
           }
         `;
+      case 'rental_item':
+        return `
+          query RatedRentalItemRecipient($entityId: uuid!) {
+            rental_items_by_pk(id: $entityId) {
+              business { user_id }
+            }
+          }
+        `;
+      case 'business':
+        return `
+          query RatedBusinessRecipient($entityId: uuid!) {
+            businesses_by_pk(id: $entityId) { user_id }
+          }
+        `;
       default:
         return null;
     }
@@ -261,6 +462,12 @@ export class RatingsService {
     }
     if (entityType === 'item') {
       return response.items_by_pk?.business?.user_id ?? null;
+    }
+    if (entityType === 'rental_item') {
+      return response.rental_items_by_pk?.business?.user_id ?? null;
+    }
+    if (entityType === 'business') {
+      return response.businesses_by_pk?.user_id ?? null;
     }
     return null;
   }
@@ -555,6 +762,26 @@ export class RatingsService {
         query = `
           query ValidateItem($entityId: uuid!) {
             items_by_pk(id: $entityId) {
+              id
+            }
+          }
+        `;
+        break;
+
+      case 'rental_item':
+        query = `
+          query ValidateRentalItem($entityId: uuid!) {
+            rental_items_by_pk(id: $entityId) {
+              id
+            }
+          }
+        `;
+        break;
+
+      case 'business':
+        query = `
+          query ValidateBusiness($entityId: uuid!) {
+            businesses_by_pk(id: $entityId) {
               id
             }
           }

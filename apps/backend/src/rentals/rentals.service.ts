@@ -54,6 +54,19 @@ export interface ListPublicRentalListingsQuery {
   country_code?: string;
   state?: string;
   sort?: string;
+  page?: number;
+  limit?: number;
+  q?: string;
+  category_id?: string;
+  min_price?: number;
+  max_price?: number;
+}
+
+export interface PaginatedPublicRentalListings {
+  items: PublicRentalListingRow[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 type RentalSortNormalized = RentalListingsSort;
@@ -244,22 +257,29 @@ export class RentalsService {
 
   async listPublicRentalListings(
     query: ListPublicRentalListingsQuery = {}
-  ): Promise<PublicRentalListingRow[]> {
+  ): Promise<PaginatedPublicRentalListings> {
     const sort = normalizeRentalSort(query.sort);
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     const geo = await this.resolveRentalCatalogGeo(query.country_code, query.state);
     if (geo.filterMode === 'specific' && (geo.country || geo.state)) {
       const ok = await this.inventoryItemsService.isCatalogLocationSupported(
         geo.country,
         geo.state
       );
-      if (!ok) return [];
+      if (!ok) {
+        return { items: [], total: 0, page, limit };
+      }
     }
     const baseWhere = await this.buildRentalListingWhere(
       geo.filterMode,
       geo.country,
       geo.state
     );
-    const where = this.whereExcludingActiveProposedContracts(baseWhere);
+    const where = this.applyCatalogFilters(
+      this.whereExcludingActiveProposedContracts(baseWhere),
+      query
+    );
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
     }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, {
@@ -268,7 +288,70 @@ export class RentalsService {
     });
     let rows = r.rental_location_listings ?? [];
     rows = await this.enrichRentalListingsWithDistance(rows);
-    return this.sortRentalListingRows(rows, sort);
+    rows = this.sortRentalListingRows(rows, sort);
+    rows = this.filterListingsByPrice(rows, query.min_price, query.max_price);
+    const total = rows.length;
+    const start = (page - 1) * limit;
+    return { items: rows.slice(start, start + limit), total, page, limit };
+  }
+
+  async listRentalCategories(): Promise<
+    Array<{ id: string; name: string; description?: string | null }>
+  > {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_categories: Array<{
+        id: string;
+        name: string;
+        description?: string | null;
+      }>;
+    }>(Q.LIST_RENTAL_CATEGORIES);
+    return r.rental_categories ?? [];
+  }
+
+  private applyCatalogFilters(
+    base: Record<string, unknown>,
+    query: ListPublicRentalListingsQuery
+  ): Record<string, unknown> {
+    const parts: Record<string, unknown>[] = [base];
+    const q = query.q?.trim();
+    if (q) {
+      parts.push({
+        _or: [
+          { rental_item: { name: { _ilike: `%${q}%` } } },
+          { rental_item: { description: { _ilike: `%${q}%` } } },
+        ],
+      });
+    }
+    if (query.category_id?.trim()) {
+      parts.push({
+        rental_item: {
+          rental_category_id: { _eq: query.category_id.trim() },
+        },
+      });
+    }
+    return parts.length === 1 ? parts[0]! : { _and: parts };
+  }
+
+  private filterListingsByPrice(
+    rows: PublicRentalListingRow[],
+    minPrice?: number,
+    maxPrice?: number
+  ): PublicRentalListingRow[] {
+    const min =
+      minPrice != null && !Number.isNaN(Number(minPrice))
+        ? Number(minPrice)
+        : null;
+    const max =
+      maxPrice != null && !Number.isNaN(Number(maxPrice))
+        ? Number(maxPrice)
+        : null;
+    if (min == null && max == null) return rows;
+    return rows.filter((row) => {
+      const price = rentalPricePerHour(row);
+      if (min != null && price < min) return false;
+      if (max != null && price > max) return false;
+      return true;
+    });
   }
 
   async getPublicRentalListingById(
@@ -587,6 +670,109 @@ export class RentalsService {
       rental_requests: ClientRentalRequestRow[];
     }>(Q.GET_CLIENT_RENTAL_REQUESTS, {});
     return r.rental_requests ?? [];
+  }
+
+  async getClientRentalBookings(): Promise<any[]> {
+    await this.requireClientId();
+    const r = await this.hasuraUserService.executeQuery<{
+      rental_bookings: any[];
+    }>(Q.GET_CLIENT_RENTAL_BOOKINGS, {});
+    return r.rental_bookings ?? [];
+  }
+
+  async getBookingPaymentStatus(bookingId: string) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException(
+        'Only clients can check payment status',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.client_id !== user.client.id) {
+      throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    }
+    const bookingNumber = booking.booking_number as string | undefined;
+    const paymentPending = bookingNumber
+      ? await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+          bookingNumber
+        )
+      : false;
+    return {
+      status: booking.status as string,
+      paymentPending,
+      contractExpiresAt: (booking.contract_expires_at as string | null) ?? null,
+      bookingNumber: bookingNumber ?? null,
+    };
+  }
+
+  async retryBookingPayment(bookingId: string) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only clients can retry payment', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.client_id !== user.client.id) {
+      throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    }
+    if (booking.status !== 'proposed') {
+      throw new HttpException(
+        'Payment retry only for proposed bookings',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const exp = booking.contract_expires_at as string | null | undefined;
+    if (!exp || new Date(exp) <= new Date()) {
+      throw new HttpException('Contract has expired', HttpStatus.GONE);
+    }
+    const bookingNumber = booking.booking_number as string | undefined;
+    if (!bookingNumber) {
+      throw new HttpException('Missing booking number', HttpStatus.BAD_REQUEST);
+    }
+    const hasPending =
+      await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+        bookingNumber
+      );
+    if (hasPending) {
+      return { success: true, bookingId, paymentPending: true };
+    }
+    const snap = booking.rental_pricing_snapshot as RentalPricingSnapshotDto;
+    if (!snap || !isValidRentalPricingSnapshot(snap)) {
+      throw new HttpException('Invalid pricing on booking', HttpStatus.BAD_REQUEST);
+    }
+    const total = Number(snap.total);
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      snap.currency
+    );
+    const availableBalance = Number(clientAccount?.available_balance ?? 0);
+    if (availableBalance >= total) {
+      await this.placeHoldForBooking(
+        bookingId,
+        user.client.id,
+        total,
+        snap.currency
+      );
+      await this.finalizeRentalBookingConfirmation(
+        bookingId,
+        booking.rental_request_id,
+        user.id
+      );
+      return { success: true, bookingId, confirmed: true };
+    }
+    const paymentReference = this.createRentalPaymentReference();
+    await this.initiateRentalBookingPayment({
+      bookingNumber,
+      amount: total,
+      currency: snap.currency,
+      clientAccountId: clientAccount.id,
+      userId: user.id,
+      phoneNumber: user.phone_number || '',
+      email: user.email,
+      reference: paymentReference,
+      paymentEntity: 'rental_booking',
+    });
+    return { success: true, bookingId, paymentPending: true };
   }
 
   async cancelClientRentalRequest(requestId: string): Promise<{ success: boolean }> {
@@ -1361,6 +1547,22 @@ export class RentalsService {
     await this.setBookingPinHash(bookingId, hash);
     await this.deliveryPinService.setPinForClient(bookingId, pin);
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
+    try {
+      const booking = await this.fetchBooking(bookingId);
+      const itemName =
+        booking?.rental_location_listing?.rental_item?.name ?? 'Rental';
+      const bookingNumber = booking?.booking_number ?? '';
+      await this.notificationsService.sendRentalBookingConfirmedPush({
+        clientUserId,
+        rentalItemName: itemName,
+        bookingId,
+        bookingNumber,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `finalizeRentalBookingConfirmation push: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   private async initiateRentalBookingPayment(params: {

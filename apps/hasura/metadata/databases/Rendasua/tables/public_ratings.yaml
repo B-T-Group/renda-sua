@@ -5,6 +5,9 @@ object_relationships:
   - name: order_details
     using:
       foreign_key_constraint_on: order_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
   - name: rater_user_details
     using:
       foreign_key_constraint_on: rater_user_id
@@ -16,6 +19,7 @@ insert_permissions:
           _eq: X-Hasura-User-Id
       columns:
         - order_id
+        - rental_booking_id
         - rating_type
         - rater_user_id
         - rated_entity_type
@@ -30,6 +34,7 @@ select_permissions:
       columns:
         - id
         - order_id
+        - rental_booking_id
         - rating_type
         - rater_user_id
         - rated_entity_type
