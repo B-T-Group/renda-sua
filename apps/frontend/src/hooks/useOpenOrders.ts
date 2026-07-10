@@ -34,6 +34,8 @@ export const useOpenOrders = () => {
 
     if (!apiClient) {
       setError('API client not available');
+      setCanClaim(false);
+      setPreviewMode(undefined);
       setLoading(false);
       return [];
     }
@@ -54,6 +56,8 @@ export const useOpenOrders = () => {
 
       setError(response.data.message || 'Failed to fetch open orders');
       setOpenOrders([]);
+      setCanClaim(false);
+      setPreviewMode(undefined);
       return [];
     } catch (err: any) {
       console.error('Error fetching open orders:', err);
@@ -63,6 +67,8 @@ export const useOpenOrders = () => {
           'Failed to fetch open orders'
       );
       setOpenOrders([]);
+      setCanClaim(false);
+      setPreviewMode(undefined);
       return [];
     } finally {
       setLoading(false);
