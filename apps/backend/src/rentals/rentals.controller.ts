@@ -24,9 +24,11 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/public.decorator';
 import { CreateBusinessRentalItemDto } from './dto/create-business-rental-item.dto';
 import { CreateBusinessRentalListingDto } from './dto/create-business-rental-listing.dto';
+import { CreateRentalCategoryDto } from './dto/create-rental-category.dto';
 import { UpdateBusinessRentalItemDto } from './dto/update-business-rental-item.dto';
 import { UpdateBusinessRentalListingDto } from './dto/update-business-rental-listing.dto';
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
+import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
@@ -46,6 +48,17 @@ export class RentalsController {
   async listCategories() {
     const categories = await this.rentalsService.listRentalCategories();
     return { success: true, data: { categories } };
+  }
+
+  @Post('categories')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a rental category (business)' })
+  @ApiBody({ type: CreateRentalCategoryDto })
+  @ApiResponse({ status: 201, description: 'Category created or existing match returned' })
+  @ApiResponse({ status: 400, description: 'Invalid category name' })
+  async createCategory(@Body() body: CreateRentalCategoryDto) {
+    const category = await this.rentalsService.createRentalCategory(body.name);
+    return { success: true, data: { category } };
   }
 
   @Public()
@@ -388,16 +401,20 @@ export class RentalsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Retry payment for a proposed rental booking (Stripe Checkout, mobile money, or wallet)',
+      'Retry payment for a proposed rental booking (Stripe Checkout/PaymentSheet, mobile money, or wallet)',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: RetryRentalBookingPaymentDto, required: false })
   @ApiResponse({
     status: 200,
     description:
-      'Payment retried (checkout_url for Stripe), pending mobile money, or booking confirmed via wallet',
+      'Payment retried (checkout_url or payment_intent_client_secret for Stripe), pending mobile money, or booking confirmed via wallet',
   })
-  async retryBookingPayment(@Param('id') bookingId: string) {
-    return this.rentalsService.retryBookingPayment(bookingId);
+  async retryBookingPayment(
+    @Param('id') bookingId: string,
+    @Body() body?: RetryRentalBookingPaymentDto
+  ) {
+    return this.rentalsService.retryBookingPayment(bookingId, body);
   }
 
   @Post('requests')

@@ -797,7 +797,6 @@ const RentalItemImagesPage: React.FC = () => {
         open={createOpen}
         image={createImage}
         entrySource={createEntrySource}
-        categories={categories}
         onClose={() => {
           setCreateOpen(false);
           setCreateImage(null);

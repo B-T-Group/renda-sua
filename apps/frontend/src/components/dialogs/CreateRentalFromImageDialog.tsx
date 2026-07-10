@@ -5,10 +5,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Switch,
   TextField,
@@ -23,8 +19,8 @@ import { useTranslation } from 'react-i18next';
 import type { RentalItemImage } from '../../hooks/useRentalItemImages';
 import { useCreateRentalFromImage } from '../../hooks/useCreateRentalFromImage';
 import { useRentalFromImageSuggestions } from '../../hooks/useRentalFromImageSuggestions';
-import type { RentalCategoryRow } from '../../hooks/useRentalCategories';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
+import RentalCategoryAutocomplete from '../business/RentalCategoryAutocomplete';
 
 export type CreateRentalFromImageEntrySource = 'manual' | 'ai_prefill';
 
@@ -33,14 +29,13 @@ interface CreateRentalFromImageDialogProps {
   image: RentalItemImage | null;
   /** manual: empty form. ai_prefill: analyze image and fill fields for review. */
   entrySource: CreateRentalFromImageEntrySource;
-  categories: RentalCategoryRow[];
   onClose: () => void;
   onCreated: () => void;
 }
 
 export const CreateRentalFromImageDialog: React.FC<
   CreateRentalFromImageDialogProps
-> = ({ open, image, entrySource, categories, onClose, onCreated }) => {
+> = ({ open, image, entrySource, onClose, onCreated }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const [name, setName] = useState('');
@@ -253,29 +248,17 @@ export const CreateRentalFromImageDialog: React.FC<
             onChange={(e) => setName(e.target.value)}
             disabled={formDisabled}
           />
-          <FormControl fullWidth disabled={formDisabled}>
-            <InputLabel id="rental-cat-label">
-              {t(
-                'business.rentalImages.createFromImage.category',
-                'Rental category'
-              )}
-            </InputLabel>
-            <Select
-              labelId="rental-cat-label"
-              label={t(
-                'business.rentalImages.createFromImage.category',
-                'Rental category'
-              )}
-              value={rentalCategoryId}
-              onChange={(e) => setRentalCategoryId(e.target.value)}
-            >
-              {categories.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <RentalCategoryAutocomplete
+            value={rentalCategoryId}
+            onChange={setRentalCategoryId}
+            disabled={formDisabled}
+            required
+            defaultToOther
+            label={t(
+              'business.rentalImages.createFromImage.category',
+              'Rental category'
+            )}
+          />
           <TextField
             label={t(
               'business.rentalImages.createFromImage.description',

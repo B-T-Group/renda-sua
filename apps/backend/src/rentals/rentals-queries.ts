@@ -33,10 +33,47 @@ export const GET_LISTING_FOR_REQUEST = `
 
 export const LIST_RENTAL_CATEGORIES = `
   query ListRentalCategories {
-    rental_categories(order_by: { name: asc }) {
+    rental_categories(
+      where: { is_active: { _eq: true } }
+      order_by: [{ display_order: asc }, { name: asc }]
+    ) {
       id
       name
-      description
+      slug
+      display_order
+    }
+  }
+`;
+
+export const INSERT_RENTAL_CATEGORY = `
+  mutation InsertRentalCategory($object: rental_categories_insert_input!) {
+    insert_rental_categories_one(object: $object) {
+      id
+      name
+      slug
+      display_order
+    }
+  }
+`;
+
+export const FIND_RENTAL_CATEGORY_BY_SLUG = `
+  query FindRentalCategoryBySlug($slug: String!) {
+    rental_categories(where: { slug: { _eq: $slug } }, limit: 1) {
+      id
+      name
+      slug
+      display_order
+    }
+  }
+`;
+
+export const FIND_RENTAL_CATEGORY_BY_NAME = `
+  query FindRentalCategoryByName($name: String!) {
+    rental_categories(where: { name: { _ilike: $name } }, limit: 1) {
+      id
+      name
+      slug
+      display_order
     }
   }
 `;

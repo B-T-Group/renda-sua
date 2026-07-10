@@ -5,11 +5,7 @@ import {
   Box,
   Button,
   Chip,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Portal,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -19,9 +15,9 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageCleanupLoadingAnimation from '../../../common/ImageCleanupLoadingAnimation';
 import { useCreateRentalFromImage } from '../../../../hooks/useCreateRentalFromImage';
-import { useRentalCategories } from '../../../../hooks/useRentalCategories';
 import { useRentalFromImageSuggestions } from '../../../../hooks/useRentalFromImageSuggestions';
 import { useRentalItemImages } from '../../../../hooks/useRentalItemImages';
+import RentalCategoryAutocomplete from '../../RentalCategoryAutocomplete';
 import type { FirstRentalUploadResult } from './firstRentalUploadTypes';
 
 export interface CreatedRentalItemSummary {
@@ -94,7 +90,6 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     setAiCategoryHint(null);
   }, [sourceImageIndex]);
 
-  const { categories, loading: catLoading } = useRentalCategories();
   const { suggestions, loading: sugLoading, error: sugError } =
     useRentalFromImageSuggestions(sourceId || null, {
       autoWhen: false,
@@ -175,7 +170,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     onComplete({ id: rid, name: rname });
   };
 
-  const formDisabled = catLoading || sugLoading || createLoading;
+  const formDisabled = sugLoading || createLoading;
   const heroUrl = previewUrls[sourceImageIndex];
 
   return (
@@ -337,30 +332,17 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
         required
         disabled={formDisabled}
       />
-      <FormControl fullWidth disabled={formDisabled}>
-        <InputLabel id="rcat">
-          {t(
-            'business.onboarding.firstRental.create.category',
-            'Rental category'
-          )}
-        </InputLabel>
-        <Select
-          labelId="rcat"
-          label={t(
-            'business.onboarding.firstRental.create.category',
-            'Rental category'
-          )}
-          value={rentalCategoryId}
-          onChange={(e) => setRentalCategoryId(e.target.value as string)}
-          required
-        >
-          {categories.map((c) => (
-            <MenuItem key={c.id} value={c.id}>
-              {c.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      <RentalCategoryAutocomplete
+        value={rentalCategoryId}
+        onChange={setRentalCategoryId}
+        disabled={formDisabled}
+        required
+        defaultToOther
+        label={t(
+          'business.onboarding.firstRental.create.category',
+          'Rental category'
+        )}
+      />
       <TextField
         label={t(
           'business.onboarding.firstRental.create.description',

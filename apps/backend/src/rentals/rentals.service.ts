@@ -41,6 +41,8 @@ import { InventoryItemsService } from '../inventory-items/inventory-items.servic
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payments-database.service';
+import { StripeService } from '../stripe-payments/stripe.service';
+import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
 import * as Q from './rentals-queries';
 
@@ -53,6 +55,8 @@ export interface RentalBookingActionResult {
   bookingId: string;
   payment_rail: RentalPaymentRail;
   checkout_url?: string;
+  payment_intent_client_secret?: string;
+  payment_transaction_id?: string;
   confirmed?: boolean;
   paymentPending?: boolean;
 }
@@ -283,7 +287,8 @@ export class RentalsService {
     private readonly activationValidation: ItemActivationValidationService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeCheckoutService: StripeCheckoutService,
-    private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService
+    private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService,
+    private readonly stripeService: StripeService
   ) {}
 
   async listPublicRentalListings(
@@ -327,16 +332,96 @@ export class RentalsService {
   }
 
   async listRentalCategories(): Promise<
-    Array<{ id: string; name: string; description?: string | null }>
+    Array<{
+      id: string;
+      name: string;
+      slug?: string | null;
+      display_order?: number | null;
+    }>
   > {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_categories: Array<{
         id: string;
         name: string;
-        description?: string | null;
+        slug?: string | null;
+        display_order?: number | null;
       }>;
     }>(Q.LIST_RENTAL_CATEGORIES);
     return r.rental_categories ?? [];
+  }
+
+  async createRentalCategory(rawName: string): Promise<{
+    id: string;
+    name: string;
+    slug: string;
+    display_order?: number | null;
+  }> {
+    const name = rawName.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) {
+      throw new HttpException(
+        { success: false, message: 'Category name is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existingByName = await this.hasuraSystemService.executeQuery<{
+      rental_categories: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        display_order?: number | null;
+      }>;
+    }>(Q.FIND_RENTAL_CATEGORY_BY_NAME, { name });
+    if (existingByName.rental_categories?.[0]) {
+      return existingByName.rental_categories[0];
+    }
+
+    const baseSlug = this.slugifyRentalCategory(name);
+    const slug = await this.uniqueRentalCategorySlug(baseSlug);
+    const maxOrder = (await this.listRentalCategories()).reduce(
+      (max, row) => Math.max(max, row.display_order ?? 0),
+      0
+    );
+
+    const inserted = await this.hasuraSystemService.executeMutation<{
+      insert_rental_categories_one: {
+        id: string;
+        name: string;
+        slug: string;
+        display_order?: number | null;
+      };
+    }>(Q.INSERT_RENTAL_CATEGORY, {
+      object: {
+        name,
+        slug,
+        display_order: maxOrder + 1,
+        is_active: true,
+      },
+    });
+    return inserted.insert_rental_categories_one;
+  }
+
+  private slugifyRentalCategory(name: string): string {
+    const slug = name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+    return slug || 'category';
+  }
+
+  private async uniqueRentalCategorySlug(baseSlug: string): Promise<string> {
+    let candidate = baseSlug;
+    for (let i = 0; i < 8; i += 1) {
+      const existing = await this.hasuraSystemService.executeQuery<{
+        rental_categories: Array<{ id: string }>;
+      }>(Q.FIND_RENTAL_CATEGORY_BY_SLUG, { slug: candidate });
+      if (!existing.rental_categories?.length) return candidate;
+      candidate = `${baseSlug}-${i + 2}`;
+    }
+    return `${baseSlug}-${Date.now().toString(36)}`;
   }
 
   private applyCatalogFilters(
@@ -789,12 +874,17 @@ export class RentalsService {
       paymentPending,
       payment_rail,
       checkout_url: stripePendingTx?.payment_url ?? null,
+      payment_transaction_id: stripePendingTx?.id ?? null,
+      has_payment_intent: !!stripePendingTx?.stripe_payment_intent_id,
       contractExpiresAt: (booking.contract_expires_at as string | null) ?? null,
       bookingNumber: bookingNumber ?? null,
     };
   }
 
-  async retryBookingPayment(bookingId: string): Promise<RentalBookingActionResult> {
+  async retryBookingPayment(
+    bookingId: string,
+    options?: RetryRentalBookingPaymentDto
+  ): Promise<RentalBookingActionResult> {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can retry payment', HttpStatus.FORBIDDEN);
@@ -855,6 +945,7 @@ export class RentalsService {
       userId: user.id,
       phoneNumber: user.phone_number || '',
       email: user.email,
+      stripePaymentMethod: options?.stripe_payment_method,
     });
   }
 
@@ -1426,7 +1517,8 @@ export class RentalsService {
         userId,
         clientId,
         user.phone_number || '',
-        user.email
+        user.email,
+        dto.stripe_payment_method
       );
     }
     if (existing?.id) {
@@ -1441,7 +1533,8 @@ export class RentalsService {
       userId,
       clientId,
       user.phone_number || '',
-      user.email
+      user.email,
+      dto.stripe_payment_method
     );
   }
 
@@ -1482,7 +1575,8 @@ export class RentalsService {
     userId: string,
     clientId: string,
     phoneNumber: string,
-    email: string | null | undefined
+    email: string | null | undefined,
+    stripePaymentMethod?: 'payment_sheet'
   ): Promise<RentalBookingActionResult> {
     const bookingId = req.rental_booking?.id as string;
     const bookingNumber = req.rental_booking?.booking_number as string | undefined;
@@ -1520,6 +1614,7 @@ export class RentalsService {
       userId,
       phoneNumber,
       email,
+      stripePaymentMethod,
     });
   }
 
@@ -1529,7 +1624,8 @@ export class RentalsService {
     userId: string,
     clientId: string,
     phoneNumber: string,
-    email: string | null | undefined
+    email: string | null | undefined,
+    stripePaymentMethod?: 'payment_sheet'
   ): Promise<RentalBookingActionResult> {
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
@@ -1588,6 +1684,7 @@ export class RentalsService {
         userId,
         phoneNumber,
         email,
+        stripePaymentMethod,
       });
     } catch (e: any) {
       await this.deleteBooking(bookingId);
@@ -1596,7 +1693,7 @@ export class RentalsService {
   }
 
   /**
-   * Start Stripe Checkout or mobile-money push for an unpaid proposed booking.
+   * Start Stripe Checkout/PaymentSheet or mobile-money push for an unpaid proposed booking.
    */
   private async initiateUnpaidRentalPayment(params: {
     bookingId: string;
@@ -1607,10 +1704,11 @@ export class RentalsService {
     userId: string;
     phoneNumber: string;
     email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
   }): Promise<RentalBookingActionResult> {
     const rail = await this.paymentRoutingService.resolveRailForUser(params.userId);
     if (rail === 'stripe') {
-      return this.initiateStripeRentalCheckout(params);
+      return this.initiateStripeRentalPayment(params);
     }
     const momoPending =
       await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
@@ -1644,7 +1742,7 @@ export class RentalsService {
     };
   }
 
-  private async initiateStripeRentalCheckout(params: {
+  private async initiateStripeRentalPayment(params: {
     bookingId: string;
     bookingNumber: string;
     amount: number;
@@ -1652,20 +1750,103 @@ export class RentalsService {
     clientAccountId: string;
     userId: string;
     email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
   }): Promise<RentalBookingActionResult> {
+    const useSheet = params.stripePaymentMethod === 'payment_sheet';
     const existing =
       await this.stripePaymentsDatabaseService.getPendingRentalBookingPayment(
         params.bookingNumber
       );
+    if (useSheet) {
+      const reused = await this.reusePendingRentalPaymentIntent(
+        params.bookingId,
+        existing
+      );
+      if (reused) return reused;
+      return this.createRentalPaymentIntent(params);
+    }
     if (existing?.payment_url) {
       return {
         success: true,
         bookingId: params.bookingId,
         payment_rail: 'stripe',
         checkout_url: existing.payment_url,
+        payment_transaction_id: existing.id,
         paymentPending: true,
       };
     }
+    return this.createRentalCheckoutSession(params);
+  }
+
+  private async reusePendingRentalPaymentIntent(
+    bookingId: string,
+    existing: { id: string; stripe_payment_intent_id?: string } | null
+  ): Promise<RentalBookingActionResult | null> {
+    if (!existing?.stripe_payment_intent_id) return null;
+    try {
+      const pi = await this.stripeService.retrievePaymentIntent(
+        existing.stripe_payment_intent_id
+      );
+      if (!pi.client_secret) return null;
+      return {
+        success: true,
+        bookingId,
+        payment_rail: 'stripe',
+        payment_intent_client_secret: pi.client_secret,
+        payment_transaction_id: existing.id,
+        paymentPending: true,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `reusePendingRentalPaymentIntent: ${error?.message ?? String(error)}`
+      );
+      return null;
+    }
+  }
+
+  private async createRentalPaymentIntent(params: {
+    bookingId: string;
+    bookingNumber: string;
+    amount: number;
+    currency: string;
+    clientAccountId: string;
+    email?: string | null;
+  }): Promise<RentalBookingActionResult> {
+    const intent = await this.stripeCheckoutService.createPaymentIntent({
+      amount: params.amount,
+      currency: params.currency,
+      description: `Rental booking ${params.bookingNumber}`,
+      accountId: params.clientAccountId,
+      paymentEntity: 'rental_booking',
+      entityId: params.bookingNumber,
+      bookingId: params.bookingId,
+      customerEmail: params.email ?? undefined,
+      captureMethod: 'automatic',
+    });
+    if (!intent.clientSecret) {
+      throw new HttpException(
+        'Failed to create Stripe PaymentIntent',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    return {
+      success: true,
+      bookingId: params.bookingId,
+      payment_rail: 'stripe',
+      payment_intent_client_secret: intent.clientSecret,
+      payment_transaction_id: intent.transactionId,
+      paymentPending: true,
+    };
+  }
+
+  private async createRentalCheckoutSession(params: {
+    bookingId: string;
+    bookingNumber: string;
+    amount: number;
+    currency: string;
+    clientAccountId: string;
+    email?: string | null;
+  }): Promise<RentalBookingActionResult> {
     const checkout = await this.stripeCheckoutService.createCheckout({
       amount: params.amount,
       currency: params.currency,
@@ -1688,6 +1869,7 @@ export class RentalsService {
       bookingId: params.bookingId,
       payment_rail: 'stripe',
       checkout_url: checkout.paymentUrl,
+      payment_transaction_id: checkout.transactionId,
       paymentPending: true,
     };
   }

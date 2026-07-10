@@ -6,12 +6,8 @@ import {
   Alert,
   Box,
   Button,
-  FormControl,
   FormControlLabel,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Switch,
   TextField,
@@ -29,7 +25,7 @@ import {
   type UpdateBusinessRentalItemBody,
   type UpdateBusinessRentalListingBody,
 } from '../../hooks/useRentalApi';
-import { useRentalCategories } from '../../hooks/useRentalCategories';
+import RentalCategoryAutocomplete from '../business/RentalCategoryAutocomplete';
 import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
@@ -151,7 +147,6 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
-  const { categories } = useRentalCategories();
   const {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
@@ -459,20 +454,11 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 )}
               />
             </Box>
-            <FormControl fullWidth>
-              <InputLabel>{t('rentals.category', 'Category')}</InputLabel>
-              <Select
-                value={cat}
-                label={t('rentals.category', 'Category')}
-                onChange={(e) => setCat(e.target.value)}
-              >
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <RentalCategoryAutocomplete
+              value={cat}
+              onChange={setCat}
+              required
+            />
             <TextField
               label={t('business.rentals.tagsHint', 'Tags (comma-separated)')}
               value={tags}
