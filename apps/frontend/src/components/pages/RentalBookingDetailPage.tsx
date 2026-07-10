@@ -18,7 +18,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
-import { type RentalBookingDetail, useRentalApi } from '../../hooks/useRentalApi';
+import {
+  type RentalBookingDetail,
+  type RentalBookingPaymentStatus,
+  useRentalApi,
+} from '../../hooks/useRentalApi';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
@@ -29,6 +34,14 @@ import {
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 
+const PAYMENT_POLL_MS = 4000;
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const m = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ?.message;
+  return typeof m === 'string' && m.trim() ? m : fallback;
+}
+
 const RentalBookingDetailPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const { t } = useTranslation();
@@ -36,6 +49,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth0();
   const { profile } = useUserProfileContext();
+  const { isStripeRail } = useIsStripeRail();
   const {
     fetchBookingDetail,
     getStartPin,
@@ -43,9 +57,14 @@ const RentalBookingDetailPage: React.FC = () => {
     verifyStartPin,
     generateOverwrite,
     confirmReturn,
+    getBookingPaymentStatus,
+    retryBookingPayment,
   } = useRentalApi();
   const [booking, setBooking] = useState<RentalBookingDetail | null>(null);
+  const [paymentStatus, setPaymentStatus] =
+    useState<RentalBookingPaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryingPayment, setRetryingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [ow, setOw] = useState('');
@@ -60,19 +79,86 @@ const RentalBookingDetailPage: React.FC = () => {
       const b = await fetchBookingDetail(bookingId);
       setBooking(b);
       setError(b ? null : t('rentals.bookingNotFound', 'Booking not found'));
+      if (b?.status === 'proposed') {
+        try {
+          setPaymentStatus(await getBookingPaymentStatus(bookingId));
+        } catch {
+          setPaymentStatus(null);
+        }
+      } else {
+        setPaymentStatus(null);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [bookingId, fetchBookingDetail, t]);
+  }, [bookingId, fetchBookingDetail, getBookingPaymentStatus, t]);
 
   useEffect(() => {
     if (isAuthenticated) void load();
   }, [load, isAuthenticated]);
 
+  useEffect(() => {
+    if (!bookingId || booking?.status !== 'proposed') return;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const pay = await getBookingPaymentStatus(bookingId);
+          setPaymentStatus(pay);
+          if (pay.status !== 'proposed') {
+            const b = await fetchBookingDetail(bookingId);
+            if (b) setBooking(b);
+          }
+        } catch {
+          /* keep last known */
+        }
+      })();
+    }, PAYMENT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [bookingId, booking?.status, getBookingPaymentStatus, fetchBookingDetail]);
+
+  const handleRetryPayment = async () => {
+    if (!bookingId) return;
+    setRetryingPayment(true);
+    setError(null);
+    try {
+      const res = await retryBookingPayment(bookingId);
+      if (res.checkout_url) {
+        window.location.href = res.checkout_url;
+        return;
+      }
+      if (res.confirmed) {
+        setInfo(
+          t('rentals.bookingDetail.paymentConfirmed', 'Payment confirmed')
+        );
+      } else {
+        setInfo(
+          t(
+            'rentals.bookingDetail.retryPaymentSuccess',
+            'Payment request sent. Complete payment to confirm your booking.'
+          )
+        );
+      }
+      await load();
+    } catch (e: unknown) {
+      setError(
+        apiErrorMessage(
+          e,
+          t('rentals.bookingDetail.retryPaymentError', 'Could not retry payment')
+        )
+      );
+    } finally {
+      setRetryingPayment(false);
+    }
+  };
+
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
+  const paymentRail = paymentStatus?.payment_rail;
+  const isStripePending =
+    paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
+  const showPaymentPending = isClient && booking?.status === 'proposed';
 
   if (!isAuthenticated) {
     return (
@@ -195,6 +281,39 @@ const RentalBookingDetailPage: React.FC = () => {
           {info ? (
             <Alert severity="success" sx={{ mb: 2 }}>
               {info}
+            </Alert>
+          ) : null}
+
+          {showPaymentPending ? (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  disabled={retryingPayment}
+                  onClick={() => void handleRetryPayment()}
+                >
+                  {t('rentals.bookingDetail.retryPayment', 'Retry payment')}
+                </Button>
+              }
+            >
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                {t(
+                  'rentals.bookingDetail.paymentPendingTitle',
+                  'Waiting for payment'
+                )}
+              </Typography>
+              {isStripePending
+                ? t(
+                    'rentals.bookingDetail.paymentPendingStripe',
+                    'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
+                  )
+                : t(
+                    'rentals.bookingDetail.paymentPendingMomo',
+                    'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
+                  )}
             </Alert>
           ) : null}
 

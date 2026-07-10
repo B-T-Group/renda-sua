@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   useRentalApi,
   type ClientRentalRequestRow,
@@ -66,6 +67,7 @@ const ClientRentalRequestsPage: React.FC = () => {
   const { isAuthenticated } = useAuth0();
   const { createBooking, cancelClientRentalRequest, fetchClientRentalRequests } =
     useRentalApi();
+  const { isStripeRail } = useIsStripeRail();
   const [rows, setRows] = useState<ClientRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +126,10 @@ const ClientRentalRequestsPage: React.FC = () => {
     try {
       const res = await createBooking(requestId);
       setBookConfirmRequestId(null);
+      if (res.checkout_url) {
+        window.location.href = res.checkout_url;
+        return;
+      }
       enqueueSnackbar(t('rentals.clientRequests.bookSuccess', 'Booking created'), {
         variant: 'success',
       });
@@ -347,14 +353,28 @@ const ClientRentalRequestsPage: React.FC = () => {
           'rentals.clientRequests.bookConfirmTitle',
           'Review and confirm your reservation'
         )}
-        message={t(
-          'rentals.clientRequests.bookConfirmMessage',
-          'By continuing, you authorize us to send a secure payment request to the mobile number on your profile. Your reservation is only confirmed after you approve that request. If you do not approve it in time, this offer may lapse.'
-        )}
+        message={
+          isStripeRail
+            ? t(
+                'rentals.clientRequests.bookConfirmMessageStripe',
+                'By continuing, you will be redirected to a secure Stripe Checkout page to pay by card. Your reservation is confirmed after payment succeeds. If you do not complete payment in time, this offer may lapse.'
+              )
+            : t(
+                'rentals.clientRequests.bookConfirmMessage',
+                'By continuing, you authorize us to send a secure payment request to the mobile number on your profile. Your reservation is only confirmed after you approve that request. If you do not approve it in time, this offer may lapse.'
+              )
+        }
         additionalContent={
           bookConfirmRow ? <RentalBookConfirmSummary row={bookConfirmRow} /> : null
         }
-        confirmText={t('rentals.clientRequests.bookConfirmButton', 'Continue')}
+        confirmText={
+          isStripeRail
+            ? t(
+                'rentals.clientRequests.bookConfirmButtonStripe',
+                'Continue to payment'
+              )
+            : t('rentals.clientRequests.bookConfirmButton', 'Continue')
+        }
         confirmColor="primary"
         loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}
         onConfirm={() => void confirmBook()}

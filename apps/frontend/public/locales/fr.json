@@ -3661,7 +3661,9 @@
       "bookSuccess": "Réservation créée",
       "bookError": "Impossible de finaliser la réservation",
       "cancelSuccess": "Demande annulée",
-      "cancelError": "Impossible d’annuler la demande"
+      "cancelError": "Impossible d’annuler la demande",
+      "bookConfirmMessageStripe": "En poursuivant, vous serez redirigé vers une page Stripe Checkout sécurisée pour payer par carte. Votre réservation est confirmée après le succès du paiement. Si vous ne finalisez pas à temps, l’offre peut expirer.",
+      "bookConfirmButtonStripe": "Continuer vers le paiement"
     },
     "loginToViewRequests": "Connectez-vous pour voir vos demandes",
     "catalog": {
@@ -3712,6 +3714,15 @@
       "howItWorksStep2": "L’entreprise vérifie la disponibilité et répond. Suivez l’état dans vos demandes de location.",
       "howItWorksStep3": "Si elle confirme la disponibilité, vous pourrez finaliser une réservation à partir de cette demande, selon les conditions indiquées.",
       "howItWorksStep4": "La prestation a lieu chez l’entreprise. Respectez les consignes de prise en charge et de retour indiquées sur cette page."
+    },
+    "bookingDetail": {
+      "paymentPendingTitle": "En attente de paiement",
+      "paymentPendingStripe": "Finalisez le paiement par carte sur Stripe Checkout pour confirmer cette réservation. Utilisez Réessayer le paiement si vous avez fermé la page de paiement.",
+      "paymentPendingMomo": "Approuvez la demande de paiement mobile money sur votre téléphone pour confirmer cette réservation. Utilisez Réessayer le paiement si vous ne l’avez pas reçue.",
+      "retryPayment": "Réessayer le paiement",
+      "retryPaymentSuccess": "Demande de paiement envoyée. Finalisez le paiement pour confirmer votre réservation.",
+      "retryPaymentError": "Impossible de relancer le paiement",
+      "paymentConfirmed": "Paiement confirmé"
     }
   },
   "profile": {
@@ -4445,14 +4456,21 @@
       "successBody": "Votre paiement a été reçu. Merci !",
       "failedTitle": "Paiement non finalisé",
       "failedBody": "Votre paiement n'a pas été finalisé. Vous pouvez réessayer.",
-      "continue": "Continuer"
+      "continue": "Continuer",
+      "rentalSuccessBody": "Votre paiement de location a été reçu. Ouvrez votre réservation pour voir la confirmation et votre code PIN.",
+      "rentalFailedBody": "Le paiement n’a pas été finalisé. Retournez à votre réservation pour réessayer.",
+      "viewBooking": "Voir la réservation"
     },
     "success": {
       "title": "Carte autorisée",
       "body": "Votre carte a été autorisée. Le débit n'interviendra que lorsque le livreur récupérera votre commande chez le commerce.",
       "orderReference": "Commande #{{orderNumber}}",
       "viewOrder": "Voir la commande",
-      "viewOrders": "Voir mes commandes"
+      "viewOrders": "Voir mes commandes",
+      "rentalTitle": "Paiement reçu",
+      "rentalBody": "Votre paiement de location a été reçu. Votre réservation sera confirmée sous peu — vous pouvez la consulter ci-dessous.",
+      "viewBooking": "Voir la réservation",
+      "bookingReference": "Réservation #{{bookingNumber}}"
     },
     "refunds": {
       "title": "Historique des Remboursements",

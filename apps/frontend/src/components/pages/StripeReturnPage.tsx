@@ -26,6 +26,7 @@ const StripeReturnPage: React.FC = () => {
   const { checkStatusByReference } = useStripePayments();
 
   const reference = searchParams.get('reference') ?? '';
+  const bookingId = searchParams.get('booking') ?? '';
   const initialStatus = searchParams.get('status');
   const [state, setState] = useState<ResultState>(
     initialStatus === 'cancel' ? 'cancelled' : 'pending'
@@ -56,6 +57,9 @@ const StripeReturnPage: React.FC = () => {
 
   const isSuccess = state === 'success';
   const isPending = state === 'pending';
+  const continueHref = bookingId
+    ? `/rentals/bookings/${bookingId}`
+    : '/app';
 
   return (
     <Container maxWidth="sm" sx={{ py: 6 }}>
@@ -73,8 +77,8 @@ const StripeReturnPage: React.FC = () => {
             {isPending
               ? t('stripe.return.pendingTitle', 'Confirming your payment')
               : isSuccess
-              ? t('stripe.return.successTitle', 'Payment successful')
-              : t('stripe.return.failedTitle', 'Payment not completed')}
+                ? t('stripe.return.successTitle', 'Payment successful')
+                : t('stripe.return.failedTitle', 'Payment not completed')}
           </Typography>
 
           <Typography variant="body2" color="text.secondary">
@@ -84,19 +88,31 @@ const StripeReturnPage: React.FC = () => {
                   'Please wait while we confirm your payment with Stripe.'
                 )
               : isSuccess
-              ? t(
-                  'stripe.return.successBody',
-                  'Your payment was received. Thank you!'
-                )
-              : t(
-                  'stripe.return.failedBody',
-                  'Your payment was not completed. You can try again.'
-                )}
+                ? bookingId
+                  ? t(
+                      'stripe.return.rentalSuccessBody',
+                      'Your rental payment was received. You can open your booking to see confirmation and your start PIN.'
+                    )
+                  : t(
+                      'stripe.return.successBody',
+                      'Your payment was received. Thank you!'
+                    )
+                : bookingId
+                  ? t(
+                      'stripe.return.rentalFailedBody',
+                      'Payment was not completed. Return to your booking to retry.'
+                    )
+                  : t(
+                      'stripe.return.failedBody',
+                      'Your payment was not completed. You can try again.'
+                    )}
           </Typography>
 
           <Box>
-            <Button variant="contained" onClick={() => navigate('/app')}>
-              {t('stripe.return.continue', 'Continue')}
+            <Button variant="contained" onClick={() => navigate(continueHref)}>
+              {bookingId
+                ? t('stripe.return.viewBooking', 'View booking')
+                : t('stripe.return.continue', 'Continue')}
             </Button>
           </Box>
         </Stack>

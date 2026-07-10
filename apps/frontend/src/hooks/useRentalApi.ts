@@ -240,6 +240,26 @@ export interface BusinessRentalScheduleRow {
   } | null;
 }
 
+export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
+
+export interface RentalBookingActionResult {
+  success: boolean;
+  bookingId: string;
+  payment_rail?: RentalPaymentRail;
+  checkout_url?: string;
+  paymentPending?: boolean;
+  confirmed?: boolean;
+}
+
+export interface RentalBookingPaymentStatus {
+  status: string;
+  paymentPending: boolean;
+  payment_rail: RentalPaymentRail | null;
+  checkout_url: string | null;
+  contractExpiresAt: string | null;
+  bookingNumber: string | null;
+}
+
 export interface RentalBookingDetail {
   id: string;
   booking_number?: string | null;
@@ -466,7 +486,28 @@ export function useRentalApi() {
   const createBooking = useCallback(
     async (rentalRequestId: string) => {
       const { data } = await api.post('/rentals/bookings', { rentalRequestId });
-      return data as { success: boolean; bookingId: string };
+      return data as RentalBookingActionResult;
+    },
+    [api]
+  );
+
+  const getBookingPaymentStatus = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.get<{
+        success: boolean;
+        data: RentalBookingPaymentStatus;
+      }>(`/rentals/bookings/${bookingId}/payment-status`);
+      return data.data;
+    },
+    [api]
+  );
+
+  const retryBookingPayment = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(
+        `/rentals/bookings/${bookingId}/retry-payment`
+      );
+      return data as RentalBookingActionResult;
     },
     [api]
   );
@@ -579,6 +620,8 @@ export function useRentalApi() {
     createRequest,
     respondRequest,
     createBooking,
+    getBookingPaymentStatus,
+    retryBookingPayment,
     cancelClientRentalRequest,
     cancelBooking,
     getStartPin,

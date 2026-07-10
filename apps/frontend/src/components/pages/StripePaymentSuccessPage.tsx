@@ -20,14 +20,23 @@ const StripePaymentSuccessPage: React.FC = () => {
 
   const reference = searchParams.get('reference') ?? '';
   const orderNumber = searchParams.get('order') ?? '';
+  const bookingId = searchParams.get('booking') ?? '';
+  const bookingNumber = searchParams.get('bookingNumber') ?? '';
+  const isRental = Boolean(bookingId || bookingNumber);
 
-  // Fire-and-forget status sync so the backend reconciles quickly even before
-  // the webhook lands; the page always presents success regardless of result.
   useEffect(() => {
     if (reference) {
       void checkStatusByReference(reference);
     }
   }, [reference, checkStatusByReference]);
+
+  const primaryHref = bookingId
+    ? `/rentals/bookings/${bookingId}`
+    : orderNumber
+      ? '/orders'
+      : isRental
+        ? '/rentals/requests'
+        : '/orders';
 
   return (
     <Container maxWidth="sm" sx={{ py: 6 }}>
@@ -36,27 +45,46 @@ const StripePaymentSuccessPage: React.FC = () => {
           <CheckCircleIcon color="success" sx={{ fontSize: 72 }} />
 
           <Typography variant="h5">
-            {t('stripe.success.title', 'Card authorized')}
+            {isRental
+              ? t('stripe.success.rentalTitle', 'Payment received')
+              : t('stripe.success.title', 'Card authorized')}
           </Typography>
 
           <Typography variant="body1" color="text.secondary">
-            {t(
-              'stripe.success.body',
-              'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
-            )}
+            {isRental
+              ? t(
+                  'stripe.success.rentalBody',
+                  'Your rental payment was received. Your booking will be confirmed shortly — you can view it below.'
+                )
+              : t(
+                  'stripe.success.body',
+                  'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
+                )}
           </Typography>
 
-          {orderNumber && (
+          {orderNumber && !isRental ? (
             <Typography variant="body2" color="text.secondary">
               {t('stripe.success.orderReference', 'Order #{{orderNumber}}', {
                 orderNumber,
               })}
             </Typography>
-          )}
+          ) : null}
+
+          {bookingNumber ? (
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'stripe.success.bookingReference',
+                'Booking #{{bookingNumber}}',
+                { bookingNumber }
+              )}
+            </Typography>
+          ) : null}
 
           <Box>
-            <Button variant="contained" onClick={() => navigate('/orders')}>
-              {t('stripe.success.viewOrders', 'View my orders')}
+            <Button variant="contained" onClick={() => navigate(primaryHref)}>
+              {isRental
+                ? t('stripe.success.viewBooking', 'View booking')
+                : t('stripe.success.viewOrders', 'View my orders')}
             </Button>
           </Box>
         </Stack>
