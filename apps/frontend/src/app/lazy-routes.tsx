@@ -55,6 +55,9 @@ export const BrandsManagementPage = lazy(() =>
 export const BusinessAnalyticsPage = lazy(() =>
   import('../components/pages/BusinessAnalyticsPage')
 );
+export const BusinessClientCitiesPage = lazy(() =>
+  import('../components/pages/BusinessClientCitiesPage')
+);
 export const BusinessAccountsPage = lazy(() =>
   import('../components/pages/BusinessAccountsPage')
 );

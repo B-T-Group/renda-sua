@@ -403,6 +403,53 @@ export class AgentsController {
     }
   }
 
+  @Get('me/referred-businesses-summary')
+  @ApiOperation({
+    summary: 'Get referred businesses summary for the current agent',
+    description:
+      'Returns how many businesses the agent has referred and their referral code.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referred businesses summary',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        referredBusinessCount: { type: 'number', example: 3 },
+        agentCode: { type: 'string', example: 'AB12CD', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  @ApiResponse({ status: 500, description: 'Failed to load referral summary' })
+  async getReferredBusinessesSummary() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+      const [referredBusinessCount, agentCode] = await Promise.all([
+        this.agentReferralsService.getReferredBusinessCount(agentId),
+        this.agentReferralsService.getAgentCodeById(agentId),
+      ]);
+      return {
+        success: true,
+        referredBusinessCount,
+        agentCode,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to load referred businesses summary',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Get('earnings-summary')
   async getEarningsSummary() {
     try {

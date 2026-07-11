@@ -12,11 +12,23 @@ export interface DashboardAggregatesDto {
   locationCount: number;
   inventoryCount: number;
   pendingFailedDeliveriesCount: number;
+  /** Distinct clients who ordered or rented from this business. */
+  uniqueClientCount: number;
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;
   businessesVerified?: number;
   businessesNotVerified?: number;
+}
+
+export interface ClientCityFrequencyDto {
+  name: string;
+  count: number;
+}
+
+export interface ClientCitiesDto {
+  cities: ClientCityFrequencyDto[];
+  totalClientsWithCity: number;
 }
 
 @Injectable()
@@ -45,6 +57,7 @@ export class DashboardService {
       locationCount,
       inventoryCount,
       pendingFailedDeliveriesCount,
+      uniqueClientCount,
       adminAggregates,
     ] = await Promise.all([
       this.getOrdersByStatus(businessId),
@@ -54,6 +67,7 @@ export class DashboardService {
       this.getLocationCount(businessId),
       this.getInventoryCount(businessId),
       this.getPendingFailedDeliveriesCount(businessId),
+      this.getUniqueClientCount(businessId),
       isAdmin ? this.getAdminAggregates() : Promise.resolve(null),
     ]);
 
@@ -68,6 +82,7 @@ export class DashboardService {
       locationCount,
       inventoryCount,
       pendingFailedDeliveriesCount,
+      uniqueClientCount,
     };
     if (adminAggregates) {
       result.clientCount = adminAggregates.clientCount;
@@ -78,6 +93,26 @@ export class DashboardService {
     }
     return result;
   }
+
+  async getClientCities(): Promise<ClientCitiesDto> {
+    const businessId = await this.requireBusinessId();
+    const clients = await this.fetchAllBusinessClientsForCities(businessId);
+    const clientCity = this.resolvePrimaryCityPerClient(clients);
+    return this.toCityFrequencies(clientCity);
+  }
+
+  private async requireBusinessId(): Promise<string> {
+    const user = await this.hasuraUserService.getUser();
+    if (user.user_type_id !== 'business' || !user.business?.id) {
+      throw new HttpException(
+        'Client cities require a business user',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return user.business.id;
+  }
+
+  private static readonly CLIENT_PAGE_SIZE = 500;
 
   private async getOrdersByStatus(
     businessId: string
@@ -208,6 +243,27 @@ export class DashboardService {
     return result?.failed_deliveries_aggregate?.aggregate?.count ?? 0;
   }
 
+  private async getUniqueClientCount(businessId: string): Promise<number> {
+    const query = `
+      query DashboardUniqueClientCount($businessId: uuid!) {
+        clients_aggregate(
+          where: {
+            _or: [
+              { orders: { business_id: { _eq: $businessId } } }
+              { rental_bookings: { business_id: { _eq: $businessId } } }
+            ]
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+    });
+    return result?.clients_aggregate?.aggregate?.count ?? 0;
+  }
+
   private async getAdminAggregates(): Promise<{
     clientCount: number;
     agentsVerified: number;
@@ -242,4 +298,141 @@ export class DashboardService {
         result?.businesses_not_verified?.aggregate?.count ?? 0,
     };
   }
+
+  private async fetchAllBusinessClientsForCities(businessId: string): Promise<
+    BusinessClientCityRow[]
+  > {
+    const clients: BusinessClientCityRow[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = await this.fetchBusinessClientsCityPage(businessId, offset);
+      clients.push(...page);
+      if (page.length < DashboardService.CLIENT_PAGE_SIZE) break;
+      offset += DashboardService.CLIENT_PAGE_SIZE;
+    }
+    return clients;
+  }
+
+  private async fetchBusinessClientsCityPage(
+    businessId: string,
+    offset: number
+  ): Promise<BusinessClientCityRow[]> {
+    const query = `
+      query DashboardClientCitiesPage(
+        $businessId: uuid!
+        $limit: Int!
+        $offset: Int!
+      ) {
+        clients(
+          where: {
+            _or: [
+              { orders: { business_id: { _eq: $businessId } } }
+              { rental_bookings: { business_id: { _eq: $businessId } } }
+            ]
+          }
+          order_by: { id: asc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          client_addresses(where: { address: { status: { _eq: active } } }) {
+            address { city is_primary }
+          }
+          orders(
+            where: { business_id: { _eq: $businessId } }
+            order_by: { created_at: desc }
+            limit: 25
+          ) {
+            delivery_address { city }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      clients: BusinessClientCityRow[];
+    }>(query, {
+      businessId,
+      limit: DashboardService.CLIENT_PAGE_SIZE,
+      offset,
+    });
+    return result?.clients ?? [];
+  }
+
+  private resolvePrimaryCityPerClient(
+    clients: BusinessClientCityRow[]
+  ): Map<string, string> {
+    const result = new Map<string, string>();
+    for (const client of clients) {
+      const city =
+        this.topDeliveryCity(client.orders) ??
+        this.profileCityForClient(client);
+      if (city) result.set(client.id, city);
+    }
+    return result;
+  }
+
+  private topDeliveryCity(
+    orders: { delivery_address?: { city?: string | null } | null }[]
+  ): string | undefined {
+    const votes = new Map<string, number>();
+    for (const order of orders ?? []) {
+      const city = this.normalizeCity(order.delivery_address?.city);
+      if (!city) continue;
+      votes.set(city, (votes.get(city) ?? 0) + 1);
+    }
+    return this.topVotedCity(votes);
+  }
+
+  private profileCityForClient(client: BusinessClientCityRow): string | null {
+    const primary = client.client_addresses.find(
+      (a) => a.address?.is_primary && this.normalizeCity(a.address?.city)
+    );
+    const any = client.client_addresses.find((a) =>
+      this.normalizeCity(a.address?.city)
+    );
+    return this.normalizeCity(primary?.address?.city ?? any?.address?.city);
+  }
+
+  private topVotedCity(votes?: Map<string, number>): string | undefined {
+    if (!votes?.size) return undefined;
+    let best: string | undefined;
+    let bestCount = -1;
+    for (const [city, count] of votes) {
+      if (count > bestCount) {
+        best = city;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
+  private normalizeCity(city?: string | null): string | null {
+    const trimmed = city?.trim();
+    if (!trimmed) return null;
+    return trimmed.replace(/\s+/g, ' ');
+  }
+
+  private toCityFrequencies(
+    clientCity: Map<string, string>
+  ): ClientCitiesDto {
+    const counts = new Map<string, number>();
+    const display = new Map<string, string>();
+    for (const city of clientCity.values()) {
+      const key = city.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (!display.has(key)) display.set(key, city);
+    }
+    const cities = [...counts.entries()]
+      .map(([key, count]) => ({ name: display.get(key) ?? key, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    return { cities, totalClientsWithCity: clientCity.size };
+  }
+}
+
+interface BusinessClientCityRow {
+  id: string;
+  client_addresses: {
+    address?: { city?: string | null; is_primary?: boolean | null } | null;
+  }[];
+  orders: { delivery_address?: { city?: string | null } | null }[];
 }

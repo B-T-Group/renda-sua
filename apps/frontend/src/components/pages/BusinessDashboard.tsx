@@ -13,6 +13,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
+import { BusinessClientsHero } from '../business/BusinessClientsHero';
 import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
@@ -104,6 +105,14 @@ const BusinessDashboard: React.FC = () => {
           {profile.business.is_admin && <StatusBadge type="admin" />}
         </Box>
       </Box>
+
+      <BusinessClientsHero
+        count={
+          aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
+        }
+        loading={isLoading}
+        onClick={() => navigate('/business/client-cities')}
+      />
 
       <BusinessVerificationBanner />
 

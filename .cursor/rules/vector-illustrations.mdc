@@ -1,0 +1,24 @@
+---
+description: Prefer custom SVG vector illustrations to explain UX concepts
+alwaysApply: true
+---
+
+# Vector illustrations for understanding
+
+When building or improving user-facing flows (onboarding, dashboards, empty states, benefit/responsibility explainers, success moments), **generate simple visual vector illustrations** when they help the user understand faster than text alone.
+
+## Prefer
+
+- Theme-aware SVG/React illustration components colocated under feature or shared UI folders
+- Use design-system / theme colors; avoid generic stock photos or emoji as the primary teaching visual
+- One clear metaphor per illustration; keep size focused so copy stays readable
+- Accessible labels on decorative teaching visuals
+
+## Avoid
+
+- Dense decorative art that competes with the message
+- Skipping an illustration when the concept is abstract (commissions, referrals, moderation, verification)
+
+## Example placement
+
+Explainers (benefit / responsibility / how-it-works) should pair each section with a short illustration + title + one supporting sentence.

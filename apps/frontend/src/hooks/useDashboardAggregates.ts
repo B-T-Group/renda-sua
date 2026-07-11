@@ -10,6 +10,8 @@ export interface DashboardAggregates {
   locationCount: number;
   inventoryCount: number;
   pendingFailedDeliveriesCount: number;
+  /** Distinct clients who ordered or rented from this business. */
+  uniqueClientCount: number;
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;

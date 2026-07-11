@@ -1432,6 +1432,14 @@
       "batchOrdersDescription": "Quickly update the status of multiple orders at once",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "subtitleSimplified": "Manage orders, reconcile cash payments, and resolve delivery issues. Use catalog tools for your products and locations.",
+      "clientsSoFar": {
+        "label": "Clients so far",
+        "hint": "Unique people who have ordered or rented from you.",
+        "hintClick": "Tap to see where your clients are coming from",
+        "emptyHint": "Customers who order or rent will show up here.",
+        "unavailableHint": "Client count unavailable right now",
+        "a11y": "Clients so far. Open city word cloud."
+      },
       "subtitleRentalFocused": "Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.",
       "backToDashboard": "Back to dashboard",
       "moreHubDescription": "Refund requests, batch orders, rentals, analytics, and more.",
@@ -1506,6 +1514,16 @@
         "adminSystem": "System & onboarding",
         "adminSystemHint": "Configuration, country setup, and application defaults."
       }
+    },
+    "clientCities": {
+      "seoTitle": "Where your clients are from",
+      "seoDescription": "See which cities your customers come from.",
+      "title": "Where your clients are from",
+      "subtitle": "A word cloud of cities for people who have ordered or rented from you.",
+      "stat": "{{count}} clients with a known city",
+      "empty": "No client cities yet. Cities appear as customers order or rent with an address.",
+      "legend": "Cities by client count",
+      "loadError": "Failed to load client cities"
     },
     "rentalImages": {
       "dashboardTitle": "Rental image library",

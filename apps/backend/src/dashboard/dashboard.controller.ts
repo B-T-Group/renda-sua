@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
-import type { DashboardAggregatesDto } from './dashboard.service';
+import type {
+  ClientCitiesDto,
+  DashboardAggregatesDto,
+} from './dashboard.service';
 import { DashboardService } from './dashboard.service';
 
 @ApiTags('dashboard')
@@ -36,6 +39,32 @@ export class DashboardController {
         {
           success: false,
           error: error.message || 'Failed to fetch dashboard aggregates',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('client-cities')
+  @ApiOperation({
+    summary: 'Get client city frequencies for the business',
+    description:
+      'Returns a word-cloud-ready list of cities where unique clients who ordered or rented from this business are located.',
+  })
+  @ApiResponse({ status: 200, description: 'Client city frequencies' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async getClientCities(): Promise<{ success: true; data: ClientCitiesDto }> {
+    try {
+      const data = await this.dashboardService.getClientCities();
+      return { success: true, data };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch client cities',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

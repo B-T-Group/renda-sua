@@ -346,5 +346,35 @@ export class AgentReferralsService {
       input,
     });
   }
+
+  async getReferredBusinessCount(agentId: string): Promise<number> {
+    const query = `
+      query AgentReferredBusinessCount($agentId: uuid!) {
+        businesses_aggregate(
+          where: { referred_by_agent_id: { _eq: $agentId } }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return result?.businesses_aggregate?.aggregate?.count ?? 0;
+  }
+
+  async getAgentCodeById(agentId: string): Promise<string | null> {
+    const query = `
+      query AgentCodeById($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          agent_code
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return result?.agents_by_pk?.agent_code ?? null;
+  }
 }
 

@@ -1175,6 +1175,14 @@
       "batchOrdersDescription": "Mettez à jour rapidement le statut de plusieurs commandes à la fois",
       "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
       "subtitleSimplified": "Gérez les commandes, le rapprochement espèces et les livraisons en échec. Utilisez le catalogue pour vos produits et emplacements.",
+      "clientsSoFar": {
+        "label": "Clients jusqu'ici",
+        "hint": "Personnes uniques qui ont commandé ou loué chez vous.",
+        "hintClick": "Appuyez pour voir d'où viennent vos clients",
+        "emptyHint": "Les clients qui commandent ou louent apparaîtront ici.",
+        "unavailableHint": "Nombre de clients indisponible pour le moment",
+        "a11y": "Clients jusqu'ici. Ouvrir le nuage de villes."
+      },
       "subtitleRentalFocused": "Votre tableau de bord met les locations en avant — catalogue, réservations et photothèque location en tête.",
       "backToDashboard": "Retour au tableau de bord",
       "moreHubDescription": "Remboursements, traitement par lot, locations, analyses et plus.",
@@ -1249,6 +1257,16 @@
         "adminSystem": "Système et intégration",
         "adminSystemHint": "Configuration, paramétrage pays et valeurs par défaut de l’application."
       }
+    },
+    "clientCities": {
+      "seoTitle": "D'où viennent vos clients",
+      "seoDescription": "Découvrez les villes d'origine de vos clients.",
+      "title": "D'où viennent vos clients",
+      "subtitle": "Un nuage de mots des villes des personnes qui ont commandé ou loué chez vous.",
+      "stat": "{{count}} clients avec une ville connue",
+      "empty": "Aucune ville pour l'instant. Elles apparaissent quand des clients commandent ou louent avec une adresse.",
+      "legend": "Villes par nombre de clients",
+      "loadError": "Impossible de charger les villes des clients"
     },
     "rentalImages": {
       "dashboardTitle": "Photothèque de location",
