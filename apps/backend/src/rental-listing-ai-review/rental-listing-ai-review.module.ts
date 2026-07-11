@@ -3,6 +3,7 @@ import { AiGenerationModule } from '../ai/ai-generation.module';
 import { AwsModule } from '../aws/aws.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RentalListingAiProposalController } from './rental-listing-ai-proposal.controller';
 import { RentalListingAiProposalService } from './rental-listing-ai-proposal.service';
@@ -19,6 +20,7 @@ import { RentalListingAiReviewService } from './rental-listing-ai-review.service
     NotificationsModule,
     AiGenerationModule,
     AwsModule,
+    ImageValidationModule,
   ],
   controllers: [
     RentalListingAiReviewInternalController,
