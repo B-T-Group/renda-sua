@@ -184,9 +184,20 @@ const BusinessRentalsCatalogPage: React.FC = () => {
         )}
         {items.map((it) => {
           const thumb = it.rental_item_images?.[0]?.image_url;
+          const draftCount =
+            it.rental_location_listings?.filter(
+              (l) => !l.deleted_at && l.moderation_status === 'draft'
+            ).length ?? 0;
           const pendingModeration =
             it.rental_location_listings?.filter(
-              (l) => !l.deleted_at && l.moderation_status === 'pending'
+              (l) =>
+                !l.deleted_at &&
+                (l.moderation_status === 'pending' ||
+                  l.moderation_status === 'ai_reviewing')
+            ).length ?? 0;
+          const proposalCount =
+            it.rental_location_listings?.filter(
+              (l) => !l.deleted_at && l.moderation_status === 'proposal_pending'
             ).length ?? 0;
           return (
             <Box
@@ -250,6 +261,17 @@ const BusinessRentalsCatalogPage: React.FC = () => {
                     size="small"
                     label={`${t('business.rentals.listingsCount', 'Listings')}: ${it.rental_location_listings?.length ?? 0}`}
                   />
+                  {draftCount > 0 ? (
+                    <Chip
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                      label={t('business.rentals.moderation.draftListingsBadge', {
+                        defaultValue: '{{count}} draft listing(s)',
+                        count: draftCount,
+                      })}
+                    />
+                  ) : null}
                   {pendingModeration > 0 ? (
                     <Chip
                       size="small"
@@ -259,6 +281,20 @@ const BusinessRentalsCatalogPage: React.FC = () => {
                         defaultValue: '{{count}} listing(s) pending approval',
                         count: pendingModeration,
                       })}
+                    />
+                  ) : null}
+                  {proposalCount > 0 ? (
+                    <Chip
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      label={t(
+                        'business.rentals.moderation.proposalListingsBadge',
+                        {
+                          defaultValue: '{{count}} AI proposal(s) ready',
+                          count: proposalCount,
+                        }
+                      )}
                     />
                   ) : null}
                   {it.deleted_at ? (

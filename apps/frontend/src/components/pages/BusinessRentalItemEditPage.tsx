@@ -151,6 +151,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
     updateBusinessRentalListing,
+    publishBusinessRentalListing,
     deleteBusinessRentalListing,
     deleteBusinessRentalItem,
   } = useRentalApi();
@@ -168,6 +169,9 @@ const BusinessRentalItemEditPage: React.FC = () => {
   );
   const [savingItem, setSavingItem] = useState(false);
   const [savingListingId, setSavingListingId] = useState<string | null>(null);
+  const [publishingListingId, setPublishingListingId] = useState<string | null>(
+    null
+  );
   const [listingDeleteId, setListingDeleteId] = useState<string | null>(null);
   const [itemDeleteOpen, setItemDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -272,6 +276,36 @@ const BusinessRentalItemEditPage: React.FC = () => {
       }
     },
     [enqueueSnackbar, listingForms, reload, t, updateBusinessRentalListing]
+  );
+
+  const publishListing = useCallback(
+    async (listingId: string) => {
+      setPublishingListingId(listingId);
+      try {
+        const res = await publishBusinessRentalListing(listingId);
+        if (!res?.success) throw new Error('Publish failed');
+        enqueueSnackbar(
+          t(
+            'business.rentals.moderation.publishSuccess',
+            'Listing submitted for approval'
+          ),
+          { variant: 'success' }
+        );
+        await reload();
+      } catch (e: any) {
+        enqueueSnackbar(
+          e?.message ||
+            t(
+              'business.rentals.moderation.publishFailed',
+              'Could not publish listing'
+            ),
+          { variant: 'error' }
+        );
+      } finally {
+        setPublishingListingId(null);
+      }
+    },
+    [enqueueSnackbar, publishBusinessRentalListing, reload, t]
   );
 
   const confirmDeleteListing = useCallback(async () => {
@@ -543,6 +577,33 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   )}
                 </Alert>
               ) : null}
+              {l.moderation_status === 'proposal_pending' ? (
+                <Alert
+                  severity="info"
+                  sx={{ mb: 2 }}
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() =>
+                        navigate(
+                          `/business/rentals/listings/${l.id}/ai-proposal`
+                        )
+                      }
+                    >
+                      {t(
+                        'business.rentals.aiProposal.reviewCta',
+                        'Review AI suggestions'
+                      )}
+                    </Button>
+                  }
+                >
+                  {t(
+                    'business.rentals.aiProposal.pendingHint',
+                    'AI suggested improvements for this listing.'
+                  )}
+                </Alert>
+              ) : null}
               <Stack spacing={2}>
                 <TextField
                   label={t('business.rentals.pricePerHour', 'Price per hour')}
@@ -675,6 +736,15 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   label={t('business.rentals.listingActive', 'Listing active')}
                 />
                 <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {l.moderation_status === 'draft' ? (
+                    <Button
+                      variant="contained"
+                      onClick={() => void publishListing(l.id)}
+                      disabled={publishingListingId === l.id}
+                    >
+                      {t('business.rentals.publishListing', 'Publish listing')}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outlined"
                     onClick={() => void saveListing(l.id)}

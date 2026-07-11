@@ -97,6 +97,35 @@ export interface BusinessRentalItemDetail {
   rental_location_listings: BusinessRentalListingDetail[];
 }
 
+export interface BusinessAiProposalPayload {
+  listing: {
+    id: string;
+    moderation_status: string;
+    rental_item: {
+      id: string;
+      name: string;
+      description: string | null;
+      rental_item_images: Array<{
+        id: string;
+        image_url: string;
+        display_order: number;
+      }>;
+    };
+  } | null;
+  proposal: {
+    id: string;
+    decision_reason: string | null;
+    proposed_title: string | null;
+    proposed_description: string | null;
+    proposed_images?: Array<{
+      id: string;
+      source_image_id: string | null;
+      image_url: string;
+      display_order: number;
+    }>;
+  } | null;
+}
+
 export interface UpdateBusinessRentalItemBody {
   rental_category_id?: string;
   name?: string;
@@ -470,6 +499,46 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchBusinessAiProposal = useCallback(
+    async (listingId: string) => {
+      const { data } = await api.get<{
+        success: boolean;
+        listing: BusinessAiProposalPayload['listing'];
+        proposal: BusinessAiProposalPayload['proposal'];
+      }>(`/rentals/business/listings/${listingId}/ai-proposal`);
+      return {
+        listing: data.listing ?? null,
+        proposal: data.proposal ?? null,
+      } as BusinessAiProposalPayload;
+    },
+    [api]
+  );
+
+  const acceptBusinessAiProposal = useCallback(
+    async (
+      listingId: string,
+      edits?: { title?: string; description?: string }
+    ) => {
+      const { data } = await api.post<{ success: boolean }>(
+        `/rentals/business/listings/${listingId}/ai-proposal/accept`,
+        edits ?? {}
+      );
+      return !!data.success;
+    },
+    [api]
+  );
+
+  const declineBusinessAiProposal = useCallback(
+    async (listingId: string) => {
+      const { data } = await api.post<{ success: boolean }>(
+        `/rentals/business/listings/${listingId}/ai-proposal/decline`,
+        {}
+      );
+      return !!data.success;
+    },
+    [api]
+  );
+
   const createRequest = useCallback(
     async (body: {
       rentalLocationListingId: string;
@@ -632,6 +701,9 @@ export function useRentalApi() {
     createBusinessRentalItem,
     createBusinessRentalListing,
     publishBusinessRentalListing,
+    fetchBusinessAiProposal,
+    acceptBusinessAiProposal,
+    declineBusinessAiProposal,
     createRequest,
     respondRequest,
     createBooking,

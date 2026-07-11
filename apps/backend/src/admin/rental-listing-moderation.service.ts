@@ -3,7 +3,12 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './rental-listing-moderation.queries';
 
-type ModerationStatusFilter = 'pending' | 'rejected' | 'ai_reviewing' | 'all';
+type ModerationStatusFilter =
+  | 'pending'
+  | 'rejected'
+  | 'ai_reviewing'
+  | 'proposal_pending'
+  | 'all';
 
 export interface ListingModerationRow {
   id: string;
@@ -136,6 +141,7 @@ export class RentalListingModerationService {
     const s = (raw || 'pending').toLowerCase();
     if (s === 'rejected') return 'rejected';
     if (s === 'ai_reviewing') return 'ai_reviewing';
+    if (s === 'proposal_pending') return 'proposal_pending';
     if (s === 'all') return 'all';
     return 'pending';
   }
@@ -153,7 +159,12 @@ export class RentalListingModerationService {
           base,
           {
             moderation_status: {
-              _in: ['pending', 'rejected', 'ai_reviewing'],
+              _in: [
+                'pending',
+                'rejected',
+                'ai_reviewing',
+                'proposal_pending',
+              ],
             },
           },
         ],

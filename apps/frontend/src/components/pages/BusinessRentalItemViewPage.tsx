@@ -265,6 +265,23 @@ const BusinessRentalItemViewPage: React.FC = () => {
                           {t('business.rentals.publishListing', 'Publish listing')}
                         </Button>
                       ) : null}
+                      {listing.moderation_status === 'proposal_pending' ? (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          sx={{ mt: 1 }}
+                          onClick={() =>
+                            navigate(
+                              `/business/rentals/listings/${listing.id}/ai-proposal`
+                            )
+                          }
+                        >
+                          {t(
+                            'business.rentals.aiProposal.reviewCta',
+                            'Review AI suggestions'
+                          )}
+                        </Button>
+                      ) : null}
                     </>
                   )}
                 </Paper>

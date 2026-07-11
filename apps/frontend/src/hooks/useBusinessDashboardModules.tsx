@@ -323,6 +323,20 @@ export function useBusinessDashboardModules({
         path: '/admin/rental-listings/moderation',
       },
       {
+        title: t(
+          'business.dashboard.manageRentalAiReviews',
+          'Rental AI review audit'
+        ),
+        description: t(
+          'business.dashboard.manageRentalAiReviewsDescription',
+          'Review AI auto-approval decisions and apply overrides for prompt tuning.'
+        ),
+        icon: <RentalModerationIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#6d4c41',
+        path: '/admin/rental-listings/ai-reviews',
+      },
+      {
         title: t('business.dashboard.manageConfigurations'),
         description: t('business.dashboard.manageConfigurationsDescription'),
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,

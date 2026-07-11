@@ -408,6 +408,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/rental-listings/ai-reviews"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminRentalAiReviewsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/configurations"
               element={
                 <ProtectedRoute>
@@ -711,6 +719,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessRentalItemEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals/listings/:listingId/ai-proposal"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessRentalAiProposalPage />
                 </ProtectedRoute>
               }
             />

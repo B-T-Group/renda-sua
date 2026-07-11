@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
-export type RentalModerationQueueStatus = 'pending' | 'rejected' | 'all';
+export type RentalModerationQueueStatus =
+  | 'pending'
+  | 'rejected'
+  | 'ai_reviewing'
+  | 'proposal_pending'
+  | 'all';
 
 export interface ModerationListingRow {
   id: string;

@@ -28,6 +28,9 @@ export const AdminManageClients = lazy(() =>
 export const AdminRentalListingsModerationPage = lazy(() =>
   import('../components/pages/AdminRentalListingsModerationPage')
 );
+export const AdminRentalAiReviewsPage = lazy(() =>
+  import('../components/pages/AdminRentalAiReviewsPage')
+);
 export const AdminUserDocumentsPage = lazy(() =>
   import('../components/pages/AdminUserDocumentsPage')
 );
@@ -78,6 +81,9 @@ export const BusinessRentalItemEditPage = lazy(() =>
 );
 export const BusinessRentalItemViewPage = lazy(() =>
   import('../components/pages/BusinessRentalItemViewPage')
+);
+export const BusinessRentalAiProposalPage = lazy(() =>
+  import('../components/pages/BusinessRentalAiProposalPage')
 );
 export const BusinessRentalsCatalogPage = lazy(() =>
   import('../components/pages/BusinessRentalsCatalogPage')

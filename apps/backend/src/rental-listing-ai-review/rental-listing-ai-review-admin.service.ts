@@ -81,6 +81,13 @@ export class RentalListingAiReviewAdminService {
     dto: AiReviewOverrideDto
   ) {
     const review = await this.getReview(reviewId);
+    const listingStatus = review.listing?.moderation_status;
+    if (listingStatus === 'draft') {
+      throw new HttpException(
+        'Cannot override AI review for a draft listing',
+        HttpStatus.BAD_REQUEST
+      );
+    }
     await this.hasura.executeMutation(Q.SET_AI_REVIEW_OVERRIDE, {
       id: reviewId,
       action: dto.action,

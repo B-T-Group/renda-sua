@@ -128,7 +128,13 @@ export class AdminController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['pending', 'rejected', 'ai_reviewing', 'all'],
+    enum: [
+      'pending',
+      'rejected',
+      'ai_reviewing',
+      'proposal_pending',
+      'all',
+    ],
   })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })

@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   useRentalListingModeration,
@@ -121,11 +122,23 @@ const AdminRentalListingsModerationPage: React.FC = () => {
             <MenuItem value="pending">
               {t('admin.rentalListingModeration.pending', 'Pending')}
             </MenuItem>
+            <MenuItem value="ai_reviewing">
+              {t('admin.rentalListingModeration.aiReviewing', 'AI reviewing')}
+            </MenuItem>
+            <MenuItem value="proposal_pending">
+              {t(
+                'admin.rentalListingModeration.proposalPending',
+                'AI proposal pending'
+              )}
+            </MenuItem>
             <MenuItem value="rejected">
               {t('admin.rentalListingModeration.rejected', 'Rejected')}
             </MenuItem>
             <MenuItem value="all">
-              {t('admin.rentalListingModeration.all', 'Pending and rejected')}
+              {t(
+                'admin.rentalListingModeration.all',
+                'Pending, AI reviewing, proposals, and rejected'
+              )}
             </MenuItem>
           </Select>
         </FormControl>
@@ -136,6 +149,13 @@ const AdminRentalListingsModerationPage: React.FC = () => {
           disabled={loading}
         >
           {t('admin.rentalListingModeration.refresh', 'Refresh')}
+        </Button>
+        <Button
+          component={RouterLink}
+          to="/admin/rental-listings/ai-reviews"
+          variant="text"
+        >
+          {t('admin.rentalListingModeration.aiReviewsLink', 'AI review audit')}
         </Button>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -196,7 +216,8 @@ const AdminRentalListingsModerationPage: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell align="right">
-                      {row.moderation_status === 'pending' ? (
+                      {row.moderation_status === 'pending' ||
+                      row.moderation_status === 'ai_reviewing' ? (
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                           <Button
                             size="small"
@@ -222,7 +243,12 @@ const AdminRentalListingsModerationPage: React.FC = () => {
                         </Box>
                       ) : (
                         <Typography variant="caption" color="text.secondary">
-                          —
+                          {row.moderation_status === 'proposal_pending'
+                            ? t(
+                                'admin.rentalListingModeration.awaitingBusiness',
+                                'Awaiting business'
+                              )
+                            : '—'}
                         </Typography>
                       )}
                     </TableCell>
