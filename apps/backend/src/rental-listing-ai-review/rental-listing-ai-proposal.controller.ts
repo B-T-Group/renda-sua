@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -7,13 +7,11 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
 import { AcceptAiProposalDto } from './dto/rental-listing-ai-review.dto';
 import { RentalListingAiProposalService } from './rental-listing-ai-proposal.service';
 
 @ApiTags('rentals')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('rentals/business/listings')
 export class RentalListingAiProposalController {
   constructor(private readonly proposalService: RentalListingAiProposalService) {}
