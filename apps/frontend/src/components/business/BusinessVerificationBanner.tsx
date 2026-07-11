@@ -9,16 +9,29 @@ import {
   Stepper,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
 import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
 
 export const BusinessVerificationBanner: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { status, loading } = useBusinessVerification();
+  const apiClient = useApiClient();
+  const { status, loading, refresh } = useBusinessVerification();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await apiClient.post('/business-contracts/refresh');
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (loading || !status || status.can_accept_orders) {
     return null;
@@ -70,6 +83,16 @@ export const BusinessVerificationBanner: React.FC = () => {
             )}
           </Typography>
         ) : null}
+        <Box sx={{ mt: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+          >
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </Box>
       </Alert>
     );
   }
@@ -130,6 +153,14 @@ export const BusinessVerificationBanner: React.FC = () => {
             {t('business.verification.uploadId', 'Upload identification')}
           </Button>
         ) : null}
+        <Button
+          variant="outlined"
+          color="warning"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+        >
+          {t('common.refresh', 'Refresh')}
+        </Button>
       </Stack>
       {status.nextAction === 'setup_stripe_connect' ? (
         <Box sx={{ mt: 2 }}>

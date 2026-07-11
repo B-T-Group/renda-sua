@@ -48,6 +48,19 @@ export class BusinessContractsController {
     return { success: true, data };
   }
 
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh merchant contract status from BoldSign',
+  })
+  @ApiResponse({ status: 200, description: 'Updated contract status' })
+  async refresh() {
+    const businessId = await this.requireBusinessId();
+    const data =
+      await this.contractsService.refreshContractForBusiness(businessId);
+    return { success: true, data };
+  }
+
   @Get(':id/download')
   @ApiOperation({ summary: 'Download signed contract PDF' })
   async download(@Param('id') id: string) {

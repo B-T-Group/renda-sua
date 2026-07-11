@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Post,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import {
   BusinessReferralsService,
   ResolvedBusinessReferral,
 } from '../business-referrals/business-referrals.service';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -119,6 +121,8 @@ const GQL_UPDATE_USER_PHONE = `
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
@@ -129,8 +133,19 @@ export class UsersController {
     private readonly agentReferralsService: AgentReferralsService,
     private readonly businessReferralsService: BusinessReferralsService,
     private readonly accountDeletionService: AccountDeletionService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly businessContractsService: BusinessContractsService
   ) {}
+
+  private scheduleEnsureContract(businessId: string): void {
+    this.businessContractsService
+      .ensureContractForBusiness(businessId)
+      .catch((error: any) => {
+        this.logger.warn(
+          `Contract creation for business ${businessId} failed: ${error?.message}`
+        );
+      });
+  }
 
   @Get('me')
   async getCurrentUser(@CurrentUser() auth0User: any) {
@@ -946,6 +961,9 @@ export class UsersController {
             businessReferral
           );
         }
+        if (inserted.business?.id) {
+          this.scheduleEnsureContract(inserted.business.id);
+        }
         return {
           success: true,
           user: inserted.user,
@@ -1191,6 +1209,7 @@ export class UsersController {
           businessReferral
         );
       }
+      this.scheduleEnsureContract(r.insert_businesses_one.id);
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);

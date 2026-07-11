@@ -30,6 +30,14 @@ describe('UsersController', () => {
     resolveSourceAddressForPersonaSeed: jest.Mock;
     seedDefaultAddressForNewPersona: jest.Mock;
   };
+  let businessReferralsService: {
+    resolveBusinessReferralCode: jest.Mock;
+    getBusinessInsertReferralFields: jest.Mock;
+    notifyAgentOfBusinessReferral: jest.Mock;
+  };
+  let businessContractsService: {
+    ensureContractForBusiness: jest.Mock;
+  };
 
   const currentUser = {
     id: 'user-123',
@@ -57,6 +65,14 @@ describe('UsersController', () => {
       resolveSourceAddressForPersonaSeed: jest.fn().mockResolvedValue(null),
       seedDefaultAddressForNewPersona: jest.fn().mockResolvedValue(undefined),
     };
+    businessReferralsService = {
+      resolveBusinessReferralCode: jest.fn().mockResolvedValue(null),
+      getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
+      notifyAgentOfBusinessReferral: jest.fn().mockResolvedValue(undefined),
+    };
+    businessContractsService = {
+      ensureContractForBusiness: jest.fn().mockResolvedValue(undefined),
+    };
     controller = new UsersController(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -64,7 +80,14 @@ describe('UsersController', () => {
       addressesService as any,
       {} as any,
       {} as any,
-      {} as any
+      { creditAgentReferralIfPresent: jest.fn() } as any,
+      businessReferralsService as any,
+      {} as any,
+      {
+        getUserCountryCode: jest.fn().mockResolvedValue(null),
+        resolveRailForCountry: jest.fn(),
+      } as any,
+      businessContractsService as any
     );
   });
 

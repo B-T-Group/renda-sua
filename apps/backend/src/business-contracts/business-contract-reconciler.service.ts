@@ -1,8 +1,7 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import type { BoldSignConfig, Configuration } from '../config/configuration';
-import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { BoldsignClientService } from './boldsign-client.service';
 import { BusinessContractsDatabaseService } from './business-contracts-database.service';
 import { BusinessContractsService } from './business-contracts.service';
@@ -15,9 +14,7 @@ export class BusinessContractReconcilerService {
     private readonly db: BusinessContractsDatabaseService,
     private readonly contractsService: BusinessContractsService,
     private readonly boldsign: BoldsignClientService,
-    private readonly configService: ConfigService<Configuration>,
-    @Inject(forwardRef(() => MerchantLifecycleService))
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   private get config(): BoldSignConfig {
@@ -50,27 +47,8 @@ export class BusinessContractReconcilerService {
     const cutoff = new Date(Date.now() - 3600000).toISOString();
     const rows = await this.db.listStaleSentContracts(cutoff);
     for (const row of rows) {
-      if (row.boldsign_document_id.startsWith('legacy:')) continue;
       try {
-        const props = await this.boldsign.getDocumentProperties(
-          row.boldsign_document_id
-        );
-        const status = String((props as { status?: string }).status ?? '');
-        if (status.toLowerCase() === 'completed') {
-          await this.contractsService.syncSignedArtifactsFromBoldsign(
-            row.id,
-            row.boldsign_document_id
-          );
-          await this.db.updateContract(row.id, {
-            status: 'signed',
-            signed_at: new Date().toISOString(),
-            boldsign_raw_metadata: props,
-          });
-          await this.merchantLifecycleService.recompute(
-            row.business_id,
-            'contract_reconciled'
-          );
-        }
+        await this.contractsService.syncInFlightFromBoldsign(row.business_id);
       } catch (error: any) {
         this.logger.debug(`Sync skip ${row.id}: ${error?.message}`);
       }

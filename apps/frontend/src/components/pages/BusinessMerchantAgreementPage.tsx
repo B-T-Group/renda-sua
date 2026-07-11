@@ -111,6 +111,20 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
     }
   };
 
+  const refreshContract = async () => {
+    if (!apiClient) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post('/business-contracts/refresh');
+      await loadStatus();
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Failed to refresh');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (!apiClient || !agreed || !legalName.trim()) return;
     setBusy(true);
@@ -193,6 +207,14 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         ) : null}
         <Button variant="contained" disabled={busy} onClick={() => void resendContract()}>
           {t('business.contract.resend', 'Resend signing email')}
+        </Button>
+        <Button
+          sx={{ ml: 1 }}
+          variant="outlined"
+          disabled={busy}
+          onClick={() => void refreshContract()}
+        >
+          {t('common.refresh', 'Refresh')}
         </Button>
         <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>
           {t('business.verification.backToDashboard', 'Back to dashboard')}

@@ -228,6 +228,10 @@ export class SignupService {
       );
     }
 
+    if (businessEntity) {
+      this.scheduleEnsureContract(businessEntity.id);
+    }
+
     return { user };
   }
 
@@ -365,7 +369,35 @@ export class SignupService {
         HttpStatus.NOT_FOUND
       );
     }
+    if (set.email) {
+      await this.ensureContractForSignupUser(userId);
+    }
     return { user: result.update_users_by_pk };
+  }
+
+  private scheduleEnsureContract(businessId: string): void {
+    this.businessContractsService
+      .ensureContractForBusiness(businessId)
+      .catch((error: any) => {
+        this.logger.warn(
+          `Contract creation after signup failed for ${businessId}: ${error?.message}`
+        );
+      });
+  }
+
+  private async ensureContractForSignupUser(userId: string): Promise<void> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: { business?: { id: string } | null } | null;
+    }>(
+      `
+      query SignupBusiness($id: uuid!) {
+        users_by_pk(id: $id) { business { id } }
+      }
+    `,
+      { id: userId }
+    );
+    const businessId = result.users_by_pk?.business?.id;
+    if (businessId) this.scheduleEnsureContract(businessId);
   }
 
   async verifyOtp(body: {
@@ -472,13 +504,7 @@ export class SignupService {
     const user = update.update_users_by_pk;
     const businessId = user?.business?.id;
     if (businessId) {
-      this.businessContractsService
-        .ensureContractForBusiness(businessId)
-        .catch((error: any) => {
-          this.logger.warn(
-            `Contract creation after signup failed for ${businessId}: ${error?.message}`
-          );
-        });
+      this.scheduleEnsureContract(businessId);
     }
     return { user };
   }

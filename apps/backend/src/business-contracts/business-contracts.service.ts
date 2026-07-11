@@ -83,6 +83,67 @@ export class BusinessContractsService {
     await this.createAndSendContract(businessId);
   }
 
+  /**
+   * Sync BoldSign completion into our DB (for refresh / missed webhooks),
+   * then return the latest status snapshot.
+   */
+  async refreshContractForBusiness(
+    businessId: string
+  ): Promise<ContractStatusSnapshot> {
+    await this.syncInFlightFromBoldsign(businessId);
+    return this.getContractStatus(businessId);
+  }
+
+  async syncInFlightFromBoldsign(businessId: string): Promise<void> {
+    const latest = await this.db.getLatestContract(businessId);
+    if (!latest || (latest.status !== 'sent' && latest.status !== 'viewed')) {
+      return;
+    }
+    const documentId = latest.boldsign_document_id;
+    if (documentId.startsWith('legacy:') || documentId.startsWith('pending:')) {
+      return;
+    }
+    try {
+      await this.markCompletedFromBoldsign(latest, documentId);
+    } catch (error: any) {
+      this.logger.debug(
+        `BoldSign sync skip for ${businessId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async markCompletedFromBoldsign(
+    contract: BusinessContractRow,
+    documentId: string
+  ): Promise<void> {
+    const props = await this.boldsign.getDocumentProperties(documentId);
+    const status = String((props as { status?: string }).status ?? '').toLowerCase();
+    if (status !== 'completed') return;
+    await this.persistSignedStatus(contract, props);
+  }
+
+  private async persistSignedStatus(
+    contract: BusinessContractRow,
+    props?: unknown
+  ): Promise<void> {
+    try {
+      await this.storeSignedArtifacts(contract.id, contract.boldsign_document_id);
+    } catch (error: any) {
+      this.logger.warn(
+        `Signed PDF store failed for ${contract.id}: ${error?.message}`
+      );
+    }
+    await this.db.updateContract(contract.id, {
+      status: 'signed',
+      signed_at: contract.signed_at ?? new Date().toISOString(),
+      ...(props ? { boldsign_raw_metadata: props } : {}),
+    });
+    await this.merchantLifecycleService.recompute(
+      contract.business_id,
+      'contract_signed'
+    );
+  }
+
   async resumePendingContract(row: BusinessContractRow): Promise<void> {
     if (!row.boldsign_document_id.startsWith('pending:')) return;
     if (row.status !== 'not_sent' && row.status !== 'failed') return;
@@ -390,8 +451,21 @@ export class BusinessContractsService {
     if (!canTransitionContractStatus(contract.status, nextStatus)) return;
 
     if (nextStatus === 'signed') {
-      await this.storeSignedArtifacts(contract.id, contract.boldsign_document_id);
-      const updates = this.buildStatusUpdates(contract.status, nextStatus, payload);
+      try {
+        await this.storeSignedArtifacts(
+          contract.id,
+          contract.boldsign_document_id
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Signed PDF store failed for ${contract.id}: ${error?.message}`
+        );
+      }
+      const updates = this.buildStatusUpdates(
+        contract.status,
+        nextStatus,
+        payload
+      );
       await this.db.updateContract(contract.id, updates);
       await this.merchantLifecycleService.recompute(
         contract.business_id,

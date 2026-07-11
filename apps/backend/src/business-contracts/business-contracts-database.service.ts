@@ -168,7 +168,6 @@ export class BusinessContractsDatabaseService {
             business_id: { _eq: $businessId }
             status: { _eq: signed }
             invalidated_at: { _is_null: true }
-            signed_pdf_s3_key: { _is_null: false }
             contract_template: { is_active: { _eq: true }, is_legacy: { _eq: false } }
           }
           limit: 1
