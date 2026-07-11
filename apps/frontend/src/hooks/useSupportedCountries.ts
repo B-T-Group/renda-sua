@@ -15,20 +15,25 @@ interface SupportedCountriesResponse {
   countries: SupportedCountry[];
 }
 
-// Module-level cache so multiple PhoneInput instances don't refetch.
+// Module-level cache so multiple consumers don't refetch.
+let cachedCountries: SupportedCountry[] | null = null;
 let cachedIsos: string[] | null = null;
 
 export const useSupportedCountries = () => {
   const apiClient = useApiClient();
+  const [countries, setCountries] = useState<SupportedCountry[]>(
+    cachedCountries ?? []
+  );
   const [supportedIsos, setSupportedIsos] = useState<string[]>(
     cachedIsos ?? []
   );
-  const [loading, setLoading] = useState(!cachedIsos);
+  const [loading, setLoading] = useState(!cachedCountries);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (cachedIsos) {
-      setSupportedIsos(cachedIsos);
+    if (cachedCountries) {
+      setCountries(cachedCountries);
+      setSupportedIsos(cachedIsos ?? []);
       setLoading(false);
       return;
     }
@@ -40,10 +45,13 @@ export const useSupportedCountries = () => {
       .get<SupportedCountriesResponse>('/locations/supported-countries')
       .then((res) => {
         if (!active) return;
-        const isos = (res.data.countries || [])
+        const list = res.data.countries || [];
+        const isos = list
           .map((c) => c.code?.toUpperCase())
           .filter((code): code is string => !!code);
+        cachedCountries = list;
         cachedIsos = isos;
+        setCountries(list);
         setSupportedIsos(isos);
         setError(null);
       })
@@ -64,5 +72,5 @@ export const useSupportedCountries = () => {
     };
   }, [apiClient]);
 
-  return { supportedIsos, loading, error };
+  return { countries, supportedIsos, loading, error };
 };

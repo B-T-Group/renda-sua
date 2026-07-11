@@ -1378,8 +1378,11 @@ export class BusinessItemsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    const currency =
+      await this.hasuraSystemService.resolveBusinessCurrency(businessId);
     const created = await this.itemsService.createItem(businessId, {
       ...(input as ItemsInsertInput),
+      currency,
       stripe_tax_code_id,
       // Starts as draft; publish submits for moderation. DB default is draft.
       is_active: false,
@@ -1425,6 +1428,10 @@ export class BusinessItemsService {
     const existing = await this.loadItemModerationRow(businessId, itemId);
     const wasRejected = existing.moderation_status === 'rejected';
     const payload: UpdateItemDto = { ...updates };
+    if (updates.currency !== undefined || updates.price !== undefined) {
+      payload.currency =
+        await this.hasuraSystemService.resolveBusinessCurrency(businessId);
+    }
     if (updates.stripe_tax_code_id !== undefined) {
       try {
         payload.stripe_tax_code_id =
@@ -1550,12 +1557,14 @@ export class BusinessItemsService {
     rowOffset = 0
   ): Promise<CsvUploadResultDto> {
     this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length} rowOffset=${rowOffset}`);
-    const [items, locations, inventory, validSubCategoryIds] = await Promise.all([
-      this.getItems(businessId),
-      this.getBusinessLocations(businessId),
-      this.getBusinessInventory(businessId),
-      this.getItemSubCategoryIds(),
-    ]);
+    const [items, locations, inventory, validSubCategoryIds, lockedCurrency] =
+      await Promise.all([
+        this.getItems(businessId),
+        this.getBusinessLocations(businessId),
+        this.getBusinessInventory(businessId),
+        this.getItemSubCategoryIds(),
+        this.hasuraSystemService.resolveBusinessCurrency(businessId),
+      ]);
 
     const details: CsvUploadResultDto['details'] = {
       inserted: [],
@@ -1615,7 +1624,7 @@ export class BusinessItemsService {
             description: row.description ?? '',
             ...(resolvedSubCategoryId !== undefined && { item_sub_category_id: resolvedSubCategoryId }),
             price: row.price,
-            currency: row.currency,
+            currency: lockedCurrency,
             ...(row.sku === existingItem.sku || !existingItem.sku
               ? { sku: row.sku }
               : {}),
@@ -1661,7 +1670,7 @@ export class BusinessItemsService {
             ...(resolvedSubCategoryIdForInsert !== undefined && { item_sub_category_id: resolvedSubCategoryIdForInsert }),
             stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
             price: row.price,
-            currency: row.currency,
+            currency: lockedCurrency,
             business_id: businessId,
             sku: row.sku,
             weight: row.weight,
@@ -1855,12 +1864,9 @@ export class BusinessItemsService {
 
     const hasPrice = dto.price != null && !Number.isNaN(dto.price as number);
     const price = hasPrice ? (dto.price as number) : undefined;
-    const currency =
-      hasPrice && dto.currency
-        ? dto.currency
-        : hasPrice
-        ? 'XAF'
-        : undefined;
+    const currency = hasPrice
+      ? await this.hasuraSystemService.resolveBusinessCurrency(businessId)
+      : undefined;
 
     const categoryName = dto.categoryName?.trim();
     const subCategoryName = dto.subCategoryName?.trim();

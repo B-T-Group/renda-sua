@@ -33,9 +33,10 @@ import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
+import { WEIGHT_UNITS } from '../../constants/enums';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import { useAi } from '../../hooks/useAi';
 import { Brand, useBrands } from '../../hooks/useBrands';
 import {
@@ -124,6 +125,7 @@ const ItemFormPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
   const { effectiveBusinessId, businessQuerySuffix } = useBusinessCatalogScope();
+  const { lockedCurrency } = useBusinessLockedCurrency(effectiveBusinessId);
   const { generateDescription, loading: aiLoading } = useAi();
 
   const isEditMode = !!itemId;
@@ -154,6 +156,15 @@ const ItemFormPage: React.FC = () => {
     is_active: true,
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
   });
+
+  useEffect(() => {
+    if (!lockedCurrency) return;
+    setFormData((prev) =>
+      prev.currency === lockedCurrency
+        ? prev
+        : { ...prev, currency: lockedCurrency }
+    );
+  }, [lockedCurrency]);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
     null
@@ -1041,24 +1052,17 @@ const ItemFormPage: React.FC = () => {
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 4 }}>
-                    <FormControl fullWidth required disabled={loading}>
-                      <InputLabel>
-                        {t('business.items.currency', 'Currency')}
-                      </InputLabel>
-                      <Select
-                        value={formData.currency}
-                        onChange={(e) =>
-                          handleInputChange('currency', e.target.value)
-                        }
-                        label={t('business.items.currency', 'Currency')}
-                      >
-                        {CURRENCIES.map((currency) => (
-                          <MenuItem key={currency} value={currency}>
-                            {currency}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <TextField
+                      fullWidth
+                      required
+                      disabled
+                      label={t('business.items.currency', 'Currency')}
+                      value={formData.currency}
+                      helperText={t(
+                        'business.items.currencyLockedToCountry',
+                        'Locked to your business country'
+                      )}
+                    />
                   </Grid>
                 </Grid>
               </Stack>

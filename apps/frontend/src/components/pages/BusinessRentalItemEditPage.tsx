@@ -18,6 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
   useRentalApi,
   type BusinessRentalItemDetail,
@@ -147,6 +148,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
+  const { lockedCurrency } = useBusinessLockedCurrency(businessId);
   const {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
@@ -162,7 +164,6 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const [desc, setDesc] = useState('');
   const [cat, setCat] = useState('');
   const [tags, setTags] = useState('');
-  const [currency, setCurrency] = useState('XAF');
   const [itemActive, setItemActive] = useState(true);
   const [listingForms, setListingForms] = useState<Record<string, ListingFormState>>(
     {}
@@ -185,7 +186,6 @@ const BusinessRentalItemEditPage: React.FC = () => {
       setDesc(next.description ?? '');
       setCat(next.rental_category_id);
       setTags((next.tags ?? []).join(', '));
-      setCurrency(next.currency);
       setItemActive(next.is_active);
       setListingForms(listingFormsFromDetail(next));
     }
@@ -219,7 +219,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
     }
     setSavingItem(true);
     try {
-      const body = buildItemUpdateBody(name, desc, cat, tags, currency, itemActive);
+      const body = buildItemUpdateBody(
+        name,
+        desc,
+        cat,
+        tags,
+        lockedCurrency,
+        itemActive
+      );
       await updateBusinessRentalItem(itemId, body);
       enqueueSnackbar(t('business.rentals.itemSaved', 'Rental item saved'), {
         variant: 'success',
@@ -235,7 +242,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
     }
   }, [
     cat,
-    currency,
+    lockedCurrency,
     desc,
     enqueueSnackbar,
     itemActive,
@@ -501,8 +508,12 @@ const BusinessRentalItemEditPage: React.FC = () => {
             />
             <TextField
               label={t('business.rentals.currency', 'Currency')}
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
+              value={lockedCurrency}
+              disabled
+              helperText={t(
+                'business.items.currencyLockedToCountry',
+                'Locked to your business country'
+              )}
               fullWidth
             />
             <FormControlLabel

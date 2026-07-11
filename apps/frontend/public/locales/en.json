@@ -2244,6 +2244,7 @@
       "createdAt": "Created At",
       "csvUpload": "CSV Upload",
       "currency": "Currency",
+      "currencyLockedToCountry": "Locked to your business country",
       "deleteError": "Failed to delete item",
       "deleteItem": "Delete Item",
       "deleteItemConfirm": "Are you sure you want to delete \"{{name}}\"? This will remove the item from all locations.",

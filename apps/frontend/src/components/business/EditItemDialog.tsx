@@ -29,6 +29,7 @@ import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WEIGHT_UNITS } from '../../constants/enums';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import { Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
@@ -48,6 +49,7 @@ export default function EditItemDialog({
 }: EditItemDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
+  const { lockedCurrency } = useBusinessLockedCurrency(businessId);
   const {
     brands,
     itemSubCategories,
@@ -107,6 +109,15 @@ export default function EditItemDialog({
       });
     }
   }, [item]);
+
+  useEffect(() => {
+    if (!lockedCurrency) return;
+    setFormData((prev) =>
+      prev.currency === lockedCurrency
+        ? prev
+        : { ...prev, currency: lockedCurrency }
+    );
+  }, [lockedCurrency]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -199,6 +210,7 @@ export default function EditItemDialog({
       // Convert null values to undefined for optional fields
       const updateData = {
         ...formData,
+        currency: lockedCurrency,
         weight: formData.weight ?? undefined,
         weight_unit: formData.weight_unit ?? undefined,
         dimensions: (formData as { dimensions?: string }).dimensions?.trim() || undefined,
@@ -358,31 +370,16 @@ export default function EditItemDialog({
                   inputProps={{ min: 0, step: 0.01 }}
                 />
 
-                <FormControl fullWidth error={!!validationErrors.currency}>
-                  <InputLabel>{t('business.inventory.currency')}</InputLabel>
-                  <Select
-                    value={formData.currency || 'USD'}
-                    onChange={(e) =>
-                      handleInputChange('currency', e.target.value)
-                    }
-                    label={t('business.inventory.currency')}
-                    required
-                  >
-                    <MenuItem value="USD">USD</MenuItem>
-                    <MenuItem value="EUR">EUR</MenuItem>
-                    <MenuItem value="GBP">GBP</MenuItem>
-                    <MenuItem value="XAF">XAF</MenuItem>
-                  </Select>
-                  {validationErrors.currency && (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{ mt: 0.5, ml: 1.5 }}
-                    >
-                      {validationErrors.currency}
-                    </Typography>
+                <TextField
+                  fullWidth
+                  disabled
+                  label={t('business.inventory.currency')}
+                  value={lockedCurrency || formData.currency || ''}
+                  helperText={t(
+                    'business.items.currencyLockedToCountry',
+                    'Locked to your business country'
                   )}
-                </FormControl>
+                />
               </Stack>
             </Box>
 

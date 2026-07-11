@@ -14,6 +14,8 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageCleanupLoadingAnimation from '../../../common/ImageCleanupLoadingAnimation';
+import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import { useCreateRentalFromImage } from '../../../../hooks/useCreateRentalFromImage';
 import { useRentalFromImageSuggestions } from '../../../../hooks/useRentalFromImageSuggestions';
 import { useRentalItemImages } from '../../../../hooks/useRentalItemImages';
@@ -65,6 +67,8 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
+  const { profile } = useUserProfileContext();
+  const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const { imageIds, files, mainImageIndex } = upload;
   const [sourceImageIndex, setSourceImageIndex] = useState(mainImageIndex);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -72,7 +76,6 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
   const [name, setName] = useState('');
   const [rentalCategoryId, setRentalCategoryId] = useState('');
   const [description, setDescription] = useState('');
-  const [currency, setCurrency] = useState('XAF');
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiCategoryHint, setAiCategoryHint] = useState<string | null>(null);
 
@@ -107,7 +110,6 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     setName(suggestions.name?.trim() || '');
     setDescription(suggestions.description?.trim() || '');
     setRentalCategoryId(suggestions.rental_category_id || '');
-    setCurrency(suggestions.currency?.trim() || 'XAF');
     setAiSuggestedTags(suggestions.suggested_tags ?? []);
     setAiCategoryHint(
       suggestions.rental_category_id
@@ -146,7 +148,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
       name: name.trim(),
       rental_category_id: rentalCategoryId,
       description: description.trim() || undefined,
-      currency: currency.trim() || 'XAF',
+      currency: lockedCurrency,
       is_active: false,
       tags: aiSuggestedTags.length ? aiSuggestedTags : undefined,
     });
@@ -360,9 +362,12 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
           'business.onboarding.firstRental.create.currency',
           'Currency'
         )}
-        value={currency}
-        onChange={(e) => setCurrency(e.target.value)}
-        disabled={formDisabled}
+        value={lockedCurrency}
+        disabled
+        helperText={t(
+          'business.items.currencyLockedToCountry',
+          'Locked to your business country'
+        )}
       />
       {aiSuggestedTags.length > 0 && (
         <Stack direction="row" flexWrap="wrap" gap={0.5}>

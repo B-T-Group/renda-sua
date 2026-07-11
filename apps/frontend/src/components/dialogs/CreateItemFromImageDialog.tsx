@@ -14,10 +14,9 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { BusinessImage } from '../../hooks/useBusinessImages';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import { useCreateItemFromImage } from '../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../hooks/useImageItemSuggestions';
-import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
 
 interface CreateItemFromImageDialogProps {
@@ -33,15 +32,13 @@ export const CreateItemFromImageDialog: React.FC<
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
-  const { primaryAddressCountry } = useBusinessLocations(profile?.business?.id);
-  const { countries } = useSupportedCountries();
+  const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const [name, setName] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [subCategoryName, setSubCategoryName] = useState('');
   const [brandName, setBrandName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState<string>('');
-  const [currency, setCurrency] = useState<string>('XAF');
   const [showSummary, setShowSummary] = useState(false);
   const [createdItem, setCreatedItem] = useState<any | null>(null);
 
@@ -71,7 +68,6 @@ export const CreateItemFromImageDialog: React.FC<
           ? String(suggestions.price)
           : ''
       );
-      setCurrency(suggestions.currency || 'XAF');
     } else {
       setName(image.caption || '');
       setCategoryName('');
@@ -79,19 +75,8 @@ export const CreateItemFromImageDialog: React.FC<
       setBrandName('');
       setDescription('');
       setPrice('');
-      setCurrency('XAF');
     }
   }, [open, image, suggestions]);
-
-  useEffect(() => {
-    if (!primaryAddressCountry || !countries.length) return;
-    const match = countries.find(
-      (c) => c.code?.toUpperCase() === primaryAddressCountry.toUpperCase()
-    );
-    if (match?.currencyCode) {
-      setCurrency(match.currencyCode.toUpperCase());
-    }
-  }, [primaryAddressCountry, countries]);
 
   useEffect(() => {
     if (suggestionsError) {
@@ -149,7 +134,7 @@ export const CreateItemFromImageDialog: React.FC<
       price: numericPrice,
       currency:
         numericPrice != null && !Number.isNaN(numericPrice)
-          ? currency.trim() || 'XAF'
+          ? lockedCurrency
           : undefined,
     });
     if (!result) return;
@@ -276,9 +261,12 @@ export const CreateItemFromImageDialog: React.FC<
           'Currency'
         )}
         fullWidth
-        value={currency}
-        onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-        disabled={createLoading || suggestionsLoading}
+        value={lockedCurrency}
+        disabled
+        helperText={t(
+          'business.items.currencyLockedToCountry',
+          'Locked to your business country'
+        )}
       />
 
       <TextField

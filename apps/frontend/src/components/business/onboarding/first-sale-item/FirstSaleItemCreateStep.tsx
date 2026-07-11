@@ -26,11 +26,11 @@ import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import { useApiClient } from '../../../../hooks/useApiClient';
 import { useBrands } from '../../../../hooks/useBrands';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
-import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useCategories, useSubcategories } from '../../../../hooks/useCategories';
 import { useCreateItemFromImage } from '../../../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import { Item, useItems } from '../../../../hooks/useItems';
+import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import ProductTaxCategorySelect from '../../../business/ProductTaxCategorySelect';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../../../hooks/useStripeTaxCodes';
 
@@ -90,7 +90,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const { profile } = useUserProfileContext();
   const apiClient = useApiClient();
   const { updateItem } = useItems(profile?.business?.id, { skipInitialItemsFetch: true });
-  const { primaryAddressCountry } = useBusinessLocations(profile?.business?.id);
+  const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const primaryId = imageIds[0] ?? '';
   const extraIds = imageIds.slice(1);
   const [aiTrigger, setAiTrigger] = useState(0);
@@ -104,7 +104,6 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const [brandName, setBrandName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [currency, setCurrency] = useState('XAF');
   const [stripeTaxCodeId, setStripeTaxCodeId] = useState(
     STRIPE_TAX_CODE_GENERAL_TANGIBLE
   );
@@ -148,7 +147,6 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         setName(it.name ?? '');
         setDescription(it.description ?? '');
         setPrice(it.price != null && !Number.isNaN(Number(it.price)) ? String(it.price) : '');
-        setCurrency(it.currency ?? 'XAF');
         setCategoryName(it.item_sub_category?.item_category?.name ?? '');
         setSubCategoryName(it.item_sub_category?.name ?? '');
         setBrandName(it.brand?.name ?? '');
@@ -178,17 +176,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     setPrice(
       suggestions.price != null && !Number.isNaN(suggestions.price) ? String(suggestions.price) : ''
     );
-    setCurrency(suggestions.currency || 'XAF');
   }, [suggestions, itemForEdit, existingItem?.id, skipAiHydrate]);
-
-  useEffect(() => {
-    if (!primaryAddressCountry) return;
-    // Map country code to a known currency — XAF for CEMAC region codes
-    const cmacCodes = ['CM', 'TD', 'CF', 'CG', 'GQ', 'GA'];
-    if (cmacCodes.includes(primaryAddressCountry.toUpperCase())) {
-      setCurrency('XAF');
-    }
-  }, [primaryAddressCountry]);
 
   useEffect(() => {
     if (!sugError) return;
@@ -235,7 +223,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
             name: name.trim(),
             description: description.trim() || undefined,
             price: numericPrice ?? itemForEdit.price,
-            currency: currency.trim() || 'XAF',
+            currency: lockedCurrency,
             stripe_tax_code_id: stripeTaxCodeId,
           },
           { skipRefetch: true }
@@ -244,7 +232,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
           t('business.onboarding.firstSale.create.updateSuccess', 'Product updated'),
           { variant: 'success' }
         );
-        onComplete({ id: itemForEdit.id, name: name.trim(), price: numericPrice, currency: currency.trim() || 'XAF' });
+        onComplete({ id: itemForEdit.id, name: name.trim(), price: numericPrice, currency: lockedCurrency });
       } catch (e: any) {
         enqueueSnackbar(
           e?.message || t('business.onboarding.firstSale.create.updateError', 'Update failed'),
@@ -264,7 +252,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
       brandName: brandName.trim() || undefined,
       description: description.trim() || undefined,
       price: numericPrice,
-      currency: numericPrice != null ? currency.trim() || 'XAF' : undefined,
+      currency: numericPrice != null ? lockedCurrency : undefined,
     });
     const itemId = res?.item?.id;
     if (!itemId) return;
@@ -281,7 +269,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
       t('business.onboarding.firstSale.create.success', 'Product created'),
       { variant: 'success' }
     );
-    onComplete({ id: itemId, name: name.trim(), price: numericPrice, currency: currency.trim() || 'XAF' });
+    onComplete({ id: itemId, name: name.trim(), price: numericPrice, currency: lockedCurrency });
   };
 
   const formDisabled = sugLoading || createLoading || saveBusy || itemLoading;
@@ -502,9 +490,12 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         />
         <TextField
           label={t('business.onboarding.firstSale.create.currency', 'Currency')}
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value)}
-          disabled={formDisabled}
+          value={lockedCurrency}
+          disabled
+          helperText={t(
+            'business.items.currencyLockedToCountry',
+            'Locked to your business country'
+          )}
           sx={{ width: { sm: 120 }, height: { sm: 56 } }}
         />
       </Stack>

@@ -433,6 +433,16 @@ export class HasuraSystemService {
   }
 
   /**
+   * Currency for a business based on its primary address country
+   * (e.g. CA → CAD, GA/CM → XAF). Falls back to XAF when unknown.
+   */
+  async resolveBusinessCurrency(businessId: string): Promise<string> {
+    const country = await this.getBusinessPrimaryAddressCountry(businessId);
+    if (!country) return 'XAF';
+    return this.getCurrencyFromCountry(country);
+  }
+
+  /**
    * Get account by ID
    */
   async getAccountById(accountId: string) {

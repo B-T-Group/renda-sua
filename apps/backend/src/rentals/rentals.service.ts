@@ -1022,6 +1022,8 @@ export class RentalsService {
 
   async createBusinessRentalItem(dto: CreateBusinessRentalItemDto): Promise<string> {
     const businessId = await this.requireBusinessId();
+    const currency =
+      await this.hasuraSystemService.resolveBusinessCurrency(businessId);
     const row = await this.hasuraUserService.executeMutation<{
       insert_rental_items_one: { id: string } | null;
     }>(Q.INSERT_BUSINESS_RENTAL_ITEM, {
@@ -1031,7 +1033,7 @@ export class RentalsService {
         name: dto.name.trim(),
         description: dto.description?.trim() ?? '',
         tags: dto.tags ?? [],
-        currency: dto.currency?.trim() || 'XAF',
+        currency,
         operation_mode: dto.operation_mode ?? 'business_operated',
         is_active: true,
       },
@@ -1149,6 +1151,10 @@ export class RentalsService {
     const businessId = await this.requireBusinessId();
     await this.assertRentalItemForBusiness(itemId, businessId);
     const changes = this.buildRentalItemUpdateSet(dto);
+    if (dto.currency !== undefined || changes.currency !== undefined) {
+      changes.currency =
+        await this.hasuraSystemService.resolveBusinessCurrency(businessId);
+    }
     if (!Object.keys(changes).length) {
       return;
     }

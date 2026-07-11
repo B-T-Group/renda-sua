@@ -16,7 +16,9 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { RentalItemImage } from '../../hooks/useRentalItemImages';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import { useCreateRentalFromImage } from '../../hooks/useCreateRentalFromImage';
 import { useRentalFromImageSuggestions } from '../../hooks/useRentalFromImageSuggestions';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
@@ -38,10 +40,11 @@ export const CreateRentalFromImageDialog: React.FC<
 > = ({ open, image, entrySource, onClose, onCreated }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
+  const { profile } = useUserProfileContext();
+  const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const [name, setName] = useState('');
   const [rentalCategoryId, setRentalCategoryId] = useState('');
   const [description, setDescription] = useState('');
-  const [currency, setCurrency] = useState('XAF');
   const [isActive, setIsActive] = useState(false);
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiCategoryHint, setAiCategoryHint] = useState<string | null>(null);
@@ -60,7 +63,6 @@ export const CreateRentalFromImageDialog: React.FC<
     setName('');
     setRentalCategoryId('');
     setDescription('');
-    setCurrency('XAF');
     setIsActive(false);
     setAiSuggestedTags([]);
     setAiCategoryHint(null);
@@ -85,7 +87,6 @@ export const CreateRentalFromImageDialog: React.FC<
     setName(suggestions.name?.trim() || image.caption?.trim() || '');
     setDescription(suggestions.description?.trim() || '');
     setRentalCategoryId(suggestions.rental_category_id || '');
-    setCurrency(suggestions.currency?.trim() || 'XAF');
     setAiSuggestedTags(suggestions.suggested_tags ?? []);
     setAiCategoryHint(
       suggestions.rental_category_id
@@ -122,7 +123,7 @@ export const CreateRentalFromImageDialog: React.FC<
       name: name.trim(),
       rental_category_id: rentalCategoryId,
       description: description.trim() || undefined,
-      currency: currency.trim() || 'XAF',
+      currency: lockedCurrency,
       is_active: isActive,
       tags: aiSuggestedTags.length ? aiSuggestedTags : undefined,
     });
@@ -292,9 +293,12 @@ export const CreateRentalFromImageDialog: React.FC<
               'Currency'
             )}
             fullWidth
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-            disabled={formDisabled}
+            value={lockedCurrency}
+            disabled
+            helperText={t(
+              'business.items.currencyLockedToCountry',
+              'Locked to your business country'
+            )}
           />
           <FormControlLabel
             control={

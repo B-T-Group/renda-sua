@@ -23,7 +23,8 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
+import { WEIGHT_UNITS } from '../../constants/enums';
+import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
   AddInventoryItemData,
   useBusinessInventory,
@@ -81,6 +82,7 @@ export default function AddItemDialog({
   loading,
 }: AddItemDialogProps) {
   const { t } = useTranslation();
+  const { lockedCurrency } = useBusinessLockedCurrency(businessId);
   const [tabValue, setTabValue] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [inventoryData, setInventoryData] = useState<
@@ -94,6 +96,7 @@ export default function AddItemDialog({
     min_order_quantity: 1,
     max_order_quantity: 1,
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
+    currency: 'XAF',
   });
   const [newBrandData, setNewBrandData] = useState<CreateBrandData>({
     name: '',
@@ -147,6 +150,15 @@ export default function AddItemDialog({
       }));
     }
   }, [businessId]);
+
+  useEffect(() => {
+    if (!lockedCurrency) return;
+    setNewItemData((prev) =>
+      prev.currency === lockedCurrency
+        ? prev
+        : { ...prev, currency: lockedCurrency }
+    );
+  }, [lockedCurrency]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -574,22 +586,16 @@ export default function AddItemDialog({
                 }
               />
 
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.currency')}</InputLabel>
-                <Select
-                  value={newItemData.currency || 'USD'}
-                  onChange={(e) =>
-                    setNewItemData({ ...newItemData, currency: e.target.value })
-                  }
-                  label={t('business.inventory.currency')}
-                >
-                  {CURRENCIES.map((currency) => (
-                    <MenuItem key={currency} value={currency}>
-                      {currency}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                disabled
+                label={t('business.inventory.currency')}
+                value={newItemData.currency || lockedCurrency}
+                helperText={t(
+                  'business.items.currencyLockedToCountry',
+                  'Locked to your business country'
+                )}
+              />
             </Stack>
 
             <Stack direction="row" spacing={2}>

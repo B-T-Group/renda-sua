@@ -417,6 +417,8 @@ export class RentalItemImagesService {
       mode === 'ai'
         ? await this.buildCreateFieldsFromAi(dto, image, preferredLanguage)
         : this.buildCreateFieldsManual(dto, image);
+    fields.currency =
+      await this.hasuraSystemService.resolveBusinessCurrency(businessId);
     return this.persistRentalItemFromImage(businessId, image, fields);
   }
 

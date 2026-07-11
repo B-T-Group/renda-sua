@@ -1986,6 +1986,7 @@
       "createdAt": "Créé le",
       "csvUpload": "Téléverser fichier csv des produits",
       "currency": "Devise",
+      "currencyLockedToCountry": "Verrouillée sur le pays de votre entreprise",
       "deleteError": "Échec de la suppression de l'article",
       "deleteItem": "Supprimer l'article",
       "deleteItemConfirm": "Êtes-vous sûr de vouloir supprimer « {{name}} » ? L'article sera retiré de tous les emplacements.",
