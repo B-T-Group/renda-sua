@@ -468,6 +468,28 @@ export class BusinessItemsController {
     return { success: true, data: { item } };
   }
 
+  @Post('items/:id/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Publish a draft sale item (submits for AI/manual moderation)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Item submitted for review' })
+  @ApiResponse({ status: 400, description: 'Item is not a draft' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async publishItem(
+    @Param('id') itemId: string,
+    @Query('businessId') businessId: string | undefined
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const item = await this.businessItemsService.publishBusinessItem(
+      ctx.targetBusinessId,
+      itemId
+    );
+    return { success: true, data: { item } };
+  }
+
   @Patch('items/:itemId')
   @ApiOperation({
     summary: 'Update an item for the current business',

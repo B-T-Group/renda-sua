@@ -337,6 +337,34 @@ export function useBusinessDashboardModules({
         path: '/admin/rental-listings/ai-reviews',
       },
       {
+        title: t(
+          'business.dashboard.manageItemModeration',
+          'Sale item moderation'
+        ),
+        description: t(
+          'business.dashboard.manageItemModerationDescription',
+          'Approve or reject sale items before they go live'
+        ),
+        icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#4e342e',
+        path: '/admin/items/moderation',
+      },
+      {
+        title: t(
+          'business.dashboard.manageItemAiReviews',
+          'Sale item AI review audit'
+        ),
+        description: t(
+          'business.dashboard.manageItemAiReviewsDescription',
+          'Review AI auto-approval decisions for sale items and apply overrides.'
+        ),
+        icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#5d4037',
+        path: '/admin/items/ai-reviews',
+      },
+      {
         title: t('business.dashboard.manageConfigurations'),
         description: t('business.dashboard.manageConfigurationsDescription'),
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,

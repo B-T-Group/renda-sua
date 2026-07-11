@@ -29,6 +29,9 @@ import type {
   RentalListingRejectedEmailPayload,
   RentalListingAiProposalEmailPayload,
   RentalPeriodEndedEmailPayload,
+  SaleItemModerationEmailPayload,
+  SaleItemRejectedEmailPayload,
+  SaleItemAiProposalEmailPayload,
 } from './notification-types';
 import {
   smsFirstOrderShareCode,
@@ -71,7 +74,10 @@ export type {
   ReferralRewardEmailPayload,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
-  RentalPeriodEndedEmailPayload
+  RentalPeriodEndedEmailPayload,
+  SaleItemModerationEmailPayload,
+  SaleItemRejectedEmailPayload,
+  SaleItemAiProposalEmailPayload,
 } from './notification-types';
 
 /**
@@ -884,6 +890,98 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendRentalListingAiProposalEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendSaleItemApprovedEmail(
+    payload: SaleItemModerationEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Sale item approved email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_sale_item_approved',
+          locale
+        ),
+        variables: {
+          itemId: payload.itemId,
+          itemName: payload.itemName,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendSaleItemApprovedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendSaleItemRejectedEmail(
+    payload: SaleItemRejectedEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Sale item rejected email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_sale_item_rejected',
+          locale
+        ),
+        variables: {
+          itemId: payload.itemId,
+          itemName: payload.itemName,
+          rejectionReason: payload.rejectionReason,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendSaleItemRejectedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendSaleItemAiProposalEmail(
+    payload: SaleItemAiProposalEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Sale item AI proposal email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_sale_item_ai_proposal',
+          locale
+        ),
+        variables: {
+          itemId: payload.itemId,
+          itemName: payload.itemName,
+          proposalSummary: payload.proposalSummary,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendSaleItemAiProposalEmail: ${error?.message ?? String(error)}`
       );
     }
   }

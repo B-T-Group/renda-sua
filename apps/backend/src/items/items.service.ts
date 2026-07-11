@@ -19,6 +19,7 @@ const GET_ITEM_BY_ID = `
       business_id
       name
       description
+      moderation_status
     }
   }
 `;
@@ -63,6 +64,7 @@ const UPDATE_ITEM = `
       min_order_quantity
       max_order_quantity
       is_active
+      moderation_status
       business_id
       created_at
       updated_at
@@ -109,7 +111,12 @@ export class ItemsService {
     businessId: string,
     input: ItemsInsertInput
   ): Promise<Record<string, unknown>> {
-    const itemData = { ...input, business_id: businessId };
+    const itemData = {
+      ...input,
+      business_id: businessId,
+      // Never allow clients to activate on create; moderation must approve first
+      is_active: false,
+    };
     const result = await this.hasuraUserService.executeMutation<{
       insert_items_one: {
         id: string;
@@ -137,6 +144,17 @@ export class ItemsService {
     const item = await this.requireOwnedItem(businessId, itemId);
     const itemData = this.normalizeUpdatePayload(updates);
     if (itemData.is_active === true) {
+      if (item.moderation_status !== 'approved') {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'ITEM_NOT_APPROVED',
+            message:
+              'Item must be approved by moderation before it can be activated.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
       await this.activationValidation.assertItemCanActivate(itemId);
     }
     const result = await this.hasuraUserService.executeMutation<{
@@ -159,13 +177,18 @@ export class ItemsService {
   private async requireOwnedItem(
     businessId: string,
     itemId: string
-  ): Promise<{ name: string; description: string }> {
+  ): Promise<{
+    name: string;
+    description: string;
+    moderation_status: string;
+  }> {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: {
         id: string;
         business_id: string;
         name: string;
         description: string;
+        moderation_status: string;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;

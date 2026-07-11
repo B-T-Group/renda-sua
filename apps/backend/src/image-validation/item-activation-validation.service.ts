@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
 const COUNT_ITEM_IMAGES = `
@@ -21,33 +22,30 @@ const MIN_IMAGES_FOR_ACTIVE = 2;
 
 @Injectable()
 export class ItemActivationValidationService {
-  constructor(private readonly hasuraUserService: HasuraUserService) {}
+  constructor(
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService
+  ) {}
 
   async assertItemCanActivate(itemId: string): Promise<void> {
     const row = await this.hasuraUserService.executeQuery<{
       item_images: { validation_errors: unknown[] }[];
     }>(COUNT_ITEM_IMAGES, { itemId });
+    this.assertItemImagesReady(row?.item_images ?? []);
+  }
 
-    const images = row?.item_images ?? [];
-    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'ITEM_MIN_IMAGES',
-          message:
-            'At least two product images are required before activating this item.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    this.assertNoBlockingErrors(images);
+  /** System/admin/AI paths without a user JWT. */
+  async assertItemCanActivateAsSystem(itemId: string): Promise<void> {
+    const row = await this.hasuraSystemService.executeQuery<{
+      item_images: { validation_errors: unknown[] }[];
+    }>(COUNT_ITEM_IMAGES, { itemId });
+    this.assertItemImagesReady(row?.item_images ?? []);
   }
 
   async assertRentalItemCanActivate(rentalItemId: string): Promise<void> {
     const row = await this.hasuraUserService.executeQuery<{
       rental_item_images: { validation_errors: unknown[] }[];
     }>(COUNT_RENTAL_IMAGES, { rentalItemId });
-
     const images = row?.rental_item_images ?? [];
     if (images.length < MIN_IMAGES_FOR_ACTIVE) {
       throw new HttpException(
@@ -56,6 +54,23 @@ export class ItemActivationValidationService {
           error: 'ITEM_MIN_IMAGES',
           message:
             'At least two product images are required before activating this rental item.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    this.assertNoBlockingErrors(images);
+  }
+
+  private assertItemImagesReady(
+    images: { validation_errors: unknown[] }[]
+  ): void {
+    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'ITEM_MIN_IMAGES',
+          message:
+            'At least two product images are required before activating this item.',
         },
         HttpStatus.BAD_REQUEST
       );

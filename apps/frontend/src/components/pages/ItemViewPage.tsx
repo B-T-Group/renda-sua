@@ -90,6 +90,7 @@ export default function ItemViewPage() {
   );
   const [viewerImageId, setViewerImageId] = useState<string | null>(null);
   const [itemActiveToggling, setItemActiveToggling] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
   const {
@@ -117,6 +118,7 @@ export default function ItemViewPage() {
     fetchBrands,
     fetchItemSubCategories,
     updateItem,
+    publishItem,
   } = useItems(effectiveBusinessId);
   const { fetchBusinessLocations } = useBusinessInventory(effectiveBusinessId);
 
@@ -234,6 +236,16 @@ export default function ItemViewPage() {
   const handleToggleItemActive = useCallback(
     async (nextActive: boolean) => {
       if (!item?.id) return;
+      if (nextActive && item.moderation_status !== 'approved') {
+        enqueueSnackbar(
+          t(
+            'business.items.moderation.activateRequiresApproval',
+            'Item must be approved before it can be activated.'
+          ),
+          { variant: 'warning' }
+        );
+        return;
+      }
       if (nextActive && sortedItemImages.length < 2) {
         enqueueSnackbar(
           t(
@@ -261,8 +273,47 @@ export default function ItemViewPage() {
         setItemActiveToggling(false);
       }
     },
-    [sortedItemImages.length, enqueueSnackbar, item?.id, t, updateItem]
+    [
+      sortedItemImages.length,
+      enqueueSnackbar,
+      item?.id,
+      item?.moderation_status,
+      t,
+      updateItem,
+    ]
   );
+
+  const handlePublishItem = useCallback(async () => {
+    if (!item?.id) return;
+    setPublishing(true);
+    try {
+      const published = await publishItem(item.id);
+      setItem((prev) =>
+        prev
+          ? {
+              ...prev,
+              moderation_status: published?.moderation_status ?? 'pending',
+              is_active: false,
+            }
+          : prev
+      );
+      enqueueSnackbar(
+        t(
+          'business.items.moderation.publishSuccess',
+          'Item submitted for approval'
+        ),
+        { variant: 'success' }
+      );
+    } catch (error: any) {
+      enqueueSnackbar(
+        error?.message ||
+          t('business.items.moderation.publishFailed', 'Could not publish item'),
+        { variant: 'error' }
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }, [enqueueSnackbar, item?.id, publishItem, t]);
 
   const handleSetImageAsGallery = useCallback(
     async (imageId: string) => {
@@ -426,11 +477,50 @@ export default function ItemViewPage() {
         name={item.name}
         sku={item.sku}
         isActive={Boolean(item.is_active)}
+        moderationStatus={item.moderation_status}
+        canToggleActive={item.moderation_status === 'approved'}
         toggling={itemActiveToggling}
         onToggleActive={(next) => void handleToggleItemActive(next)}
         onBack={handleBack}
         onEdit={handleEditItem}
       />
+
+      {(item.moderation_status === 'draft' ||
+        item.moderation_status === 'proposal_pending' ||
+        item.moderation_status === 'rejected') && (
+        <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {item.moderation_status === 'draft' ? (
+            <Button
+              variant="contained"
+              disabled={publishing}
+              onClick={() => void handlePublishItem()}
+            >
+              {t('business.items.moderation.publishItem', 'Publish item')}
+            </Button>
+          ) : null}
+          {item.moderation_status === 'proposal_pending' ? (
+            <Button
+              variant="contained"
+              onClick={() =>
+                navigate(`/business/items/${item.id}/ai-proposal`)
+              }
+            >
+              {t(
+                'business.items.aiProposal.reviewCta',
+                'Review AI suggestions'
+              )}
+            </Button>
+          ) : null}
+          {item.moderation_status === 'rejected' ? (
+            <Alert severity="warning" sx={{ flex: 1, minWidth: 240 }}>
+              {t(
+                'business.items.moderation.resubmitHint',
+                'If this item was rejected, saving name or description changes will send it for review again.'
+              )}
+            </Alert>
+          ) : null}
+        </Box>
+      )}
 
       {hasNoInventory && (
         <Alert

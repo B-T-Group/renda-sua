@@ -549,6 +549,9 @@ export class InventoryItemsService {
 
     const whereConditions: any[] = [];
     whereConditions.push({ is_active: { _eq: is_active } });
+    whereConditions.push({
+      item: { moderation_status: { _eq: 'approved' } },
+    });
     const businessFilter: Record<string, unknown> = {
       is_storefront_visible: { _eq: true },
     };
@@ -1539,6 +1542,7 @@ export class InventoryItemsService {
             is_active
             created_at
             updated_at
+            moderation_status
             item_sub_category {
               id
               name
@@ -1649,6 +1653,13 @@ export class InventoryItemsService {
       }
 
       if (item.business_location?.business?.is_storefront_visible !== true) {
+        throw new HttpException(
+          'Inventory item not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      if ((item as any).item?.moderation_status !== 'approved') {
         throw new HttpException(
           'Inventory item not found',
           HttpStatus.NOT_FOUND

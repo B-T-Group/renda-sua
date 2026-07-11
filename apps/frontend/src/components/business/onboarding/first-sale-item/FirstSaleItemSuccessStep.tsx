@@ -1,5 +1,5 @@
 import { CheckCircle as CheckIcon } from '@mui/icons-material';
-import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ interface FirstSaleItemSuccessStepProps {
   item: CreatedSaleItemSummary;
   intent?: SaleItemFromImageIntent;
   locationName?: string;
+  savedAsDraft?: boolean;
 }
 
 const scaleIn = {
@@ -23,31 +24,58 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
   item,
   intent = 'first',
   locationName,
+  savedAsDraft = false,
 }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
-  const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const isFirst = intent === 'first';
 
-  const bodyText = locationName
-    ? t(
-        isFirst
-          ? 'business.onboarding.firstSale.success.bodyWithLocation'
-          : 'business.onboarding.firstSale.success.bodyAdditionalWithLocation',
-        '{{name}} is on your catalog and available at {{locationName}}.',
-        { name: item.name, locationName }
-      )
-    : t(
-        isFirst
-          ? 'business.onboarding.firstSale.success.body'
-          : 'business.onboarding.firstSale.success.bodyAdditional',
-        '{{name}} is on your catalog and available at the location you chose.',
-        { name: item.name }
-      );
+  const title = savedAsDraft
+    ? t('business.onboarding.firstSale.success.draftTitle', 'Draft saved')
+    : isFirst
+      ? t(
+          'business.onboarding.firstSale.success.title',
+          'Your first product was submitted'
+        )
+      : t(
+          'business.onboarding.firstSale.success.titleAdditional',
+          'Product submitted for approval'
+        );
+
+  const bodyText = savedAsDraft
+    ? locationName
+      ? t(
+          'business.onboarding.firstSale.success.draftBodyWithLocation',
+          '{{name}} is saved as a draft at {{locationName}}. Open the product and publish when you are ready for review.',
+          { name: item.name, locationName }
+        )
+      : t(
+          'business.onboarding.firstSale.success.draftBody',
+          '{{name}} is saved as a draft. Open the product and publish when you are ready for review.',
+          { name: item.name }
+        )
+    : locationName
+      ? t(
+          isFirst
+            ? 'business.onboarding.firstSale.success.bodyWithLocation'
+            : 'business.onboarding.firstSale.success.bodyAdditionalWithLocation',
+          '{{name}} is stocked at {{locationName}} and awaits review before it appears in the public catalog.',
+          { name: item.name, locationName }
+        )
+      : t(
+          isFirst
+            ? 'business.onboarding.firstSale.success.body'
+            : 'business.onboarding.firstSale.success.bodyAdditional',
+          '{{name}} awaits review before it appears in the public catalog.',
+          { name: item.name }
+        );
 
   return (
-    <Stack spacing={3} alignItems="center" sx={{ py: { xs: 1, sm: 2 }, px: { xs: 0.5, sm: 0 } }}>
+    <Stack
+      spacing={3}
+      alignItems="center"
+      sx={{ py: { xs: 1, sm: 2 }, px: { xs: 0.5, sm: 0 } }}
+    >
       <Box
         sx={{
           ...scaleIn,
@@ -57,37 +85,73 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
         <CheckIcon color="success" sx={{ fontSize: 64 }} />
       </Box>
       <Typography variant="h5" textAlign="center" fontWeight={600}>
-        {isFirst
-          ? t('business.onboarding.firstSale.success.title', 'Your first product is live')
-          : t('business.onboarding.firstSale.success.titleAdditional', 'Your product is live')}
+        {title}
       </Typography>
       <Typography variant="body1" color="text.secondary" textAlign="center">
         {bodyText}
       </Typography>
       <Stack spacing={1} sx={{ width: '100%', maxWidth: 400 }}>
-        <Button
-          variant="contained"
-          component={RouterLink}
-          to={isFirst ? '/dashboard' : '/business/items'}
-          fullWidth
-          size="large"
-          sx={{ minHeight: 48 }}
-        >
-          {isFirst
-            ? t('business.onboarding.firstSale.success.dashboard', 'Back to dashboard')
-            : t('business.onboarding.firstSale.success.backToItems', 'Back to items')}
-        </Button>
+        {savedAsDraft ? (
+          <Button
+            variant="contained"
+            component={RouterLink}
+            to={`/business/items/${item.id}`}
+            fullWidth
+            size="large"
+            sx={{ minHeight: 48 }}
+          >
+            {t(
+              'business.onboarding.firstSale.success.publishFromItem',
+              'Open product to publish'
+            )}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            component={RouterLink}
+            to={isFirst ? '/dashboard' : '/business/items'}
+            fullWidth
+            size="large"
+            sx={{ minHeight: 48 }}
+          >
+            {isFirst
+              ? t(
+                  'business.onboarding.firstSale.success.dashboard',
+                  'Back to dashboard'
+                )
+              : t(
+                  'business.onboarding.firstSale.success.backToItems',
+                  'Back to items'
+                )}
+          </Button>
+        )}
         <Button
           variant="outlined"
           component={RouterLink}
-          to={`/business/items/${item.id}`}
+          to={
+            savedAsDraft
+              ? isFirst
+                ? '/dashboard'
+                : '/business/items'
+              : `/business/items/${item.id}`
+          }
           fullWidth
           size="large"
           sx={{ minHeight: 48 }}
         >
-          {t('business.onboarding.firstSale.success.viewItem', 'View product')}
+          {savedAsDraft
+            ? isFirst
+              ? t(
+                  'business.onboarding.firstSale.success.dashboard',
+                  'Back to dashboard'
+                )
+              : t(
+                  'business.onboarding.firstSale.success.backToItems',
+                  'Back to items'
+                )
+            : t('business.onboarding.firstSale.success.viewItem', 'View product')}
         </Button>
-        {!isFirst && (
+        {!isFirst && !savedAsDraft && (
           <Button
             variant="text"
             onClick={() => navigate('/business/items/add-from-image')}
@@ -95,7 +159,10 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
             size="large"
             sx={{ minHeight: 48 }}
           >
-            {t('business.onboarding.firstSale.success.addAnother', 'Add another product')}
+            {t(
+              'business.onboarding.firstSale.success.addAnother',
+              'Add another product'
+            )}
           </Button>
         )}
       </Stack>

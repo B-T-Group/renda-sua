@@ -20,6 +20,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.constants';
 import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -50,6 +51,9 @@ const GET_ITEMS = `
       min_order_quantity
       max_order_quantity
       is_active
+      moderation_status
+      moderated_at
+      moderation_source
       business_id
       stripe_tax_code_id
       stripe_tax_code {
@@ -226,6 +230,9 @@ const GET_SINGLE_ITEM = `
       min_order_quantity
       max_order_quantity
       is_active
+      moderation_status
+      moderated_at
+      moderation_source
       business_id
       stripe_tax_code_id
       stripe_tax_code {
@@ -349,12 +356,68 @@ const GET_SINGLE_ITEM = `
   }
 `;
 
+const PUBLISH_ITEM_FROM_DRAFT = `
+  mutation PublishItemFromDraft($id: uuid!) {
+    update_items(
+      where: {
+        id: { _eq: $id }
+        moderation_status: { _eq: draft }
+        status: { _eq: active }
+      }
+      _set: {
+        moderation_status: pending
+        moderated_at: null
+        moderated_by_user_id: null
+        moderation_source: null
+        is_active: false
+      }
+    ) {
+      affected_rows
+      returning {
+        id
+        moderation_status
+      }
+    }
+  }
+`;
+
+const RESET_ITEM_MODERATION_PENDING = `
+  mutation ResetItemModerationPending($id: uuid!) {
+    update_items_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        moderation_status: pending
+        moderated_at: null
+        moderated_by_user_id: null
+        moderation_source: null
+        is_active: false
+      }
+    ) {
+      id
+    }
+  }
+`;
+
+const GET_ITEM_MODERATION_ROW = `
+  query GetItemModerationRow($itemId: uuid!) {
+    items_by_pk(id: $itemId) {
+      id
+      business_id
+      moderation_status
+      name
+      description
+      status
+    }
+  }
+`;
+
 const GET_AVAILABLE_ITEMS = `
   query GetAvailableItems {
     items(
       where: { 
         is_active: { _eq: true },
         status: { _eq: active },
+        moderation_status: { _eq: approved },
         business: { is_storefront_visible: { _eq: true } }
       }
       order_by: { name: asc }
@@ -635,6 +698,7 @@ export class BusinessItemsService {
     private readonly businessImagesService: BusinessImagesService,
     private readonly aiService: AiService,
     private readonly itemsService: ItemsService,
+    private readonly itemAiReviewService: ItemAiReviewService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly permissionService: PermissionService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
@@ -1317,9 +1381,39 @@ export class BusinessItemsService {
     const created = await this.itemsService.createItem(businessId, {
       ...(input as ItemsInsertInput),
       stripe_tax_code_id,
+      // Starts as draft; publish submits for moderation. DB default is draft.
+      is_active: false,
     });
     this.triggerLifecycleRecompute(businessId);
     return created;
+  }
+
+  async publishBusinessItem(
+    businessId: string,
+    itemId: string
+  ): Promise<{ id: string; moderation_status: string }> {
+    const item = await this.loadItemModerationRow(businessId, itemId);
+    if (item.moderation_status !== 'draft') {
+      throw new HttpException(
+        'Only draft items can be published',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_items: {
+        affected_rows: number;
+        returning: Array<{ id: string; moderation_status: string }>;
+      };
+    }>(PUBLISH_ITEM_FROM_DRAFT, { id: itemId });
+    const row = result.update_items?.returning?.[0];
+    if (!row || result.update_items.affected_rows < 1) {
+      throw new HttpException(
+        'Failed to publish item',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    void this.itemAiReviewService.requestReview(itemId);
+    return row;
   }
 
   async updateItem(
@@ -1328,6 +1422,8 @@ export class BusinessItemsService {
     updates: UpdateItemDto
   ) {
     await this.assertOfflinePaymentAllowed(businessId, updates);
+    const existing = await this.loadItemModerationRow(businessId, itemId);
+    const wasRejected = existing.moderation_status === 'rejected';
     const payload: UpdateItemDto = { ...updates };
     if (updates.stripe_tax_code_id !== undefined) {
       try {
@@ -1347,8 +1443,73 @@ export class BusinessItemsService {
       itemId,
       payload
     );
+    const contentKeys = Object.keys(updates).filter((k) => k !== 'is_active');
+    if (wasRejected && contentKeys.length > 0) {
+      await this.resetRejectedItemToPendingModeration(itemId);
+    }
     this.triggerLifecycleRecompute(businessId);
     return updated;
+  }
+
+  private async loadItemModerationRow(
+    businessId: string,
+    itemId: string
+  ): Promise<{
+    id: string;
+    business_id: string;
+    moderation_status: string;
+    name: string;
+    description: string | null;
+    status: string;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        moderation_status: string;
+        name: string;
+        description: string | null;
+        status: string;
+      } | null;
+    }>(GET_ITEM_MODERATION_ROW, { itemId });
+    const item = result.items_by_pk;
+    if (!item || item.business_id !== businessId || item.status !== 'active') {
+      throw new HttpException(
+        { success: false, error: 'Item not found or not owned by business' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return item;
+  }
+
+  private async resetRejectedItemToPendingModeration(
+    itemId: string
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_items_by_pk: { id: string } | null;
+    }>(RESET_ITEM_MODERATION_PENDING, { id: itemId });
+    if (!result.update_items_by_pk) {
+      throw new HttpException(
+        'Failed to resubmit item for review',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    void this.itemAiReviewService.requestReview(itemId);
+  }
+
+  /** CSV rows: publish drafts into the moderation queue; resubmit rejected after image fixes. */
+  private async ensureCsvItemSubmittedForReview(
+    businessId: string,
+    itemId: string
+  ): Promise<void> {
+    const item = await this.loadItemModerationRow(businessId, itemId);
+    if (item.moderation_status === 'draft') {
+      await this.publishBusinessItem(businessId, itemId);
+      return;
+    }
+    if (item.moderation_status === 'rejected') {
+      await this.itemAiReviewService.resubmitIfRejected(itemId);
+    }
   }
 
   /**
@@ -1468,14 +1629,11 @@ export class BusinessItemsService {
             requires_special_handling: row.requires_special_handling,
             min_order_quantity: row.min_order_quantity,
             max_order_quantity: row.max_order_quantity,
-            is_active: row.is_active,
+            // Never activate via CSV — moderation must approve first
+            is_active: false,
             brand_id: row.brand_id,
           };
-          await this.itemsService.updateItem(
-            businessId,
-            existingItem.id,
-            itemData
-          );
+          await this.updateItem(businessId, existingItem.id, itemData);
           this.logger.log(`CSV upload: updated item id=${existingItem.id} name="${row.name}"`);
           details.updated.push(`Item: ${row.name}`);
           updatedCount++;
@@ -1516,7 +1674,8 @@ export class BusinessItemsService {
             requires_special_handling: row.requires_special_handling,
             min_order_quantity: row.min_order_quantity,
             max_order_quantity: row.max_order_quantity,
-            is_active: row.is_active,
+            // New items start inactive until moderation approves them
+            is_active: false,
             brand_id: row.brand_id,
           };
           const newItem = await this.itemsService.createItem(
@@ -1636,6 +1795,8 @@ export class BusinessItemsService {
             });
           }
         }
+
+        await this.ensureCsvItemSubmittedForReview(businessId, itemId);
       } catch (err) {
         errorCount++;
         const errMsg = err instanceof Error ? err.message : 'Unknown error';

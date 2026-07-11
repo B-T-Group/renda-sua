@@ -14,6 +14,9 @@ object_relationships:
   - name: stripe_tax_code
     using:
       foreign_key_constraint_on: stripe_tax_code_id
+  - name: moderated_by_user
+    using:
+      foreign_key_constraint_on: moderated_by_user_id
 array_relationships:
   - name: business_inventories
     using:
@@ -77,6 +80,13 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: item_variants
+          schema: public
+  - name: ai_reviews
+    using:
+      foreign_key_constraint_on:
+        column: item_id
+        table:
+          name: item_ai_reviews
           schema: public
 insert_permissions:
   - role: business
@@ -142,9 +152,12 @@ select_permissions:
         - pay_at_pickup_enabled
         - status
         - stripe_tax_code_id
+        - moderation_status
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        moderation_status:
+          _eq: approved
   - role: anonymous
     permission:
       columns:
@@ -174,9 +187,12 @@ select_permissions:
         - pay_at_pickup_enabled
         - status
         - stripe_tax_code_id
+        - moderation_status
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        moderation_status:
+          _eq: approved
   - role: business
     permission:
       columns:
@@ -206,6 +222,12 @@ select_permissions:
         - pay_at_pickup_enabled
         - status
         - stripe_tax_code_id
+        - moderation_status
+        - moderated_at
+        - moderated_by_user_id
+        - ai_reviewed_at
+        - ai_review_version
+        - moderation_source
         - created_at
         - updated_at
       filter:
@@ -242,9 +264,12 @@ select_permissions:
         - pay_at_pickup_enabled
         - status
         - stripe_tax_code_id
+        - moderation_status
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        moderation_status:
+          _eq: approved
   - role: user
     permission:
       columns:
@@ -274,9 +299,12 @@ select_permissions:
         - pay_at_pickup_enabled
         - status
         - stripe_tax_code_id
+        - moderation_status
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        moderation_status:
+          _eq: approved
 update_permissions:
   - role: business
     permission:

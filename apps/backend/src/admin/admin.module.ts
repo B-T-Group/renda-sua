@@ -14,7 +14,10 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { ConfigurationsController } from './configurations.controller';
 import { ConfigurationsService } from './configurations.service';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
+import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
+import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
+import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { WithdrawalPinService } from './withdrawal-pin.service';
 
 @Module({
@@ -26,6 +29,8 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     MerchantLifecycleModule,
     BusinessContractsModule,
     RentalListingAiReviewModule,
+    ItemAiReviewModule,
+    ImageValidationModule,
   ],
   controllers: [AdminController, ConfigurationsController, AdminSiteEventsController],
   providers: [
@@ -33,6 +38,7 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     AdminService,
     ConfigurationsService,
     RentalListingModerationService,
+    ItemModerationService,
     ApplicationSetupService,
     CountryOnboardingService,
     WithdrawalPinService,
@@ -42,6 +48,7 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     AdminService,
     ConfigurationsService,
     RentalListingModerationService,
+    ItemModerationService,
     ApplicationSetupService,
     CountryOnboardingService,
     WithdrawalPinService,

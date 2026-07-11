@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 
 export interface BusinessImage {
   id: string;
@@ -234,7 +235,8 @@ const ITEM_IMAGES_ORDERED_FOR_ITEM = `
 export class BusinessImagesService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly itemAiReviewService: ItemAiReviewService
   ) {}
 
   async getBusinessImages(
@@ -347,6 +349,7 @@ export class BusinessImagesService {
       status: 'assigned',
       display_order: displayOrder,
     });
+    await this.itemAiReviewService.resubmitIfRejected(itemId);
   }
 
   async disassociateImageFromItem(

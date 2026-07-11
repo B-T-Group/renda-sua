@@ -1,7 +1,6 @@
 import { Add as AddIcon } from '@mui/icons-material';
 import {
   Alert,
-  Box,
   Button,
   FormControl,
   InputLabel,
@@ -26,7 +25,7 @@ import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 
 interface FirstSaleItemLocationStepProps {
   item: CreatedSaleItemSummary;
-  onComplete: (locationName?: string) => void;
+  onComplete: (savedAsDraft: boolean, locationName?: string) => void;
 }
 
 const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
@@ -52,7 +51,7 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
     fetchBusinessLocations,
     loading: invLoading,
   } = useBusinessInventory(businessId);
-  const { updateItem } = useItems(businessId);
+  const { publishItem } = useItems(businessId, { skipInitialItemsFetch: true });
 
   const [locationId, setLocationId] = useState('');
   const [qty, setQty] = useState('1');
@@ -74,7 +73,6 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
 
   const list = businessLocations.length ? businessLocations : locations;
   const price = item.price ?? 0;
-  const currency = item.currency || 'XAF';
 
   const saveLocation = async (data: AddBusinessLocationData) => {
     const created = await addLocation(data);
@@ -84,7 +82,22 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
     setModalOpen(false);
   };
 
-  const finish = async () => {
+  const addStock = async () => {
+    const q = Math.max(0, Number.parseInt(qty, 10) || 0);
+    await addInventoryItem({
+      business_location_id: locationId,
+      item_id: item.id,
+      quantity: q,
+      reserved_quantity: 0,
+      reorder_point: 0,
+      reorder_quantity: 0,
+      unit_cost: price,
+      selling_price: price,
+      is_active: true,
+    });
+  };
+
+  const finish = async (publish: boolean) => {
     if (!locationId) {
       enqueueSnackbar(
         t(
@@ -95,30 +108,28 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
       );
       return;
     }
-    const q = Math.max(0, Number.parseInt(qty, 10) || 0);
     setSaving(true);
     try {
-      await addInventoryItem({
-        business_location_id: locationId,
-        item_id: item.id,
-        quantity: q,
-        reserved_quantity: 0,
-        reorder_point: 0,
-        reorder_quantity: 0,
-        unit_cost: price,
-        selling_price: price,
-        is_active: true,
-      });
-      await updateItem(item.id, { is_active: true });
+      await addStock();
+      if (publish) {
+        await publishItem(item.id);
+      }
       enqueueSnackbar(
-        t(
-          'business.onboarding.firstSale.location.success',
-          'Item added to your location'
-        ),
+        publish
+          ? t(
+              'business.onboarding.firstSale.location.publishSuccess',
+              'Product submitted for approval'
+            )
+          : t(
+              'business.onboarding.firstSale.location.draftSuccess',
+              'Product saved as draft'
+            ),
         { variant: 'success' }
       );
-      const selectedLoc = list.find((l: { id: string; name: string }) => l.id === locationId);
-      onComplete(selectedLoc?.name);
+      const selectedLoc = list.find(
+        (l: { id: string; name: string }) => l.id === locationId
+      );
+      onComplete(!publish, selectedLoc?.name);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message ||
@@ -144,7 +155,7 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
       >
         {t(
           'business.onboarding.firstSale.location.hint',
-          'Choose where this product is stocked. You can add a new location if needed.'
+          'Choose where this product is stocked. Publish to submit for review, or save as draft.'
         )}
       </Typography>
       {!primaryAddressCountry && (
@@ -195,16 +206,31 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
         disabled={busy}
         inputProps={{ min: 0 }}
       />
-      <Button
-        variant="contained"
-        onClick={() => void finish()}
-        disabled={busy || !locationId}
-        fullWidth={isNarrow}
-        size="large"
-        sx={{ minHeight: 48 }}
-      >
-        {t('business.onboarding.firstSale.location.finish', 'Finish')}
-      </Button>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <Button
+          variant="contained"
+          onClick={() => void finish(true)}
+          disabled={busy || !locationId}
+          fullWidth={isNarrow}
+          size="large"
+          sx={{ minHeight: 48 }}
+        >
+          {t('business.onboarding.firstSale.location.publish', 'Publish product')}
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => void finish(false)}
+          disabled={busy || !locationId}
+          fullWidth={isNarrow}
+          size="large"
+          sx={{ minHeight: 48 }}
+        >
+          {t(
+            'business.onboarding.firstSale.location.saveDraft',
+            'Save as draft'
+          )}
+        </Button>
+      </Stack>
       <LocationModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

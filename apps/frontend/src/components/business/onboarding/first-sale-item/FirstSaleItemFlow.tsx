@@ -49,6 +49,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [item, setItem] = useState<CreatedSaleItemSummary | null>(null);
   const [locationName, setLocationName] = useState<string | undefined>(undefined);
+  const [savedAsDraft, setSavedAsDraft] = useState(false);
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -205,14 +206,20 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         {step === 2 && item && (
           <FirstSaleItemLocationStep
             item={item}
-            onComplete={(locName) => {
+            onComplete={(asDraft, locName) => {
+              setSavedAsDraft(asDraft);
               setLocationName(locName);
               setStep(3);
             }}
           />
         )}
         {step === 3 && item && (
-          <FirstSaleItemSuccessStep item={item} intent={intent} locationName={locationName} />
+          <FirstSaleItemSuccessStep
+            item={item}
+            intent={intent}
+            locationName={locationName}
+            savedAsDraft={savedAsDraft}
+          />
         )}
       </Paper>
 

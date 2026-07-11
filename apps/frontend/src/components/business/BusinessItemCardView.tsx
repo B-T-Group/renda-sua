@@ -18,6 +18,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   CardMedia,
@@ -33,6 +34,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import {
@@ -40,6 +42,7 @@ import {
   itemHasActivePromotion,
   itemHasSponsoredPromotion,
 } from '../../utils/businessItemListing';
+import ItemModerationStatusChip from './ItemModerationStatusChip';
 
 interface BusinessInventory {
   id: string;
@@ -86,6 +89,7 @@ interface Item {
   currency: string;
   sku: string;
   is_active: boolean;
+  moderation_status?: string | null;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
   is_fragile?: boolean;
@@ -159,6 +163,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   offlinePaymentsSupported = true,
 }) => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const [togglingActive, setTogglingActive] = useState(false);
   const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
@@ -267,6 +272,9 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
 
   const handleListingActiveChange = async (checked: boolean) => {
     if (!onToggleItemActive) return;
+    if (checked && item.moderation_status !== 'approved') {
+      return;
+    }
     setTogglingActive(true);
     try {
       await onToggleItemActive(item, checked);
@@ -359,6 +367,9 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               }}
             />
           )}
+          {item.moderation_status && item.moderation_status !== 'approved' ? (
+            <ItemModerationStatusChip status={item.moderation_status} />
+          ) : null}
           {isOutOfStock && (
             <Chip
               label={t('business.inventory.status.outOfStock', 'Out of Stock')}
@@ -647,7 +658,9 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               <Switch
                 size="small"
                 checked={item.is_active}
-                disabled={togglingActive}
+                disabled={
+                  togglingActive || item.moderation_status !== 'approved'
+                }
                 onChange={(_e, checked) => {
                   void handleListingActiveChange(checked);
                 }}
@@ -714,6 +727,25 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           )}
         </Box>
       )}
+
+      {item.moderation_status === 'proposal_pending' ? (
+        <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Button
+            size="small"
+            variant="contained"
+            fullWidth
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/business/items/${item.id}/ai-proposal`);
+            }}
+          >
+            {t(
+              'business.items.aiProposal.reviewCta',
+              'Review AI suggestions'
+            )}
+          </Button>
+        </Box>
+      ) : null}
 
       {(hasActiveDeal || hasActivePromotion) && (
         <Stack

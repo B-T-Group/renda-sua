@@ -452,6 +452,16 @@ const BusinessItemsPage: React.FC = () => {
 
   const handleToggleItemActive = useCallback(
     async (row: Item, isActive: boolean) => {
+      if (isActive && row.moderation_status !== 'approved') {
+        enqueueSnackbar(
+          t(
+            'business.items.moderation.activateRequiresApproval',
+            'Item must be approved before it can be activated.'
+          ),
+          { variant: 'warning' }
+        );
+        return;
+      }
       try {
         const updated = await updateItem(row.id, { is_active: isActive }, {
           skipRefetch: true,

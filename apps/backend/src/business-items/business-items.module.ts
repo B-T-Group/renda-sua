@@ -7,6 +7,7 @@ import { ItemDealsService } from '../item-deals/item-deals.service';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { ItemsModule } from '../items/items.module';
+import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
@@ -17,6 +18,7 @@ import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
     BusinessImagesModule,
     AiGenerationModule,
     ItemsModule,
+    ItemAiReviewModule,
     StripePaymentsModule,
     StripeTaxModule,
     MerchantLifecycleModule,

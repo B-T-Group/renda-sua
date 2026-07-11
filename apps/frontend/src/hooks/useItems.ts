@@ -29,6 +29,7 @@ export interface Item {
   min_order_quantity: number;
   max_order_quantity: number | null;
   is_active: boolean;
+  moderation_status?: string | null;
   stripe_tax_code_id?: string | null;
   stripe_tax_code?: {
     id: string;
@@ -408,6 +409,66 @@ export const useItems = (
     [apiClient, fetchItems, businessId]
   );
 
+  const publishItem = useCallback(
+    async (itemId: string) => {
+      const response = await apiClient.post<{
+        success: boolean;
+        data?: { item: { id: string; moderation_status: string } };
+        error?: string;
+      }>(`/business-items/items/${itemId}/publish`, {}, businessItemsApiParams(businessId));
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || 'Failed to publish item');
+      }
+      return response.data.data?.item;
+    },
+    [apiClient, businessId]
+  );
+
+  const fetchItemAiProposal = useCallback(
+    async (itemId: string): Promise<BusinessItemAiProposalPayload> => {
+      const { data } = await apiClient.get<{
+        success: boolean;
+        item: BusinessItemAiProposalPayload['item'];
+        proposal: BusinessItemAiProposalPayload['proposal'];
+      }>(
+        `/business-items/items/${itemId}/ai-proposal`,
+        businessItemsApiParams(businessId)
+      );
+      return {
+        item: data.item ?? null,
+        proposal: data.proposal ?? null,
+      };
+    },
+    [apiClient, businessId]
+  );
+
+  const acceptItemAiProposal = useCallback(
+    async (
+      itemId: string,
+      edits?: { title?: string; description?: string }
+    ) => {
+      const { data } = await apiClient.post<{ success: boolean }>(
+        `/business-items/items/${itemId}/ai-proposal/accept`,
+        edits ?? {},
+        businessItemsApiParams(businessId)
+      );
+      return !!data.success;
+    },
+    [apiClient, businessId]
+  );
+
+  const declineItemAiProposal = useCallback(
+    async (itemId: string) => {
+      const { data } = await apiClient.post<{ success: boolean }>(
+        `/business-items/items/${itemId}/ai-proposal/decline`,
+        {},
+        businessItemsApiParams(businessId)
+      );
+      return !!data.success;
+    },
+    [apiClient, businessId]
+  );
+
   useEffect(() => {
     console.log('useItems: useEffect triggered, businessId:', businessId);
     if (businessId && !options?.skipInitialItemsFetch) {
@@ -428,5 +489,35 @@ export const useItems = (
     createItem,
     createBrand,
     updateItem,
+    publishItem,
+    fetchItemAiProposal,
+    acceptItemAiProposal,
+    declineItemAiProposal,
   };
 };
+
+export interface BusinessItemAiProposalPayload {
+  item: {
+    id: string;
+    name: string;
+    description: string | null;
+    moderation_status: string;
+    item_images?: Array<{
+      id: string;
+      image_url: string;
+      display_order: number;
+    }>;
+  } | null;
+  proposal: {
+    id: string;
+    decision_reason: string | null;
+    proposed_title: string | null;
+    proposed_description: string | null;
+    proposed_images?: Array<{
+      id: string;
+      source_image_id: string | null;
+      image_url: string;
+      display_order: number;
+    }>;
+  } | null;
+}

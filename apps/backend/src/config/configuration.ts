@@ -324,6 +324,13 @@ export interface RentalAiReviewConfig {
   model: string;
 }
 
+export interface ItemAiReviewConfig {
+  /** Master switch for async AI auto-review of sale items. */
+  enabled: boolean;
+  /** OpenAI multimodal model for item review (default gpt-4.1). */
+  model: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -366,6 +373,7 @@ export interface Configuration {
   merchantLifecycle: MerchantLifecycleConfig;
   boldsign: BoldSignConfig;
   rentalAiReview: RentalAiReviewConfig;
+  itemAiReview: ItemAiReviewConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -745,6 +753,10 @@ export default (): Configuration => {
     rentalAiReview: {
       enabled: process.env.RENTAL_AI_AUTO_REVIEW_ENABLED === 'true',
       model: process.env.RENTAL_AI_REVIEW_MODEL || 'gpt-4.1',
+    },
+    itemAiReview: {
+      enabled: process.env.ITEM_AI_AUTO_REVIEW_ENABLED === 'true',
+      model: process.env.ITEM_AI_REVIEW_MODEL || 'gpt-4.1',
     },
   };
 };

@@ -5,7 +5,6 @@ import {
 import {
   Box,
   Button,
-  Chip,
   FormControlLabel,
   Stack,
   Switch,
@@ -15,11 +14,14 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import ItemModerationStatusChip from '../ItemModerationStatusChip';
 
 interface ItemViewHeaderProps {
   name: string;
   sku?: string | null;
   isActive: boolean;
+  moderationStatus?: string | null;
+  canToggleActive?: boolean;
   toggling: boolean;
   onToggleActive: (next: boolean) => void;
   onBack: () => void;
@@ -30,6 +32,8 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
   name,
   sku,
   isActive,
+  moderationStatus,
+  canToggleActive = true,
   toggling,
   onToggleActive,
   onBack,
@@ -78,26 +82,24 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
             {t('common.back')}
           </Button>
           <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              flexWrap="wrap"
+            >
               <Typography
                 variant="h5"
                 component="h1"
                 noWrap
-                sx={{ fontSize: { xs: '1.15rem', md: '1.5rem' }, fontWeight: 700 }}
+                sx={{
+                  fontSize: { xs: '1.15rem', md: '1.5rem' },
+                  fontWeight: 700,
+                }}
               >
                 {name}
               </Typography>
-              <Chip
-                label={
-                  isActive
-                    ? t('business.items.statusLive', 'Live')
-                    : t('business.items.statusHidden', 'Hidden')
-                }
-                size="small"
-                color={isActive ? 'success' : 'default'}
-                variant={isActive ? 'filled' : 'outlined'}
-                sx={{ flexShrink: 0, fontWeight: 600 }}
-              />
+              <ItemModerationStatusChip status={moderationStatus} />
             </Stack>
             {sku && (
               <Typography variant="body2" color="text.secondary" noWrap>
@@ -118,7 +120,7 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
               <Switch
                 checked={isActive}
                 onChange={(_, checked) => onToggleActive(checked)}
-                disabled={toggling}
+                disabled={toggling || !canToggleActive}
                 color="success"
               />
             }

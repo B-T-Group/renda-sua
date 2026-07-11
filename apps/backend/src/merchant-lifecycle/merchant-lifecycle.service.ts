@@ -217,7 +217,11 @@ export class MerchantLifecycleService {
           where: {
             is_active: { _eq: true }
             business_location: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
-            item: { is_active: { _eq: true }, status: { _eq: active } }
+            item: {
+              is_active: { _eq: true }
+              status: { _eq: active }
+              moderation_status: { _eq: approved }
+            }
           }
         ) { aggregate { count } }
       }

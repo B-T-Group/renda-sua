@@ -416,6 +416,22 @@ function App() {
               }
             />
             <Route
+              path="/admin/items/moderation"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminItemsModerationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/items/ai-reviews"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminItemAiReviewsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/configurations"
               element={
                 <ProtectedRoute>
@@ -779,6 +795,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.ItemFormPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/business/items/:itemId/ai-proposal"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessItemAiProposalPage />
                 </ProtectedRoute>
               }
             />

@@ -26,15 +26,22 @@ import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import type { CountryOnboardingConfigDto } from './dto/country-onboarding.dto';
 import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
+import { RejectSaleItemDto } from './dto/item-moderation.dto';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
+import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewAdminService } from '../rental-listing-ai-review/rental-listing-ai-review-admin.service';
+import { ItemAiReviewAdminService } from '../item-ai-review/item-ai-review-admin.service';
 import {
   AiReviewFeedbackDto,
   AiReviewOverrideDto,
 } from '../rental-listing-ai-review/dto/rental-listing-ai-review.dto';
+import {
+  AiReviewFeedbackDto as ItemAiReviewFeedbackDto,
+  AiReviewOverrideDto as ItemAiReviewOverrideDto,
+} from '../item-ai-review/dto/item-ai-review.dto';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -62,6 +69,8 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly rentalListingModerationService: RentalListingModerationService,
     private readonly rentalListingAiReviewAdminService: RentalListingAiReviewAdminService,
+    private readonly itemModerationService: ItemModerationService,
+    private readonly itemAiReviewAdminService: ItemAiReviewAdminService,
     private readonly applicationSetupService: ApplicationSetupService,
     private readonly countryOnboardingService: CountryOnboardingService
   ) {}
@@ -259,6 +268,151 @@ export class AdminController {
     @Req() request: RequestWithUser
   ) {
     return this.rentalListingAiReviewAdminService.override(
+      reviewId,
+      request.user.id,
+      body
+    );
+  }
+
+  @Get('items/moderation')
+  @ApiOperation({
+    summary: 'List sale items for moderation (pending by default)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: [
+      'pending',
+      'rejected',
+      'ai_reviewing',
+      'proposal_pending',
+      'all',
+    ],
+  })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiResponse({ status: 200, description: 'Paginated items' })
+  async listItemsModeration(
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const result = await this.itemModerationService.listModerationQueue({
+      status,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+    });
+    return { success: true, ...result };
+  }
+
+  @Post('items/:itemId/approve')
+  @ApiOperation({
+    summary: 'Approve a pending sale item (sets is_active=true)',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Item approved' })
+  @ApiResponse({ status: 400, description: 'Item not pending' })
+  async approveSaleItem(
+    @Param('itemId') itemId: string,
+    @Req() request: RequestWithUser
+  ) {
+    await this.itemModerationService.approveItem(itemId, request.user.id);
+    return { success: true };
+  }
+
+  @Post('items/:itemId/reject')
+  @ApiOperation({
+    summary:
+      'Reject a pending sale item (requires reason; message + email to business)',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiBody({ type: RejectSaleItemDto })
+  @ApiResponse({ status: 200, description: 'Item rejected' })
+  @ApiResponse({ status: 400, description: 'Invalid body or item not pending' })
+  async rejectSaleItem(
+    @Param('itemId') itemId: string,
+    @Body() body: RejectSaleItemDto,
+    @Req() request: RequestWithUser
+  ) {
+    const reason = body.rejectionReason?.trim();
+    if (!reason) {
+      throw new HttpException(
+        'rejectionReason is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.itemModerationService.rejectItem(
+      itemId,
+      request.user.id,
+      reason
+    );
+    return { success: true };
+  }
+
+  @Get('items/ai-reviews')
+  @ApiOperation({ summary: 'List sale-item AI review decisions for prompt tuning' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['approved', 'rejected', 'proposal', 'failed', 'all'],
+  })
+  @ApiQuery({ name: 'adminFeedback', required: false })
+  @ApiQuery({ name: 'promptVersion', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async listItemAiReviews(
+    @Query('status') status?: string,
+    @Query('adminFeedback') adminFeedback?: string,
+    @Query('promptVersion') promptVersion?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const result = await this.itemAiReviewAdminService.listReviews({
+      status,
+      adminFeedback,
+      promptVersion,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+    });
+    return { success: true, ...result };
+  }
+
+  @Get('items/ai-reviews/:reviewId')
+  @ApiOperation({ summary: 'Get sale-item AI review detail for audit' })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  async getItemAiReview(@Param('reviewId') reviewId: string) {
+    const review = await this.itemAiReviewAdminService.getReview(reviewId);
+    return { success: true, review };
+  }
+
+  @Post('items/ai-reviews/:reviewId/feedback')
+  @ApiOperation({
+    summary: 'Agree/disagree with a sale-item AI review (prompt tuning)',
+  })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  @ApiBody({ type: ItemAiReviewFeedbackDto })
+  async feedbackItemAiReview(
+    @Param('reviewId') reviewId: string,
+    @Body() body: ItemAiReviewFeedbackDto,
+    @Req() request: RequestWithUser
+  ) {
+    return this.itemAiReviewAdminService.submitFeedback(
+      reviewId,
+      request.user.id,
+      body
+    );
+  }
+
+  @Post('items/ai-reviews/:reviewId/override')
+  @ApiOperation({ summary: 'Override a sale-item AI review decision' })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  @ApiBody({ type: ItemAiReviewOverrideDto })
+  async overrideItemAiReview(
+    @Param('reviewId') reviewId: string,
+    @Body() body: ItemAiReviewOverrideDto,
+    @Req() request: RequestWithUser
+  ) {
+    return this.itemAiReviewAdminService.override(
       reviewId,
       request.user.id,
       body
