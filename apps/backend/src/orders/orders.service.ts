@@ -4267,8 +4267,10 @@ export class OrdersService {
       previewMode = 'region';
       agentCountry = operatingRegion.country;
       agentState = operatingRegion.state;
-    } else if (!isVerified && previewCountry) {
-      canClaim = false;
+    } else if (previewCountry) {
+      // Country-only profile (or GPS without state): still list by country.
+      // Verified agents may claim; unverified stay preview-only.
+      canClaim = isVerified;
       previewMode = 'country';
       agentCountry = previewCountry;
     } else {

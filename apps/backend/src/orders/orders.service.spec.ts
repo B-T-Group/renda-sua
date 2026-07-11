@@ -1396,6 +1396,36 @@ describe('OrdersService', () => {
       expect(result.orders).toHaveLength(1);
     });
 
+    it('returns country listing with canClaim true for verified agents without state', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockAgentUser,
+        agent: { id: 'agent-123', user_id: 'agent-123', is_verified: true },
+      });
+      hasuraSystemService.getAllUserAddresses = jest.fn().mockResolvedValue([
+        { country: 'CM', state: '', is_primary: true },
+      ]);
+      (service as any).locationsService = {
+        getLatestAgentLocation: jest.fn().mockResolvedValue({
+          agentId: 'agent-123',
+          latitude: 3.8,
+          longitude: 11.5,
+          updatedAt: new Date().toISOString(),
+        }),
+      };
+      (service as any).googleDistanceService = {
+        reverseGeocode: jest.fn().mockResolvedValue({
+          country: 'CM',
+          state: '',
+        }),
+      };
+
+      const result = await service.getOpenOrders();
+
+      expect(result.canClaim).toBe(true);
+      expect(result.previewMode).toBe('country');
+      expect(result.orders).toHaveLength(1);
+    });
+
     it('returns empty orders for suspended agents', async () => {
       hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
       hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {

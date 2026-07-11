@@ -81,7 +81,10 @@ export async function resolveAgentPreviewCountry(params: {
   }
 }
 
-/** Profile address first; else reverse-geocode live GPS when provided. */
+/**
+ * Full country+state from profile address when present.
+ * If address is missing or country-only (no state), reverse-geocode agent_location.
+ */
 export async function resolveAgentOperatingRegion(params: {
   agentAddresses: RegionAddressEntry[] | null | undefined;
   agentLocation?: { latitude: number; longitude: number } | null;
@@ -95,8 +98,10 @@ export async function resolveAgentOperatingRegion(params: {
 
   try {
     const geo = await params.reverseGeocode(loc.latitude, loc.longitude);
-    if (!geo.country?.trim() || !geo.state?.trim()) return null;
-    return { country: geo.country, state: geo.state };
+    const geoCountry = geo.country?.trim();
+    const geoState = geo.state?.trim();
+    if (!geoCountry || !geoState) return null;
+    return { country: geoCountry, state: geoState };
   } catch {
     return null;
   }

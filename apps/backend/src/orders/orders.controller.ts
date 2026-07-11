@@ -798,7 +798,7 @@ export class OrdersController {
   @ApiResponse({
     status: 200,
     description:
-      'Open delivery orders. Unverified agents receive country-level preview with canClaim false.',
+      'Open delivery orders. Unverified agents get country-level preview with canClaim false. Verified agents with country+state filter by region; verified with country only still list by country with canClaim true.',
     schema: {
       type: 'object',
       properties: {

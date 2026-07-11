@@ -46,6 +46,28 @@ describe('agent-proximity.util', () => {
     expect(region).toBeNull();
   });
 
+  it('resolveAgentOperatingRegion uses agent_location when address has country only', async () => {
+    const region = await resolveAgentOperatingRegion({
+      agentAddresses: [
+        { address: { country: 'CM', state: '', is_primary: true } },
+      ],
+      agentLocation: { latitude: 3.8, longitude: 11.5 },
+      reverseGeocode: async () => ({ country: 'CM', state: 'Centre' }),
+    });
+    expect(region).toEqual({ country: 'CM', state: 'Centre' });
+  });
+
+  it('resolveAgentOperatingRegion prefers agent_location over country-only address', async () => {
+    const region = await resolveAgentOperatingRegion({
+      agentAddresses: [
+        { address: { country: 'GA', state: '', is_primary: true } },
+      ],
+      agentLocation: { latitude: 3.8, longitude: 11.5 },
+      reverseGeocode: async () => ({ country: 'CM', state: 'Centre' }),
+    });
+    expect(region).toEqual({ country: 'CM', state: 'Centre' });
+  });
+
   it('countryFromAddresses returns country when state is empty', () => {
     expect(
       countryFromAddresses([
