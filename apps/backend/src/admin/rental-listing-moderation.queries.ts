@@ -59,6 +59,7 @@ export const APPROVE_RENTAL_LISTING_MODERATION = `
         moderation_status: approved
         moderated_at: $moderatedAt
         moderated_by_user_id: $moderatorId
+        moderation_source: "admin"
       }
     ) {
       id
@@ -78,6 +79,7 @@ export const REJECT_RENTAL_LISTING_MODERATION = `
         moderation_status: rejected
         moderated_at: $moderatedAt
         moderated_by_user_id: $moderatorId
+        moderation_source: "admin"
       }
     ) {
       id

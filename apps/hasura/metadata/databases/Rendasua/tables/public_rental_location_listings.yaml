@@ -12,6 +12,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: rental_item_id
 array_relationships:
+  - name: ai_reviews
+    using:
+      foreign_key_constraint_on:
+        column: listing_id
+        table:
+          name: rental_listing_ai_reviews
+          schema: public
   - name: weekly_availability
     using:
       foreign_key_constraint_on:
@@ -114,6 +121,9 @@ select_permissions:
         - moderation_status
         - moderated_at
         - moderated_by_user_id
+        - ai_reviewed_at
+        - ai_review_version
+        - moderation_source
       filter:
         rental_item:
           business:

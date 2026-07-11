@@ -38,6 +38,7 @@ import {
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
+import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payments-database.service';
@@ -288,7 +289,8 @@ export class RentalsService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeCheckoutService: StripeCheckoutService,
     private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService,
-    private readonly stripeService: StripeService
+    private readonly stripeService: StripeService,
+    private readonly rentalListingAiReviewService: RentalListingAiReviewService
   ) {}
 
   async listPublicRentalListings(
@@ -1073,6 +1075,7 @@ export class RentalsService {
       );
     }
     await this.upsertWeeklyAvailability(id, availability);
+    void this.rentalListingAiReviewService.requestReview(id);
     return id;
   }
 
@@ -1325,6 +1328,7 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    void this.rentalListingAiReviewService.requestReview(listingId);
   }
 
   private async requireBusinessId(): Promise<string> {

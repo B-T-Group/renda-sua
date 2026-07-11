@@ -627,6 +627,8 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         moderation_status
         moderated_at
         moderated_by_user_id
+        moderation_source
+        ai_reviewed_at
         pickup_instructions
         dropoff_instructions
         weekly_availability(order_by: { weekday: asc }) {
@@ -639,6 +641,15 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         business_location {
           id
           name
+        }
+        ai_reviews(order_by: { created_at: desc }, limit: 1) {
+          id
+          status
+          decision_reason
+          proposed_title
+          proposed_description
+          rejection_fields
+          completed_at
         }
       }
     }

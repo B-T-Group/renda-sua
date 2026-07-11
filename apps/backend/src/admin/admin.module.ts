@@ -14,10 +14,19 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { ConfigurationsController } from './configurations.controller';
 import { ConfigurationsService } from './configurations.service';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
+import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { WithdrawalPinService } from './withdrawal-pin.service';
 
 @Module({
-  imports: [AuthModule, HasuraModule, NotificationsModule, SiteEventsModule, MerchantLifecycleModule, BusinessContractsModule],
+  imports: [
+    AuthModule,
+    HasuraModule,
+    NotificationsModule,
+    SiteEventsModule,
+    MerchantLifecycleModule,
+    BusinessContractsModule,
+    RentalListingAiReviewModule,
+  ],
   controllers: [AdminController, ConfigurationsController, AdminSiteEventsController],
   providers: [
     AdminMessageService,

@@ -317,6 +317,13 @@ export interface BoldSignConfig {
   expirationDays: number;
 }
 
+export interface RentalAiReviewConfig {
+  /** Master switch for async AI auto-review of rental listings. */
+  enabled: boolean;
+  /** OpenAI multimodal model for listing review (default gpt-4.1). */
+  model: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -358,6 +365,7 @@ export interface Configuration {
   pdfEndpoint: PdfEndpointConfig;
   merchantLifecycle: MerchantLifecycleConfig;
   boldsign: BoldSignConfig;
+  rentalAiReview: RentalAiReviewConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -733,6 +741,10 @@ export default (): Configuration => {
         process.env.BOLDSIGN_EXPIRATION_DAYS || '30',
         10
       ),
+    },
+    rentalAiReview: {
+      enabled: process.env.RENTAL_AI_AUTO_REVIEW_ENABLED === 'true',
+      model: process.env.RENTAL_AI_REVIEW_MODEL || 'gpt-4.1',
     },
   };
 };

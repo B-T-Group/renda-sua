@@ -62,6 +62,11 @@ export interface RentalListingRejectedEmailPayload
   rejectionReason: string;
 }
 
+export interface RentalListingAiProposalEmailPayload
+  extends RentalListingModerationEmailPayload {
+  proposalSummary: string;
+}
+
 export interface BusinessRentalBookingRequestEmailPayload {
   businessUserId: string;
   requestId: string;

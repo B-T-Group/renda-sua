@@ -48,6 +48,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
+import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { RentalsModule } from '../rentals/rentals.module';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
@@ -118,6 +119,7 @@ import { AppService } from './app.service';
     OrdersModule,
     RatingsModule,
     RentalsModule,
+    RentalListingAiReviewModule,
     RentalItemImagesModule,
     ItemVariantsModule,
     ItemViewsModule,

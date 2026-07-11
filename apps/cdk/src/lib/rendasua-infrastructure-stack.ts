@@ -175,6 +175,55 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `OrderStatusQueueUrl-${environment}`,
     });
 
+    // FIFO SQS + Lambda for rental listing AI auto-review
+    const rentalListingAiReviewQueue = new sqs.Queue(
+      this,
+      `RentalListingAiReviewQueue-${environment}`,
+      {
+        queueName: `rental-listing-ai-review-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        // Must exceed Lambda timeout (propose + image cleanup can be long).
+        visibilityTimeout: cdk.Duration.minutes(16),
+      }
+    );
+
+    const rentalListingAiReviewHandler = new lambda.Function(
+      this,
+      `RentalListingAiReviewHandler-${environment}`,
+      {
+        functionName: `rental-listing-ai-review-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset(
+          'src/lambda/rental-listing-ai-review-handler'
+        ),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    rentalListingAiReviewHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(rentalListingAiReviewQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    new cdk.CfnOutput(this, `RentalListingAiReviewQueueUrl-${environment}`, {
+      value: rentalListingAiReviewQueue.queueUrl,
+      description: 'SQS Queue URL for rental listing AI review',
+      exportName: `RentalListingAiReviewQueueUrl-${environment}`,
+    });
+
     // Output Lambda function ARN
     new cdk.CfnOutput(this, `OrderStatusHandlerFunctionArn-${environment}`, {
       value: orderStatusHandlerFunction.functionArn,

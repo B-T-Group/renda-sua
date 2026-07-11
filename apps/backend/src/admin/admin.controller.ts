@@ -30,6 +30,11 @@ import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
+import { RentalListingAiReviewAdminService } from '../rental-listing-ai-review/rental-listing-ai-review-admin.service';
+import {
+  AiReviewFeedbackDto,
+  AiReviewOverrideDto,
+} from '../rental-listing-ai-review/dto/rental-listing-ai-review.dto';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -56,6 +61,7 @@ export class AdminController {
     private readonly adminMessageService: AdminMessageService,
     private readonly adminService: AdminService,
     private readonly rentalListingModerationService: RentalListingModerationService,
+    private readonly rentalListingAiReviewAdminService: RentalListingAiReviewAdminService,
     private readonly applicationSetupService: ApplicationSetupService,
     private readonly countryOnboardingService: CountryOnboardingService
   ) {}
@@ -122,7 +128,7 @@ export class AdminController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['pending', 'rejected', 'all'],
+    enum: ['pending', 'rejected', 'ai_reviewing', 'all'],
   })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -182,6 +188,75 @@ export class AdminController {
       reason
     );
     return { success: true };
+  }
+
+  @Get('rental-listings/ai-reviews')
+  @ApiOperation({ summary: 'List AI review decisions for prompt tuning' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['approved', 'rejected', 'proposal', 'failed', 'all'],
+  })
+  @ApiQuery({ name: 'adminFeedback', required: false })
+  @ApiQuery({ name: 'promptVersion', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async listAiReviews(
+    @Query('status') status?: string,
+    @Query('adminFeedback') adminFeedback?: string,
+    @Query('promptVersion') promptVersion?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const result = await this.rentalListingAiReviewAdminService.listReviews({
+      status,
+      adminFeedback,
+      promptVersion,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+    });
+    return { success: true, ...result };
+  }
+
+  @Get('rental-listings/ai-reviews/:reviewId')
+  @ApiOperation({ summary: 'Get AI review detail for audit' })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  async getAiReview(@Param('reviewId') reviewId: string) {
+    const review =
+      await this.rentalListingAiReviewAdminService.getReview(reviewId);
+    return { success: true, review };
+  }
+
+  @Post('rental-listings/ai-reviews/:reviewId/feedback')
+  @ApiOperation({ summary: 'Agree/disagree with an AI review (prompt tuning)' })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  @ApiBody({ type: AiReviewFeedbackDto })
+  async feedbackAiReview(
+    @Param('reviewId') reviewId: string,
+    @Body() body: AiReviewFeedbackDto,
+    @Req() request: RequestWithUser
+  ) {
+    return this.rentalListingAiReviewAdminService.submitFeedback(
+      reviewId,
+      request.user.id,
+      body
+    );
+  }
+
+  @Post('rental-listings/ai-reviews/:reviewId/override')
+  @ApiOperation({ summary: 'Override an AI review decision' })
+  @ApiParam({ name: 'reviewId', format: 'uuid' })
+  @ApiBody({ type: AiReviewOverrideDto })
+  async overrideAiReview(
+    @Param('reviewId') reviewId: string,
+    @Body() body: AiReviewOverrideDto,
+    @Req() request: RequestWithUser
+  ) {
+    return this.rentalListingAiReviewAdminService.override(
+      reviewId,
+      request.user.id,
+      body
+    );
   }
 
   @Get('agents')

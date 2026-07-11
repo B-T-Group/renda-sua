@@ -27,6 +27,7 @@ import type {
   ReferralRewardEmailPayload,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
+  RentalListingAiProposalEmailPayload,
   RentalPeriodEndedEmailPayload,
 } from './notification-types';
 import {
@@ -852,6 +853,37 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendRentalListingRejectedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendRentalListingAiProposalEmail(
+    payload: RentalListingAiProposalEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental listing AI proposal email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_rental_listing_ai_proposal',
+          locale
+        ),
+        variables: {
+          listingId: payload.listingId,
+          rentalItemName: payload.rentalItemName,
+          proposalSummary: payload.proposalSummary,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendRentalListingAiProposalEmail: ${error?.message ?? String(error)}`
       );
     }
   }

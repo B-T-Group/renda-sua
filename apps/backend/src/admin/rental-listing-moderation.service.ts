@@ -3,7 +3,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './rental-listing-moderation.queries';
 
-type ModerationStatusFilter = 'pending' | 'rejected' | 'all';
+type ModerationStatusFilter = 'pending' | 'rejected' | 'ai_reviewing' | 'all';
 
 export interface ListingModerationRow {
   id: string;
@@ -24,6 +24,8 @@ type ListingForModerationRow = {
   deleted_at: string | null;
   rental_item: { name: string; business: { user_id: string } };
 };
+
+const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
 
 @Injectable()
 export class RentalListingModerationService {
@@ -133,6 +135,7 @@ export class RentalListingModerationService {
   private parseModerationStatusFilter(raw?: string): ModerationStatusFilter {
     const s = (raw || 'pending').toLowerCase();
     if (s === 'rejected') return 'rejected';
+    if (s === 'ai_reviewing') return 'ai_reviewing';
     if (s === 'all') return 'all';
     return 'pending';
   }
@@ -148,7 +151,11 @@ export class RentalListingModerationService {
       return {
         _and: [
           base,
-          { moderation_status: { _in: ['pending', 'rejected'] } },
+          {
+            moderation_status: {
+              _in: ['pending', 'rejected', 'ai_reviewing'],
+            },
+          },
         ],
       };
     }
@@ -161,10 +168,10 @@ export class RentalListingModerationService {
     status: string,
     action: 'approved' | 'rejected'
   ): void {
-    if (status === 'pending') return;
+    if (HUMAN_REVIEWABLE.has(status)) return;
     const verb = action === 'approved' ? 'approved' : 'rejected';
     throw new HttpException(
-      `Only listings pending review can be ${verb}`,
+      `Only listings pending or in AI review can be ${verb}`,
       HttpStatus.BAD_REQUEST
     );
   }
