@@ -506,7 +506,7 @@ export class HasuraUserService {
           main_interest
           is_admin
           is_verified
-          image_cleanup_enabled
+          ai_tokens
           created_at
           updated_at
         }
@@ -543,10 +543,10 @@ export class HasuraUserService {
         main_interest: business.main_interest,
         is_admin: business.is_admin,
         is_verified: business.is_verified,
-        image_cleanup_enabled: business.image_cleanup_enabled,
+        ai_tokens: business.ai_tokens,
         created_at: business.created_at,
         updated_at: business.updated_at,
-      } as Businesses,
+      } as unknown as Businesses,
     };
   }
 

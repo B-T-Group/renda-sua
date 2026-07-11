@@ -19,6 +19,7 @@
 - "!include public_contract_templates.yaml"
 - "!include public_business_lifecycle_status_history.yaml"
 - "!include public_business_payment_accounts.yaml"
+- "!include public_business_ai_token_usage.yaml"
 - "!include public_businesses.yaml"
 - "!include public_client_addresses.yaml"
 - "!include public_clients.yaml"

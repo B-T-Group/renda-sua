@@ -6,7 +6,8 @@ export type StripePaymentEntity =
   | 'account'
   | 'claim_order'
   | 'rental_booking'
-  | 'order_cash_reconciliation';
+  | 'order_cash_reconciliation'
+  | 'token';
 
 export type StripeTransactionStatus =
   | 'pending'

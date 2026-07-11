@@ -15,6 +15,7 @@ import {
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { AiService } from '../ai/ai.service';
+import { BusinessTokensService } from '../business-tokens/business-tokens.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService, CreateBusinessImageInput } from './business-images.service';
 import type { UpdateBusinessImageInput } from './business-images.service';
@@ -32,7 +33,8 @@ export class BusinessImagesController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly businessImagesService: BusinessImagesService,
-    private readonly aiService: AiService
+    private readonly aiService: AiService,
+    private readonly businessTokensService: BusinessTokensService
   ) {}
 
   @Get()
@@ -326,9 +328,8 @@ export class BusinessImagesController {
     },
   })
   @ApiResponse({
-    status: 403,
-    description:
-      'User has no business or image cleanup is not enabled for this business',
+    status: 402,
+    description: 'Insufficient AI tokens',
   })
   @ApiResponse({ status: 400, description: 'Image was already cleaned with AI' })
   @ApiResponse({ status: 404, description: 'Image not found' })
@@ -342,26 +343,29 @@ export class BusinessImagesController {
         HttpStatus.FORBIDDEN
       );
     }
-    if (!user.business?.image_cleanup_enabled) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Image cleanup is not enabled for this business account',
-        },
-        HttpStatus.FORBIDDEN
-      );
-    }
     const image = await this.businessImagesService.getImageForBusiness(
       businessId,
       id
     );
     if (image.is_ai_cleaned) {
-      throw new BadRequestException(
-        'Image was already cleaned with AI'
-      );
+      throw new BadRequestException('Image was already cleaned with AI');
     }
-    const result = await this.aiService.cleanupProductImage(image.image_url);
-    return { success: true, data: result };
+    const { result, balanceAfter } =
+      await this.businessTokensService.runCleanupWithToken(
+        {
+          businessId,
+          userId: user.id,
+          subjectType: 'business_image',
+          subjectId: id,
+          imageUrl: image.image_url,
+        },
+        () => this.aiService.cleanupProductImage(image.image_url)
+      );
+    return {
+      success: true,
+      data: result,
+      ai_tokens_remaining: balanceAfter,
+    };
   }
 
   @Get('item-search')

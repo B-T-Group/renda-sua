@@ -269,7 +269,7 @@ const BusinessImagesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, loading: profileLoading, error: profileError } =
+  const { profile, loading: profileLoading, error: profileError, updateBusinessAiTokens } =
     useUserProfileContext();
   const {
     images,
@@ -401,13 +401,16 @@ const BusinessImagesPage: React.FC = () => {
     cleanupImage(imageToCleanup.id).then((result) => {
       if (!cancelled && result?.b64_json) {
         setCleanedB64(result.b64_json);
+        if (typeof result.ai_tokens_remaining === 'number') {
+          updateBusinessAiTokens(result.ai_tokens_remaining);
+        }
       }
       if (!cancelled) setCleanupLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [imageToCleanup, cleanupImage]);
+  }, [imageToCleanup, cleanupImage, updateBusinessAiTokens]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
@@ -1660,7 +1663,7 @@ const BusinessImagesPage: React.FC = () => {
                               'Create item from image'
                             )}
                           </Button>
-                          {profile?.business?.image_cleanup_enabled && (
+                          {(profile?.business?.ai_tokens ?? 0) > 0 ? (
                             <Button
                               size="small"
                               variant="outlined"
@@ -1672,6 +1675,20 @@ const BusinessImagesPage: React.FC = () => {
                               {t(
                                 'business.images.actions.cleanup',
                                 'Cleanup picture'
+                              )}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<AutoFixHighIcon />}
+                              onClick={() => navigate('/business/ai-tokens')}
+                              disabled={submitting || img.is_ai_cleaned}
+                              fullWidth
+                            >
+                              {t(
+                                'business.tokens.buyToCleanup',
+                                'Buy tokens to cleanup'
                               )}
                             </Button>
                           )}

@@ -266,6 +266,12 @@ export class StripePaymentCallbackProcessor {
       await this.settleCashReconciliation(tx, paymentIntentId, req);
       return;
     }
+
+    if (tx.payment_entity === 'token') {
+      await this.finalizeTokenPaymentSuccess(tx, paymentIntentId, req);
+      return;
+    }
+
     const capturedAt = new Date().toISOString();
     await this.databaseService.updateTransaction(tx.id, {
       status: 'success',
@@ -281,6 +287,30 @@ export class StripePaymentCallbackProcessor {
       (await this.databaseService.getTransactionById(tx.id)) ?? tx;
     await this.creditWalletIfNeeded(updatedTx);
     await this.runHandlerSuccess(updatedTx, req);
+  }
+
+  private async finalizeTokenPaymentSuccess(
+    tx: StripePaymentTransaction,
+    paymentIntentId: string | undefined,
+    req: Request
+  ): Promise<void> {
+    const handlers = await this.resolveHandlers(req);
+    const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
+    if (!handler) {
+      throw new Error(
+        `No payment callback handler for token entity ${tx.payment_entity}`
+      );
+    }
+    await handler.onPaymentSuccess(this.toCallbackTransaction(tx));
+    const capturedAt = new Date().toISOString();
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'success',
+      stripe_payment_intent_id: paymentIntentId,
+      captured_at: capturedAt,
+    });
+    this.logger.log(
+      `Token pack Stripe payment finalized for business ${tx.entity_id} (tx ${tx.id})`
+    );
   }
 
   private async finalizeOrderTaxIfNeeded(
@@ -332,7 +362,13 @@ export class StripePaymentCallbackProcessor {
   private async creditWalletIfNeeded(
     tx: StripePaymentTransaction
   ): Promise<void> {
-    if (!tx.account_id || tx.transaction_type !== 'PAYMENT') return;
+    if (
+      !tx.account_id ||
+      tx.transaction_type !== 'PAYMENT' ||
+      tx.payment_entity === 'token'
+    ) {
+      return;
+    }
     const result = await this.accountsService.registerTransaction({
       accountId: tx.account_id,
       amount: tx.amount,

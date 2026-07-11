@@ -545,8 +545,8 @@
       }
     },
     "businesses": {
-      "imageCleanupEnabled": "Image cleanup enabled",
-      "imageCleanupEnabledHelp": "Automatically removes unused images to save storage.",
+      "aiTokens": "AI tokens",
+      "aiTokensHelp": "Remaining AI credits for image cleanup. Super users are granted at least 1000.",
       "withdrawalPinEnabled": "Require withdrawal PIN",
       "withdrawalPinEnabledHelp": "When enabled, withdrawals require a 4-digit PIN.",
       "changeWithdrawalPin": "Change PIN",
@@ -1304,6 +1304,20 @@
     "successMessage": "Your profile was created successfully. Redirecting to your dashboard…"
   },
   "business": {
+    "tokens": {
+      "seoTitle": "AI tokens",
+      "seoDescription": "Buy AI tokens for image cleanup",
+      "title": "AI tokens",
+      "subtitle": "Each image cleanup uses 1 AI token. Purchase packs when you need more.",
+      "balanceLabel": "You have {{count}} AI tokens",
+      "phoneNumber": "Mobile money phone number",
+      "packTokens": "{{count}} tokens",
+      "buy": "Buy",
+      "buyToCleanup": "Buy tokens to cleanup",
+      "purchaseError": "Failed to start purchase",
+      "mobilePending": "Payment request sent. Tokens will be added when payment succeeds.",
+      "unsupportedCurrency": "Token packs are only available in CAD or XAF for your business country."
+    },
     "csvUpload": {
       "downloadTemplate": "Download Template",
       "takesSomeTime": "This process may take several minutes depending on the number of items. Please do not close this window.",
@@ -2121,7 +2135,10 @@
         "error": "Failed to cleanup image",
         "alreadyCleaned": "Image was already cleaned with AI",
         "fixWithAi": "Fix with AI",
-        "issuesAddressed": "AI will try to fix: {{issues}}"
+        "issuesAddressed": "AI will try to fix: {{issues}}",
+        "tokenCost": "Uses 1 AI token",
+        "tokenCostWithBalance": "This uses 1 AI token. You have {{count}} left.",
+        "insufficientTokens": "No AI tokens remaining. Purchase more to use image cleanup."
       },
       "validation": {
         "validating": "Checking image quality…",

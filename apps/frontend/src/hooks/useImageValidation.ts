@@ -74,8 +74,12 @@ export const useImageValidation = () => {
         const response = await apiClient.post<{
           success: boolean;
           data: { b64_json: string };
+          ai_tokens_remaining?: number;
         }>('/images/cleanup-preview', input);
-        return response.data.data.b64_json;
+        return {
+          b64_json: response.data.data.b64_json,
+          ai_tokens_remaining: response.data.ai_tokens_remaining,
+        };
       } finally {
         setCleanupLoading(false);
       }

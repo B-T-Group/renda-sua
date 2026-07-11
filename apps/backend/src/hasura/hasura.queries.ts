@@ -48,7 +48,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         main_interest
         is_admin
         is_verified
-        image_cleanup_enabled
+        ai_tokens
         merchant_agreement_version
         merchant_agreement_accepted_at
         created_at

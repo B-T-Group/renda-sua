@@ -94,7 +94,7 @@ export interface UserProfile {
     main_interest?: 'sell_items' | 'rent_items';
     is_admin: boolean;
     is_verified: boolean;
-    image_cleanup_enabled?: boolean;
+    ai_tokens?: number;
     created_at: string;
     updated_at: string;
   };
@@ -291,6 +291,7 @@ interface UserProfileContextType {
   refetch: () => Promise<void>;
   refetchAccounts: () => Promise<void>;
   clearProfile: () => void;
+  updateBusinessAiTokens: (aiTokens: number) => void;
   updateProfile: (
     userId: string,
     firstName: string,
@@ -480,6 +481,19 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setAccounts([]);
     setAccountsError(null);
     clearStoredActivePersona();
+  };
+
+  const updateBusinessAiTokens = (aiTokens: number) => {
+    setProfile((prev) => {
+      if (!prev?.business) return prev;
+      return {
+        ...prev,
+        business: {
+          ...prev.business,
+          ai_tokens: aiTokens,
+        },
+      };
+    });
   };
 
   const personas = useMemo(
@@ -702,6 +716,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     refetch: checkProfile,
     refetchAccounts: checkAccounts,
     clearProfile,
+    updateBusinessAiTokens,
     updateProfile,
     updateProfilePicture,
     addAddress,

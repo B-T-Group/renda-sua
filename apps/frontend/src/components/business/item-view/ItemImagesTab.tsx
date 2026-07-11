@@ -27,6 +27,7 @@ interface ItemImagesTabProps {
   onSetPrimary: (imageId: string) => void;
   onSetSecondary: (imageId: string) => void;
   onOpenCleanup: (image: ItemImage) => void;
+  onBuyTokens?: () => void;
   onManageImages: () => void;
 }
 
@@ -42,6 +43,7 @@ interface ImageCardProps {
   onSetPrimary: (imageId: string) => void;
   onSetSecondary: (imageId: string) => void;
   onOpenCleanup: (image: ItemImage) => void;
+  onBuyTokens?: () => void;
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
@@ -56,6 +58,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
   onSetPrimary,
   onSetSecondary,
   onOpenCleanup,
+  onBuyTokens,
 }) => {
   const { t } = useTranslation();
 
@@ -140,6 +143,27 @@ const ImageCard: React.FC<ImageCardProps> = ({
             {t('business.images.actions.cleanup', 'Cleanup picture')}
           </Button>
         )}
+        {!cleanupEnabled && onBuyTokens && !image.is_ai_cleaned && (
+          <Button
+            size="small"
+            variant="outlined"
+            fullWidth
+            startIcon={<AutoFixHighIcon />}
+            onClick={onBuyTokens}
+            disabled={imageActionsBusy}
+            sx={{ mb: 1 }}
+          >
+            {t('business.tokens.buyToCleanup', 'Buy tokens to cleanup')}
+          </Button>
+        )}
+        {cleanupEnabled && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            {t(
+              'business.images.cleanup.tokenCost',
+              'Uses 1 AI token'
+            )}
+          </Typography>
+        )}
         {image.alt_text && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {image.alt_text}
@@ -164,6 +188,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
   onSetPrimary,
   onSetSecondary,
   onOpenCleanup,
+  onBuyTokens,
   onManageImages,
 }) => {
   const { t } = useTranslation();
@@ -219,6 +244,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
                     onSetPrimary={onSetPrimary}
                     onSetSecondary={onSetSecondary}
                     onOpenCleanup={onOpenCleanup}
+                    onBuyTokens={onBuyTokens}
                   />
                 </Grid>
               );

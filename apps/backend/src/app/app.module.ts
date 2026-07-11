@@ -14,6 +14,7 @@ import { AiModule } from '../ai/ai.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
+import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
 import { BrandsModule } from '../brands/brands.module';
 import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
@@ -140,6 +141,7 @@ import { AppService } from './app.service';
     BusinessAgentsModule,
     BusinessItemsModule,
     BusinessImagesModule,
+    BusinessTokensModule,
     ImageValidationModule,
     BusinessVerificationModule,
     BusinessContractsModule,

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
 import { ImageValidationController } from './image-validation.controller';
 import { ImageValidationService } from './image-validation.service';
 import { ItemActivationValidationService } from './item-activation-validation.service';
@@ -21,7 +22,7 @@ import { ResolutionValidator } from './validators/resolution.validator';
 import { TextDetectionValidator } from './validators/text-detection.validator';
 
 @Module({
-  imports: [ConfigModule, AuthModule, AiGenerationModule],
+  imports: [ConfigModule, AuthModule, AiGenerationModule, BusinessTokensModule],
   controllers: [ImageValidationController],
   providers: [
     ImageValidationService,

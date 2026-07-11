@@ -40,6 +40,7 @@ import axios from 'axios';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import {
@@ -187,8 +188,9 @@ const AssociateRentalDialog: React.FC<AssociateRentalDialogProps> = ({
 
 const RentalItemImagesPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, loading: profileLoading, error: profileError } =
+  const { profile, loading: profileLoading, error: profileError, updateBusinessAiTokens } =
     useUserProfileContext();
   const { categories } = useRentalCategories();
   const {
@@ -262,13 +264,18 @@ const RentalItemImagesPage: React.FC = () => {
     let cancelled = false;
     setCleanupLoading(true);
     void cleanupImage(cleanupTarget.id).then((r) => {
-      if (!cancelled && r?.b64_json) setCleanedB64(r.b64_json);
+      if (!cancelled && r?.b64_json) {
+        setCleanedB64(r.b64_json);
+        if (typeof r.ai_tokens_remaining === 'number') {
+          updateBusinessAiTokens(r.ai_tokens_remaining);
+        }
+      }
       if (!cancelled) setCleanupLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [cleanupTarget, cleanupImage]);
+  }, [cleanupTarget, cleanupImage, updateBusinessAiTokens]);
 
   const uploadFileToS3 = async (file: File) => {
     const presigned = await generateImageUploadUrl({
@@ -744,13 +751,31 @@ const RentalItemImagesPage: React.FC = () => {
                       </IconButton>
                     </span>
                   </Tooltip>
-                  <IconButton
-                    size="small"
-                    onClick={() => openCleanup(img)}
-                    disabled={img.is_ai_cleaned}
-                  >
-                    <AutoFixHighIcon fontSize="small" />
-                  </IconButton>
+                  {(profile?.business?.ai_tokens ?? 0) > 0 ? (
+                    <IconButton
+                      size="small"
+                      onClick={() => openCleanup(img)}
+                      disabled={img.is_ai_cleaned}
+                      aria-label={t(
+                        'business.images.actions.cleanup',
+                        'Cleanup picture'
+                      )}
+                    >
+                      <AutoFixHighIcon fontSize="small" />
+                    </IconButton>
+                  ) : (
+                    <IconButton
+                      size="small"
+                      onClick={() => navigate('/business/ai-tokens')}
+                      disabled={img.is_ai_cleaned}
+                      aria-label={t(
+                        'business.tokens.buyToCleanup',
+                        'Buy tokens to cleanup'
+                      )}
+                    >
+                      <AutoFixHighIcon fontSize="small" />
+                    </IconButton>
+                  )}
                   <IconButton
                     size="small"
                     color="error"

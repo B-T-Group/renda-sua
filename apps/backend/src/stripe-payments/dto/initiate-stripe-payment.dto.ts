@@ -14,6 +14,7 @@ const PAYMENT_ENTITIES = [
   'claim_order',
   'rental_booking',
   'order_cash_reconciliation',
+  'token',
 ] as const;
 
 export class InitiateStripePaymentDto {

@@ -65,7 +65,7 @@ export default function ItemViewPage() {
   const { itemId } = useParams<{ itemId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile } = useUserProfileContext();
+  const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const { effectiveBusinessId, canSuperUserActions, businessQuerySuffix } =
     useBusinessCatalogScope();
   const listItem = (location.state as { item?: Item } | null)?.item;
@@ -367,13 +367,16 @@ export default function ItemViewPage() {
     cleanupImage(imageToCleanup.id).then((result) => {
       if (!cancelled && result?.b64_json) {
         setCleanedB64(result.b64_json);
+        if (typeof result.ai_tokens_remaining === 'number') {
+          updateBusinessAiTokens(result.ai_tokens_remaining);
+        }
       }
       if (!cancelled) setCleanupLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [imageToCleanup, cleanupImage]);
+  }, [imageToCleanup, cleanupImage, updateBusinessAiTokens]);
 
   const handleOpenItemImageCleanup = useCallback(
     (img: ItemImage) => {
@@ -602,11 +605,12 @@ export default function ItemViewPage() {
           images={sortedItemImages}
           itemName={item.name}
           imageActionsBusy={imageActionsBusy}
-          cleanupEnabled={Boolean(profile?.business?.image_cleanup_enabled)}
+          cleanupEnabled={(profile?.business?.ai_tokens ?? 0) > 0}
           onOpenLightbox={openImageLightbox}
           onSetPrimary={(id) => void handleSetImageAsMain(id)}
           onSetSecondary={(id) => void handleSetImageAsGallery(id)}
           onOpenCleanup={handleOpenItemImageCleanup}
+          onBuyTokens={() => navigate('/business/ai-tokens')}
           onManageImages={() => setShowImageUploadDialog(true)}
         />
       )}

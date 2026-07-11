@@ -85,6 +85,15 @@ export class MobilePaymentCallbackProcessor {
 
     if (isCashRecSuccess) {
       await this.settleCashReconciliation(tx, callbackData.transactionId, req);
+    } else if (
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'token'
+    ) {
+      await this.finalizeTokenPaymentSuccess(
+        tx,
+        callbackData.transactionId,
+        req
+      );
     } else {
       await this.applyMypvitStatusUpdate(tx, callbackData);
       await this.applyMypvitSuccessCredit(tx, callbackData, req);
@@ -130,6 +139,11 @@ export class MobilePaymentCallbackProcessor {
 
     if (isCashRecSuccess) {
       await this.settleCashReconciliation(tx, callbackData.reference, req);
+    } else if (
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'token'
+    ) {
+      await this.finalizeTokenPaymentSuccess(tx, callbackData.reference, req);
     } else {
       await this.applyFreemopayStatusUpdate(tx, callbackData);
       await this.applyFreemopaySuccessCredit(tx, callbackData, req);
@@ -137,6 +151,31 @@ export class MobilePaymentCallbackProcessor {
     await this.applyFreemopayFailureSideEffects(tx, callbackData, req);
 
     return { received: true, reference: callbackData.reference };
+  }
+
+  private async finalizeTokenPaymentSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string,
+    req: Request
+  ): Promise<void> {
+    const handlers = await this.resolveHandlers(req);
+    const handler = findPaymentCallbackHandler(
+      handlers,
+      transaction.payment_entity
+    );
+    if (!handler) {
+      throw new Error(
+        `No payment callback handler for token entity ${transaction.payment_entity}`
+      );
+    }
+    await handler.onPaymentSuccess(transaction);
+    await this.databaseService.updateTransaction(transaction.id, {
+      status: 'success',
+      transaction_id: providerTransactionId,
+    });
+    this.logger.log(
+      `Token pack payment finalized for business ${transaction.entity_id} (tx ${transaction.id})`
+    );
   }
 
   private async settleCashReconciliation(
@@ -190,8 +229,21 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<void> {
     if (
       callbackData.status !== 'SUCCESS' ||
-      !transaction.account_id ||
       transaction.transaction_type !== 'PAYMENT'
+    ) {
+      return;
+    }
+
+    await this.creditWalletIfNeeded(transaction);
+    await this.runHandlerSuccess(transaction, req);
+  }
+
+  private async creditWalletIfNeeded(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (
+      !transaction.account_id ||
+      transaction.payment_entity === 'token'
     ) {
       return;
     }
@@ -214,7 +266,12 @@ export class MobilePaymentCallbackProcessor {
     this.logger.log(
       `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
     );
+  }
 
+  private async runHandlerSuccess(
+    transaction: MobilePaymentTransaction,
+    req: Request
+  ): Promise<void> {
     try {
       const handlers = await this.resolveHandlers(req);
       const handler = findPaymentCallbackHandler(
@@ -226,7 +283,7 @@ export class MobilePaymentCallbackProcessor {
       }
     } catch (error: any) {
       this.logger.error(
-        `Payment finalize failed for account ${transaction.account_id}: ${String(
+        `Payment finalize failed for ${transaction.reference}: ${String(
           error?.message || error
         )}`
       );
@@ -276,47 +333,13 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<void> {
     if (
       callbackData.status !== 'SUCCESS' ||
-      !transaction.account_id ||
       transaction.transaction_type !== 'PAYMENT'
     ) {
       return;
     }
 
-    const creditResult = await this.accountsService.registerTransaction({
-      accountId: transaction.account_id,
-      amount: transaction.amount,
-      transactionType: 'deposit',
-      memo: `Mobile payment deposit - ${transaction.reference}`,
-      referenceId: transaction.id,
-    });
-
-    if (!creditResult.success) {
-      this.logger.error(
-        `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
-      );
-      return;
-    }
-
-    this.logger.log(
-      `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
-    );
-
-    try {
-      const handlers = await this.resolveHandlers(req);
-      const handler = findPaymentCallbackHandler(
-        handlers,
-        transaction.payment_entity
-      );
-      if (handler) {
-        await handler.onPaymentSuccess(transaction);
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `Payment finalize failed for account ${transaction.account_id}: ${String(
-          error?.message || error
-        )}`
-      );
-    }
+    await this.creditWalletIfNeeded(transaction);
+    await this.runHandlerSuccess(transaction, req);
   }
 
   private async applyFreemopayFailureSideEffects(

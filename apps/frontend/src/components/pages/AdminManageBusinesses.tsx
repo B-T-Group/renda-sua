@@ -139,7 +139,7 @@ const AdminManageBusinesses: React.FC = () => {
       phone_number: target?.user.phone_number || '',
       name: target?.name || '',
       is_admin: target?.is_admin || false,
-      image_cleanup_enabled: target?.image_cleanup_enabled ?? false,
+      ai_tokens: target?.ai_tokens ?? 20,
       withdrawal_pin_enabled: target?.withdrawal_pin_enabled ?? false,
     });
     setWithdrawalPinInput('');
@@ -568,29 +568,28 @@ const AdminManageBusinesses: React.FC = () => {
                   />
                 </Box>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={600}>
-                      {t(
-                        'admin.businesses.imageCleanupEnabled',
-                        'Image cleanup enabled'
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'admin.businesses.imageCleanupEnabledHelp',
-                        'Automatically removes unused images to save storage.'
-                      )}
-                    </Typography>
-                  </Box>
-                  <Switch
-                    checked={!!form.image_cleanup_enabled}
+                <Box>
+                  <Typography fontWeight={600} sx={{ mb: 1 }}>
+                    {t('admin.businesses.aiTokens', 'AI tokens')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {t(
+                      'admin.businesses.aiTokensHelp',
+                      'Remaining AI credits for image cleanup. Super users are granted at least 1000.'
+                    )}
+                  </Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={form.ai_tokens ?? 0}
                     onChange={(e) =>
                       setForm((f: any) => ({
                         ...f,
-                        image_cleanup_enabled: e.target.checked,
+                        ai_tokens: Number.parseInt(e.target.value, 10) || 0,
                       }))
                     }
+                    inputProps={{ min: 0 }}
                   />
                 </Box>
 

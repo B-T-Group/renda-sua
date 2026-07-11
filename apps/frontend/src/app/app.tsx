@@ -687,6 +687,14 @@ function App() {
               }
             />
             <Route
+              path="/business/ai-tokens"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessAiTokensPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/onboarding/first-sale-item"
               element={
                 <ProtectedRoute>

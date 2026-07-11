@@ -1,0 +1,29 @@
+table:
+  name: business_ai_token_usage
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: created_by_user
+    using:
+      foreign_key_constraint_on: created_by_user_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - tokens_consumed
+        - operation_type
+        - subject_type
+        - subject_id
+        - image_url
+        - created_by_user_id
+        - created_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: false

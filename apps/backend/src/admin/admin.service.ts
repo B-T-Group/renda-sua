@@ -180,7 +180,7 @@ const UPDATE_BUSINESS_MUTATION = `
       name
       is_admin
       is_verified
-      image_cleanup_enabled
+      ai_tokens
       withdrawal_pin_enabled
       updated_at
     }
@@ -341,7 +341,7 @@ export class AdminService {
     const query = `
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_admin is_verified lifecycle_status is_storefront_visible can_accept_orders image_cleanup_enabled withdrawal_pin_enabled created_at updated_at
+          id user_id name is_admin is_verified lifecycle_status is_storefront_visible can_accept_orders ai_tokens withdrawal_pin_enabled created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
@@ -445,7 +445,7 @@ export class AdminService {
     updates: {
       name?: string;
       is_admin?: boolean;
-      image_cleanup_enabled?: boolean;
+      ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
       withdrawal_pin_hashed?: string | null;
     }
@@ -537,10 +537,17 @@ export class AdminService {
     businessUpdates: {
       name?: string;
       is_admin?: boolean;
-      image_cleanup_enabled?: boolean;
+      ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
     }
   ) {
+    if (
+      businessUpdates.ai_tokens !== undefined &&
+      (!Number.isInteger(businessUpdates.ai_tokens) ||
+        businessUpdates.ai_tokens < 0)
+    ) {
+      throw new Error('ai_tokens must be a non-negative integer');
+    }
     const userId = await this.getUserIdByEntity('business', businessId);
     const updatedUser = Object.keys(userUpdates || {}).length
       ? await this.updateUserProfile(userId, userUpdates)
@@ -548,7 +555,22 @@ export class AdminService {
     const updatedBusiness = Object.keys(businessUpdates || {}).length
       ? await this.updateBusinessRecord(businessId, businessUpdates)
       : null;
+    if (businessUpdates.is_admin === true) {
+      await this.ensureSuperUserAiTokens(businessId);
+    }
     return { user: updatedUser, business: updatedBusiness };
+  }
+
+  private async ensureSuperUserAiTokens(businessId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation EnsureSuperUserTokens($id: uuid!, $min: Int!) {
+        update_businesses(
+          where: { id: { _eq: $id }, ai_tokens: { _lt: $min } }
+          _set: { ai_tokens: $min }
+        ) { affected_rows }
+      }`,
+      { id: businessId, min: 1000 }
+    );
   }
 
   async getBusinessVerificationDetails(businessId: string) {

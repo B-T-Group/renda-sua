@@ -304,8 +304,8 @@
       }
     },
     "businesses": {
-      "imageCleanupEnabled": "Nettoyage d'image activé",
-      "imageCleanupEnabledHelp": "Supprime automatiquement les images inutilisées pour économiser l'espace de stockage.",
+      "aiTokens": "Jetons IA",
+      "aiTokensHelp": "Crédits IA restants pour le nettoyage d'images. Les super-utilisateurs reçoivent au moins 1000.",
       "withdrawalPinEnabled": "Exiger un code PIN de retrait",
       "withdrawalPinEnabledHelp": "Lorsque cette option est activée, les retraits nécessitent un code PIN à 4 chiffres.",
       "changeWithdrawalPin": "Modifier le code PIN",
@@ -1047,6 +1047,20 @@
     "successMessage": "Votre profil a été créé avec succès. Redirection vers votre tableau de bord…"
   },
   "business": {
+    "tokens": {
+      "seoTitle": "Jetons IA",
+      "seoDescription": "Acheter des jetons IA pour le nettoyage d'images",
+      "title": "Jetons IA",
+      "subtitle": "Chaque nettoyage d'image utilise 1 jeton IA. Achetez des packs si besoin.",
+      "balanceLabel": "Vous avez {{count}} jetons IA",
+      "phoneNumber": "Numéro de téléphone mobile money",
+      "packTokens": "{{count}} jetons",
+      "buy": "Acheter",
+      "buyToCleanup": "Acheter des jetons pour nettoyer",
+      "purchaseError": "Échec du démarrage de l'achat",
+      "mobilePending": "Demande de paiement envoyée. Les jetons seront ajoutés après le succès du paiement.",
+      "unsupportedCurrency": "Les packs de jetons ne sont disponibles qu'en CAD ou XAF pour le pays de votre entreprise."
+    },
     "csvUpload": {
       "downloadTemplate": "Télécharger le Modèle",
       "takesSomeTime": "Ce processus peut prendre plusieurs minutes selon le nombre d'articles. Veuillez ne pas fermer cette fenêtre.",
@@ -1864,7 +1878,10 @@
         "error": "Échec du nettoyage de l'image",
         "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA",
         "fixWithAi": "Corriger avec l'IA",
-        "issuesAddressed": "L'IA va tenter de corriger : {{issues}}"
+        "issuesAddressed": "L'IA va tenter de corriger : {{issues}}",
+        "tokenCost": "Utilise 1 jeton IA",
+        "tokenCostWithBalance": "Cela utilise 1 jeton IA. Il vous en reste {{count}}.",
+        "insufficientTokens": "Plus de jetons IA. Achetez-en pour utiliser le nettoyage d'images."
       },
       "validation": {
         "validating": "Vérification de la qualité des images…",

@@ -259,18 +259,24 @@ export const useRentalItemImages = () => {
   );
 
   const cleanupImage = useCallback(
-    async (imageId: string): Promise<{ b64_json: string } | null> => {
+    async (
+      imageId: string
+    ): Promise<{ b64_json: string; ai_tokens_remaining?: number } | null> => {
       try {
         const response = await apiClient.post<{
           success: boolean;
           data: { b64_json: string };
+          ai_tokens_remaining?: number;
         }>(
           `/rental-item-images/${imageId}/cleanup`,
           undefined,
           { timeout: environment.imageCleanupRequestTimeoutMs }
         );
         if (response.data.success && response.data.data?.b64_json) {
-          return response.data.data;
+          return {
+            ...response.data.data,
+            ai_tokens_remaining: response.data.ai_tokens_remaining,
+          };
         }
         return null;
       } catch (err: any) {

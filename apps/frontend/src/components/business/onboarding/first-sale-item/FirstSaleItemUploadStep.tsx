@@ -53,7 +53,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfileContext();
+  const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const { generateImageUploadUrl } = useAws();
   const { bulkCreateImages, submitting } = useBusinessImages();
   const {
@@ -78,7 +78,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     () => sessionStorage.getItem(GUIDELINES_DISMISSED_KEY) !== '1'
   );
 
-  const cleanupEnabled = Boolean(profile?.business?.image_cleanup_enabled);
+  const cleanupEnabled = (profile?.business?.ai_tokens ?? 0) > 0;
   const bucketName = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
 
   const objectUrls = useMemo(
@@ -161,12 +161,15 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     setCleanupIndex(index);
     setCleanupB64(null);
     try {
-      const b64 = await cleanupPreview({
+      const preview = await cleanupPreview({
         imageBase64: await fileToBase64(file),
         mimeType: fileMimeType(file),
         issues,
       });
-      setCleanupB64(b64);
+      setCleanupB64(preview.b64_json);
+      if (typeof preview.ai_tokens_remaining === 'number') {
+        updateBusinessAiTokens(preview.ai_tokens_remaining);
+      }
     } catch (e: any) {
       enqueueSnackbar(
         e?.message || t('business.images.cleanup.error', 'Failed to cleanup image'),
@@ -274,6 +277,13 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
             {t(
               'business.images.cleanup.enhanceHint',
               'Optionally use AI to clean up each photo before publishing. You can skip any or all.'
+            )}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {t(
+              'business.images.cleanup.tokenCostWithBalance',
+              'This uses 1 AI token. You have {{count}} left.',
+              { count: profile?.business?.ai_tokens ?? 0 }
             )}
           </Typography>
         </Box>

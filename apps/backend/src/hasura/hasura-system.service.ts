@@ -989,11 +989,14 @@ export class HasuraSystemService {
     if (personas.includes('business')) {
       varDecls.push('$business_name: String!');
       varDecls.push('$main_interest: business_main_interest_enum!');
+      varDecls.push('$ai_tokens: Int!');
       vars.business_name = params.business_name ?? '';
       vars.main_interest = params.main_interest ?? 'sell_items';
+      vars.ai_tokens = 20;
       const businessDataFields = [
         'name: $business_name',
         'main_interest: $main_interest',
+        'ai_tokens: $ai_tokens',
       ];
       if (params.business_referral_agent_id && params.business_referral_code_used) {
         varDecls.push('$referred_by_agent_id: uuid!');
@@ -1007,7 +1010,7 @@ export class HasuraSystemService {
         `business: { data: { ${businessDataFields.join(', ')} } }`
       );
       returnSel.push(
-        'business { id user_id name main_interest is_admin is_verified created_at updated_at }'
+        'business { id user_id name main_interest is_admin is_verified ai_tokens created_at updated_at }'
       );
     }
     const mutation = `

@@ -756,7 +756,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Update a business (admin only)',
     description:
-      'Only business accounts with is_admin can update businesses. Supports name, is_admin, image_cleanup_enabled, and owner user fields.',
+      'Only business accounts with is_admin can update businesses. Supports name, is_admin, ai_tokens, and owner user fields.',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiBody({
@@ -765,7 +765,7 @@ export class AdminController {
       properties: {
         name: { type: 'string' },
         is_admin: { type: 'boolean' },
-        image_cleanup_enabled: { type: 'boolean' },
+        ai_tokens: { type: 'integer' },
         withdrawal_pin_enabled: { type: 'boolean' },
         first_name: { type: 'string' },
         last_name: { type: 'string' },
@@ -781,7 +781,7 @@ export class AdminController {
     body: {
       name?: string;
       is_admin?: boolean;
-      image_cleanup_enabled?: boolean;
+      ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
       first_name?: string;
       last_name?: string;
@@ -802,13 +802,20 @@ export class AdminController {
       const businessUpdates: {
         name?: string;
         is_admin?: boolean;
-        image_cleanup_enabled?: boolean;
+        ai_tokens?: number;
         withdrawal_pin_enabled?: boolean;
       } = {};
       if (typeof body.name === 'string') businessUpdates.name = body.name;
       if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
-      if (typeof body.image_cleanup_enabled === 'boolean')
-        businessUpdates.image_cleanup_enabled = body.image_cleanup_enabled;
+      if (typeof body.ai_tokens === 'number') {
+        if (!Number.isInteger(body.ai_tokens) || body.ai_tokens < 0) {
+          return {
+            success: false,
+            error: 'ai_tokens must be a non-negative integer',
+          };
+        }
+        businessUpdates.ai_tokens = body.ai_tokens;
+      }
       if (typeof body.withdrawal_pin_enabled === 'boolean')
         businessUpdates.withdrawal_pin_enabled = body.withdrawal_pin_enabled;
 

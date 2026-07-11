@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { AiService } from '../ai/ai.service';
+import { BusinessTokensService } from '../business-tokens/business-tokens.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateRentalFromImageDto } from './dto/create-rental-from-image.dto';
 import { RentalFromImageSuggestionsDto } from './dto/rental-from-image-suggestions.dto';
@@ -44,7 +45,8 @@ export class RentalItemImagesController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly rentalItemImagesService: RentalItemImagesService,
-    private readonly aiService: AiService
+    private readonly aiService: AiService,
+    private readonly businessTokensService: BusinessTokensService
   ) {}
 
   @Get()
@@ -285,24 +287,16 @@ export class RentalItemImagesController {
 
   @Post(':id/cleanup')
   @ApiOperation({
-    summary: 'AI cleanup preview (base64); accept by PATCH with new URL + is_ai_cleaned',
+    summary: 'AI cleanup preview (base64); accept by PATCH with new URL + is_ai_cleaned. Consumes 1 AI token.',
   })
   @ApiResponse({ status: 200, description: 'Returns b64_json for preview' })
+  @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
   async cleanup(@Param('id') id: string) {
     const user = await this.hasuraUserService.getUser();
     const businessId = user?.business?.id;
     if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    if (!user.business?.image_cleanup_enabled) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Image cleanup is not enabled for this business account',
-        },
         HttpStatus.FORBIDDEN
       );
     }
@@ -313,8 +307,22 @@ export class RentalItemImagesController {
     if (image.is_ai_cleaned) {
       throw new BadRequestException('Image was already cleaned with AI');
     }
-    const result = await this.aiService.cleanupProductImage(image.image_url);
-    return { success: true, data: result };
+    const { result, balanceAfter } =
+      await this.businessTokensService.runCleanupWithToken(
+        {
+          businessId,
+          userId: user.id,
+          subjectType: 'rental_item_image',
+          subjectId: id,
+          imageUrl: image.image_url,
+        },
+        () => this.aiService.cleanupProductImage(image.image_url)
+      );
+    return {
+      success: true,
+      data: result,
+      ai_tokens_remaining: balanceAfter,
+    };
   }
 
   private async requireBusinessId(): Promise<string> {

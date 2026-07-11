@@ -79,6 +79,9 @@ export const AdminRefundsPage = lazy(() =>
 export const BusinessImagesPage = lazy(() =>
   import('../components/pages/BusinessImagesPage')
 );
+export const BusinessAiTokensPage = lazy(() =>
+  import('../components/pages/BusinessAiTokensPage')
+);
 export const BusinessItemsPage = lazy(() =>
   import('../components/pages/BusinessItemsPage')
 );

@@ -100,6 +100,13 @@ array_relationships:
         table:
           name: business_lifecycle_status_history
           schema: public
+  - name: ai_token_usage
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_ai_token_usage
+          schema: public
 insert_permissions:
   - role: agent
     permission:
@@ -160,7 +167,7 @@ select_permissions:
         - lifecycle_status
         - is_storefront_visible
         - can_accept_orders
-        - image_cleanup_enabled
+        - ai_tokens
       filter: {}
   - role: anonymous
     permission:
@@ -174,7 +181,6 @@ select_permissions:
         - lifecycle_status
         - is_storefront_visible
         - can_accept_orders
-        - image_cleanup_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
       filter: {}
@@ -192,7 +198,7 @@ select_permissions:
         - lifecycle_status
         - is_storefront_visible
         - can_accept_orders
-        - image_cleanup_enabled
+        - ai_tokens
         - merchant_agreement_version
         - merchant_agreement_accepted_at
         - referred_by_agent_id
@@ -215,7 +221,6 @@ select_permissions:
         - lifecycle_status
         - is_storefront_visible
         - can_accept_orders
-        - image_cleanup_enabled
       filter: {}
 update_permissions:
   - role: business

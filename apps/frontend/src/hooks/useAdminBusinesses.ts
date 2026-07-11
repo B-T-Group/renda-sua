@@ -21,7 +21,7 @@ export interface AdminBusiness {
   lifecycle_status?: string;
   is_storefront_visible?: boolean;
   can_accept_orders?: boolean;
-  image_cleanup_enabled?: boolean;
+  ai_tokens?: number;
   withdrawal_pin_enabled?: boolean;
   created_at: string;
   updated_at: string;
@@ -35,7 +35,7 @@ export interface UpdateBusinessPayload {
   phone_number?: string;
   name?: string;
   is_admin?: boolean;
-  image_cleanup_enabled?: boolean;
+  ai_tokens?: number;
   withdrawal_pin_enabled?: boolean;
 }
 
