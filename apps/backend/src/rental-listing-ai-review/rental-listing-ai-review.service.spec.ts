@@ -2,6 +2,15 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { RentalListingAiReviewService } from './rental-listing-ai-review.service';
 
 describe('RentalListingAiReviewService', () => {
+  type ApprovalHarness = {
+    applyApproveDecision(
+      listing: unknown,
+      reviewId: string,
+      result: { reason: string; issues: [] },
+      modelMeta: Record<string, unknown>
+    ): Promise<void>;
+  };
+
   const hasura = { executeMutation: jest.fn() };
   const activationValidation = {
     assertRentalItemCanActivateAsSystem: jest.fn(),
@@ -37,14 +46,10 @@ describe('RentalListingAiReviewService', () => {
       },
     };
     const result = { reason: 'ok', issues: [] };
+    const service = createService() as unknown as ApprovalHarness;
 
     await expect(
-      (createService() as any).applyApproveDecision(
-        listing,
-        'review-1',
-        result,
-        {}
-      )
+      service.applyApproveDecision(listing, 'review-1', result, {})
     ).rejects.toBeInstanceOf(HttpException);
     expect(hasura.executeMutation).not.toHaveBeenCalled();
     expect(notifications.sendRentalListingApprovedEmail).not.toHaveBeenCalled();
