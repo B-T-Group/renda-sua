@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import FormData from 'form-data';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -252,7 +253,6 @@ export class AiService {
   ): Promise<CleanupProductImageResponse> {
     const resolved =
       typeof input === 'string' ? { imageUrl: input } : input;
-    const imageRef = this.resolveCleanupImageRef(resolved);
     const apiKey = this.configService.get<string>('openai.apiKey');
     if (!apiKey) {
       this.logger.error('OpenAI API key not configured');
@@ -263,30 +263,27 @@ export class AiService {
     }
 
     try {
-      const body = {
-        images: [{ image_url: imageRef }],
-        prompt: this.buildCleanupPrompt(resolved.issues),
-        model: 'gpt-image-1.5',
-        n: 1,
-        output_format: 'png',
-        output_size: '1024x1024',
-        background: 'opaque',
-      };
-
+      const { buffer, mimeType, filename } =
+        await this.resolveCleanupImageFile(resolved);
+      const form = this.buildCleanupImageForm(
+        buffer,
+        mimeType,
+        filename,
+        this.buildCleanupPrompt(resolved.issues)
+      );
       this.logger.log('Sending image to OpenAI for cleanup');
       const editResponse = await axios.post<OpenAIImageEditResponse>(
         this.openaiImagesEditsUrl,
-        body,
+        form,
         {
           headers: {
-            'Content-Type': 'application/json',
+            ...form.getHeaders(),
             Authorization: `Bearer ${apiKey}`,
           },
           timeout: 120000,
           maxBodyLength: 50 * 1024 * 1024,
         }
       );
-
       const b64_json =
         editResponse.data?.data?.[0]?.b64_json ??
         (editResponse.data as unknown as { b64_json?: string })?.b64_json;
@@ -297,55 +294,165 @@ export class AiService {
           HttpStatus.INTERNAL_SERVER_ERROR
         );
       }
-
       this.logger.log('Image cleanup completed successfully');
       return { b64_json };
     } catch (error: unknown) {
-      this.logger.error('Failed to cleanup product image', error);
-      if (error instanceof HttpException) throw error;
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { status: number } };
-        if (axiosError.response?.status === 401) {
-          throw new HttpException(
-            'Invalid OpenAI API key',
-            HttpStatus.UNAUTHORIZED
-          );
-        }
-        if (axiosError.response?.status === 429) {
-          throw new HttpException(
-            'OpenAI API rate limit exceeded. Please try again later.',
-            HttpStatus.TOO_MANY_REQUESTS
-          );
-        }
-      }
-      if (error && typeof error === 'object' && 'code' in error) {
-        const err = error as { code?: string };
-        if (err.code === 'ECONNABORTED') {
-          throw new HttpException(
-            'Request timeout. Please try again.',
-            HttpStatus.REQUEST_TIMEOUT
-          );
-        }
-      }
-      const message =
-        error instanceof Error ? error.message : 'Unknown error occurred';
-      throw new HttpException(
-        { message: 'Failed to cleanup image', error: message },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.throwCleanupImageError(error);
     }
   }
 
-  private resolveCleanupImageRef(input: CleanupProductImageInput): string {
-    if (input.imageUrl?.trim()) return input.imageUrl.trim();
+  private buildCleanupImageForm(
+    buffer: Buffer,
+    mimeType: string,
+    filename: string,
+    prompt: string
+  ): FormData {
+    const form = new FormData();
+    form.append('image', buffer, { filename, contentType: mimeType });
+    form.append('model', 'gpt-image-1.5');
+    form.append('prompt', prompt);
+    form.append('n', '1');
+    form.append('size', '1024x1024');
+    form.append('output_format', 'png');
+    form.append('background', 'opaque');
+    return form;
+  }
+
+  private async resolveCleanupImageFile(
+    input: CleanupProductImageInput
+  ): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
     if (input.imageBase64?.trim()) {
-      const mime = input.mimeType?.trim() || 'image/jpeg';
-      return `data:${mime};base64,${input.imageBase64.trim()}`;
+      const mimeType = input.mimeType?.trim() || 'image/jpeg';
+      return {
+        buffer: Buffer.from(input.imageBase64.trim(), 'base64'),
+        mimeType,
+        filename: this.filenameForMime(mimeType),
+      };
     }
+    const ref = input.imageUrl?.trim();
+    if (!ref) {
+      throw new HttpException(
+        'imageUrl or imageBase64 is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (ref.startsWith('data:')) {
+      return this.bufferFromDataUrl(ref);
+    }
+    return this.fetchCleanupImageFile(ref);
+  }
+
+  private bufferFromDataUrl(dataUrl: string): {
+    buffer: Buffer;
+    mimeType: string;
+    filename: string;
+  } {
+    const match = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
+    if (!match) {
+      throw new HttpException(
+        'Invalid image data URL',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const mimeType = match[1] || 'image/jpeg';
+    return {
+      buffer: Buffer.from(match[2], 'base64'),
+      mimeType,
+      filename: this.filenameForMime(mimeType),
+    };
+  }
+
+  private async fetchCleanupImageFile(url: string): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+    filename: string;
+  }> {
+    const { data, headers, status } = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 25000,
+      maxContentLength: AiService.IMAGE_FETCH_MAX_BYTES,
+      maxBodyLength: AiService.IMAGE_FETCH_MAX_BYTES,
+      validateStatus: (s) => s === 200,
+    });
+    if (status !== 200 || !data) {
+      throw new HttpException(
+        'Could not download image for cleanup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const mimeType =
+      headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
+    if (!mimeType.startsWith('image/')) {
+      throw new HttpException(
+        'Cleanup source is not an image',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return {
+      buffer: Buffer.from(data),
+      mimeType,
+      filename: this.filenameForMime(mimeType),
+    };
+  }
+
+  private filenameForMime(mimeType: string): string {
+    if (mimeType.includes('png')) return 'product.png';
+    if (mimeType.includes('webp')) return 'product.webp';
+    return 'product.jpg';
+  }
+
+  private throwCleanupImageError(error: unknown): never {
+    this.logger.error('Failed to cleanup product image', error);
+    if (error instanceof HttpException) throw error;
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const apiMessage = this.openAiErrorMessage(error.response?.data);
+      if (apiMessage) {
+        this.logger.error(`OpenAI image edit error: ${apiMessage}`);
+      }
+      if (status === 401) {
+        throw new HttpException(
+          'Invalid OpenAI API key',
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+      if (status === 429) {
+        throw new HttpException(
+          'OpenAI API rate limit exceeded. Please try again later.',
+          HttpStatus.TOO_MANY_REQUESTS
+        );
+      }
+      if (status === 400) {
+        throw new HttpException(
+          {
+            message: 'Failed to cleanup image',
+            error: apiMessage || 'OpenAI rejected the image edit request',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+    if (error && typeof error === 'object' && 'code' in error) {
+      const err = error as { code?: string };
+      if (err.code === 'ECONNABORTED') {
+        throw new HttpException(
+          'Request timeout. Please try again.',
+          HttpStatus.REQUEST_TIMEOUT
+        );
+      }
+    }
+    const message =
+      error instanceof Error ? error.message : 'Unknown error occurred';
     throw new HttpException(
-      'imageUrl or imageBase64 is required',
-      HttpStatus.BAD_REQUEST
+      { message: 'Failed to cleanup image', error: message },
+      HttpStatus.INTERNAL_SERVER_ERROR
     );
+  }
+
+  private openAiErrorMessage(data: unknown): string | null {
+    if (!data || typeof data !== 'object') return null;
+    const err = (data as { error?: { message?: string } }).error;
+    return typeof err?.message === 'string' ? err.message : null;
   }
 
   private buildCleanupPrompt(issues?: CleanupProductImageIssue[]): string {
@@ -1054,22 +1161,22 @@ The "description" field MUST be written in ${languageLabel}.`;
     altText?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
+    /** Defaults to `openai` (vision), same as sale-item fill. */
+    provider?: ImageItemSuggestionsProvider;
   }): Promise<RentalImageSuggestionResult> {
     const defaultCurrency = input.defaultCurrency || 'XAF';
     const descriptionLanguage = this.resolvePreferredLanguage(
       input.preferredLanguage
     );
     const textContext = this.buildRentalSuggestionTextContext(input);
-    const userText = this.buildRentalSuggestionUserPrompt(
-      textContext,
-      defaultCurrency,
-      descriptionLanguage
-    );
+    const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
     try {
       return await this.requestRentalImageSuggestions(
         input.imageUrl,
-        userText,
-        defaultCurrency
+        textContext,
+        defaultCurrency,
+        descriptionLanguage,
+        provider
       );
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -1101,7 +1208,8 @@ The "description" field MUST be written in ${languageLabel}.`;
     const languageLabel = descriptionLanguage === 'fr' ? 'French' : 'English';
     return `
 You analyze photos of assets that could be rented (tools, equipment, vehicles, event items, apparel, etc.).
-Infer a concise rental listing from the image and any visible text.
+Look carefully at the image pixels: identify the object type, brand/model text if readable, and condition.
+Examples: cordless/electric drill, angle grinder, generator, ladder, tent, camera, car.
 
 Context from the image record (may be empty):
 ${textContext}
@@ -1115,50 +1223,98 @@ Return ONLY a JSON object with this exact shape:
   "currency": string | null
 }
 
-- name: short title for the rental item (not a full sentence).
+- name: short title for the rental item (not a full sentence), e.g. "Cordless electric drill".
 - description: 2–4 sentences for renters (condition, typical use, what is included if visible) in ${languageLabel}.
 - rentalCategoryName: the best-matching category label in plain English (e.g. "Power tools", "Vehicles", "Event equipment") — a human name, not an id.
-- suggestedTags: a few lowercase keywords for search (e.g. ["drill", "cordless", "dewalt"]).
+- suggestedTags: a few lowercase keywords for search (e.g. ["drill", "cordless", "electric", "power-tool"]).
 - currency: 3-letter ISO code for pricing context if inferable; otherwise "${defaultCurrency}".
 
 No markdown, no explanation outside JSON.`;
   }
 
-  private resolvePreferredLanguage(
-    preferredLanguage?: string | null
-  ): 'en' | 'fr' {
-    const normalized = preferredLanguage?.trim().toLowerCase();
-    return normalized?.startsWith('fr') ? 'fr' : 'en';
+  private buildRentalSuggestionTextOnlyPrompt(
+    imageUrl: string,
+    textContext: string,
+    defaultCurrency: string,
+    descriptionLanguage: 'en' | 'fr'
+  ): string {
+    return `${this.buildRentalSuggestionUserPrompt(
+      textContext,
+      defaultCurrency,
+      descriptionLanguage
+    )}
+
+This fallback has no image pixels—only the URL and optional captions. Do not invent details not supported by the text context.
+Image URL (reference only): ${imageUrl}`;
   }
 
   private async requestRentalImageSuggestions(
     imageUrl: string,
-    userText: string,
-    defaultCurrency: string
+    textContext: string,
+    defaultCurrency: string,
+    descriptionLanguage: 'en' | 'fr',
+    provider: ImageItemSuggestionsProvider
   ): Promise<RentalImageSuggestionResult> {
-    const request: ChatCompletionRequest = {
+    const userText = this.buildRentalSuggestionUserPrompt(
+      textContext,
+      defaultCurrency,
+      descriptionLanguage
+    );
+    const resolvedImages = await this.resolveVisionImageUrls([imageUrl]);
+    const visionUserContent = this.buildVisionUserContentParts(
+      userText,
+      resolvedImages,
+      provider === 'openai'
+    );
+    const visionRequest: ChatCompletionRequest = {
+      model:
+        provider === 'openai'
+          ? this.getOpenAiItemSuggestionsModel()
+          : this.getDeepSeekVisionModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You extract structured rental catalog data from images for a rentals marketplace. Use the attached image pixels; do not rely on the URL string alone.',
+        },
+        { role: 'user', content: visionUserContent },
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
+    };
+    const textFallbackRequest: ChatCompletionRequest = {
       model: this.deepseekService.defaultChatModel,
       messages: [
         {
           role: 'system',
           content:
-            'You extract structured rental catalog data from images for a rentals marketplace.',
+            'You extract structured rental catalog data from text context for a rentals marketplace.',
         },
         {
           role: 'user',
-          content: `${userText}\n\nImage URL: ${imageUrl}`,
+          content: this.buildRentalSuggestionTextOnlyPrompt(
+            imageUrl,
+            textContext,
+            defaultCurrency,
+            descriptionLanguage
+          ),
         },
       ],
       max_tokens: 500,
       temperature: 0.2,
     };
-    const response = await this.deepseekService.chatCompletions(
-      request,
-      45000
+    this.logger.log(
+      `Generating rental image suggestions (vision, ${provider}) for 1 image`
+    );
+    const response = await this.runImageItemSuggestionsLlm(
+      provider,
+      visionRequest,
+      textFallbackRequest
     );
     const rawContent = response.choices?.[0]?.message?.content;
     const contentString = this.messageContentToString(rawContent);
-    return this.parseRentalSuggestionJson(contentString, defaultCurrency);
+    const jsonString = this.coerceJsonObjectString(contentString);
+    return this.parseRentalSuggestionJson(jsonString, defaultCurrency);
   }
 
   private parseRentalSuggestionJson(
@@ -1203,6 +1359,13 @@ No markdown, no explanation outside JSON.`;
       suggestedTags: undefined,
       currency: defaultCurrency,
     };
+  }
+
+  private resolvePreferredLanguage(
+    preferredLanguage?: string | null
+  ): 'en' | 'fr' {
+    const normalized = preferredLanguage?.trim().toLowerCase();
+    return normalized?.startsWith('fr') ? 'fr' : 'en';
   }
 
   private async lookupProductByBarcode(
