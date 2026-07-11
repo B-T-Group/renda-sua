@@ -606,6 +606,7 @@ export default function ItemViewPage() {
           itemName={item.name}
           imageActionsBusy={imageActionsBusy}
           cleanupEnabled={(profile?.business?.ai_tokens ?? 0) > 0}
+          aiTokensRemaining={profile?.business?.ai_tokens ?? 0}
           onOpenLightbox={openImageLightbox}
           onSetPrimary={(id) => void handleSetImageAsMain(id)}
           onSetSecondary={(id) => void handleSetImageAsGallery(id)}

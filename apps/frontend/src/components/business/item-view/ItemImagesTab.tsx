@@ -23,6 +23,7 @@ interface ItemImagesTabProps {
   itemName: string;
   imageActionsBusy: boolean;
   cleanupEnabled: boolean;
+  aiTokensRemaining?: number;
   onOpenLightbox: (index: number) => void;
   onSetPrimary: (imageId: string) => void;
   onSetSecondary: (imageId: string) => void;
@@ -39,6 +40,7 @@ interface ImageCardProps {
   showSetSecondary: boolean;
   imageActionsBusy: boolean;
   cleanupEnabled: boolean;
+  aiTokensRemaining?: number;
   onOpenLightbox: (index: number) => void;
   onSetPrimary: (imageId: string) => void;
   onSetSecondary: (imageId: string) => void;
@@ -54,6 +56,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
   showSetSecondary,
   imageActionsBusy,
   cleanupEnabled,
+  aiTokensRemaining = 0,
   onOpenLightbox,
   onSetPrimary,
   onSetSecondary,
@@ -159,8 +162,9 @@ const ImageCard: React.FC<ImageCardProps> = ({
         {cleanupEnabled && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
             {t(
-              'business.images.cleanup.tokenCost',
-              'Uses 1 AI token'
+              'business.images.cleanup.tokenCostWithBalance',
+              'This uses 1 AI token. You have {{count}} left.',
+              { count: aiTokensRemaining }
             )}
           </Typography>
         )}
@@ -184,6 +188,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
   itemName,
   imageActionsBusy,
   cleanupEnabled,
+  aiTokensRemaining = 0,
   onOpenLightbox,
   onSetPrimary,
   onSetSecondary,
@@ -240,6 +245,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
                     showSetSecondary={isMain && images.length > 1}
                     imageActionsBusy={imageActionsBusy}
                     cleanupEnabled={cleanupEnabled}
+                    aiTokensRemaining={aiTokensRemaining}
                     onOpenLightbox={onOpenLightbox}
                     onSetPrimary={onSetPrimary}
                     onSetSecondary={onSetSecondary}
