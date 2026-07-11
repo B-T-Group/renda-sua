@@ -4,6 +4,7 @@ import { AwsModule } from '../aws/aws.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
+import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ItemAiProposalController } from './item-ai-proposal.controller';
 import { ItemAiProposalService } from './item-ai-proposal.service';
@@ -21,6 +22,7 @@ import { ItemAiReviewService } from './item-ai-review.service';
     AiGenerationModule,
     AwsModule,
     ImageValidationModule,
+    MerchantLifecycleModule,
   ],
   controllers: [ItemAiReviewInternalController, ItemAiProposalController],
   providers: [

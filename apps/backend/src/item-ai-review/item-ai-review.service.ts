@@ -7,6 +7,7 @@ import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
@@ -28,7 +29,8 @@ export class ItemAiReviewService {
     private readonly aiService: AiService,
     private readonly awsService: AwsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly activationValidation: ItemActivationValidationService
+    private readonly activationValidation: ItemActivationValidationService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   isEnabled(): boolean {
@@ -269,6 +271,10 @@ export class ItemAiReviewService {
       itemName: item.name,
       businessUserId: item.business.user_id,
     });
+    await this.merchantLifecycleService.recompute(
+      item.business_id,
+      'item_ai_approved'
+    );
   }
 
   private async applyProposeDecision(

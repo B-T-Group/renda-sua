@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './item-moderation.queries';
 
@@ -28,7 +29,7 @@ type ItemForModerationRow = {
   name: string;
   moderation_status: string;
   status: string;
-  business: { user_id: string };
+  business: { id: string; user_id: string };
 };
 
 const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
@@ -38,7 +39,8 @@ export class ItemModerationService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
-    private readonly activationValidation: ItemActivationValidationService
+    private readonly activationValidation: ItemActivationValidationService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async listModerationQueue(params: {
@@ -83,6 +85,10 @@ export class ItemModerationService {
       businessUserId: item.business.user_id,
       itemName: item.name,
     });
+    await this.merchantLifecycleService.recompute(
+      item.business.id,
+      'item_approved'
+    );
   }
 
   async rejectItem(

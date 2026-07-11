@@ -5,6 +5,7 @@ export type VerificationNextAction =
   | 'sign_agreement'
   | 'upload_id'
   | 'setup_stripe_connect'
+  | 'publish_catalog'
   | 'pending_review'
   | 'complete';
 
@@ -59,6 +60,12 @@ export interface BusinessVerificationStatus {
       complete: boolean;
       status: string;
       connected: boolean;
+    };
+    catalog?: {
+      complete: boolean;
+      hasLocation?: boolean;
+      hasApprovedItem?: boolean;
+      hasPendingItem?: boolean;
     };
   };
 }

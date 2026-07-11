@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { isActivePersona } from '../users/persona.util';
 import { ItemAiReviewService } from './item-ai-review.service';
 import * as Q from './item-ai-review.queries';
@@ -13,7 +14,8 @@ export class ItemAiProposalService {
     private readonly hasuraSystem: HasuraSystemService,
     private readonly hasuraUser: HasuraUserService,
     private readonly reviewService: ItemAiReviewService,
-    private readonly activationValidation: ItemActivationValidationService
+    private readonly activationValidation: ItemActivationValidationService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async getProposal(itemId: string) {
@@ -40,6 +42,10 @@ export class ItemAiProposalService {
     await this.applyProposedImages(item, review);
     await this.activationValidation.assertItemCanActivateAsSystem(itemId);
     await this.markApproved(itemId);
+    await this.merchantLifecycleService.recompute(
+      businessId,
+      'item_ai_proposal_accepted'
+    );
     return { success: true };
   }
 

@@ -9,6 +9,8 @@ import {
   Stepper,
   Typography,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -98,13 +100,31 @@ export const BusinessVerificationBanner: React.FC = () => {
   }
 
   const isStripe = status.paymentRail === 'stripe';
-  const secondStepAction = isStripe ? 'setup_stripe_connect' : 'upload_id';
-  const activeStep =
-    status.nextAction === 'sign_agreement'
+  const agreementDone = status.steps.agreement?.complete === true;
+  const payoutsDone = status.steps.stripeConnect?.complete === true;
+  const catalogDone = status.steps.catalog?.complete === true;
+  const identityDone = status.steps.identity?.complete === true;
+
+  const activeStep = isStripe
+    ? status.nextAction === 'sign_agreement'
       ? 0
-      : status.nextAction === secondStepAction
+      : status.nextAction === 'setup_stripe_connect'
+        ? 1
+        : status.nextAction === 'publish_catalog'
+          ? 2
+          : 3
+    : status.nextAction === 'sign_agreement'
+      ? 0
+      : status.nextAction === 'upload_id'
         ? 1
         : 2;
+
+  const stepIcon = (complete: boolean) =>
+    complete ? (
+      <CheckCircleIcon color="success" fontSize="small" />
+    ) : (
+      <RadioButtonUncheckedIcon color="disabled" fontSize="small" />
+    );
 
   return (
     <Alert severity="warning" sx={{ mb: 3 }}>
@@ -118,20 +138,24 @@ export const BusinessVerificationBanner: React.FC = () => {
         )}
       </Typography>
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
-        <Step>
-          <StepLabel>{t('business.verification.stepAgreement', 'Agreement')}</StepLabel>
+        <Step completed={agreementDone}>
+          <StepLabel icon={stepIcon(agreementDone)}>
+            {t('business.verification.stepAgreement', 'Agreement')}
+          </StepLabel>
         </Step>
-        <Step>
-          <StepLabel>
+        <Step completed={isStripe ? payoutsDone : identityDone}>
+          <StepLabel icon={stepIcon(isStripe ? payoutsDone : identityDone)}>
             {isStripe
               ? t('business.verification.stepPayouts', 'Payouts')
               : t('business.verification.stepIdentity', 'ID document')}
           </StepLabel>
         </Step>
-        <Step>
-          <StepLabel>
+        <Step completed={isStripe ? catalogDone : status.nextAction === 'complete'}>
+          <StepLabel
+            icon={stepIcon(isStripe ? catalogDone : status.nextAction === 'complete')}
+          >
             {isStripe
-              ? t('business.verification.stepActive', 'Active')
+              ? t('business.verification.stepCatalog', 'Product')
               : t('business.verification.stepReview', 'Review')}
           </StepLabel>
         </Step>
@@ -153,6 +177,15 @@ export const BusinessVerificationBanner: React.FC = () => {
             {t('business.verification.uploadId', 'Upload identification')}
           </Button>
         ) : null}
+        {status.nextAction === 'publish_catalog' && !status.steps.catalog?.hasPendingItem ? (
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => navigate('/business/items')}
+          >
+            {t('business.verification.addProduct', 'Add a product')}
+          </Button>
+        ) : null}
         <Button
           variant="outlined"
           color="warning"
@@ -166,6 +199,14 @@ export const BusinessVerificationBanner: React.FC = () => {
         <Box sx={{ mt: 2 }}>
           <StripeConnectOnboardingCard />
         </Box>
+      ) : null}
+      {status.nextAction === 'publish_catalog' && status.steps.catalog?.hasPendingItem ? (
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          {t(
+            'business.verification.catalogPendingNotice',
+            'Your product is awaiting review. Once approved, this step will complete.'
+          )}
+        </Typography>
       ) : null}
     </Alert>
   );

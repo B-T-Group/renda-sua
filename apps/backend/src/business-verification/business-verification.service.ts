@@ -21,6 +21,7 @@ export type VerificationNextAction =
   | 'sign_agreement'
   | 'upload_id'
   | 'setup_stripe_connect'
+  | 'publish_catalog'
   | 'pending_review'
   | 'complete';
 
@@ -40,18 +41,23 @@ export class BusinessVerificationService {
 
   async getStatus() {
     const user = await this.requireBusinessUser();
-    const base = await this.buildStatus(user.business!.id, user);
+    const businessId = user.business!.id;
+    // Keep lifecycle in sync when dashboard/status is opened (e.g. after
+    // item approval paths that missed an explicit recompute).
+    await this.merchantLifecycleService.recompute(
+      businessId,
+      'verification_status'
+    );
+    const base = await this.buildStatus(businessId, user);
     const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
-      user.business!.id
+      businessId
     );
     return {
       ...base,
       lifecycle_status: lifecycle?.lifecycle_status ?? 'created',
       is_storefront_visible: lifecycle?.is_storefront_visible ?? false,
       can_accept_orders: lifecycle?.can_accept_orders ?? false,
-      contract: await this.businessContractsService.getContractStatus(
-        user.business!.id
-      ),
+      contract: await this.businessContractsService.getContractStatus(businessId),
     };
   }
 
@@ -188,19 +194,23 @@ export class BusinessVerificationService {
     user: any,
     agreement: { complete: boolean }
   ) {
-    const adminVerified = user.business?.is_verified === true;
+    const businessId = user.business!.id;
     const stripeConnect = await this.getStripeConnectStep(user.id);
-    const isVerified =
-      adminVerified || (agreement.complete && stripeConnect.complete);
+    const catalog = await this.merchantLifecycleService.getCatalogStep(businessId);
+    const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
+      businessId
+    );
+    const canAccept = lifecycle?.can_accept_orders === true;
     const nextAction = this.resolveStripeNextAction(
-      isVerified,
       agreement,
-      stripeConnect
+      stripeConnect,
+      catalog,
+      canAccept
     );
     return {
-      is_verified: isVerified,
+      is_verified: canAccept,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-      steps: { agreement, stripeConnect },
+      steps: { agreement, stripeConnect, catalog },
       nextAction,
       paymentRail: 'stripe' as const,
     };
@@ -218,14 +228,16 @@ export class BusinessVerificationService {
   }
 
   private resolveStripeNextAction(
-    isVerified: boolean,
     agreement: { complete: boolean },
-    stripeConnect: { complete: boolean }
+    stripeConnect: { complete: boolean },
+    catalog: { complete: boolean },
+    canAcceptOrders: boolean
   ): VerificationNextAction {
-    if (isVerified) return 'complete';
+    if (canAcceptOrders) return 'complete';
     if (!agreement.complete) return 'sign_agreement';
     if (!stripeConnect.complete) return 'setup_stripe_connect';
-    return 'complete';
+    if (!catalog.complete) return 'publish_catalog';
+    return 'pending_review';
   }
 
   private async getAgreementStep(businessId: string, business: any) {

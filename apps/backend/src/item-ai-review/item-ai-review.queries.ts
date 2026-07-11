@@ -319,7 +319,7 @@ export const AI_REVIEWS_ADMIN_LIST = `
         name
         description
         moderation_status
-        business { name user_id }
+        business { id name user_id }
       }
     }
     item_ai_reviews_aggregate(where: $where) {
@@ -364,7 +364,7 @@ export const AI_REVIEW_BY_PK = `
         name
         description
         moderation_status
-        business { name user_id }
+        business { id name user_id }
         item_images(order_by: { display_order: asc }) {
           id
           image_url

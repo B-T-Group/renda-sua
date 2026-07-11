@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ItemAiReviewService } from './item-ai-review.service';
 import * as Q from './item-ai-review.queries';
@@ -15,7 +16,8 @@ export class ItemAiReviewAdminService {
     private readonly hasura: HasuraSystemService,
     private readonly reviewService: ItemAiReviewService,
     private readonly notifications: NotificationsService,
-    private readonly activationValidation: ItemActivationValidationService
+    private readonly activationValidation: ItemActivationValidationService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async listReviews(params: {
@@ -145,6 +147,12 @@ export class ItemAiReviewAdminService {
         itemName: item.name,
         businessUserId: item.business.user_id,
       });
+    }
+    if (item?.business?.id) {
+      await this.merchantLifecycleService.recompute(
+        item.business.id,
+        'item_admin_approved'
+      );
     }
   }
 

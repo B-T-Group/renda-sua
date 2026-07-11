@@ -204,16 +204,39 @@ export class MerchantLifecycleService {
     const agreementSigned =
       await this.businessContractsService.hasValidSignedContract(businessId);
     if (!agreementSigned) return false;
-    return this.hasCatalogInventory(businessId);
+    const catalog = await this.getCatalogStep(businessId);
+    return catalog.complete;
   }
 
-  private async hasCatalogInventory(businessId: string): Promise<boolean> {
+  /**
+   * Product catalog readiness (approved inventory at an active location).
+   * Agreement signing is checked separately by isCatalogReady / verification.
+   */
+  async getCatalogStep(businessId: string): Promise<{
+    complete: boolean;
+    hasLocation: boolean;
+    hasApprovedItem: boolean;
+    hasPendingItem: boolean;
+  }> {
+    const inventory = await this.queryCatalogInventory(businessId);
+    return {
+      complete: inventory.hasLocation && inventory.hasApprovedItem,
+      hasLocation: inventory.hasLocation,
+      hasApprovedItem: inventory.hasApprovedItem,
+      hasPendingItem: inventory.hasPendingItem,
+    };
+  }
+  private async queryCatalogInventory(businessId: string): Promise<{
+    hasLocation: boolean;
+    hasApprovedItem: boolean;
+    hasPendingItem: boolean;
+  }> {
     const query = `
       query CatalogInventory($businessId: uuid!) {
         business_locations_aggregate(
           where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
         ) { aggregate { count } }
-        business_inventory_aggregate(
+        approved: business_inventory_aggregate(
           where: {
             is_active: { _eq: true }
             business_location: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
@@ -224,12 +247,24 @@ export class MerchantLifecycleService {
             }
           }
         ) { aggregate { count } }
+        pending: business_inventory_aggregate(
+          where: {
+            is_active: { _eq: true }
+            business_location: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
+            item: {
+              status: { _eq: active }
+              moderation_status: { _neq: approved }
+            }
+          }
+        ) { aggregate { count } }
       }
     `;
     const res = await this.hasuraSystemService.executeQuery(query, { businessId });
-    const locCount = res.business_locations_aggregate?.aggregate?.count ?? 0;
-    const invCount = res.business_inventory_aggregate?.aggregate?.count ?? 0;
-    return locCount > 0 && invCount > 0;
+    return {
+      hasLocation: (res.business_locations_aggregate?.aggregate?.count ?? 0) > 0,
+      hasApprovedItem: (res.approved?.aggregate?.count ?? 0) > 0,
+      hasPendingItem: (res.pending?.aggregate?.count ?? 0) > 0,
+    };
   }
 
   private async resolvePaymentCapability(

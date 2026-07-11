@@ -36,6 +36,7 @@ export const ITEM_FOR_MODERATION_BY_PK = `
       moderation_status
       status
       business {
+        id
         user_id
       }
     }
