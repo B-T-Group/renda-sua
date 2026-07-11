@@ -40,10 +40,16 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { locations } = useBusinessLocations(businessId);
-  const { fetchBusinessRentalItems, createBusinessRentalListing } = useRentalApi();
+  const {
+    fetchBusinessRentalItems,
+    fetchBusinessRentalItem,
+    createBusinessRentalListing,
+    publishBusinessRentalListing,
+  } = useRentalApi();
 
   const [items, setItems] = useState<BusinessRentalItemRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingListing, setSavingListing] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [selItem, setSelItem] = useState('');
   const [selLoc, setSelLoc] = useState('');
@@ -81,20 +87,43 @@ const BusinessRentalsCatalogPage: React.FC = () => {
     const hourly = Number(price);
     const daily =
       priceDay.trim() === '' ? Number((hourly * 12).toFixed(2)) : Number(priceDay);
-    await createBusinessRentalListing({
-      rental_item_id: selItem,
-      business_location_id: selLoc,
-      pickup_instructions: pickup,
-      dropoff_instructions: dropoff,
-      base_price_per_hour: hourly,
-      base_price_per_day: daily,
-      min_rental_hours: Number(minD) || 1,
-      max_rental_hours: maxD ? Number(maxD) : null,
-      units_available: Number(units) || 1,
-      weekly_availability: weeklyAvailability,
-    });
-    setListOpen(false);
-    void loadItems();
+    setSavingListing(true);
+    try {
+      let listingId: string | undefined;
+      try {
+        const created = await createBusinessRentalListing({
+          rental_item_id: selItem,
+          business_location_id: selLoc,
+          pickup_instructions: pickup,
+          dropoff_instructions: dropoff,
+          base_price_per_hour: hourly,
+          base_price_per_day: daily,
+          min_rental_hours: Number(minD) || 1,
+          max_rental_hours: maxD ? Number(maxD) : null,
+          units_available: Number(units) || 1,
+          weekly_availability: weeklyAvailability,
+        });
+        listingId = created?.data?.id;
+      } catch {
+        const detail = await fetchBusinessRentalItem(selItem);
+        listingId = detail?.rental_location_listings?.find(
+          (l) => l.business_location_id === selLoc && !l.deleted_at
+        )?.id;
+      }
+      if (!listingId) {
+        throw new Error('Failed to create listing');
+      }
+      const published = await publishBusinessRentalListing(listingId);
+      if (!published?.success) {
+        throw new Error('Failed to publish listing');
+      }
+      setListOpen(false);
+      await loadItems();
+    } catch (error: unknown) {
+      console.error('Failed to create and publish listing', error);
+    } finally {
+      setSavingListing(false);
+    }
   };
 
   if (!businessId) {
@@ -383,9 +412,15 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setListOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-          <Button variant="contained" onClick={() => void saveListing()}>
-            {t('common.save', 'Save')}
+          <Button onClick={() => setListOpen(false)} disabled={savingListing}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={savingListing || !selItem || !selLoc}
+            onClick={() => void saveListing()}
+          >
+            {t('business.rentals.publishListing', 'Publish listing')}
           </Button>
         </DialogActions>
       </Dialog>

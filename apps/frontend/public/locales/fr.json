@@ -1277,15 +1277,21 @@
           "pricePerDay": "Prix par jour",
           "pricePerDayHint": "Laisser vide pour utiliser 12 × le tarif horaire",
           "finish": "Terminer",
+          "publish": "Publier la location",
+          "saveDraft": "Enregistrer comme brouillon",
           "pickLocation": "Sélectionnez ou ajoutez un emplacement",
           "invalidHourlyPrice": "Indiquez un tarif horaire valide",
           "invalidDailyPrice": "Indiquez un tarif journalier valide ou laissez le champ vide",
           "success": "Annonce de location créée",
+          "publishSuccess": "Annonce de location soumise pour approbation",
+          "draftSuccess": "Annonce de location enregistrée comme brouillon",
           "error": "Impossible de créer l’annonce"
         },
         "success": {
-          "title": "Article de location prêt",
-          "body": "{{name}} a une annonce sur votre emplacement. Vous pourrez en ajouter d’autres plus tard.",
+          "title": "Soumis pour approbation",
+          "body": "{{name}} a une annonce sur votre emplacement et attend une revue avant d’apparaître dans le catalogue public.",
+          "draftTitle": "Brouillon enregistré",
+          "draftBody": "{{name}} est enregistré comme brouillon sur votre emplacement. Publiez-le lorsque vous êtes prêt pour la revue.",
           "dashboard": "Retour au tableau de bord",
           "viewItem": "Voir l’article à louer"
         }

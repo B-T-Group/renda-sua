@@ -30,6 +30,39 @@ const RentalListingModerationStatusChip: React.FC<
       />
     );
   }
+  if (s === 'draft') {
+    return (
+      <Chip
+        size="small"
+        color="default"
+        variant="outlined"
+        label={t('business.rentals.moderation.draft', 'Draft')}
+      />
+    );
+  }
+  if (s === 'proposal_pending') {
+    return (
+      <Chip
+        size="small"
+        color="info"
+        variant="outlined"
+        label={t(
+          'business.rentals.moderation.proposalPending',
+          'AI suggestions ready'
+        )}
+      />
+    );
+  }
+  if (s === 'ai_reviewing') {
+    return (
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label={t('business.rentals.moderation.aiReviewing', 'AI reviewing')}
+      />
+    );
+  }
   return (
     <Chip
       size="small"

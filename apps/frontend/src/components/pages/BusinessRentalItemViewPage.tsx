@@ -9,6 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -21,13 +22,15 @@ import SEOHead from '../seo/SEOHead';
 
 const BusinessRentalItemViewPage: React.FC = () => {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
-  const { fetchBusinessRentalItem } = useRentalApi();
+  const { fetchBusinessRentalItem, publishBusinessRentalListing } = useRentalApi();
   const [item, setItem] = useState<BusinessRentalItemDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!itemId) return;
@@ -43,6 +46,38 @@ const BusinessRentalItemViewPage: React.FC = () => {
     setLoading(true);
     void load().finally(() => setLoading(false));
   }, [businessId, itemId, load]);
+
+  const publishListing = useCallback(
+    async (listingId: string) => {
+      setPublishingId(listingId);
+      try {
+        const res = await publishBusinessRentalListing(listingId);
+        if (!res?.success) {
+          throw new Error('Publish failed');
+        }
+        enqueueSnackbar(
+          t(
+            'business.rentals.moderation.publishSuccess',
+            'Listing submitted for approval'
+          ),
+          { variant: 'success' }
+        );
+        await load();
+      } catch (e: any) {
+        enqueueSnackbar(
+          e?.message ||
+            t(
+              'business.rentals.moderation.publishFailed',
+              'Could not publish listing'
+            ),
+          { variant: 'error' }
+        );
+      } finally {
+        setPublishingId(null);
+      }
+    },
+    [enqueueSnackbar, load, publishBusinessRentalListing, t]
+  );
 
   const coverImage = item?.rental_item_images?.[0]?.image_url ?? '';
   const renderedDescription = useMemo(
@@ -219,6 +254,17 @@ const BusinessRentalItemViewPage: React.FC = () => {
                         {t('business.rentals.pricePerDay', 'Full day price (daily rate)')}:{' '}
                         {listing.base_price_per_day} {item.currency}
                       </Typography>
+                      {listing.moderation_status === 'draft' ? (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          sx={{ mt: 1 }}
+                          disabled={publishingId === listing.id}
+                          onClick={() => void publishListing(listing.id)}
+                        >
+                          {t('business.rentals.publishListing', 'Publish listing')}
+                        </Button>
+                      ) : null}
                     </>
                   )}
                 </Paper>

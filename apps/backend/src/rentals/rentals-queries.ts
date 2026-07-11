@@ -704,6 +704,30 @@ export const RESET_RENTAL_LISTING_MODERATION_PENDING = `
   }
 `;
 
+export const PUBLISH_RENTAL_LISTING_FROM_DRAFT = `
+  mutation PublishRentalListingFromDraft($id: uuid!) {
+    update_rental_location_listings(
+      where: {
+        id: { _eq: $id }
+        moderation_status: { _eq: draft }
+        deleted_at: { _is_null: true }
+      }
+      _set: {
+        moderation_status: pending
+        moderated_at: null
+        moderated_by_user_id: null
+        moderation_source: null
+      }
+    ) {
+      affected_rows
+      returning {
+        id
+        moderation_status
+      }
+    }
+  }
+`;
+
 export const GET_RENTAL_LISTING_MIN_MAX = `
   query GetRentalListingMinMax($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {

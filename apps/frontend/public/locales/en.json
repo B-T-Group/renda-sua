@@ -1534,15 +1534,21 @@
           "pricePerDay": "Price per day",
           "pricePerDayHint": "Leave empty to use 12 × hourly rate",
           "finish": "Finish",
+          "publish": "Publish rental",
+          "saveDraft": "Save as draft",
           "pickLocation": "Select or add a location",
           "invalidHourlyPrice": "Enter a valid hourly price",
           "invalidDailyPrice": "Enter a valid daily price or leave it empty",
           "success": "Rental listing created",
+          "publishSuccess": "Rental listing submitted for approval",
+          "draftSuccess": "Rental listing saved as draft",
           "error": "Could not create listing"
         },
         "success": {
-          "title": "Rental item is set up",
-          "body": "{{name}} has a listing at your location. You can add more listings or photos anytime.",
+          "title": "Submitted for approval",
+          "body": "{{name}} has a listing at your location and awaits review before it appears in the public catalog.",
+          "draftTitle": "Draft saved",
+          "draftBody": "{{name}} is saved as a draft at your location. Publish it when you are ready for review.",
           "dashboard": "Back to dashboard",
           "viewItem": "View rental item"
         }

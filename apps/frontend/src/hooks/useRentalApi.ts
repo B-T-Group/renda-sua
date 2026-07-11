@@ -456,6 +456,20 @@ export function useRentalApi() {
     [api]
   );
 
+  const publishBusinessRentalListing = useCallback(
+    async (listingId: string) => {
+      const { data } = await api.post<{
+        success: boolean;
+        data: { listing: { id: string; moderation_status: string } };
+      }>(`/rentals/business/listings/${listingId}/publish`, {});
+      return data as {
+        success: boolean;
+        data: { listing: { id: string; moderation_status: string } };
+      };
+    },
+    [api]
+  );
+
   const createRequest = useCallback(
     async (body: {
       rentalLocationListingId: string;
@@ -617,6 +631,7 @@ export function useRentalApi() {
     fetchBusinessRentalSchedule,
     createBusinessRentalItem,
     createBusinessRentalListing,
+    publishBusinessRentalListing,
     createRequest,
     respondRequest,
     createBooking,

@@ -23,7 +23,7 @@ import type { CreatedRentalItemSummary } from './FirstRentalItemCreateStep';
 
 interface FirstRentalItemLocationStepProps {
   item: CreatedRentalItemSummary;
-  onComplete: () => void;
+  onComplete: (savedAsDraft: boolean) => void;
 }
 
 const FirstRentalItemLocationStep: React.FC<
@@ -45,14 +45,21 @@ const FirstRentalItemLocationStep: React.FC<
     fetchBusinessLocations,
     loading: invLoading,
   } = useBusinessInventory(businessId);
-  const { createBusinessRentalListing, updateBusinessRentalItem } =
-    useRentalApi();
+  const {
+    createBusinessRentalListing,
+    publishBusinessRentalListing,
+    updateBusinessRentalItem,
+    fetchBusinessRentalItem,
+  } = useRentalApi();
 
   const [locationId, setLocationId] = useState('');
   const [pricePerHour, setPricePerHour] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [listingIdsByLocation, setListingIdsByLocation] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     if (!businessId) return;
@@ -77,7 +84,7 @@ const FirstRentalItemLocationStep: React.FC<
     setModalOpen(false);
   };
 
-  const finish = async () => {
+  const parsePrices = (): { hourly: number; daily: number } | null => {
     if (!locationId) {
       enqueueSnackbar(
         t(
@@ -86,7 +93,7 @@ const FirstRentalItemLocationStep: React.FC<
         ),
         { variant: 'warning' }
       );
-      return;
+      return null;
     }
     const hourly = Number.parseFloat(pricePerHour.trim());
     if (Number.isNaN(hourly) || hourly < 0) {
@@ -97,7 +104,7 @@ const FirstRentalItemLocationStep: React.FC<
         ),
         { variant: 'warning' }
       );
-      return;
+      return null;
     }
     const dailyRaw = pricePerDay.trim();
     const daily =
@@ -112,18 +119,66 @@ const FirstRentalItemLocationStep: React.FC<
         ),
         { variant: 'warning' }
       );
-      return;
+      return null;
     }
-    setSaving(true);
+    return { hourly, daily };
+  };
+
+  const rememberListingId = (locId: string, listingId: string) => {
+    setListingIdsByLocation((prev) => ({ ...prev, [locId]: listingId }));
+  };
+
+  const findExistingListingId = async (locId: string): Promise<string | null> => {
+    const detail = await fetchBusinessRentalItem(item.id);
+    const existing = detail?.rental_location_listings?.find(
+      (l) => l.business_location_id === locId && !l.deleted_at
+    );
+    if (!existing?.id) return null;
+    rememberListingId(locId, existing.id);
+    return existing.id;
+  };
+
+  const ensureListingId = async (
+    locId: string,
+    hourly: number,
+    daily: number
+  ): Promise<string> => {
+    const cached = listingIdsByLocation[locId];
+    if (cached) return cached;
     try {
       const res = await createBusinessRentalListing({
         rental_item_id: item.id,
-        business_location_id: locationId,
+        business_location_id: locId,
         base_price_per_hour: hourly,
         base_price_per_day: daily,
       });
-      if (!res?.success) {
-        throw new Error('Listing failed');
+      if (res?.success && res.data?.id) {
+        rememberListingId(locId, res.data.id);
+        return res.data.id;
+      }
+    } catch {
+      // Unique constraint or race: reuse existing listing for this location.
+    }
+    const existingId = await findExistingListingId(locId);
+    if (existingId) return existingId;
+    throw new Error('Listing failed');
+  };
+
+  const finish = async (publish: boolean) => {
+    const prices = parsePrices();
+    if (!prices) return;
+    setSaving(true);
+    try {
+      const listingId = await ensureListingId(
+        locationId,
+        prices.hourly,
+        prices.daily
+      );
+      if (publish) {
+        const pub = await publishBusinessRentalListing(listingId);
+        if (!pub?.success) {
+          throw new Error('Publish failed');
+        }
       }
       const upd = await updateBusinessRentalItem(item.id, {
         is_active: true,
@@ -132,13 +187,18 @@ const FirstRentalItemLocationStep: React.FC<
         throw new Error('Activation failed');
       }
       enqueueSnackbar(
-        t(
-          'business.onboarding.firstRental.location.success',
-          'Rental listing created'
-        ),
+        publish
+          ? t(
+              'business.onboarding.firstRental.location.publishSuccess',
+              'Rental listing submitted for approval'
+            )
+          : t(
+              'business.onboarding.firstRental.location.draftSuccess',
+              'Rental listing saved as draft'
+            ),
         { variant: 'success' }
       );
-      onComplete();
+      onComplete(!publish);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message ||
@@ -231,13 +291,28 @@ const FirstRentalItemLocationStep: React.FC<
           )}
         />
       </Stack>
-      <Button
-        variant="contained"
-        onClick={() => void finish()}
-        disabled={busy || !locationId}
-      >
-        {t('business.onboarding.firstRental.location.finish', 'Finish')}
-      </Button>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <Button
+          variant="contained"
+          onClick={() => void finish(true)}
+          disabled={busy || !locationId}
+        >
+          {t(
+            'business.onboarding.firstRental.location.publish',
+            'Publish rental'
+          )}
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => void finish(false)}
+          disabled={busy || !locationId}
+        >
+          {t(
+            'business.onboarding.firstRental.location.saveDraft',
+            'Save as draft'
+          )}
+        </Button>
+      </Stack>
       <LocationModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

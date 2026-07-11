@@ -27,6 +27,7 @@ const FirstRentalItemFlow: React.FC = () => {
   const [step, setStep] = useState(0);
   const [upload, setUpload] = useState<FirstRentalUploadResult | null>(null);
   const [item, setItem] = useState<CreatedRentalItemSummary | null>(null);
+  const [savedAsDraft, setSavedAsDraft] = useState(false);
 
   if (!profile?.business) {
     return <Navigate to="/dashboard" replace />;
@@ -82,10 +83,15 @@ const FirstRentalItemFlow: React.FC = () => {
         {step === 2 && item && (
           <FirstRentalItemLocationStep
             item={item}
-            onComplete={() => setStep(3)}
+            onComplete={(asDraft) => {
+              setSavedAsDraft(asDraft);
+              setStep(3);
+            }}
           />
         )}
-        {step === 3 && item && <FirstRentalItemSuccessStep item={item} />}
+        {step === 3 && item && (
+          <FirstRentalItemSuccessStep item={item} savedAsDraft={savedAsDraft} />
+        )}
       </Paper>
     </Container>
   );

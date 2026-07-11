@@ -278,12 +278,30 @@ export class RentalsController {
 
   @Post('business/listings')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Add a location listing for a rental item' })
+  @ApiOperation({
+    summary: 'Add a location listing for a rental item (starts as draft)',
+  })
   @ApiBody({ type: CreateBusinessRentalListingDto })
-  @ApiResponse({ status: 201, description: 'Listing created' })
+  @ApiResponse({ status: 201, description: 'Draft listing created' })
   async createBusinessListing(@Body() dto: CreateBusinessRentalListingDto) {
     const id = await this.rentalsService.createBusinessRentalListing(dto);
     return { success: true, data: { id } };
+  }
+
+  @Post('business/listings/:listingId/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Publish a draft rental listing (submits for AI/manual moderation)',
+  })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Listing submitted for review' })
+  @ApiResponse({ status: 400, description: 'Listing is not a draft' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
+  async publishBusinessListing(@Param('listingId') listingId: string) {
+    const listing =
+      await this.rentalsService.publishBusinessRentalListing(listingId);
+    return { success: true, data: { listing } };
   }
 
   @Get('business/items/:itemId')

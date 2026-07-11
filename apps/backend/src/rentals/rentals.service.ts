@@ -1065,6 +1065,7 @@ export class RentalsService {
         max_rental_hours: maxHours,
         units_available: dto.units_available ?? 1,
         is_active: true,
+        // moderation_status omitted: DB default is draft; business role cannot set it
       },
     });
     const id = row.insert_rental_location_listings_one?.id;
@@ -1075,8 +1076,39 @@ export class RentalsService {
       );
     }
     await this.upsertWeeklyAvailability(id, availability);
-    void this.rentalListingAiReviewService.requestReview(id);
     return id;
+  }
+
+  async publishBusinessRentalListing(listingId: string): Promise<{
+    id: string;
+    moderation_status: string;
+  }> {
+    const businessId = await this.requireBusinessId();
+    const listing = await this.loadRentalListingBusinessRow(
+      listingId,
+      businessId
+    );
+    if (listing.moderation_status !== 'draft') {
+      throw new HttpException(
+        'Only draft listings can be published',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_location_listings: {
+        affected_rows: number;
+        returning: Array<{ id: string; moderation_status: string }>;
+      };
+    }>(Q.PUBLISH_RENTAL_LISTING_FROM_DRAFT, { id: listingId });
+    const row = result.update_rental_location_listings?.returning?.[0];
+    if (!row || result.update_rental_location_listings.affected_rows < 1) {
+      throw new HttpException(
+        'Failed to publish listing',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    void this.rentalListingAiReviewService.requestReview(listingId);
+    return row;
   }
 
   async getBusinessRentalItemById(itemId: string): Promise<any> {
