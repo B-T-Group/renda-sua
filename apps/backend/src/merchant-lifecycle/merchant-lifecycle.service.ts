@@ -253,7 +253,7 @@ export class MerchantLifecycleService {
             business_location: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
             item: {
               status: { _eq: active }
-              moderation_status: { _neq: approved }
+              moderation_status: { _in: [pending, ai_reviewing, proposal_pending] }
             }
           }
         ) { aggregate { count } }
