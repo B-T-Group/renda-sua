@@ -24,7 +24,7 @@ const MarketplaceOverviewSection: React.FC = () => {
       titleKey: 'home.overview.client.title',
       defaultTitle: 'Shoppers',
       descKey: 'home.overview.client.desc',
-      defaultDesc: 'Browse products from local businesses and get them delivered to your door.',
+      defaultDesc: 'Buy what you want to own, or rent what you only need for a while — delivered from local businesses to your door.',
       color: '#1e40af',
       anchor: '#persona-client',
     },
@@ -33,7 +33,7 @@ const MarketplaceOverviewSection: React.FC = () => {
       titleKey: 'home.overview.business.title',
       defaultTitle: 'Businesses',
       descKey: 'home.overview.business.desc',
-      defaultDesc: 'Create a storefront, manage inventory, and reach customers in your city.',
+      defaultDesc: 'Create a storefront, list products and rentals, and reach customers in your city.',
       color: '#16a34a',
       anchor: '#persona-business',
     },
@@ -85,7 +85,7 @@ const MarketplaceOverviewSection: React.FC = () => {
               variant="body1"
               sx={{ color: 'text.secondary', maxWidth: 560, mx: 'auto', fontSize: { xs: '1rem', md: '1.1rem' } }}
             >
-              {t('home.overview.subtitle', 'Rendasua connects shoppers, local businesses, and delivery agents into one seamless ecosystem.')}
+              {t('home.overview.subtitle', 'Rendasua connects shoppers, local businesses, and delivery agents into one seamless ecosystem — for buying and renting.')}
             </Typography>
           </motion.div>
         </Box>

@@ -11,14 +11,14 @@ export const homeFaqItems: HomeFaqItem[] = [
     defaultQuestion: 'What is Rendasua?',
     answerKey: 'home.faq.whatIsRendasua.answer',
     defaultAnswer:
-      'Rendasua is a local marketplace app that connects shoppers with local businesses and delivery agents. You can browse products, place orders, and get them delivered to your door.',
+      "Rendasua is a local marketplace for buying and renting. Want to own something? We've got your back. Just want to rent it? We've still got your back — with delivery agents who bring it to your door.",
   },
   {
     questionKey: 'home.faq.howDoIOrder.question',
     defaultQuestion: 'How do I place an order?',
     answerKey: 'home.faq.howDoIOrder.answer',
     defaultAnswer:
-      'Download the Rendasua app, browse products from local businesses near you, add items to your cart, and checkout. A delivery agent will pick up and bring your order to you.',
+      'Download the Rendasua app, browse products or rentals from local businesses near you, add items to your cart or book a rental, and checkout. A delivery agent will pick up and bring your order to you.',
   },
   {
     questionKey: 'home.faq.canITrack.question',

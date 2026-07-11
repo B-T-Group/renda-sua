@@ -15,9 +15,9 @@ interface StoryBeat {
 }
 
 const storyBeats: StoryBeat[] = [
-  { stepKey: 'home.story.step1', defaultStep: '1', emojiIcon: '🔍', titleKey: 'home.story.discover.title', defaultTitle: 'Discover', descKey: 'home.story.discover.desc', defaultDesc: 'Browse products from local businesses in your city.', color: '#6366f1' },
-  { stepKey: 'home.story.step2', defaultStep: '2', emojiIcon: '🛍️', titleKey: 'home.story.browse.title', defaultTitle: 'Browse', descKey: 'home.story.browse.desc', defaultDesc: 'Filter by category, brand, or distance. Find exactly what you need.', color: '#1e40af' },
-  { stepKey: 'home.story.step3', defaultStep: '3', emojiIcon: '📲', titleKey: 'home.story.order.title', defaultTitle: 'Order', descKey: 'home.story.order.desc', defaultDesc: 'Place your order in seconds. Pay securely with mobile money or card.', color: '#0891b2' },
+  { stepKey: 'home.story.step1', defaultStep: '1', emojiIcon: '🔍', titleKey: 'home.story.discover.title', defaultTitle: 'Discover', descKey: 'home.story.discover.desc', defaultDesc: 'Browse products and rentals from local businesses in your city.', color: '#6366f1' },
+  { stepKey: 'home.story.step2', defaultStep: '2', emojiIcon: '🛍️', titleKey: 'home.story.browse.title', defaultTitle: 'Browse', descKey: 'home.story.browse.desc', defaultDesc: 'Filter by category, brand, or distance. Find exactly what you need — to buy or to rent.', color: '#1e40af' },
+  { stepKey: 'home.story.step3', defaultStep: '3', emojiIcon: '📲', titleKey: 'home.story.order.title', defaultTitle: 'Order', descKey: 'home.story.order.desc', defaultDesc: 'Place your order or rental request in seconds. Pay securely with mobile money or card.', color: '#0891b2' },
   { stepKey: 'home.story.step4', defaultStep: '4', emojiIcon: '🏪', titleKey: 'home.story.businessReceives.title', defaultTitle: 'Business prepares', descKey: 'home.story.businessReceives.desc', defaultDesc: 'The business receives your order and starts preparing it right away.', color: '#16a34a' },
   { stepKey: 'home.story.step5', defaultStep: '5', emojiIcon: '🛵', titleKey: 'home.story.agentAccepts.title', defaultTitle: 'Agent picks up', descKey: 'home.story.agentAccepts.desc', defaultDesc: 'A nearby delivery agent accepts the request and picks up your order.', color: '#f59e0b' },
   { stepKey: 'home.story.step6', defaultStep: '6', emojiIcon: '📍', titleKey: 'home.story.tracking.title', defaultTitle: 'Track live', descKey: 'home.story.tracking.desc', defaultDesc: 'Watch your delivery move on the map in real time. ETA always visible.', color: '#ef4444' },

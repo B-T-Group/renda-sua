@@ -100,7 +100,7 @@ const PersonaSection: React.FC = () => {
               {t('home.personas.title', 'Built for every role')}
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 500, mx: 'auto' }}>
-              {t('home.personas.subtitle', 'Whether you shop, sell, or deliver — Rendasua has you covered.')}
+              {t('home.personas.subtitle', 'Whether you shop, rent, sell, or deliver — Rendasua has you covered.')}
             </Typography>
           </motion.div>
         </Box>

@@ -19,7 +19,7 @@ function useHomeStructuredData() {
         '@context': 'https://schema.org',
         '@type': 'MobileApplication',
         name: 'Rendasua',
-        description: 'Local marketplace app connecting shoppers, local businesses, and delivery agents.',
+        description: 'Local marketplace app for buying and renting — connecting shoppers, local businesses, and delivery agents.',
         applicationCategory: 'ShoppingApplication',
         operatingSystem: 'iOS, Android',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
@@ -29,9 +29,9 @@ function useHomeStructuredData() {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',
         mainEntity: [
-          { '@type': 'Question', name: 'What is Rendasua?', acceptedAnswer: { '@type': 'Answer', text: 'Rendasua is a local marketplace app connecting shoppers with local businesses and delivery agents.' } },
-          { '@type': 'Question', name: 'How do I place an order?', acceptedAnswer: { '@type': 'Answer', text: 'Download the Rendasua app, browse products from local businesses near you, and checkout in minutes.' } },
-          { '@type': 'Question', name: 'How do I start selling as a business?', acceptedAnswer: { '@type': 'Answer', text: 'Create a free business account on rendasua.com, set up your storefront, and start receiving orders.' } },
+          { '@type': 'Question', name: 'What is Rendasua?', acceptedAnswer: { '@type': 'Answer', text: 'Rendasua is a local marketplace for buying and renting. Want to own something? We have your back. Just want to rent it? We still have your back — with delivery to your door.' } },
+          { '@type': 'Question', name: 'How do I place an order?', acceptedAnswer: { '@type': 'Answer', text: 'Download the Rendasua app, browse products or rentals from local businesses near you, and checkout in minutes.' } },
+          { '@type': 'Question', name: 'How do I start selling as a business?', acceptedAnswer: { '@type': 'Answer', text: 'Create a free business account on rendasua.com, set up your storefront, list products and rentals, and start receiving orders.' } },
         ],
       },
     ]);
@@ -66,14 +66,14 @@ const HomePage: React.FC = () => {
   useHomeAnalytics();
 
   const seoConfig = useSEO({
-    title: t('home.seo.title', 'Rendasua — Everything Local, Delivered'),
+    title: t('home.seo.title', 'Rendasua — Own It or Rent It, Locally'),
     description: t(
       'home.seo.description',
-      'Browse local businesses, place orders in minutes, and track every delivery in real time. Download the Rendasua app or open a business account today.'
+      "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Shop or rent from local businesses and track every delivery in real time."
     ),
     keywords: t(
       'home.seo.keywords',
-      'local delivery app, marketplace, online shopping, delivery agent, business storefront, Rendasua app, download Rendasua'
+      'local delivery app, marketplace, online shopping, rentals, rent locally, delivery agent, business storefront, Rendasua app, download Rendasua'
     ),
     type: 'website',
     canonical: 'https://rendasua.com/',

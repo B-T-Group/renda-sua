@@ -27,12 +27,12 @@ export const personaContentData: PersonaContent[] = [
     nameKey: 'home.personas.client.name',
     defaultName: 'Shopper',
     taglineKey: 'home.personas.client.tagline',
-    defaultTagline: 'Shop local. Receive fast.',
+    defaultTagline: 'Own it or rent it. Locally.',
     descriptionKey: 'home.personas.client.description',
     defaultDescription:
-      'Browse hundreds of local products, place an order in minutes, and track your delivery in real time.',
+      "Want to own something? We've got your back. Just want to rent it? We've still got your back. Browse local products and rentals, then track delivery in real time.",
     features: [
-      { key: 'home.personas.client.features.browse', defaultLabel: 'Browse & order local products' },
+      { key: 'home.personas.client.features.browse', defaultLabel: 'Browse & order products — or book rentals' },
       { key: 'home.personas.client.features.tracking', defaultLabel: 'Real-time delivery tracking' },
       { key: 'home.personas.client.features.chat', defaultLabel: 'Chat with businesses & agents' },
       { key: 'home.personas.client.features.pin', defaultLabel: 'Secure delivery PIN verification' },
@@ -54,12 +54,12 @@ export const personaContentData: PersonaContent[] = [
     defaultTagline: 'Your storefront, online in minutes.',
     descriptionKey: 'home.personas.business.description',
     defaultDescription:
-      'Create your online storefront, manage inventory, and start receiving orders from customers in your city.',
+      'Create your online storefront, list products and rentals, manage inventory, and start receiving orders from customers in your city.',
     features: [
       { key: 'home.personas.business.features.storefront', defaultLabel: 'Create your online storefront' },
       { key: 'home.personas.business.features.inventory', defaultLabel: 'Manage inventory across locations' },
       { key: 'home.personas.business.features.ai', defaultLabel: 'AI-assisted product descriptions' },
-      { key: 'home.personas.business.features.orders', defaultLabel: 'Order & delivery management' },
+      { key: 'home.personas.business.features.orders', defaultLabel: 'Order, rental & delivery management' },
       { key: 'home.personas.business.features.messaging', defaultLabel: 'Message customers & agents' },
       { key: 'home.personas.business.features.growth', defaultLabel: 'Analytics & growth tools' },
     ],

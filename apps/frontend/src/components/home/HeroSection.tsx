@@ -1,4 +1,4 @@
-import { ArrowForward, ShoppingBag } from '@mui/icons-material';
+import { ArrowForward, EventAvailable, ShoppingBag } from '@mui/icons-material';
 import { Box, Button, Container, Grid, Stack, Typography, alpha } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
@@ -142,9 +142,9 @@ const HeroSection: React.FC = () => {
                     mb: 3,
                   }}
                 >
-                  {t('home.hero.headline', 'Everything local,')}
+                  {t('home.hero.headline', 'Own it or rent it,')}
                   <Box component="span" sx={{ display: 'block', color: 'rgba(255,255,255,0.85)' }}>
-                    {t('home.hero.headlineLine2', 'delivered.')}
+                    {t('home.hero.headlineLine2', "we've got you.")}
                   </Box>
                 </Typography>
               </motion.div>
@@ -165,7 +165,7 @@ const HeroSection: React.FC = () => {
                 >
                   {t(
                     'home.hero.subheadline',
-                    'Browse local businesses, order in minutes, and track every delivery in real time — or open a storefront and start selling today.'
+                    "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Browse local businesses, order or book in minutes, and track every delivery in real time."
                   )}
                 </Typography>
               </motion.div>
@@ -196,6 +196,21 @@ const HeroSection: React.FC = () => {
                     }}
                   >
                     {t('home.hero.browseItems', 'Browse Items')}
+                  </Button>
+                  <Button
+                    component={RouterLink}
+                    to="/rentals"
+                    variant="outlined"
+                    startIcon={<EventAvailable />}
+                    sx={{
+                      color: '#fff',
+                      borderColor: 'rgba(255,255,255,0.45)',
+                      borderWidth: 2,
+                      fontWeight: 600,
+                      '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)', borderWidth: 2 },
+                    }}
+                  >
+                    {t('home.hero.browseRentals', 'Browse Rentals')}
                   </Button>
                   <Button
                     component={RouterLink}
