@@ -89,6 +89,7 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
       base_price_per_day
       min_rental_hours
       max_rental_hours
+      units_available
       pickup_instructions
       dropoff_instructions
       updated_at
@@ -151,6 +152,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
       base_price_per_day
       min_rental_hours
       max_rental_hours
+      units_available
       pickup_instructions
       dropoff_instructions
       updated_at
@@ -223,6 +225,7 @@ export const GET_RENTAL_REQUEST_FULL = `
       rental_selection_windows
       rental_pricing_snapshot
       rental_location_listing_id
+      units_requested
       expires_at
       rental_location_listing {
         id
@@ -297,42 +300,94 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
 `;
 
 export const LIST_TAKEN_RENTAL_BOOKING_WINDOWS = `
-  query ListTakenRentalBookingWindows($listingId: uuid!) {
+  query ListTakenRentalBookingWindows($listingId: uuid!, $now: timestamptz!) {
     rental_booking_windows(
       where: {
         rental_booking: {
           rental_location_listing_id: { _eq: $listingId }
-          status: { _in: [confirmed, active, awaiting_return, proposed] }
+          _or: [
+            { status: { _in: [confirmed, active, awaiting_return] } }
+            {
+              _and: [
+                { status: { _eq: proposed } }
+                { contract_expires_at: { _gt: $now } }
+              ]
+            }
+          ]
         }
       }
       order_by: { start_at: asc }
     ) {
       start_at
       end_at
+      rental_booking {
+        units_booked
+      }
     }
   }
 `;
 
-export const COUNT_OVERLAPPING_BOOKINGS = `
-  query CountOverlappingBookings(
+/** Windows overlapping [start, end) with booking units (for peak concurrent capacity). */
+export const LIST_OVERLAPPING_BOOKING_WINDOWS = `
+  query ListOverlappingBookingWindows(
     $listingId: uuid!
     $start: timestamptz!
     $end: timestamptz!
+    $now: timestamptz!
   ) {
-    rental_bookings_aggregate(
+    rental_booking_windows(
       where: {
-        rental_location_listing_id: { _eq: $listingId }
-        status: { _in: [confirmed, active, awaiting_return] }
-        rental_booking_windows: {
-          _and: [
-            { start_at: { _lt: $end } }
-            { end_at: { _gt: $start } }
+        start_at: { _lt: $end }
+        end_at: { _gt: $start }
+        rental_booking: {
+          rental_location_listing_id: { _eq: $listingId }
+          _or: [
+            { status: { _in: [confirmed, active, awaiting_return] } }
+            {
+              _and: [
+                { status: { _eq: proposed } }
+                { contract_expires_at: { _gt: $now } }
+              ]
+            }
           ]
         }
       }
     ) {
-      aggregate {
-        count
+      start_at
+      end_at
+      rental_booking {
+        units_booked
+      }
+    }
+  }
+`;
+
+export const LIST_COMMITTED_RENTAL_BOOKING_WINDOWS_FOR_LISTING = `
+  query ListCommittedRentalBookingWindowsForListing(
+    $listingId: uuid!
+    $now: timestamptz!
+  ) {
+    rental_booking_windows(
+      where: {
+        end_at: { _gt: $now }
+        rental_booking: {
+          rental_location_listing_id: { _eq: $listingId }
+          _or: [
+            { status: { _in: [confirmed, active, awaiting_return] } }
+            {
+              _and: [
+                { status: { _eq: proposed } }
+                { contract_expires_at: { _gt: $now } }
+              ]
+            }
+          ]
+        }
+      }
+    ) {
+      start_at
+      end_at
+      rental_booking {
+        units_booked
       }
     }
   }
@@ -746,6 +801,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       created_at
       business_response_note
       client_request_note
+      units_requested
       unavailable_reason_code
       rental_pricing_snapshot
       responded_at
@@ -781,6 +837,7 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       end_at
       total_amount
       currency
+      units_booked
       contract_expires_at
       created_at
       rental_request_id
@@ -822,6 +879,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       rental_pricing_snapshot
       business_response_note
       client_request_note
+      units_requested
       unavailable_reason_code
       expires_at
       responded_at
@@ -911,22 +969,6 @@ export const GET_BUSINESS_RENTAL_SCHEDULE = `
             email
           }
         }
-      }
-    }
-  }
-`;
-
-export const COUNT_ACTIVE_PROPOSED_BOOKINGS_FOR_LISTING = `
-  query CountActiveProposedBookingsForListing($listingId: uuid!, $now: timestamptz!) {
-    rental_bookings_aggregate(
-      where: {
-        rental_location_listing_id: { _eq: $listingId }
-        status: { _eq: proposed }
-        contract_expires_at: { _gt: $now }
-      }
-    ) {
-      aggregate {
-        count
       }
     }
   }

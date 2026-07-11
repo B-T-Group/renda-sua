@@ -23,6 +23,7 @@ export interface RentalPricingSnapshotBody {
   version: number;
   currency: string;
   total: number;
+  unitsBooked?: number;
   ratePerHour?: number;
   hours?: number;
   lines?: RentalPricingSnapshotLine[];
@@ -157,6 +158,7 @@ export type UnavailableRentalReasonCode =
 export interface RentalTakenWindow {
   startAt: string;
   endAt: string;
+  unitsBooked?: number;
 }
 
 export interface RespondRentalRequestBody {
@@ -182,6 +184,7 @@ export interface BusinessRentalRequestRow {
   rental_pricing_snapshot: unknown;
   business_response_note?: string | null;
   client_request_note?: string | null;
+  units_requested?: number;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;
@@ -225,6 +228,7 @@ export interface ClientRentalRequestRow {
   business_response_note?: string | null;
   unavailable_reason_code?: string | null;
   client_request_note?: string | null;
+  units_requested?: number;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
@@ -473,7 +477,7 @@ export function useRentalApi() {
       base_price_per_day: number;
       min_rental_hours?: number;
       max_rental_hours?: number | null;
-      units_available?: number;
+      units_available: number;
       weekly_availability?: RentalWeeklyAvailabilityRow[];
     }) => {
       const { data } = await api.post<{
@@ -550,6 +554,7 @@ export function useRentalApi() {
         billing?: 'hourly' | 'all_day';
         calendarDate?: string;
       }>;
+      unitsRequested?: number;
       clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);

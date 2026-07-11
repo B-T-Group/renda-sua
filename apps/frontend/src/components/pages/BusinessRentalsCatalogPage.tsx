@@ -87,6 +87,11 @@ const BusinessRentalsCatalogPage: React.FC = () => {
     const hourly = Number(price);
     const daily =
       priceDay.trim() === '' ? Number((hourly * 12).toFixed(2)) : Number(priceDay);
+    const unitsNum = Number(units);
+    if (!Number.isInteger(unitsNum) || unitsNum < 1) {
+      console.error('units_available must be >= 1');
+      return;
+    }
     setSavingListing(true);
     try {
       let listingId: string | undefined;
@@ -100,7 +105,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           base_price_per_day: daily,
           min_rental_hours: Number(minD) || 1,
           max_rental_hours: maxD ? Number(maxD) : null,
-          units_available: Number(units) || 1,
+          units_available: unitsNum,
           weekly_availability: weeklyAvailability,
         });
         listingId = created?.data?.id;
@@ -382,6 +387,13 @@ const BusinessRentalsCatalogPage: React.FC = () => {
             label={t('business.rentals.units', 'Units available')}
             value={units}
             onChange={(e) => setUnits(e.target.value)}
+            type="number"
+            inputProps={{ min: 1, step: 1 }}
+            helperText={t(
+              'business.rentals.unitsHelp',
+              'How many identical units can be rented at once?'
+            )}
+            required
           />
           <Typography variant="subtitle2">
             {t('business.rentals.weeklyAvailability', 'Weekly availability')}

@@ -2,11 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsInt,
   IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -44,6 +46,19 @@ export class CreateRentalRequestDto {
   @ValidateNested({ each: true })
   @Type(() => RentalRequestWindowDto)
   windows?: RentalRequestWindowDto[];
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Number of identical listing units to rent for every window (default 1)',
+    minimum: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  unitsRequested?: number;
 
   @ApiProperty({
     required: false,

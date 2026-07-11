@@ -94,13 +94,15 @@ export function estimateTotalFromSelectionRanges(
     calendarDate?: string;
   }>,
   ratePerHour: number,
-  ratePerDay: number
+  ratePerDay: number,
+  units = 1
 ): { lines: RentalPricingLine[]; total: number } {
+  const qty = Math.max(1, Math.floor(units) || 1);
   const lines: RentalPricingLine[] = [];
   let total = 0;
   for (const r of selections) {
     if (r.billing === 'all_day' && r.calendarDate) {
-      const subtotal = Number(ratePerDay.toFixed(2));
+      const subtotal = Number((ratePerDay * qty).toFixed(2));
       total += subtotal;
       lines.push({
         kind: 'all_day',
@@ -110,7 +112,7 @@ export function estimateTotalFromSelectionRanges(
       });
     } else {
       const h = rentalBillableHours(r.startMs, r.endMs);
-      const subtotal = Number((h * ratePerHour).toFixed(2));
+      const subtotal = Number((h * ratePerHour * qty).toFixed(2));
       total += subtotal;
       const s = new Date(r.startMs);
       const e = new Date(r.endMs);

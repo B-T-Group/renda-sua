@@ -33,14 +33,14 @@ import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../uti
 import { estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
   bookedSegmentsForLocalDay,
-  dayHasNoBookedOverlap,
+  dayHasRemainingCapacity,
   formatSelectionLabel,
   freeSlotEndsLocal,
   freeSlotStartsLocal,
   listingDayBoundsLocal,
   maximalFreeHourRangesLocal,
   mergeRangeIntoSelections,
-  rangesOverlapMs,
+  remainingUnitsInRange,
   rentalBillableHours,
   totalBillableHours,
   type SelectionRange,
@@ -79,6 +79,7 @@ export interface RentalListingRequestSectionProps {
   isAuthenticated: boolean;
   minRentalHours?: number;
   maxRentalHours?: number | null;
+  unitsAvailable?: number;
   weeklyAvailability?: WeeklyRow[];
   basePricePerHour?: number;
   basePricePerDay?: number;
@@ -90,6 +91,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   isAuthenticated,
   minRentalHours = 1,
   maxRentalHours = null,
+  unitsAvailable = 1,
   weeklyAvailability = [],
   basePricePerHour = 0,
   basePricePerDay = 0,
@@ -104,10 +106,13 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const [endMs, setEndMs] = useState<number | ''>('');
   const [allDayChecked, setAllDayChecked] = useState(false);
   const [selections, setSelections] = useState<SelectionRange[]>([]);
+  const [unitsRequested, setUnitsRequested] = useState(1);
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const stock = Math.max(1, Math.floor(Number(unitsAvailable)) || 1);
 
   const loadBooked = useCallback(async () => {
     try {
@@ -144,16 +149,31 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const minStartMs = nowMs + RENTAL_MIN_START_BUFFER_MS;
   const slotStarts = useMemo(() => {
     if (!dayBounds) return [];
-    return freeSlotStartsLocal(dayBounds.open, dayBounds.close, bookedSegs, minStartMs);
-  }, [bookedSegs, dayBounds, minStartMs]);
+    return freeSlotStartsLocal(dayBounds.open, dayBounds.close, bookedSegs, minStartMs, stock);
+  }, [bookedSegs, dayBounds, minStartMs, stock]);
 
   const slotEnds = useMemo(() => {
     if (!dayBounds || startMs === '') return [];
-    return freeSlotEndsLocal(Number(startMs), dayBounds.close, bookedSegs);
-  }, [bookedSegs, dayBounds, startMs]);
+    return freeSlotEndsLocal(Number(startMs), dayBounds.close, bookedSegs, stock);
+  }, [bookedSegs, dayBounds, startMs, stock]);
 
   const canAllDay =
-    !!dayBounds && dayHasNoBookedOverlap(dayStartEnd.start, dayStartEnd.end, booked);
+    !!dayBounds &&
+    dayHasRemainingCapacity(dayBounds.open, dayBounds.close, booked, stock, 1);
+
+  const remainingForSelection = useMemo(() => {
+    if (selections.length === 0) return stock;
+    let minRem = stock;
+    for (const r of selections) {
+      const rem = remainingUnitsInRange(r.startMs, r.endMs, booked, stock);
+      if (rem < minRem) minRem = rem;
+    }
+    return minRem;
+  }, [booked, selections, stock]);
+
+  useEffect(() => {
+    setUnitsRequested((prev) => Math.min(Math.max(1, prev), Math.max(1, remainingForSelection)));
+  }, [remainingForSelection]);
 
   useEffect(() => {
     setStartMs('');
@@ -178,7 +198,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           dayBounds.open,
           dayBounds.close,
           bookedSegs,
-          minStartMs
+          minStartMs,
+          stock
         );
         if (ranges.length === 0) return;
         setSelections((prev) => {
@@ -208,13 +229,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       setMsg(t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.'));
       return;
     }
-    for (const w of booked) {
-      const w0 = new Date(w.startAt).getTime();
-      const w1 = new Date(w.endAt).getTime();
-      if (rangesOverlapMs(s, e, w0, w1)) {
-        setMsg(t('rentals.requestForm.overlapsTaken', 'That time overlaps an existing booking.'));
-        return;
-      }
+    if (remainingUnitsInRange(s, e, booked, stock) < 1) {
+      setMsg(t('rentals.requestForm.noUnitsLeft', 'No units left for that time.'));
+      return;
     }
     setSelections((prev) => mergeRangeIntoSelections(prev, s, e, { billing: 'hourly' }));
     setStartMs('');
@@ -227,8 +244,14 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
 
   const hoursTotal = useMemo(() => totalBillableHours(selections), [selections]);
   const { lines: estimateLines, total: estimatedTotal } = useMemo(
-    () => estimateTotalFromSelectionRanges(selections, basePricePerHour, basePricePerDay),
-    [basePricePerDay, basePricePerHour, selections]
+    () =>
+      estimateTotalFromSelectionRanges(
+        selections,
+        basePricePerHour,
+        basePricePerDay,
+        unitsRequested
+      ),
+    [basePricePerDay, basePricePerHour, selections, unitsRequested]
   );
 
   const validateBeforeSubmit = useCallback((): string | null => {
@@ -241,31 +264,41 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     if (maxRentalHours != null && hoursTotal > maxRentalHours) {
       return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
     }
+    if (unitsRequested < 1 || unitsRequested > remainingForSelection) {
+      return t(
+        'rentals.requestForm.unitsUnavailable',
+        'Not enough units available for the selected times.'
+      );
+    }
     for (const r of selections) {
       if (r.billing === 'all_day') {
         if (!r.calendarDate) {
           return t('rentals.requestForm.allDayNeedsDate', 'All-day selection is missing a date.');
         }
-        if (!dayHasNoBookedOverlap(dayStartEnd.start, dayStartEnd.end, booked)) {
-          return t(
-            'rentals.requestForm.allDayDisabledHint',
-            'Add all available hours is disabled when any time that day is already booked.'
-          );
-        }
       }
       if (r.startMs < minStartMs) {
         return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
       }
-      for (const w of booked) {
-        const w0 = new Date(w.startAt).getTime();
-        const w1 = new Date(w.endAt).getTime();
-        if (rangesOverlapMs(r.startMs, r.endMs, w0, w1)) {
-          return t('rentals.requestForm.overlapsTaken', 'A selection overlaps an existing booking.');
-        }
+      if (remainingUnitsInRange(r.startMs, r.endMs, booked, stock) < unitsRequested) {
+        return t(
+          'rentals.requestForm.unitsUnavailable',
+          'Not enough units available for the selected times.'
+        );
       }
     }
     return null;
-  }, [booked, dayStartEnd, hoursTotal, maxRentalHours, minRentalHours, minStartMs, selections, t]);
+  }, [
+    booked,
+    hoursTotal,
+    maxRentalHours,
+    minRentalHours,
+    minStartMs,
+    remainingForSelection,
+    selections,
+    stock,
+    t,
+    unitsRequested,
+  ]);
 
   const openConfirm = () => {
     setMsg(null);
@@ -308,6 +341,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         requestedStartAt: requestedSlotUtcIso(envS.dateKey, envS.hour, envS.minute),
         requestedEndAt: requestedSlotUtcIso(envE.dateKey, envE.hour, envE.minute),
         windows,
+        unitsRequested,
         clientRequestNote: notes.trim() || undefined,
       });
       setConfirmOpen(false);
@@ -524,6 +558,24 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                         </ListItem>
                       ))}
                     </List>
+                    <TextField
+                      label={t('rentals.requestForm.units', 'Quantity')}
+                      type="number"
+                      size="small"
+                      value={unitsRequested}
+                      onChange={(e) => {
+                        const n = Math.floor(Number(e.target.value));
+                        if (!Number.isFinite(n)) return;
+                        setUnitsRequested(Math.min(Math.max(1, n), Math.max(1, remainingForSelection)));
+                      }}
+                      inputProps={{ min: 1, max: Math.max(1, remainingForSelection) }}
+                      helperText={t(
+                        'rentals.requestForm.unitsRemaining',
+                        '{{remaining}} of {{total}} available for your selected times',
+                        { remaining: remainingForSelection, total: stock }
+                      )}
+                      sx={{ maxWidth: 280 }}
+                    />
                     <Typography variant="body2" color="text.secondary">
                       {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
                       <strong>{formatMoney(estimatedTotal, currency)}</strong>
@@ -650,6 +702,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           </List>
           <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
             {t('rentals.requestForm.confirmHours', 'Total hours')}: {hoursTotal}
+          </Typography>
+          <Typography variant="body1" fontWeight={600} sx={{ mt: 0.5 }}>
+            {t('rentals.requestForm.confirmUnits', 'Quantity')}: {unitsRequested}
           </Typography>
           <Typography variant="h6" fontWeight={800} color="primary" sx={{ mt: 1 }}>
             {t('rentals.requestForm.confirmPrice', 'Estimated price')}: {formatMoney(estimatedTotal, currency)}

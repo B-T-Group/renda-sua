@@ -30,6 +30,7 @@ select_permissions:
         - rental_pricing_snapshot
         - business_response_note
         - client_request_note
+        - units_requested
         - unavailable_reason_code
         - responded_at
         - responded_by_user_id
@@ -55,6 +56,7 @@ select_permissions:
         - rental_pricing_snapshot
         - business_response_note
         - client_request_note
+        - units_requested
         - unavailable_reason_code
         - responded_at
         - responded_by_user_id

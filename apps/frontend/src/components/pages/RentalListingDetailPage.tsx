@@ -736,6 +736,7 @@ const RentalListingDetailPage: React.FC = () => {
                   isAuthenticated={isAuthenticated}
                   minRentalHours={row.min_rental_hours}
                   maxRentalHours={row.max_rental_hours}
+                  unitsAvailable={Number(row.units_available) || 1}
                   weeklyAvailability={row.weekly_availability ?? []}
                   basePricePerHour={Number(row.base_price_per_hour)}
                   basePricePerDay={Number(row.base_price_per_day ?? 0)}

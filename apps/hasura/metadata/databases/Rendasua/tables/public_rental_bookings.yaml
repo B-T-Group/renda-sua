@@ -52,6 +52,7 @@ select_permissions:
         - currency
         - rental_pricing_snapshot
         - status
+        - units_booked
         - rental_start_pin_hash
         - rental_start_pin_attempts
         - rental_start_overwrite_code_hash
@@ -82,6 +83,7 @@ select_permissions:
         - currency
         - rental_pricing_snapshot
         - status
+        - units_booked
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at

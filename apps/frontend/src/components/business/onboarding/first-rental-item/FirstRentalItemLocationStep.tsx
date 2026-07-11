@@ -151,6 +151,7 @@ const FirstRentalItemLocationStep: React.FC<
         business_location_id: locId,
         base_price_per_hour: hourly,
         base_price_per_day: daily,
+        units_available: 1,
       });
       if (res?.success && res.data?.id) {
         rememberListingId(locId, res.data.id);

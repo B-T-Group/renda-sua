@@ -649,6 +649,12 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     patchListingForm(l.id, { units_available: e.target.value })
                   }
                   type="number"
+                  inputProps={{ min: 1, step: 1 }}
+                  helperText={t(
+                    'business.rentals.unitsHelp',
+                    'How many identical units can be rented at once?'
+                  )}
+                  required
                   fullWidth
                 />
                 <TextField

@@ -15,6 +15,7 @@ export interface RentalListingRow {
   base_price_per_day: string | number;
   min_rental_hours: number;
   max_rental_hours: number | null;
+  units_available?: number;
   pickup_instructions: string;
   dropoff_instructions: string;
   weekly_availability: Array<{

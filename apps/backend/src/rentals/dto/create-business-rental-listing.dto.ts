@@ -80,11 +80,15 @@ export class CreateBusinessRentalListingDto {
   @Min(1)
   max_rental_hours?: number | null;
 
-  @ApiProperty({ required: false, default: 1 })
-  @IsOptional()
+  @ApiProperty({
+    description: 'How many identical units can be rented at the same time',
+    minimum: 1,
+    example: 1,
+  })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
-  units_available?: number;
+  units_available!: number;
 
   @ApiProperty({
     required: false,

@@ -163,8 +163,10 @@ interface RentalRequestRowForClientNotification {
   id: string;
   client_id: string;
   rental_location_listing_id: string;
+  units_requested?: number;
   client?: { user_id?: string | null } | null;
   rental_location_listing?: {
+    units_available?: number;
     rental_item?: {
       name?: string | null;
       business_id?: string;
@@ -187,6 +189,7 @@ export interface PublicRentalListingRow {
   base_price_per_day: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
+  units_available: number;
   pickup_instructions: string;
   dropoff_instructions: string;
   weekly_availability: WeeklyAvailabilityRow[];
@@ -237,6 +240,7 @@ export interface ClientRentalRequestRow {
   created_at: string;
   business_response_note?: string | null;
   client_request_note?: string | null;
+  units_requested?: number;
   unavailable_reason_code?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
@@ -507,9 +511,6 @@ export class RentalsService {
     if (row.deleted_at || row.rental_item?.deleted_at) {
       return null;
     }
-    if (await this.listingHasActiveProposedContract(listingId)) {
-      return null;
-    }
     if (
       !this.listingMatchesCatalogGeo(
         row,
@@ -528,17 +529,23 @@ export class RentalsService {
   async listTakenRentalBookingWindowsForPublicListing(
     listingId: string,
     query: ListPublicRentalListingsQuery = {}
-  ): Promise<Array<{ startAt: string; endAt: string }> | null> {
+  ): Promise<Array<{ startAt: string; endAt: string; unitsBooked: number }> | null> {
     const visible = await this.getPublicRentalListingById(listingId, query);
     if (!visible) {
       return null;
     }
+    const now = new Date().toISOString();
     const res = await this.hasuraSystemService.executeQuery<{
-      rental_booking_windows: Array<{ start_at: string; end_at: string }>;
-    }>(Q.LIST_TAKEN_RENTAL_BOOKING_WINDOWS, { listingId });
+      rental_booking_windows: Array<{
+        start_at: string;
+        end_at: string;
+        rental_booking?: { units_booked?: number | null } | null;
+      }>;
+    }>(Q.LIST_TAKEN_RENTAL_BOOKING_WINDOWS, { listingId, now });
     return (res.rental_booking_windows ?? []).map((b) => ({
       startAt: b.start_at,
       endAt: b.end_at,
+      unitsBooked: Math.max(1, Number(b.rental_booking?.units_booked) || 1),
     }));
   }
 
@@ -549,8 +556,16 @@ export class RentalsService {
     }
     const listing = await this.fetchListing(dto.rentalLocationListingId);
     this.assertListingBookable(listing);
+    const unitsRequested = this.normalizeUnitsRequested(dto.unitsRequested);
+    const unitsAvailable = Math.max(1, Number(listing.units_available) || 1);
+    if (unitsRequested > unitsAvailable) {
+      throw new HttpException(
+        'unitsRequested exceeds listing units_available',
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const plan = this.buildCreateRentalRequestPlan(dto);
-    await this.validateRentalRequestWindowsPlan(plan, listing);
+    await this.validateRentalRequestWindowsPlan(plan, listing, unitsRequested);
     const note = dto.clientRequestNote?.trim();
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
@@ -560,6 +575,7 @@ export class RentalsService {
         rental_location_listing_id: listing.id,
         rental_selection_windows: plan.selectionWindowsJson,
         status: 'pending',
+        units_requested: unitsRequested,
         client_request_note: note || null,
       },
     });
@@ -726,14 +742,17 @@ export class RentalsService {
     }
     const listingId = req.rental_location_listing_id;
     const now = new Date();
-    const nowIso = now.toISOString();
-    const activeProposed = await this.countActiveProposedBookingsForListing(listingId, nowIso);
-    if (activeProposed > 0) {
-      throw new HttpException(
-        'This listing already has an active rental contract',
-        HttpStatus.CONFLICT
-      );
-    }
+    const unitsRequested = this.normalizeUnitsRequested(req.units_requested);
+    const unitsAvailable = Math.max(
+      1,
+      Number(req.rental_location_listing?.units_available) || 1
+    );
+    await this.assertCapacityForRequestWindows(
+      listingId,
+      unitsAvailable,
+      req,
+      unitsRequested
+    );
     const snap = computedSnapshot;
     const total = Number(snap.total);
     const contractExpiresAt = new Date(now.getTime() + hours * 3600000).toISOString();
@@ -1063,7 +1082,7 @@ export class RentalsService {
         base_price_per_day: dayPrice,
         min_rental_hours: minHours,
         max_rental_hours: maxHours,
-        units_available: dto.units_available ?? 1,
+        units_available: dto.units_available,
         is_active: true,
         // moderation_status omitted: DB default is draft; business role cannot set it
       },
@@ -1185,6 +1204,12 @@ export class RentalsService {
     }
     if (Object.keys(changes).length) {
       await this.assertListingMinMaxAfterPatch(listingId, changes);
+      if (changes.units_available !== undefined) {
+        await this.assertUnitsAvailableNotBelowCommitted(
+          listingId,
+          Number(changes.units_available)
+        );
+      }
       const result = await this.hasuraUserService.executeMutation<{
         update_rental_location_listings_by_pk: { id: string } | null;
       }>(Q.UPDATE_BUSINESS_RENTAL_LISTING, { id: listingId, _set: changes });
@@ -1629,7 +1654,8 @@ export class RentalsService {
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
-      req
+      req,
+      this.normalizeUnitsRequested(req.units_requested)
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
@@ -1672,7 +1698,8 @@ export class RentalsService {
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
-      req
+      req,
+      this.normalizeUnitsRequested(req.units_requested)
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
@@ -2395,7 +2422,8 @@ export class RentalsService {
 
   private async validateRentalRequestWindowsPlan(
     plan: RentalRequestWindowPlan,
-    listing: any
+    listing: any,
+    requestedUnits: number
   ): Promise<void> {
     const earliest = new Date(
       Math.min(...plan.windows.map((w) => w.start.getTime()))
@@ -2406,12 +2434,13 @@ export class RentalsService {
     for (const w of plan.windows) {
       this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
     }
+    const unitsAvailable = Math.max(1, Number(listing.units_available) || 1);
     for (const w of plan.windows) {
       if (w.billing === 'all_day' && w.calendarDate) {
         const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
-        await this.assertCapacity(listing.id, start, end, listing.units_available);
+        await this.assertCapacity(listing.id, start, end, unitsAvailable, requestedUnits);
       } else {
-        await this.assertCapacity(listing.id, w.start, w.end, listing.units_available);
+        await this.assertCapacity(listing.id, w.start, w.end, unitsAvailable, requestedUnits);
       }
     }
   }
@@ -2460,15 +2489,18 @@ export class RentalsService {
 
   private async assertCapacityForRequestWindows(
     listingId: string,
-    units: number,
-    req: any
+    unitsAvailable: number,
+    req: any,
+    requestedUnits: number
   ): Promise<void> {
+    const cap = Math.max(1, Number(unitsAvailable) || 1);
+    const want = this.normalizeUnitsRequested(requestedUnits);
     for (const w of this.parseRentalSelectionWindows(req)) {
       if (w.billing === 'all_day' && w.calendarDate) {
         const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
-        await this.assertCapacity(listingId, start, end, units);
+        await this.assertCapacity(listingId, start, end, cap, want);
       } else {
-        await this.assertCapacity(listingId, w.start, w.end, units);
+        await this.assertCapacity(listingId, w.start, w.end, cap, want);
       }
     }
   }
@@ -2567,6 +2599,7 @@ export class RentalsService {
     const listing = req.rental_location_listing;
     const ratePerHour = Number(listing.base_price_per_hour);
     const ratePerDay = Number(listing.base_price_per_day);
+    const units = this.normalizeUnitsRequested(req.units_requested);
     const lines: RentalPricingLine[] = [];
     let total = 0;
     for (const p of parts) {
@@ -2577,7 +2610,7 @@ export class RentalsService {
             HttpStatus.BAD_REQUEST
           );
         }
-        const subtotal = Number(ratePerDay.toFixed(2));
+        const subtotal = Number((ratePerDay * units).toFixed(2));
         total += subtotal;
         lines.push({
           kind: 'all_day',
@@ -2587,7 +2620,7 @@ export class RentalsService {
         });
       } else {
         const h = rentalHoursCount(p.start, p.end);
-        const subtotal = Number((h * ratePerHour).toFixed(2));
+        const subtotal = Number((h * ratePerHour * units).toFixed(2));
         total += subtotal;
         lines.push({
           kind: 'hourly',
@@ -2603,28 +2636,120 @@ export class RentalsService {
       version: 3,
       currency: listing.rental_item.currency,
       total: Number(total.toFixed(2)),
+      unitsBooked: units,
       lines,
       computedAt: new Date().toISOString(),
     };
+  }
+
+  private normalizeUnitsRequested(value: unknown): number {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n) || n < 1) return 1;
+    return n;
   }
 
   private async assertCapacity(
     listingId: string,
     start: Date,
     end: Date,
-    units: number
+    unitsAvailable: number,
+    requestedUnits: number
   ) {
+    const used = await this.peakUnitsUsedInInterval(listingId, start, end);
+    if (used + requestedUnits > unitsAvailable) {
+      throw new HttpException('No units available for these dates', HttpStatus.CONFLICT);
+    }
+  }
+
+  /** Peak concurrent units booked at any instant in [start, end). */
+  private async peakUnitsUsedInInterval(
+    listingId: string,
+    start: Date,
+    end: Date
+  ): Promise<number> {
+    const now = new Date().toISOString();
     const r = await this.hasuraSystemService.executeQuery<{
-      rental_bookings_aggregate: { aggregate: { count: number } };
-    }>(Q.COUNT_OVERLAPPING_BOOKINGS, {
+      rental_booking_windows: Array<{
+        start_at: string;
+        end_at: string;
+        rental_booking?: { units_booked?: number | null } | null;
+      }>;
+    }>(Q.LIST_OVERLAPPING_BOOKING_WINDOWS, {
       listingId,
       start: start.toISOString(),
       end: end.toISOString(),
+      now,
     });
-    const count = r.rental_bookings_aggregate?.aggregate?.count ?? 0;
-    if (count >= units) {
-      throw new HttpException('No units available for these dates', HttpStatus.CONFLICT);
+    return this.peakConcurrentUnits(
+      (r.rental_booking_windows ?? []).map((w) => ({
+        startMs: new Date(w.start_at).getTime(),
+        endMs: new Date(w.end_at).getTime(),
+        units: Math.max(1, Number(w.rental_booking?.units_booked) || 1),
+      })),
+      start.getTime(),
+      end.getTime()
+    );
+  }
+
+  private peakConcurrentUnits(
+    windows: Array<{ startMs: number; endMs: number; units: number }>,
+    rangeStartMs: number,
+    rangeEndMs: number
+  ): number {
+    const events: Array<{ t: number; delta: number }> = [];
+    for (const w of windows) {
+      const s = Math.max(w.startMs, rangeStartMs);
+      const e = Math.min(w.endMs, rangeEndMs);
+      if (e <= s) continue;
+      events.push({ t: s, delta: w.units });
+      events.push({ t: e, delta: -w.units });
     }
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+    let cur = 0;
+    let peak = 0;
+    for (const e of events) {
+      cur += e.delta;
+      if (cur > peak) peak = cur;
+    }
+    return peak;
+  }
+
+  private async assertUnitsAvailableNotBelowCommitted(
+    listingId: string,
+    nextUnits: number
+  ): Promise<void> {
+    if (!Number.isInteger(nextUnits) || nextUnits < 1) {
+      throw new HttpException('units_available must be >= 1', HttpStatus.BAD_REQUEST);
+    }
+    const peak = await this.peakCommittedUnitsForListing(listingId);
+    if (nextUnits < peak) {
+      throw new HttpException(
+        `Cannot set units_available below committed peak usage (${peak})`,
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async peakCommittedUnitsForListing(listingId: string): Promise<number> {
+    const now = new Date().toISOString();
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_booking_windows: Array<{
+        start_at: string;
+        end_at: string;
+        rental_booking?: { units_booked?: number | null } | null;
+      }>;
+    }>(Q.LIST_COMMITTED_RENTAL_BOOKING_WINDOWS_FOR_LISTING, { listingId, now });
+    const nowMs = Date.now();
+    const farFuture = nowMs + 1000 * 60 * 60 * 24 * 365 * 10;
+    return this.peakConcurrentUnits(
+      (r.rental_booking_windows ?? []).map((w) => ({
+        startMs: new Date(w.start_at).getTime(),
+        endMs: new Date(w.end_at).getTime(),
+        units: Math.max(1, Number(w.rental_booking?.units_booked) || 1),
+      })),
+      nowMs,
+      farFuture
+    );
   }
 
   private async fetchRequest(id: string) {
@@ -2689,6 +2814,7 @@ export class RentalsService {
     snap: RentalPricingSnapshotDto,
     total: number
   ) {
+    const unitsBooked = this.normalizeUnitsRequested(req.units_requested);
     return this.hasuraSystemService.executeMutation<{
       insert_rental_bookings_one: { id: string; booking_number: string };
     }>(Q.INSERT_RENTAL_BOOKING, {
@@ -2704,6 +2830,7 @@ export class RentalsService {
         rental_pricing_snapshot: snap,
         booking_number: this.createRentalBookingNumber(),
         status: 'confirmed',
+        units_booked: unitsBooked,
         rental_booking_windows: this.bookingWindowsNestedInput(req),
       },
     });
@@ -2717,6 +2844,7 @@ export class RentalsService {
     contractExpiresAt: string
   ) {
     const envelope = this.requestWindowEnvelope(req);
+    const unitsBooked = this.normalizeUnitsRequested(req.units_requested);
     return this.hasuraSystemService.executeMutation<{
       insert_rental_bookings_one: { id: string; booking_number: string };
     }>(Q.INSERT_RENTAL_BOOKING, {
@@ -2733,19 +2861,10 @@ export class RentalsService {
         booking_number: this.createRentalBookingNumber(),
         status: 'proposed',
         contract_expires_at: contractExpiresAt,
+        units_booked: unitsBooked,
         rental_booking_windows: this.bookingWindowsNestedInput(req),
       },
     });
-  }
-
-  private async countActiveProposedBookingsForListing(
-    listingId: string,
-    nowIso: string
-  ): Promise<number> {
-    const r = await this.hasuraSystemService.executeQuery<{
-      rental_bookings_aggregate: { aggregate: { count: number } };
-    }>(Q.COUNT_ACTIVE_PROPOSED_BOOKINGS_FOR_LISTING, { listingId, now: nowIso });
-    return r.rental_bookings_aggregate?.aggregate?.count ?? 0;
   }
 
   private async placeHoldForBooking(
@@ -2982,7 +3101,6 @@ export class RentalsService {
   private whereExcludingActiveProposedContracts(
     base: Record<string, unknown>
   ): Record<string, unknown> {
-    const nowIso = new Date().toISOString();
     return {
       _and: [
         base,
@@ -2994,26 +3112,8 @@ export class RentalsService {
             business: { is_storefront_visible: { _eq: true } },
           },
         },
-        {
-          _not: {
-            rental_bookings: {
-              _and: [
-                { status: { _eq: 'proposed' } },
-                { contract_expires_at: { _gt: nowIso } },
-              ],
-            },
-          },
-        },
       ],
     };
-  }
-
-  private async listingHasActiveProposedContract(listingId: string): Promise<boolean> {
-    const n = await this.countActiveProposedBookingsForListing(
-      listingId,
-      new Date().toISOString()
-    );
-    return n > 0;
   }
 
   private listingMatchesCatalogGeo(

@@ -58,52 +58,103 @@ export function bookedSegmentsForLocalDay(
   dayStart: Date,
   dayEnd: Date,
   booked: RentalTakenWindow[]
-): Array<{ s: number; e: number }> {
+): Array<{ s: number; e: number; units: number }> {
   const d0 = dayStart.getTime();
   const d1 = dayEnd.getTime();
-  const out: Array<{ s: number; e: number }> = [];
+  const out: Array<{ s: number; e: number; units: number }> = [];
   for (const w of booked) {
     const s = new Date(w.startAt).getTime();
     const e = new Date(w.endAt).getTime();
     if (rangesOverlapMs(d0, d1, s, e)) {
-      out.push({ s: Math.max(d0, s), e: Math.min(d1, e) });
+      out.push({
+        s: Math.max(d0, s),
+        e: Math.min(d1, e),
+        units: Math.max(1, Number(w.unitsBooked) || 1),
+      });
     }
   }
   return out.sort((a, b) => a.s - b.s);
 }
 
-/** True when no booking overlaps the listing's open–close window for that calendar day. */
-export function dayHasNoBookedOverlap(open: Date, close: Date, booked: RentalTakenWindow[]): boolean {
-  const s0 = open.getTime();
-  const s1 = close.getTime();
-  for (const w of booked) {
-    const b0 = new Date(w.startAt).getTime();
-    const b1 = new Date(w.endAt).getTime();
-    if (rangesOverlapMs(s0, s1, b0, b1)) return false;
+/** Peak concurrent units booked at any instant in [startMs, endMs). */
+export function unitsUsedInRange(
+  startMs: number,
+  endMs: number,
+  segs: Array<{ s: number; e: number; units: number }>
+): number {
+  const events: Array<{ t: number; delta: number }> = [];
+  for (const seg of segs) {
+    if (!rangesOverlapMs(startMs, endMs, seg.s, seg.e)) continue;
+    const s = Math.max(seg.s, startMs);
+    const e = Math.min(seg.e, endMs);
+    if (e <= s) continue;
+    events.push({ t: s, delta: seg.units });
+    events.push({ t: e, delta: -seg.units });
   }
-  return true;
+  events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+  let cur = 0;
+  let peak = 0;
+  for (const ev of events) {
+    cur += ev.delta;
+    if (cur > peak) peak = cur;
+  }
+  return peak;
+}
+
+export function remainingUnitsInRange(
+  startMs: number,
+  endMs: number,
+  booked: RentalTakenWindow[],
+  unitsAvailable: number
+): number {
+  const segs = booked.map((w) => ({
+    s: new Date(w.startAt).getTime(),
+    e: new Date(w.endAt).getTime(),
+    units: Math.max(1, Number(w.unitsBooked) || 1),
+  }));
+  return Math.max(0, unitsAvailable - unitsUsedInRange(startMs, endMs, segs));
+}
+
+/** True when at least `need` units remain for the listing open–close window. */
+export function dayHasRemainingCapacity(
+  open: Date,
+  close: Date,
+  booked: RentalTakenWindow[],
+  unitsAvailable: number,
+  need = 1
+): boolean {
+  return remainingUnitsInRange(open.getTime(), close.getTime(), booked, unitsAvailable) >= need;
+}
+
+/** @deprecated Prefer dayHasRemainingCapacity for multi-unit listings. */
+export function dayHasNoBookedOverlap(
+  open: Date,
+  close: Date,
+  booked: RentalTakenWindow[]
+): boolean {
+  return dayHasRemainingCapacity(open, close, booked, 1, 1);
 }
 
 /** Full-hour slot start times between open and close (each slot is one hour; last start + 1h <= close). */
 export function freeSlotStartsLocal(
   open: Date,
   close: Date,
-  bookedSegs: Array<{ s: number; e: number }>,
-  nowMs: number
+  bookedSegs: Array<{ s: number; e: number; units?: number }>,
+  nowMs: number,
+  unitsAvailable = 1
 ): Date[] {
+  const segs = bookedSegs.map((s) => ({
+    s: s.s,
+    e: s.e,
+    units: Math.max(1, Number(s.units) || 1),
+  }));
   const out: Date[] = [];
   let t = open.getTime();
   const endMs = close.getTime();
   while (t + ONE_HOUR_MS <= endMs) {
     const slotEnd = t + ONE_HOUR_MS;
-    let blocked = false;
-    for (const seg of bookedSegs) {
-      if (rangesOverlapMs(t, slotEnd, seg.s, seg.e)) {
-        blocked = true;
-        break;
-      }
-    }
-    if (!blocked && t >= nowMs) {
+    const used = unitsUsedInRange(t, slotEnd, segs);
+    if (used < unitsAvailable && t >= nowMs) {
       out.push(new Date(t));
     }
     t += ONE_HOUR_MS;
@@ -114,20 +165,20 @@ export function freeSlotStartsLocal(
 export function freeSlotEndsLocal(
   startMs: number,
   close: Date,
-  bookedSegs: Array<{ s: number; e: number }>
+  bookedSegs: Array<{ s: number; e: number; units?: number }>,
+  unitsAvailable = 1
 ): Date[] {
+  const segs = bookedSegs.map((s) => ({
+    s: s.s,
+    e: s.e,
+    units: Math.max(1, Number(s.units) || 1),
+  }));
   const out: Date[] = [];
   let t = startMs + ONE_HOUR_MS;
   const endMs = close.getTime();
   while (t <= endMs) {
-    let blocked = false;
-    for (const seg of bookedSegs) {
-      if (rangesOverlapMs(startMs, t, seg.s, seg.e)) {
-        blocked = true;
-        break;
-      }
-    }
-    if (!blocked) out.push(new Date(t));
+    const used = unitsUsedInRange(startMs, t, segs);
+    if (used < unitsAvailable) out.push(new Date(t));
     t += ONE_HOUR_MS;
   }
   return out;
@@ -157,10 +208,11 @@ function groupContiguousFreeSlotStarts(starts: Date[]): Array<{ startMs: number;
 export function maximalFreeHourRangesLocal(
   open: Date,
   close: Date,
-  bookedSegs: Array<{ s: number; e: number }>,
-  nowMs: number
+  bookedSegs: Array<{ s: number; e: number; units?: number }>,
+  nowMs: number,
+  unitsAvailable = 1
 ): Array<{ startMs: number; endMs: number }> {
-  const starts = freeSlotStartsLocal(open, close, bookedSegs, nowMs);
+  const starts = freeSlotStartsLocal(open, close, bookedSegs, nowMs, unitsAvailable);
   return groupContiguousFreeSlotStarts(starts);
 }
 

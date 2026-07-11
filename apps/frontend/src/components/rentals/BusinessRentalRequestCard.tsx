@@ -341,6 +341,11 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             </Typography>
           ) : null}
 
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.15 }}>
+            <strong>{t('rentals.requestForm.units', 'Quantity')}:</strong>{' '}
+            {request.units_requested ?? 1}
+          </Typography>
+
           <Box sx={{ flex: 1 }} />
 
           <Stack

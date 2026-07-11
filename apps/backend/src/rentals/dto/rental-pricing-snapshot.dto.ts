@@ -35,6 +35,17 @@ export class RentalPricingSnapshotDto {
   @Min(0)
   total!: number;
 
+  @ApiProperty({
+    required: false,
+    description: 'Units multiplied into line subtotals and total',
+    example: 1,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  unitsBooked?: number;
+
   @ApiProperty({ required: false, example: 2500 })
   @IsOptional()
   @IsNumber()

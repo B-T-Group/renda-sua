@@ -141,7 +141,7 @@ export class RentalsController {
   @ApiResponse({
     status: 200,
     description:
-      '{ success: true, data: { windows: Array<{ startAt: string, endAt: string }> } }',
+      '{ success: true, data: { windows: Array<{ startAt: string, endAt: string, unitsBooked: number }> } }',
   })
   @ApiResponse({ status: 404, description: 'Listing not found or not visible' })
   async listListingBookedWindows(

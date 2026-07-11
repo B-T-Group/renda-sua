@@ -1,16 +1,17 @@
 {
   "home": {
     "seo": {
-      "title": "Rendasua — Everything Local, Delivered",
-      "description": "Browse local businesses, place orders in minutes, and track every delivery in real time. Download the Rendasua app or open a business account today.",
-      "keywords": "local delivery app, marketplace, online shopping, delivery agent, business storefront, Rendasua app, download Rendasua"
+      "title": "Rendasua — Own It or Rent It, Locally",
+      "description": "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Shop or rent from local businesses and track every delivery in real time.",
+      "keywords": "local delivery app, marketplace, online shopping, rentals, rent locally, delivery agent, business storefront, Rendasua app, download Rendasua"
     },
     "hero": {
       "eyebrow": "Now available on iOS & Android",
-      "headline": "Everything local,",
-      "headlineLine2": "delivered.",
-      "subheadline": "Browse local businesses, order in minutes, and track every delivery in real time — or open a storefront and start selling today.",
+      "headline": "Own it or rent it,",
+      "headlineLine2": "we've got you.",
+      "subheadline": "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Browse local businesses, order or book in minutes, and track every delivery in real time.",
       "browseItems": "Browse Items",
+      "browseRentals": "Browse Rentals",
       "sellOnRendasua": "Sell on Rendasua"
     },
     "trust": {
@@ -23,14 +24,14 @@
     "overview": {
       "eyebrow": "One platform. Three roles. One great experience.",
       "title": "A marketplace built for everyone",
-      "subtitle": "Rendasua connects shoppers, local businesses, and delivery agents into one seamless ecosystem.",
+      "subtitle": "Rendasua connects shoppers, local businesses, and delivery agents into one seamless ecosystem — for buying and renting.",
       "client": {
         "title": "Shoppers",
-        "desc": "Browse products from local businesses and get them delivered to your door."
+        "desc": "Buy what you want to own, or rent what you only need for a while — delivered from local businesses to your door."
       },
       "business": {
         "title": "Businesses",
-        "desc": "Create a storefront, manage inventory, and reach customers in your city."
+        "desc": "Create a storefront, list products and rentals, and reach customers in your city."
       },
       "agent": {
         "title": "Delivery Agents",
@@ -44,15 +45,15 @@
       "stepLabel": "Step {{n}}",
       "discover": {
         "title": "Discover",
-        "desc": "Browse products from local businesses in your city."
+        "desc": "Browse products and rentals from local businesses in your city."
       },
       "browse": {
         "title": "Browse",
-        "desc": "Filter by category, brand, or distance. Find exactly what you need."
+        "desc": "Filter by category, brand, or distance. Find exactly what you need — to buy or to rent."
       },
       "order": {
         "title": "Order",
-        "desc": "Place your order in seconds. Pay securely with mobile money or card."
+        "desc": "Place your order or rental request in seconds. Pay securely with mobile money or card."
       },
       "businessReceives": {
         "title": "Business prepares",
@@ -81,16 +82,16 @@
     },
     "personas": {
       "title": "Built for every role",
-      "subtitle": "Whether you shop, sell, or deliver — Rendasua has you covered.",
+      "subtitle": "Whether you shop, rent, sell, or deliver — Rendasua has you covered.",
       "tabsLabel": "Persona tabs",
       "client": {
         "name": "Shopper",
-        "tagline": "Shop local. Receive fast.",
-        "description": "Browse hundreds of local products, place an order in minutes, and track your delivery in real time.",
+        "tagline": "Own it or rent it. Locally.",
+        "description": "Want to own something? We've got your back. Just want to rent it? We've still got your back. Browse local products and rentals, then track delivery in real time.",
         "cta": "Download the App",
         "secondaryCta": "Browse Items",
         "features": {
-          "browse": "Browse & order local products",
+          "browse": "Browse & order products — or book rentals",
           "tracking": "Real-time delivery tracking",
           "chat": "Chat with businesses & agents",
           "pin": "Secure delivery PIN verification",
@@ -101,14 +102,14 @@
       "business": {
         "name": "Business",
         "tagline": "Your storefront, online in minutes.",
-        "description": "Create your online storefront, manage inventory, and start receiving orders from customers in your city.",
+        "description": "Create your online storefront, list products and rentals, manage inventory, and start receiving orders from customers in your city.",
         "cta": "Create Business Account",
         "secondaryCta": "Learn more",
         "features": {
           "storefront": "Create your online storefront",
           "inventory": "Manage inventory across locations",
           "ai": "AI-assisted product descriptions",
-          "orders": "Order & delivery management",
+          "orders": "Order, rental & delivery management",
           "messaging": "Message customers & agents",
           "growth": "Analytics & growth tools"
         }
@@ -208,11 +209,11 @@
       "seeAll": "See all FAQs",
       "whatIsRendasua": {
         "question": "What is Rendasua?",
-        "answer": "Rendasua is a local marketplace app that connects shoppers with local businesses and delivery agents. You can browse products, place orders, and get them delivered to your door."
+        "answer": "Rendasua is a local marketplace for buying and renting. Want to own something? We've got your back. Just want to rent it? We've still got your back — with delivery agents who bring it to your door."
       },
       "howDoIOrder": {
         "question": "How do I place an order?",
-        "answer": "Download the Rendasua app, browse products from local businesses near you, add items to your cart, and checkout. A delivery agent will pick up and bring your order to you."
+        "answer": "Download the Rendasua app, browse products or rentals from local businesses near you, add items to your cart or book a rental, and checkout. A delivery agent will pick up and bring your order to you."
       },
       "canITrack": {
         "question": "Can I track my delivery in real time?",
@@ -220,7 +221,7 @@
       },
       "howSellBusiness": {
         "question": "How do I start selling as a business?",
-        "answer": "Create a free business account on rendasua.com, set up your storefront, add your products, and start receiving orders from customers in your community."
+        "answer": "Create a free business account on rendasua.com, set up your storefront, add your products and rentals, and start receiving orders from customers in your community."
       },
       "howBecomeAgent": {
         "question": "How do I become a delivery agent?",
@@ -245,7 +246,7 @@
     "accessibilityText": "We make our platform accessible to businesses of all sizes, from small local shops to larger enterprises, ensuring everyone can benefit from our services.",
     "community": "Community First",
     "communityText": "We believe in strengthening local communities by supporting local businesses and creating opportunities for economic growth.",
-    "companyIntro": "Rendasua is a Canadian-owned company, owned by <groupeLink>Groupe BT</groupeLink>. We were founded in 2023 and first launched in Gabon to make deliveries easier. Since 2025, we have expanded beyond deliveries to support online sales as well.",
+    "companyIntro": "Rendasua is a Canadian-owned company, owned by <groupeLink>Groupe BT</groupeLink>. We were founded in 2023 and first launched in Gabon to make deliveries easier. Since 2025, we have expanded beyond deliveries to support online sales and rentals as well.",
     "contactText": "We would love to hear from you! Whether you are a business owner looking to join our platform, a delivery agent interested in opportunities, or a customer with feedback, please reach out to us.",
     "contactUs": "Contact Us",
     "email": "Email",
