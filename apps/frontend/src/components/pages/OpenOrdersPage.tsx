@@ -46,24 +46,28 @@ const OpenOrdersPage: React.FC = () => {
 
   const isAgent = Boolean(profile?.agent);
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
+  const stripeReady =
+    !!connectStatus?.connected &&
+    (connectStatus?.status === 'active' ||
+      (!!connectStatus?.chargesEnabled && !!connectStatus?.payoutsEnabled));
 
   // When the agent returns from Stripe onboarding and the account is active,
   // the backend has flipped is_verified; refresh profile and open orders so
   // canClaim and the order list match verification state.
   useEffect(() => {
-    if (
-      isAgent &&
-      connectStatus?.status === 'active' &&
-      profile?.agent?.is_verified === false
-    ) {
+    if (isAgent && stripeReady && profile?.agent?.is_verified === false) {
       void refetchProfile();
     }
-  }, [
-    isAgent,
-    connectStatus?.status,
-    profile?.agent?.is_verified,
-    refetchProfile,
-  ]);
+  }, [isAgent, stripeReady, profile?.agent?.is_verified, refetchProfile]);
+
+  const prevStripeReadyRef = React.useRef(stripeReady);
+  useEffect(() => {
+    const wasReady = prevStripeReadyRef.current === true;
+    prevStripeReadyRef.current = stripeReady;
+    if (isAgent && stripeReady && !wasReady) {
+      void refetch();
+    }
+  }, [isAgent, stripeReady, refetch]);
 
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
@@ -217,7 +221,8 @@ const OpenOrdersPage: React.FC = () => {
           profile?.agent?.status !== 'suspended' &&
           ordersCanClaim === false &&
           availableOrders.length > 0 &&
-          previewMode === 'country' && (
+          previewMode === 'country' &&
+          !(isStripeRail && stripeReady) && (
             <Alert severity="info" sx={{ mb: 2 }}>
               {t(
                 'agent.openOrders.previewBanner',
@@ -244,6 +249,7 @@ const OpenOrdersPage: React.FC = () => {
         {isAgent &&
           !profile?.agent?.is_verified &&
           profile?.agent?.status !== 'suspended' &&
+          !(isStripeRail && stripeReady) &&
           !(ordersCanClaim === false && availableOrders.length > 0) &&
           (isStripeRail ? (
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -366,7 +372,7 @@ const OpenOrdersPage: React.FC = () => {
                       order={order}
                       onClaimSuccess={refetch}
                       isStripeRail={isStripeRail}
-                      canClaimOrders={ordersCanClaim}
+                      canClaimOrders={ordersCanClaim || (isStripeRail && stripeReady)}
                     />
                   ))}
                 </Box>
