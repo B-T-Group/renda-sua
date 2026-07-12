@@ -362,6 +362,42 @@ export const LIST_OVERLAPPING_BOOKING_WINDOWS = `
   }
 `;
 
+export const LIST_OVERLAPPING_BOOKING_WINDOWS_EXCLUDING_BOOKING = `
+  query ListOverlappingBookingWindowsExcludingBooking(
+    $listingId: uuid!
+    $start: timestamptz!
+    $end: timestamptz!
+    $now: timestamptz!
+    $excludedBookingId: uuid!
+  ) {
+    rental_booking_windows(
+      where: {
+        start_at: { _lt: $end }
+        end_at: { _gt: $start }
+        rental_booking: {
+          id: { _neq: $excludedBookingId }
+          rental_location_listing_id: { _eq: $listingId }
+          _or: [
+            { status: { _in: [confirmed, active, awaiting_return] } }
+            {
+              _and: [
+                { status: { _eq: proposed } }
+                { contract_expires_at: { _gt: $now } }
+              ]
+            }
+          ]
+        }
+      }
+    ) {
+      start_at
+      end_at
+      rental_booking {
+        units_booked
+      }
+    }
+  }
+`;
+
 export const LIST_COMMITTED_RENTAL_BOOKING_WINDOWS_FOR_LISTING = `
   query ListCommittedRentalBookingWindowsForListing(
     $listingId: uuid!
@@ -432,6 +468,8 @@ export const GET_RENTAL_BOOKING_FULL = `
       total_amount
       currency
       status
+      contract_expires_at
+      units_booked
       rental_pricing_snapshot
       rental_start_pin_hash
       rental_start_pin_attempts
@@ -442,7 +480,14 @@ export const GET_RENTAL_BOOKING_FULL = `
       business { id user_id name }
       rental_location_listing {
         business_location_id
+        units_available
         rental_item { name }
+      }
+      rental_request {
+        id
+        status
+        units_requested
+        rental_selection_windows
       }
     }
   }

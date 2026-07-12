@@ -1460,4 +1460,46 @@ describe('OrdersService', () => {
       });
     });
   });
+
+  describe('processClaimOrderPayment', () => {
+    it('does not register a hold when the order assignment loses the race', async () => {
+      const assignmentError = new HttpException(
+        { message: 'Order already assigned', error: 'ALREADY_ASSIGNED' },
+        HttpStatus.CONFLICT
+      );
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ ...mockReadyOrder, order_number: 'ORD-1' });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-123',
+        user_id: 'agent-user-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        id: 'agent-user-123',
+        agent: { id: 'agent-123', user_id: 'agent-user-123' },
+      });
+      const assignSpy = jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockRejectedValue(assignmentError);
+      const getHoldSpy = jest.spyOn(service, 'getOrCreateOrderHold');
+
+      await expect(
+        service.processClaimOrderPayment({
+          entity_id: 'ORD-1',
+          account_id: 'account-123',
+          amount: 500,
+          currency: 'XAF',
+        })
+      ).rejects.toBe(assignmentError);
+
+      expect(assignSpy).toHaveBeenCalledWith(
+        'order-123',
+        'agent-123',
+        'assigned_to_agent'
+      );
+      expect(getHoldSpy).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
+  });
 });
