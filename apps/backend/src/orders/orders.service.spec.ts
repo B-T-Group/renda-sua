@@ -1,3 +1,7 @@
+jest.mock('../stripe-payments/stripe-connect.service', () => ({
+  StripeConnectService: jest.fn(),
+}));
+
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
