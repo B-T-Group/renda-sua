@@ -95,23 +95,47 @@ export class StripeConnectService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const email = await this.getUserEmail(userId);
+    const profile = await this.getUserConnectPrefill(userId);
     const account = await this.stripeService.createExpressAccount({
       country: countryCode,
-      email,
+      email: profile.email,
       userId,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      phone: profile.phone,
+      businessName: profile.businessName,
     });
     return this.insertAccountRow(userId, account, countryCode);
   }
 
-  private async getUserEmail(userId: string): Promise<string | undefined> {
+  private async getUserConnectPrefill(userId: string): Promise<{
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    businessName?: string;
+  }> {
     const query = `
-      query GetUserEmail($userId: uuid!) {
-        users_by_pk(id: $userId) { email }
+      query GetUserConnectPrefill($userId: uuid!) {
+        users_by_pk(id: $userId) {
+          email
+          first_name
+          last_name
+          phone_number
+          business { name }
+        }
       }
     `;
     const response = await this.hasuraService.executeQuery(query, { userId });
-    return response.users_by_pk?.email || undefined;
+    const user = response.users_by_pk;
+    if (!user) return {};
+    return {
+      email: user.email || undefined,
+      firstName: user.first_name || undefined,
+      lastName: user.last_name || undefined,
+      phone: user.phone_number || undefined,
+      businessName: user.business?.name || undefined,
+    };
   }
 
   private async insertAccountRow(

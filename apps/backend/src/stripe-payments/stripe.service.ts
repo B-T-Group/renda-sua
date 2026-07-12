@@ -374,20 +374,114 @@ export class StripeService {
     country: string;
     email?: string;
     userId: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    businessName?: string;
   }): Promise<Stripe.Account> {
-    return this.getClient().accounts.create(
-      {
-        type: 'express',
-        country: params.country,
-        email: params.email,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        metadata: { userId: params.userId },
+    const createParams = this.buildExpressAccountCreateParams(params);
+    return this.getClient().accounts.create(createParams, {
+      idempotencyKey: `connect_account_${params.userId}`,
+    });
+  }
+
+  private buildExpressAccountCreateParams(params: {
+    country: string;
+    email?: string;
+    userId: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    businessName?: string;
+  }): Stripe.AccountCreateParams {
+    const createParams: Stripe.AccountCreateParams = {
+      type: 'express',
+      country: params.country,
+      email: params.email,
+      business_type: 'individual',
+      business_profile: this.buildBusinessProfilePrefill(params.businessName),
+      individual: this.buildIndividualPrefill(params),
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
       },
-      { idempotencyKey: `connect_account_${params.userId}` }
-    );
+      metadata: { userId: params.userId },
+    };
+    return createParams;
+  }
+
+  /** Platform defaults shown during Connect onboarding for all environments. */
+  private buildBusinessProfilePrefill(
+    businessName?: string
+  ): Stripe.AccountCreateParams.BusinessProfile {
+    return {
+      url: 'https://www.rendasua.com',
+      product_description: 'Sell my stock online',
+      // Specialty retail / miscellaneous — covers general goods sold via Rendasua.
+      mcc: '5999',
+      ...(businessName ? { name: businessName } : {}),
+    };
+  }
+
+  private buildIndividualPrefill(params: {
+    country: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  }): Stripe.AccountCreateParams.Individual {
+    const individual: Stripe.AccountCreateParams.Individual = {
+      email: params.email,
+      first_name: params.firstName,
+      last_name: params.lastName,
+    };
+    if (params.phone?.startsWith('+')) {
+      individual.phone = params.phone;
+    }
+    if (this.shouldPrefillDevConnectData()) {
+      Object.assign(individual, this.buildDevIndividualPrefill(params.country));
+    }
+    return individual;
+  }
+
+  /** Non-production only: speed up Connect test onboarding with Stripe test tokens. */
+  private shouldPrefillDevConnectData(): boolean {
+    const nodeEnv =
+      this.configService.get<string>('app.nodeEnv') || 'development';
+    return nodeEnv !== 'production';
+  }
+
+  /**
+   * Stripe test magic values: DOB 1901-01-01 and line1 `address_full_match`
+   * (Canada / Quebec defaults when the connected account country is CA).
+   */
+  private buildDevIndividualPrefill(
+    country: string
+  ): Stripe.AccountCreateParams.Individual {
+    const code = country.toUpperCase();
+    const dob = { day: 1, month: 1, year: 1901 };
+    if (code === 'CA') {
+      return {
+        dob,
+        address: {
+          line1: 'address_full_match',
+          city: 'Montreal',
+          state: 'QC',
+          postal_code: 'H2Y1C6',
+          country: 'CA',
+        },
+      };
+    }
+    return {
+      dob,
+      address: {
+        line1: 'address_full_match',
+        city: 'San Francisco',
+        state: code === 'US' ? 'CA' : undefined,
+        postal_code: code === 'US' ? '94111' : 'A1A1A1',
+        country: code,
+      },
+    };
   }
 
   async createAccountLink(
