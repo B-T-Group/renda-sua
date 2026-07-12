@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { isActivePersona } from '../users/persona.util';
 import { RentalListingAiReviewService } from './rental-listing-ai-review.service';
 import * as Q from './rental-listing-ai-review.queries';
@@ -11,7 +12,8 @@ export class RentalListingAiProposalService {
   constructor(
     private readonly hasuraSystem: HasuraSystemService,
     private readonly hasuraUser: HasuraUserService,
-    private readonly reviewService: RentalListingAiReviewService
+    private readonly reviewService: RentalListingAiReviewService,
+    private readonly activationValidation: ItemActivationValidationService
   ) {}
 
   async getProposal(listingId: string) {
@@ -36,6 +38,9 @@ export class RentalListingAiProposalService {
     }
     await this.applyAcceptedCopy(listing.rental_item.id, review, dto);
     await this.applyProposedImages(listing, review);
+    await this.activationValidation.assertRentalItemCanActivateAsSystem(
+      listing.rental_item.id
+    );
     await this.markApproved(listingId);
     return { success: true };
   }

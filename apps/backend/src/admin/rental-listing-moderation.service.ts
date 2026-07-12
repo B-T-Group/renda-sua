@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './rental-listing-moderation.queries';
 
@@ -27,7 +28,7 @@ type ListingForModerationRow = {
   id: string;
   moderation_status: string;
   deleted_at: string | null;
-  rental_item: { name: string; business: { user_id: string } };
+  rental_item: { id: string; name: string; business: { user_id: string } };
 };
 
 const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
@@ -36,7 +37,8 @@ const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
 export class RentalListingModerationService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly activationValidation: ItemActivationValidationService
   ) {}
 
   async listModerationQueue(params: {
@@ -75,6 +77,9 @@ export class RentalListingModerationService {
   ): Promise<void> {
     const listing = await this.fetchListingForModeration(listingId);
     this.assertPendingModeration(listing.moderation_status, 'approved');
+    await this.activationValidation.assertRentalItemCanActivateAsSystem(
+      listing.rental_item.id
+    );
     await this.runModerationPatch(
       listingId,
       moderatorUserId,

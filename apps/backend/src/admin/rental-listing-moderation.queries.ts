@@ -38,6 +38,7 @@ export const LISTING_FOR_MODERATION_BY_PK = `
       moderation_status
       deleted_at
       rental_item {
+        id
         name
         business {
           user_id

@@ -46,19 +46,17 @@ export class ItemActivationValidationService {
     const row = await this.hasuraUserService.executeQuery<{
       rental_item_images: { validation_errors: unknown[] }[];
     }>(COUNT_RENTAL_IMAGES, { rentalItemId });
-    const images = row?.rental_item_images ?? [];
-    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'ITEM_MIN_IMAGES',
-          message:
-            'At least two product images are required before activating this rental item.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    this.assertNoBlockingErrors(images);
+    this.assertRentalItemImagesReady(row?.rental_item_images ?? []);
+  }
+
+  /** System/admin/AI paths without a user JWT. */
+  async assertRentalItemCanActivateAsSystem(
+    rentalItemId: string
+  ): Promise<void> {
+    const row = await this.hasuraSystemService.executeQuery<{
+      rental_item_images: { validation_errors: unknown[] }[];
+    }>(COUNT_RENTAL_IMAGES, { rentalItemId });
+    this.assertRentalItemImagesReady(row?.rental_item_images ?? []);
   }
 
   private assertItemImagesReady(
@@ -71,6 +69,23 @@ export class ItemActivationValidationService {
           error: 'ITEM_MIN_IMAGES',
           message:
             'At least two product images are required before activating this item.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    this.assertNoBlockingErrors(images);
+  }
+
+  private assertRentalItemImagesReady(
+    images: { validation_errors: unknown[] }[]
+  ): void {
+    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'ITEM_MIN_IMAGES',
+          message:
+            'At least two product images are required before activating this rental item.',
         },
         HttpStatus.BAD_REQUEST
       );

@@ -5,6 +5,7 @@ import { AiService } from '../ai/ai.service';
 import { AwsService } from '../aws/aws.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RentalListingAiReviewModelService } from './rental-listing-ai-review-model.service';
 import { RentalListingAiReviewQueueService } from './rental-listing-ai-review-queue.service';
@@ -26,7 +27,8 @@ export class RentalListingAiReviewService {
     private readonly notifications: NotificationsService,
     private readonly aiService: AiService,
     private readonly awsService: AwsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly activationValidation: ItemActivationValidationService
   ) {}
 
   isEnabled(): boolean {
@@ -234,6 +236,9 @@ export class RentalListingAiReviewService {
     result: AiReviewModelResult,
     modelMeta: Record<string, unknown>
   ): Promise<void> {
+    await this.activationValidation.assertRentalItemCanActivateAsSystem(
+      listing.rental_item.id
+    );
     await this.completeReview(reviewId, 'approved', result, modelMeta);
     const applied = await this.patchListingStatusIfAiReviewing(
       listing.id,
