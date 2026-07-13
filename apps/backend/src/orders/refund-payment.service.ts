@@ -50,10 +50,13 @@ export class RefundPaymentService {
       const result = await this.walletExecutor.execute({
         order: params.order,
         amount: params.amount,
-        refundRequestId: params.refundRequestId,
         paymentId,
       });
-      await this.clawbackService.clawbackItemSubtotal(params.order, params.amount);
+      await this.clawbackService.clawbackItemSubtotal(
+        params.order,
+        params.amount,
+        paymentId
+      );
       await this.updateOrderPaymentStatus(params.order.id, params.amount);
       return result;
     }
@@ -87,6 +90,7 @@ export class RefundPaymentService {
     if (!payment) {
       return;
     }
+    const alreadySucceeded = payment.status === 'succeeded';
     const status: RefundPaymentStatus = succeeded ? 'succeeded' : 'failed';
     await this.updatePayment(payment.id, {
       status,
@@ -98,7 +102,13 @@ export class RefundPaymentService {
     }
     const order = await this.fetchOrder(payment.order_id);
     if (order) {
-      await this.clawbackService.clawbackItemSubtotal(order, Number(payment.amount));
+      if (!alreadySucceeded) {
+        await this.clawbackService.clawbackItemSubtotal(
+          order,
+          Number(payment.amount),
+          payment.id
+        );
+      }
       await this.maybeFinalizeIfAllPaymentsComplete(
         payment.order_id,
         payment.refund_request_id
@@ -153,7 +163,11 @@ export class RefundPaymentService {
     }
     if (stripeResult.immediateSuccess) {
       await this.updatePayment(paymentId, { status: 'succeeded' });
-      await this.clawbackService.clawbackItemSubtotal(params.order, params.amount);
+      await this.clawbackService.clawbackItemSubtotal(
+        params.order,
+        params.amount,
+        paymentId
+      );
       await this.maybeFinalizeIfAllPaymentsComplete(
         params.order.id,
         params.refundRequestId
@@ -264,13 +278,14 @@ export class RefundPaymentService {
     order_id: string;
     refund_request_id: string;
     amount: number;
+    status: RefundPaymentStatus;
   } | null> {
     const query = `
       query ByStripe($sid: uuid!) {
         order_refund_payments(
           where: { stripe_refund_id: { _eq: $sid } }
           limit: 1
-        ) { id order_id refund_request_id amount }
+        ) { id order_id refund_request_id amount status }
       }
     `;
     const res = await this.hasuraSystemService.executeQuery<{
@@ -279,6 +294,7 @@ export class RefundPaymentService {
         order_id: string;
         refund_request_id: string;
         amount: number;
+        status: RefundPaymentStatus;
       }[];
     }>(query, { sid: stripeRefundDbId });
     return res.order_refund_payments[0] ?? null;
