@@ -1,6 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
 import { StripeConnectService } from './stripe-connect.service';
 
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: jest.fn(),
+}));
+
 describe('StripeConnectService', () => {
   const stripeService = { createExpressAccount: jest.fn() };
   const hasuraService = {
