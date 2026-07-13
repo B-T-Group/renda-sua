@@ -287,6 +287,20 @@ export function useBusinessDashboardModules({
         path: '/admin/businesses',
       },
       {
+        title: t(
+          'business.dashboard.locationTransfers',
+          'Location transfers'
+        ),
+        description: t(
+          'business.dashboard.locationTransfersDescription',
+          'Review all business location transfer requests'
+        ),
+        icon: <BizIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#5d4037',
+        path: '/admin/location-transfers',
+      },
+      {
         title: t('business.dashboard.manageBrands'),
         description: t('business.dashboard.manageBrandsDescription'),
         icon: <BrandIcon sx={{ fontSize: 40 }} />,

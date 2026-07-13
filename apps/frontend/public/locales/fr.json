@@ -656,6 +656,24 @@
       "status": "Statut",
       "uploadedAt": "Téléversé le",
       "viewFile": "Voir le Fichier"
+    },
+    "locationTransfers": {
+      "title": "Transferts d'emplacements",
+      "description": "Voir et gérer les demandes de transfert d'emplacements",
+      "status": "Statut",
+      "location": "Emplacement",
+      "from": "De",
+      "to": "Vers",
+      "counts": "Compteurs",
+      "created": "Créé",
+      "empty": "Aucune demande de transfert",
+      "statuses": {
+        "pending": "En attente",
+        "accepted": "Accepté",
+        "rejected": "Rejeté",
+        "cancelled": "Annulé",
+        "expired": "Expiré"
+      }
     }
   },
   "agent": {
@@ -1274,7 +1292,9 @@
         "adminCatalogHint": "Taxonomie, marques et comptes liés aux commissions.",
         "adminSystem": "Système et intégration",
         "adminSystemHint": "Configuration, paramétrage pays et valeurs par défaut de l’application."
-      }
+      },
+      "locationTransfers": "Transferts d'emplacements",
+      "locationTransfersDescription": "Consulter toutes les demandes de transfert"
     },
     "clientCities": {
       "seoTitle": "D'où viennent vos clients",
@@ -2308,7 +2328,39 @@
       "logoUpload": "Téléverser une image",
       "logoClear": "Retirer le logo",
       "logoUploadError": "Échec du téléversement du logo",
-      "logoBusinessRequired": "Le profil entreprise est requis pour téléverser un logo"
+      "logoBusinessRequired": "Le profil entreprise est requis pour téléverser un logo",
+      "transfer": {
+        "action": "Transférer",
+        "title": "Transférer l'emplacement",
+        "stepSelect": "Choisir l'entreprise",
+        "stepSummary": "Résumé",
+        "stepConfirm": "Confirmer",
+        "selectHint": "Recherchez l'entreprise qui doit recevoir « {{name}} ».",
+        "searchLabel": "Nom ou e-mail de l'entreprise",
+        "summaryLine": "1 emplacement · {{items}} articles · {{rentals}} locations · {{orders}} commandes terminées",
+        "toBusiness": "Vers : {{name}} ({{email}})",
+        "fromBusiness": "De : {{name}}",
+        "confirmHint": "Saisissez le nom de l'entreprise de destination « {{name}} » pour envoyer la demande.",
+        "confirmLabel": "Nom de l'entreprise de destination",
+        "sendRequest": "Envoyer la demande de transfert",
+        "requestSent": "Demande de transfert envoyée",
+        "pendingBadge": "Transfert en attente",
+        "incomingTitle": "Transferts d'emplacement entrants",
+        "outgoingTitle": "Transferts d'emplacement sortants",
+        "acceptTitle": "Accepter le transfert d'emplacement ?",
+        "acceptMessage": "Cela déplacera l'emplacement, ses articles, adresses et compte vers votre entreprise.",
+        "block": {
+          "sameBusiness": "Impossible de transférer vers la même entreprise",
+          "primary": "Impossible de transférer l'emplacement principal",
+          "only": "Impossible de transférer le seul emplacement",
+          "sharedItems": "Certains articles sont utilisés dans d'autres emplacements",
+          "sharedRentals": "Certains articles de location sont listés ailleurs",
+          "ongoingOrders": "Cet emplacement a des commandes en cours",
+          "ongoingRentals": "Cet emplacement a des locations en cours",
+          "skuCollision": "L'entreprise de destination a déjà des articles avec le même SKU",
+          "unknown": "Le transfert est bloqué"
+        }
+      }
     },
     "orders": {
       "agentAssigned": "🚚 Excellent ! Un agent a réclamé cette commande et arrivera bientôt. Préparez la commande pour un transfert rapide.",
@@ -2578,7 +2630,9 @@
     "promoTilePin": "Livraison PIN sécurisée",
     "promoTileNotifs": "Notifications instantanées",
     "downloadFree": "Télécharger gratuitement",
-    "appPromoTileLabel": "Télécharger l'application Rendasua"
+    "appPromoTileLabel": "Télécharger l'application Rendasua",
+    "accept": "Accepter",
+    "reject": "Rejeter"
   },
   "dashboard": {
     "client": {

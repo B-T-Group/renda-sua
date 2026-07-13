@@ -24,6 +24,7 @@ import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
+import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
 import type { CountryOnboardingConfigDto } from './dto/country-onboarding.dto';
 import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
 import { RejectSaleItemDto } from './dto/item-moderation.dto';
@@ -72,7 +73,8 @@ export class AdminController {
     private readonly itemModerationService: ItemModerationService,
     private readonly itemAiReviewAdminService: ItemAiReviewAdminService,
     private readonly applicationSetupService: ApplicationSetupService,
-    private readonly countryOnboardingService: CountryOnboardingService
+    private readonly countryOnboardingService: CountryOnboardingService,
+    private readonly transferService: BusinessLocationTransferService
   ) {}
 
   @Post('message')
@@ -1199,4 +1201,58 @@ export class AdminController {
       };
     }
   }
+
+  @Get('location-transfers')
+  @ApiOperation({ summary: 'List all business location transfer requests' })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiResponse({ status: 200, description: 'Transfer requests retrieved' })
+  async getLocationTransfers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string
+  ) {
+    try {
+      const result = await this.transferService.listAllAdmin({
+        page: Number(page) || 1,
+        limit: Number(limit) || 20,
+        status: status || undefined,
+        search: search || undefined,
+      });
+      return { success: true, ...result };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to load location transfers',
+      };
+    }
+  }
+
+  @Post('location-transfers/:id/cancel')
+  @ApiOperation({ summary: 'Cancel a pending location transfer as admin' })
+  @ApiParam({ name: 'id', description: 'Transfer request UUID' })
+  async cancelLocationTransfer(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser
+  ) {
+    try {
+      const requestRow = await this.transferService.cancel(id, {
+        isAdmin: true,
+        userId: request.user?.id || request.user?.user_id,
+      });
+      return { success: true, data: { request: requestRow } };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error?.response?.error || error.message || 'Cancel failed',
+        },
+        error?.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
 }

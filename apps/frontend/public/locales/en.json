@@ -898,6 +898,24 @@
       "status": "Status",
       "uploadedAt": "Uploaded At",
       "viewFile": "View File"
+    },
+    "locationTransfers": {
+      "title": "Location transfers",
+      "description": "View and manage business location transfer requests",
+      "status": "Status",
+      "location": "Location",
+      "from": "From",
+      "to": "To",
+      "counts": "Counts",
+      "created": "Created",
+      "empty": "No transfer requests found",
+      "statuses": {
+        "pending": "Pending",
+        "accepted": "Accepted",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled",
+        "expired": "Expired"
+      }
     }
   },
   "agent": {
@@ -1532,7 +1550,9 @@
         "adminCatalogHint": "Taxonomy, brands, and commission-related accounts.",
         "adminSystem": "System & onboarding",
         "adminSystemHint": "Configuration, country setup, and application defaults."
-      }
+      },
+      "locationTransfers": "Location transfers",
+      "locationTransfersDescription": "Review all business location transfer requests"
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",
@@ -2566,7 +2586,39 @@
       "logoUpload": "Upload image",
       "logoClear": "Remove logo",
       "logoUploadError": "Failed to upload logo",
-      "logoBusinessRequired": "Business profile is required to upload a logo"
+      "logoBusinessRequired": "Business profile is required to upload a logo",
+      "transfer": {
+        "action": "Transfer",
+        "title": "Transfer location",
+        "stepSelect": "Select business",
+        "stepSummary": "Summary",
+        "stepConfirm": "Confirm",
+        "selectHint": "Search for the business that should receive \"{{name}}\".",
+        "searchLabel": "Business name or email",
+        "summaryLine": "1 location · {{items}} items · {{rentals}} rentals · {{orders}} completed orders",
+        "toBusiness": "To: {{name}} ({{email}})",
+        "fromBusiness": "From: {{name}}",
+        "confirmHint": "Type the destination business name \"{{name}}\" to send the transfer request.",
+        "confirmLabel": "Destination business name",
+        "sendRequest": "Send transfer request",
+        "requestSent": "Transfer request sent",
+        "pendingBadge": "Transfer pending",
+        "incomingTitle": "Incoming location transfers",
+        "outgoingTitle": "Outgoing location transfers",
+        "acceptTitle": "Accept location transfer?",
+        "acceptMessage": "This will move the location, its items, addresses, and account to your business.",
+        "block": {
+          "sameBusiness": "Cannot transfer to the same business",
+          "primary": "Cannot transfer the primary location",
+          "only": "Cannot transfer the only location",
+          "sharedItems": "Some items are used in other locations",
+          "sharedRentals": "Some rental items are listed at other locations",
+          "ongoingOrders": "This location has ongoing orders",
+          "ongoingRentals": "This location has ongoing rentals",
+          "skuCollision": "Destination already has items with the same SKU",
+          "unknown": "Transfer is blocked"
+        }
+      }
     },
     "orders": {
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",
@@ -2836,7 +2888,9 @@
     "promoTilePin": "Secure PIN delivery",
     "promoTileNotifs": "Instant notifications",
     "downloadFree": "Download Free",
-    "appPromoTileLabel": "Download the Rendasua app"
+    "appPromoTileLabel": "Download the Rendasua app",
+    "accept": "Accept",
+    "reject": "Reject"
   },
   "dashboard": {
     "client": {

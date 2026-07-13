@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
+import { BusinessItemsModule } from '../business-items/business-items.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
@@ -28,6 +29,7 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     SiteEventsModule,
     MerchantLifecycleModule,
     BusinessContractsModule,
+    BusinessItemsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
     ImageValidationModule,

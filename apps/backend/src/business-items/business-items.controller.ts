@@ -28,6 +28,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CsvUploadRequestDto } from './dto/csv-upload.dto';
 import { BusinessItemsService } from './business-items.service';
 import { BusinessItemsAccessService } from './business-items-access.service';
+import { BusinessLocationTransferService } from './business-location-transfer.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
@@ -38,6 +39,7 @@ import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
 import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
+import { CreateLocationTransferRequestDto } from './dto/create-location-transfer-request.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -50,7 +52,8 @@ export class BusinessItemsController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly businessItemsService: BusinessItemsService,
     private readonly itemDealsService: ItemDealsService,
-    private readonly accessService: BusinessItemsAccessService
+    private readonly accessService: BusinessItemsAccessService,
+    private readonly transferService: BusinessLocationTransferService
   ) {}
 
   @Get('page-data')
@@ -197,6 +200,125 @@ export class BusinessItemsController {
       success: true,
       data: { business_locations, primary_address_country },
     };
+  }
+
+  @Get('businesses/search')
+  @ApiOperation({
+    summary: 'Search businesses by name or email for location transfer',
+  })
+  @ApiQuery({ name: 'q', required: true })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Businesses matching search' })
+  async searchBusinesses(
+    @Query('q') q: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    if (!q?.trim()) {
+      return { success: true, data: { businesses: [] } };
+    }
+    const businesses = await this.transferService.searchBusinesses(
+      q,
+      ctx.targetBusinessId
+    );
+    return { success: true, data: { businesses } };
+  }
+
+  @Get('locations/:locationId/transfer-preview')
+  @ApiOperation({ summary: 'Preview a business location transfer' })
+  @ApiQuery({ name: 'toBusinessId', required: true })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Transfer preview' })
+  async transferPreview(
+    @Param('locationId') locationId: string,
+    @Query('toBusinessId') toBusinessId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const preview = await this.transferService.preview(
+      locationId,
+      toBusinessId,
+      ctx.targetBusinessId
+    );
+    return { success: true, data: preview };
+  }
+
+  @Post('locations/:locationId/transfer-requests')
+  @HttpCode(HttpStatus.CREATED)
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @ApiOperation({
+    summary: 'Create a pending location transfer request to another business',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiBody({ type: CreateLocationTransferRequestDto })
+  @ApiResponse({ status: 201, description: 'Transfer request created' })
+  async createTransferRequest(
+    @Param('locationId') locationId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: CreateLocationTransferRequestDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser();
+    const request = await this.transferService.createRequest({
+      locationId,
+      toBusinessId: body.toBusinessId,
+      confirmBusinessName: body.confirmBusinessName,
+      sourceBusinessId: ctx.targetBusinessId,
+      requestedByUserId: user.id,
+    });
+    return { success: true, data: { request } };
+  }
+
+  @Get('transfer-requests/pending')
+  @ApiOperation({
+    summary: 'List incoming and outgoing pending location transfer requests',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Pending transfer requests' })
+  async pendingTransferRequests(@Query('businessId') businessId?: string) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.transferService.listPendingForBusiness(
+      ctx.targetBusinessId
+    );
+    return { success: true, data };
+  }
+
+  @Post('transfer-requests/:id/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept a pending location transfer (destination)' })
+  @ApiResponse({ status: 200, description: 'Transfer accepted and applied' })
+  async acceptTransferRequest(@Param('id') id: string) {
+    const ctx = await this.accessService.resolveAccess();
+    const request = await this.transferService.accept(id, ctx.ownBusinessId);
+    return { success: true, data: { request } };
+  }
+
+  @Post('transfer-requests/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject a pending location transfer (destination)' })
+  @ApiResponse({ status: 200, description: 'Transfer rejected' })
+  async rejectTransferRequest(@Param('id') id: string) {
+    const ctx = await this.accessService.resolveAccess();
+    const request = await this.transferService.reject(id, ctx.ownBusinessId);
+    return { success: true, data: { request } };
+  }
+
+  @Post('transfer-requests/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a pending location transfer (source or admin)' })
+  @ApiResponse({ status: 200, description: 'Transfer cancelled' })
+  async cancelTransferRequest(
+    @Param('id') id: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser();
+    const request = await this.transferService.cancel(id, {
+      businessId: ctx.targetBusinessId,
+      isAdmin: ctx.isPlatformAdmin,
+      userId: user.id,
+    });
+    return { success: true, data: { request } };
   }
 
   @Post('locations')

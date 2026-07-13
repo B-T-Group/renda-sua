@@ -13,6 +13,7 @@
 - "!include public_business_inventory.yaml"
 - "!include public_business_item_favorites.yaml"
 - "!include public_business_locations.yaml"
+- "!include public_business_location_transfer_requests.yaml"
 - "!include public_business_contract_events.yaml"
 - "!include public_business_contracts.yaml"
 - "!include public_business_merchant_agreement_acceptances.yaml"

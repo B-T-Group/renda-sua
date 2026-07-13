@@ -38,6 +38,9 @@ import {
 import LocationCard from '../business/LocationCard';
 import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
+import LocationTransferInbox from '../business/LocationTransferInbox';
+import TransferLocationDialog from '../business/TransferLocationDialog';
+import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import AddressDialog, {
   type AddressFormData,
 } from '../dialogs/AddressDialog';
@@ -73,6 +76,10 @@ const BusinessLocationsPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [locationToDelete, setLocationToDelete] =
     useState<BusinessLocation | null>(null);
+  const [locationToTransfer, setLocationToTransfer] =
+    useState<BusinessLocation | null>(null);
+  const [transferRefresh, setTransferRefresh] = useState(0);
+  const { outgoing, fetchPending } = useLocationTransfers(profile?.business?.id);
 
   const {
     locations,
@@ -164,6 +171,15 @@ const BusinessLocationsPage: React.FC = () => {
     t,
     fetchLocations,
   ]);
+
+
+  useEffect(() => {
+    void fetchPending();
+  }, [fetchPending]);
+
+  const pendingLocationIds = new Set(
+    outgoing.map((r) => r.business_location_id)
+  );
 
   // Fetch locations when component mounts or business ID changes
   useEffect(() => {
@@ -405,6 +421,16 @@ const BusinessLocationsPage: React.FC = () => {
           </Alert>
         )}
 
+        <LocationTransferInbox
+          businessId={profile?.business?.id}
+          refreshToken={transferRefresh}
+          onChanged={() => {
+            void fetchLocations();
+            void fetchPending();
+            setTransferRefresh((n) => n + 1);
+          }}
+        />
+
         {/* Stats Summary */}
         {!locationsLoading && locations.length > 0 && (
           <Paper sx={{ p: 2, bgcolor: 'primary.50' }}>
@@ -551,6 +577,8 @@ const BusinessLocationsPage: React.FC = () => {
                       account={accounts.find(
                         (a) => a.business_location_id === location.id
                       )}
+                      transferPending={pendingLocationIds.has(location.id)}
+                      onTransfer={setLocationToTransfer}
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}
@@ -596,6 +624,8 @@ const BusinessLocationsPage: React.FC = () => {
                       account={accounts.find(
                         (a) => a.business_location_id === location.id
                       )}
+                      transferPending={pendingLocationIds.has(location.id)}
+                      onTransfer={setLocationToTransfer}
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}
@@ -633,6 +663,26 @@ const BusinessLocationsPage: React.FC = () => {
           'Add business address'
         )}
         fullScreen={isMobile}
+      />
+
+      
+      <TransferLocationDialog
+        open={!!locationToTransfer}
+        location={locationToTransfer}
+        businessId={profile?.business?.id}
+        onClose={() => setLocationToTransfer(null)}
+        onSuccess={() => {
+          enqueueSnackbar(
+            t(
+              'business.locations.transfer.requestSent',
+              'Transfer request sent'
+            ),
+            { variant: 'success' }
+          );
+          void fetchPending();
+          void fetchLocations();
+          setTransferRefresh((n) => n + 1);
+        }}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -6,6 +6,7 @@ import {
   LocationOn as LocationIcon,
   Phone as PhoneIcon,
   Store as StoreIcon,
+  SwapHoriz as TransferIcon,
 } from '@mui/icons-material';
 import {
   Avatar,
@@ -37,17 +38,21 @@ interface LocationCardProps {
   location: BusinessLocation;
   /** When present, shows this location's account balance on the card */
   account?: LocationAccountInfo | null;
+  transferPending?: boolean;
   onEdit: (location: BusinessLocation) => void;
   onDelete: (location: BusinessLocation) => void;
   onToggleStatus: (location: BusinessLocation) => void;
+  onTransfer?: (location: BusinessLocation) => void;
 }
 
 const LocationCard: React.FC<LocationCardProps> = ({
   location,
   account,
+  transferPending = false,
   onEdit,
   onDelete,
   onToggleStatus,
+  onTransfer,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -323,11 +328,21 @@ const LocationCard: React.FC<LocationCardProps> = ({
             color={location.is_active ? 'success' : 'default'}
             size="small"
           />
+          {transferPending && (
+            <Chip
+              label={t(
+                'business.locations.transfer.pendingBadge',
+                'Transfer pending'
+              )}
+              color="warning"
+              size="small"
+            />
+          )}
         </Stack>
       </CardContent>
 
       {/* Actions */}
-      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2, pt: 0 }}>
+      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2, pt: 0, flexWrap: 'wrap', gap: 1 }}>
         <Button
           size="small"
           startIcon={<EditIcon />}
@@ -336,16 +351,28 @@ const LocationCard: React.FC<LocationCardProps> = ({
         >
           {t('business.locations.edit', 'Edit')}
         </Button>
-        <Button
-          size="small"
-          onClick={() => onToggleStatus(location)}
-          variant="outlined"
-          sx={{ textTransform: 'none' }}
-        >
-          {location.is_active
-            ? t('business.locations.deactivate', 'Deactivate')
-            : t('business.locations.activate', 'Activate')}
-        </Button>
+        <Stack direction="row" spacing={1}>
+          {onTransfer && !location.is_primary && !transferPending && (
+            <Button
+              size="small"
+              startIcon={<TransferIcon />}
+              onClick={() => onTransfer(location)}
+              sx={{ textTransform: 'none' }}
+            >
+              {t('business.locations.transfer.action', 'Transfer')}
+            </Button>
+          )}
+          <Button
+            size="small"
+            onClick={() => onToggleStatus(location)}
+            variant="outlined"
+            sx={{ textTransform: 'none' }}
+          >
+            {location.is_active
+              ? t('business.locations.deactivate', 'Deactivate')
+              : t('business.locations.activate', 'Activate')}
+          </Button>
+        </Stack>
       </CardActions>
     </Card>
   );

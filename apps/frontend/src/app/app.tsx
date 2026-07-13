@@ -400,6 +400,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/location-transfers"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminLocationTransfersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/rental-listings/moderation"
               element={
                 <ProtectedRoute>
