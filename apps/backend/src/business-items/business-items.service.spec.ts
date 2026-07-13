@@ -1,3 +1,13 @@
+jest.mock('../business-images/business-images.service', () => ({
+  BusinessImagesService: class BusinessImagesService {},
+}));
+jest.mock('../item-ai-review/item-ai-review.service', () => ({
+  ItemAiReviewService: class ItemAiReviewService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+
 import { BusinessItemsService } from './business-items.service';
 import type { CsvItemRowDto } from './dto/csv-upload.dto';
 
