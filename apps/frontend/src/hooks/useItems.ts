@@ -30,6 +30,8 @@ export interface Item {
   max_order_quantity: number | null;
   is_active: boolean;
   moderation_status?: string | null;
+  /** Set by API when moderation_status is rejected */
+  rejection_reason?: string | null;
   stripe_tax_code_id?: string | null;
   stripe_tax_code?: {
     id: string;

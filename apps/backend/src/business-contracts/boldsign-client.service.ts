@@ -85,10 +85,19 @@ export class BoldsignClientService {
     return Buffer.from(res.data);
   }
 
-  async remindDocument(documentId: string): Promise<void> {
-    await this.http.post('/v1/document/remind', null, {
-      params: { documentId },
-    });
+  async remindDocument(documentId: string, message?: string): Promise<void> {
+    await this.http.post(
+      '/v1/document/remind',
+      {
+        message:
+          message?.trim() ||
+          'Please sign your merchant agreement to continue.',
+      },
+      {
+        params: { documentId },
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   async revokeDocument(documentId: string, message?: string): Promise<void> {

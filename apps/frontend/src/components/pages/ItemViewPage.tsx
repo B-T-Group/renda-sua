@@ -516,6 +516,19 @@ export default function ItemViewPage() {
           ) : null}
           {item.moderation_status === 'rejected' ? (
             <Alert severity="warning" sx={{ flex: 1, minWidth: 240 }}>
+              {item.rejection_reason ? (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    {t(
+                      'business.items.moderation.rejectionReason',
+                      'Why this item was rejected'
+                    )}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {item.rejection_reason}
+                  </Typography>
+                </>
+              ) : null}
               {t(
                 'business.items.moderation.resubmitHint',
                 'If this item was rejected, saving name or description changes will send it for review again.'

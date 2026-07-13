@@ -21,6 +21,7 @@ import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.const
 import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
+import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -1112,7 +1113,14 @@ export class BusinessItemsService {
     if (!item || item.business_id !== businessId) {
       throw new Error('Item not found or does not belong to this business');
     }
-    return item;
+    if (item.moderation_status !== 'rejected') {
+      return { ...item, rejection_reason: null };
+    }
+    const rejection_reason = await resolveSaleItemRejectionReason(
+      this.hasuraSystemService,
+      itemId
+    );
+    return { ...item, rejection_reason };
   }
 
   async getAvailableItems() {

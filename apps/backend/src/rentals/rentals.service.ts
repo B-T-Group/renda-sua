@@ -45,6 +45,7 @@ import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payment
 import { StripeService } from '../stripe-payments/stripe.service';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
+import { resolveRentalListingRejectionReasons } from '../common/moderation-rejection-reason';
 import * as Q from './rentals-queries';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
@@ -1141,7 +1142,7 @@ export class RentalsService {
     if (!r.rental_items_by_pk) {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
-    return r.rental_items_by_pk;
+    return this.attachListingRejectionReasons(r.rental_items_by_pk);
   }
 
   async updateBusinessRentalItem(
@@ -1416,6 +1417,32 @@ export class RentalsService {
     return user.client.id;
   }
 
+  private async attachListingRejectionReasons(item: any): Promise<any> {
+    const listings = item.rental_location_listings ?? [];
+    const rejectedIds = listings
+      .filter((l: { moderation_status?: string }) => l.moderation_status === 'rejected')
+      .map((l: { id: string }) => l.id);
+    const reasons = await resolveRentalListingRejectionReasons(
+      this.hasuraSystemService,
+      rejectedIds
+    );
+    const withReasons = listings.map((l: { id: string; moderation_status?: string }) =>
+      this.withListingRejectionReason(l, reasons)
+    );
+    return { ...item, rental_location_listings: withReasons };
+  }
+
+  private withListingRejectionReason(
+    listing: { id: string; moderation_status?: string },
+    reasons: Map<string, string>
+  ) {
+    const rejection_reason =
+      listing.moderation_status === 'rejected'
+        ? reasons.get(listing.id) ?? null
+        : null;
+    return { ...listing, rejection_reason };
+  }
+
   private async assertRentalItemForBusiness(
     itemId: string,
     businessId: string,
@@ -1609,37 +1636,6 @@ export class RentalsService {
       user.email,
       dto.stripe_payment_method
     );
-  }
-
-  async expireProposedRentalContracts(): Promise<number> {
-    const now = new Date().toISOString();
-    const res = await this.hasuraSystemService.executeQuery<{
-      rental_bookings: Array<{ id: string; rental_request_id: string }>;
-    }>(Q.LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS, { now });
-    const rows = res.rental_bookings ?? [];
-    for (const b of rows) {
-      try {
-        await this.patchBooking(b.id, {
-          status: 'cancelled',
-          contract_expires_at: null,
-        });
-        await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-          id: b.rental_request_id,
-          status: 'expired',
-        });
-        await this.logHistory(
-          b.id,
-          'cancelled',
-          'proposed',
-          null,
-          'system',
-          'Rental contract expired'
-        );
-      } catch (error: any) {
-        this.logger.error(`expireProposedRentalContracts ${b.id}: ${error.message}`);
-      }
-    }
-    return rows.length;
   }
 
   private async confirmProposedRentalBooking(
@@ -2268,41 +2264,6 @@ export class RentalsService {
     );
     await this.deliveryPinService.clearPinForOrder(bookingId);
     return { success: true };
-  }
-
-  async processEndedActiveBookings(): Promise<number> {
-    const now = new Date().toISOString();
-    const res = await this.hasuraSystemService.executeQuery<{
-      rental_bookings: Array<{ id: string }>;
-    }>(Q.LIST_ACTIVE_BOOKINGS_PAST_END, { now });
-    const rows = res.rental_bookings || [];
-    for (const b of rows) {
-      try {
-        await this.transitionActiveToAwaitingReturn(b.id, now);
-      } catch (error: any) {
-        this.logger.error(`processEndedActiveBookings ${b.id}: ${error.message}`);
-      }
-    }
-    return rows.length;
-  }
-
-  private async transitionActiveToAwaitingReturn(bookingId: string, nowIso: string) {
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.status !== 'active') {
-      return;
-    }
-    await this.patchBooking(bookingId, {
-      status: 'awaiting_return',
-      period_ended_notified_at: nowIso,
-    });
-    await this.logHistory(bookingId, 'awaiting_return', 'active', null, 'system', 'Rental period ended');
-    await this.notificationsService.sendRentalPeriodEndedEmails({
-      bookingId,
-      rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
-      endAt: booking.end_at,
-      clientUserId: booking.client.user_id,
-      businessUserId: booking.business.user_id,
-    });
   }
 
   private async fetchListing(id: string) {

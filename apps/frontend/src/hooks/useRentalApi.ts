@@ -78,6 +78,8 @@ export interface BusinessRentalListingDetail {
   moderation_status?: string;
   moderated_at?: string | null;
   moderated_by_user_id?: string | null;
+  /** Set by API when moderation_status is rejected */
+  rejection_reason?: string | null;
   pickup_instructions?: string | null;
   dropoff_instructions?: string | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];

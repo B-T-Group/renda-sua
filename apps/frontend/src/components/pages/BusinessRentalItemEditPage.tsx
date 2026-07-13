@@ -581,7 +581,20 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 <RentalListingModerationStatusChip status={l.moderation_status} />
               </Stack>
               {l.moderation_status === 'rejected' ? (
-                <Alert severity="info" sx={{ mb: 2 }}>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {l.rejection_reason ? (
+                    <>
+                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                        {t(
+                          'business.rentals.moderation.rejectionReason',
+                          'Why this listing was rejected'
+                        )}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        {l.rejection_reason}
+                      </Typography>
+                    </>
+                  ) : null}
                   {t(
                     'business.rentals.moderation.resubmitHint',
                     'If this listing was rejected, saving changes will send it for review again.'

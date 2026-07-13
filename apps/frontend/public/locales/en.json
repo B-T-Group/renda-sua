@@ -1791,6 +1791,7 @@
         "draftListingsBadge": "{{count}} draft listing(s)",
         "proposalListingsBadge": "{{count}} AI proposal(s) ready",
         "resubmitHint": "If this listing was rejected, saving changes will send it for review again.",
+        "rejectionReason": "Why this listing was rejected",
         "publishSuccess": "Listing submitted for approval",
         "publishFailed": "Could not publish listing"
       },
@@ -2372,7 +2373,8 @@
         "publishSuccess": "Item submitted for approval",
         "publishFailed": "Could not publish item",
         "activateRequiresApproval": "Item must be approved before it can be activated.",
-        "resubmitHint": "If this item was rejected, saving name or description changes will send it for review again."
+        "resubmitHint": "If this item was rejected, saving name or description changes will send it for review again.",
+        "rejectionReason": "Why this item was rejected"
       },
       "aiProposal": {
         "title": "Review AI suggestions",

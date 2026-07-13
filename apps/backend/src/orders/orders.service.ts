@@ -65,6 +65,7 @@ import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 export interface OrderStatusChangeRequest {
@@ -368,7 +369,8 @@ export class OrdersService {
     private readonly taxCalculationService: StripeTaxCalculationService,
     private readonly orderOffersService: OrderOffersService,
     private readonly cancellationPolicyService: CancellationPolicyService,
-    private readonly locationsService: LocationsService
+    private readonly locationsService: LocationsService,
+    private readonly orderSystemJobsService: OrderSystemJobsService
   ) {}
 
   private requireActivePersona(
@@ -6277,40 +6279,8 @@ export class OrdersService {
 
   /** System-initiated cancel for stale authorized orders (reconciler). */
   async cancelStaleAuthorizedOrderAsSystem(orderId: string): Promise<void> {
-    const order = await this.getOrderDetails(orderId);
-    if (!order || order.current_status === 'cancelled') {
-      return;
-    }
-
-    const previousStatus = order.current_status;
-    await this.releaseStripeAuthorizationIfNeeded(order);
-
-    await this.orderStatusService.updateOrderStatus(orderId, 'cancelled');
-
-    const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation CancelStaleAuthorizedOrder($orderId: uuid!, $at: timestamptz!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            cancelled_by: "system"
-            cancelled_at: $at
-            payment_status: "cancelled"
-            updated_at: $at
-          }
-        ) { id }
-      }
-    `,
-      { orderId, at }
-    );
-
-    await this.runOrderCancellationSideEffects(
-      order,
-      orderId,
-      previousStatus,
-      'system',
-      'Auto-cancelled: no agent claimed within timeout'
+    return this.orderSystemJobsService.cancelStaleAuthorizedOrderAsSystem(
+      orderId
     );
   }
 
@@ -6448,148 +6418,10 @@ export class OrdersService {
     orderId: string,
     failureMessage?: string | null
   ): Promise<void> {
-    try {
-      // Get order details
-      const order = await this.getOrderDetails(orderId);
-
-      if (!order) {
-        throw new Error(`Order with ID ${orderId} not found`);
-      }
-
-      const msg = failureMessage?.trim() || 'Payment failed';
-
-      // Mark payment as failed (system context - no request user)
-      const mutation = `
-        mutation MarkOrderPaymentFailed(
-          $orderId: uuid!
-          $paymentStatus: String!
-          $paymentFailedAt: timestamptz!
-          $paymentFailureMessage: String!
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              payment_status: $paymentStatus
-              payment_failed_at: $paymentFailedAt
-              payment_failure_message: $paymentFailureMessage
-              updated_at: "now()"
-            }
-          ) {
-            id
-            payment_status
-            payment_failed_at
-          }
-        }
-      `;
-      await this.hasuraSystemService.executeMutation(mutation, {
-        orderId,
-        paymentStatus: 'failed',
-        paymentFailedAt: new Date().toISOString(),
-        paymentFailureMessage: msg,
-      });
-
-      // Schedule grace-period auto-cancel (3h) anchored on payment_failed_at
-      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
-        'order.payment_failed',
-        { order_id: orderId },
-        180
-      );
-
-      // Notify client (and agent for pay-at-delivery)
-      try {
-        const publicWebAppUrl =
-          this.configService.get('publicWebAppUrl') || 'https://rendasua.com';
-        const orderUrl = `${String(publicWebAppUrl).replace(/\/$/, '')}/orders/${orderId}`;
-
-        const clientUser = order.client?.user;
-        await this.notificationsService.sendOrderPaymentFailedPush({
-          userId: order.client?.user_id,
-          orderId,
-          orderNumber: order.order_number,
-          failureMessage: msg,
-        });
-        if (clientUser?.email?.trim()) {
-          await this.notificationsService.sendClientOrderPaymentFailedEmail({
-            to: clientUser.email.trim(),
-            preferredLanguage: clientUser.preferred_language,
-            clientName: [clientUser.first_name, clientUser.last_name]
-              .filter(Boolean)
-              .join(' ')
-              .trim(),
-            orderNumber: order.order_number,
-            orderUrl,
-            failureMessage: msg,
-          });
-        } else if (clientUser?.phone_number?.trim()) {
-          await this.notificationsService.sendClientPaymentFailedSms({
-            to: clientUser.phone_number.trim(),
-            preferredLanguage: clientUser.preferred_language,
-            orderNumber: order.order_number,
-          });
-        }
-
-        const paymentTiming = (order as any).payment_timing as
-          | 'pay_now'
-          | 'pay_at_delivery'
-          | undefined;
-        if (paymentTiming === 'pay_at_delivery') {
-          const assignedAgent = order.assigned_agent;
-          await this.notificationsService.sendOrderPaymentFailedPush({
-            userId: assignedAgent?.user_id,
-            orderId,
-            orderNumber: order.order_number,
-            failureMessage: msg,
-          });
-          const agentUser = assignedAgent?.user;
-          if (agentUser?.email) {
-            await this.notificationsService.sendAgentOrderPaymentFailedEmail({
-              to: agentUser.email,
-              preferredLanguage: agentUser.preferred_language,
-              agentName: [agentUser.first_name, agentUser.last_name]
-                .filter(Boolean)
-                .join(' ')
-                .trim(),
-              orderNumber: order.order_number,
-              orderUrl,
-              failureMessage: msg,
-            });
-          }
-        }
-      } catch (notifyErr: any) {
-        this.logger.error(
-          `Failed to send payment-failed notifications for order ${orderId}: ${
-            notifyErr?.message ?? String(notifyErr)
-          }`
-        );
-      }
-
-      // Get user ID from the order (client user)
-      const userId = order.client.user_id;
-      if (!userId) {
-        throw new Error('Client user ID not found in order');
-      }
-
-      // Create status history entry for payment failure (no fulfillment status change)
-      await this.createStatusHistoryEntry(
-        orderId,
-        order.current_status,
-        'Payment failed',
-        'client',
-        userId,
-        msg
-      );
-
-      this.logger.log(
-        `Marked order ${order.order_number} payment as failed (status kept: ${order.current_status})`
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to handle order payment failure for order ${orderId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw error;
-    }
+    return this.orderSystemJobsService.onOrderPaymentFailed(
+      orderId,
+      failureMessage
+    );
   }
 
   private async getAgentStatus(agentId: string): Promise<string> {

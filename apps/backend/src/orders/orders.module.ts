@@ -22,6 +22,7 @@ import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { RefundsModule } from './refunds.module';
@@ -59,8 +60,9 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
     CancellationPolicyService,
+    OrderSystemJobsService,
     StripeAuthReconcilerService,
   ],
-  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService, RefundsModule],
+  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService, RefundsModule, OrderSystemJobsService],
 })
 export class OrdersModule {}

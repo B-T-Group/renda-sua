@@ -1,9 +1,9 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { StripeConfig } from '../config/configuration';
-import { OrdersService } from '../orders/orders.service';
+import { OrderSystemJobsService } from '../orders/order-system-jobs.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 import { StripeService } from './stripe.service';
 
@@ -24,8 +24,7 @@ export class StripeAuthReconcilerService {
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly stripeService: StripeService,
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => OrdersService))
-    private readonly ordersService: OrdersService
+    private readonly orderSystemJobsService: OrderSystemJobsService
   ) {}
 
   private get config(): StripeConfig {
@@ -134,7 +133,7 @@ export class StripeAuthReconcilerService {
       this.logger.warn(
         `stripe_auth_lapsed_assigned order=${order.order_number} id=${order.id}`
       );
-      await this.ordersService.onOrderPaymentFailed(
+      await this.orderSystemJobsService.onOrderPaymentFailed(
         order.id,
         'Payment authorization expired before pickup'
       );
@@ -174,7 +173,7 @@ export class StripeAuthReconcilerService {
           this.logger.warn(
             `Assigned order ${order.order_number} has lapsed Stripe authorization`
           );
-          await this.ordersService.onOrderPaymentFailed(
+          await this.orderSystemJobsService.onOrderPaymentFailed(
             order.id,
             'Payment authorization expired before pickup'
           );
@@ -231,6 +230,6 @@ export class StripeAuthReconcilerService {
     this.logger.log(
       `Auto-cancelling stale authorized order ${order.order_number} (no agent)`
     );
-    await this.ordersService.cancelStaleAuthorizedOrderAsSystem(order.id);
+    await this.orderSystemJobsService.cancelStaleAuthorizedOrderAsSystem(order.id);
   }
 }

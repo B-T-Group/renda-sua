@@ -1533,6 +1533,7 @@
         "draftListingsBadge": "{{count}} brouillon(s)",
         "proposalListingsBadge": "{{count}} proposition(s) IA prête(s)",
         "resubmitHint": "Si cette annonce a été refusée, l’enregistrement renverra l’annonce pour vérification.",
+        "rejectionReason": "Pourquoi cette annonce a été refusée",
         "publishSuccess": "Annonce soumise pour approbation",
         "publishFailed": "Impossible de publier l’annonce"
       },
@@ -2114,7 +2115,8 @@
         "publishSuccess": "Article soumis pour approbation",
         "publishFailed": "Impossible de publier l’article",
         "activateRequiresApproval": "L’article doit être approuvé avant d’être activé.",
-        "resubmitHint": "Si cet article a été refusé, l’enregistrement du nom ou de la description le renverra pour vérification."
+        "resubmitHint": "Si cet article a été refusé, l’enregistrement du nom ou de la description le renverra pour vérification.",
+        "rejectionReason": "Pourquoi cet article a été refusé"
       },
       "aiProposal": {
         "title": "Examiner les suggestions IA",
