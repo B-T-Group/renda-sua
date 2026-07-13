@@ -712,6 +712,16 @@ export class BusinessItemsService {
     );
   }
 
+  private getCsvItemActiveStateForUpdate(existingItem: {
+    is_active?: boolean | null;
+    moderation_status?: string | null;
+  }): boolean {
+    return (
+      existingItem.moderation_status === 'approved' &&
+      existingItem.is_active === true
+    );
+  }
+
   /**
    * Pay-at-delivery is an offline/mobile-money flow incompatible with card
    * (Stripe) markets. Store pickup remains available on Stripe — clients pay
@@ -1638,8 +1648,9 @@ export class BusinessItemsService {
             requires_special_handling: row.requires_special_handling,
             min_order_quantity: row.min_order_quantity,
             max_order_quantity: row.max_order_quantity,
-            // Never activate via CSV — moderation must approve first
-            is_active: false,
+            // Preserve already-approved live items; all other rows stay inactive
+            // until moderation approves them.
+            is_active: this.getCsvItemActiveStateForUpdate(existingItem),
             brand_id: row.brand_id,
           };
           await this.updateItem(businessId, existingItem.id, itemData);
