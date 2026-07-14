@@ -35,21 +35,33 @@ export class UploadsController {
   @ApiOperation({
     summary: 'Check if current user (agent) has an ID document',
     description:
-      'Returns whether the authenticated agent has at least one upload of type id_card, passport, or driver_license.',
+      'Returns whether the authenticated agent has at least one upload of type id_card, passport, or driver_license, plus review status.',
   })
   @ApiResponse({
     status: 200,
     description: 'Success',
-    schema: { type: 'object', properties: { hasIdDocument: { type: 'boolean' } } },
+    schema: {
+      type: 'object',
+      properties: {
+        hasIdDocument: { type: 'boolean' },
+        idDocumentStatus: {
+          type: 'string',
+          enum: ['missing', 'pending', 'rejected', 'approved'],
+        },
+      },
+    },
   })
-  async getMeHasIdDocument(): Promise<{ hasIdDocument: boolean }> {
+  async getMeHasIdDocument(): Promise<{
+    hasIdDocument: boolean;
+    idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+  }> {
     const user = await this.hasuraUserService.getUser();
     const active = resolveActivePersonaWithDefault(
       user,
       this.hasuraUserService.getActivePersonaHeader()
     );
     if ((active !== 'agent' && active !== 'business') || !user.id) {
-      return { hasIdDocument: false };
+      return { hasIdDocument: false, idDocumentStatus: 'missing' };
     }
     return this.uploadService.hasIdDocument(user.id);
   }

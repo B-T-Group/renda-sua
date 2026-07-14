@@ -66,7 +66,10 @@ export class UploadService {
     return result.user_uploads ?? [];
   }
 
-  async hasIdDocument(userId: string): Promise<{ hasIdDocument: boolean }> {
+  async hasIdDocument(userId: string): Promise<{
+    hasIdDocument: boolean;
+    idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+  }> {
     const query = `
       query AgentHasIdDocument($userId: uuid!, $documentTypeNames: [String!]) {
         user_uploads(
@@ -74,9 +77,11 @@ export class UploadService {
             user_id: { _eq: $userId }
             document_type: { name: { _in: $documentTypeNames } }
           }
-          limit: 1
+          order_by: { created_at: desc }
         ) {
           id
+          is_approved
+          note
         }
       }
     `;
@@ -84,8 +89,21 @@ export class UploadService {
       userId,
       documentTypeNames: ID_DOCUMENT_TYPE_NAMES,
     });
-    const uploads = (result?.user_uploads as { id: string }[] | undefined) ?? [];
-    return { hasIdDocument: uploads.length > 0 };
+    const uploads =
+      (result?.user_uploads as
+        | { id: string; is_approved: boolean; note?: string | null }[]
+        | undefined) ?? [];
+    if (!uploads.length) {
+      return { hasIdDocument: false, idDocumentStatus: 'missing' };
+    }
+    if (uploads.some((u) => u.is_approved)) {
+      return { hasIdDocument: true, idDocumentStatus: 'approved' };
+    }
+    const latest = uploads[0];
+    if (latest?.note?.trim()) {
+      return { hasIdDocument: true, idDocumentStatus: 'rejected' };
+    }
+    return { hasIdDocument: true, idDocumentStatus: 'pending' };
   }
 
   async listDocumentTypes(excludeNames: string[] = []) {
