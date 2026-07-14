@@ -22,6 +22,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import type {
   FreemopayCallbackDto,
   MyPVitCallbackDto,
@@ -38,6 +40,7 @@ import { MobilePaymentsService } from './mobile-payments.service';
 @ApiTags('admin-mobile-payments')
 @Controller('admin/mobile-payments')
 @UseGuards(AdminAuthGuard)
+@RequirePermissions(PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS)
 @ApiBearerAuth()
 export class AdminMobilePaymentsController {
   constructor(

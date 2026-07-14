@@ -27,6 +27,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BusinessDashboardModule } from '../components/business/BusinessDashboardModuleCard';
 import type { DashboardAggregates } from './useDashboardAggregates';
+import { PlatformPermissions } from '../constants/platformPermissions';
+import { usePermissions } from './usePermissions';
 
 interface UseBusinessDashboardModulesOptions {
   aggregates: DashboardAggregates | null;
@@ -38,6 +40,7 @@ export function useBusinessDashboardModules({
   isRentalFocused,
 }: UseBusinessDashboardModulesOptions) {
   const { t } = useTranslation();
+  const { can, isSuperuser } = usePermissions();
 
   return useMemo(() => {
     const ordersTotalNonCancelled = aggregates?.ordersTotal ?? 0;
@@ -257,6 +260,7 @@ export function useBusinessDashboardModules({
               }
             : undefined,
         color: '#2e7d32',
+        requiredPermission: PlatformPermissions.MANAGE_AGENTS,
         path: '/admin/agents',
       },
       {
@@ -265,6 +269,7 @@ export function useBusinessDashboardModules({
         icon: <UsersIcon sx={{ fontSize: 40 }} />,
         count: aggregates?.clientCount ?? null,
         color: '#0288d1',
+        requiredPermission: PlatformPermissions.MANAGE_CLIENTS,
         path: '/admin/clients',
       },
       {
@@ -284,6 +289,7 @@ export function useBusinessDashboardModules({
               }
             : undefined,
         color: '#6d4c41',
+        requiredPermission: PlatformPermissions.MANAGE_BUSINESSES,
         path: '/admin/businesses',
       },
       {
@@ -298,6 +304,7 @@ export function useBusinessDashboardModules({
         icon: <BizIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#5d4037',
+        requiredPermission: PlatformPermissions.LOCATIONS_TRANSFERS_ADMIN,
         path: '/admin/location-transfers',
       },
       {
@@ -306,6 +313,7 @@ export function useBusinessDashboardModules({
         icon: <BrandIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#9c27b0',
+        requiredPermission: PlatformPermissions.CONTENT_BRANDS,
         path: '/content-management/brands',
       },
       {
@@ -314,6 +322,7 @@ export function useBusinessDashboardModules({
         icon: <CategoryIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#ff9800',
+        requiredPermission: PlatformPermissions.CONTENT_TAXONOMY,
         path: '/content-management/categories',
       },
       {
@@ -324,6 +333,7 @@ export function useBusinessDashboardModules({
         icon: <AccountBalanceIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#1976d2',
+        requiredPermission: PlatformPermissions.FINANCIAL_COMMISSIONS,
         path: '/admin/commission-accounts',
       },
       {
@@ -334,6 +344,7 @@ export function useBusinessDashboardModules({
         icon: <RentalModerationIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#5d4037',
+        requiredPermission: PlatformPermissions.MODERATE_RENTALS,
         path: '/admin/rental-listings/moderation',
       },
       {
@@ -348,6 +359,7 @@ export function useBusinessDashboardModules({
         icon: <RentalModerationIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#6d4c41',
+        requiredPermission: PlatformPermissions.MODERATE_RENTALS,
         path: '/admin/rental-listings/ai-reviews',
       },
       {
@@ -362,6 +374,7 @@ export function useBusinessDashboardModules({
         icon: <ItemsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#4e342e',
+        requiredPermission: PlatformPermissions.MODERATE_ITEMS,
         path: '/admin/items/moderation',
       },
       {
@@ -376,6 +389,7 @@ export function useBusinessDashboardModules({
         icon: <ItemsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#5d4037',
+        requiredPermission: PlatformPermissions.MODERATE_ITEMS,
         path: '/admin/items/ai-reviews',
       },
       {
@@ -384,6 +398,7 @@ export function useBusinessDashboardModules({
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#607d8b',
+        requiredPermission: PlatformPermissions.CONFIG_APPLICATION,
         path: '/admin/configurations',
       },
       {
@@ -395,6 +410,7 @@ export function useBusinessDashboardModules({
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#00695c',
+        requiredPermission: PlatformPermissions.CONFIG_APPLICATION_SETUP,
         path: '/admin/application-setup',
       },
       {
@@ -409,6 +425,7 @@ export function useBusinessDashboardModules({
         icon: <PublicIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#00838f',
+        requiredPermission: PlatformPermissions.CONFIG_COUNTRY_ONBOARDING,
         path: '/admin/country-onboarding',
       },
       {
@@ -423,6 +440,7 @@ export function useBusinessDashboardModules({
         icon: <PaymentsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#5e35b1',
+        requiredPermission: PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS,
         path: '/admin/pending-mobile-payments',
       },
       {
@@ -434,6 +452,7 @@ export function useBusinessDashboardModules({
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#455a64',
+        requiredPermission: PlatformPermissions.OPS_SITE_EVENTS,
         path: '/admin/site-events',
       },
     ];
@@ -450,6 +469,11 @@ export function useBusinessDashboardModules({
       path: '/business/dashboard/admin',
     };
 
+    const visibleAdminModules = adminModules.filter(
+      (m) =>
+        !m.requiredPermission || can(m.requiredPermission)
+    );
+
     return {
       isRentalFocused,
       primaryOrderModules,
@@ -460,8 +484,9 @@ export function useBusinessDashboardModules({
       morePageOrderModules,
       rentalModules,
       insightModules,
-      adminModules,
+      adminModules: visibleAdminModules,
       adminHubModule,
+      hasAdminAccess: isSuperuser || visibleAdminModules.length > 0,
     };
-  }, [aggregates, isRentalFocused, t]);
+  }, [aggregates, can, isRentalFocused, isSuperuser, t]);
 }

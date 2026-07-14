@@ -5,10 +5,13 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { ConfigurationManagement } from '../admin/ConfigurationManagement';
 import LoadingScreen from '../common/LoadingScreen';
 import SEOHead from '../seo/SEOHead';
+import { usePermission } from '../../hooks/usePermissions';
+import { PlatformPermissions } from '../../constants/platformPermissions';
 
 const AdminConfigurationPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile, loading, error } = useUserProfileContext();
+  const canAccess = usePermission(PlatformPermissions.CONFIG_APPLICATION);
 
   if (loading) {
     return <LoadingScreen />;
@@ -37,7 +40,7 @@ const AdminConfigurationPage: React.FC = () => {
     );
   }
 
-  if (!profile.business.is_admin) {
+  if (!canAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography variant="h6" color="error">

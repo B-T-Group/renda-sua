@@ -105,11 +105,15 @@ export const useDocumentManagement = () => {
           }
         }
 
-        // For business admins, show all uploads. For others, show only their own
-        if (user?.user_type_id === 'business' && user?.is_admin) {
-          // Business admins can see all uploads - no user_id filter
+        // Platform document ops can see all uploads
+        if (
+          user?.permissions?.includes('platform.ops.user_documents') ||
+          user?.permissions?.includes('*') ||
+          user?.is_superuser ||
+          user?.business?.is_admin
+        ) {
+          // no user_id filter
         } else {
-          // Regular users can only see their own uploads
           whereClause.user_id = { _eq: user?.id };
         }
 
@@ -154,7 +158,7 @@ export const useDocumentManagement = () => {
         setLoading(false);
       }
     },
-    [client, user?.id, user?.user_type_id, user?.is_admin]
+    [client, user?.id, user?.user_type_id, user?.business?.is_admin, user?.is_superuser, user?.permissions]
   );
 
   // Delete document - now handled by useDocumentDelete hook

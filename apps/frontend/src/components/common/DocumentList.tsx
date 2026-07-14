@@ -503,7 +503,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({
 
                           {/* Show approve button only for business admins and unapproved documents */}
                           {user?.user_type_id === 'business' &&
-                            user?.business?.is_admin &&
+                            (user?.is_superuser ||
+                              user?.business?.is_admin ||
+                              user?.permissions?.includes(
+                                'platform.ops.user_documents'
+                              ) ||
+                              user?.permissions?.includes('*')) &&
                             !document.is_approved && (
                               <Tooltip title="Approve Document">
                                 <IconButton

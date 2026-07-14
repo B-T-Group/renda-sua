@@ -7,11 +7,13 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
   CardContent,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -35,6 +37,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
+import { useAdminRbac } from '../../hooks/useAdminRbac';
+import { usePermission } from '../../hooks/usePermissions';
+import { PlatformPermissions } from '../../constants/platformPermissions';
 import AdminUserCard from '../common/AdminUserCard';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { PinCodeFields } from '../common/PinCodeFields';
@@ -107,9 +112,17 @@ const AdminManageBusinesses: React.FC = () => {
     setWithdrawalPin,
     clearWithdrawalPin,
   } = useAdminBusinesses();
+  const {
+    roles: platformRoles,
+    getUserRoles,
+    setUserRoles,
+  } = useAdminRbac();
+  const canManageRbac = usePermission(PlatformPermissions.RBAC_MANAGE);
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
+  const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const [withdrawalPin, setWithdrawalPinInput] = useState('');
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [pinDraft, setPinDraft] = useState('');
@@ -131,27 +144,42 @@ const AdminManageBusinesses: React.FC = () => {
     [businesses, editingId]
   );
 
-  const openEdit = (id: string) => {
+  const openEdit = async (id: string) => {
     const target = businesses.find((b) => b.id === id);
     setForm({
       first_name: target?.user.first_name || '',
       last_name: target?.user.last_name || '',
       phone_number: target?.user.phone_number || '',
       name: target?.name || '',
-      is_admin: target?.is_admin || false,
       ai_tokens: target?.ai_tokens ?? 20,
       withdrawal_pin_enabled: target?.withdrawal_pin_enabled ?? false,
     });
+    setSelectedRoleKeys([]);
     setWithdrawalPinInput('');
     setPinDialogOpen(false);
     setPinDraft('');
     setPinDialogError(null);
     setEditingId(id);
+    if (canManageRbac && target?.user_id) {
+      setRolesLoading(true);
+      try {
+        const keys = await getUserRoles(target.user_id);
+        setSelectedRoleKeys(keys);
+      } finally {
+        setRolesLoading(false);
+      }
+    }
   };
 
   const handleSave = async () => {
     if (!editingId) return;
-    await updateBusiness(editingId, form);
+    const target = businesses.find((b) => b.id === editingId);
+    const { is_admin: _ignored, ...payload } = form;
+    void _ignored;
+    await updateBusiness(editingId, payload);
+    if (canManageRbac && target?.user_id) {
+      await setUserRoles(target.user_id, selectedRoleKeys);
+    }
     setEditingId(null);
   };
 
@@ -409,7 +437,7 @@ const AdminManageBusinesses: React.FC = () => {
                   title={b.name}
                   subtitle={`Owner: ${b.user.first_name} ${
                     b.user.last_name
-                  } • Admin: ${b.is_admin ? 'Yes' : 'No'} • Lifecycle: ${
+                  } • Lifecycle: ${
                     b.lifecycle_status ?? 'unknown'
                   }`}
                   accounts={(b.user as any).accounts}
@@ -548,25 +576,52 @@ const AdminManageBusinesses: React.FC = () => {
                   gap: 1.25,
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={600}>
-                      {t('admin.businesses.flags.admin', 'Admin')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'admin.businesses.flags.adminHelp',
-                        'Marks the business as an admin business account.'
-                      )}
-                    </Typography>
-                  </Box>
-                  <Switch
-                    checked={!!form.is_admin}
-                    onChange={(e) =>
-                      setForm((f: any) => ({ ...f, is_admin: e.target.checked }))
+                {canManageRbac && (
+                <Box>
+                  <Typography fontWeight={600} sx={{ mb: 1 }}>
+                    {t('admin.businesses.flags.roles', 'Platform roles')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {t(
+                      'admin.businesses.flags.rolesHelp',
+                      'Assign platform roles for this business owner. Superuser has full access.'
+                    )}
+                  </Typography>
+                  <Autocomplete
+                    multiple
+                    loading={rolesLoading}
+                    options={platformRoles.map((r) => r.key)}
+                    value={selectedRoleKeys}
+                    onChange={(_e, value) => setSelectedRoleKeys(value)}
+                    getOptionLabel={(key) =>
+                      platformRoles.find((r) => r.key === key)?.name || key
                     }
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          label={
+                            platformRoles.find((r) => r.key === option)?.name ||
+                            option
+                          }
+                          {...getTagProps({ index })}
+                          key={option}
+                          size="small"
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        size="small"
+                        placeholder={t(
+                          'admin.businesses.flags.rolesPlaceholder',
+                          'Select roles'
+                        )}
+                      />
+                    )}
                   />
                 </Box>
+                )}
 
                 <Box>
                   <Typography fontWeight={600} sx={{ mb: 1 }}>

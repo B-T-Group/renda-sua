@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
-import { BusinessAdminGuard } from '../admin/business-admin.guard';
+import { AdminAuthModule } from '../admin/admin-auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { BusinessAgentsController } from './business-agents.controller';
 
 @Module({
-  imports: [HasuraModule],
+  imports: [HasuraModule, AdminAuthModule],
   controllers: [BusinessAgentsController],
-  providers: [BusinessAdminGuard],
 })
 export class BusinessAgentsModule {}

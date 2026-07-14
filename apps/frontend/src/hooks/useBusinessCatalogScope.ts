@@ -1,13 +1,19 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PlatformPermissions } from '../constants/platformPermissions';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { usePermission } from './usePermissions';
 
 export function useBusinessCatalogScope() {
   const { profile } = useUserProfileContext();
   const [searchParams, setSearchParams] = useSearchParams();
+  const canCrossBusiness = usePermission(
+    PlatformPermissions.CATALOG_CROSS_BUSINESS
+  );
 
   const ownBusinessId = profile?.business?.id;
-  const isPlatformAdmin = profile?.business?.is_admin === true;
+  const isPlatformAdmin =
+    canCrossBusiness || profile?.business?.is_admin === true;
 
   const effectiveBusinessId = useMemo(() => {
     if (!ownBusinessId) return undefined;

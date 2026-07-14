@@ -129,7 +129,6 @@ insert_permissions:
         - user_id
         - name
         - main_interest
-        - is_admin
   - role: client
     permission:
       check: {}
@@ -228,7 +227,6 @@ update_permissions:
       columns:
         - name
         - updated_at
-        - is_admin
       filter:
         user:
           id:

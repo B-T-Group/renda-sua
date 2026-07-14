@@ -24,8 +24,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useAws } from '../../hooks/useAws';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   AddBusinessLocationData,
   BusinessLocation,
@@ -83,7 +85,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
-  const isAdmin = profile?.business?.is_admin === true;
+  const isAdmin = usePermission(PlatformPermissions.LOCATIONS_COMMISSION);
   const isEditing = !!location;
   const effectiveCountry = isEditing
     ? location?.address?.country

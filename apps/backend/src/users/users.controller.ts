@@ -32,6 +32,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { RbacService } from '../rbac/rbac.service';
 import { derivePersonas, userHasPersona } from './persona.util';
 import { isPersonaId, PersonaId } from './persona.types';
 import {
@@ -134,7 +135,8 @@ export class UsersController {
     private readonly businessReferralsService: BusinessReferralsService,
     private readonly accountDeletionService: AccountDeletionService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly businessContractsService: BusinessContractsService
+    private readonly businessContractsService: BusinessContractsService,
+    private readonly rbacService: RbacService
   ) {}
 
   private scheduleEnsureContract(businessId: string): void {
@@ -165,14 +167,27 @@ export class UsersController {
           'stripe'
         : false;
 
+      const access = await this.rbacService.getEffectiveAccess(user.id);
+      const legacyAdmin = user.business?.is_admin === true;
+      const isSuperuser = access.isSuperuser || legacyAdmin;
+      const business = user.business
+        ? { ...user.business, is_admin: isSuperuser }
+        : user.business;
+
       return {
         success: true,
         user: {
           ...user,
+          business,
           personas: derivePersonas(user),
           country,
           currency,
           is_stripe_enabled: isStripeEnabled,
+          roles: isSuperuser
+            ? Array.from(new Set([...access.roles, 'superuser']))
+            : access.roles,
+          permissions: isSuperuser ? ['*'] : access.permissions,
+          is_superuser: isSuperuser,
         },
         personalAccountCreated,
         userId: this.hasuraUserService.getUserId(),

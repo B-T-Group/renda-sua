@@ -33,6 +33,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   type AdminSiteEventRow,
   type AdminSiteEventSummary,
@@ -130,6 +132,7 @@ const AdminSiteEventsPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile, loading: profileLoading, error: profileError } =
     useUserProfileContext();
+  const canAccess = usePermission(PlatformPermissions.OPS_SITE_EVENTS);
   const { fetchList, fetchSummary, exportCsv, listLoading, exportLoading, error } =
     useAdminSiteEventsApi();
 
@@ -233,7 +236,7 @@ const AdminSiteEventsPage: React.FC = () => {
     );
   }
 
-  if (!profile.business.is_admin) {
+  if (!canAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography color="error">

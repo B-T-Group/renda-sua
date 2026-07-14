@@ -11,6 +11,8 @@ import {
 import React from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import { useAdminUserUploads } from '../../hooks/useAdminUserUploads';
 import { useUserDetails } from '../../hooks/useUserDetails';
 import AdminUserUploadList from '../common/AdminUserUploadList';
@@ -32,8 +34,7 @@ const AdminUserDocumentsPage: React.FC = () => {
   } = useAdminUserUploads(userId || '');
 
   // Check if current user is admin
-  const isAdmin =
-    currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
+  const isAdmin = usePermission(PlatformPermissions.OPS_USER_DOCUMENTS);
 
   if (!isAdmin) {
     return (

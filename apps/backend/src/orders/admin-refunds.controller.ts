@@ -18,6 +18,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { ForceRefundDto } from './admin-refunds.dto';
 import { OrderRefundsService } from './order-refunds.service';
 import { RefundPaymentService } from './refund-payment.service';
@@ -25,6 +27,7 @@ import { RefundPaymentService } from './refund-payment.service';
 @ApiTags('admin')
 @Controller('admin/refunds')
 @UseGuards(AdminAuthGuard)
+@RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
 @ApiBearerAuth()
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AdminRefundsController {

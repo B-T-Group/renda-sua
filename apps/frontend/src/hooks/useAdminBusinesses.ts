@@ -34,7 +34,6 @@ export interface UpdateBusinessPayload {
   last_name?: string;
   phone_number?: string;
   name?: string;
-  is_admin?: boolean;
   ai_tokens?: number;
   withdrawal_pin_enabled?: boolean;
 }

@@ -18,12 +18,12 @@ const BusinessDashboardAdminPage: React.FC = () => {
   const mainInterest =
     profile?.business?.main_interest ?? 'sell_items';
   const isRentalFocused = mainInterest === 'rent_items';
-  const { adminModules } = useBusinessDashboardModules({
+  const { adminModules, hasAdminAccess } = useBusinessDashboardModules({
     aggregates,
     isRentalFocused,
   });
 
-  if (!profile?.business?.is_admin) {
+  if (!hasAdminAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error">

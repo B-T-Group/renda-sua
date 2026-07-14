@@ -22,6 +22,8 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
@@ -78,6 +80,7 @@ export class AdminController {
   ) {}
 
   @Post('message')
+  @RequirePermissions(PlatformPermissions.OPS_USER_MESSAGES)
   async postMessage(
     @Body() messageData: AdminMessageRequest,
     @Req() request: RequestWithUser
@@ -133,6 +136,7 @@ export class AdminController {
   }
 
   @Get('rental-listings/moderation')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({
     summary: 'List rental location listings for moderation (pending by default)',
   })
@@ -164,6 +168,7 @@ export class AdminController {
   }
 
   @Post('rental-listings/:listingId/approve')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({ summary: 'Approve a pending rental listing (visible in public catalog)' })
   @ApiParam({ name: 'listingId', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Listing approved' })
@@ -180,6 +185,7 @@ export class AdminController {
   }
 
   @Post('rental-listings/:listingId/reject')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({
     summary: 'Reject a pending rental listing (requires reason; message + email to business)',
   })
@@ -208,6 +214,7 @@ export class AdminController {
   }
 
   @Get('rental-listings/ai-reviews')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({ summary: 'List AI review decisions for prompt tuning' })
   @ApiQuery({
     name: 'status',
@@ -236,6 +243,7 @@ export class AdminController {
   }
 
   @Get('rental-listings/ai-reviews/:reviewId')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({ summary: 'Get AI review detail for audit' })
   @ApiParam({ name: 'reviewId', format: 'uuid' })
   async getAiReview(@Param('reviewId') reviewId: string) {
@@ -245,6 +253,7 @@ export class AdminController {
   }
 
   @Post('rental-listings/ai-reviews/:reviewId/feedback')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({ summary: 'Agree/disagree with an AI review (prompt tuning)' })
   @ApiParam({ name: 'reviewId', format: 'uuid' })
   @ApiBody({ type: AiReviewFeedbackDto })
@@ -261,6 +270,7 @@ export class AdminController {
   }
 
   @Post('rental-listings/ai-reviews/:reviewId/override')
+  @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
   @ApiOperation({ summary: 'Override an AI review decision' })
   @ApiParam({ name: 'reviewId', format: 'uuid' })
   @ApiBody({ type: AiReviewOverrideDto })
@@ -277,6 +287,7 @@ export class AdminController {
   }
 
   @Get('items/moderation')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({
     summary: 'List sale items for moderation (pending by default)',
   })
@@ -308,6 +319,7 @@ export class AdminController {
   }
 
   @Post('items/:itemId/approve')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({
     summary: 'Approve a pending sale item (sets is_active=true)',
   })
@@ -323,6 +335,7 @@ export class AdminController {
   }
 
   @Post('items/:itemId/reject')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({
     summary:
       'Reject a pending sale item (requires reason; message + email to business)',
@@ -352,6 +365,7 @@ export class AdminController {
   }
 
   @Get('items/ai-reviews')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({ summary: 'List sale-item AI review decisions for prompt tuning' })
   @ApiQuery({
     name: 'status',
@@ -380,6 +394,7 @@ export class AdminController {
   }
 
   @Get('items/ai-reviews/:reviewId')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({ summary: 'Get sale-item AI review detail for audit' })
   @ApiParam({ name: 'reviewId', format: 'uuid' })
   async getItemAiReview(@Param('reviewId') reviewId: string) {
@@ -388,6 +403,7 @@ export class AdminController {
   }
 
   @Post('items/ai-reviews/:reviewId/feedback')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({
     summary: 'Agree/disagree with a sale-item AI review (prompt tuning)',
   })
@@ -406,6 +422,7 @@ export class AdminController {
   }
 
   @Post('items/ai-reviews/:reviewId/override')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({ summary: 'Override a sale-item AI review decision' })
   @ApiParam({ name: 'reviewId', format: 'uuid' })
   @ApiBody({ type: ItemAiReviewOverrideDto })
@@ -422,6 +439,7 @@ export class AdminController {
   }
 
   @Get('agents')
+  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
   async getAgents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -446,6 +464,7 @@ export class AdminController {
   }
 
   @Post('agents/:id/restore')
+  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
   @ApiOperation({
     summary: 'Restore suspended agent',
     description:
@@ -479,6 +498,7 @@ export class AdminController {
   }
 
   @Patch('agents/:id')
+  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
   async updateAgent(@Param('id') agentId: string, @Body() body: any) {
     try {
       const {
@@ -526,6 +546,7 @@ export class AdminController {
   }
 
   @Get('agents/:agentId/id-documents')
+  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
   async getAgentIdDocuments(@Param('agentId') agentId: string) {
     try {
       const result = await this.adminService.getAgentIdDocuments(agentId);
@@ -540,6 +561,7 @@ export class AdminController {
   }
 
   @Get('clients')
+  @RequirePermissions(PlatformPermissions.MANAGE_CLIENTS)
   async getClients(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -562,6 +584,7 @@ export class AdminController {
   }
 
   @Get('businesses')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   async getBusinesses(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -584,6 +607,7 @@ export class AdminController {
   }
 
   @Get('businesses/:id/verification')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Get business verification details for admin review' })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   async getBusinessVerification(@Param('id') businessId: string) {
@@ -599,6 +623,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/payment-accounts/:provider/verify')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Verify business payment account (e.g. mobile money)' })
   async verifyBusinessPayment(
     @Param('id') businessId: string,
@@ -614,6 +639,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/payment-accounts/:provider/reject')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Reject business payment account verification' })
   async rejectBusinessPayment(
     @Param('id') businessId: string,
@@ -629,6 +655,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/suspend')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Suspend a business merchant account' })
   async suspendBusiness(
     @Param('id') businessId: string,
@@ -644,6 +671,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/reinstate')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Reinstate a suspended business merchant account' })
   async reinstateBusiness(
     @Param('id') businessId: string,
@@ -657,6 +685,7 @@ export class AdminController {
   }
 
   @Get('businesses/:id/contract')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Get business contract history' })
   async getBusinessContract(@Param('id') businessId: string) {
     const data = await this.adminService.getBusinessContractHistory(businessId);
@@ -664,6 +693,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/contract/resend')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Resend merchant contract' })
   async resendBusinessContract(@Param('id') businessId: string) {
     const data = await this.adminService.resendBusinessContract(businessId);
@@ -671,6 +701,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/contract/regenerate')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Regenerate merchant contract document' })
   async regenerateBusinessContract(@Param('id') businessId: string) {
     await this.adminService.regenerateBusinessContract(businessId);
@@ -678,6 +709,7 @@ export class AdminController {
   }
 
   @Get('businesses/:id/contract/:contractId/download')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Download signed contract PDF (admin)' })
   async downloadBusinessContract(
     @Param('id') businessId: string,
@@ -692,6 +724,7 @@ export class AdminController {
   }
 
   @Get('businesses/:id/contract/:contractId/audit-certificate')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Download contract audit certificate (admin)' })
   async downloadContractAudit(
     @Param('id') businessId: string,
@@ -706,6 +739,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/contract/:contractId/invalidate')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Invalidate a signed contract' })
   async invalidateContract(
     @Param('contractId') contractId: string,
@@ -721,6 +755,7 @@ export class AdminController {
   }
 
   @Get('contract-templates')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'List contract template versions' })
   async listContractTemplates() {
     const data = await this.adminService.listContractTemplates();
@@ -728,6 +763,7 @@ export class AdminController {
   }
 
   @Post('contract-templates')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Create a contract template version' })
   async createContractTemplate(
     @Body()
@@ -748,6 +784,7 @@ export class AdminController {
   }
 
   @Patch('contract-templates/:id/activate')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
   @ApiOperation({ summary: 'Activate a contract template version' })
   async activateContractTemplate(@Param('id') templateId: string) {
     await this.adminService.activateContractTemplate(templateId);
@@ -755,10 +792,11 @@ export class AdminController {
   }
 
   @Patch('businesses/:id')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({
     summary: 'Update a business (admin only)',
     description:
-      'Only business accounts with is_admin can update businesses. Supports name, is_admin, ai_tokens, and owner user fields.',
+      'Update business name, ai_tokens, withdrawal PIN flag, and owner user fields. Platform roles are managed via /admin/rbac.',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiBody({
@@ -766,7 +804,6 @@ export class AdminController {
       type: 'object',
       properties: {
         name: { type: 'string' },
-        is_admin: { type: 'boolean' },
         ai_tokens: { type: 'integer' },
         withdrawal_pin_enabled: { type: 'boolean' },
         first_name: { type: 'string' },
@@ -782,7 +819,6 @@ export class AdminController {
     @Body()
     body: {
       name?: string;
-      is_admin?: boolean;
       ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
       first_name?: string;
@@ -803,12 +839,10 @@ export class AdminController {
 
       const businessUpdates: {
         name?: string;
-        is_admin?: boolean;
         ai_tokens?: number;
         withdrawal_pin_enabled?: boolean;
       } = {};
       if (typeof body.name === 'string') businessUpdates.name = body.name;
-      if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
       if (typeof body.ai_tokens === 'number') {
         if (!Number.isInteger(body.ai_tokens) || body.ai_tokens < 0) {
           return {
@@ -837,6 +871,7 @@ export class AdminController {
   }
 
   @Post('businesses/:id/withdrawal-pin')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
   @ApiOperation({ summary: 'Set or clear a business withdrawal PIN (admin only)' })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiBody({
@@ -878,6 +913,7 @@ export class AdminController {
   }
 
   @Get('users/:id/uploads')
+  @RequirePermissions(PlatformPermissions.OPS_USER_DOCUMENTS)
   async getUserUploads(
     @Param('id') userId: string,
     @Query('page') page?: string,
@@ -900,6 +936,7 @@ export class AdminController {
   }
 
   @Get('users/:id/messages')
+  @RequirePermissions(PlatformPermissions.OPS_USER_MESSAGES)
   async getUserMessages(
     @Param('id') userId: string,
     @Query('page') page?: string,
@@ -922,6 +959,7 @@ export class AdminController {
   }
 
   @Get('users/:id')
+  @RequirePermissions(PlatformPermissions.MANAGE_CLIENTS)
   async getUserDetails(@Param('id') userId: string) {
     try {
       const result = await this.adminService.getUserDetails(userId);
@@ -936,6 +974,7 @@ export class AdminController {
   }
 
   @Get('commission-users')
+  @RequirePermissions(PlatformPermissions.FINANCIAL_COMMISSIONS)
   @ApiOperation({
     summary: 'Get commission users',
     description:
@@ -987,6 +1026,7 @@ export class AdminController {
   }
 
   @Get('accounts/:accountId/transactions')
+  @RequirePermissions(PlatformPermissions.FINANCIAL_COMMISSIONS)
   @ApiOperation({
     summary: 'Get account transactions',
     description:
@@ -1078,6 +1118,7 @@ export class AdminController {
   }
 
   @Get('application-setup')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION_SETUP)
   @ApiOperation({
     summary: 'Get application setup for a country',
     description:
@@ -1126,6 +1167,7 @@ export class AdminController {
   }
 
   @Get('country-onboarding/:countryCode')
+  @RequirePermissions(PlatformPermissions.CONFIG_COUNTRY_ONBOARDING)
   @ApiOperation({
     summary: 'Get country onboarding configuration',
     description:
@@ -1175,6 +1217,7 @@ export class AdminController {
   }
 
   @Post('country-onboarding/apply')
+  @RequirePermissions(PlatformPermissions.CONFIG_COUNTRY_ONBOARDING)
   @ApiOperation({
     summary: 'Apply country onboarding configuration',
     description:
@@ -1203,6 +1246,7 @@ export class AdminController {
   }
 
   @Get('location-transfers')
+  @RequirePermissions(PlatformPermissions.LOCATIONS_TRANSFERS_ADMIN)
   @ApiOperation({ summary: 'List all business location transfer requests' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -1232,6 +1276,7 @@ export class AdminController {
   }
 
   @Post('location-transfers/:id/cancel')
+  @RequirePermissions(PlatformPermissions.LOCATIONS_TRANSFERS_ADMIN)
   @ApiOperation({ summary: 'Cancel a pending location transfer as admin' })
   @ApiParam({ name: 'id', description: 'Transfer request UUID' })
   async cancelLocationTransfer(

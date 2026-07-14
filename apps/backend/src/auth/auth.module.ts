@@ -6,6 +6,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
 import { LoginController } from './login.controller';
@@ -18,6 +19,7 @@ import { SignupService } from './signup.service';
   imports: [
     ConfigModule,
     HasuraModule,
+    RbacModule,
     AddressesModule,
     AgentsModule,
     BusinessReferralsModule,
@@ -35,6 +37,13 @@ import { SignupService } from './signup.service';
       useClass: AuthGuard,
     },
   ],
-  exports: [AuthGuard, PermissionService, Auth0Service, SignupService, LoginService],
+  exports: [
+    AuthGuard,
+    PermissionService,
+    Auth0Service,
+    SignupService,
+    LoginService,
+    RbacModule,
+  ],
 })
 export class AuthModule {}

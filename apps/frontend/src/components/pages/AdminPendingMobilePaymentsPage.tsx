@@ -22,6 +22,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   type PendingMobilePaymentRow,
   type ProviderStatusResponse,
@@ -38,6 +40,9 @@ const AdminPendingMobilePaymentsPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile, loading: profileLoading, error: profileError } =
     useUserProfileContext();
+  const canAccess = usePermission(
+    PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS
+  );
   const {
     items,
     loading,
@@ -159,7 +164,7 @@ const AdminPendingMobilePaymentsPage: React.FC = () => {
     );
   }
 
-  if (!profile.business.is_admin) {
+  if (!canAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography color="error">

@@ -14,16 +14,21 @@ import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { ConfigurationsController } from './configurations.controller';
 import { ConfigurationsService } from './configurations.service';
+import { RbacAdminController } from './rbac-admin.controller';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
 import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { WithdrawalPinService } from './withdrawal-pin.service';
+import { RbacModule } from '../rbac/rbac.module';
+import { AdminAuthModule } from './admin-auth.module';
 
 @Module({
   imports: [
     AuthModule,
+    AdminAuthModule,
+    RbacModule,
     HasuraModule,
     NotificationsModule,
     SiteEventsModule,
@@ -34,7 +39,12 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     ItemAiReviewModule,
     ImageValidationModule,
   ],
-  controllers: [AdminController, ConfigurationsController, AdminSiteEventsController],
+  controllers: [
+    AdminController,
+    ConfigurationsController,
+    AdminSiteEventsController,
+    RbacAdminController,
+  ],
   providers: [
     AdminMessageService,
     AdminService,
@@ -46,6 +56,8 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
     WithdrawalPinService,
   ],
   exports: [
+    AdminAuthModule,
+    RbacModule,
     AdminMessageService,
     AdminService,
     ConfigurationsService,

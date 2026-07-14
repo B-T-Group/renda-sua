@@ -56,6 +56,7 @@ const BusinessDashboard: React.FC = () => {
     primaryCatalogModules,
     catalogMenuHubModule,
     adminHubModule,
+    hasAdminAccess,
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
   const showFirstSaleCta =
@@ -102,7 +103,9 @@ const BusinessDashboard: React.FC = () => {
             canAcceptOrders={verificationStatus?.can_accept_orders}
             isStorefrontVisible={verificationStatus?.is_storefront_visible}
           />
-          {profile.business.is_admin && <StatusBadge type="admin" />}
+          {(hasAdminAccess || profile.business.is_admin) && (
+            <StatusBadge type="admin" />
+          )}
         </Box>
       </Box>
 
@@ -199,7 +202,7 @@ const BusinessDashboard: React.FC = () => {
         {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
       </BusinessDashboardSection>
 
-      {profile.business.is_admin && (
+      {hasAdminAccess && (
         <BusinessDashboardSection
           title={t('business.dashboard.adminManagement')}
           subtitle={t(

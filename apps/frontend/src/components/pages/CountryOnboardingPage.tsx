@@ -23,6 +23,8 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   CountryOnboardingConfig,
   useCountryOnboardingConfig,
@@ -39,6 +41,7 @@ const CountryOnboardingPage: React.FC = () => {
   const { t } = useTranslation();
   const { module: countryStateCity } = useCountryStateCity();
   const { profile, loading, error } = useUserProfileContext();
+  const canAccess = usePermission(PlatformPermissions.CONFIG_COUNTRY_ONBOARDING);
   const {
     data,
     loading: loadingConfig,
@@ -182,7 +185,7 @@ const CountryOnboardingPage: React.FC = () => {
     );
   }
 
-  if (!profile?.business || !profile.business.is_admin) {
+  if (!canAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography variant="h6" color="error">

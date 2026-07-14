@@ -26,6 +26,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   useItemModeration,
   type ItemModerationQueueStatus,
@@ -35,8 +37,7 @@ import ItemModerationStatusChip from '../business/ItemModerationStatusChip';
 const AdminItemsModerationPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
-  const isAdmin =
-    profile?.user_type_id === 'business' && profile?.business?.is_admin;
+  const isAdmin = usePermission(PlatformPermissions.MODERATE_ITEMS);
   const {
     items,
     pagination,

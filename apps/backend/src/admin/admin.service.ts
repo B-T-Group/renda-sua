@@ -444,7 +444,6 @@ export class AdminService {
     businessId: string,
     updates: {
       name?: string;
-      is_admin?: boolean;
       ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
       withdrawal_pin_hashed?: string | null;
@@ -536,7 +535,6 @@ export class AdminService {
     },
     businessUpdates: {
       name?: string;
-      is_admin?: boolean;
       ai_tokens?: number;
       withdrawal_pin_enabled?: boolean;
     }
@@ -555,10 +553,11 @@ export class AdminService {
     const updatedBusiness = Object.keys(businessUpdates || {}).length
       ? await this.updateBusinessRecord(businessId, businessUpdates)
       : null;
-    if (businessUpdates.is_admin === true) {
-      await this.ensureSuperUserAiTokens(businessId);
-    }
     return { user: updatedUser, business: updatedBusiness };
+  }
+
+  async ensureSuperUserAiTokensForBusiness(businessId: string): Promise<void> {
+    await this.ensureSuperUserAiTokens(businessId);
   }
 
   private async ensureSuperUserAiTokens(businessId: string): Promise<void> {

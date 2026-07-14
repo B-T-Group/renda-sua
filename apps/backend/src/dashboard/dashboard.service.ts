@@ -1,6 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { PermissionService } from '../auth/permission.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 
 export interface DashboardAggregatesDto {
   ordersTotal: number;
@@ -35,7 +38,9 @@ export interface ClientCitiesDto {
 export class DashboardService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly permissionService: PermissionService,
+    private readonly rbacService: RbacService
   ) {}
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
@@ -47,7 +52,7 @@ export class DashboardService {
       );
     }
     const businessId = user.business.id;
-    const isAdmin = user.business.is_admin === true;
+    const includePlatformStats = await this.canViewPlatformStats(user.id);
 
     const [
       ordersByStatus,
@@ -68,7 +73,9 @@ export class DashboardService {
       this.getInventoryCount(businessId),
       this.getPendingFailedDeliveriesCount(businessId),
       this.getUniqueClientCount(businessId),
-      isAdmin ? this.getAdminAggregates() : Promise.resolve(null),
+      includePlatformStats
+        ? this.getAdminAggregates()
+        : Promise.resolve(null),
     ]);
 
     const ordersTotal = Object.values(ordersByStatus).reduce((a, b) => a + b, 0);
@@ -92,6 +99,16 @@ export class DashboardService {
       result.businessesNotVerified = adminAggregates.businessesNotVerified;
     }
     return result;
+  }
+
+  private async canViewPlatformStats(userId: string): Promise<boolean> {
+    if (await this.permissionService.isBusinessAdmin(userId)) return true;
+    return this.rbacService.hasAnyPermission(userId, [
+      PlatformPermissions.DASHBOARD_PLATFORM_STATS,
+      PlatformPermissions.MANAGE_AGENTS,
+      PlatformPermissions.MANAGE_CLIENTS,
+      PlatformPermissions.MANAGE_BUSINESSES,
+    ]);
   }
 
   async getClientCities(): Promise<ClientCitiesDto> {

@@ -92,6 +92,7 @@ export interface UserProfile {
     user_id: string;
     name: string;
     main_interest?: 'sell_items' | 'rent_items';
+    /** @deprecated Prefer is_superuser / roles; kept as dual-read alias */
     is_admin: boolean;
     is_verified: boolean;
     ai_tokens?: number;
@@ -109,6 +110,10 @@ export interface UserProfile {
   /** Display currency from supported_country_states */
   currency?: string | null;
   is_stripe_enabled?: boolean;
+  /** Platform RBAC from GET /users/me */
+  roles?: string[];
+  permissions?: string[];
+  is_superuser?: boolean;
 }
 
 export interface UserProfileResponse {

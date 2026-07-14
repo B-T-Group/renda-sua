@@ -28,7 +28,9 @@ export class BusinessItemsAccessService {
       );
     }
 
-    const isPlatformAdmin = user.business?.is_admin === true;
+    const isPlatformAdmin = await this.permissionService.isBusinessAdmin(
+      user.id
+    );
     const targetBusinessId = requestedBusinessId ?? ownBusinessId;
     const isOwnBusiness = targetBusinessId === ownBusinessId;
 

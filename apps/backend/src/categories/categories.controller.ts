@@ -20,6 +20,8 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { Public } from '../auth/public.decorator';
 import { CategoriesService } from './categories.service';
 
@@ -123,6 +125,7 @@ export class CategoriesController {
 
   @Post()
   @UseGuards(AdminAuthGuard)
+  @RequirePermissions(PlatformPermissions.CONTENT_TAXONOMY)
   @ApiOperation({ summary: 'Create a new category (Admin only)' })
   @ApiResponse({
     status: 201,
@@ -163,6 +166,7 @@ export class CategoriesController {
 
   @Put(':id')
   @UseGuards(AdminAuthGuard)
+  @RequirePermissions(PlatformPermissions.CONTENT_TAXONOMY)
   @ApiOperation({ summary: 'Update a category (Admin only)' })
   @ApiResponse({
     status: 200,
@@ -217,6 +221,7 @@ export class CategoriesController {
 
   @Delete(':id')
   @UseGuards(AdminAuthGuard)
+  @RequirePermissions(PlatformPermissions.CONTENT_TAXONOMY)
   @ApiOperation({ summary: 'Delete a category (Admin only)' })
   @ApiResponse({
     status: 200,

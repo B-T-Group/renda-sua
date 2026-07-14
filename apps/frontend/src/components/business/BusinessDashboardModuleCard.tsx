@@ -38,6 +38,8 @@ export interface BusinessDashboardModule {
   color: string;
   path: string;
   orderCountByStatus?: Record<string, number>;
+  /** Platform permission required to show this admin module */
+  requiredPermission?: string;
   showBadge?: boolean;
   countBreakdown?: {
     verified: number;

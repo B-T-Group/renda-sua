@@ -13,6 +13,8 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import { useApplicationSetup } from '../../hooks/useApplicationSetup';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { ApplicationConfigurationsSection } from '../admin/ApplicationConfigurationsSection';
@@ -37,7 +39,7 @@ const ApplicationSetupPage: React.FC = () => {
   const [stateFilter, setStateFilter] = useState<string>('all');
 
   const isBusinessAdmin =
-    !!profile?.business && profile.business.is_admin === true;
+    usePermission(PlatformPermissions.CONFIG_APPLICATION_SETUP);
 
   useEffect(() => {
     fetchSetup(countryCode);

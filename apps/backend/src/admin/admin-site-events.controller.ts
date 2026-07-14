@@ -18,6 +18,8 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminSiteEventsQueryDto } from './dto/admin-site-events-query.dto';
 import { SiteEventsService } from '../site-events/site-events.service';
 
@@ -30,6 +32,7 @@ const QUERY_PIPE = new ValidationPipe({
 @Controller('admin/site-events')
 @SkipThrottle()
 @UseGuards(AdminAuthGuard)
+@RequirePermissions(PlatformPermissions.OPS_SITE_EVENTS)
 @UsePipes(QUERY_PIPE)
 @ApiBearerAuth()
 export class AdminSiteEventsController {

@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { PlatformRoles } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { isActivePersona } from '../users/persona.util';
 
 @Injectable()
 export class PermissionService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly rbacService: RbacService
   ) {}
 
   /**
@@ -146,26 +149,24 @@ export class PermissionService {
   }
 
   /**
-   * Check if user is a business with admin privileges
-   * @param userId User ID to check
-   * @returns Promise<boolean> True if user is a business admin
+   * Platform superuser via RBAC role `superuser`, with dual-read of
+   * legacy `businesses.is_admin` until that column is fully retired.
    */
   async isBusinessAdmin(userId: string): Promise<boolean> {
     try {
-      const businessQuery = `
+      if (await this.rbacService.hasRole(userId, PlatformRoles.SUPERUSER)) {
+        return true;
+      }
+      const businessResult = await this.hasuraSystemService.executeQuery(
+        `
         query GetBusinessAdminStatus($userId: uuid!) {
-          businesses(where: {user_id: {_eq: $userId}}) {
-            id
+          businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
             is_admin
           }
         }
-      `;
-
-      const businessResult = await this.hasuraUserService.executeQuery(
-        businessQuery,
+      `,
         { userId }
       );
-
       return businessResult.businesses?.[0]?.is_admin === true;
     } catch (error) {
       console.error('Error checking business admin status:', error);

@@ -28,6 +28,8 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { Link as RouterLink } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { PlatformPermissions } from '../../constants/platformPermissions';
+import { usePermission } from '../../hooks/usePermissions';
 import {
   useRentalListingAiReviews,
   type AdminAiReviewDetail,
@@ -48,8 +50,7 @@ const AdminRentalAiReviewsPage: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
-  const isAdmin =
-    profile?.user_type_id === 'business' && profile?.business?.is_admin;
+  const isAdmin = usePermission(PlatformPermissions.MODERATE_RENTALS);
   const {
     reviews,
     pagination,

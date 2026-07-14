@@ -18,6 +18,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { PermissionService } from '../auth/permission.service';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { Public } from '../auth/public.decorator';
 import { BrandsService } from './brands.service';
@@ -38,7 +41,8 @@ export interface UpdateBrandDto {
 export class BrandsController {
   constructor(
     private readonly brandsService: BrandsService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly permissionService: PermissionService
   ) {}
 
   @Get()
@@ -141,7 +145,7 @@ export class BrandsController {
         );
       }
 
-      const isSuperUser = !!user.business.is_admin;
+      const isSuperUser = await this.permissionService.isBusinessAdmin(user.id);
 
       const brand = await this.brandsService.createBrand(
         createBrandDto,
@@ -166,6 +170,7 @@ export class BrandsController {
 
   @Put(':id')
   @UseGuards(AdminAuthGuard)
+  @RequirePermissions(PlatformPermissions.CONTENT_BRANDS)
   @ApiOperation({ summary: 'Update a brand (Admin only)' })
   @ApiResponse({
     status: 200,
@@ -216,6 +221,7 @@ export class BrandsController {
 
   @Delete(':id')
   @UseGuards(AdminAuthGuard)
+  @RequirePermissions(PlatformPermissions.CONTENT_BRANDS)
   @ApiOperation({ summary: 'Delete a brand (Admin only)' })
   @ApiResponse({
     status: 200,

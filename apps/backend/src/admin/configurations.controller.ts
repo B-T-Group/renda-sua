@@ -19,6 +19,8 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import {
   ApplicationConfiguration,
   ConfigurationsService,
@@ -37,6 +39,7 @@ export class ConfigurationsController {
   constructor(private readonly configurationsService: ConfigurationsService) {}
 
   @Get()
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Get all application configurations',
     description:
@@ -99,6 +102,7 @@ export class ConfigurationsController {
   }
 
   @Get(':id')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Get configuration by ID',
     description: 'Retrieve a specific configuration by its ID',
@@ -144,6 +148,7 @@ export class ConfigurationsController {
   }
 
   @Get('key/:key')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Get configuration by key',
     description: 'Retrieve configuration by key with optional country filter',
@@ -196,6 +201,7 @@ export class ConfigurationsController {
   }
 
   @Patch(':id')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Update configuration',
     description:
@@ -253,6 +259,7 @@ export class ConfigurationsController {
   }
 
   @Delete(':id')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Delete configuration',
     description: 'Delete a configuration by its ID',
