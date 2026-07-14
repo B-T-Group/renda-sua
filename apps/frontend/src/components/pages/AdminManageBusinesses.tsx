@@ -837,7 +837,8 @@ const AdminManageBusinesses: React.FC = () => {
                     'No merchant agreement on file. Ask the business to sign the agreement in the app.'
                   )}
                 </Alert>
-              ) : (
+              ) : null}
+              {verificationDetails?.latestAcceptance ? (
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>
                     {t('admin.businesses.merchantAgreement', 'Merchant agreement')}
@@ -847,7 +848,7 @@ const AdminManageBusinesses: React.FC = () => {
                     {verificationDetails.latestAcceptance.signer_legal_name} (
                     {verificationDetails.latestAcceptance.agreement_version})
                   </Typography>
-                  {verificationDetails.latestAcceptance.pdf_upload_id && (
+                  {verificationDetails.latestAcceptance.pdf_upload_id ? (
                     <Button
                       size="small"
                       sx={{ mt: 1 }}
@@ -867,9 +868,9 @@ const AdminManageBusinesses: React.FC = () => {
                     >
                       {t('admin.businesses.viewAgreementPdf', 'View signed PDF')}
                     </Button>
-                  )}
+                  ) : null}
                 </Box>
-              )}
+              ) : null}
 
               {(verificationDetails?.identityDocuments?.length ?? 0) === 0 ? (
                 <Alert severity="info">
