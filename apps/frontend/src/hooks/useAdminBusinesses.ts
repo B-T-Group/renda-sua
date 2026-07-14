@@ -12,6 +12,12 @@ export interface AdminBusinessUser {
   phone_number?: string;
 }
 
+export interface AdminBusinessVerificationSummary {
+  contractStatus: string;
+  contractComplete: boolean;
+  idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+}
+
 export interface AdminBusiness {
   id: string;
   user_id: string;
@@ -26,6 +32,7 @@ export interface AdminBusiness {
   updated_at: string;
   user: AdminBusinessUser;
   addresses: any[];
+  verificationSummary?: AdminBusinessVerificationSummary;
 }
 
 export interface UpdateBusinessPayload {

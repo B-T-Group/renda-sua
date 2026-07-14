@@ -13,6 +13,10 @@ export interface SendFromTemplateParams {
   reminderIntervalDays?: number;
 }
 
+export type RemindDocumentResult =
+  | { success: true }
+  | { success: false; rateLimited: boolean; message: string };
+
 @Injectable()
 export class BoldsignClientService {
   private readonly http: AxiosInstance;
@@ -85,19 +89,40 @@ export class BoldsignClientService {
     return Buffer.from(res.data);
   }
 
-  async remindDocument(documentId: string, message?: string): Promise<void> {
-    await this.http.post(
-      '/v1/document/remind',
-      {
-        message:
-          message?.trim() ||
-          'Please sign your merchant agreement to continue.',
-      },
-      {
-        params: { documentId },
-        headers: { 'Content-Type': 'application/json' },
-      }
+  async remindDocument(
+    documentId: string,
+    message?: string
+  ): Promise<RemindDocumentResult> {
+    try {
+      await this.http.post(
+        '/v1/document/remind',
+        {
+          message:
+            message?.trim() ||
+            'Please sign your merchant agreement to continue.',
+        },
+        {
+          params: { documentId },
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      return { success: true };
+    } catch (error: any) {
+      return this.mapRemindError(error);
+    }
+  }
+
+  private mapRemindError(error: any): RemindDocumentResult {
+    const status = error?.response?.status as number | undefined;
+    const message = String(
+      error?.response?.data?.error ||
+        error?.message ||
+        'Failed to send reminder'
     );
+    const rateLimited =
+      status === 403 &&
+      /reminder.*limit|cannot send another reminder/i.test(message);
+    return { success: false, rateLimited, message };
   }
 
   async revokeDocument(documentId: string, message?: string): Promise<void> {

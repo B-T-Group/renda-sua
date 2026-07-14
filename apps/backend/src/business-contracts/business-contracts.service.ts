@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   forwardRef,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -13,7 +15,10 @@ import type { BoldSignConfig, Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { BoldsignClientService } from './boldsign-client.service';
+import {
+  BoldsignClientService,
+  type RemindDocumentResult,
+} from './boldsign-client.service';
 import {
   canTransitionContractStatus,
   mapBoldSignEventToStatus,
@@ -154,11 +159,31 @@ export class BusinessContractsService {
     const latest = await this.db.getLatestContract(businessId);
     if (latest && (latest.status === 'sent' || latest.status === 'viewed')) {
       if (!latest.boldsign_document_id.startsWith('legacy:')) {
-        await this.boldsign.remindDocument(latest.boldsign_document_id);
+        const result = await this.boldsign.remindDocument(
+          latest.boldsign_document_id
+        );
+        this.throwIfRemindFailed(result);
+        await this.db.updateContract(latest.id, {
+          last_reminded_at: new Date().toISOString(),
+        });
       }
       return latest;
     }
     return this.createAndSendContract(businessId);
+  }
+
+  private throwIfRemindFailed(result: RemindDocumentResult): void {
+    if (result.success) return;
+    throw new HttpException(
+      {
+        success: false,
+        error: result.message,
+        rateLimited: result.rateLimited,
+      },
+      result.rateLimited
+        ? HttpStatus.TOO_MANY_REQUESTS
+        : HttpStatus.BAD_GATEWAY
+    );
   }
 
   async handleWebhookEvent(

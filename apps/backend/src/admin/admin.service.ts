@@ -337,26 +337,150 @@ export class AdminService {
     const { page, limit, search } = params;
     const offset = (page - 1) * limit;
     const query = `
-      query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
-        businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_verified lifecycle_status is_storefront_visible can_accept_orders ai_tokens withdrawal_pin_enabled created_at updated_at
-          user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
-          business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+      query GetBusinesses(
+        $where: businesses_bool_exp
+        $limit: Int!
+        $offset: Int!
+        $idNames: [String!]
+      ) {
+        businesses(
+          where: $where
+          limit: $limit
+          offset: $offset
+          order_by: { created_at: desc }
+        ) {
+          id
+          user_id
+          name
+          is_verified
+          lifecycle_status
+          is_storefront_visible
+          can_accept_orders
+          ai_tokens
+          withdrawal_pin_enabled
+          merchant_agreement_accepted_at
+          created_at
+          updated_at
+          user {
+            id
+            email
+            first_name
+            last_name
+            phone_number
+            accounts {
+              id
+              currency
+              available_balance
+              withheld_balance
+              total_balance
+              is_active
+              created_at
+              updated_at
+            }
+            user_uploads(
+              where: { document_type: { name: { _in: $idNames } } }
+              order_by: { created_at: desc }
+              limit: 5
+            ) {
+              id
+              is_approved
+              note
+            }
+          }
+          business_contracts(order_by: { created_at: desc }, limit: 1) {
+            id
+            status
+            signed_at
+            contract_version
+            invalidated_at
+          }
+          business_addresses(
+            where: { address: { status: { _eq: active } } }
+          ) {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              latitude
+              longitude
+              created_at
+              updated_at
+            }
+          }
         }
-        businesses_aggregate(where: $where) { aggregate { count } }
+        businesses_aggregate(where: $where) {
+          aggregate {
+            count
+          }
+        }
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
       where: this.buildBusinessWhere(search),
       limit,
       offset,
+      idNames: ['id_card', 'passport', 'driver_license'],
     });
-    const items = (result.businesses || []).map((b: any) => ({
-      ...b,
-      addresses: (b.business_addresses || []).map((x: any) => x.address),
-    }));
+    const items = (result.businesses || []).map((b: any) => {
+      const {
+        business_contracts: _contracts,
+        business_addresses,
+        user,
+        ...rest
+      } = b;
+      const { user_uploads: _uploads, ...userRest } = user || {};
+      return {
+        ...rest,
+        user: userRest,
+        addresses: (business_addresses || []).map((x: any) => x.address),
+        verificationSummary: this.buildVerificationSummary(b),
+      };
+    });
     const total = result.businesses_aggregate?.aggregate?.count || 0;
     return { items, total, page, limit };
+  }
+
+  private buildVerificationSummary(business: any): {
+    contractStatus: string;
+    contractComplete: boolean;
+    idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+  } {
+    const contract = business.business_contracts?.[0] ?? null;
+    const legacySigned = !!business.merchant_agreement_accepted_at;
+    const boldSignSigned =
+      contract?.status === 'signed' && !contract?.invalidated_at;
+    const contractComplete = boldSignSigned || legacySigned;
+    let contractStatus = 'missing';
+    if (boldSignSigned) {
+      contractStatus = 'signed';
+    } else if (legacySigned) {
+      contractStatus = 'legacy_signed';
+    } else if (contract?.status) {
+      contractStatus = String(contract.status);
+    }
+    return {
+      contractStatus,
+      contractComplete,
+      idDocumentStatus: this.resolveIdDocumentStatus(
+        business.user?.user_uploads ?? []
+      ),
+    };
+  }
+
+  private resolveIdDocumentStatus(
+    uploads: Array<{ is_approved?: boolean; note?: string | null }>
+  ): 'missing' | 'pending' | 'rejected' | 'approved' {
+    if (!uploads.length) return 'missing';
+    if (uploads.some((u) => u.is_approved)) return 'approved';
+    const latest = uploads[0];
+    if (latest?.note?.trim()) return 'rejected';
+    return 'pending';
   }
 
   async getAgentsWithDetails() {

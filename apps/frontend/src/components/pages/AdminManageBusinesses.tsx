@@ -1,5 +1,6 @@
 import {
   Block as BlockIcon,
+  CheckCircle as CheckCircleIcon,
   Edit as EditIcon,
   Refresh as RefreshIcon,
   VerifiedUser as VerifiedUserIcon,
@@ -25,10 +26,11 @@ import {
   InputLabel,
   List,
   ListItem,
-  ListItemSecondaryAction,
   ListItemText,
   MenuItem,
+  Paper,
   Select,
+  Stack,
   Switch,
   TextField,
   Typography,
@@ -40,6 +42,7 @@ import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
 import { useAdminRbac } from '../../hooks/useAdminRbac';
 import { usePermission } from '../../hooks/usePermissions';
 import { PlatformPermissions } from '../../constants/platformPermissions';
+import { AdminBusinessVerificationSteps } from '../admin/AdminBusinessVerificationSteps';
 import AdminUserCard from '../common/AdminUserCard';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { PinCodeFields } from '../common/PinCodeFields';
@@ -139,6 +142,10 @@ const AdminManageBusinesses: React.FC = () => {
   const [rejectMessage, setRejectMessage] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
   const [contractActionLoading, setContractActionLoading] = useState(false);
+  const [contractActionError, setContractActionError] = useState<string | null>(
+    null
+  );
+  const [approveLoadingId, setApproveLoadingId] = useState<string | null>(null);
 
   const current = useMemo(
     () => businesses.find((b) => b.id === editingId),
@@ -254,13 +261,28 @@ const AdminManageBusinesses: React.FC = () => {
   const handleResendContract = useCallback(async () => {
     if (!apiClient || !verificationBusinessId) return;
     setContractActionLoading(true);
+    setContractActionError(null);
     try {
-      await apiClient.post(`/admin/businesses/${verificationBusinessId}/contract/resend`);
+      await apiClient.post(
+        `/admin/businesses/${verificationBusinessId}/contract/resend`
+      );
       await fetchVerificationDetails(verificationBusinessId);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t(
+          'admin.businesses.resendContractFailed',
+          'Could not resend the contract reminder.'
+        );
+      setContractActionError(
+        typeof message === 'string' ? message : String(message)
+      );
     } finally {
       setContractActionLoading(false);
     }
-  }, [apiClient, verificationBusinessId, fetchVerificationDetails]);
+  }, [apiClient, verificationBusinessId, fetchVerificationDetails, t]);
 
   const handleDownloadContract = useCallback(
     async (contractId: string) => {
@@ -283,6 +305,7 @@ const AdminManageBusinesses: React.FC = () => {
   useEffect(() => {
     if (verificationBusinessId) {
       setNameMatchConfirmed(false);
+      setContractActionError(null);
       void fetchVerificationDetails(verificationBusinessId);
     } else {
       setVerificationDetails(null);
@@ -357,12 +380,50 @@ const AdminManageBusinesses: React.FC = () => {
         setRejectingDocId(null);
         setRejectMessage('');
         await fetchVerificationDetails(verificationBusinessId);
+        await fetchBusinesses();
       } finally {
         setRejectLoading(false);
       }
     },
-    [apiClient, rejectMessage, verificationBusinessId, fetchVerificationDetails]
+    [
+      apiClient,
+      rejectMessage,
+      verificationBusinessId,
+      fetchVerificationDetails,
+      fetchBusinesses,
+    ]
   );
+
+  const handleApproveUpload = useCallback(
+    async (uploadId: string) => {
+      if (!apiClient || !verificationBusinessId) return;
+      setApproveLoadingId(uploadId);
+      try {
+        await apiClient.patch(`/uploads/${uploadId}/approve`);
+        await fetchVerificationDetails(verificationBusinessId);
+        await fetchBusinesses();
+      } finally {
+        setApproveLoadingId(null);
+      }
+    },
+    [apiClient, verificationBusinessId, fetchVerificationDetails, fetchBusinesses]
+  );
+
+  const agreementComplete = Boolean(
+    verificationDetails?.latestContract?.complete ||
+      verificationDetails?.latestAcceptance
+  );
+  const hasApprovedId = Boolean(
+    verificationDetails?.identityDocuments?.some((doc) => doc.is_approved)
+  );
+  const canVerifyPayment =
+    nameMatchConfirmed && agreementComplete && hasApprovedId;
+  const contractIsSigned =
+    verificationDetails?.latestContract?.complete === true ||
+    verificationDetails?.latestContract?.status === 'signed';
+  const canResendContract =
+    Boolean(verificationDetails?.latestContract?.boldSignEnabled) &&
+    !contractIsSigned;
 
   const verificationBusiness = businesses.find((b) => b.id === verificationBusinessId);
 
@@ -436,11 +497,9 @@ const AdminManageBusinesses: React.FC = () => {
                 <AdminUserCard
                   key={b.id}
                   title={b.name}
-                  subtitle={`Owner: ${b.user.first_name} ${
-                    b.user.last_name
-                  } • Lifecycle: ${
-                    b.lifecycle_status ?? 'unknown'
-                  }`}
+                  subtitle={`${t('admin.businesses.ownerLabel', 'Owner')}: ${
+                    b.user.first_name
+                  } ${b.user.last_name}`}
                   accounts={(b.user as any).accounts}
                   addresses={(b as any).addresses}
                   admin={isSuperuserUser(b.user.id)}
@@ -448,48 +507,68 @@ const AdminManageBusinesses: React.FC = () => {
                   userId={b.user.id}
                   userType="business"
                   footer={
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <MerchantStatusChip
-                        lifecycleStatus={b.lifecycle_status}
-                        canAcceptOrders={b.can_accept_orders}
-                        isStorefrontVisible={b.is_storefront_visible}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.5,
+                        width: '100%',
+                      }}
+                    >
+                      <AdminBusinessVerificationSteps
+                        summary={b.verificationSummary}
+                        dense
                       />
-                      {!b.can_accept_orders && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="warning"
-                          onClick={() => setVerificationBusinessId(b.id)}
-                        >
-                          {t('admin.businesses.verification', 'Verification')}
-                        </Button>
-                      )}
-                      {b.lifecycle_status === 'suspended' ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => void handleReinstateBusiness(b.id)}
-                        >
-                          {t('admin.businesses.reinstate', 'Reinstate')}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={() => void handleSuspendBusiness(b.id)}
-                        >
-                          {t('admin.businesses.suspend', 'Suspend')}
-                        </Button>
-                      )}
-                      <Button
-                        size="small"
-                        variant="contained"
-                        startIcon={<EditIcon />}
-                        onClick={() => openEdit(b.id)}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          gap: 1,
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                        }}
                       >
-                        {t('common.edit', 'Edit')}
-                      </Button>
+                        <MerchantStatusChip
+                          lifecycleStatus={b.lifecycle_status}
+                          canAcceptOrders={b.can_accept_orders}
+                          isStorefrontVisible={b.is_storefront_visible}
+                        />
+                        {!b.can_accept_orders && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            onClick={() => setVerificationBusinessId(b.id)}
+                          >
+                            {t('admin.businesses.verification', 'Verification')}
+                          </Button>
+                        )}
+                        {b.lifecycle_status === 'suspended' ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => void handleReinstateBusiness(b.id)}
+                          >
+                            {t('admin.businesses.reinstate', 'Reinstate')}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={() => void handleSuspendBusiness(b.id)}
+                          >
+                            {t('admin.businesses.suspend', 'Suspend')}
+                          </Button>
+                        )}
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<EditIcon />}
+                          onClick={() => openEdit(b.id)}
+                        >
+                          {t('common.edit', 'Edit')}
+                        </Button>
+                      </Box>
                     </Box>
                   }
                 />
@@ -787,15 +866,56 @@ const AdminManageBusinesses: React.FC = () => {
             </Box>
           ) : (
             <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <AdminBusinessVerificationSteps
+                summary={{
+                  contractComplete: agreementComplete,
+                  contractStatus: contractIsSigned
+                    ? 'signed'
+                    : verificationDetails?.latestContract?.status ||
+                      (verificationDetails?.latestAcceptance
+                        ? 'legacy_signed'
+                        : 'missing'),
+                  idDocumentStatus: hasApprovedId
+                    ? 'approved'
+                    : (verificationDetails?.identityDocuments?.length ?? 0) === 0
+                      ? 'missing'
+                      : verificationDetails?.identityDocuments?.some(
+                            (d) => d.note?.trim()
+                          )
+                        ? 'rejected'
+                        : 'pending',
+                }}
+              />
+
               {verificationDetails?.latestContract?.boldSignEnabled ? (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    {t('admin.businesses.boldSignContract', 'BoldSign contract')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('admin.businesses.contractStatus', 'Status')}:{' '}
-                    {verificationDetails.latestContract.status ?? '—'}
-                  </Typography>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={1}
+                    flexWrap="wrap"
+                    sx={{ mb: 1 }}
+                  >
+                    <Typography variant="subtitle2">
+                      {t('admin.businesses.boldSignContract', 'BoldSign contract')}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      color={contractIsSigned ? 'success' : 'warning'}
+                      label={
+                        contractIsSigned
+                          ? t('admin.businesses.contractSigned', 'Signed')
+                          : verificationDetails.latestContract.status ||
+                            t('admin.businesses.contractPending', 'Pending')
+                      }
+                    />
+                  </Stack>
+                  {contractActionError ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {contractActionError}
+                    </Alert>
+                  ) : null}
                   {verificationDetails.latestContract.version ? (
                     <Typography variant="body2" color="text.secondary">
                       {t('admin.businesses.contractVersion', 'Version')}:{' '}
@@ -803,14 +923,16 @@ const AdminManageBusinesses: React.FC = () => {
                     </Typography>
                   ) : null}
                   <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={contractActionLoading}
-                      onClick={() => void handleResendContract()}
-                    >
-                      {t('admin.businesses.resendContract', 'Resend contract')}
-                    </Button>
+                    {canResendContract ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={contractActionLoading}
+                        onClick={() => void handleResendContract()}
+                      >
+                        {t('admin.businesses.resendContract', 'Resend contract')}
+                      </Button>
+                    ) : null}
                     {verificationDetails.latestContract.contractId &&
                     verificationDetails.latestContract.canDownload ? (
                       <Button
@@ -827,8 +949,9 @@ const AdminManageBusinesses: React.FC = () => {
                       </Button>
                     ) : null}
                   </Box>
-                </Box>
+                </Paper>
               ) : null}
+
               {!verificationDetails?.latestAcceptance &&
               !verificationDetails?.latestContract?.complete ? (
                 <Alert severity="warning">
@@ -838,8 +961,9 @@ const AdminManageBusinesses: React.FC = () => {
                   )}
                 </Alert>
               ) : null}
+
               {verificationDetails?.latestAcceptance ? (
-                <Box>
+                <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     {t('admin.businesses.merchantAgreement', 'Merchant agreement')}
                   </Typography>
@@ -869,7 +993,7 @@ const AdminManageBusinesses: React.FC = () => {
                       {t('admin.businesses.viewAgreementPdf', 'View signed PDF')}
                     </Button>
                   ) : null}
-                </Box>
+                </Paper>
               ) : null}
 
               {(verificationDetails?.identityDocuments?.length ?? 0) === 0 ? (
@@ -880,46 +1004,113 @@ const AdminManageBusinesses: React.FC = () => {
                   )}
                 </Alert>
               ) : (
-                <Box>
+                <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     {t('admin.businesses.idDocuments', 'Identity documents')}
                   </Typography>
-                  <List dense>
-                    {verificationDetails!.identityDocuments.map((doc) => (
-                      <ListItem key={doc.id}>
-                        <ListItemText
-                          primary={doc.file_name}
-                          secondary={`${doc.document_type?.name ?? ''} • ${
-                            doc.is_approved
-                              ? t('admin.uploads.approved', 'Approved')
-                              : t('admin.uploads.pending', 'Pending')
-                          }`}
-                        />
-                        <ListItemSecondaryAction>
-                          <Button
-                            size="small"
-                            onClick={() => void handleViewUpload(doc.id)}
-                            disabled={presignedUrlLoadingId !== null}
-                          >
-                            {t('common.view', 'View')}
-                          </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            startIcon={<BlockIcon />}
-                            onClick={() => {
-                              setRejectingDocId(doc.id);
-                              setRejectMessage('');
-                            }}
-                          >
-                            {t('admin.agents.reject', 'Reject')}
-                          </Button>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
+                  <List dense disablePadding>
+                    {verificationDetails!.identityDocuments.map((doc) => {
+                      const rejected = Boolean(doc.note?.trim()) && !doc.is_approved;
+                      const statusLabel = doc.is_approved
+                        ? t('admin.uploads.approved', 'Approved')
+                        : rejected
+                          ? t('admin.uploads.rejected', 'Rejected')
+                          : t('admin.uploads.pending', 'Pending');
+                      return (
+                        <ListItem
+                          key={doc.id}
+                          sx={{
+                            px: 0,
+                            alignItems: 'flex-start',
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                            '&:last-child': { borderBottom: 'none' },
+                          }}
+                          secondaryAction={
+                            <Stack direction="row" spacing={0.5}>
+                              <Button
+                                size="small"
+                                onClick={() => void handleViewUpload(doc.id)}
+                                disabled={presignedUrlLoadingId !== null}
+                              >
+                                {t('common.view', 'View')}
+                              </Button>
+                              {!doc.is_approved && !rejected ? (
+                                <Button
+                                  size="small"
+                                  color="success"
+                                  startIcon={
+                                    approveLoadingId === doc.id ? (
+                                      <CircularProgress size={14} />
+                                    ) : (
+                                      <CheckCircleIcon />
+                                    )
+                                  }
+                                  disabled={approveLoadingId !== null}
+                                  onClick={() => void handleApproveUpload(doc.id)}
+                                >
+                                  {t('admin.uploads.approve', 'Approve')}
+                                </Button>
+                              ) : null}
+                              {!doc.is_approved ? (
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  startIcon={<BlockIcon />}
+                                  onClick={() => {
+                                    setRejectingDocId(doc.id);
+                                    setRejectMessage('');
+                                  }}
+                                >
+                                  {t('admin.agents.reject', 'Reject')}
+                                </Button>
+                              ) : null}
+                            </Stack>
+                          }
+                        >
+                          <ListItemText
+                            primary={doc.file_name}
+                            secondary={
+                              <>
+                                {`${doc.document_type?.name ?? ''} • ${statusLabel}`}
+                                {rejected ? (
+                                  <Typography
+                                    component="span"
+                                    variant="caption"
+                                    color="error"
+                                    display="block"
+                                  >
+                                    {doc.note}
+                                  </Typography>
+                                ) : null}
+                              </>
+                            }
+                            sx={{ pr: 22 }}
+                          />
+                        </ListItem>
+                      );
+                    })}
                   </List>
-                </Box>
+                </Paper>
               )}
+
+              {(verificationDetails?.paymentAccounts?.length ?? 0) > 0 ? (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {t('admin.businesses.paymentAccounts', 'Payment accounts')}
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {verificationDetails!.paymentAccounts!.map((account) => (
+                      <Typography key={account.id} variant="body2" color="text.secondary">
+                        {account.provider}: {account.capability_status}
+                        {account.rejection_reason
+                          ? ` — ${account.rejection_reason}`
+                          : ''}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Paper>
+              ) : null}
 
               <FormControlLabel
                 control={
@@ -940,19 +1131,25 @@ const AdminManageBusinesses: React.FC = () => {
           <Button onClick={() => setVerificationBusinessId(null)}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          {(verificationDetails?.identityDocuments?.length ?? 0) > 0 &&
-            verificationDetails?.latestAcceptance && (
-              <Button
-                variant="contained"
-                disabled={!nameMatchConfirmed || verifyLoading}
-                startIcon={
-                  verifyLoading ? <CircularProgress size={20} /> : <VerifiedUserIcon />
-                }
-                onClick={() => void handleSetVerified()}
-              >
-                {t('admin.businesses.verifyPaymentAccount', 'Verify mobile money payment')}
-              </Button>
-            )}
+          {canVerifyPayment ? (
+            <Button
+              variant="contained"
+              disabled={verifyLoading}
+              startIcon={
+                verifyLoading ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <VerifiedUserIcon />
+                )
+              }
+              onClick={() => void handleSetVerified()}
+            >
+              {t(
+                'admin.businesses.verifyPaymentAccount',
+                'Verify mobile money payment'
+              )}
+            </Button>
+          ) : null}
         </DialogActions>
       </Dialog>
 

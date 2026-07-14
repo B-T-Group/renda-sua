@@ -66,7 +66,19 @@ export class BusinessContractReconcilerService {
     for (const row of stale) {
       if (row.boldsign_document_id.startsWith('legacy:')) continue;
       try {
-        await this.boldsign.remindDocument(row.boldsign_document_id);
+        const result = await this.boldsign.remindDocument(
+          row.boldsign_document_id
+        );
+        if (!result.success) {
+          this.logger.warn(`Reminder failed ${row.id}: ${result.message}`);
+          // Avoid hourly retries against BoldSign's daily reminder cap.
+          if (result.rateLimited) {
+            await this.db.updateContract(row.id, {
+              last_reminded_at: new Date().toISOString(),
+            });
+          }
+          continue;
+        }
         await this.db.updateContract(row.id, {
           last_reminded_at: new Date().toISOString(),
         });
