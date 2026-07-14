@@ -35,13 +35,13 @@ export const BusinessGetReadyChecklist: React.FC<
 > = ({ status, mainInterest, itemCount, rentalItemCount }) => {
   const { t } = useTranslation();
 
+  const isStripeRail = status?.paymentRail === 'stripe';
   const agreementDone = Boolean(status?.steps?.agreement?.complete);
-  const payoutsDone = Boolean(
-    status?.steps?.stripeConnect?.complete || status?.steps?.identity?.complete
-  );
+  const payoutsDone = Boolean(status?.steps?.stripeConnect?.complete);
   const hasCatalog =
     mainInterest === 'rent_items' ? rentalItemCount > 0 : itemCount > 0;
-  const allDone = agreementDone && payoutsDone && hasCatalog;
+  const allDone =
+    agreementDone && hasCatalog && (!isStripeRail || payoutsDone);
 
   if (allDone) return null;
 
@@ -58,13 +58,17 @@ export const BusinessGetReadyChecklist: React.FC<
       to: '/business/merchant-agreement',
       cta: t('signup.getReady.ctaAgreement', 'Sign agreement'),
     },
-    {
-      id: 'payouts',
-      label: t('signup.getReady.stepPayouts', 'Connect payouts'),
-      done: payoutsDone,
-      to: '/documents',
-      cta: t('signup.getReady.ctaPayouts', 'Set up payouts'),
-    },
+    ...(isStripeRail
+      ? [
+          {
+            id: 'payouts',
+            label: t('signup.getReady.stepPayouts', 'Connect payouts'),
+            done: payoutsDone,
+            to: '/documents',
+            cta: t('signup.getReady.ctaPayouts', 'Set up payouts'),
+          } satisfies ChecklistItem,
+        ]
+      : []),
     {
       id: 'firstItem',
       label: t('signup.getReady.stepFirstItem', 'Add your first product'),
