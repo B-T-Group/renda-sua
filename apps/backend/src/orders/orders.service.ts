@@ -6370,28 +6370,31 @@ export class OrdersService {
         );
       }
 
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-
-      await this.updateOrderHold(orderHold.id, {
-        agent_hold_amount: transaction.amount,
-        agent_id: user.agent.id,
-      });
-
-      // Register hold transaction
-      await this.accountsService.registerTransaction({
-        accountId: account.id,
-        amount: transaction.amount,
-        transactionType: 'hold',
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-
-      // Assign order to agent
       await this.assignOrderToAgent(
         order.id,
         user.agent.id,
         'assigned_to_agent'
       );
+
+      try {
+        const orderHold = await this.getOrCreateOrderHold(order.id);
+
+        await this.updateOrderHold(orderHold.id, {
+          agent_hold_amount: transaction.amount,
+          agent_id: user.agent.id,
+        });
+
+        await this.accountsService.registerTransaction({
+          accountId: account.id,
+          amount: transaction.amount,
+          transactionType: 'hold',
+          memo: `Hold for order ${order.order_number}`,
+          referenceId: order.id,
+        });
+      } catch (error: any) {
+        await this.revertOrderAssignment(order.id);
+        throw error;
+      }
 
       await this.createStatusHistoryEntry(
         order.id,

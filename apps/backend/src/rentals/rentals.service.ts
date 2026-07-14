@@ -1657,7 +1657,8 @@ export class RentalsService {
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
       req,
-      this.normalizeUnitsRequested(req.units_requested)
+      this.normalizeUnitsRequested(req.units_requested),
+      bookingId
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
@@ -2109,6 +2110,15 @@ export class RentalsService {
       return;
     }
 
+    if (!this.isProposedBookingStillConfirmable(booking)) {
+      this.logger.warn(
+        `processRentalBookingPayment: expired contract for ${bookingNumber}`
+      );
+      return;
+    }
+
+    await this.assertCapacityForBookingPayment(booking);
+
     const hold = await this.getHold(booking.id);
     if (!hold || hold.status !== 'active') {
       await this.placeHoldForBooking(
@@ -2131,6 +2141,33 @@ export class RentalsService {
       booking.id,
       booking.rental_request_id,
       clientUserId
+    );
+  }
+
+  private isProposedBookingStillConfirmable(booking: any): boolean {
+    const exp = booking.contract_expires_at as string | null | undefined;
+    return !!exp && new Date(exp) > new Date();
+  }
+
+  private async assertCapacityForBookingPayment(booking: any): Promise<void> {
+    const rentalRequest = booking.rental_request;
+    if (!rentalRequest?.rental_selection_windows) {
+      this.logger.warn(
+        `processRentalBookingPayment: missing rental request windows for ${booking.booking_number}`
+      );
+      throw new HttpException(
+        'Rental request windows unavailable',
+        HttpStatus.CONFLICT
+      );
+    }
+    await this.assertCapacityForRequestWindows(
+      booking.rental_location_listing_id,
+      booking.rental_location_listing?.units_available,
+      rentalRequest,
+      this.normalizeUnitsRequested(
+        booking.units_booked ?? rentalRequest.units_requested
+      ),
+      booking.id
     );
   }
 
@@ -2458,16 +2495,31 @@ export class RentalsService {
     listingId: string,
     unitsAvailable: number,
     req: any,
-    requestedUnits: number
+    requestedUnits: number,
+    excludedBookingId?: string
   ): Promise<void> {
     const cap = Math.max(1, Number(unitsAvailable) || 1);
     const want = this.normalizeUnitsRequested(requestedUnits);
     for (const w of this.parseRentalSelectionWindows(req)) {
       if (w.billing === 'all_day' && w.calendarDate) {
         const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
-        await this.assertCapacity(listingId, start, end, cap, want);
+        await this.assertCapacity(
+          listingId,
+          start,
+          end,
+          cap,
+          want,
+          excludedBookingId
+        );
       } else {
-        await this.assertCapacity(listingId, w.start, w.end, cap, want);
+        await this.assertCapacity(
+          listingId,
+          w.start,
+          w.end,
+          cap,
+          want,
+          excludedBookingId
+        );
       }
     }
   }
@@ -2620,9 +2672,15 @@ export class RentalsService {
     start: Date,
     end: Date,
     unitsAvailable: number,
-    requestedUnits: number
+    requestedUnits: number,
+    excludedBookingId?: string
   ) {
-    const used = await this.peakUnitsUsedInInterval(listingId, start, end);
+    const used = await this.peakUnitsUsedInInterval(
+      listingId,
+      start,
+      end,
+      excludedBookingId
+    );
     if (used + requestedUnits > unitsAvailable) {
       throw new HttpException('No units available for these dates', HttpStatus.CONFLICT);
     }
@@ -2632,20 +2690,25 @@ export class RentalsService {
   private async peakUnitsUsedInInterval(
     listingId: string,
     start: Date,
-    end: Date
+    end: Date,
+    excludedBookingId?: string
   ): Promise<number> {
     const now = new Date().toISOString();
+    const query = excludedBookingId
+      ? Q.LIST_OVERLAPPING_BOOKING_WINDOWS_EXCLUDING_BOOKING
+      : Q.LIST_OVERLAPPING_BOOKING_WINDOWS;
     const r = await this.hasuraSystemService.executeQuery<{
       rental_booking_windows: Array<{
         start_at: string;
         end_at: string;
         rental_booking?: { units_booked?: number | null } | null;
       }>;
-    }>(Q.LIST_OVERLAPPING_BOOKING_WINDOWS, {
+    }>(query, {
       listingId,
       start: start.toISOString(),
       end: end.toISOString(),
       now,
+      ...(excludedBookingId ? { excludedBookingId } : {}),
     });
     return this.peakConcurrentUnits(
       (r.rental_booking_windows ?? []).map((w) => ({

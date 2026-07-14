@@ -1,3 +1,7 @@
+jest.mock('../stripe-payments/stripe-connect.service', () => ({
+  StripeConnectService: jest.fn(),
+}));
+
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -26,6 +30,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { LocationsService } from '../locations/locations.service';
@@ -205,6 +211,8 @@ describe('OrdersService', () => {
             creditWalletForCapturedOrder: jest.fn(),
           },
         },
+        { provide: StripeTaxCheckoutBuilderService, useValue: {} },
+        { provide: StripeTaxCalculationService, useValue: {} },
         {
           provide: OrderOffersService,
           useValue: {
@@ -1458,6 +1466,48 @@ describe('OrdersService', () => {
         },
         status: HttpStatus.FORBIDDEN,
       });
+    });
+  });
+
+  describe('processClaimOrderPayment', () => {
+    it('does not register a hold when the order assignment loses the race', async () => {
+      const assignmentError = new HttpException(
+        { message: 'Order already assigned', error: 'ALREADY_ASSIGNED' },
+        HttpStatus.CONFLICT
+      );
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ ...mockReadyOrder, order_number: 'ORD-1' });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-123',
+        user_id: 'agent-user-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        id: 'agent-user-123',
+        agent: { id: 'agent-123', user_id: 'agent-user-123' },
+      });
+      const assignSpy = jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockRejectedValue(assignmentError);
+      const getHoldSpy = jest.spyOn(service, 'getOrCreateOrderHold');
+
+      await expect(
+        service.processClaimOrderPayment({
+          entity_id: 'ORD-1',
+          account_id: 'account-123',
+          amount: 500,
+          currency: 'XAF',
+        })
+      ).rejects.toBe(assignmentError);
+
+      expect(assignSpy).toHaveBeenCalledWith(
+        'order-123',
+        'agent-123',
+        'assigned_to_agent'
+      );
+      expect(getHoldSpy).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
   });
 });
