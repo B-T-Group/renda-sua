@@ -46,7 +46,6 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         user_id
         name
         main_interest
-        is_admin
         is_verified
         ai_tokens
         merchant_agreement_version
@@ -213,7 +212,6 @@ export const GET_USER_BUSINESS = gql`
       id
       user_id
       name
-      is_admin
       is_verified
       business_addresses(where: { address: { status: { _eq: active } } }) {
         address {
@@ -287,7 +285,6 @@ export const GET_BUSINESS_BY_ID = gql`
       id
       user_id
       name
-      is_admin
       is_verified
     }
   }

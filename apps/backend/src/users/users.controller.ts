@@ -168,26 +168,18 @@ export class UsersController {
         : false;
 
       const access = await this.rbacService.getEffectiveAccess(user.id);
-      const legacyAdmin = user.business?.is_admin === true;
-      const isSuperuser = access.isSuperuser || legacyAdmin;
-      const business = user.business
-        ? { ...user.business, is_admin: isSuperuser }
-        : user.business;
 
       return {
         success: true,
         user: {
           ...user,
-          business,
           personas: derivePersonas(user),
           country,
           currency,
           is_stripe_enabled: isStripeEnabled,
-          roles: isSuperuser
-            ? Array.from(new Set([...access.roles, 'superuser']))
-            : access.roles,
-          permissions: isSuperuser ? ['*'] : access.permissions,
-          is_superuser: isSuperuser,
+          roles: access.roles,
+          permissions: access.isSuperuser ? ['*'] : access.permissions,
+          is_superuser: access.isSuperuser,
         },
         personalAccountCreated,
         userId: this.hasuraUserService.getUserId(),

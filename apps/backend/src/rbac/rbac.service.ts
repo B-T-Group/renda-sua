@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
@@ -5,11 +6,30 @@ import {
   PlatformRoles,
 } from './platform-permissions';
 
+/** Per-request cache for effective RBAC resolution (set by RbacCacheInterceptor). */
+export const rbacRequestStore = new AsyncLocalStorage<
+  Map<string, EffectiveAccess>
+>();
+
 @Injectable()
 export class RbacService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   async getEffectiveAccess(userId: string): Promise<EffectiveAccess> {
+    const store = rbacRequestStore.getStore();
+    const cached = store?.get(userId);
+    if (cached) return cached;
+
+    const access = await this.loadEffectiveAccess(userId);
+    store?.set(userId, access);
+    return access;
+  }
+
+  invalidateUser(userId: string): void {
+    rbacRequestStore.getStore()?.delete(userId);
+  }
+
+  private async loadEffectiveAccess(userId: string): Promise<EffectiveAccess> {
     const query = `
       query GetUserRbac($userId: uuid!) {
         user_roles(where: { user_id: { _eq: $userId } }) {
@@ -178,6 +198,7 @@ export class RbacService {
       );
     }
 
+    this.invalidateUser(userId);
     return this.getUserRoleKeys(userId);
   }
 

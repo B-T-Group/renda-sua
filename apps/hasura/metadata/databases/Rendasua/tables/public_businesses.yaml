@@ -118,7 +118,6 @@ insert_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
   - role: business
     permission:
       check:
@@ -139,7 +138,6 @@ insert_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
   - role: user
     permission:
       check: {}
@@ -150,7 +148,6 @@ insert_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
 select_permissions:
   - role: agent
     permission:
@@ -161,7 +158,6 @@ select_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
         - is_verified
         - lifecycle_status
         - is_storefront_visible
@@ -175,7 +171,6 @@ select_permissions:
         - name
         - created_at
         - updated_at
-        - is_admin
         - is_verified
         - lifecycle_status
         - is_storefront_visible
@@ -192,7 +187,6 @@ select_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
         - is_verified
         - lifecycle_status
         - is_storefront_visible
@@ -215,7 +209,6 @@ select_permissions:
         - main_interest
         - created_at
         - updated_at
-        - is_admin
         - is_verified
         - lifecycle_status
         - is_storefront_visible

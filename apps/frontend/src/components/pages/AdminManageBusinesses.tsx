@@ -116,6 +116,7 @@ const AdminManageBusinesses: React.FC = () => {
     roles: platformRoles,
     getUserRoles,
     setUserRoles,
+    isSuperuserUser,
   } = useAdminRbac();
   const canManageRbac = usePermission(PlatformPermissions.RBAC_MANAGE);
   const { t } = useTranslation();
@@ -442,7 +443,7 @@ const AdminManageBusinesses: React.FC = () => {
                   }`}
                   accounts={(b.user as any).accounts}
                   addresses={(b as any).addresses}
-                  admin={!!b.is_admin}
+                  admin={isSuperuserUser(b.user.id)}
                   verified={!!b.can_accept_orders}
                   userId={b.user.id}
                   userType="business"

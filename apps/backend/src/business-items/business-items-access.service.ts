@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 
 export interface BusinessItemsAccessContext {
   targetBusinessId: string;
@@ -28,8 +29,9 @@ export class BusinessItemsAccessService {
       );
     }
 
-    const isPlatformAdmin = await this.permissionService.isBusinessAdmin(
-      user.id
+    const isPlatformAdmin = await this.permissionService.hasPlatformPermission(
+      user.id,
+      PlatformPermissions.CATALOG_CROSS_BUSINESS
     );
     const targetBusinessId = requestedBusinessId ?? ownBusinessId;
     const isOwnBusiness = targetBusinessId === ownBusinessId;

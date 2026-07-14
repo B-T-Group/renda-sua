@@ -16,7 +16,6 @@ export interface AdminBusiness {
   id: string;
   user_id: string;
   name: string;
-  is_admin: boolean;
   is_verified: boolean;
   lifecycle_status?: string;
   is_storefront_visible?: boolean;

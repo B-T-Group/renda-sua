@@ -19,8 +19,7 @@ export function usePermissions(): PermissionsState {
   );
   const isSuperuser = !!(
     profile?.is_superuser ||
-    roles.includes('superuser') ||
-    profile?.business?.is_admin
+    roles.includes('superuser')
   );
 
   const can = useCallback(

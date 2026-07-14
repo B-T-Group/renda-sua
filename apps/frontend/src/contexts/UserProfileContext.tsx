@@ -92,8 +92,8 @@ export interface UserProfile {
     user_id: string;
     name: string;
     main_interest?: 'sell_items' | 'rent_items';
-    /** @deprecated Prefer is_superuser / roles; kept as dual-read alias */
-    is_admin: boolean;
+    /** @deprecated Removed from API; use is_superuser / permissions */
+    is_admin?: boolean;
     is_verified: boolean;
     ai_tokens?: number;
     created_at: string;

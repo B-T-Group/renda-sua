@@ -104,7 +104,6 @@ const GET_BUSINESSES_QUERY = `
       id
       user_id
       name
-      is_admin
       is_verified
       created_at
       updated_at
@@ -178,7 +177,6 @@ const UPDATE_BUSINESS_MUTATION = `
       id
       user_id
       name
-      is_admin
       is_verified
       ai_tokens
       withdrawal_pin_enabled
@@ -341,7 +339,7 @@ export class AdminService {
     const query = `
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_admin is_verified lifecycle_status is_storefront_visible can_accept_orders ai_tokens withdrawal_pin_enabled created_at updated_at
+          id user_id name is_verified lifecycle_status is_storefront_visible can_accept_orders ai_tokens withdrawal_pin_enabled created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
@@ -988,7 +986,6 @@ export class AdminService {
             id
             user_id
             name
-            is_admin
             created_at
             updated_at
           }

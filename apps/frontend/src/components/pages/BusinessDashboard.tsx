@@ -103,7 +103,7 @@ const BusinessDashboard: React.FC = () => {
             canAcceptOrders={verificationStatus?.can_accept_orders}
             isStorefrontVisible={verificationStatus?.is_storefront_visible}
           />
-          {(hasAdminAccess || profile.business.is_admin) && (
+          {hasAdminAccess && (
             <StatusBadge type="admin" />
           )}
         </Box>

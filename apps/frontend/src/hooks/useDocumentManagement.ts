@@ -109,8 +109,7 @@ export const useDocumentManagement = () => {
         if (
           user?.permissions?.includes('platform.ops.user_documents') ||
           user?.permissions?.includes('*') ||
-          user?.is_superuser ||
-          user?.business?.is_admin
+          user?.is_superuser
         ) {
           // no user_id filter
         } else {
@@ -158,7 +157,7 @@ export const useDocumentManagement = () => {
         setLoading(false);
       }
     },
-    [client, user?.id, user?.user_type_id, user?.business?.is_admin, user?.is_superuser, user?.permissions]
+    [client, user?.id, user?.user_type_id, user?.is_superuser, user?.permissions]
   );
 
   // Delete document - now handled by useDocumentDelete hook

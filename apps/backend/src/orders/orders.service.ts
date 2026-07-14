@@ -35,6 +35,8 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
@@ -188,7 +190,6 @@ export interface OrderWithDetails {
     id: string;
     user_id: string;
     name: string;
-    is_admin: boolean;
     user: {
       id: string;
       first_name: string;
@@ -370,8 +371,16 @@ export class OrdersService {
     private readonly orderOffersService: OrderOffersService,
     private readonly cancellationPolicyService: CancellationPolicyService,
     private readonly locationsService: LocationsService,
-    private readonly orderSystemJobsService: OrderSystemJobsService
+    private readonly orderSystemJobsService: OrderSystemJobsService,
+    private readonly rbacService: RbacService
   ) {}
+
+  private async canAccessAnyOrder(userId: string): Promise<boolean> {
+    return this.rbacService.hasPermission(
+      userId,
+      PlatformPermissions.ORDERS_CROSS_BUSINESS
+    );
+  }
 
   private requireActivePersona(
     user: any,
@@ -4526,7 +4535,7 @@ export class OrdersService {
   /**
    * Get a specific order by ID with access control
    * Accessible by:
-   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Business that owns the order (order.business_id or platform orders permission)
    * - Client that made the order (order.client_id)
    * - Agent assigned to the order (order.assigned_agent_id)
    */
@@ -4548,9 +4557,9 @@ export class OrdersService {
       if (order.business_id === user.business.id) {
         hasAccess = true;
         accessReason = 'business_owner';
-      } else if (user.business.is_admin) {
+      } else if (await this.canAccessAnyOrder(user.id)) {
         hasAccess = true;
-        accessReason = 'admin_business';
+        accessReason = 'platform_orders';
       }
     } else if (
       isActivePersona(user, 'client') &&
@@ -4628,7 +4637,6 @@ export class OrdersService {
             id
             user_id
             name
-            is_admin
             user {
               id
               first_name
@@ -4817,7 +4825,6 @@ export class OrdersService {
             id
             user_id
             name
-            is_admin
             user {
               id
               first_name
@@ -5032,7 +5039,7 @@ export class OrdersService {
   /**
    * Get all messages for a specific order
    * Accessible by:
-   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Business that owns the order (order.business_id or platform orders permission)
    * - Client that made the order (order.client_id)
    * - Agent assigned to the order (order.assigned_agent_id)
    */
@@ -5049,7 +5056,10 @@ export class OrdersService {
     let hasAccess = false;
 
     if (isActivePersona(user, 'business') && user.business) {
-      if (order.business_id === user.business.id || user.business.is_admin) {
+      if (
+        order.business_id === user.business.id ||
+        (await this.canAccessAnyOrder(user.id))
+      ) {
         hasAccess = true;
       }
     } else if (
@@ -5115,7 +5125,7 @@ export class OrdersService {
   /**
    * Create a new message for a specific order
    * Accessible by:
-   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Business that owns the order (order.business_id or platform orders permission)
    * - Client that made the order (order.client_id)
    * - Agent assigned to the order (order.assigned_agent_id)
    */
@@ -5132,7 +5142,10 @@ export class OrdersService {
     let hasAccess = false;
 
     if (isActivePersona(user, 'business') && user.business) {
-      if (order.business_id === user.business.id || user.business.is_admin) {
+      if (
+        order.business_id === user.business.id ||
+        (await this.canAccessAnyOrder(user.id))
+      ) {
         hasAccess = true;
       }
     } else if (

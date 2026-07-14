@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { PlatformRoles } from '../rbac/platform-permissions';
+import {
+  PlatformPermissions,
+  PlatformRoles,
+} from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { isActivePersona } from '../users/persona.util';
 
@@ -21,9 +24,12 @@ export class PermissionService {
    */
   async canViewUserUpload(userId: string, uploadId: string): Promise<boolean> {
     try {
-      // Superuser (business admin) can view any upload – use system query to bypass RLS
-      const isAdmin = await this.isBusinessAdmin(userId);
-      if (isAdmin) {
+      // Platform document ops can view any upload
+      const canViewAll = await this.rbacService.hasPermission(
+        userId,
+        PlatformPermissions.OPS_USER_DOCUMENTS
+      );
+      if (canViewAll) {
         const systemUploadResult =
           await this.hasuraSystemService.executeQuery(
             `query GetUserUpload($uploadId: uuid!) {
@@ -149,29 +155,22 @@ export class PermissionService {
   }
 
   /**
-   * Platform superuser via RBAC role `superuser`, with dual-read of
-   * legacy `businesses.is_admin` until that column is fully retired.
+   * Platform superuser (RBAC role `superuser`).
    */
   async isBusinessAdmin(userId: string): Promise<boolean> {
     try {
-      if (await this.rbacService.hasRole(userId, PlatformRoles.SUPERUSER)) {
-        return true;
-      }
-      const businessResult = await this.hasuraSystemService.executeQuery(
-        `
-        query GetBusinessAdminStatus($userId: uuid!) {
-          businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
-            is_admin
-          }
-        }
-      `,
-        { userId }
-      );
-      return businessResult.businesses?.[0]?.is_admin === true;
+      return await this.rbacService.hasRole(userId, PlatformRoles.SUPERUSER);
     } catch (error) {
       console.error('Error checking business admin status:', error);
       return false;
     }
+  }
+
+  async hasPlatformPermission(
+    userId: string,
+    permissionKey: string
+  ): Promise<boolean> {
+    return this.rbacService.hasPermission(userId, permissionKey);
   }
 
   /**
@@ -206,8 +205,10 @@ export class PermissionService {
           return true;
         }
 
-        const isAdmin = await this.isBusinessAdmin(userId);
-        return isAdmin;
+        return await this.rbacService.hasPermission(
+          userId,
+          PlatformPermissions.MANAGE_BUSINESSES
+        );
       }
 
       return false;
@@ -224,13 +225,12 @@ export class PermissionService {
    */
   async canManageUsers(userId: string): Promise<boolean> {
     try {
-      const currentUser = await this.hasuraUserService.getUser();
-
-      if (isActivePersona(currentUser, 'business')) {
-        return await this.isBusinessAdmin(userId);
-      }
-
-      return false;
+      return await this.rbacService.hasAnyPermission(userId, [
+        PlatformPermissions.MANAGE_AGENTS,
+        PlatformPermissions.MANAGE_CLIENTS,
+        PlatformPermissions.MANAGE_BUSINESSES,
+        PlatformPermissions.RBAC_MANAGE,
+      ]);
     } catch (error) {
       console.error('Error checking user management permission:', error);
       return false;
@@ -238,12 +238,12 @@ export class PermissionService {
   }
 
   /**
-   * Check if user can view uploads from other users (business admins)
-   * @param userId User ID
-   * @returns Promise<boolean>
+   * Check if user can view uploads from other users
    */
   async canViewOtherUserUploads(userId: string): Promise<boolean> {
-    const isAdmin = await this.isBusinessAdmin(userId);
-    return isAdmin;
+    return this.rbacService.hasPermission(
+      userId,
+      PlatformPermissions.OPS_USER_DOCUMENTS
+    );
   }
 }

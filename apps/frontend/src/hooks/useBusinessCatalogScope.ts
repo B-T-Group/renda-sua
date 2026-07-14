@@ -12,8 +12,7 @@ export function useBusinessCatalogScope() {
   );
 
   const ownBusinessId = profile?.business?.id;
-  const isPlatformAdmin =
-    canCrossBusiness || profile?.business?.is_admin === true;
+  const isPlatformAdmin = canCrossBusiness;
 
   const effectiveBusinessId = useMemo(() => {
     if (!ownBusinessId) return undefined;

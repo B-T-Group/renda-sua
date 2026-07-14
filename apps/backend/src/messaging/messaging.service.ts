@@ -10,6 +10,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { Configuration } from '../config/configuration';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import type { PersonaId } from '../users/persona.types';
 import { isActivePersona } from '../users/persona.util';
 import { MentionValidationService } from './mention-validation.service';
@@ -37,13 +39,14 @@ export class MessagingService {
     private readonly eventEmitter: EventEmitter2,
     private readonly configService: ConfigService<Configuration>,
     private readonly notificationsService: NotificationsService,
-    private readonly structuredMessageRegistry: StructuredMessageTypeRegistry
+    private readonly structuredMessageRegistry: StructuredMessageTypeRegistry,
+    private readonly rbacService: RbacService
   ) {}
 
   async getOrderMessages(orderId: string): Promise<OrderMessage[]> {
     const user = await this.hasuraUserService.getUser();
     const order = await this.loadOrderForMessaging(orderId);
-    this.assertMessagingAccess(user, order);
+    await this.assertMessagingAccess(user, order);
 
     const query = `
       query GetOrderMessages($orderId: uuid!, $entityType: entity_types_enum!) {
@@ -196,7 +199,7 @@ export class MessagingService {
   ): Promise<OrderMessage> {
     const user = await this.hasuraUserService.getUser();
     const order = await this.loadOrderForMessaging(orderId);
-    this.assertMessagingAccess(user, order);
+    await this.assertMessagingAccess(user, order);
 
     if (!message?.trim()) {
       throw new HttpException('Message cannot be empty', HttpStatus.BAD_REQUEST);
@@ -347,7 +350,7 @@ export class MessagingService {
   ): Promise<MentionableParticipant[]> {
     const user = await this.hasuraUserService.getUser();
     const order = await this.loadOrderForMessaging(orderId);
-    this.assertMessagingAccess(user, order);
+    await this.assertMessagingAccess(user, order);
 
     const senderPersona = this.resolvePersona(user, order);
     return this.orderParticipantsService.getMentionableParticipants(
@@ -363,7 +366,7 @@ export class MessagingService {
   ): Promise<void> {
     const user = await this.hasuraUserService.getUser();
     const order = await this.loadOrderForMessaging(orderId);
-    this.assertMessagingAccess(user, order);
+    await this.assertMessagingAccess(user, order);
 
     const getMessagesQuery = `
       query GetMessagesUpTo($orderId: uuid!, $entityType: entity_types_enum!, $lastId: uuid!) {
@@ -437,21 +440,25 @@ export class MessagingService {
    * Assert that the current user has access to the order's message thread.
    * Throws 403 if not authorized.
    */
-  assertMessagingAccess(
+  async assertMessagingAccess(
     user: {
       id: string;
-      business?: { id?: string; is_admin?: boolean | null } | null;
+      business?: { id?: string } | null;
       agent?: { id?: string } | null;
       user_type_id?: string | null;
     },
     order: MessagingOrder
-  ): void {
+  ): Promise<void> {
     let hasAccess = false;
 
     if (isActivePersona(user, 'business') && user.business) {
-      if (
-        order.business_id === user.business.id ||
-        user.business.is_admin
+      if (order.business_id === user.business.id) {
+        hasAccess = true;
+      } else if (
+        await this.rbacService.hasPermission(
+          user.id,
+          PlatformPermissions.ORDERS_CROSS_BUSINESS
+        )
       ) {
         hasAccess = true;
       }

@@ -11,6 +11,7 @@ import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PermissionService } from '../auth/permission.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
@@ -975,7 +976,10 @@ export class BusinessItemsService {
 
     // Strip commission percentage for non-admin users
     const userId = this.hasuraUserService.getUserId();
-    const isAdmin = await this.permissionService.isBusinessAdmin(userId);
+    const isAdmin = await this.permissionService.hasPlatformPermission(
+      userId,
+      PlatformPermissions.LOCATIONS_COMMISSION
+    );
     if (!isAdmin && 'rendasua_item_commission_percentage' in setInput) {
       delete setInput.rendasua_item_commission_percentage;
     }

@@ -10,6 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UploadService } from '../services/upload.service';
@@ -192,7 +193,10 @@ export class UploadsController {
       const user = await this.hasuraUserService.getUser();
 
       // Check if user is a business admin
-      const isAdmin = await this.permissionService.isBusinessAdmin(user.id);
+      const isAdmin = await this.permissionService.hasPlatformPermission(
+        user.id,
+        PlatformPermissions.OPS_USER_DOCUMENTS
+      );
       if (!isAdmin) {
         throw new HttpException(
           {
@@ -242,7 +246,10 @@ export class UploadsController {
   ) {
     try {
       const user = await this.hasuraUserService.getUser();
-      const isAdmin = await this.permissionService.isBusinessAdmin(user.id);
+      const isAdmin = await this.permissionService.hasPlatformPermission(
+        user.id,
+        PlatformPermissions.OPS_USER_DOCUMENTS
+      );
       if (!isAdmin) {
         throw new HttpException(
           {

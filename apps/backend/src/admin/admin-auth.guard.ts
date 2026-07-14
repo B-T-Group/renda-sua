@@ -57,13 +57,9 @@ export class AdminAuthGuard implements CanActivate {
           access.permissions.includes(p)
         );
         if (!roleOk && !permOk) {
-          const legacyAdmin =
-            await this.permissionService.isBusinessAdmin(user.id);
-          if (!legacyAdmin) {
-            throw new UnauthorizedException(
-              'Access denied. Required privileges missing.'
-            );
-          }
+          throw new UnauthorizedException(
+            'Access denied. Required privileges missing.'
+          );
         }
         (context.switchToHttp().getRequest() as { user?: unknown }).user =
           user;

@@ -145,7 +145,10 @@ export class BrandsController {
         );
       }
 
-      const isSuperUser = await this.permissionService.isBusinessAdmin(user.id);
+      const isSuperUser = await this.permissionService.hasPlatformPermission(
+        user.id,
+        PlatformPermissions.CONTENT_BRANDS
+      );
 
       const brand = await this.brandsService.createBrand(
         createBrandDto,

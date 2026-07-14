@@ -10,6 +10,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { StripeAuthReconcilerService } from '../stripe-payments/stripe-auth-reconciler.service';
@@ -44,6 +45,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     RefundsModule,
     LocationsModule,
     GoogleModule,
+    RbacModule,
   ],
   controllers: [
     OrdersController,

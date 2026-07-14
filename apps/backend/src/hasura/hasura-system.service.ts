@@ -261,7 +261,6 @@ export class HasuraSystemService {
           id
           user_id
           name
-          is_admin
           is_verified
         }
       }
@@ -1020,7 +1019,7 @@ export class HasuraSystemService {
         `business: { data: { ${businessDataFields.join(', ')} } }`
       );
       returnSel.push(
-        'business { id user_id name main_interest is_admin is_verified ai_tokens created_at updated_at }'
+        'business { id user_id name main_interest is_verified ai_tokens created_at updated_at }'
       );
     }
     const mutation = `
@@ -1259,7 +1258,6 @@ export class HasuraSystemService {
             user_id
             name
             main_interest
-            is_admin
             is_verified
             created_at
             updated_at
@@ -1299,7 +1297,6 @@ export class HasuraSystemService {
         user_id: business.user_id,
         name: business.name,
         main_interest: business.main_interest,
-        is_admin: business.is_admin,
         is_verified: business.is_verified,
         created_at: business.created_at,
         updated_at: business.updated_at,

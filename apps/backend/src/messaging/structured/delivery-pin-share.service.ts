@@ -58,7 +58,7 @@ export class DeliveryPinShareService {
     this.requireClient(user);
 
     const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
-    this.messagingService.assertMessagingAccess(user, order);
+    await this.messagingService.assertMessagingAccess(user, order);
 
     if (order.client?.user_id !== user.id) {
       throw new HttpException(

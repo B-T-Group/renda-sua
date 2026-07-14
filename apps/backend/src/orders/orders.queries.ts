@@ -207,7 +207,6 @@ export const GET_ORDER_BY_ID = gql`
         id
         user_id
         name
-        is_admin
         user {
           id
           first_name

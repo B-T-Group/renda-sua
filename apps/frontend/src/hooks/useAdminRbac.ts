@@ -11,6 +11,9 @@ export interface PlatformRole {
 export function useAdminRbac() {
   const apiClient = useApiClient();
   const [roles, setRoles] = useState<PlatformRole[]>([]);
+  const [userRolesByUserId, setUserRolesByUserId] = useState<
+    Record<string, string[]>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,9 +31,24 @@ export function useAdminRbac() {
     }
   }, [apiClient]);
 
+  const loadUsersWithRoles = useCallback(async () => {
+    if (!apiClient) return;
+    try {
+      const { data } = await apiClient.get('/admin/rbac/users');
+      const next: Record<string, string[]> = {};
+      for (const row of data.users ?? []) {
+        if (row?.userId) next[row.userId] = row.roles ?? [];
+      }
+      setUserRolesByUserId(next);
+    } catch {
+      // Role badge is best-effort; manage-businesses still works without it
+    }
+  }, [apiClient]);
+
   useEffect(() => {
     void loadRoles();
-  }, [loadRoles]);
+    void loadUsersWithRoles();
+  }, [loadRoles, loadUsersWithRoles]);
 
   const getUserRoles = useCallback(
     async (userId: string): Promise<string[]> => {
@@ -48,10 +66,27 @@ export function useAdminRbac() {
         `/admin/rbac/users/${userId}/roles`,
         { roles: roleKeys }
       );
-      return data.roles ?? [];
+      const nextRoles = data.roles ?? [];
+      setUserRolesByUserId((prev) => ({ ...prev, [userId]: nextRoles }));
+      return nextRoles;
     },
     [apiClient]
   );
 
-  return { roles, loading, error, loadRoles, getUserRoles, setUserRoles };
+  const isSuperuserUser = useCallback(
+    (userId: string) =>
+      (userRolesByUserId[userId] ?? []).includes('superuser'),
+    [userRolesByUserId]
+  );
+
+  return {
+    roles,
+    loading,
+    error,
+    loadRoles,
+    loadUsersWithRoles,
+    getUserRoles,
+    setUserRoles,
+    isSuperuserUser,
+  };
 }

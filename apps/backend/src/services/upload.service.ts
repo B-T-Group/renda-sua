@@ -4,6 +4,7 @@ import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { resolveActivePersona } from '../users/persona.util';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 
 export interface UploadData {
   file_name: string;
@@ -152,7 +153,10 @@ export class UploadService {
 
     const user = await this.hasuraUserService.getUser();
     const useSystemService =
-      await this.permissionService.isBusinessAdmin(user.id);
+      await this.permissionService.hasPlatformPermission(
+        user.id,
+        PlatformPermissions.OPS_USER_DOCUMENTS
+      );
 
     const uploadResult = useSystemService
       ? await this.hasuraSystemService.executeQuery(getUploadQuery, {

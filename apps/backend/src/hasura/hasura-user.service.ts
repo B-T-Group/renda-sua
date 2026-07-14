@@ -504,7 +504,6 @@ export class HasuraUserService {
           user_id
           name
           main_interest
-          is_admin
           is_verified
           ai_tokens
           created_at
@@ -541,7 +540,6 @@ export class HasuraUserService {
         user_id: business.user_id,
         name: business.name,
         main_interest: business.main_interest,
-        is_admin: business.is_admin,
         is_verified: business.is_verified,
         ai_tokens: business.ai_tokens,
         created_at: business.created_at,
