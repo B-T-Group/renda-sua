@@ -11,4 +11,10 @@
         max_connections: 50
         retries: 1
       use_prepared_statements: true
+  functions:
+    - function:
+        name: accept_business_location_transfer
+        schema: public
+      configuration:
+        exposed_as: mutation
   tables: "!include Rendasua/tables/tables.yaml"

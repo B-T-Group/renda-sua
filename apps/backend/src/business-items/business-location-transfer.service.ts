@@ -295,8 +295,7 @@ export class BusinessLocationTransferService {
     );
     this.assertCanTransfer(preview);
     const location = await this.loadLocation(request.business_location_id);
-    const ids = await this.loadTransferableIds(location.id);
-    await this.executeAtomicTransfer(request, location, ids);
+    await this.executeAtomicTransfer(request);
     const updated = await this.loadRequest(requestId);
     void this.notifyRequester(
       request,
@@ -343,104 +342,32 @@ export class BusinessLocationTransferService {
   }
 
   private async executeAtomicTransfer(
-    request: TransferRequestRow,
-    location: LocationContext,
-    ids: TransferableIds
+    request: TransferRequestRow
   ): Promise<void> {
-    const toBusinessId = request.to_business_id;
-    const toUserId = request.to_user_id;
-    const locationId = location.id;
-    const addressId = location.address_id;
-    const itemIds = ids.itemIds;
-    const rentalItemIds = ids.rentalItemIds;
-    const listingIds = ids.listingIds;
     const mutation = `
-      mutation AcceptLocationTransfer(
-        $requestId: uuid!
-        $locationId: uuid!
-        $toBusinessId: uuid!
-        $fromBusinessId: uuid!
-        $toUserId: uuid!
-        $addressId: uuid!
-        $itemIds: [uuid!]!
-        $rentalItemIds: [uuid!]!
-        $listingIds: [uuid!]!
-        $now: timestamptz!
-      ) {
-        update_business_location_transfer_requests(
-          where: { id: { _eq: $requestId }, status: { _eq: pending } }
-          _set: { status: accepted, responded_at: $now }
-        ) { affected_rows }
-        update_business_locations_by_pk(
-          pk_columns: { id: $locationId }
-          _set: { business_id: $toBusinessId, is_primary: false }
-        ) { id }
-        update_business_addresses(
-          where: { address_id: { _eq: $addressId } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_items(
-          where: { id: { _in: $itemIds } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_item_images(
-          where: { item_id: { _in: $itemIds } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_rental_items(
-          where: { id: { _in: $rentalItemIds } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_rental_item_images(
-          where: { rental_item_id: { _in: $rentalItemIds } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_orders(
-          where: { business_location_id: { _eq: $locationId } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_order_refund_requests(
-          where: { order: { business_location_id: { _eq: $locationId } } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_rental_bookings(
-          where: { rental_location_listing_id: { _in: $listingIds } }
-          _set: { business_id: $toBusinessId }
-        ) { affected_rows }
-        update_accounts(
-          where: { business_location_id: { _eq: $locationId } }
-          _set: { user_id: $toUserId }
-        ) { affected_rows }
-        delete_business_item_favorites(
-          where: {
-            item_id: { _in: $itemIds }
-            business_id: { _eq: $fromBusinessId }
-          }
-        ) { affected_rows }
+      mutation AcceptLocationTransfer($requestId: uuid!, $destinationBusinessId: uuid!) {
+        accept_business_location_transfer(args: {
+          p_request_id: $requestId
+          p_destination_business_id: $destinationBusinessId
+        }) { id }
       }
     `;
-    const result = await this.hasuraSystem.executeMutation<{
-      update_business_location_transfer_requests: { affected_rows: number };
-    }>(mutation, {
-      requestId: request.id,
-      locationId,
-      toBusinessId,
-      fromBusinessId: request.from_business_id,
-      toUserId,
-      addressId,
-      itemIds,
-      rentalItemIds,
-      listingIds,
-      now: new Date().toISOString(),
-    });
-    if (
-      result.update_business_location_transfer_requests?.affected_rows !== 1
-    ) {
-      throw new HttpException(
-        { success: false, error: 'Transfer request is no longer pending' },
-        HttpStatus.CONFLICT
-      );
+    try {
+      await this.hasuraSystem.executeMutation(mutation, {
+        requestId: request.id,
+        destinationBusinessId: request.to_business_id,
+      });
+    } catch (error: any) {
+      if (!error?.message?.includes('TRANSFER_')) throw error;
+      this.throwTransferConflict();
     }
+  }
+
+  private throwTransferConflict(): never {
+    throw new HttpException(
+      { success: false, error: 'Transfer request changed or is blocked' },
+      HttpStatus.CONFLICT
+    );
   }
 
   private async collectBlockReasons(
@@ -808,17 +735,24 @@ export class BusinessLocationTransferService {
     requestId: string,
     status: TransferRequestStatus
   ): Promise<void> {
-    await this.hasuraSystem.executeMutation(
+    const result = await this.hasuraSystem.executeMutation<{
+      update_business_location_transfer_requests: { affected_rows: number };
+    }>(
       `
       mutation SetTransferStatus($id: uuid!, $status: business_location_transfer_status!, $now: timestamptz!) {
-        update_business_location_transfer_requests_by_pk(
-          pk_columns: { id: $id }
+        update_business_location_transfer_requests(
+          where: { id: { _eq: $id }, status: { _eq: pending } }
           _set: { status: $status, responded_at: $now }
-        ) { id }
+        ) { affected_rows }
       }
     `,
       { id: requestId, status, now: new Date().toISOString() }
     );
+    if (
+      result.update_business_location_transfer_requests?.affected_rows !== 1
+    ) {
+      this.throwTransferConflict();
+    }
   }
 
   private async assertNoPendingRequest(locationId: string): Promise<void> {
