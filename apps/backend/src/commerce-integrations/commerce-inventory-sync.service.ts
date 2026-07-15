@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { BusinessItemsAccessService } from '../business-items/business-items-access.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CommerceConnectionService } from './commerce-connection.service';
@@ -285,23 +284,6 @@ export class CommerceInventorySyncService {
       message.idempotencyKey,
       'success'
     );
-  }
-
-  @Cron(CronExpression.EVERY_30_MINUTES)
-  async scheduledReconciliation(): Promise<void> {
-    const integrations = await this.db.listConnectedIntegrations();
-    const now = Date.now();
-    for (const integration of integrations) {
-      const shard = parseInt(integration.id.replace(/-/g, '').slice(0, 8), 16);
-      if (Number.isNaN(shard) || shard % 2 !== Math.floor(now / 1800000) % 2) {
-        continue;
-      }
-      await this.queue.enqueue({
-        type: 'reconcile',
-        integrationId: integration.id,
-        trigger: 'RECONCILIATION',
-      });
-    }
   }
 
   private async findInventoryForVariant(

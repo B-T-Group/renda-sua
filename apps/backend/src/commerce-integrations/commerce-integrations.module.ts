@@ -8,6 +8,7 @@ import {
   CommerceIntegrationsWebhookController,
 } from './commerce-integrations.controller';
 import { CommerceIntegrationsDatabaseService } from './commerce-integrations-database.service';
+import { CommerceInventorySyncCronService } from './commerce-inventory-sync-cron.service';
 import { CommerceInventorySyncService } from './commerce-inventory-sync.service';
 import { CommerceMappingService } from './commerce-mapping.service';
 import { CommerceQueueService } from './commerce-queue.service';
@@ -36,6 +37,7 @@ import { CommerceOrderInventoryHook } from './commerce-order-inventory.hook';
     CommerceMappingService,
     CommerceImportService,
     CommerceInventorySyncService,
+    CommerceInventorySyncCronService,
     CommerceWebhookService,
     CommerceOrderInventoryHook,
   ],
