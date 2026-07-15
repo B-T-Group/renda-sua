@@ -33,16 +33,10 @@ export class AuthGuard implements CanActivate {
     if (!this.jwksClient) {
       const auth0Config = this.configService.get('auth0');
 
-      this.logger.log('Auth0 config:', { auth0Config });
-
       if (!auth0Config?.domain) {
         this.logger.error('AUTH0_DOMAIN environment variable is required');
         throw new Error('AUTH0_DOMAIN environment variable is required');
       }
-
-      this.logger.log(
-        `Initializing JWKS client for domain: ${auth0Config.domain}`
-      );
 
       this.jwksClient = new jwksClient.JwksClient({
         jwksUri: `https://${auth0Config.domain}/.well-known/jwks.json`,

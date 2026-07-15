@@ -19,11 +19,6 @@ export class AppService {
   }
 
   getHealth(): { status: string; timestamp: string } {
-    this.logger.info('Health check endpoint called', {
-      service: 'AppService',
-      method: 'getHealth',
-      timestamp: new Date().toISOString(),
-    });
 
     return {
       status: 'healthy',

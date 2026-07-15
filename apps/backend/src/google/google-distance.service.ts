@@ -61,7 +61,6 @@ export class GoogleDistanceService {
         );
 
         if (cachedResult) {
-          this.logger.log('Using cached distance matrix result for all destination pairs', cachedResult);
           return cachedResult;
         }
       }
@@ -117,13 +116,6 @@ export class GoogleDistanceService {
     destinations: string[]
   ): Promise<DistanceMatrixResponse> {
 
-     const keyPreview =
-       typeof this.apiKey === 'string' && this.apiKey.length >= 8
-         ? `${this.apiKey.slice(0, 4)}...${this.apiKey.slice(-4)}`
-         : this.apiKey
-         ? '****'
-         : '(not set)';
-     this.logger.log(`Calling Google Distance Matrix API with key: ${keyPreview}`);
     const url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
     const params = {
       origins: origins.join('|'),
