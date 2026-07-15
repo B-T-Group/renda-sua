@@ -322,7 +322,7 @@ export class BusinessImagesService {
       validation_warnings: img.validation_warnings ?? [],
       validated_at: img.validated_at ?? new Date().toISOString(),
     }));
-    const row = await this.hasuraUserService.executeMutation<{
+    const row = await this.hasuraSystemService.executeMutation<{
       insert_item_images: { returning: { id: string }[] };
     }>(INSERT_ITEM_IMAGES, {
       objects,

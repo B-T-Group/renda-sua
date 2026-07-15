@@ -2,10 +2,11 @@ import { Global, Module } from '@nestjs/common';
 import { HasuraSystemService } from './hasura-system.service';
 import { HasuraUserService } from './hasura-user.service';
 import { HasuraController } from './hasura.controller';
+import { HasuraDiagnosticsController } from './hasura-diagnostics.controller';
 
 @Global()
 @Module({
-  controllers: [HasuraController],
+  controllers: [HasuraController, HasuraDiagnosticsController],
   providers: [HasuraSystemService, HasuraUserService],
   exports: [HasuraSystemService, HasuraUserService],
 })
