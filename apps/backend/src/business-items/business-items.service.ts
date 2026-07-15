@@ -141,6 +141,7 @@ const GET_ITEMS = `
       business_inventories {
         id
         item_id
+        item_variant_id
         business_location_id
         quantity
         computed_available_quantity
@@ -153,6 +154,11 @@ const GET_ITEMS = `
         created_at
         updated_at
         promotion
+        item_variant {
+          id
+          name
+          sku
+        }
         item_deals {
           id
           start_at
@@ -319,6 +325,7 @@ const GET_SINGLE_ITEM = `
       }
       business_inventories {
         id
+        item_variant_id
         business_location_id
         quantity
         computed_available_quantity
@@ -332,6 +339,11 @@ const GET_SINGLE_ITEM = `
         created_at
         updated_at
         promotion
+        item_variant {
+          id
+          name
+          sku
+        }
         item_deals {
           id
           start_at
@@ -467,6 +479,7 @@ const GET_BUSINESS_INVENTORY = `
       id
       business_location_id
       item_id
+      item_variant_id
       quantity
       computed_available_quantity
       reserved_quantity
@@ -487,6 +500,11 @@ const GET_BUSINESS_INVENTORY = `
         name
         sku
       }
+      item_variant {
+        id
+        name
+        sku
+      }
     }
   }
 `;
@@ -497,6 +515,7 @@ const INSERT_BUSINESS_INVENTORY = `
       id
       item_id
       business_location_id
+      item_variant_id
     }
   }
 `;
@@ -1262,6 +1281,7 @@ export class BusinessItemsService {
     data: {
       business_location_id: string;
       item_id: string;
+      item_variant_id?: string | null;
       quantity: number;
       reserved_quantity: number;
       reorder_point: number;
@@ -1303,16 +1323,38 @@ export class BusinessItemsService {
       );
     }
 
+    if (data.item_variant_id) {
+      const variantRow = await this.hasuraUserService.executeQuery<{
+        item_variants_by_pk: { id: string; item_id: string } | null;
+      }>(
+        `
+        query ($id: uuid!) {
+          item_variants_by_pk(id: $id) { id item_id }
+        }
+      `,
+        { id: data.item_variant_id }
+      );
+      const variant = variantRow.item_variants_by_pk;
+      if (!variant || variant.item_id !== data.item_id) {
+        throw new HttpException(
+          { success: false, error: 'Variant not found for item' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     const result = await this.hasuraUserService.executeMutation<{
       insert_business_inventory_one: {
         id: string;
         item_id: string;
         business_location_id: string;
+        item_variant_id?: string | null;
       } | null;
     }>(INSERT_BUSINESS_INVENTORY, {
       itemData: {
         business_location_id: data.business_location_id,
         item_id: data.item_id,
+        item_variant_id: data.item_variant_id ?? null,
         quantity: data.quantity,
         reserved_quantity: data.reserved_quantity,
         reorder_point: data.reorder_point,

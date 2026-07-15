@@ -1,0 +1,7 @@
+table:
+  name: commerce_entity_mappings
+  schema: public
+object_relationships:
+  - name: integration
+    using:
+      foreign_key_constraint_on: integration_id

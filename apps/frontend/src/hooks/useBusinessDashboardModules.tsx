@@ -11,6 +11,7 @@ import {
   Error as ErrorIcon,
   Inbox as RentalInboxIcon,
   Inventory2 as ItemsIcon,
+  IntegrationInstructions as IntegrationsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
@@ -132,6 +133,17 @@ export function useBusinessDashboardModules({
     };
 
     const catalogMenuModules: BusinessDashboardModule[] = [
+      {
+        title: t('business.integrations.title', 'Integrations'),
+        description: t(
+          'business.integrations.dashboardDescription',
+          'Connect Shopify and sync catalog and inventory.'
+        ),
+        icon: <IntegrationsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#5c6bc0',
+        path: '/business/integrations',
+      },
       {
         title: t('business.images.title', 'Item Images Library'),
         description: t(

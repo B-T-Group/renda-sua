@@ -663,6 +663,14 @@ function App() {
               }
             />
             <Route
+              path="/business/integrations"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessIntegrationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/merchant-agreement"
               element={
                 <ProtectedRoute>

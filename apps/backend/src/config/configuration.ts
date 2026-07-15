@@ -331,6 +331,22 @@ export interface ItemAiReviewConfig {
   model: string;
 }
 
+export interface ShopifyCommerceConfig {
+  apiKey: string;
+  apiSecret: string;
+  scopes: string;
+  apiVersion: string;
+  appUrl: string;
+}
+
+export interface CommerceIntegrationsConfig {
+  tokenEncryptionKey: string;
+  oauthStateSecret: string;
+  /** Process sync jobs inline when SQS is unavailable (dev/test). */
+  processSyncInline: boolean;
+  shopify: ShopifyCommerceConfig;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -374,6 +390,7 @@ export interface Configuration {
   boldsign: BoldSignConfig;
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
+  commerceIntegrations: CommerceIntegrationsConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -757,6 +774,25 @@ export default (): Configuration => {
     itemAiReview: {
       enabled: process.env.ITEM_AI_AUTO_REVIEW_ENABLED === 'true',
       model: process.env.ITEM_AI_REVIEW_MODEL || 'gpt-4.1',
+    },
+    commerceIntegrations: {
+      tokenEncryptionKey: process.env.COMMERCE_TOKEN_ENCRYPTION_KEY || '',
+      oauthStateSecret:
+        process.env.COMMERCE_OAUTH_STATE_SECRET ||
+        process.env.SHOPIFY_API_SECRET ||
+        '',
+      processSyncInline:
+        process.env.COMMERCE_SYNC_INLINE === 'true' ||
+        process.env.NODE_ENV !== 'production',
+      shopify: {
+        apiKey: process.env.SHOPIFY_API_KEY || '',
+        apiSecret: process.env.SHOPIFY_API_SECRET || '',
+        scopes:
+          process.env.SHOPIFY_SCOPES ||
+          'read_products,read_inventory,write_inventory,read_locations',
+        apiVersion: process.env.SHOPIFY_API_VERSION || '2025-10',
+        appUrl: process.env.SHOPIFY_APP_URL || '',
+      },
     },
   };
 };

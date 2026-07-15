@@ -220,6 +220,11 @@ const Header: React.FC = () => {
       submenuItems.push(
         { label: t('common.items', 'Items'), path: '/business/items', icon: <Assignment /> },
         {
+          label: t('business.integrations.title', 'Integrations'),
+          path: '/business/integrations',
+          icon: <Assignment />,
+        },
+        {
           label: t('business.dashboard.rentalsTitle', 'Rentals'),
           path: '/business/rentals/catalog',
           icon: <Assignment />,

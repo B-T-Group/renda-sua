@@ -8,6 +8,9 @@ object_relationships:
   - name: item
     using:
       foreign_key_constraint_on: item_id
+  - name: item_variant
+    using:
+      foreign_key_constraint_on: item_variant_id
 array_relationships:
   - name: order_items
     using:
@@ -47,6 +50,7 @@ insert_permissions:
       columns:
         - business_location_id
         - item_id
+        - item_variant_id
         - quantity
         - reserved_quantity
         - reorder_point
@@ -62,6 +66,7 @@ select_permissions:
         - id
         - business_location_id
         - item_id
+        - item_variant_id
         - selling_price
         - is_active
         - created_at
@@ -80,6 +85,7 @@ select_permissions:
         - id
         - business_location_id
         - item_id
+        - item_variant_id
         - quantity
         - reserved_quantity
         - reorder_point
@@ -107,6 +113,7 @@ select_permissions:
         - id
         - is_active
         - item_id
+        - item_variant_id
         - quantity
         - selling_price
         - updated_at

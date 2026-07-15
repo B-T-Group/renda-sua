@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
+import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
@@ -46,6 +47,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     LocationsModule,
     GoogleModule,
     RbacModule,
+    CommerceIntegrationsModule,
   ],
   controllers: [
     OrdersController,

@@ -1,0 +1,10 @@
+table:
+  name: commerce_sync_events
+  schema: public
+object_relationships:
+  - name: integration
+    using:
+      foreign_key_constraint_on: integration_id
+  - name: sync_run
+    using:
+      foreign_key_constraint_on: sync_run_id

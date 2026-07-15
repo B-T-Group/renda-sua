@@ -271,6 +271,52 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `ItemAiReviewQueueUrl-${environment}`,
     });
 
+    // FIFO SQS + Lambda for commerce / Shopify sync jobs
+    const commerceSyncQueue = new sqs.Queue(
+      this,
+      `CommerceSyncQueue-${environment}`,
+      {
+        queueName: `commerce-sync-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: false,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(5),
+      }
+    );
+
+    const commerceSyncHandler = new lambda.Function(
+      this,
+      `CommerceSyncHandler-${environment}`,
+      {
+        functionName: `commerce-sync-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/commerce-sync-handler'),
+        timeout: cdk.Duration.minutes(3),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    commerceSyncHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(commerceSyncQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    new cdk.CfnOutput(this, `CommerceSyncQueueUrl-${environment}`, {
+      value: commerceSyncQueue.queueUrl,
+      description: 'SQS Queue URL for commerce inventory sync',
+      exportName: `CommerceSyncQueueUrl-${environment}`,
+    });
+
     // Output Lambda function ARN
     new cdk.CfnOutput(this, `OrderStatusHandlerFunctionArn-${environment}`, {
       value: orderStatusHandlerFunction.functionArn,

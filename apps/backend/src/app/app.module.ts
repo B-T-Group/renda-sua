@@ -24,6 +24,7 @@ import { BusinessContractsModule } from '../business-contracts/business-contract
 import { CategoriesModule } from '../categories/categories.module';
 import { ClientsModule } from '../clients/clients.module';
 import { CollectionsModule } from '../collections/collections.module';
+import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
 import configuration from '../config/configuration';
 import { DatabaseModule } from '../database/database.module';
 import { DeliveryPinModule } from '../delivery-pin/delivery-pin.module';
@@ -142,6 +143,7 @@ import { AppService } from './app.service';
     BusinessItemsModule,
     BusinessImagesModule,
     BusinessTokensModule,
+    CommerceIntegrationsModule,
     ImageValidationModule,
     BusinessVerificationModule,
     BusinessContractsModule,

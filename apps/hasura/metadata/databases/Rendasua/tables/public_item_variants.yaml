@@ -24,6 +24,13 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+  - name: business_inventories
+    using:
+      foreign_key_constraint_on:
+        column: item_variant_id
+        table:
+          name: business_inventory
+          schema: public
 insert_permissions:
   - role: business
     permission:

@@ -91,6 +91,9 @@ export const BusinessItemsPage = lazy(() =>
 export const BusinessLocationsPage = lazy(() =>
   import('../components/pages/BusinessLocationsPage')
 );
+export const BusinessIntegrationsPage = lazy(() =>
+  import('../components/pages/BusinessIntegrationsPage')
+);
 export const BusinessRentalItemEditPage = lazy(() =>
   import('../components/pages/BusinessRentalItemEditPage')
 );

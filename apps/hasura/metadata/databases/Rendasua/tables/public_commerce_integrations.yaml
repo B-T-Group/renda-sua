@@ -1,0 +1,36 @@
+table:
+  name: commerce_integrations
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+array_relationships:
+  - name: entity_mappings
+    using:
+      foreign_key_constraint_on:
+        column: integration_id
+        table:
+          name: commerce_entity_mappings
+          schema: public
+  - name: sync_runs
+    using:
+      foreign_key_constraint_on:
+        column: integration_id
+        table:
+          name: commerce_sync_runs
+          schema: public
+  - name: sync_events
+    using:
+      foreign_key_constraint_on:
+        column: integration_id
+        table:
+          name: commerce_sync_events
+          schema: public
+  - name: webhook_events
+    using:
+      foreign_key_constraint_on:
+        column: integration_id
+        table:
+          name: commerce_webhook_events
+          schema: public

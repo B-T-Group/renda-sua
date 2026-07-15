@@ -1584,6 +1584,35 @@
       "dashboardTitle": "Rental image library",
       "dashboardDescription": "Upload rental photos, run AI cleanup, and link or create rental items."
     },
+    "integrations": {
+      "title": "Integrations",
+      "dashboardDescription": "Connect Shopify and sync catalog and inventory.",
+      "subtitle": "Connect external commerce systems to import products and sync inventory.",
+      "connectedSuccess": "Shopify connected successfully.",
+      "connectError": "Shopify connection failed: {{error}}",
+      "status": "Status",
+      "lastSynced": "Last synchronized",
+      "never": "Never",
+      "mapLocations": "Map locations",
+      "importProducts": "Import products",
+      "syncNow": "Sync now",
+      "syncQueued": "Inventory sync queued.",
+      "viewSyncIssues": "View sync history",
+      "disconnect": "Disconnect",
+      "locationsSaved": "Location mappings saved.",
+      "notSynced": "Not synchronized",
+      "alreadyImported": "already imported",
+      "variants": "variants",
+      "importSelected": "Import selected",
+      "importResult": "Import {{status}}: {{success}} succeeded.",
+      "syncHistory": "Sync history",
+      "shopify": {
+        "title": "Shopify",
+        "shopDomain": "Shop domain",
+        "connect": "Connect Shopify",
+        "store": "Store"
+      }
+    },
     "onboarding": {
       "firstSale": {
         "seoTitle": "Add your first product",

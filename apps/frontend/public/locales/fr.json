@@ -2419,6 +2419,35 @@
       },
       "title": "Commandes",
       "waitingForAgent": "📦 Commande prête pour la collecte ! En attente qu'un agent réclame cette livraison. Gardez la commande préparée et prête."
+    },
+    "integrations": {
+      "title": "Intégrations",
+      "dashboardDescription": "Connectez Shopify et synchronisez le catalogue et les stocks.",
+      "subtitle": "Connectez des systèmes de commerce externes pour importer des produits et synchroniser les stocks.",
+      "connectedSuccess": "Shopify connecté avec succès.",
+      "connectError": "Échec de la connexion Shopify : {{error}}",
+      "status": "Statut",
+      "lastSynced": "Dernière synchronisation",
+      "never": "Jamais",
+      "mapLocations": "Associer les emplacements",
+      "importProducts": "Importer des produits",
+      "syncNow": "Synchroniser maintenant",
+      "syncQueued": "Synchronisation des stocks mise en file.",
+      "viewSyncIssues": "Voir l'historique de sync",
+      "disconnect": "Déconnecter",
+      "locationsSaved": "Associations d'emplacements enregistrées.",
+      "notSynced": "Non synchronisé",
+      "alreadyImported": "déjà importé",
+      "variants": "variantes",
+      "importSelected": "Importer la sélection",
+      "importResult": "Import {{status}} : {{success}} réussis.",
+      "syncHistory": "Historique de synchronisation",
+      "shopify": {
+        "title": "Shopify",
+        "shopDomain": "Domaine de la boutique",
+        "connect": "Connecter Shopify",
+        "store": "Boutique"
+      }
     }
   },
   "client": {

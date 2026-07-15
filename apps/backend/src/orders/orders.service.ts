@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
@@ -6,6 +6,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { assertMobileLocationConsentAccepted } from '../agents/agent-location-claim.util';
+import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -372,7 +373,9 @@ export class OrdersService {
     private readonly cancellationPolicyService: CancellationPolicyService,
     private readonly locationsService: LocationsService,
     private readonly orderSystemJobsService: OrderSystemJobsService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    @Optional()
+    private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook
   ) {}
 
   private async canAccessAnyOrder(userId: string): Promise<boolean> {
@@ -505,7 +508,38 @@ export class OrdersService {
     orderLine: OrderItem,
     inventoryRow: any
   ): any | null {
+    const rowVariantId = inventoryRow.item_variant_id as string | null | undefined;
     const activeVariants = inventoryRow.item?.item_variants ?? [];
+    if (rowVariantId) {
+      const rowVariant =
+        (Array.isArray(activeVariants)
+          ? activeVariants.find((v: any) => v?.id === rowVariantId)
+          : null) ||
+        inventoryRow.item_variant ||
+        null;
+      if (!rowVariant) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Inventory variant is unavailable for this product.',
+            error: 'ITEM_VARIANT_INVALID',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const requestedId = orderLine.item_variant_id;
+      if (requestedId?.trim() && requestedId !== rowVariantId) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Selected variant does not match inventory stock row.',
+            error: 'ITEM_VARIANT_MISMATCH',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return rowVariant;
+    }
     if (!Array.isArray(activeVariants) || activeVariants.length === 0) {
       return null;
     }
@@ -6313,6 +6347,38 @@ export class OrdersService {
       );
     }
 
+    const committedStatuses = new Set([
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'assigned_to_agent',
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+      'delivered',
+    ]);
+    if (
+      this.commerceOrderInventoryHook &&
+      committedStatuses.has(previousStatus)
+    ) {
+      try {
+        const items = (order.order_items || []).map((oi: any) => ({
+          id: oi.id,
+          business_inventory_id: oi.business_inventory_id,
+          quantity: oi.quantity,
+        }));
+        await this.commerceOrderInventoryHook.onOrderCancelledAfterCommit({
+          orderId,
+          items,
+        });
+      } catch (error: any) {
+        this.logger.warn(
+          `Commerce inventory release hook failed for ${orderId}: ${error?.message}`
+        );
+      }
+    }
+
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
@@ -6484,9 +6550,50 @@ export class OrdersService {
   ): Promise<void> {
     if (currentStatus === 'pending_payment') {
       await this.updateOrderStatusAndPaymentStatus(orderId, 'pending', 'paid');
+      await this.triggerCommerceInventoryCommit(orderId);
       return;
     }
     await this.updateOrderPaymentStatusOnly(orderId, 'paid');
+  }
+
+  private async triggerCommerceInventoryCommit(orderId: string): Promise<void> {
+    if (!this.commerceOrderInventoryHook) return;
+    try {
+      const order = await this.getOrderByIdInternal(orderId);
+      const items = (order?.order_items || []).map((oi: any) => ({
+        id: oi.id,
+        business_inventory_id: oi.business_inventory_id,
+        quantity: oi.quantity,
+      }));
+      await this.commerceOrderInventoryHook.onOrderPaymentCommitted({
+        orderId,
+        items,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Commerce inventory commit hook failed for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async getOrderByIdInternal(orderId: string): Promise<any> {
+    const q = `
+      query ($id: uuid!) {
+        orders_by_pk(id: $id) {
+          id
+          current_status
+          order_items {
+            id
+            business_inventory_id
+            quantity
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: any;
+    }>(q, { id: orderId });
+    return res.orders_by_pk;
   }
 
   /**
@@ -6797,6 +6904,28 @@ export class OrdersService {
           selling_price
           is_active
           business_location_id
+          item_variant_id
+          item_variant {
+            id
+            name
+            sku
+            price
+            weight
+            weight_unit
+            dimensions
+            color
+            attributes
+            is_default
+            sort_order
+            item_variant_images(order_by: { display_order: asc }) {
+              id
+              image_url
+              alt_text
+              caption
+              is_primary
+              display_order
+            }
+          }
           business_location {
             business_id
             address {
@@ -7531,6 +7660,10 @@ export class OrdersService {
 
     // Update reserved quantities for inventory items
     await this.updateReservedQuantities(orderItemsData, 'increment');
+
+    if (current_status === 'pending' && payment_status === 'paid') {
+      await this.triggerCommerceInventoryCommit(order.id);
+    }
 
     // Create order status history after order is created
     const createStatusHistoryMutation = `

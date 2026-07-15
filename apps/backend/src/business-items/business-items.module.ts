@@ -35,6 +35,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   ],
   exports: [
     BusinessItemsService,
+    BusinessItemsAccessService,
     BusinessLocationTransferService,
     ItemDealsService,
   ],
