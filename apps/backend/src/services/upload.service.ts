@@ -1,8 +1,9 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { PermissionService } from '../auth/permission.service';
 import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { resolveActivePersona } from '../users/persona.util';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 
@@ -33,11 +34,14 @@ const ID_DOCUMENT_TYPE_NAMES = ['id_card', 'passport', 'driver_license'];
 
 @Injectable()
 export class UploadService {
+  private readonly logger = new Logger(UploadService.name);
+
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly awsService: AwsService,
-    private readonly permissionService: PermissionService
+    private readonly permissionService: PermissionService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   /**
@@ -294,11 +298,62 @@ export class UploadService {
       }
     );
 
+    const inserted = uploadRecord.insert_user_uploads_one as
+      | { id: string }
+      | undefined;
+    if (inserted?.id && persona === 'business') {
+      void this.notifyBusinessIdUploadIfNeeded(
+        user,
+        uploadData.document_type_id,
+        inserted.id
+      );
+    }
+
     return {
       upload_record: uploadRecord.insert_user_uploads_one,
       presigned_url: presignedUrlResponse.url,
       expires_at: presignedUrlResponse.expiresAt,
     };
+  }
+
+  private async notifyBusinessIdUploadIfNeeded(
+    user: {
+      id: string;
+      business?: { name?: string | null } | null;
+    },
+    documentTypeId: number,
+    uploadId: string
+  ): Promise<void> {
+    try {
+      const documentType = await this.getDocumentTypeName(documentTypeId);
+      if (!documentType || !ID_DOCUMENT_TYPE_NAMES.includes(documentType)) {
+        return;
+      }
+      await this.notificationsService.notifySuperusersIdDocumentUploaded({
+        businessUserId: user.id,
+        businessName: user.business?.name?.trim() || 'Business',
+        documentType,
+        uploadId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `notifyBusinessIdUploadIfNeeded: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async getDocumentTypeName(
+    documentTypeId: number
+  ): Promise<string | null> {
+    const query = `
+      query DocumentTypeById($id: Int!) {
+        document_types_by_pk(id: $id) { name }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      id: documentTypeId,
+    });
+    return (result.document_types_by_pk?.name as string | undefined) ?? null;
   }
 
   /**
@@ -508,6 +563,42 @@ export class UploadService {
           agentId: agent.id,
         });
       }
+
+      void this.notifyBusinessIdApprovedIfNeeded(
+        upload.user_id,
+        upload.document_type.name
+      );
+    }
+  }
+
+  private async notifyBusinessIdApprovedIfNeeded(
+    userId: string,
+    documentType: string
+  ): Promise<void> {
+    try {
+      const businessQuery = `
+        query BusinessByUserId($userId: uuid!) {
+          businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const businessResult = await this.hasuraSystemService.executeQuery(
+        businessQuery,
+        { userId }
+      );
+      const business = (
+        businessResult?.businesses as { id: string }[] | undefined
+      )?.[0];
+      if (!business) return;
+      await this.notificationsService.sendBusinessIdDocumentApprovedEmail({
+        businessUserId: userId,
+        documentType,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `notifyBusinessIdApprovedIfNeeded: ${error?.message ?? String(error)}`
+      );
     }
   }
 

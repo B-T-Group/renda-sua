@@ -7,6 +7,8 @@ import { Resend } from 'resend';
 import * as webPush from 'web-push';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PlatformRoles } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { SmsService } from '../sms/sms.service';
 import {
   buildProximityVariables,
@@ -99,6 +101,25 @@ function escapeHtmlForEmail(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function formatIdDocumentTypeLabel(
+  documentType: string,
+  locale: EmailLocale = 'en'
+): string {
+  const labels: Record<EmailLocale, Record<string, string>> = {
+    en: {
+      id_card: 'ID card',
+      passport: 'passport',
+      driver_license: "driver's license",
+    },
+    fr: {
+      id_card: "carte d'identité",
+      passport: 'passeport',
+      driver_license: 'permis de conduire',
+    },
+  };
+  return labels[locale][documentType] ?? documentType.replace(/_/g, ' ');
+}
+
 const RENTAL_REJECTION_REASONS: Record<
   EmailLocale,
   Record<string, string>
@@ -153,7 +174,8 @@ export class NotificationsService {
   constructor(
     private readonly configService: ConfigService<Configuration>,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly smsService: SmsService
+    private readonly smsService: SmsService,
+    private readonly rbacService: RbacService
   ) {
     this.loadResendTemplateIds();
   }
@@ -2235,6 +2257,97 @@ export class NotificationsService {
         <p>Reason: ${params.reason}</p>
       `,
     });
+  }
+
+  async notifySuperusersIdDocumentUploaded(params: {
+    businessUserId: string;
+    businessName: string;
+    documentType: string;
+    uploadId: string;
+  }): Promise<void> {
+    try {
+      const recipients = await this.listSuperuserRecipients();
+      const safeName = escapeHtmlForEmail(params.businessName || 'Business');
+      const safeDoc = escapeHtmlForEmail(formatIdDocumentTypeLabel(params.documentType));
+      const subject = `ID document uploaded — ${params.businessName || 'Business'}`;
+      const html = `
+        <p>Business <strong>${safeName}</strong> uploaded a <strong>${safeDoc}</strong> for verification.</p>
+        <p>Review it in the admin businesses panel (<code>/admin/businesses</code>).</p>
+        <p>Upload id: ${escapeHtmlForEmail(params.uploadId)}</p>
+      `;
+      const title = 'ID document uploaded';
+      const body = `${params.businessName || 'A business'} uploaded ${formatIdDocumentTypeLabel(params.documentType)} for review.`;
+      for (const recipient of recipients) {
+        if (recipient.email) {
+          await this.sendSimpleLifecycleEmail({
+            to: recipient.email,
+            subject,
+            html,
+          });
+        }
+        await this.sendPushNotificationByUserId(recipient.userId, title, body, {
+          type: 'admin_id_uploaded',
+          uploadId: params.uploadId,
+          businessUserId: params.businessUserId,
+          url: '/admin/businesses',
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperusersIdDocumentUploaded: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendBusinessIdDocumentApprovedEmail(params: {
+    businessUserId: string;
+    documentType: string;
+  }): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(params.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Business ID approved email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
+      if (locale === 'fr') {
+        await this.sendSimpleLifecycleEmail({
+          to: u.email,
+          subject: `Pièce d'identité approuvée — ${docLabel}`,
+          html: `
+            <p>Votre <strong>${escapeHtmlForEmail(docLabel)}</strong> a été approuvée.</p>
+            <p>Vous pouvez poursuivre la vérification de votre compte marchand dans l'application.</p>
+            <p>— Rendasua</p>
+          `,
+        });
+        return;
+      }
+      await this.sendSimpleLifecycleEmail({
+        to: u.email,
+        subject: `ID document approved — ${docLabel}`,
+        html: `
+          <p>Your <strong>${escapeHtmlForEmail(docLabel)}</strong> has been approved.</p>
+          <p>You can continue merchant verification in the app.</p>
+          <p>— Rendasua</p>
+        `,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessIdDocumentApprovedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async listSuperuserRecipients(): Promise<
+    Array<{ userId: string; email: string | null }>
+  > {
+    const users = await this.rbacService.listUsersWithRoles();
+    return users
+      .filter((u) => u.roles.includes(PlatformRoles.SUPERUSER))
+      .map((u) => ({ userId: u.userId, email: u.email }));
   }
 
   private async sendSimpleLifecycleEmail(params: {

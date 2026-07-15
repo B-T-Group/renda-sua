@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as libphonenumber from 'google-libphonenumber';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
@@ -158,6 +159,21 @@ function validatePhoneNumber(
   }
 }
 
+function pickPrimaryOrOnlyAddressCountry(
+  rows: Array<{ address?: { country?: string | null; is_primary?: boolean | null } | null }>
+): string | null {
+  const addresses = rows
+    .map((row) => row.address)
+    .filter(
+      (address): address is { country?: string | null; is_primary?: boolean | null } =>
+        !!address?.country?.trim()
+    );
+  if (!addresses.length) return null;
+  const primary = addresses.find((address) => address.is_primary);
+  const chosen = primary ?? addresses[0];
+  return chosen.country?.trim().toUpperCase() || null;
+}
+
 export interface MobilePaymentRequest {
   amount: number;
   currency: string;
@@ -218,7 +234,8 @@ export class MobilePaymentsService {
     private readonly mtnMomoDatabaseService: MtnMomoDatabaseService,
     private readonly orangeMomoService: OrangeMomoService,
     private readonly orangeMomoDatabaseService: OrangeMomoDatabaseService,
-    private readonly freemopayService: FreemopayService
+    private readonly freemopayService: FreemopayService,
+    private readonly hasuraSystemService: HasuraSystemService
   ) {
     // Register payment providers
     this.providers.set('mypvit', myPVitService);
@@ -322,14 +339,17 @@ export class MobilePaymentsService {
     userId?: string
   ): Promise<MobilePaymentResponse> {
     try {
+      const phoneRegion = await this.resolvePhoneDefaultRegion(userId);
+
       // Validate phone number if provided
       if (paymentRequest.customerPhone) {
         const phoneValidation = validatePhoneNumber(
-          paymentRequest.customerPhone
+          paymentRequest.customerPhone,
+          phoneRegion
         );
         if (!phoneValidation.isValid) {
           this.logger.warn(
-            `Invalid phone number provided: ${paymentRequest.customerPhone}`
+            `Invalid phone number provided: ${paymentRequest.customerPhone} (region=${phoneRegion})`
           );
           return {
             success: false,
@@ -346,7 +366,7 @@ export class MobilePaymentsService {
       this.logger.log(
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
-            ? removeCountryCode(paymentRequest.customerPhone)
+            ? removeCountryCode(paymentRequest.customerPhone, phoneRegion)
             : paymentRequest.accountId || 'unknown'
         }`
       );
@@ -368,7 +388,8 @@ export class MobilePaymentsService {
         case 'airtel':
         case 'moov': {
           const phoneNumber = removeCountryCode(
-            paymentRequest.customerPhone || ''
+            paymentRequest.customerPhone || '',
+            phoneRegion
           );
           const mypvitResponse = await this.myPVitService.initiatePayment(
             providerRequest as MyPVitPaymentRequest,
@@ -1019,6 +1040,64 @@ export class MobilePaymentsService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Resolve libphonenumber default region from the user's primary/only address.
+   * Falls back to GA when the user or country cannot be resolved.
+   */
+  private async resolvePhoneDefaultRegion(userId?: string): Promise<string> {
+    if (!userId) return 'GA';
+    try {
+      const country = await this.getUserPrimaryAddressCountry(userId);
+      return country || 'GA';
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not resolve phone region for user ${userId}: ${error?.message ?? error}`
+      );
+      return 'GA';
+    }
+  }
+
+  private async getUserPrimaryAddressCountry(
+    userId: string
+  ): Promise<string | null> {
+    const query = `
+      query GetUserAddressCountries($userId: uuid!) {
+        business_addresses(
+          where: {
+            business: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+        ) {
+          address { country is_primary }
+        }
+        client_addresses(
+          where: {
+            client: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+        ) {
+          address { country is_primary }
+        }
+        agent_addresses(
+          where: {
+            agent: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+        ) {
+          address { country is_primary }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+    });
+    return pickPrimaryOrOnlyAddressCountry([
+      ...(result.business_addresses ?? []),
+      ...(result.client_addresses ?? []),
+      ...(result.agent_addresses ?? []),
+    ]);
   }
 
   /**
