@@ -86,5 +86,11 @@
   "client_rental_request_accepted_fr": "abc47d42-5616-4240-ad16-f68b2c46444e",
   "client_rental_request_rejected_fr": "98d1e83d-6525-406e-ada7-b4707218f8d8",
   "agent_business_referred": "2f37b23f-5d59-4e27-bea9-96c32faabcea",
-  "agent_business_referred_fr": "ac2d5347-a14b-4293-9566-91abd8f2f8d8"
+  "agent_business_referred_fr": "ac2d5347-a14b-4293-9566-91abd8f2f8d8",
+  "business_sale_item_ai_proposal": "81d7d123-b8ab-4855-8485-bb37478a6016",
+  "business_sale_item_approved": "28f5a8a7-7768-4be1-9c0e-ef1293dcfbe7",
+  "business_sale_item_rejected": "a651f24c-49d4-4c86-9984-b39750d2118f",
+  "business_sale_item_ai_proposal_fr": "3e0b369d-2a77-4163-a683-511108d981e2",
+  "business_sale_item_approved_fr": "42f70302-c54b-4f87-9a4d-31de00efa713",
+  "business_sale_item_rejected_fr": "ebf74621-7a6d-4b5a-bd3e-4a058870bcc6"
 }
