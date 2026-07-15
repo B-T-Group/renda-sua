@@ -1,11 +1,11 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from './hasura-user.service';
 
 @ApiTags('diagnostics')
 @Controller('diagnostics/hasura')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class HasuraDiagnosticsController {
   constructor(private readonly hasuraUserService: HasuraUserService) {}
