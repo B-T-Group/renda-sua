@@ -90,7 +90,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
 
     const backendInternalApiBaseUrl =
       environment === 'production'
-        ? 'https://api.rendasua.com'
+        ? 'https://prod.api.rendasua.com'
         : 'https://dev.api.rendasua.com';
 
     // Create Lambda function for order status handler

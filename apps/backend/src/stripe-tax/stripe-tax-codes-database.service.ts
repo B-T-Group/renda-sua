@@ -81,8 +81,8 @@ export class StripeTaxCodesDatabaseService {
   }): Promise<{ rows: StripeTaxCodeRow[]; total: number }> {
     const whereParts: string[] = ['is_active: { _eq: true }'];
     const variables: Record<string, unknown> = {
-      limit: params.limit,
-      offset: params.offset,
+      limit: Math.trunc(Number(params.limit)),
+      offset: Math.trunc(Number(params.offset)),
     };
     if (params.group?.trim()) {
       whereParts.push('group_name: { _eq: $group }');

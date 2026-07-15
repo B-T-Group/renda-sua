@@ -3,6 +3,8 @@ import {
   Get,
   Param,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,13 +26,14 @@ export class StripeTaxController {
   constructor(private readonly database: StripeTaxCodesDatabaseService) {}
 
   @Get('codes')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({ summary: 'Search Stripe product tax categories' })
   @ApiResponse({ status: 200, type: StripeTaxCodesListResponseDto })
   async searchCodes(
     @Query() query: SearchStripeTaxCodesQueryDto
   ): Promise<StripeTaxCodesListResponseDto> {
-    const limit = query.limit ?? 50;
-    const offset = query.offset ?? 0;
+    const limit = Number(query.limit ?? 50);
+    const offset = Number(query.offset ?? 0);
     const { rows, total } = await this.database.search({
       search: query.search,
       group: query.group,
