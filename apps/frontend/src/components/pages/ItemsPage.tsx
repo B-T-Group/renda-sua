@@ -56,7 +56,9 @@ import AppDownloadBanner from '../common/AppDownloadBanner';
 import InGridAppPromoTile from '../common/InGridAppPromoTile';
 import DashboardItemCard from '../common/DashboardItemCard';
 import { FeaturedCollectionsRow } from '../common/FeaturedCollectionsRow';
+import BrowseStoresStrip from '../common/BrowseStoresStrip';
 import { useCollections } from '../../hooks/useCollections';
+import { useCatalogStores } from '../../hooks/useCatalogStores';
 import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
@@ -328,6 +330,12 @@ const ItemsPage: React.FC = () => {
       anonymousOrigin: browserGeo,
       enabled: !collectionSlug && !searchTerm.trim(),
     });
+
+  const { stores: featuredStores, loading: storesLoading } = useCatalogStores({
+    limit: 8,
+    anonymousOrigin: browserGeo,
+    enabled: !collectionSlug && !searchTerm.trim(),
+  });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
@@ -1007,6 +1015,17 @@ const ItemsPage: React.FC = () => {
               loading={collectionsLoading}
               onCollectionClick={(slug) => navigate(`/collections/${slug}`)}
               onSeeAllCollections={() => navigate('/collections')}
+            />
+          </Box>
+        ) : null}
+
+        {!hasActiveFilters && (featuredStores.length > 0 || storesLoading) ? (
+          <Box sx={{ px: { xs: 1, sm: 2 } }}>
+            <BrowseStoresStrip
+              stores={featuredStores}
+              loading={storesLoading}
+              onStoreClick={(id) => navigate(`/store/${id}`)}
+              onSeeAll={() => navigate('/stores')}
             />
           </Box>
         ) : null}

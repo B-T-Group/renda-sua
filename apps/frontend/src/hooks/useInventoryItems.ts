@@ -138,6 +138,9 @@ export interface GetInventoryItemsQuery {
   sort?: InventorySortMode;
   include_unavailable?: boolean;
   business_location_id?: string;
+  business_id?: string;
+  /** Explicit merchant preview (requires verified owner JWT). */
+  owner_preview?: boolean;
   anonymousOrigin?: { lat: number; lng: number } | null;
   collection?: string;
 }
@@ -225,6 +228,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.business_location_id?.trim() && {
             business_location_id: query.business_location_id.trim(),
           }),
+          ...(query.business_id?.trim() && {
+            business_id: query.business_id.trim(),
+          }),
+          ...(query.owner_preview === true && { owner_preview: true }),
           ...(query.collection?.trim() && {
             collection: query.collection.trim(),
           }),
@@ -289,6 +296,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.sort,
     query.include_unavailable,
     query.business_location_id,
+    query.business_id,
+    query.owner_preview,
     query.collection,
     query.anonymousOrigin?.lat,
     query.anonymousOrigin?.lng,

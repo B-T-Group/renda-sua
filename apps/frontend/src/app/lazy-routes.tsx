@@ -222,6 +222,10 @@ export const ItemsPage = lazy(
       '../components/pages/ItemsPage'
     )
 );
+export const StorePage = lazy(() => import('../components/pages/StorePage'));
+export const StoresIndexPage = lazy(
+  () => import('../components/pages/StoresIndexPage')
+);
 export const ItemViewPage = lazy(() =>
   import('../components/pages/ItemViewPage')
 );

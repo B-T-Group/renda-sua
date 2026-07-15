@@ -20,6 +20,7 @@ export interface BusinessGetReadyChecklistProps {
   mainInterest: 'sell_items' | 'rent_items';
   itemCount: number;
   rentalItemCount: number;
+  businessId?: string;
 }
 
 type ChecklistItem = {
@@ -32,7 +33,7 @@ type ChecklistItem = {
 
 export const BusinessGetReadyChecklist: React.FC<
   BusinessGetReadyChecklistProps
-> = ({ status, mainInterest, itemCount, rentalItemCount }) => {
+> = ({ status, mainInterest, itemCount, rentalItemCount, businessId }) => {
   const { t } = useTranslation();
 
   const isStripeRail = status?.paymentRail === 'stripe';
@@ -40,6 +41,7 @@ export const BusinessGetReadyChecklist: React.FC<
   const payoutsDone = Boolean(status?.steps?.stripeConnect?.complete);
   const hasCatalog =
     mainInterest === 'rent_items' ? rentalItemCount > 0 : itemCount > 0;
+  const previewDone = Boolean(status?.is_storefront_visible);
   const allDone =
     agreementDone && hasCatalog && (!isStripeRail || payoutsDone);
 
@@ -76,6 +78,17 @@ export const BusinessGetReadyChecklist: React.FC<
       to: firstItemPath,
       cta: t('signup.getReady.ctaFirstItem', 'Add product'),
     },
+    ...(businessId && hasCatalog
+      ? [
+          {
+            id: 'previewStore',
+            label: t('signup.getReady.stepPreviewStore', 'Preview your store'),
+            done: previewDone,
+            to: `/store/${businessId}?preview=1`,
+            cta: t('stores.previewCtaButton', 'Preview store'),
+          } satisfies ChecklistItem,
+        ]
+      : []),
   ];
 
   return (

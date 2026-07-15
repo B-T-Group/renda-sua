@@ -1159,7 +1159,7 @@ export default function ItemDetailPage() {
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                   {t('items.detail.fulfilledBy', 'Fulfilled by')}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                   <BusinessIcon fontSize="small" color="action" />
                   <Typography variant="body2" color="text.primary" fontWeight={500}>
                     {business.name}
@@ -1174,6 +1174,16 @@ export default function ItemDetailPage() {
                     ) : null}
                     {location.name && ` · ${location.name}`}
                   </Typography>
+                  {business.id ? (
+                    <Button
+                      size="small"
+                      component={RouterLink}
+                      to={`/store/${business.id}`}
+                      sx={{ ml: 0.5 }}
+                    >
+                      {t('stores.viewStore', 'View store')}
+                    </Button>
+                  ) : null}
                 </Box>
               </Box>
             )}

@@ -13,6 +13,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
+import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessClientsHero } from '../business/BusinessClientsHero';
 import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
@@ -124,7 +125,10 @@ const BusinessDashboard: React.FC = () => {
         mainInterest={mainInterest}
         itemCount={itemCount}
         rentalItemCount={rentalItemCount}
+        businessId={profile.business.id}
       />
+
+      <BusinessPreviewStoreCta businessId={profile.business.id} />
 
       {accounts.length > 0 && (
         <Box sx={{ mb: 3 }}>

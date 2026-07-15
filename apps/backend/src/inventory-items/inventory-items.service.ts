@@ -199,6 +199,13 @@ export interface GetInventoryItemsQuery {
   include_unavailable?: boolean;
   /** When set, only inventory rows for this business location (UUID). */
   business_location_id?: string;
+  /** When set, only inventory rows for this business (UUID). */
+  business_id?: string;
+  /**
+   * Explicit owner preview: when true and the caller is the verified business
+   * owner, bypass storefront visibility / geo and include unavailable stock.
+   */
+  owner_preview?: boolean;
   /** Anonymous client approximate location (browser) for distance enrichment. */
   origin_lat?: number;
   origin_lng?: number;
@@ -229,6 +236,18 @@ export interface TopInventoryLocationRow {
   name: string;
   logo_url: string | null;
   item_count: number;
+  /** Straight-line distance in meters when origin coordinates are available. */
+  distance_meters?: number | null;
+}
+
+export interface TopInventoryStoreRow {
+  business_id: string;
+  name: string;
+  logo_url: string | null;
+  item_count: number;
+  is_verified: boolean;
+  can_accept_orders: boolean;
+  is_storefront_visible: boolean;
   /** Straight-line distance in meters when origin coordinates are available. */
   distance_meters?: number | null;
 }
@@ -534,10 +553,13 @@ export class InventoryItemsService {
     max_price?: number;
     currency?: string;
     business_location_id?: string;
+    business_id?: string;
     country_code?: string;
     state?: string;
     collection?: string;
     requireCanAcceptOrders?: boolean;
+    /** Owner preview: skip storefront visibility + geo scope. */
+    ownerPreview?: boolean;
   }): Promise<{ unsupported: true } | { where: Record<string, unknown> }> {
     const {
       is_active,
@@ -553,9 +575,11 @@ export class InventoryItemsService {
       max_price,
       currency,
       business_location_id,
+      business_id,
       country_code,
       state,
       collection,
+      ownerPreview,
     } = params;
 
     const whereConditions: any[] = [];
@@ -563,15 +587,22 @@ export class InventoryItemsService {
     whereConditions.push({
       item: { moderation_status: { _eq: 'approved' } },
     });
-    const businessFilter: Record<string, unknown> = {
-      is_storefront_visible: { _eq: true },
-    };
+    const businessFilter: Record<string, unknown> = {};
+    if (!ownerPreview) {
+      businessFilter.is_storefront_visible = { _eq: true };
+    }
     if (params.requireCanAcceptOrders) {
       businessFilter.can_accept_orders = { _eq: true };
     }
+    if (business_id?.trim()) {
+      businessFilter.id = { _eq: business_id.trim() };
+    }
     whereConditions.push({
       business_location: {
-        business: businessFilter,
+        business:
+          Object.keys(businessFilter).length > 0
+            ? businessFilter
+            : {},
       },
     });
     if (!include_unavailable) {
@@ -649,7 +680,7 @@ export class InventoryItemsService {
       });
     }
 
-    if (country_code || state) {
+    if (!ownerPreview && (country_code || state)) {
       const ok = await this.validateLocationSupport(country_code, state);
       if (!ok) {
         return { unsupported: true };
@@ -657,7 +688,9 @@ export class InventoryItemsService {
     }
 
     let supportedLocationFilter: any = {};
-    if (country_code || state) {
+    if (ownerPreview) {
+      supportedLocationFilter = {};
+    } else if (country_code || state) {
       const locationConditions: any[] = [];
       if (country_code) {
         locationConditions.push({
@@ -685,7 +718,9 @@ export class InventoryItemsService {
         },
       };
     }
-    whereConditions.push(supportedLocationFilter);
+    if (Object.keys(supportedLocationFilter).length > 0) {
+      whereConditions.push(supportedLocationFilter);
+    }
     const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
     return { where };
   }
@@ -892,6 +927,309 @@ export class InventoryItemsService {
   }
 
   /**
+   * Owner preview only when explicitly requested and the Bearer token was
+   * verified (AuthGuard optional auth on public routes) and maps to this business.
+   */
+  private async resolveOwnerPreview(
+    businessId: string | undefined,
+    ownerPreviewRequested: boolean
+  ): Promise<boolean> {
+    if (!ownerPreviewRequested || !businessId?.trim()) return false;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      return user?.business?.id === businessId.trim();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Distinct catalog `item_id` counts per business (matches store product grid totals).
+   * Pages through matching inventory rows so counts are not truncated by a single scan limit.
+   */
+  private async countDistinctCatalogItemsByBusiness(
+    where: Record<string, unknown>
+  ): Promise<Map<string, number>> {
+    const itemIdsByBiz = new Map<string, Set<string>>();
+    const chunk = 1000;
+    let offset = 0;
+    for (;;) {
+      const scanQuery = `
+        query ScanBizItemIds(
+          $where: business_inventory_bool_exp!
+          $lim: Int!
+          $off: Int!
+        ) {
+          business_inventory(where: $where, limit: $lim, offset: $off) {
+            item_id
+            business_location { business_id }
+          }
+        }
+      `;
+      const scanResult = await this.hasuraSystemService.executeQuery(
+        scanQuery,
+        { where, lim: chunk, off: offset }
+      );
+      const rows: {
+        item_id?: string;
+        business_location?: { business_id?: string } | null;
+      }[] = scanResult.business_inventory ?? [];
+      for (const r of rows) {
+        const bizId = r.business_location?.business_id;
+        const itemId = r.item_id;
+        if (!bizId || !itemId) continue;
+        let set = itemIdsByBiz.get(bizId);
+        if (!set) {
+          set = new Set();
+          itemIdsByBiz.set(bizId, set);
+        }
+        set.add(itemId);
+      }
+      if (rows.length < chunk) break;
+      offset += chunk;
+      if (offset >= INVENTORY_CATALOG_FETCH_MAX) {
+        this.logger.warn(
+          `Store directory: distinct item count scan hit fetch cap (${INVENTORY_CATALOG_FETCH_MAX})`
+        );
+        break;
+      }
+    }
+    const counts = new Map<string, number>();
+    for (const [id, set] of itemIdsByBiz) {
+      counts.set(id, set.size);
+    }
+    return counts;
+  }
+
+  private async fetchStoreDetailsByIds(ids: string[]): Promise<
+    Map<
+      string,
+      {
+        id: string;
+        name: string;
+        is_verified: boolean;
+        can_accept_orders: boolean;
+        is_storefront_visible: boolean;
+        logo_url: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      }
+    >
+  > {
+    const query = `
+      query StoreDetails($ids: [uuid!]!) {
+        businesses(where: { id: { _in: $ids } }) {
+          id
+          name
+          is_verified
+          can_accept_orders
+          is_storefront_visible
+          business_locations(
+            where: { is_active: { _eq: true } }
+            order_by: [{ is_primary: desc }, { created_at: asc }]
+            limit: 1
+          ) {
+            logo_url
+            address { latitude longitude }
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, { ids });
+    const rows: Array<{
+      id: string;
+      name: string;
+      is_verified?: boolean;
+      can_accept_orders?: boolean;
+      is_storefront_visible?: boolean;
+      business_locations?: Array<{
+        logo_url?: string | null;
+        address?: { latitude?: number | null; longitude?: number | null } | null;
+      }>;
+    }> = res.businesses ?? [];
+    return new Map(
+      rows.map((b) => {
+        const loc = b.business_locations?.[0];
+        return [
+          b.id,
+          {
+            id: b.id,
+            name: b.name,
+            is_verified: b.is_verified === true,
+            can_accept_orders: b.can_accept_orders === true,
+            is_storefront_visible: b.is_storefront_visible === true,
+            logo_url: loc?.logo_url ?? null,
+            latitude: loc?.address?.latitude ?? null,
+            longitude: loc?.address?.longitude ?? null,
+          },
+        ];
+      })
+    );
+  }
+
+  private rankTopStoresByOrigin(
+    counts: Map<string, number>,
+    byId: Map<
+      string,
+      {
+        name: string;
+        logo_url: string | null;
+        is_verified: boolean;
+        can_accept_orders: boolean;
+        is_storefront_visible: boolean;
+        latitude?: number | null;
+        longitude?: number | null;
+      }
+    >,
+    origin: { lat: number; lng: number } | null,
+    take: number
+  ): TopInventoryStoreRow[] {
+    const scored = [...counts.keys()].map((id) => {
+      const biz = byId.get(id);
+      let distance_meters: number | null = null;
+      if (origin && biz?.latitude != null && biz?.longitude != null) {
+        distance_meters = haversineMeters(
+          origin.lat,
+          origin.lng,
+          Number(biz.latitude),
+          Number(biz.longitude)
+        );
+      }
+      return { id, item_count: counts.get(id) ?? 0, distance_meters };
+    });
+    if (origin) {
+      scored.sort((a, b) => {
+        const da = a.distance_meters ?? Infinity;
+        const db = b.distance_meters ?? Infinity;
+        if (da !== db) return da - db;
+        return b.item_count - a.item_count;
+      });
+    } else {
+      scored.sort((a, b) => b.item_count - a.item_count);
+    }
+    return scored.slice(0, take).map(({ id, item_count, distance_meters }) => {
+      const biz = byId.get(id);
+      return {
+        business_id: id,
+        name: biz?.name ?? '',
+        logo_url: biz?.logo_url ?? null,
+        item_count,
+        is_verified: biz?.is_verified === true,
+        can_accept_orders: biz?.can_accept_orders === true,
+        is_storefront_visible: biz?.is_storefront_visible === true,
+        distance_meters:
+          origin && distance_meters != null ? distance_meters : null,
+      };
+    });
+  }
+
+  /**
+   * Public store directory: businesses with visible storefronts and listable inventory.
+   */
+  async getTopInventoryStores(
+    limit = 20,
+    query: Pick<
+      GetInventoryItemsQuery,
+      | 'country_code'
+      | 'state'
+      | 'is_active'
+      | 'include_unavailable'
+      | 'origin_lat'
+      | 'origin_lng'
+    > & { search?: string } = {}
+  ): Promise<TopInventoryStoreRow[]> {
+    const take = Math.min(Math.max(limit, 1), 50);
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: query.is_active !== undefined ? query.is_active : true,
+      include_unavailable: query.include_unavailable ?? false,
+      country_code,
+      state,
+    });
+    if ('unsupported' in built) return [];
+    const counts = await this.countDistinctCatalogItemsByBusiness(built.where);
+    if (counts.size === 0) return [];
+    const origin = await this.resolveTopLocationsOrigin(query);
+    const byId = await this.fetchStoreDetailsByIds([...counts.keys()]);
+    const q = query.search?.trim().toLowerCase();
+    if (q) {
+      for (const [id, biz] of byId) {
+        if (!biz.name.toLowerCase().includes(q)) {
+          counts.delete(id);
+          byId.delete(id);
+        }
+      }
+      if (counts.size === 0) return [];
+    }
+    return this.rankTopStoresByOrigin(counts, byId, origin, take);
+  }
+
+  /**
+   * Store header for public browse or explicit owner preview.
+   */
+  async getInventoryStoreById(
+    businessId: string,
+    query: Pick<
+      GetInventoryItemsQuery,
+      | 'country_code'
+      | 'state'
+      | 'is_active'
+      | 'include_unavailable'
+      | 'origin_lat'
+      | 'origin_lng'
+      | 'owner_preview'
+    > = {}
+  ): Promise<TopInventoryStoreRow | null> {
+    const id = businessId.trim();
+    if (!id) return null;
+    const ownerPreview = await this.resolveOwnerPreview(
+      id,
+      query.owner_preview === true
+    );
+    const byId = await this.fetchStoreDetailsByIds([id]);
+    const biz = byId.get(id);
+    if (!biz) return null;
+    if (!ownerPreview && !biz.is_storefront_visible) return null;
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const includeUnavailable = ownerPreview
+      ? true
+      : (query.include_unavailable ?? false);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: query.is_active !== undefined ? query.is_active : true,
+      include_unavailable: includeUnavailable,
+      country_code,
+      state,
+      business_id: id,
+      ownerPreview,
+    });
+    let item_count = 0;
+    if (!('unsupported' in built)) {
+      item_count = await this.countDistinctCatalogItemIds(built.where);
+    }
+    if (!ownerPreview && item_count === 0) return null;
+    const origin = await this.resolveTopLocationsOrigin(query);
+    let distance_meters: number | null = null;
+    if (origin && biz.latitude != null && biz.longitude != null) {
+      distance_meters = haversineMeters(
+        origin.lat,
+        origin.lng,
+        Number(biz.latitude),
+        Number(biz.longitude)
+      );
+    }
+    return {
+      business_id: id,
+      name: biz.name,
+      logo_url: biz.logo_url,
+      item_count,
+      is_verified: biz.is_verified,
+      can_accept_orders: biz.can_accept_orders,
+      is_storefront_visible: biz.is_storefront_visible,
+      distance_meters: origin ? distance_meters : null,
+    };
+  }
+
+  /**
    * Get paginated inventory items with optional filters.
    * When a valid JWT is present, uses the logged-in user's primary address for country_code/state.
    * Otherwise uses query params (e.g. from anonymous users).
@@ -915,11 +1253,21 @@ export class InventoryItemsService {
       sort = 'relevance',
       include_unavailable = false,
       business_location_id,
+      business_id,
       collection,
+      owner_preview: ownerPreviewRequested = false,
     } = query;
 
     const { country_code, state, clientId } =
       await this.resolveInventoryListGeo(query);
+
+    const ownerPreview = await this.resolveOwnerPreview(
+      business_id,
+      ownerPreviewRequested === true
+    );
+    const effectiveIncludeUnavailable = ownerPreview
+      ? true
+      : include_unavailable;
 
     let semanticScores: Map<string, number> | undefined;
     let searchItemIds: string[] | undefined;
@@ -945,7 +1293,7 @@ export class InventoryItemsService {
 
     const built = await this.buildInventoryCatalogWhere({
       is_active,
-      include_unavailable,
+      include_unavailable: effectiveIncludeUnavailable,
       searchItemIds,
       searchSkuQuery,
       category,
@@ -957,10 +1305,12 @@ export class InventoryItemsService {
       max_price,
       currency,
       business_location_id,
+      business_id,
       country_code,
       state,
       collection,
       requireCanAcceptOrders: sort === 'deals' || sort === 'top_rated',
+      ownerPreview,
     });
     if ('unsupported' in built) {
       return {

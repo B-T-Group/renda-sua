@@ -54,13 +54,25 @@ export class AuthGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (isPublic) {
-      this.logger.debug('Public route, skipping authentication');
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const token = this.extractTokenFromHeader(request);
+
+    if (isPublic) {
+      if (token) {
+        try {
+          request.user = await this.verifyToken(token);
+        } catch (error) {
+          // Optional auth: ignore invalid/expired tokens on public routes so
+          // downstream services (e.g. HasuraUserService) treat the caller as anonymous.
+          this.logger.debug(
+            `Public route: ignoring invalid token (${(error as Error).message})`
+          );
+          this.stripAuthorizationHeader(request);
+          delete request.user;
+        }
+      }
+      return true;
+    }
 
     if (!token) {
       this.logger.warn('No authorization token provided');
@@ -75,6 +87,12 @@ export class AuthGuard implements CanActivate {
       this.logger.error('Token verification failed', (error as Error).message);
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  private stripAuthorizationHeader(request: Request): void {
+    if (!request.headers) return;
+    delete request.headers.authorization;
+    delete (request.headers as Record<string, unknown>)['Authorization'];
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {

@@ -16,6 +16,7 @@ import type {
   InventorySearchSuggestion,
   PaginatedInventoryItems,
   TopInventoryLocationRow,
+  TopInventoryStoreRow,
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
 
@@ -38,6 +39,8 @@ interface GetInventoryItemsQueryParams {
   sort?: string;
   include_unavailable?: string;
   business_location_id?: string;
+  business_id?: string;
+  owner_preview?: string;
   origin_lat?: string;
   origin_lng?: string;
   collection?: string;
@@ -137,6 +140,166 @@ export class InventoryItemsController {
       success: true,
       data: { locations },
       message: 'Top locations retrieved successfully',
+    };
+  }
+
+  @Public()
+  @Get('stores')
+  @ApiOperation({
+    summary:
+      'Public store directory: businesses with visible storefronts and listable inventory',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Max stores to return (default 20, max 50)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Filter stores by business name (substring)',
+  })
+  @ApiQuery({
+    name: 'country_code',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'origin_lat',
+    required: false,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'origin_lng',
+    required: false,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'include_unavailable',
+    required: false,
+    type: Boolean,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stores with item counts and optional distance',
+  })
+  async getTopInventoryStores(
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('country_code') country_code?: string,
+    @Query('state') state?: string,
+    @Query('is_active') is_active?: string,
+    @Query('include_unavailable') include_unavailable?: string,
+    @Query('origin_lat') origin_lat?: string,
+    @Query('origin_lng') origin_lng?: string
+  ): Promise<{
+    success: boolean;
+    data: { stores: TopInventoryStoreRow[] };
+    message: string;
+  }> {
+    const n = limit ? Math.min(parseInt(limit, 10) || 20, 50) : 20;
+    const lat =
+      origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
+    const lng =
+      origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
+    const stores = await this.inventoryItemsService.getTopInventoryStores(n, {
+      search,
+      country_code,
+      state,
+      is_active:
+        is_active === 'true'
+          ? true
+          : is_active === 'false'
+            ? false
+            : undefined,
+      include_unavailable:
+        include_unavailable !== undefined
+          ? include_unavailable === 'true'
+          : undefined,
+      ...(Number.isFinite(lat) && { origin_lat: lat }),
+      ...(Number.isFinite(lng) && { origin_lng: lng }),
+    });
+    return {
+      success: true,
+      data: { stores },
+      message: 'Stores retrieved successfully',
+    };
+  }
+
+  @Public()
+  @Get('stores/:businessId')
+  @ApiOperation({
+    summary: 'Get a single store header (public or owner preview)',
+  })
+  @ApiQuery({ name: 'country_code', required: false, type: String })
+  @ApiQuery({ name: 'state', required: false, type: String })
+  @ApiQuery({ name: 'origin_lat', required: false, type: Number })
+  @ApiQuery({ name: 'origin_lng', required: false, type: Number })
+  @ApiQuery({ name: 'include_unavailable', required: false, type: Boolean })
+  @ApiQuery({
+    name: 'owner_preview',
+    required: false,
+    type: Boolean,
+    description:
+      'When true and caller is the verified business owner, show hidden/unavailable catalog',
+  })
+  @ApiResponse({ status: 200, description: 'Store header' })
+  @ApiResponse({ status: 404, description: 'Store not found or not visible' })
+  async getInventoryStoreById(
+    @Param('businessId') businessId: string,
+    @Query('country_code') country_code?: string,
+    @Query('state') state?: string,
+    @Query('is_active') is_active?: string,
+    @Query('include_unavailable') include_unavailable?: string,
+    @Query('owner_preview') owner_preview?: string,
+    @Query('origin_lat') origin_lat?: string,
+    @Query('origin_lng') origin_lng?: string
+  ): Promise<{
+    success: boolean;
+    data: { store: TopInventoryStoreRow };
+    message: string;
+  }> {
+    const lat =
+      origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
+    const lng =
+      origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
+    const store = await this.inventoryItemsService.getInventoryStoreById(
+      businessId,
+      {
+        country_code,
+        state,
+        is_active:
+          is_active === 'true'
+            ? true
+            : is_active === 'false'
+              ? false
+              : undefined,
+        include_unavailable:
+          include_unavailable !== undefined
+            ? include_unavailable === 'true'
+            : undefined,
+        owner_preview: owner_preview === 'true',
+        ...(Number.isFinite(lat) && { origin_lat: lat }),
+        ...(Number.isFinite(lng) && { origin_lng: lng }),
+      }
+    );
+    if (!store) {
+      throw new HttpException(
+        { success: false, message: 'Store not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return {
+      success: true,
+      data: { store },
+      message: 'Store retrieved successfully',
     };
   }
 
@@ -282,6 +445,19 @@ export class InventoryItemsController {
     description: 'Filter to a single business location (UUID)',
   })
   @ApiQuery({
+    name: 'business_id',
+    required: false,
+    type: String,
+    description: 'Filter to a single business / store (UUID)',
+  })
+  @ApiQuery({
+    name: 'owner_preview',
+    required: false,
+    type: Boolean,
+    description:
+      'With business_id: when true and caller is the verified owner, bypass storefront visibility and include unavailable stock',
+  })
+  @ApiQuery({
     name: 'origin_lat',
     required: false,
     type: Number,
@@ -354,6 +530,8 @@ export class InventoryItemsController {
             ? query.include_unavailable === 'true'
             : undefined,
         business_location_id: query.business_location_id?.trim() || undefined,
+        business_id: query.business_id?.trim() || undefined,
+        owner_preview: query.owner_preview === 'true',
         ...(Number.isFinite(oLat) && { origin_lat: oLat }),
         ...(Number.isFinite(oLng) && { origin_lng: oLng }),
         collection: query.collection?.trim() || undefined,
