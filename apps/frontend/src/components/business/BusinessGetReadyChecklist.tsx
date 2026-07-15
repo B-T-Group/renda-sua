@@ -10,7 +10,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import type { BusinessVerificationStatus } from '../../hooks/useBusinessVerification';
@@ -31,6 +31,9 @@ type ChecklistItem = {
   cta?: string;
 };
 
+const previewStorageKey = (businessId: string) =>
+  `rendasua:business:${businessId}:previewed-store`;
+
 export const BusinessGetReadyChecklist: React.FC<
   BusinessGetReadyChecklistProps
 > = ({ status, mainInterest, itemCount, rentalItemCount, businessId }) => {
@@ -41,9 +44,23 @@ export const BusinessGetReadyChecklist: React.FC<
   const payoutsDone = Boolean(status?.steps?.stripeConnect?.complete);
   const hasCatalog =
     mainInterest === 'rent_items' ? rentalItemCount > 0 : itemCount > 0;
-  const previewDone = Boolean(status?.is_storefront_visible);
+  const [previewDone, setPreviewDone] = useState(false);
   const allDone =
     agreementDone && hasCatalog && (!isStripeRail || payoutsDone);
+
+  useEffect(() => {
+    if (!businessId) {
+      setPreviewDone(false);
+      return;
+    }
+    setPreviewDone(localStorage.getItem(previewStorageKey(businessId)) === '1');
+  }, [businessId]);
+
+  const markPreviewDone = (item: ChecklistItem) => {
+    if (item.id !== 'previewStore' || !businessId) return;
+    localStorage.setItem(previewStorageKey(businessId), '1');
+    setPreviewDone(true);
+  };
 
   if (allDone) return null;
 
@@ -134,6 +151,7 @@ export const BusinessGetReadyChecklist: React.FC<
                   to={item.to}
                   size="small"
                   variant="outlined"
+                  onClick={() => markPreviewDone(item)}
                   sx={{ flexShrink: 0 }}
                 >
                   {item.cta}

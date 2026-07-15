@@ -8,6 +8,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  FormControlLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   Step,
   StepLabel,
@@ -24,6 +32,7 @@ import {
 } from '../../hooks/useBusinessSearch';
 import {
   useLocationTransfers,
+  type TransferMode,
   type TransferPreview,
 } from '../../hooks/useLocationTransfers';
 
@@ -68,6 +77,10 @@ const BLOCK_REASON_KEYS: Record<string, [string, string]> = {
     'business.locations.transfer.block.skuCollision',
     'Destination already has items with the same SKU',
   ],
+  NO_MOVABLE_INVENTORY: [
+    'business.locations.transfer.block.noMovable',
+    'No inventory can be moved (all items skipped or empty)',
+  ],
 };
 
 const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
@@ -78,10 +91,17 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
-  const { previewTransfer, createRequest } = useLocationTransfers(businessId);
+  const { previewTransfer, createRequest, listDestLocations } =
+    useLocationTransfers(businessId);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<TransferBusinessOption | null>(null);
+  const [mode, setMode] = useState<TransferMode>('location_ownership');
+  const [destLocations, setDestLocations] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [toLocationId, setToLocationId] = useState('');
+  const [locationsLoading, setLocationsLoading] = useState(false);
   const [preview, setPreview] = useState<TransferPreview | null>(null);
   const [confirmName, setConfirmName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,20 +117,59 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
       setStep(0);
       setSearch('');
       setSelected(null);
+      setMode('location_ownership');
+      setDestLocations([]);
+      setToLocationId('');
       setPreview(null);
       setConfirmName('');
       setError(null);
     }
   }, [open]);
 
-  const handleNextFromSearch = async () => {
+  useEffect(() => {
+    if (!open || step !== 1 || !selected || mode !== 'inventory_merge') return;
+    setLocationsLoading(true);
+    void listDestLocations(selected.id)
+      .then((locs) => {
+        setDestLocations(locs);
+        setToLocationId((prev) =>
+          prev && locs.some((l) => l.id === prev) ? prev : locs[0]?.id || ''
+        );
+      })
+      .catch(() => {
+        setDestLocations([]);
+        setToLocationId('');
+      })
+      .finally(() => setLocationsLoading(false));
+  }, [open, step, selected, mode, listDestLocations]);
+
+  const handleNextFromSearch = () => {
+    if (!selected) return;
+    setError(null);
+    setStep(1);
+  };
+
+  const handleNextFromMode = async () => {
     if (!location || !selected) return;
+    if (mode === 'inventory_merge' && !toLocationId) {
+      setError(
+        t(
+          'business.locations.transfer.destLocationRequired',
+          'Select a destination location'
+        )
+      );
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await previewTransfer(location.id, selected.id);
+      const data = await previewTransfer(location.id, selected.id, {
+        mode,
+        toLocationId:
+          mode === 'inventory_merge' ? toLocationId : undefined,
+      });
       setPreview(data);
-      setStep(1);
+      setStep(2);
     } catch (err: unknown) {
       setError((err as { message?: string })?.message ?? 'Preview failed');
     } finally {
@@ -123,12 +182,16 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
     setLoading(true);
     setError(null);
     try {
-      await createRequest(location.id, selected.id, confirmName);
+      await createRequest(location.id, selected.id, confirmName, {
+        mode,
+        toLocationId:
+          mode === 'inventory_merge' ? toLocationId : undefined,
+      });
       onSuccess();
       onClose();
     } catch (err: unknown) {
       const ax = err as {
-        response?: { data?: { error?: string; blockReasons?: string[] } };
+        response?: { data?: { error?: string } };
         message?: string;
       };
       setError(
@@ -154,6 +217,11 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
           <Step>
             <StepLabel>
               {t('business.locations.transfer.stepSelect', 'Select business')}
+            </StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>
+              {t('business.locations.transfer.stepMode', 'Transfer type')}
             </StepLabel>
           </Step>
           <Step>
@@ -226,7 +294,72 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
           </Stack>
         )}
 
-        {step === 1 && preview && (
+        {step === 1 && (
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'business.locations.transfer.modeHint',
+                'Choose whether to move the whole location or only its inventory.'
+              )}
+            </Typography>
+            <FormControl>
+              <RadioGroup
+                value={mode}
+                onChange={(e) =>
+                  setMode(e.target.value as TransferMode)
+                }
+              >
+                <FormControlLabel
+                  value="location_ownership"
+                  control={<Radio />}
+                  label={t(
+                    'business.locations.transfer.modeOwnership',
+                    'Transfer entire location (ownership)'
+                  )}
+                />
+                <FormControlLabel
+                  value="inventory_merge"
+                  control={<Radio />}
+                  label={t(
+                    'business.locations.transfer.modeMerge',
+                    'Move inventory into an existing location'
+                  )}
+                />
+              </RadioGroup>
+            </FormControl>
+            {mode === 'inventory_merge' && (
+              <TextField
+                select
+                fullWidth
+                label={t(
+                  'business.locations.transfer.destLocation',
+                  'Destination location'
+                )}
+                value={toLocationId}
+                onChange={(e) => setToLocationId(e.target.value)}
+                disabled={locationsLoading}
+                helperText={
+                  locationsLoading
+                    ? t('common.loading', 'Loading...')
+                    : destLocations.length
+                      ? undefined
+                      : t(
+                          'business.locations.transfer.noDestLocations',
+                          'This business has no active locations'
+                        )
+                }
+              >
+                {destLocations.map((loc) => (
+                  <MenuItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </Stack>
+        )}
+
+        {step === 2 && preview && (
           <Stack spacing={1.5}>
             {!preview.canTransfer && (
               <Alert severity="warning">
@@ -239,16 +372,39 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
                 })}
               </Alert>
             )}
+            <Typography variant="body2" color="text.secondary">
+              {preview.mode === 'inventory_merge'
+                ? t(
+                    'business.locations.transfer.modeMergeBadge',
+                    'Inventory merge'
+                  )
+                : t(
+                    'business.locations.transfer.modeOwnershipBadge',
+                    'Location ownership'
+                  )}
+            </Typography>
             <Typography variant="body1">
-              {t(
-                'business.locations.transfer.summaryLine',
-                '1 location · {{items}} items · {{rentals}} rentals · {{orders}} completed orders',
-                {
-                  items: preview.itemCount,
-                  rentals: preview.rentalItemCount,
-                  orders: preview.completedOrderCount,
-                }
-              )}
+              {preview.mode === 'inventory_merge'
+                ? t(
+                    'business.locations.transfer.mergeSummaryLine',
+                    '{{items}} items · {{rentals}} rentals will move · {{skipped}} skipped',
+                    {
+                      items: preview.movableItemCount,
+                      rentals: preview.movableRentalItemCount,
+                      skipped:
+                        preview.skippedDuplicateCount +
+                        preview.skippedSharedCount,
+                    }
+                  )
+                : t(
+                    'business.locations.transfer.summaryLine',
+                    '1 location · {{items}} items · {{rentals}} rentals · {{orders}} completed orders',
+                    {
+                      items: preview.itemCount,
+                      rentals: preview.rentalItemCount,
+                      orders: preview.completedOrderCount,
+                    }
+                  )}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {t(
@@ -260,10 +416,56 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
                 }
               )}
             </Typography>
+            {preview.toLocation && (
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'business.locations.transfer.toLocationLine',
+                  'Destination location: {{name}}',
+                  { name: preview.toLocation.name }
+                )}
+              </Typography>
+            )}
+            {preview.skippedDuplicates?.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2">
+                  {t(
+                    'business.locations.transfer.skippedDuplicates',
+                    'Skipped duplicates (left on source)'
+                  )}
+                </Typography>
+                <List dense>
+                  {preview.skippedDuplicates.map((item) => (
+                    <ListItem key={item.itemId} disableGutters>
+                      <ListItemText
+                        primary={item.name}
+                        secondary={item.sku || undefined}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
+            {preview.skippedShared?.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2">
+                  {t(
+                    'business.locations.transfer.skippedShared',
+                    'Skipped (used at other locations)'
+                  )}
+                </Typography>
+                <List dense>
+                  {preview.skippedShared.map((item) => (
+                    <ListItem key={item.itemId} disableGutters>
+                      <ListItemText primary={item.name} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
           </Stack>
         )}
 
-        {step === 2 && preview && (
+        {step === 3 && preview && (
           <Stack spacing={2}>
             <Typography variant="body2">
               {t(
@@ -300,6 +502,19 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
             onClick={handleNextFromSearch}
             disabled={!selected || loading}
           >
+            {t('common.next', 'Next')}
+          </Button>
+        )}
+        {step === 1 && (
+          <Button
+            variant="contained"
+            onClick={handleNextFromMode}
+            disabled={
+              loading ||
+              (mode === 'inventory_merge' &&
+                (!toLocationId || locationsLoading))
+            }
+          >
             {loading ? (
               <CircularProgress size={20} />
             ) : (
@@ -307,16 +522,16 @@ const TransferLocationDialog: React.FC<TransferLocationDialogProps> = ({
             )}
           </Button>
         )}
-        {step === 1 && (
+        {step === 2 && (
           <Button
             variant="contained"
-            onClick={() => setStep(2)}
+            onClick={() => setStep(3)}
             disabled={!preview?.canTransfer}
           >
             {t('common.next', 'Next')}
           </Button>
         )}
-        {step === 2 && (
+        {step === 3 && (
           <Button
             variant="contained"
             color="error"

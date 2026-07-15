@@ -186,6 +186,9 @@ const AdminLocationTransfersPage: React.FC = () => {
                     {t('admin.locationTransfers.location', 'Location')}
                   </TableCell>
                   <TableCell>
+                    {t('admin.locationTransfers.mode', 'Mode')}
+                  </TableCell>
+                  <TableCell>
                     {t('admin.locationTransfers.from', 'From')}
                   </TableCell>
                   <TableCell>
@@ -211,6 +214,30 @@ const AdminLocationTransfersPage: React.FC = () => {
                     <TableCell>
                       {row.business_location?.name ||
                         String(row.metadata?.locationName || '—')}
+                      {row.transfer_mode === 'inventory_merge' &&
+                        (row.to_business_location?.name ||
+                          row.metadata?.toLocationName) && (
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            color="text.secondary"
+                          >
+                            →{' '}
+                            {row.to_business_location?.name ||
+                              String(row.metadata?.toLocationName)}
+                          </Typography>
+                        )}
+                    </TableCell>
+                    <TableCell>
+                      {row.transfer_mode === 'inventory_merge'
+                        ? t(
+                            'admin.locationTransfers.modes.inventory_merge',
+                            'Inventory merge'
+                          )
+                        : t(
+                            'admin.locationTransfers.modes.location_ownership',
+                            'Ownership'
+                          )}
                     </TableCell>
                     <TableCell>{row.from_business?.name || '—'}</TableCell>
                     <TableCell>{row.to_business?.name || '—'}</TableCell>

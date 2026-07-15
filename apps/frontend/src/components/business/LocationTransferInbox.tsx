@@ -96,12 +96,36 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
                       String(req.metadata?.locationName || '')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
+                    {req.transfer_mode === 'inventory_merge'
+                      ? t(
+                          'business.locations.transfer.modeMergeBadge',
+                          'Inventory merge'
+                        )
+                      : t(
+                          'business.locations.transfer.modeOwnershipBadge',
+                          'Location ownership'
+                        )}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     {t(
                       'business.locations.transfer.fromBusiness',
                       'From: {{name}}',
                       { name: req.from_business?.name || '' }
                     )}
                   </Typography>
+                  {req.transfer_mode === 'inventory_merge' && (
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'business.locations.transfer.toLocationLine',
+                        'Destination location: {{name}}',
+                        {
+                          name:
+                            req.to_business_location?.name ||
+                            String(req.metadata?.toLocationName || ''),
+                        }
+                      )}
+                    </Typography>
+                  )}
                   <Typography variant="body2" color="text.secondary">
                     {t(
                       'business.locations.transfer.summaryLine',
@@ -190,10 +214,17 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
           'business.locations.transfer.acceptTitle',
           'Accept location transfer?'
         )}
-        message={t(
-          'business.locations.transfer.acceptMessage',
-          'This will move the location, its items, addresses, and account to your business.'
-        )}
+        message={
+          acceptTarget?.transfer_mode === 'inventory_merge'
+            ? t(
+                'business.locations.transfer.acceptMergeMessage',
+                'This will move eligible items and inventory into the selected location. Duplicates stay on the source.'
+              )
+            : t(
+                'business.locations.transfer.acceptMessage',
+                'This will move the location, its items, addresses, and account to your business.'
+              )
+        }
         confirmText={t('common.accept', 'Accept')}
         confirmColor="primary"
         loading={!!busyId}

@@ -226,21 +226,50 @@ export class BusinessItemsController {
     return { success: true, data: { businesses } };
   }
 
+  @Get('businesses/:targetBusinessId/locations')
+  @ApiOperation({
+    summary:
+      'List active locations for a destination business (transfer merge picker)',
+  })
+  @ApiParam({ name: 'targetBusinessId', type: String })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Active locations for business' })
+  async listBusinessLocationsForTransfer(
+    @Param('targetBusinessId') targetBusinessId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    await this.accessService.resolveAccess(businessId);
+    const locations =
+      await this.transferService.listActiveLocationsForBusiness(
+        targetBusinessId
+      );
+    return { success: true, data: { locations } };
+  }
+
   @Get('locations/:locationId/transfer-preview')
   @ApiOperation({ summary: 'Preview a business location transfer' })
   @ApiQuery({ name: 'toBusinessId', required: true })
+  @ApiQuery({
+    name: 'mode',
+    required: false,
+    enum: ['location_ownership', 'inventory_merge'],
+  })
+  @ApiQuery({ name: 'toLocationId', required: false })
   @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Transfer preview' })
   async transferPreview(
     @Param('locationId') locationId: string,
     @Query('toBusinessId') toBusinessId: string,
+    @Query('mode') mode?: 'location_ownership' | 'inventory_merge',
+    @Query('toLocationId') toLocationId?: string,
     @Query('businessId') businessId?: string
   ) {
     const ctx = await this.accessService.resolveAccess(businessId);
     const preview = await this.transferService.preview(
       locationId,
       toBusinessId,
-      ctx.targetBusinessId
+      ctx.targetBusinessId,
+      { mode, toLocationId }
     );
     return { success: true, data: preview };
   }
@@ -267,6 +296,8 @@ export class BusinessItemsController {
       confirmBusinessName: body.confirmBusinessName,
       sourceBusinessId: ctx.targetBusinessId,
       requestedByUserId: user.id,
+      mode: body.mode,
+      toLocationId: body.toLocationId,
     });
     return { success: true, data: { request } };
   }

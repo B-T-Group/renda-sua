@@ -2,13 +2,29 @@ import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import type { TransferBusinessOption } from './useBusinessSearch';
 
+export type TransferMode = 'location_ownership' | 'inventory_merge';
+
+export interface TransferSkipItem {
+  itemId: string;
+  sku?: string | null;
+  name: string;
+}
+
 export interface TransferPreview {
   locationId: string;
   locationName: string;
   fromBusiness: TransferBusinessOption;
   toBusiness: TransferBusinessOption;
+  mode: TransferMode;
+  toLocation?: { id: string; name: string } | null;
   itemCount: number;
   rentalItemCount: number;
+  movableItemCount: number;
+  movableRentalItemCount: number;
+  skippedDuplicateCount: number;
+  skippedSharedCount: number;
+  skippedDuplicates: TransferSkipItem[];
+  skippedShared: TransferSkipItem[];
   orderCount: number;
   completedOrderCount: number;
   canTransfer: boolean;
@@ -20,6 +36,8 @@ export interface TransferRequest {
   business_location_id: string;
   from_business_id: string;
   to_business_id: string;
+  to_business_location_id?: string | null;
+  transfer_mode?: TransferMode;
   status: string;
   item_count: number;
   rental_item_count: number;
@@ -28,6 +46,7 @@ export interface TransferRequest {
   responded_at: string | null;
   created_at: string;
   business_location?: { id: string; name: string };
+  to_business_location?: { id: string; name: string } | null;
   from_business?: { id: string; name: string };
   to_business?: { id: string; name: string };
   requested_by_user?: {
@@ -69,10 +88,30 @@ export function useLocationTransfers(businessId?: string) {
     }
   }, [apiClient, businessId]);
 
+  const listDestLocations = useCallback(
+    async (targetBusinessId: string) => {
+      if (!apiClient) throw new Error('No API client');
+      const { data } = await apiClient.get(
+        withBusinessId(
+          `/business-items/businesses/${targetBusinessId}/locations`,
+          businessId
+        )
+      );
+      return (data?.data?.locations || []) as Array<{ id: string; name: string }>;
+    },
+    [apiClient, businessId]
+  );
+
   const previewTransfer = useCallback(
-    async (locationId: string, toBusinessId: string) => {
+    async (
+      locationId: string,
+      toBusinessId: string,
+      options?: { mode?: TransferMode; toLocationId?: string }
+    ) => {
       if (!apiClient) throw new Error('No API client');
       const params = new URLSearchParams({ toBusinessId });
+      if (options?.mode) params.set('mode', options.mode);
+      if (options?.toLocationId) params.set('toLocationId', options.toLocationId);
       if (businessId) params.set('businessId', businessId);
       const { data } = await apiClient.get(
         `/business-items/locations/${locationId}/transfer-preview?${params}`
@@ -86,7 +125,8 @@ export function useLocationTransfers(businessId?: string) {
     async (
       locationId: string,
       toBusinessId: string,
-      confirmBusinessName: string
+      confirmBusinessName: string,
+      options?: { mode?: TransferMode; toLocationId?: string }
     ) => {
       if (!apiClient) throw new Error('No API client');
       const { data } = await apiClient.post(
@@ -94,7 +134,12 @@ export function useLocationTransfers(businessId?: string) {
           `/business-items/locations/${locationId}/transfer-requests`,
           businessId
         ),
-        { toBusinessId, confirmBusinessName }
+        {
+          toBusinessId,
+          confirmBusinessName,
+          mode: options?.mode,
+          toLocationId: options?.toLocationId,
+        }
       );
       return data?.data?.request as TransferRequest;
     },
@@ -143,6 +188,7 @@ export function useLocationTransfers(businessId?: string) {
     loading,
     error,
     fetchPending,
+    listDestLocations,
     previewTransfer,
     createRequest,
     acceptRequest,

@@ -5,6 +5,9 @@ object_relationships:
   - name: business_location
     using:
       foreign_key_constraint_on: business_location_id
+  - name: to_business_location
+    using:
+      foreign_key_constraint_on: to_business_location_id
   - name: from_business
     using:
       foreign_key_constraint_on: from_business_id

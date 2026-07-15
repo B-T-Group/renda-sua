@@ -136,7 +136,7 @@ const StorePage: React.FC = () => {
       />
       {loginMethodDialog}
 
-      {previewMode ? (
+      {isOwnerPreview ? (
         <Alert
           severity="info"
           icon={<VisibilityOutlinedIcon />}
@@ -219,7 +219,7 @@ const StorePage: React.FC = () => {
                     )}
                   />
                 ) : null}
-                {previewMode && store && !store.is_storefront_visible ? (
+                {isOwnerPreview && store && !store.is_storefront_visible ? (
                   <Chip
                     size="small"
                     color="warning"
@@ -236,7 +236,7 @@ const StorePage: React.FC = () => {
             </Box>
           </Box>
 
-          {previewMode && isEmpty ? (
+          {isOwnerPreview && isEmpty ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography fontWeight={700} gutterBottom>
                 {t('stores.previewEmptyTitle', 'Your store looks empty')}
@@ -258,7 +258,7 @@ const StorePage: React.FC = () => {
             </Alert>
           ) : null}
 
-          {previewMode && !isEmpty ? (
+          {isOwnerPreview && !isEmpty ? (
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {inventoryItems.some(
                 (i) => !(i.item.item_images?.length > 0)
