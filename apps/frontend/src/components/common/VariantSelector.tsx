@@ -10,6 +10,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type ItemVariant,
+  type VariantPriceOverride,
   effectiveVariantUnitPrice,
   unitPriceWithListingDeal,
 } from '../../types/itemVariant';
@@ -19,6 +20,7 @@ export interface VariantSelectorProps {
   value: string | null;
   onChange: (variantId: string) => void;
   listingSellingPrice: number;
+  priceOverrides?: VariantPriceOverride[] | null;
   hasActiveDeal?: boolean;
   originalPrice?: number;
   discountedPrice?: number;
@@ -32,6 +34,7 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
   value,
   onChange,
   listingSellingPrice,
+  priceOverrides,
   hasActiveDeal,
   originalPrice,
   discountedPrice,
@@ -63,7 +66,11 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
         required
       >
         {variants.map((v) => {
-          const base = effectiveVariantUnitPrice(v, listingSellingPrice);
+          const base = effectiveVariantUnitPrice(
+            v,
+            listingSellingPrice,
+            priceOverrides
+          );
           const p = unitPriceWithListingDeal(
             base,
             listingSellingPrice,
@@ -71,9 +78,10 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
             originalPrice,
             discountedPrice
           );
-          const priceLabel = p.hasDeal && p.strikeOriginal != null
-            ? `${formatCurrency(p.strikeOriginal, currency)} → ${formatCurrency(p.unit, currency)}`
-            : formatCurrency(p.unit, currency);
+          const priceLabel =
+            p.hasDeal && p.strikeOriginal != null
+              ? `${formatCurrency(p.strikeOriginal, currency)} → ${formatCurrency(p.unit, currency)}`
+              : formatCurrency(p.unit, currency);
           return (
             <MenuItem key={v.id} value={v.id}>
               <Typography variant="body2" component="span">

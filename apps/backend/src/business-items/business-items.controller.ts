@@ -19,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -26,6 +27,7 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CsvUploadRequestDto } from './dto/csv-upload.dto';
+import { BulkVariantPriceOverridesDto } from './dto/bulk-variant-price-overrides.dto';
 import { BusinessItemsService } from './business-items.service';
 import { BusinessItemsAccessService } from './business-items-access.service';
 import { BusinessLocationTransferService } from './business-location-transfer.service';
@@ -517,6 +519,32 @@ export class BusinessItemsController {
       body
     );
     return { success: true, data: { inventory } };
+  }
+
+  @Put('inventory/:inventoryId/variant-price-overrides')
+  @ApiOperation({
+    summary:
+      'Bulk upsert/clear per-variant price overrides for an inventory location',
+    description:
+      'Shared stock stays on the inventory row. Pass selling_price null to clear an override (inherit variant.price or inventory selling_price).',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiParam({ name: 'inventoryId', description: 'Business inventory UUID' })
+  @ApiResponse({ status: 200, description: 'Overrides updated' })
+  @ApiResponse({ status: 400, description: 'Variant does not belong to item' })
+  @ApiResponse({ status: 404, description: 'Inventory not found' })
+  async bulkVariantPriceOverrides(
+    @Param('inventoryId') inventoryId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: BulkVariantPriceOverridesDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.businessItemsService.bulkSetVariantPriceOverrides(
+      ctx.targetBusinessId,
+      inventoryId,
+      body.overrides ?? []
+    );
+    return { success: true, data };
   }
 
   @Get('items/:itemId')

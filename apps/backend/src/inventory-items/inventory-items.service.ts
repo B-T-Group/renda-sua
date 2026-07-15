@@ -53,6 +53,12 @@ export interface InventoryItem {
   created_at: string;
   updated_at: string;
   promotion?: InventoryListingPromotion | null;
+  /** Per-location variant price overrides (shared stock model). */
+  variant_price_overrides?: Array<{
+    id?: string;
+    item_variant_id: string;
+    selling_price: number;
+  }> | null;
   viewsCount?: number;
   hasActiveDeal?: boolean;
   original_price?: number;
@@ -253,6 +259,11 @@ const CATALOG_INVENTORY_LIST_GQL = `
       created_at
       updated_at
       promotion
+      variant_price_overrides {
+        id
+        item_variant_id
+        selling_price
+      }
       item {
         id
         name
@@ -1513,6 +1524,11 @@ export class InventoryItemsService {
           created_at
           updated_at
           promotion
+          variant_price_overrides {
+            id
+            item_variant_id
+            selling_price
+          }
           item {
             id
             name

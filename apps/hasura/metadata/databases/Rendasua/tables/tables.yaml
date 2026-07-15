@@ -11,6 +11,7 @@
 - "!include public_brands.yaml"
 - "!include public_business_addresses.yaml"
 - "!include public_business_inventory.yaml"
+- "!include public_business_inventory_variant_price_overrides.yaml"
 - "!include public_business_item_favorites.yaml"
 - "!include public_business_locations.yaml"
 - "!include public_business_location_transfer_requests.yaml"

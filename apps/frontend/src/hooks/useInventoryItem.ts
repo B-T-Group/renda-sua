@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ImageType } from '../types/image';
-import type { ItemVariant } from '../types/itemVariant';
+import type {
+  ItemVariant,
+  VariantPriceOverride,
+} from '../types/itemVariant';
 import { useApiClient } from './useApiClient';
 
 export interface InventoryItem {
@@ -17,6 +20,8 @@ export interface InventoryItem {
   original_price?: number;
   discounted_price?: number;
   deal_end_at?: string;
+  /** Location-specific variant price overrides (shared stock). */
+  variant_price_overrides?: VariantPriceOverride[];
   item: {
     id: string;
     name: string;

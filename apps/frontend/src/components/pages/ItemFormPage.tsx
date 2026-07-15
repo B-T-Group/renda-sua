@@ -1630,7 +1630,18 @@ const ItemFormPage: React.FC = () => {
             </Box>
 
             {isEditMode && itemId ? (
-              <VariantsManagerSection itemId={itemId} />
+              <VariantsManagerSection
+                itemId={itemId}
+                parentItem={{
+                  name: formData.name || '',
+                  price: formData.price,
+                  currency: formData.currency,
+                  weight: formData.weight,
+                  weight_unit: formData.weight_unit,
+                  dimensions: formData.dimensions,
+                  color: formData.color,
+                }}
+              />
             ) : null}
 
             {/* Error Display */}

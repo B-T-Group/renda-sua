@@ -44,6 +44,7 @@ import {
   AnyInventory,
   buildInventorySummary,
 } from '../business/item-view/itemViewHelpers';
+import VariantsManagerSection from '../business/variants/VariantsManagerSection';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { ManageItemCollectionsDialog } from '../dialogs/ManageItemCollectionsDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
@@ -590,17 +591,33 @@ export default function ItemViewPage() {
       </Tabs>
 
       {activeTab === 0 && (
-        <ItemOverviewTab
-          item={item}
-          images={sortedItemImages}
-          activeImage={activeImage}
-          summary={inventorySummary}
-          canSuperUserActions={canSuperUserActions}
-          onSelectThumb={setViewerImageId}
-          onOpenLightbox={openImageLightbox}
-          onManageCollections={() => setShowCollectionsDialog(true)}
-          onRefineWithAi={() => setShowRefineAiDialog(true)}
-        />
+        <>
+          <ItemOverviewTab
+            item={item}
+            images={sortedItemImages}
+            activeImage={activeImage}
+            summary={inventorySummary}
+            canSuperUserActions={canSuperUserActions}
+            onSelectThumb={setViewerImageId}
+            onOpenLightbox={openImageLightbox}
+            onManageCollections={() => setShowCollectionsDialog(true)}
+            onRefineWithAi={() => setShowRefineAiDialog(true)}
+          />
+          {itemId ? (
+            <VariantsManagerSection
+              itemId={itemId}
+              parentItem={{
+                name: item.name,
+                price: item.price,
+                currency: item.currency,
+                weight: item.weight,
+                weight_unit: item.weight_unit,
+                dimensions: item.dimensions,
+                color: item.color,
+              }}
+            />
+          ) : null}
+        </>
       )}
 
       {activeTab === 1 && (

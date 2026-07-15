@@ -1,0 +1,95 @@
+table:
+  name: business_inventory_variant_price_overrides
+  schema: public
+object_relationships:
+  - name: business_inventory
+    using:
+      foreign_key_constraint_on: business_inventory_id
+  - name: item_variant
+    using:
+      foreign_key_constraint_on: item_variant_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business_inventory:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - business_inventory_id
+        - item_variant_id
+        - selling_price
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_inventory_id
+        - item_variant_id
+        - selling_price
+        - created_at
+        - updated_at
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - business_inventory_id
+        - item_variant_id
+        - selling_price
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_inventory_id
+        - item_variant_id
+        - selling_price
+        - created_at
+        - updated_at
+      filter:
+        business_inventory:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_inventory_id
+        - item_variant_id
+        - selling_price
+        - created_at
+        - updated_at
+      filter: {}
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - selling_price
+        - updated_at
+      filter:
+        business_inventory:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business_inventory:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id

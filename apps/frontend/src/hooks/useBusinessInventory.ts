@@ -107,6 +107,11 @@ const GET_BUSINESS_INVENTORY = `
       last_restocked_at
       created_at
       updated_at
+      variant_price_overrides {
+        id
+        item_variant_id
+        selling_price
+      }
       business_location {
         id
         name
@@ -311,16 +316,21 @@ export const useBusinessInventory = (
     async (
       itemData: AddInventoryItemData,
       options?: { skipFetchInventory?: boolean }
-    ) => {
+    ): Promise<string | null> => {
       try {
-        await executeAddMutation({ itemData });
+        const result = await executeAddMutation({ itemData });
+        const createdId =
+          (result as { insert_business_inventory_one?: { id?: string } } | null)
+            ?.insert_business_inventory_one?.id ?? null;
         if (!options?.skipFetchInventory) {
           await fetchInventory();
         }
+        return createdId;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to add inventory item'
         );
+        return null;
       }
     },
     [executeAddMutation, fetchInventory]
@@ -331,7 +341,7 @@ export const useBusinessInventory = (
       itemId: string,
       updates: Partial<UpdateInventoryItemData>,
       options?: { skipFetchInventory?: boolean }
-    ) => {
+    ): Promise<boolean> => {
       try {
         await apiClient.patch(
           `/business-items/inventory/${itemId}`,
@@ -341,10 +351,12 @@ export const useBusinessInventory = (
         if (!options?.skipFetchInventory) {
           await fetchInventory();
         }
+        return true;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to update inventory item'
         );
+        return false;
       }
     },
     [apiClient, fetchInventory, businessId]

@@ -37,6 +37,39 @@ const VARIANT_FIELDS = `
 export class ItemVariantsService {
   constructor(private readonly hasuraUserService: HasuraUserService) {}
 
+  private async assertSkuUniqueForItem(
+    itemId: string,
+    sku: string,
+    excludeVariantId?: string
+  ): Promise<void> {
+    const q = `
+      query SkuConflict($itemId: uuid!, $sku: String!) {
+        item_variants(
+          where: { item_id: { _eq: $itemId }, sku: { _eq: $sku } }
+          limit: 5
+        ) {
+          id
+        }
+      }
+    `;
+    const res = await this.hasuraUserService.executeQuery<{
+      item_variants: Array<{ id: string }>;
+    }>(q, { itemId, sku });
+    const conflict = (res.item_variants ?? []).find(
+      (v) => !excludeVariantId || v.id !== excludeVariantId
+    );
+    if (conflict) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'SKU_CONFLICT',
+          message: 'A variant with this SKU already exists for this item',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
   async assertItemOwnedByBusiness(
     businessId: string,
     itemId: string
@@ -102,6 +135,9 @@ export class ItemVariantsService {
     dto: CreateItemVariantDto
   ): Promise<unknown> {
     await this.assertItemOwnedByBusiness(businessId, itemId);
+    if (dto.sku?.trim()) {
+      await this.assertSkuUniqueForItem(itemId, dto.sku.trim());
+    }
     if (dto.is_default === true) {
       await this.clearDefaultVariantsForItem(itemId);
     }
@@ -172,6 +208,9 @@ export class ItemVariantsService {
       businessId,
       variantId
     );
+    if (dto.sku?.trim()) {
+      await this.assertSkuUniqueForItem(itemId, dto.sku.trim(), variantId);
+    }
     if (dto.is_default === true) {
       await this.clearDefaultVariantsForItem(itemId);
     }

@@ -31,6 +31,13 @@ array_relationships:
         table:
           name: business_inventory
           schema: public
+  - name: inventory_price_overrides
+    using:
+      foreign_key_constraint_on:
+        column: item_variant_id
+        table:
+          name: business_inventory_variant_price_overrides
+          schema: public
 insert_permissions:
   - role: business
     permission:

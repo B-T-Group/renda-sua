@@ -856,7 +856,11 @@ const PlaceOrderPage: React.FC = () => {
         strikeOriginal: undefined as number | undefined,
       };
     }
-    const base = effectiveVariantUnitPrice(selectedVariant, selectedItem.selling_price);
+    const base = effectiveVariantUnitPrice(
+      selectedVariant,
+      selectedItem.selling_price,
+      selectedItem.variant_price_overrides
+    );
     return unitPriceWithListingDeal(
       base,
       selectedItem.selling_price,
@@ -2190,6 +2194,7 @@ const PlaceOrderPage: React.FC = () => {
                     value={selectedVariantId}
                     onChange={setSelectedVariantId}
                     listingSellingPrice={selectedItem.selling_price}
+                    priceOverrides={selectedItem.variant_price_overrides}
                     hasActiveDeal={selectedItem.hasActiveDeal}
                     originalPrice={selectedItem.original_price}
                     discountedPrice={selectedItem.discounted_price}
@@ -3181,6 +3186,7 @@ const PlaceOrderPage: React.FC = () => {
                         value={selectedVariantId}
                         onChange={setSelectedVariantId}
                         listingSellingPrice={selectedItem.selling_price}
+                        priceOverrides={selectedItem.variant_price_overrides}
                         hasActiveDeal={selectedItem.hasActiveDeal}
                         originalPrice={selectedItem.original_price}
                         discountedPrice={selectedItem.discounted_price}

@@ -212,6 +212,7 @@ type ItemDetailMobileOrderBarProps = {
   topRow?: React.ReactNode;
   questionSlot?: React.ReactNode;
   onOrder: () => void;
+  orderDisabled?: boolean;
 };
 
 function ItemDetailMobileOrderBar({
@@ -221,6 +222,7 @@ function ItemDetailMobileOrderBar({
   topRow,
   questionSlot,
   onOrder,
+  orderDisabled = false,
 }: ItemDetailMobileOrderBarProps) {
   const navRef = React.useRef<HTMLDivElement | null>(null);
   const [shouldPulse, setShouldPulse] = React.useState(false);
@@ -317,6 +319,7 @@ function ItemDetailMobileOrderBar({
             size="medium"
             startIcon={<MobileMoneyOrderIcon />}
             onClick={onOrder}
+            disabled={orderDisabled}
             sx={(theme) => ({
               minWidth: { xs: 160, sm: 172 },
               minHeight: 48,
@@ -514,6 +517,12 @@ export default function ItemDetailPage() {
   ]);
 
   const handleOrderClick = () => {
+    if (
+      variantSel.activeVariants.length > 1 &&
+      !variantSel.selectedVariantId
+    ) {
+      return;
+    }
     if (id) {
       void trackSiteEvent({
         eventType: SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
@@ -530,6 +539,12 @@ export default function ItemDetailPage() {
   };
 
   const handleAddToCart = (item: InventoryItem) => {
+    if (
+      variantSel.activeVariants.length > 1 &&
+      !variantSel.selectedVariantId
+    ) {
+      return;
+    }
     trackView(item.id);
     const lp = variantSel.listingUnitPricing;
     const unitPrice = lp.unit;
@@ -729,19 +744,23 @@ export default function ItemDetailPage() {
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
-  const canAddToCart =
+  const hasStock =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
+  const variantSelectionReady =
+    variantSel.activeVariants.length <= 1 || !!variantSel.selectedVariantId;
   const merchantCanAcceptOrders =
     business?.can_accept_orders ?? business?.is_verified ?? false;
-  const canCheckout = canAddToCart && merchantCanAcceptOrders;
-  const canOrder = canCheckout;
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
-  const showMobileStickyOrderBar = isMobile && canOrder;
+  const showMobileStickyOrderBar = isMobile && hasStock && merchantCanAcceptOrders;
   const showInlineOrderNow = !showMobileStickyOrderBar;
   const showOrderCtaStack =
-    !canOrder || isClientUser || !isMobile;
+    !hasStock ||
+    !merchantCanAcceptOrders ||
+    isClientUser ||
+    !isMobile ||
+    variantSel.activeVariants.length > 1;
 
   const ratingCount = ratings.length;
   const ratingAvg =
@@ -815,7 +834,7 @@ export default function ItemDetailPage() {
         component="main"
         sx={{
           pt: { xs: 1, md: 4 },
-          pb: { xs: isMobile && canOrder ? 18 : 2, md: 4 },
+          pb: { xs: isMobile && showMobileStickyOrderBar ? 18 : 2, md: 4 },
         }}
       >
         <Stack spacing={isMobile ? 0 : 1.5} sx={{ mb: isMobile ? 1 : 2 }}>
@@ -1207,7 +1226,7 @@ export default function ItemDetailPage() {
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-                {!canAddToCart ? (
+                {!hasStock ? (
                   <Button variant="outlined" disabled size="medium">
                     {inventoryItem.computed_available_quantity === 0
                       ? t('items.outOfStock', 'Out of Stock')
@@ -1220,6 +1239,7 @@ export default function ItemDetailPage() {
                       value={variantSel.selectedVariantId}
                       onChange={variantSel.setSelectedVariantId}
                       listingSellingPrice={inventoryItem.selling_price}
+                      priceOverrides={inventoryItem.variant_price_overrides}
                       hasActiveDeal={inventoryItem.hasActiveDeal}
                       originalPrice={inventoryItem.original_price}
                       discountedPrice={inventoryItem.discounted_price}
@@ -1234,6 +1254,7 @@ export default function ItemDetailPage() {
                         onClick={() => handleAddToCart(inventoryItem)}
                         size="medium"
                         fullWidth
+                        disabled={!variantSelectionReady}
                       >
                         {t('cart.addToCart', 'Add to Cart')}
                       </Button>
@@ -1252,6 +1273,7 @@ export default function ItemDetailPage() {
                         onClick={handleOrderClick}
                         size="medium"
                         fullWidth
+                        disabled={!variantSelectionReady}
                         sx={(btnTheme) => ({
                           minHeight: 48,
                           fontWeight: 800,
@@ -1549,6 +1571,7 @@ export default function ItemDetailPage() {
         visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
+        orderDisabled={!variantSelectionReady}
         topRow={
           stickyRatingLabel ? (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>
@@ -1609,6 +1632,7 @@ export default function ItemDetailPage() {
             value={variantSel.selectedVariantId}
             onChange={variantSel.setSelectedVariantId}
             listingSellingPrice={inventoryItem.selling_price}
+            priceOverrides={inventoryItem.variant_price_overrides}
             hasActiveDeal={inventoryItem.hasActiveDeal}
             originalPrice={inventoryItem.original_price}
             discountedPrice={inventoryItem.discounted_price}

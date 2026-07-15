@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,12 +15,14 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
+import { useItemVariants } from '../../hooks/useItemVariants';
 import { Item } from '../../hooks/useItems';
+import type { ItemVariant } from '../../types/itemVariant';
 
 interface UpdateInventoryDialogProps {
   open: boolean;
@@ -52,6 +55,9 @@ export default function UpdateInventoryDialog({
     loading: locationsLoading,
     error: locationsError,
   } = useBusinessLocations(catalogBusinessId);
+  const { listVariants, setVariantPriceOverrides } = useItemVariants(
+    item?.id ?? ''
+  );
 
   const [formData, setFormData] = useState({
     business_location_id: '',
@@ -62,38 +68,105 @@ export default function UpdateInventoryDialog({
     reorder_point: 0,
     reorder_quantity: 0,
   });
+  const [variants, setVariants] = useState<ItemVariant[]>([]);
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>(
+    {}
+  );
+  const [overridesOpen, setOverridesOpen] = useState(false);
+  const [savingOverrides, setSavingOverrides] = useState(false);
+  const [dirtyOverrideIds, setDirtyOverrideIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   // Track the current inventory record being edited (for the selected location)
   const [currentInventoryRecord, setCurrentInventoryRecord] =
     useState<any>(null);
 
-  useEffect(() => {
-    if (item && open) {
-      // If we have selectedInventory, prefill with existing data
-      if (selectedInventory) {
-        setFormData({
-          business_location_id: selectedInventory.business_location_id || '',
-          quantity: selectedInventory.quantity || 0,
-          reserved_quantity: selectedInventory.reserved_quantity || 0,
-          selling_price: selectedInventory.selling_price || item.price || 0,
-          unit_cost: selectedInventory.unit_cost || item.price || 0,
-          reorder_point: selectedInventory.reorder_point || 10,
-          reorder_quantity: selectedInventory.reorder_quantity || 50,
-        });
-      } else {
-        // New inventory - use defaults
-        setFormData({
-          business_location_id: '',
-          quantity: 0,
-          reserved_quantity: 0,
-          selling_price: item.price || 0,
-          unit_cost: item.price || 0,
-          reorder_point: 10,
-          reorder_quantity: 50,
-        });
-      }
+  const loadVariants = useCallback(async () => {
+    if (!item?.id || !open) return;
+    try {
+      const rows = await listVariants();
+      setVariants(rows.filter((v) => v.is_active !== false));
+    } catch {
+      setVariants([]);
     }
-  }, [item, selectedInventory, open, businessLocations]);
+  }, [item?.id, listVariants, open]);
+
+  const seedOverrides = useCallback(
+    (inventory: any | null, variantRows: ItemVariant[]) => {
+      const existing = inventory?.variant_price_overrides;
+      const next: Record<string, string> = {};
+      for (const v of variantRows) {
+        const row = Array.isArray(existing)
+          ? existing.find(
+              (o: { item_variant_id: string }) => o.item_variant_id === v.id
+            )
+          : undefined;
+        next[v.id] =
+          row?.selling_price != null && row.selling_price !== ''
+            ? String(row.selling_price)
+            : '';
+      }
+      setOverrideDrafts(next);
+      setDirtyOverrideIds(new Set());
+    },
+    []
+  );
+
+  useEffect(() => {
+    void loadVariants();
+  }, [loadVariants]);
+
+  // Initialize form when dialog opens / inventory selection changes — not when variants load.
+  useEffect(() => {
+    if (!item || !open) return;
+    if (selectedInventory) {
+      setFormData({
+        business_location_id: selectedInventory.business_location_id || '',
+        quantity: selectedInventory.quantity || 0,
+        reserved_quantity: selectedInventory.reserved_quantity || 0,
+        selling_price: selectedInventory.selling_price || item.price || 0,
+        unit_cost: selectedInventory.unit_cost || item.price || 0,
+        reorder_point: selectedInventory.reorder_point || 10,
+        reorder_quantity: selectedInventory.reorder_quantity || 50,
+      });
+      setCurrentInventoryRecord(selectedInventory);
+    } else {
+      setFormData({
+        business_location_id: '',
+        quantity: 0,
+        reserved_quantity: 0,
+        selling_price: item.price || 0,
+        unit_cost: item.price || 0,
+        reorder_point: 10,
+        reorder_quantity: 50,
+      });
+      setCurrentInventoryRecord(null);
+    }
+  }, [item, selectedInventory, open]);
+
+  // Seed / merge override drafts when variants arrive without resetting form fields.
+  useEffect(() => {
+    if (!open || !variants.length) return;
+    const inventory = selectedInventory || currentInventoryRecord;
+    setOverrideDrafts((prev) => {
+      const existing = inventory?.variant_price_overrides;
+      const next = { ...prev };
+      for (const v of variants) {
+        if (Object.prototype.hasOwnProperty.call(next, v.id)) continue;
+        const row = Array.isArray(existing)
+          ? existing.find(
+              (o: { item_variant_id: string }) => o.item_variant_id === v.id
+            )
+          : undefined;
+        next[v.id] =
+          row?.selling_price != null && row.selling_price !== ''
+            ? String(row.selling_price)
+            : '';
+      }
+      return next;
+    });
+  }, [open, variants, selectedInventory, currentInventoryRecord]);
 
   // Helper function to find existing inventory for a location
   const findInventoryForLocation = (locationId: string) => {
@@ -103,7 +176,6 @@ export default function UpdateInventoryDialog({
     );
   };
 
-  // Helper function to prefill form with inventory data
   const prefillFormWithInventory = (inventory: any) => {
     if (inventory) {
       setFormData({
@@ -116,8 +188,8 @@ export default function UpdateInventoryDialog({
         reorder_quantity: inventory.reorder_quantity || 50,
       });
       setCurrentInventoryRecord(inventory);
+      seedOverrides(inventory, variants);
     } else {
-      // No existing inventory - use defaults
       setFormData((prev) => ({
         ...prev,
         quantity: 0,
@@ -128,6 +200,7 @@ export default function UpdateInventoryDialog({
         reorder_quantity: 50,
       }));
       setCurrentInventoryRecord(null);
+      seedOverrides(null, variants);
     }
   };
 
@@ -137,20 +210,57 @@ export default function UpdateInventoryDialog({
       [field]: value,
     }));
 
-    // Special handling for location selection
     if (field === 'business_location_id' && value) {
       const existingInventory = findInventoryForLocation(value);
-
-      // Only auto-prefill if we're not already editing a specific inventory
-      // (i.e., when selectedInventory is null)
       if (!selectedInventory) {
         prefillFormWithInventory(existingInventory);
-        // Update just the location in formData since prefillFormWithInventory sets it
         setFormData((prev) => ({
           ...prev,
           business_location_id: value,
         }));
       }
+    }
+  };
+
+  const markOverrideDirty = (variantId: string, value: string) => {
+    setOverrideDrafts((prev) => ({ ...prev, [variantId]: value }));
+    setDirtyOverrideIds((prev) => {
+      const next = new Set(prev);
+      next.add(variantId);
+      return next;
+    });
+  };
+
+  const buildOverridePayload = () =>
+    variants
+      .filter((v) => dirtyOverrideIds.has(v.id))
+      .map((v) => {
+        const raw = (overrideDrafts[v.id] ?? '').trim();
+        if (raw === '') {
+          return { item_variant_id: v.id, selling_price: null as number | null };
+        }
+        const n = Number(raw);
+        return {
+          item_variant_id: v.id,
+          selling_price: Number.isFinite(n) && n >= 0 ? n : null,
+        };
+      });
+
+  const saveOverridesForInventory = async (inventoryId: string) => {
+    const overrides = buildOverridePayload();
+    if (!overrides.length) return;
+    setSavingOverrides(true);
+    try {
+      const ok = await setVariantPriceOverrides(
+        inventoryId,
+        overrides,
+        catalogBusinessId
+      );
+      if (!ok) {
+        throw new Error('Failed to save variant price overrides');
+      }
+    } finally {
+      setSavingOverrides(false);
     }
   };
 
@@ -163,41 +273,51 @@ export default function UpdateInventoryDialog({
     }
 
     try {
-      // Determine if we're updating existing inventory or adding new
       const inventoryToUpdate = selectedInventory || currentInventoryRecord;
+      let inventoryId: string | null = inventoryToUpdate?.id ?? null;
+      const wasUpdate = !!inventoryId;
 
-      if (inventoryToUpdate?.id) {
-        // Update existing inventory - only pass updatable fields
-        const updateData = {
-          quantity: formData.quantity,
-          reserved_quantity: formData.reserved_quantity,
-          selling_price: formData.selling_price,
-          unit_cost: formData.unit_cost,
-          reorder_point: formData.reorder_point,
-          reorder_quantity: formData.reorder_quantity,
-          is_active: true,
-        };
-        await updateInventoryItem(inventoryToUpdate.id, updateData, {
-          skipFetchInventory,
-        });
+      if (inventoryId) {
+        const ok = await updateInventoryItem(
+          inventoryId,
+          {
+            quantity: formData.quantity,
+            reserved_quantity: formData.reserved_quantity,
+            selling_price: formData.selling_price,
+            unit_cost: formData.unit_cost,
+            reorder_point: formData.reorder_point,
+            reorder_quantity: formData.reorder_quantity,
+            is_active: true,
+          },
+          { skipFetchInventory }
+        );
+        if (!ok) {
+          throw new Error('Failed to update inventory');
+        }
       } else {
-        // Add new inventory - include all required fields
-        const addData = {
-          item_id: item.id,
-          business_location_id: formData.business_location_id,
-          quantity: formData.quantity,
-          reserved_quantity: formData.reserved_quantity,
-          selling_price: formData.selling_price,
-          unit_cost: formData.unit_cost,
-          reorder_point: formData.reorder_point,
-          reorder_quantity: formData.reorder_quantity,
-          is_active: true,
-        };
-        await addInventoryItem(addData, { skipFetchInventory });
+        inventoryId = await addInventoryItem(
+          {
+            item_id: item.id,
+            business_location_id: formData.business_location_id,
+            quantity: formData.quantity,
+            reserved_quantity: formData.reserved_quantity,
+            selling_price: formData.selling_price,
+            unit_cost: formData.unit_cost,
+            reorder_point: formData.reorder_point,
+            reorder_quantity: formData.reorder_quantity,
+            is_active: true,
+          },
+          { skipFetchInventory }
+        );
+        if (!inventoryId) {
+          throw new Error('Failed to add inventory');
+        }
       }
 
+      await saveOverridesForInventory(inventoryId);
+
       enqueueSnackbar(
-        inventoryToUpdate?.id
+        wasUpdate
           ? t('business.inventory.inventoryUpdatedSuccessfully')
           : t('business.inventory.inventoryAddedSuccessfully'),
         { variant: 'success' }
@@ -231,6 +351,9 @@ export default function UpdateInventoryDialog({
       reorder_quantity: 0,
     });
     setCurrentInventoryRecord(null);
+    setOverrideDrafts({});
+    setDirtyOverrideIds(new Set());
+    setOverridesOpen(false);
     onClose();
   };
 
@@ -416,6 +539,56 @@ export default function UpdateInventoryDialog({
               inputProps={{ min: 0, step: 0.01 }}
             />
           </Stack>
+
+          {variants.length > 0 && (
+            <Stack spacing={1}>
+              <Button
+                size="small"
+                onClick={() => setOverridesOpen((o) => !o)}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                {overridesOpen
+                  ? t(
+                      'business.variants.hideLocationOverrides',
+                      'Hide variant price overrides'
+                    )
+                  : t(
+                      'business.variants.locationOverrides',
+                      'Variant price overrides'
+                    )}
+              </Button>
+              <Collapse in={overridesOpen}>
+                <Stack spacing={2}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t(
+                      'business.variants.overrideHint',
+                      'Leave blank to inherit the variant or inventory price. Quantity stays shared.'
+                    )}
+                  </Typography>
+                  {variants.map((v) => (
+                    <TextField
+                      key={v.id}
+                      fullWidth
+                      type="number"
+                      label={`${v.name} (${item.currency || ''})`}
+                      placeholder={String(
+                        v.price ?? formData.selling_price ?? item.price ?? ''
+                      )}
+                      value={overrideDrafts[v.id] ?? ''}
+                      onChange={(e) =>
+                        markOverrideDirty(v.id, e.target.value)
+                      }
+                      inputProps={{ min: 0, step: 0.01 }}
+                      helperText={t(
+                        'business.variants.overrideFieldHint',
+                        'Blank = inherited'
+                      )}
+                    />
+                  ))}
+                </Stack>
+              </Collapse>
+            </Stack>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -423,9 +596,13 @@ export default function UpdateInventoryDialog({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={loading || !formData.business_location_id}
+          disabled={
+            loading || savingOverrides || !formData.business_location_id
+          }
         >
-          {loading ? t('common.saving') : t('common.save')}
+          {loading || savingOverrides
+            ? t('common.saving')
+            : t('common.save')}
         </Button>
       </DialogActions>
     </Dialog>

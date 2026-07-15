@@ -30,6 +30,13 @@ array_relationships:
         remote_table:
           name: item_deals
           schema: public
+  - name: variant_price_overrides
+    using:
+      foreign_key_constraint_on:
+        column: business_inventory_id
+        table:
+          name: business_inventory_variant_price_overrides
+          schema: public
 computed_fields:
   - name: computed_available_quantity
     definition:

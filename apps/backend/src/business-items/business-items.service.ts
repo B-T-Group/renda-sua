@@ -159,6 +159,11 @@ const GET_ITEMS = `
           name
           sku
         }
+        variant_price_overrides {
+          id
+          item_variant_id
+          selling_price
+        }
         item_deals {
           id
           start_at
@@ -504,6 +509,11 @@ const GET_BUSINESS_INVENTORY = `
         id
         name
         sku
+      }
+      variant_price_overrides {
+        id
+        item_variant_id
+        selling_price
       }
     }
   }
@@ -1218,6 +1228,155 @@ export class BusinessItemsService {
         business_inventory: any[];
       }>(GET_BUSINESS_INVENTORY, { businessId });
     return result.business_inventory ?? [];
+  }
+
+  /**
+   * Upsert/clear per-location variant price overrides for an inventory row.
+   * Pass selling_price: null to delete an override (inherit variant/inventory price).
+   */
+  async bulkSetVariantPriceOverrides(
+    businessId: string,
+    inventoryId: string,
+    overrides: Array<{ item_variant_id: string; selling_price: number | null }>
+  ) {
+    const inv = await this.getOwnedInventoryRow(businessId, inventoryId);
+    const itemId = inv.item_id as string;
+    const results: Array<{
+      item_variant_id: string;
+      selling_price: number | null;
+    }> = [];
+
+    for (const entry of overrides) {
+      await this.assertVariantBelongsToItem(entry.item_variant_id, itemId);
+      if (entry.selling_price == null) {
+        await this.deleteVariantPriceOverride(
+          inventoryId,
+          entry.item_variant_id
+        );
+        results.push({
+          item_variant_id: entry.item_variant_id,
+          selling_price: null,
+        });
+        continue;
+      }
+      await this.upsertVariantPriceOverride(
+        inventoryId,
+        entry.item_variant_id,
+        entry.selling_price
+      );
+      results.push({
+        item_variant_id: entry.item_variant_id,
+        selling_price: entry.selling_price,
+      });
+    }
+    return { inventory_id: inventoryId, overrides: results };
+  }
+
+  private async getOwnedInventoryRow(businessId: string, inventoryId: string) {
+    const invResult = await this.hasuraUserService.executeQuery<{
+      business_inventory_by_pk: {
+        id: string;
+        item_id: string;
+        business_location: { business_id: string };
+      } | null;
+    }>(
+      `
+      query GetInventoryOwned($id: uuid!) {
+        business_inventory_by_pk(id: $id) {
+          id
+          item_id
+          business_location { business_id }
+        }
+      }
+    `,
+      { id: inventoryId }
+    );
+    const inv = invResult.business_inventory_by_pk;
+    if (!inv || inv.business_location.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Inventory not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return inv;
+  }
+
+  private async assertVariantBelongsToItem(
+    variantId: string,
+    itemId: string
+  ): Promise<void> {
+    const res = await this.hasuraUserService.executeQuery<{
+      item_variants_by_pk: { id: string; item_id: string } | null;
+    }>(
+      `
+      query VariantItem($id: uuid!) {
+        item_variants_by_pk(id: $id) { id item_id }
+      }
+    `,
+      { id: variantId }
+    );
+    const v = res.item_variants_by_pk;
+    if (!v || v.item_id !== itemId) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Variant does not belong to this inventory item',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async upsertVariantPriceOverride(
+    inventoryId: string,
+    variantId: string,
+    sellingPrice: number
+  ): Promise<void> {
+    await this.hasuraUserService.executeMutation(
+      `
+      mutation UpsertVariantPriceOverride(
+        $inventoryId: uuid!
+        $variantId: uuid!
+        $price: numeric!
+      ) {
+        insert_business_inventory_variant_price_overrides_one(
+          object: {
+            business_inventory_id: $inventoryId
+            item_variant_id: $variantId
+            selling_price: $price
+          }
+          on_conflict: {
+            constraint: uq_bivpo_inventory_variant
+            update_columns: [selling_price, updated_at]
+          }
+        ) { id }
+      }
+    `,
+      {
+        inventoryId,
+        variantId,
+        price: sellingPrice,
+      }
+    );
+  }
+
+  private async deleteVariantPriceOverride(
+    inventoryId: string,
+    variantId: string
+  ): Promise<void> {
+    await this.hasuraUserService.executeMutation(
+      `
+      mutation DeleteVariantPriceOverride($inventoryId: uuid!, $variantId: uuid!) {
+        delete_business_inventory_variant_price_overrides(
+          where: {
+            business_inventory_id: { _eq: $inventoryId }
+            item_variant_id: { _eq: $variantId }
+          }
+        ) { affected_rows }
+      }
+    `,
+      { inventoryId, variantId }
+    );
   }
 
   async updateInventoryItem(

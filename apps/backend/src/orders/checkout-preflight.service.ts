@@ -27,6 +27,7 @@ import {
   CheckoutPreflightResponseDto,
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
+import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -35,6 +36,12 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
       selling_price
       computed_available_quantity
       is_active
+      item_variant_id
+      variant_price_overrides {
+        id
+        item_variant_id
+        selling_price
+      }
       business_location {
         business_id
         business {
@@ -60,6 +67,11 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           weight
           is_default
         }
+      }
+      item_variant {
+        id
+        name
+        price
       }
     }
   }
@@ -406,23 +418,41 @@ export class CheckoutPreflightService {
       }
 
       // Build item lines
-      const itemLines: CheckoutItemLineDto[] = group.items.map((line) => {
+      const itemLines: CheckoutItemLineDto[] = [];
+      for (const line of group.items) {
         const inv = inventoryById.get(line.business_inventory_id)!;
-        const variant = this.resolveVariant(line.item_variant_id, inv);
-        const unitPrice =
-          variant?.price != null && variant.price !== ''
-            ? Number(variant.price)
-            : Number(inv.selling_price ?? 0);
-        return {
-          business_inventory_id: line.business_inventory_id,
-          quantity: line.quantity,
-          item_variant_id: line.item_variant_id,
-          unit_price: unitPrice,
-          line_total: unitPrice * line.quantity,
-          item_name: inv.item?.name,
-          seller_country: group.sellerCountry,
-        };
-      });
+        try {
+          const variant = this.resolveVariantForOrderParity(
+            line.item_variant_id,
+            inv
+          );
+          const unitPrice = resolveEffectiveUnitPrice({
+            inventorySellingPrice: inv.selling_price,
+            variant,
+            overrides: inv.variant_price_overrides ?? [],
+          });
+          itemLines.push({
+            business_inventory_id: line.business_inventory_id,
+            quantity: line.quantity,
+            item_variant_id: line.item_variant_id ?? variant?.id,
+            unit_price: unitPrice,
+            line_total: unitPrice * line.quantity,
+            item_name: inv.item?.name,
+            seller_country: group.sellerCountry,
+          });
+        } catch (error: any) {
+          blockers.push({
+            code: error?.response?.error || error?.error || 'ITEM_VARIANT_INVALID',
+            message:
+              error?.response?.message ||
+              error?.message ||
+              'Selected variant is invalid for this product.',
+          });
+        }
+      }
+      if (itemLines.length === 0 && group.items.length > 0) {
+        continue;
+      }
 
       const subtotal = itemLines.reduce((s, l) => s + l.line_total, 0);
 
@@ -588,11 +618,60 @@ export class CheckoutPreflightService {
     };
   }
 
-  private resolveVariant(variantId: string | undefined, inv: any): any | null {
-    const variants: any[] = inv.item?.item_variants ?? [];
-    if (variants.length === 0) return null;
-    if (variants.length === 1) return variants[0];
-    if (!variantId) return null;
-    return variants.find((v: any) => v?.id === variantId) ?? null;
+  /**
+   * Mirrors OrdersService.resolveVariantForOrderLine for checkout parity.
+   */
+  private resolveVariantForOrderParity(
+    requestedVariantId: string | undefined,
+    inventoryRow: any
+  ): any | null {
+    const rowVariantId = inventoryRow.item_variant_id as
+      | string
+      | null
+      | undefined;
+    const activeVariants = inventoryRow.item?.item_variants ?? [];
+    if (rowVariantId) {
+      const rowVariant =
+        (Array.isArray(activeVariants)
+          ? activeVariants.find((v: any) => v?.id === rowVariantId)
+          : null) ||
+        inventoryRow.item_variant ||
+        null;
+      if (!rowVariant) {
+        throw {
+          error: 'ITEM_VARIANT_INVALID',
+          message: 'Inventory variant is unavailable for this product.',
+        };
+      }
+      if (requestedVariantId?.trim() && requestedVariantId !== rowVariantId) {
+        throw {
+          error: 'ITEM_VARIANT_MISMATCH',
+          message: 'Selected variant does not match inventory stock row.',
+        };
+      }
+      return rowVariant;
+    }
+    if (!Array.isArray(activeVariants) || activeVariants.length === 0) {
+      return null;
+    }
+    if (activeVariants.length === 1) {
+      return activeVariants[0];
+    }
+    if (!requestedVariantId?.trim()) {
+      throw {
+        error: 'ITEM_VARIANT_REQUIRED',
+        message: 'Please select a product option before checkout.',
+      };
+    }
+    const found = activeVariants.find(
+      (v: any) => v?.id === requestedVariantId
+    );
+    if (!found) {
+      throw {
+        error: 'ITEM_VARIANT_INVALID',
+        message: 'Selected product option is not available.',
+      };
+    }
+    return found;
   }
 }

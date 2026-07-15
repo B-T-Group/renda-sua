@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS public.business_inventory_variant_price_overrides;

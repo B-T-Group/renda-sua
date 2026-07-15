@@ -1,7 +1,12 @@
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   Divider,
   IconButton,
@@ -12,40 +17,50 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useItemVariants } from '../../../hooks/useItemVariants';
-import type { ItemVariant } from '../../../types/itemVariant';
+import type {
+  ItemVariant,
+  VariantParentDefaults,
+} from '../../../types/itemVariant';
+import {
+  effectiveVariantUnitPrice,
+  primaryVariantImageUrl,
+} from '../../../types/itemVariant';
 import ConfirmationModal from '../../common/ConfirmationModal';
-import VariantFormDialog from './VariantFormDialog';
-import VariantImagesEditor from './VariantImagesEditor';
+import VariantWizardDialog from './VariantWizardDialog';
 
 export interface VariantsManagerSectionProps {
   itemId: string;
+  parentItem: VariantParentDefaults;
+}
+
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'XAF',
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
 }
 
 const VariantsManagerSection: React.FC<VariantsManagerSectionProps> = ({
   itemId,
+  parentItem,
 }) => {
   const { t } = useTranslation();
-  const {
-    listVariants,
-    deleteVariant,
-    setDefaultVariant,
-  } = useItemVariants(itemId);
+  const { listVariants, deleteVariant, setDefaultVariant } =
+    useItemVariants(itemId);
   const [variants, setVariants] = useState<ItemVariant[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ItemVariant | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ItemVariant | null>(null);
 
-  const bucketName = useMemo(
-    () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
-    []
-  );
-
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listVariants();
-      setVariants(data);
+      setVariants(await listVariants());
     } finally {
       setLoading(false);
     }
@@ -54,6 +69,14 @@ const VariantsManagerSection: React.FC<VariantsManagerSectionProps> = ({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const siblingSkus = useMemo(
+    () =>
+      variants
+        .filter((v) => v.id !== editing?.id && v.sku)
+        .map((v) => v.sku as string),
+    [variants, editing?.id]
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -110,68 +133,26 @@ const VariantsManagerSection: React.FC<VariantsManagerSectionProps> = ({
           {t('business.variants.empty', 'No variants yet.')}
         </Typography>
       ) : (
-        <Stack spacing={2}>
+        <Stack spacing={1.5}>
           {variants.map((v) => (
-            <Paper key={v.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="flex-start"
-                spacing={1}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography fontWeight={600}>{v.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {[v.sku, v.price != null ? String(v.price) : null]
-                      .filter(Boolean)
-                      .join(' · ') || '—'}
-                  </Typography>
-                  {v.is_default ? (
-                    <Typography variant="caption" color="primary" display="block">
-                      {t('business.variants.default', 'Default option')}
-                    </Typography>
-                  ) : null}
-                </Box>
-                <Stack direction="row">
-                  {!v.is_default ? (
-                    <Button
-                      size="small"
-                      onClick={() => void setDefaultVariant(v.id).then(refresh)}
-                    >
-                      {t('business.variants.setDefault', 'Set default')}
-                    </Button>
-                  ) : null}
-                  <IconButton
-                    size="small"
-                    aria-label="edit"
-                    onClick={() => openEdit(v)}
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    aria-label="delete"
-                    onClick={() => setDeleteTarget(v)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              </Stack>
-              <VariantImagesEditor
-                itemId={itemId}
-                variant={v}
-                bucketName={bucketName}
-                onChanged={refresh}
-              />
-            </Paper>
+            <VariantCard
+              key={v.id}
+              variant={v}
+              parentItem={parentItem}
+              onEdit={() => openEdit(v)}
+              onDelete={() => setDeleteTarget(v)}
+              onSetDefault={() => void setDefaultVariant(v.id).then(refresh)}
+            />
           ))}
         </Stack>
       )}
 
-      <VariantFormDialog
+      <VariantWizardDialog
         open={formOpen}
         itemId={itemId}
+        parentItem={parentItem}
         initial={editing}
+        siblingSkus={siblingSkus}
         onClose={() => setFormOpen(false)}
         onSaved={refresh}
       />
@@ -189,6 +170,104 @@ const VariantsManagerSection: React.FC<VariantsManagerSectionProps> = ({
         confirmColor="error"
       />
     </Box>
+  );
+};
+
+interface VariantCardProps {
+  variant: ItemVariant;
+  parentItem: VariantParentDefaults;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSetDefault: () => void;
+}
+
+const VariantCard: React.FC<VariantCardProps> = ({
+  variant,
+  parentItem,
+  onEdit,
+  onDelete,
+  onSetDefault,
+}) => {
+  const { t } = useTranslation();
+  const inactive = variant.is_active === false;
+  const thumb = primaryVariantImageUrl(variant);
+  const price = effectiveVariantUnitPrice(variant, parentItem.price);
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        opacity: inactive ? 0.55 : 1,
+        transition: 'opacity 0.2s',
+      }}
+    >
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Box
+          sx={{
+            width: 64,
+            height: 64,
+            borderRadius: 1,
+            overflow: 'hidden',
+            bgcolor: 'action.hover',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {thumb ? (
+            <Box
+              component="img"
+              src={thumb}
+              alt=""
+              sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              {t('business.variants.noImage', 'No image')}
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Typography fontWeight={600} noWrap>
+              {variant.name}
+            </Typography>
+            {variant.is_default ? (
+              <Chip
+                size="small"
+                color="primary"
+                label={t('business.variants.defaultBadge', 'Default')}
+              />
+            ) : null}
+            {inactive ? (
+              <Chip
+                size="small"
+                label={t('business.variants.inactiveBadge', 'Inactive')}
+              />
+            ) : null}
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {formatMoney(price, parentItem.currency)}
+            {variant.sku ? ` · ${variant.sku}` : ''}
+          </Typography>
+        </Box>
+        <Stack direction="row" alignItems="center">
+          {!variant.is_default ? (
+            <Button size="small" onClick={onSetDefault}>
+              {t('business.variants.setDefault', 'Set default')}
+            </Button>
+          ) : null}
+          <IconButton size="small" aria-label="edit" onClick={onEdit}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" aria-label="delete" onClick={onDelete}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Stack>
+    </Paper>
   );
 };
 

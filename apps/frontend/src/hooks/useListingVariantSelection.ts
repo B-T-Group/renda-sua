@@ -17,7 +17,8 @@ function sortActiveVariants(
 }
 
 /**
- * Default selection + unit pricing for a catalog listing (variant price + listing deal).
+ * Default selection + unit pricing for a catalog listing
+ * (location override → variant price → inventory, then listing deal).
  */
 export function useListingVariantSelection(
   inventoryItem: InventoryItem | null | undefined
@@ -47,8 +48,10 @@ export function useListingVariantSelection(
       setSelectedVariantId(variants[0].id);
       return;
     }
-    const def = variants.find((v) => v.is_default);
-    setSelectedVariantId(def?.id ?? variants[0].id);
+    // Multiple options: keep selection only if still valid; otherwise require explicit pick.
+    setSelectedVariantId((prev) =>
+      prev && variants.some((v) => v.id === prev) ? prev : null
+    );
   }, [inventoryItem, variantIdsKey]);
 
   const selectedVariant = useMemo(() => {
@@ -66,7 +69,8 @@ export function useListingVariantSelection(
     }
     const base = effectiveVariantUnitPrice(
       selectedVariant,
-      inventoryItem.selling_price
+      inventoryItem.selling_price,
+      inventoryItem.variant_price_overrides
     );
     return unitPriceWithListingDeal(
       base,

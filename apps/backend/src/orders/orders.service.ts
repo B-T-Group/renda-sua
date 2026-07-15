@@ -63,6 +63,7 @@ import {
   resolveAgentPreviewCountry,
 } from '../common/agent-proximity.util';
 import { LocationsService } from '../locations/locations.service';
+import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -473,10 +474,11 @@ export class OrdersService {
     variant: any | null,
     deal?: { discount_type: string; discount_value: number }
   ): number {
-    const base =
-      variant != null && variant.price != null && variant.price !== ''
-        ? Number(variant.price)
-        : businessInventory.selling_price;
+    const base = resolveEffectiveUnitPrice({
+      inventorySellingPrice: businessInventory.selling_price,
+      variant,
+      overrides: businessInventory.variant_price_overrides ?? [],
+    });
     return this.computeUnitPriceFromBase(base, deal);
   }
 
@@ -490,12 +492,17 @@ export class OrdersService {
     return typeof primary?.image_url === 'string' ? primary.image_url : null;
   }
 
-  private buildVariantSnapshot(variant: any): Record<string, unknown> | null {
+  private buildVariantSnapshot(
+    variant: any,
+    resolvedUnitPrice?: number
+  ): Record<string, unknown> | null {
     if (!variant) {
       return null;
     }
     return {
       price: variant.price ?? null,
+      resolved_unit_price:
+        resolvedUnitPrice != null ? resolvedUnitPrice : null,
       weight: variant.weight ?? null,
       weight_unit: variant.weight_unit ?? null,
       dimensions: variant.dimensions ?? null,
@@ -6905,6 +6912,11 @@ export class OrdersService {
           is_active
           business_location_id
           item_variant_id
+          variant_price_overrides {
+            id
+            item_variant_id
+            selling_price
+          }
           item_variant {
             id
             name
@@ -7596,7 +7608,7 @@ export class OrdersService {
         variant,
         deal
       );
-      const snapshot = this.buildVariantSnapshot(variant);
+      const snapshot = this.buildVariantSnapshot(variant, unitPrice);
       return {
         business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,

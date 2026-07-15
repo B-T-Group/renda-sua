@@ -24,6 +24,24 @@ export interface ItemVariant {
   item_variant_images?: ItemVariantImage[];
 }
 
+/** Per-location price override on a business_inventory row. */
+export interface VariantPriceOverride {
+  id?: string;
+  item_variant_id: string;
+  selling_price: number | string | null;
+}
+
+/** Parent item fields used to seed a new variant. */
+export interface VariantParentDefaults {
+  name: string;
+  price: number;
+  currency: string;
+  weight?: number | null;
+  weight_unit?: string | null;
+  dimensions?: string | null;
+  color?: string | null;
+}
+
 export function primaryVariantImageUrl(
   variant: ItemVariant | null | undefined
 ): string | null {
@@ -35,14 +53,25 @@ export function primaryVariantImageUrl(
   return primary?.image_url ?? null;
 }
 
-/** Effective list unit price before deals: variant override or listing selling_price */
+/**
+ * Effective list unit price before deals:
+ * location override → variant price → inventory selling_price.
+ */
 export function effectiveVariantUnitPrice(
   variant: ItemVariant | null | undefined,
-  sellingPrice: number
+  sellingPrice: number,
+  overrides?: VariantPriceOverride[] | null
 ): number {
+  if (variant?.id && overrides?.length) {
+    const row = overrides.find((o) => o.item_variant_id === variant.id);
+    if (row != null && row.selling_price != null && row.selling_price !== '') {
+      const n = Number(row.selling_price);
+      if (!Number.isNaN(n) && n >= 0) return n;
+    }
+  }
   if (variant != null && variant.price != null) {
     const n = Number(variant.price);
-    if (!Number.isNaN(n)) return n;
+    if (!Number.isNaN(n) && n >= 0) return n;
   }
   return sellingPrice;
 }
@@ -66,9 +95,20 @@ export function unitPriceWithListingDeal(
     return { unit: baseUnit, hasDeal: false };
   }
 
+  const original = originalPrice as number;
+  const discounted = discountedPrice as number;
   return {
-    unit: baseUnit * (discountedPrice! / listingSellingPrice),
-    strikeOriginal: baseUnit * (originalPrice! / listingSellingPrice),
+    unit: baseUnit * (discounted / listingSellingPrice),
+    strikeOriginal: baseUnit * (original / listingSellingPrice),
     hasDeal: true,
   };
+}
+
+export function suggestVariantName(
+  itemName: string,
+  color: string | null | undefined
+): string {
+  const c = color?.trim();
+  if (!c) return '';
+  return `${itemName} — ${c}`;
 }
