@@ -38,6 +38,7 @@ import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
 import ProductTaxCategorySelect from './ProductTaxCategorySelect';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -83,6 +84,8 @@ export default function AddItemDialog({
 }: AddItemDialogProps) {
   const { t } = useTranslation();
   const { lockedCurrency } = useBusinessLockedCurrency(businessId);
+  const { isStripeRail, loading: stripeRailLoading, status: stripeRailStatus } =
+    useIsStripeRail();
   const [tabValue, setTabValue] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [inventoryData, setInventoryData] = useState<
@@ -559,19 +562,20 @@ export default function AddItemDialog({
               </FormControl>
             </Stack>
 
-            <ProductTaxCategorySelect
-              value={
-                newItemData.stripe_tax_code_id ?? STRIPE_TAX_CODE_GENERAL_TANGIBLE
-              }
-              onChange={(taxCodeId) =>
-                setNewItemData({
-                  ...newItemData,
-                  stripe_tax_code_id: taxCodeId,
-                })
-              }
-              disabled={itemsLoading}
-            />
-
+            {stripeRailStatus == null || isStripeRail ? (
+              <ProductTaxCategorySelect
+                value={
+                  newItemData.stripe_tax_code_id ?? STRIPE_TAX_CODE_GENERAL_TANGIBLE
+                }
+                onChange={(taxCodeId) =>
+                  setNewItemData({
+                    ...newItemData,
+                    stripe_tax_code_id: taxCodeId,
+                  })
+                }
+                disabled={itemsLoading || stripeRailLoading}
+              />
+            ) : null}
             <Stack direction="row" spacing={2}>
               <TextField
                 fullWidth

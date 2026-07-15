@@ -33,6 +33,7 @@ import { Item, useItems } from '../../../../hooks/useItems';
 import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import ProductTaxCategorySelect from '../../../business/ProductTaxCategorySelect';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../../../hooks/useStripeTaxCodes';
+import { useIsStripeRail } from '../../../../hooks/useIsStripeRail';
 
 export interface CreatedSaleItemSummary {
   id: string;
@@ -91,7 +92,10 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   const apiClient = useApiClient();
   const { updateItem } = useItems(profile?.business?.id, { skipInitialItemsFetch: true });
   const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
+  const { isStripeRail, loading: stripeRailLoading, status: stripeRailStatus } =
+    useIsStripeRail();
   const primaryId = imageIds[0] ?? '';
+  const showTaxCategory = stripeRailStatus == null || isStripeRail;
   const extraIds = imageIds.slice(1);
   const [aiTrigger, setAiTrigger] = useState(0);
   const [itemForEdit, setItemForEdit] = useState<Item | null>(null);
@@ -469,11 +473,13 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         disabled={formDisabled}
         helperText={t('business.onboarding.firstSale.create.descriptionHelper', 'Required — describe what you are renting or selling')}
       />
-      <ProductTaxCategorySelect
-        value={stripeTaxCodeId}
-        onChange={setStripeTaxCodeId}
-        disabled={formDisabled}
-      />
+      {showTaxCategory ? (
+        <ProductTaxCategorySelect
+          value={stripeTaxCodeId}
+          onChange={setStripeTaxCodeId}
+          disabled={formDisabled || stripeRailLoading}
+        />
+      ) : null}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <TextField
           label={t('business.onboarding.firstSale.create.price', 'Price')}

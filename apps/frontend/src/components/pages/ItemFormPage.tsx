@@ -50,6 +50,7 @@ import { Tag, useTags } from '../../hooks/useTags';
 import VariantsManagerSection from '../business/variants/VariantsManagerSection';
 import ProductTaxCategorySelect from '../business/ProductTaxCategorySelect';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import SEOHead from '../seo/SEOHead';
 
 // Extended types for create options
@@ -127,8 +128,11 @@ const ItemFormPage: React.FC = () => {
   const { effectiveBusinessId, businessQuerySuffix } = useBusinessCatalogScope();
   const { lockedCurrency } = useBusinessLockedCurrency(effectiveBusinessId);
   const { generateDescription, loading: aiLoading } = useAi();
+  const { isStripeRail, loading: stripeRailLoading, status: stripeRailStatus } =
+    useIsStripeRail();
 
   const isEditMode = !!itemId;
+  const showTaxCategory = stripeRailStatus == null || isStripeRail;
 
   // Collapsible sections state
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
@@ -1432,13 +1436,15 @@ const ItemFormPage: React.FC = () => {
                     )}
                   />
 
-                  <ProductTaxCategorySelect
-                    value={formData.stripe_tax_code_id}
-                    onChange={(taxCodeId) =>
-                      handleInputChange('stripe_tax_code_id', taxCodeId)
-                    }
-                    disabled={loading}
-                  />
+                  {showTaxCategory ? (
+                    <ProductTaxCategorySelect
+                      value={formData.stripe_tax_code_id}
+                      onChange={(taxCodeId) =>
+                        handleInputChange('stripe_tax_code_id', taxCodeId)
+                      }
+                      disabled={loading || stripeRailLoading}
+                    />
+                  ) : null}
 
                   <FormControlLabel
                     control={
