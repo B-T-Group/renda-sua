@@ -155,3 +155,12 @@ update_permissions:
               id:
                 _eq: X-Hasura-User-Id
       check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
