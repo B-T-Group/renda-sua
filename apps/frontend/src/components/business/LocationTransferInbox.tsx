@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -15,55 +14,91 @@ import {
   useLocationTransfers,
   type TransferRequest,
 } from '../../hooks/useLocationTransfers';
-import ConfirmationModal from '../common/ConfirmationModal';
+import TransferRequestDetailDialog from './TransferRequestDetailDialog';
 
 interface LocationTransferInboxProps {
   businessId?: string;
   refreshToken?: number;
   onChanged?: () => void;
+  focusRequestId?: string | null;
+  onFocusHandled?: () => void;
+}
+
+function requestLocationName(req: TransferRequest): string {
+  return (
+    req.business_location?.name ||
+    String(req.metadata?.locationName || '') ||
+    '—'
+  );
+}
+
+function businessEmail(
+  biz?: { name?: string; user?: { email?: string } } | null
+): string {
+  return biz?.user?.email?.trim() || '';
+}
+
+function formatExpiresAt(
+  iso: string,
+  t: (key: string, fallback: string, opts?: Record<string, unknown>) => string
+): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms)) return '';
+  if (ms <= 0) {
+    return t('business.locations.transfer.expiredLabel', 'Expired');
+  }
+  const days = Math.ceil(ms / 86400000);
+  if (days <= 1) {
+    return t('business.locations.transfer.expiresToday', 'Expires today');
+  }
+  return t(
+    'business.locations.transfer.expiresInDays',
+    'Expires in {{days}} days',
+    { days }
+  );
 }
 
 const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
   businessId,
   refreshToken = 0,
   onChanged,
+  focusRequestId = null,
+  onFocusHandled,
 }) => {
   const { t } = useTranslation();
-  const {
-    incoming,
-    outgoing,
-    loading,
-    fetchPending,
-    acceptRequest,
-    rejectRequest,
-    cancelRequest,
-  } = useLocationTransfers(businessId);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [acceptTarget, setAcceptTarget] = useState<TransferRequest | null>(
-    null
-  );
-  const [error, setError] = useState<string | null>(null);
+  const { incoming, outgoing, loading, fetchPending } =
+    useLocationTransfers(businessId);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchPending();
   }, [fetchPending, refreshToken]);
 
-  const run = async (id: string, action: () => Promise<unknown>) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      await action();
-      await fetchPending();
-      onChanged?.();
-    } catch (err: unknown) {
-      setError((err as { message?: string })?.message ?? 'Action failed');
-    } finally {
-      setBusyId(null);
-      setAcceptTarget(null);
-    }
+  useEffect(() => {
+    if (!focusRequestId) return;
+    setDetailId(focusRequestId);
+    setHighlightId(focusRequestId);
+    onFocusHandled?.();
+    const timer = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [focusRequestId, onFocusHandled]);
+
+  const openDetail = (id: string) => {
+    setDetailId(id);
+    setHighlightId(id);
   };
 
-  if (loading && !incoming.length && !outgoing.length) {
+  const cardSx = (id: string) =>
+    highlightId === id
+      ? {
+          outline: '2px solid',
+          outlineColor: 'primary.main',
+          bgcolor: 'action.hover',
+        }
+      : undefined;
+
+  if (loading && !incoming.length && !outgoing.length && !detailId) {
     return (
       <Box display="flex" justifyContent="center" py={2}>
         <CircularProgress size={28} />
@@ -71,14 +106,12 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
     );
   }
 
-  if (!incoming.length && !outgoing.length) {
+  if (!incoming.length && !outgoing.length && !detailId) {
     return null;
   }
 
   return (
     <Stack spacing={2} sx={{ mb: 3 }}>
-      {error && <Alert severity="error">{error}</Alert>}
-
       {incoming.length > 0 && (
         <Box>
           <Typography variant="h6" gutterBottom>
@@ -89,11 +122,15 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
           </Typography>
           <Stack spacing={1.5}>
             {incoming.map((req) => (
-              <Card key={req.id} variant="outlined">
+              <Card
+                key={req.id}
+                variant="outlined"
+                sx={{ ...cardSx(req.id), cursor: 'pointer' }}
+                onClick={() => openDetail(req.id)}
+              >
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={600}>
-                    {req.business_location?.name ||
-                      String(req.metadata?.locationName || '')}
+                    {requestLocationName(req)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {req.transfer_mode === 'inventory_merge'
@@ -137,21 +174,19 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
                       }
                     )}
                   </Typography>
+                  <Typography variant="caption" color="warning.main">
+                    {formatExpiresAt(req.expires_at, t)}
+                  </Typography>
                 </CardContent>
                 <CardActions>
                   <Button
-                    color="inherit"
-                    disabled={busyId === req.id}
-                    onClick={() => run(req.id, () => rejectRequest(req.id))}
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDetail(req.id);
+                    }}
                   >
-                    {t('common.reject', 'Reject')}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    disabled={busyId === req.id}
-                    onClick={() => setAcceptTarget(req)}
-                  >
-                    {t('common.accept', 'Accept')}
+                    {t('business.locations.transfer.viewRequest', 'View')}
                   </Button>
                 </CardActions>
               </Card>
@@ -170,11 +205,15 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
           </Typography>
           <Stack spacing={1.5}>
             {outgoing.map((req) => (
-              <Card key={req.id} variant="outlined">
+              <Card
+                key={req.id}
+                variant="outlined"
+                sx={{ ...cardSx(req.id), cursor: 'pointer' }}
+                onClick={() => openDetail(req.id)}
+              >
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={600}>
-                    {req.business_location?.name ||
-                      String(req.metadata?.locationName || '')}
+                    {requestLocationName(req)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t(
@@ -182,24 +221,28 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
                       'To: {{name}} ({{email}})',
                       {
                         name: req.to_business?.name || '',
-                        email: '',
+                        email: businessEmail(req.to_business),
                       }
                     )}
                   </Typography>
-                  <Typography variant="caption" color="warning.main">
+                  <Typography variant="caption" color="warning.main" display="block">
                     {t(
                       'business.locations.transfer.pendingBadge',
                       'Transfer pending'
                     )}
+                    {' · '}
+                    {formatExpiresAt(req.expires_at, t)}
                   </Typography>
                 </CardContent>
                 <CardActions>
                   <Button
-                    color="inherit"
-                    disabled={busyId === req.id}
-                    onClick={() => run(req.id, () => cancelRequest(req.id))}
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDetail(req.id);
+                    }}
                   >
-                    {t('common.cancel', 'Cancel')}
+                    {t('business.locations.transfer.viewRequest', 'View')}
                   </Button>
                 </CardActions>
               </Card>
@@ -208,30 +251,15 @@ const LocationTransferInbox: React.FC<LocationTransferInboxProps> = ({
         </Box>
       )}
 
-      <ConfirmationModal
-        open={!!acceptTarget}
-        title={t(
-          'business.locations.transfer.acceptTitle',
-          'Accept location transfer?'
-        )}
-        message={
-          acceptTarget?.transfer_mode === 'inventory_merge'
-            ? t(
-                'business.locations.transfer.acceptMergeMessage',
-                'This will move eligible items and inventory into the selected location. Duplicates stay on the source.'
-              )
-            : t(
-                'business.locations.transfer.acceptMessage',
-                'This will move the location, its items, addresses, and account to your business.'
-              )
-        }
-        confirmText={t('common.accept', 'Accept')}
-        confirmColor="primary"
-        loading={!!busyId}
-        onCancel={() => setAcceptTarget(null)}
-        onConfirm={() => {
-          if (!acceptTarget) return;
-          void run(acceptTarget.id, () => acceptRequest(acceptTarget.id));
+      <TransferRequestDetailDialog
+        open={!!detailId}
+        requestId={detailId}
+        businessId={businessId}
+        viewerBusinessId={businessId}
+        onClose={() => setDetailId(null)}
+        onChanged={() => {
+          void fetchPending();
+          onChanged?.();
         }}
       />
     </Stack>

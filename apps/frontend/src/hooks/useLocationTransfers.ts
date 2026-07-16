@@ -47,8 +47,8 @@ export interface TransferRequest {
   created_at: string;
   business_location?: { id: string; name: string };
   to_business_location?: { id: string; name: string } | null;
-  from_business?: { id: string; name: string };
-  to_business?: { id: string; name: string };
+  from_business?: { id: string; name: string; user?: { email?: string } };
+  to_business?: { id: string; name: string; user?: { email?: string } };
   requested_by_user?: {
     id: string;
     email: string;
@@ -182,6 +182,20 @@ export function useLocationTransfers(businessId?: string) {
     [apiClient, businessId]
   );
 
+  const getRequest = useCallback(
+    async (id: string) => {
+      if (!apiClient) throw new Error('No API client');
+      const { data } = await apiClient.get(
+        withBusinessId(
+          `/business-items/transfer-requests/${id}`,
+          businessId
+        )
+      );
+      return data?.data?.request as TransferRequest;
+    },
+    [apiClient, businessId]
+  );
+
   return {
     incoming,
     outgoing,
@@ -194,5 +208,6 @@ export function useLocationTransfers(businessId?: string) {
     acceptRequest,
     rejectRequest,
     cancelRequest,
+    getRequest,
   };
 }

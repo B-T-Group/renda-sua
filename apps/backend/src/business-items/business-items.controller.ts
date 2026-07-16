@@ -316,6 +316,25 @@ export class BusinessItemsController {
     return { success: true, data };
   }
 
+  @Get('transfer-requests/:id')
+  @ApiOperation({
+    summary: 'Get a location transfer request by id (source or destination)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiResponse({ status: 200, description: 'Transfer request' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  async getTransferRequest(
+    @Param('id') id: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const request = await this.transferService.getForBusiness(
+      id,
+      ctx.targetBusinessId
+    );
+    return { success: true, data: { request } };
+  }
+
   @Post('transfer-requests/:id/accept')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept a pending location transfer (destination)' })

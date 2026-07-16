@@ -354,7 +354,29 @@ export class BusinessLocationTransferService {
       );
     }
     await this.setRequestStatus(requestId, 'cancelled');
+    const locationName =
+      request.business_location?.name ||
+      String(request.metadata?.locationName || '');
+    void this.notifyDestinationOfCancel(request, locationName);
     return this.loadRequest(requestId);
+  }
+
+  async getForBusiness(
+    requestId: string,
+    businessId: string
+  ): Promise<TransferRequestRow> {
+    await this.expireStaleRequests();
+    const request = await this.loadRequest(requestId);
+    if (
+      request.from_business_id !== businessId &&
+      request.to_business_id !== businessId
+    ) {
+      throw new HttpException(
+        { success: false, error: 'Transfer request not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return request;
   }
 
   private async previewOwnership(
@@ -1312,6 +1334,10 @@ export class BusinessLocationTransferService {
     }
   }
 
+  private transferDeepLink(requestId: string): string {
+    return `/business/locations?transferRequestId=${encodeURIComponent(requestId)}`;
+  }
+
   private async notifyDestination(
     request: TransferRequestRow,
     locationName: string,
@@ -1334,10 +1360,35 @@ export class BusinessLocationTransferService {
           requestId: request.id,
           expiresAt: request.expires_at,
           mode: request.transfer_mode || 'location_ownership',
+          url: this.transferDeepLink(request.id),
         },
       });
     } catch (error: any) {
       this.logger.warn(`Transfer push failed: ${error?.message}`);
+    }
+  }
+
+  private async notifyDestinationOfCancel(
+    request: TransferRequestRow,
+    locationName: string
+  ): Promise<void> {
+    const isMerge = request.transfer_mode === 'inventory_merge';
+    const noun = isMerge ? 'Inventory' : 'Location';
+    try {
+      await this.notifications.sendBusinessLocationTransferPush({
+        userId: request.to_user_id,
+        title: `${noun} transfer cancelled`,
+        body: `A ${noun.toLowerCase()} transfer request for "${locationName || 'location'}" was cancelled`,
+        data: {
+          type: 'business_location_transfer_result',
+          requestId: request.id,
+          outcome: 'cancelled',
+          mode: request.transfer_mode || 'location_ownership',
+          url: this.transferDeepLink(request.id),
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`Transfer cancel push failed: ${error?.message}`);
     }
   }
 
@@ -1366,6 +1417,7 @@ export class BusinessLocationTransferService {
           requestId: request.id,
           outcome,
           mode: request.transfer_mode || 'location_ownership',
+          url: this.transferDeepLink(request.id),
         },
       });
     } catch (error: any) {
@@ -1382,8 +1434,8 @@ export class BusinessLocationTransferService {
       expires_at responded_at created_at updated_at
       business_location { id name }
       to_business_location { id name }
-      from_business { id name }
-      to_business { id name }
+      from_business { id name user { email } }
+      to_business { id name user { email } }
       requested_by_user { id email first_name last_name }
     `;
   }

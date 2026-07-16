@@ -70,8 +70,8 @@ export interface TransferRequestRow {
   updated_at: string;
   business_location?: { id: string; name: string };
   to_business_location?: { id: string; name: string } | null;
-  from_business?: { id: string; name: string };
-  to_business?: { id: string; name: string };
+  from_business?: { id: string; name: string; user?: { email?: string } };
+  to_business?: { id: string; name: string; user?: { email?: string } };
   requested_by_user?: {
     id: string;
     email: string;

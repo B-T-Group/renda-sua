@@ -130,6 +130,10 @@ self.addEventListener('push', (event) => {
       data.body = event.data.text();
     }
   }
+  const requestId =
+    typeof data.requestId === 'string' && data.requestId.trim()
+      ? data.requestId.trim()
+      : null;
   event.waitUntil(
     (async () => {
       try {
@@ -137,8 +141,16 @@ self.addEventListener('push', (event) => {
           body: data.body,
           icon: '/favicon.ico',
           badge: '/favicon.ico',
-          data: { url: data.url || '/', orderId: data.orderId },
-          tag: data.orderId ? `order-${data.orderId}` : 'rendasua-notification',
+          data: {
+            url: data.url || '/',
+            orderId: data.orderId,
+            requestId,
+          },
+          tag: requestId
+            ? `transfer-${requestId}`
+            : data.orderId
+              ? `order-${data.orderId}`
+              : 'rendasua-notification',
           requireInteraction: true,
         });
       } catch (e) {

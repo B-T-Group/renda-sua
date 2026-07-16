@@ -26,7 +26,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountManager } from '../../hooks/useAccountManager';
 import {
@@ -60,6 +60,7 @@ const INITIAL_BUSINESS_ADDRESS_FORM: AddressFormData = {
 const BusinessLocationsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
@@ -79,7 +80,19 @@ const BusinessLocationsPage: React.FC = () => {
   const [locationToTransfer, setLocationToTransfer] =
     useState<BusinessLocation | null>(null);
   const [transferRefresh, setTransferRefresh] = useState(0);
+  const [deepLinkRequestId, setDeepLinkRequestId] = useState<string | null>(
+    null
+  );
   const { outgoing, fetchPending } = useLocationTransfers(profile?.business?.id);
+
+  useEffect(() => {
+    const id = searchParams.get('transferRequestId');
+    if (!id) return;
+    setDeepLinkRequestId(id);
+    const next = new URLSearchParams(searchParams);
+    next.delete('transferRequestId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const {
     locations,
@@ -424,6 +437,8 @@ const BusinessLocationsPage: React.FC = () => {
         <LocationTransferInbox
           businessId={profile?.business?.id}
           refreshToken={transferRefresh}
+          focusRequestId={deepLinkRequestId}
+          onFocusHandled={() => setDeepLinkRequestId(null)}
           onChanged={() => {
             void fetchLocations();
             void fetchPending();
