@@ -9,6 +9,9 @@ import {
 } from './admin-performance.queries';
 import type { TopAgentMetric } from './dto/admin-performance-query.dto';
 
+/** Target catalog depth: average sale items per referred business. */
+export const GOLDEN_ITEMS_PER_REFERRAL = 10;
+
 export interface PerformanceWindowParams {
   from: string;
   to: string;
@@ -32,6 +35,13 @@ export interface TopAgentEntry {
   firstName: string;
   lastName: string;
   count: number;
+  /** Sale catalog items across referred businesses (referrals metric only). */
+  inventoryItemsCount?: number;
+  /** inventoryItemsCount / count, one decimal. */
+  itemsPerReferral?: number;
+  /** Referred businesses that currently have ≥ golden items. */
+  stockedReferralCount?: number;
+  meetsGoldenRatio?: boolean;
 }
 
 interface AggregateCount {
@@ -65,8 +75,19 @@ interface DeliveryAgentsQueryResult {
   agents: DeliveryAgentRow[];
 }
 
+interface ReferredBusinessRow {
+  referred_by_agent_id: string;
+  items_aggregate: AggregateCount;
+}
+
 interface ReferredBusinessesQueryResult {
-  businesses: { referred_by_agent_id: string }[];
+  businesses: ReferredBusinessRow[];
+}
+
+interface ReferralAgg {
+  referrals: number;
+  inventoryItems: number;
+  stockedReferrals: number;
 }
 
 const PAGE_SIZE = 1000;
@@ -102,13 +123,14 @@ export class AdminPerformanceService {
   async getTopAgents(
     params: PerformanceWindowParams,
     metric: TopAgentMetric,
-    limit: number
+    limit: number,
+    minItemsPerReferral?: number
   ): Promise<TopAgentEntry[]> {
     if (metric === 'deliveries') {
       const entries = await this.collectDeliveryAgents(params);
       return entries.sort((a, b) => b.count - a.count).slice(0, limit);
     }
-    return this.topReferralAgents(params, limit);
+    return this.topReferralAgents(params, limit, minItemsPerReferral);
   }
 
   async getMarkets(): Promise<{ countryCode: string; countryName: string }[]> {
@@ -121,10 +143,6 @@ export class AdminPerformanceService {
     }));
   }
 
-  /**
-   * Pages over agents (not raw orders) with a filtered orders_aggregate,
-   * so counts stay exact regardless of order volume in the window.
-   */
   private async collectDeliveryAgents(
     params: PerformanceWindowParams
   ): Promise<TopAgentEntry[]> {
@@ -156,51 +174,123 @@ export class AdminPerformanceService {
 
   private async topReferralAgents(
     params: PerformanceWindowParams,
-    limit: number
+    limit: number,
+    minItemsPerReferral?: number
   ): Promise<TopAgentEntry[]> {
-    const counts = await this.countBusinessReferralsByAgent(params);
-    const ranked = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit);
+    const aggs = await this.aggregateReferralsByAgent(params);
+    let entries = [...aggs.entries()].map(([agentId, agg]) =>
+      this.toReferralEntry(agentId, agg)
+    );
+    const goldenFilter = minItemsPerReferral != null;
+    if (goldenFilter) {
+      entries = entries.filter((e) =>
+        this.rawItemsPerReferral(e) >= minItemsPerReferral
+      );
+    }
+    entries.sort((a, b) =>
+      this.compareReferralEntries(a, b, goldenFilter)
+    );
+    const ranked = entries.slice(0, limit);
     if (ranked.length === 0) return [];
-    const agents = await this.fetchAgentsByIds(ranked.map(([id]) => id));
-    return ranked.map(([agentId, count]) =>
-      this.toTopAgentEntry(agentId, count, agents.get(agentId))
+    const agents = await this.fetchAgentsByIds(ranked.map((e) => e.agentId));
+    return ranked.map((entry) =>
+      this.withAgentNames(entry, agents.get(entry.agentId))
     );
   }
 
-  private async countBusinessReferralsByAgent(
+  private rawItemsPerReferral(entry: TopAgentEntry): number {
+    if (entry.count <= 0) return 0;
+    return (entry.inventoryItemsCount ?? 0) / entry.count;
+  }
+
+  private compareReferralEntries(
+    a: TopAgentEntry,
+    b: TopAgentEntry,
+    preferItemsPerReferral: boolean
+  ): number {
+    if (preferItemsPerReferral) {
+      const byItems =
+        this.rawItemsPerReferral(b) - this.rawItemsPerReferral(a);
+      if (byItems !== 0) return byItems;
+      return b.count - a.count;
+    }
+    const byCount = b.count - a.count;
+    if (byCount !== 0) return byCount;
+    return this.rawItemsPerReferral(b) - this.rawItemsPerReferral(a);
+  }
+
+  private toReferralEntry(agentId: string, agg: ReferralAgg): TopAgentEntry {
+    const rawRatio =
+      agg.referrals > 0 ? agg.inventoryItems / agg.referrals : 0;
+    const itemsPerReferral = Math.round(rawRatio * 10) / 10;
+    return {
+      agentId,
+      agentCode: null,
+      firstName: '',
+      lastName: '',
+      count: agg.referrals,
+      inventoryItemsCount: agg.inventoryItems,
+      itemsPerReferral,
+      stockedReferralCount: agg.stockedReferrals,
+      meetsGoldenRatio: rawRatio >= GOLDEN_ITEMS_PER_REFERRAL,
+    };
+  }
+
+  private withAgentNames(
+    entry: TopAgentEntry,
+    agent?: AgentRow
+  ): TopAgentEntry {
+    return {
+      ...entry,
+      agentCode: agent?.agent_code ?? null,
+      firstName: agent?.user?.first_name ?? '',
+      lastName: agent?.user?.last_name ?? '',
+    };
+  }
+
+  private async aggregateReferralsByAgent(
     params: PerformanceWindowParams
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, ReferralAgg>> {
     const query = buildReferredBusinessesQuery(Boolean(params.countryCode));
-    return this.pageAndCount<ReferredBusinessesQueryResult>(
-      query,
-      params,
-      (result) =>
-        (result?.businesses ?? []).map((row) => row.referred_by_agent_id)
-    );
-  }
-
-  private async pageAndCount<T>(
-    query: string,
-    params: PerformanceWindowParams,
-    extractAgentIds: (result: T) => string[]
-  ): Promise<Map<string, number>> {
-    const counts = new Map<string, number>();
+    const aggs = new Map<string, ReferralAgg>();
     for (let page = 0; page < MAX_PAGES; page++) {
-      const result = await this.hasuraSystemService.executeQuery<T>(query, {
-        ...this.windowVariables(params),
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
-      });
-      const agentIds = extractAgentIds(result);
-      agentIds.forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
-      if (agentIds.length < PAGE_SIZE) return counts;
+      const result =
+        await this.hasuraSystemService.executeQuery<ReferredBusinessesQueryResult>(
+          query,
+          {
+            ...this.windowVariables(params),
+            limit: PAGE_SIZE,
+            offset: page * PAGE_SIZE,
+          }
+        );
+      const rows = result?.businesses ?? [];
+      rows.forEach((row) => this.addReferralRow(aggs, row));
+      if (rows.length < PAGE_SIZE) return aggs;
     }
     this.logger.warn(
       `Top-agents pagination cap reached (${MAX_PAGES * PAGE_SIZE} rows)`
     );
-    return counts;
+    return aggs;
+  }
+
+  private addReferralRow(
+    aggs: Map<string, ReferralAgg>,
+    row: ReferredBusinessRow
+  ): void {
+    const agentId = row.referred_by_agent_id;
+    if (!agentId) return;
+    const itemCount = this.count(row.items_aggregate);
+    const current = aggs.get(agentId) ?? {
+      referrals: 0,
+      inventoryItems: 0,
+      stockedReferrals: 0,
+    };
+    current.referrals += 1;
+    current.inventoryItems += itemCount;
+    if (itemCount >= GOLDEN_ITEMS_PER_REFERRAL) {
+      current.stockedReferrals += 1;
+    }
+    aggs.set(agentId, current);
   }
 
   private async fetchAgentsByIds(

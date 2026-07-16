@@ -45,4 +45,16 @@ export class AdminPerformanceTopAgentsQueryDto extends AdminPerformanceSummaryQu
   @Min(1)
   @Max(50)
   limit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'When set (business_referrals only), keep agents whose average sale items per referred business is at least this value (golden bar is 10)',
+    example: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  minItemsPerReferral?: number;
 }

@@ -70,9 +70,14 @@ export class AdminPerformanceController {
     const agents = await this.adminPerformanceService.getTopAgents(
       { from: query.from, to: query.to, countryCode: query.countryCode },
       query.metric,
-      query.limit ?? 10
+      query.limit ?? 10,
+      query.minItemsPerReferral
     );
-    return { metric: query.metric, agents };
+    return {
+      metric: query.metric,
+      minItemsPerReferral: query.minItemsPerReferral ?? null,
+      agents,
+    };
   }
 
   @Get('markets')

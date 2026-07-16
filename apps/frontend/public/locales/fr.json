@@ -325,13 +325,27 @@
         "saleItemsAdded": "Articles en vente ajoutés",
         "rentalItemsAdded": "Articles en location ajoutés"
       },
+      "golden": {
+        "title": "Objectif qualité des parrainages",
+        "description": "Objectif : chaque entreprise parrainée devrait atteindre en moyenne au moins {{n}} articles en vente (articles / parrainage).",
+        "filterLabel": "Uniquement les agents ≥{{n}} articles / parrainage"
+      },
       "topAgents": {
         "deliveriesTitle": "Meilleurs agents par livraisons",
         "referralsTitle": "Meilleurs agents par parrainages d’entreprises",
+        "referralsHelp": "Articles / parrainage = articles en vente des entreprises parrainées ÷ parrainages. Objectif : ≥{{n}}.",
         "agent": "Agent",
         "code": "Code",
         "deliveriesCount": "Livraisons",
         "referralsCount": "Parrainages",
+        "itemsCount": "Articles",
+        "itemsTooltip": "Articles en vente actifs des entreprises parrainées par cet agent",
+        "itemsPerReferral": "Articles / parrainage",
+        "itemsPerReferralTooltip": "Moyenne d’articles par entreprise parrainée (objectif ≥{{n}})",
+        "stockedReferrals": "Approvisionnés",
+        "stockedTooltip": "Entreprises parrainées avec ≥{{n}} articles en vente",
+        "goldenFilterActive": "≥{{n}} articles / parrainage",
+        "goldenEmpty": "Aucun agent n’atteint l’objectif de ≥{{n}} articles / parrainage pour cette période",
         "empty": "Aucune donnée pour cette période"
       }
     },

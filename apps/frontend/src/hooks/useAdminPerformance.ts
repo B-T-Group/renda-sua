@@ -48,7 +48,14 @@ export interface TopAgentEntry {
   firstName: string;
   lastName: string;
   count: number;
+  inventoryItemsCount?: number;
+  itemsPerReferral?: number;
+  stockedReferralCount?: number;
+  meetsGoldenRatio?: boolean;
 }
+
+/** Target average sale items per referred business. */
+export const GOLDEN_ITEMS_PER_REFERRAL = 10;
 
 export interface PerformanceMarket {
   countryCode: string;
@@ -151,12 +158,22 @@ export function useAdminPerformance() {
     async (
       period: PerformancePeriod,
       countryCode: string,
-      metric: TopAgentMetric
+      metric: TopAgentMetric,
+      options?: { minItemsPerReferral?: number; limit?: number }
     ): Promise<TopAgentEntry[]> => {
       if (!apiClient) return [];
       try {
         const params = buildWindowParams(period, countryCode);
         params.set('metric', metric);
+        if (options?.minItemsPerReferral != null) {
+          params.set(
+            'minItemsPerReferral',
+            String(options.minItemsPerReferral)
+          );
+        }
+        if (options?.limit != null) {
+          params.set('limit', String(options.limit));
+        }
         const { data } = await apiClient.get<{ agents: TopAgentEntry[] }>(
           `/admin/performance/top-agents?${params.toString()}`
         );

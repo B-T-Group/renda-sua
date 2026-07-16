@@ -567,13 +567,27 @@
         "saleItemsAdded": "Sale items added",
         "rentalItemsAdded": "Rental items added"
       },
+      "golden": {
+        "title": "Referral quality target",
+        "description": "Goal: each referred business should reach at least {{n}} sale catalog items on average (items / referral).",
+        "filterLabel": "Only agents ≥{{n}} items / referral"
+      },
       "topAgents": {
         "deliveriesTitle": "Top agents by deliveries",
         "referralsTitle": "Top agents by business referrals",
+        "referralsHelp": "Items / referral = sale catalog items across referred businesses ÷ referrals. Target: ≥{{n}}.",
         "agent": "Agent",
         "code": "Code",
         "deliveriesCount": "Deliveries",
         "referralsCount": "Referrals",
+        "itemsCount": "Items",
+        "itemsTooltip": "Active sale items on businesses this agent referred",
+        "itemsPerReferral": "Items / referral",
+        "itemsPerReferralTooltip": "Average items per referred business (goal ≥{{n}})",
+        "stockedReferrals": "Stocked",
+        "stockedTooltip": "Referred businesses with ≥{{n}} sale items",
+        "goldenFilterActive": "≥{{n}} items / referral",
+        "goldenEmpty": "No agents meet the ≥{{n}} items / referral target for this period",
         "empty": "No data for this period"
       }
     },

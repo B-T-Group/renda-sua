@@ -116,6 +116,15 @@ export function buildReferredBusinessesQuery(hasCountry: boolean): string {
         offset: $offset
       ) {
         referred_by_agent_id
+        items_aggregate(
+          where: {
+            status: { _eq: active }
+            is_active: { _eq: true }
+            moderation_status: { _eq: approved }
+          }
+        ) {
+          aggregate { count }
+        }
       }
     }
   `;
