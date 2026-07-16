@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { UpdateItemDto } from '../business-items/dto/update-item.dto';
 
@@ -103,6 +104,7 @@ export class ItemsService {
 
   constructor(
     private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService,
     private readonly itemEmbeddingService: ItemEmbeddingService,
     private readonly activationValidation: ItemActivationValidationService
   ) {}
@@ -117,7 +119,7 @@ export class ItemsService {
       // Never allow clients to activate on create; moderation must approve first
       is_active: false,
     };
-    const result = await this.hasuraUserService.executeMutation<{
+    const result = await this.hasuraSystemService.executeMutation<{
       insert_items_one: {
         id: string;
         name: string;
@@ -157,7 +159,7 @@ export class ItemsService {
       }
       await this.activationValidation.assertItemCanActivate(itemId);
     }
-    const result = await this.hasuraUserService.executeMutation<{
+    const result = await this.hasuraSystemService.executeMutation<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });
     const updated = result?.update_items_by_pk;
