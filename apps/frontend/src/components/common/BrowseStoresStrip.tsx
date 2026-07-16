@@ -10,6 +10,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogStore } from '../../hooks/useCatalogStores';
+import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
+import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 
 export interface BrowseStoresStripProps {
   stores: CatalogStore[];
@@ -35,6 +37,7 @@ function StorePill({
   const name = store.name?.trim() || unnamedLabel;
   const openingSoon =
     store.is_storefront_visible && !store.can_accept_orders;
+  const palette = storeAvatarPalette(name);
 
   return (
     <ButtonBase
@@ -51,62 +54,62 @@ function StorePill({
         overflow: 'hidden',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease',
         border: '1px solid',
-        borderColor: 'divider',
-        bgcolor: alpha(theme.palette.background.paper, 0.9),
+        borderColor: alpha(palette.bg, 0.28),
+        bgcolor: alpha(theme.palette.background.paper, 0.95),
         boxShadow: `0 1px 3px ${alpha(theme.palette.common.black, 0.06)}`,
         '&:hover': {
           transform: 'translateY(-2px)',
           boxShadow: `0 4px 16px ${alpha(theme.palette.common.black, 0.1)}`,
-          borderColor: 'primary.light',
+          borderColor: palette.accent,
         },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25 }}>
+      <Box
+        sx={{
+          height: 52,
+          bgcolor: palette.bgSoft,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderBottom: `1px solid ${alpha(palette.accent, 0.35)}`,
+        }}
+      >
         {store.logo_url ? (
           <img
             src={store.logo_url}
             alt={name}
-            width={44}
-            height={44}
-            style={{ flexShrink: 0, objectFit: 'contain', display: 'block' }}
+            width={40}
+            height={40}
+            style={{
+              flexShrink: 0,
+              objectFit: 'contain',
+              display: 'block',
+              borderRadius: 8,
+              background: '#fff',
+            }}
           />
         ) : (
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              borderRadius: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: alpha(theme.palette.primary.main, 0.12),
-              color: 'primary.main',
-              fontWeight: 700,
-            }}
-          >
-            {name.slice(0, 1).toUpperCase()}
-          </Box>
+          <StoreDefaultAvatar name={name} size={40} />
         )}
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="body2" fontWeight={700} noWrap>
-            {name}
-          </Typography>
+      </Box>
+      <Box sx={{ p: 1.25, minWidth: 0 }}>
+        <Typography variant="body2" fontWeight={700} noWrap>
+          {name}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}
+        >
+          {subtitle}
+        </Typography>
+        {openingSoon ? (
           <Typography
             variant="caption"
-            sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}
+            sx={{ color: 'warning.main', fontWeight: 600 }}
           >
-            {subtitle}
+            {openingSoonLabel}
           </Typography>
-          {openingSoon ? (
-            <Typography
-              variant="caption"
-              sx={{ color: 'warning.main', fontWeight: 600 }}
-            >
-              {openingSoonLabel}
-            </Typography>
-          ) : null}
-        </Box>
+        ) : null}
       </Box>
     </ButtonBase>
   );

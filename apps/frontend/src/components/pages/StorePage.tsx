@@ -26,6 +26,9 @@ import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
+import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
+import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
+import { alpha } from '@mui/material/styles';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -123,6 +126,7 @@ const StorePage: React.FC = () => {
   const openingSoon =
     !!store?.is_storefront_visible && !store?.can_accept_orders;
   const isEmpty = !loading && inventoryItems.length === 0;
+  const palette = storeAvatarPalette(name);
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -155,86 +159,138 @@ const StorePage: React.FC = () => {
         <Paper
           elevation={0}
           sx={{
-            p: 2.5,
             mb: 3,
             border: 1,
-            borderColor: 'divider',
-            borderRadius: 2,
+            borderColor: alpha(palette.bg, 0.25),
+            borderRadius: 3,
+            overflow: 'hidden',
           }}
         >
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-            {store?.logo_url ? (
-              <Box
-                component="img"
-                src={store.logo_url}
-                alt={name}
-                sx={{ width: 72, height: 72, objectFit: 'contain' }}
-              />
-            ) : (
-              <Box
-                sx={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 2,
-                  bgcolor: 'primary.main',
-                  color: 'primary.contrastText',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: 28,
-                }}
-              >
-                {storeLoading ? (
-                  <StorefrontOutlinedIcon />
-                ) : (
-                  name.slice(0, 1).toUpperCase()
-                )}
-              </Box>
-            )}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="h4" fontWeight={800} gutterBottom>
-                {storeLoading ? '…' : name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {t('stores.itemCount', '{{count}} items', {
-                  count: store?.item_count ?? pagination?.total ?? 0,
-                })}
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                {store?.is_verified ? (
-                  <Chip
-                    size="small"
-                    color="success"
-                    label={t('stores.verified', 'Verified')}
-                  />
-                ) : null}
-                {openingSoon ? (
-                  <Chip
-                    size="small"
-                    color="warning"
-                    label={t(
-                      'business.lifecycle.openingSoonBadge',
-                      'Opening Soon'
-                    )}
-                  />
-                ) : null}
-                {isOwnerPreview && store && !store.is_storefront_visible ? (
-                  <Chip
-                    size="small"
-                    color="warning"
-                    label={t(
-                      'stores.notVisibleYet',
-                      'Not visible to customers yet'
-                    )}
-                  />
-                ) : null}
-              </Box>
-              <Button size="small" variant="outlined" onClick={() => void handleShare()}>
-                {t('stores.share', 'Share store')}
-              </Button>
+          <Box
+            sx={{
+              height: 96,
+              background: `linear-gradient(135deg, ${palette.bgSoft} 0%, ${alpha(palette.accent, 0.35)} 55%, ${palette.bgSoft} 100%)`,
+              position: 'relative',
+              borderBottom: `1px solid ${alpha(palette.accent, 0.35)}`,
+            }}
+          >
+            <StorefrontOutlinedIcon
+              sx={{
+                position: 'absolute',
+                right: 20,
+                top: 16,
+                fontSize: 72,
+                color: alpha(palette.bg, 0.2),
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: 20,
+                bottom: 14,
+                display: 'flex',
+                gap: 0.75,
+              }}
+            >
+              {[palette.accent, palette.bg, palette.accentSoft].map((c) => (
+                <Box
+                  key={c}
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: c,
+                  }}
+                />
+              ))}
             </Box>
           </Box>
+
+          <Box sx={{ p: 2.5 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              {store?.logo_url ? (
+                <Box
+                  component="img"
+                  src={store.logo_url}
+                  alt={name}
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    objectFit: 'contain',
+                    borderRadius: 2,
+                    border: `2px solid ${alpha(palette.bg, 0.3)}`,
+                    bgcolor: 'common.white',
+                  }}
+                />
+              ) : storeLoading ? (
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 2,
+                    bgcolor: alpha(palette.bg, 0.12),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: palette.bg,
+                  }}
+                >
+                  <StorefrontOutlinedIcon />
+                </Box>
+              ) : (
+                <StoreDefaultAvatar name={name} size={80} />
+              )}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="h4" fontWeight={800} gutterBottom>
+                  {storeLoading ? '…' : name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {t('stores.itemCount', '{{count}} items', {
+                    count: store?.item_count ?? pagination?.total ?? 0,
+                  })}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+                  {store?.is_verified ? (
+                    <Chip
+                      size="small"
+                      color="success"
+                      label={t('stores.verified', 'Verified')}
+                    />
+                  ) : null}
+                  {openingSoon ? (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      label={t(
+                        'business.lifecycle.openingSoonBadge',
+                        'Opening Soon'
+                      )}
+                    />
+                  ) : null}
+                  {isOwnerPreview && store && !store.is_storefront_visible ? (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      label={t(
+                        'stores.notVisibleYet',
+                        'Not visible to customers yet'
+                      )}
+                    />
+                  ) : null}
+                </Box>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => void handleShare()}
+                  sx={{
+                    bgcolor: palette.bg,
+                    '&:hover': { bgcolor: palette.bg, filter: 'brightness(0.92)' },
+                  }}
+                >
+                  {t('stores.share', 'Share store')}
+                </Button>
+              </Box>
+            </Box>
 
           {isOwnerPreview && isEmpty ? (
             <Alert severity="info" sx={{ mt: 2 }}>
@@ -290,6 +346,7 @@ const StorePage: React.FC = () => {
               ) : null}
             </Box>
           ) : null}
+          </Box>
         </Paper>
       )}
 

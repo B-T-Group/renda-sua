@@ -17,6 +17,9 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useCatalogStores } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import SEOHead from '../seo/SEOHead';
+import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
+import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
+import { alpha } from '@mui/material/styles';
 
 const StoresIndexPage: React.FC = () => {
   const { t } = useTranslation();
@@ -78,6 +81,7 @@ const StoresIndexPage: React.FC = () => {
             ))
           : stores.map((store) => {
               const name = store.name?.trim() || t('stores.unnamed', 'Store');
+              const palette = storeAvatarPalette(name);
               return (
                 <ButtonBase
                   key={store.business_id}
@@ -89,12 +93,24 @@ const StoresIndexPage: React.FC = () => {
                     sx={{
                       width: '100%',
                       p: 2,
+                      pl: 2.5,
                       border: 1,
-                      borderColor: 'divider',
+                      borderColor: alpha(palette.bg, 0.25),
                       borderRadius: 2,
                       display: 'flex',
                       gap: 1.5,
                       alignItems: 'center',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 4,
+                        bgcolor: palette.accent,
+                      },
                     }}
                   >
                     {store.logo_url ? (
@@ -102,24 +118,17 @@ const StoresIndexPage: React.FC = () => {
                         component="img"
                         src={store.logo_url}
                         alt={name}
-                        sx={{ width: 52, height: 52, objectFit: 'contain' }}
+                        sx={{
+                          width: 56,
+                          height: 56,
+                          objectFit: 'contain',
+                          borderRadius: 1.5,
+                          border: `1.5px solid ${alpha(palette.bg, 0.3)}`,
+                          bgcolor: 'common.white',
+                        }}
                       />
                     ) : (
-                      <Box
-                        sx={{
-                          width: 52,
-                          height: 52,
-                          borderRadius: 1.5,
-                          bgcolor: 'primary.main',
-                          color: 'primary.contrastText',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 800,
-                        }}
-                      >
-                        {name.slice(0, 1).toUpperCase()}
-                      </Box>
+                      <StoreDefaultAvatar name={name} size={56} />
                     )}
                     <Box sx={{ minWidth: 0 }}>
                       <Typography fontWeight={700} noWrap>
