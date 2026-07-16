@@ -61,6 +61,22 @@ export interface UpdateBusinessImageInput {
   is_ai_cleaned?: boolean;
 }
 
+const PUBLIC_IMAGE_UPDATE_FIELDS = [
+  'item_sub_category_id',
+  'image_url',
+  'image_type',
+  's3_key',
+  'file_size',
+  'width',
+  'height',
+  'format',
+  'caption',
+  'alt_text',
+  'tags',
+  'status',
+  'is_ai_cleaned',
+] as const;
+
 const LIBRARY_IMAGE_FIELDS = `
   id
   business_id
@@ -421,7 +437,10 @@ export class BusinessImagesService {
     });
   }
 
-  async deleteBusinessImage(businessId: string, imageId: string): Promise<void> {
+  async deleteBusinessImage(
+    businessId: string,
+    imageId: string
+  ): Promise<void> {
     await this.ensureImageBelongsToBusiness(businessId, imageId);
     const result = await this.hasuraSystemService.executeMutation<{
       delete_item_images_by_pk: { id: string } | null;
@@ -440,7 +459,7 @@ export class BusinessImagesService {
     changes: UpdateBusinessImageInput
   ): Promise<BusinessImage> {
     const current = await this.fetchImageForBusiness(businessId, imageId);
-    const cleanedChanges = this.removeUndefinedKeys(
+    const cleanedChanges = this.pickPublicImageUpdates(
       changes as Record<string, unknown>
     );
     if (cleanedChanges.is_ai_cleaned === true) {
@@ -523,7 +542,9 @@ export class BusinessImagesService {
     const result = await this.hasuraUserService.executeQuery<{
       item_images: { id: string }[];
     }>(ITEM_IMAGES_ORDERED_FOR_ITEM, { itemId, businessId });
-    const next = (result.item_images ?? []).find((r) => r.id !== excludeImageId);
+    const next = (result.item_images ?? []).find(
+      (r) => r.id !== excludeImageId
+    );
     if (!next) return;
     await this.applyImageUpdate(businessId, next.id, { image_type: 'main' });
   }
@@ -544,11 +565,7 @@ export class BusinessImagesService {
       return target;
     }
     await this.applyImageUpdate(businessId, imageId, { image_type: 'gallery' });
-    await this.promoteNextMainExcluding(
-      businessId,
-      target.item_id,
-      imageId
-    );
+    await this.promoteNextMainExcluding(businessId, target.item_id, imageId);
     return this.fetchImageForBusiness(businessId, imageId);
   }
 
@@ -650,15 +667,13 @@ export class BusinessImagesService {
     );
   }
 
-  private removeUndefinedKeys(
+  private pickPublicImageUpdates(
     input: Record<string, unknown>
   ): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    Object.entries(input).forEach(([key, value]) => {
-      if (value !== undefined) {
-        result[key] = value;
-      }
-    });
-    return result;
+    return Object.fromEntries(
+      PUBLIC_IMAGE_UPDATE_FIELDS.filter(
+        (field) => input[field] !== undefined
+      ).map((field) => [field, input[field]])
+    );
   }
 }
