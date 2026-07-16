@@ -1,3 +1,7 @@
+jest.mock('../item-ai-review/item-ai-review.service', () => ({
+  ItemAiReviewService: class {},
+}));
+
 import { BusinessImagesService, type BusinessImage } from './business-images.service';
 
 describe('BusinessImagesService privileged field filtering', () => {

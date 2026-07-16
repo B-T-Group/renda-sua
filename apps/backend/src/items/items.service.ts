@@ -243,11 +243,14 @@ export class ItemsService {
     };
   }
 
-  private pickMutableFields(input: Record<string, unknown>): Record<string, unknown> {
+  private pickMutableFields(
+    input: Record<string, unknown> | UpdateItemDto
+  ): Record<string, unknown> {
+    const source = input as Record<string, unknown>;
     return Object.fromEntries(
       MUTABLE_ITEM_FIELDS.filter((field) =>
-        Object.prototype.hasOwnProperty.call(input, field)
-      ).map((field) => [field, input[field]])
+        Object.prototype.hasOwnProperty.call(source, field)
+      ).map((field) => [field, source[field]])
     );
   }
 
