@@ -61,6 +61,22 @@ export interface UpdateBusinessImageInput {
   is_ai_cleaned?: boolean;
 }
 
+const PUBLIC_IMAGE_UPDATE_FIELDS = [
+  'item_sub_category_id',
+  'image_url',
+  'image_type',
+  's3_key',
+  'file_size',
+  'width',
+  'height',
+  'format',
+  'caption',
+  'alt_text',
+  'tags',
+  'status',
+  'is_ai_cleaned',
+] as const;
+
 const LIBRARY_IMAGE_FIELDS = `
   id
   business_id
@@ -440,7 +456,7 @@ export class BusinessImagesService {
     changes: UpdateBusinessImageInput
   ): Promise<BusinessImage> {
     const current = await this.fetchImageForBusiness(businessId, imageId);
-    const cleanedChanges = this.removeUndefinedKeys(
+    const cleanedChanges = this.pickPublicImageUpdates(
       changes as Record<string, unknown>
     );
     if (cleanedChanges.is_ai_cleaned === true) {
@@ -650,15 +666,13 @@ export class BusinessImagesService {
     );
   }
 
-  private removeUndefinedKeys(
+  private pickPublicImageUpdates(
     input: Record<string, unknown>
   ): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    Object.entries(input).forEach(([key, value]) => {
-      if (value !== undefined) {
-        result[key] = value;
-      }
-    });
-    return result;
+    return Object.fromEntries(
+      PUBLIC_IMAGE_UPDATE_FIELDS.filter(
+        (field) => input[field] !== undefined
+      ).map((field) => [field, input[field]])
+    );
   }
 }
