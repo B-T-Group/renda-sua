@@ -1,5 +1,4 @@
 import {
-  Edit as EditIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import {
@@ -8,35 +7,54 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
+  Stack,
   Switch,
   TextField,
   Typography,
-  Chip,
 } from '@mui/material';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
-import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
+import {
+  useAdminBusinesses,
+  type AdminBusinessLifecycleFilter,
+  type AdminIdDocumentStatus,
+} from '../../hooks/useAdminBusinesses';
 import { useAdminRbac } from '../../hooks/useAdminRbac';
 import { usePermission } from '../../hooks/usePermissions';
 import { PlatformPermissions } from '../../constants/platformPermissions';
-import {
-  AdminBusinessVerificationDialog,
-  formatVerificationBlocker,
-} from '../admin/AdminBusinessVerificationDialog';
-import { AdminBusinessVerificationSteps } from '../admin/AdminBusinessVerificationSteps';
-import AdminUserCard from '../common/AdminUserCard';
-import { MerchantStatusChip } from '../business/MerchantStatusChip';
+import { AdminBusinessOverviewCard } from '../admin/AdminBusinessOverviewCard';
+import { AdminBusinessVerificationDialog } from '../admin/AdminBusinessVerificationDialog';
 import { PinCodeFields } from '../common/PinCodeFields';
+
+const LIFECYCLE_FILTERS: AdminBusinessLifecycleFilter[] = [
+  '',
+  'created',
+  'catalog_ready',
+  'payment_setup_pending',
+  'payment_verification_pending',
+  'active',
+  'suspended',
+];
+
+const ID_STATUS_FILTERS: Array<AdminIdDocumentStatus | ''> = [
+  '',
+  'pending',
+  'rejected',
+  'missing',
+  'approved',
+];
 
 const AdminManageBusinesses: React.FC = () => {
   const apiClient = useApiClient();
@@ -46,9 +64,15 @@ const AdminManageBusinesses: React.FC = () => {
     page,
     limit,
     search,
+    lifecycleStatus,
+    idDocumentStatus,
+    needsAttention,
     setPage,
     setLimit,
     setSearch,
+    setLifecycleStatus,
+    setIdDocumentStatus,
+    setNeedsAttention,
     loading,
     error,
     fetchBusinesses,
@@ -60,7 +84,6 @@ const AdminManageBusinesses: React.FC = () => {
     roles: platformRoles,
     getUserRoles,
     setUserRoles,
-    isSuperuserUser,
   } = useAdminRbac();
   const canManageRbac = usePermission(PlatformPermissions.RBAC_MANAGE);
   const { t } = useTranslation();
@@ -187,6 +210,26 @@ const AdminManageBusinesses: React.FC = () => {
     (b) => b.id === verificationBusinessId
   );
 
+  const hasActiveFilters = Boolean(
+    search || lifecycleStatus || idDocumentStatus || needsAttention
+  );
+
+  const lifecycleFilterLabel = (value: AdminBusinessLifecycleFilter) => {
+    if (!value) {
+      return t('admin.businesses.filters.lifecycleAll', 'All lifecycles');
+    }
+    const keyMap: Record<string, string> = {
+      created: 'draft',
+      catalog_ready: 'catalogReady',
+      payment_setup_pending: 'paymentSetupPending',
+      payment_verification_pending: 'paymentVerificationPending',
+      active: 'active',
+      suspended: 'suspended',
+    };
+    const key = keyMap[value] || value;
+    return t(`admin.businesses.lifecycle.${key}`, value);
+  };
+
   return (
     <Box>
       <Box
@@ -198,46 +241,170 @@ const AdminManageBusinesses: React.FC = () => {
           mb: 2,
         }}
       >
-        <Typography variant="h5">
-          {t('admin.manageBusinesses', 'Manage Businesses')}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField
-            size="small"
-            label={t('common.search', 'Search')}
-            value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
-          />
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel id="businesses-page-size">
-              {t('common.pageSize', 'Page size')}
-            </InputLabel>
-            <Select
-              labelId="businesses-page-size"
-              label={t('common.pageSize', 'Page size')}
-              value={String(limit)}
-              onChange={(e) => {
-                setPage(1);
-                setLimit(Number(e.target.value));
-              }}
-            >
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={25}>25</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-            </Select>
-          </FormControl>
-          <Button
-            startIcon={<RefreshIcon />}
-            variant="outlined"
-            onClick={fetchBusinesses}
-          >
-            {t('common.refresh', 'Refresh')}
-          </Button>
+        <Box>
+          <Typography variant="h5">
+            {t('admin.manageBusinesses', 'Manage Businesses')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'admin.businesses.pageSubtitle',
+              'Triage merchant lifecycle, ID review, and payment readiness.'
+            )}
+          </Typography>
         </Box>
+        <Button
+          startIcon={<RefreshIcon />}
+          variant="outlined"
+          onClick={fetchBusinesses}
+        >
+          {t('common.refresh', 'Refresh')}
+        </Button>
       </Box>
+
+      <Card sx={{ mb: 2 }} variant="outlined">
+        <CardContent
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+            '&:last-child': { pb: 2 },
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.5}
+            flexWrap="wrap"
+            useFlexGap
+            alignItems="center"
+          >
+            <TextField
+              size="small"
+              label={t('common.search', 'Search')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{ minWidth: 200, flex: '1 1 180px' }}
+            />
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="businesses-lifecycle">
+                {t('admin.businesses.filters.lifecycle', 'Lifecycle')}
+              </InputLabel>
+              <Select
+                labelId="businesses-lifecycle"
+                label={t('admin.businesses.filters.lifecycle', 'Lifecycle')}
+                value={lifecycleStatus}
+                onChange={(e) =>
+                  setLifecycleStatus(
+                    e.target.value as AdminBusinessLifecycleFilter
+                  )
+                }
+              >
+                {LIFECYCLE_FILTERS.map((value) => (
+                  <MenuItem key={value || 'all'} value={value}>
+                    {lifecycleFilterLabel(value)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="businesses-id-status">
+                {t('admin.businesses.filters.idDocuments', 'ID documents')}
+              </InputLabel>
+              <Select
+                labelId="businesses-id-status"
+                label={t(
+                  'admin.businesses.filters.idDocuments',
+                  'ID documents'
+                )}
+                value={idDocumentStatus}
+                onChange={(e) =>
+                  setIdDocumentStatus(
+                    e.target.value as AdminIdDocumentStatus | ''
+                  )
+                }
+              >
+                {ID_STATUS_FILTERS.map((value) => (
+                  <MenuItem key={value || 'all'} value={value}>
+                    {value
+                      ? t(`admin.businesses.idStatus.${value}`, value)
+                      : t(
+                          'admin.businesses.filters.idAll',
+                          'All ID statuses'
+                        )}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={needsAttention}
+                  onChange={(e) => setNeedsAttention(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={t(
+                'admin.businesses.filters.needsAttention',
+                'Needs attention'
+              )}
+            />
+            <FormControl size="small" sx={{ minWidth: 110 }}>
+              <InputLabel id="businesses-page-size">
+                {t('common.pageSize', 'Page size')}
+              </InputLabel>
+              <Select
+                labelId="businesses-page-size"
+                label={t('common.pageSize', 'Page size')}
+                value={String(limit)}
+                onChange={(e) => setLimit(Number(e.target.value))}
+              >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+
+          {hasActiveFilters ? (
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {search ? (
+                <Chip
+                  size="small"
+                  label={`${t('common.search', 'Search')}: ${search}`}
+                  onDelete={() => setSearch('')}
+                />
+              ) : null}
+              {lifecycleStatus ? (
+                <Chip
+                  size="small"
+                  label={lifecycleFilterLabel(lifecycleStatus)}
+                  onDelete={() => setLifecycleStatus('')}
+                />
+              ) : null}
+              {idDocumentStatus ? (
+                <Chip
+                  size="small"
+                  label={t(
+                    `admin.businesses.idStatus.${idDocumentStatus}`,
+                    idDocumentStatus
+                  )}
+                  onDelete={() => setIdDocumentStatus('')}
+                />
+              ) : null}
+              {needsAttention ? (
+                <Chip
+                  size="small"
+                  color="warning"
+                  label={t(
+                    'admin.businesses.filters.needsAttention',
+                    'Needs attention'
+                  )}
+                  onDelete={() => setNeedsAttention(false)}
+                />
+              ) : null}
+            </Stack>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {error && (
         <Card sx={{ mb: 2 }}>
@@ -247,145 +414,63 @@ const AdminManageBusinesses: React.FC = () => {
         </Card>
       )}
 
-      <Card>
-        <CardContent>
-          {loading ? (
-            <Typography>Loading...</Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {businesses.map((b) => (
-                <AdminUserCard
-                  key={b.id}
-                  title={b.name}
-                  subtitle={`${t('admin.businesses.ownerLabel', 'Owner')}: ${
-                    b.user.first_name
-                  } ${b.user.last_name}`}
-                  accounts={(b.user as any).accounts}
-                  addresses={(b as any).addresses}
-                  admin={isSuperuserUser(b.user.id)}
-                  verified={!!b.can_accept_orders}
-                  userId={b.user.id}
-                  userType="business"
-                  footer={
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 1.5,
-                        width: '100%',
-                      }}
-                    >
-                      <AdminBusinessVerificationSteps
-                        summary={b.verificationSummary}
-                        dense
-                      />
-                      {b.lifecycle_status === 'created' &&
-                      (b.verificationSummary?.blockers?.length ?? 0) > 0 ? (
-                        <Typography variant="caption" color="text.secondary">
-                          {t(
-                            'admin.businesses.draftNextStep',
-                            'Still Draft — next step: {{step}}',
-                            {
-                              step: formatVerificationBlocker(
-                                b.verificationSummary!.blockers![0],
-                                t
-                              ),
-                            }
-                          )}
-                        </Typography>
-                      ) : null}
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          gap: 1,
-                          flexWrap: 'wrap',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <MerchantStatusChip
-                          lifecycleStatus={b.lifecycle_status}
-                          canAcceptOrders={b.can_accept_orders}
-                          isStorefrontVisible={b.is_storefront_visible}
-                        />
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="warning"
-                          onClick={() => setVerificationBusinessId(b.id)}
-                        >
-                          {t('admin.businesses.verification', 'Verification')}
-                        </Button>
-                        {b.lifecycle_status === 'suspended' ? (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => void handleReinstateBusiness(b.id)}
-                          >
-                            {t('admin.businesses.reinstate', 'Reinstate')}
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            onClick={() => void handleSuspendBusiness(b.id)}
-                          >
-                            {t('admin.businesses.suspend', 'Suspend')}
-                          </Button>
-                        )}
-                        <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<EditIcon />}
-                          onClick={() => openEdit(b.id)}
-                        >
-                          {t('common.edit', 'Edit')}
-                        </Button>
-                      </Box>
-                    </Box>
-                  }
-                />
-              ))}
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  {t('common.results', '{{count}} results', { count: total })}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    {t('common.prev', 'Prev')}
-                  </Button>
-                  <Typography variant="body2">
-                    {t('common.page', 'Page')} {page} /{' '}
-                    {Math.max(1, Math.ceil((total || 0) / (limit || 1)))}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={
-                      page >=
-                      Math.max(1, Math.ceil((total || 0) / (limit || 1)))
-                    }
-                    onClick={() => setPage(page + 1)}
-                  >
-                    {t('common.next', 'Next')}
-                  </Button>
-                </Box>
-              </Box>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+      {loading ? (
+        <Typography>{t('common.loading', 'Loading...')}</Typography>
+      ) : businesses.length === 0 ? (
+        <Card variant="outlined">
+          <CardContent>
+            <Typography color="text.secondary">
+              {hasActiveFilters
+                ? t(
+                    'admin.businesses.emptyFiltered',
+                    'No businesses match these filters.'
+                  )
+                : t('admin.businesses.empty', 'No businesses found.')}
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {businesses.map((b) => (
+            <AdminBusinessOverviewCard
+              key={b.id}
+              business={b}
+              onVerify={() => setVerificationBusinessId(b.id)}
+              onEdit={() => void openEdit(b.id)}
+              onSuspend={() => void handleSuspendBusiness(b.id)}
+              onReinstate={() => void handleReinstateBusiness(b.id)}
+            />
+          ))}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 1,
+            }}
+          >
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, page - 1))}
+            >
+              {t('common.previous', 'Previous')}
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              {t('common.pageOfTotal', 'Page {{page}} · {{total}} total', {
+                page,
+                total,
+              })}
+            </Typography>
+            <Button
+              disabled={page * limit >= total}
+              onClick={() => setPage(page + 1)}
+            >
+              {t('common.next', 'Next')}
+            </Button>
+          </Box>
+        </Box>
+      )}
 
       <Dialog
         open={!!editingId}

@@ -360,6 +360,40 @@
       "catalogMissingApprovedProduct": "Produit approuvé : non",
       "catalogPendingProduct": "article en attente de modération",
       "catalogDraftHelp": "L’entreprise reste en brouillon jusqu’à ce qu’un produit soit approuvé à un emplacement actif (et que le contrat soit signé).",
+      "pageSubtitle": "Trier le cycle de vie marchand, la revue d’identité et la préparation au paiement.",
+      "empty": "Aucune entreprise trouvée.",
+      "emptyFiltered": "Aucune entreprise ne correspond à ces filtres.",
+      "docs": "Docs",
+      "messages": "Messages",
+      "filters": {
+        "lifecycle": "Cycle de vie",
+        "lifecycleAll": "Tous les cycles",
+        "idDocuments": "Pièces d’identité",
+        "idAll": "Tous les statuts ID",
+        "needsAttention": "Nécessite une attention"
+      },
+      "lifecycle": {
+        "draft": "Brouillon",
+        "catalogReady": "Catalogue prêt",
+        "paymentSetupPending": "Config. paiement",
+        "paymentVerificationPending": "Vérif. paiement",
+        "active": "Actif",
+        "suspended": "Suspendu",
+        "unknown": "Inconnu"
+      },
+      "idStatus": {
+        "missing": "ID manquante",
+        "pending": "ID en attente",
+        "rejected": "ID refusée",
+        "approved": "ID approuvée"
+      },
+      "meta": {
+        "storefrontOn": "Vitrine activée",
+        "storefrontOff": "Vitrine désactivée",
+        "canAcceptOrders": "Peut accepter des commandes",
+        "cannotAcceptOrders": "Ne peut pas accepter de commandes",
+        "created": "Créée le {{date}}"
+      },
       "checklist": {
         "contract": "Contrat",
         "identity": "Identité",

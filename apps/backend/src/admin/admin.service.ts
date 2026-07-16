@@ -253,17 +253,42 @@ export class AdminService {
     };
   }
 
-  private buildBusinessWhere(search: string): any {
-    if (!search) return {};
-    const pattern = `%${search}%`;
-    return {
-      _or: [
-        { name: { _ilike: pattern } },
-        { user: { email: { _ilike: pattern } } },
-        { user: { first_name: { _ilike: pattern } } },
-        { user: { last_name: { _ilike: pattern } } },
-      ],
-    };
+  private buildBusinessWhere(
+    search: string,
+    filters?: {
+      lifecycleStatus?: string;
+    }
+  ): any {
+    const conditions: any[] = [];
+    if (search) {
+      const pattern = `%${search}%`;
+      conditions.push({
+        _or: [
+          { name: { _ilike: pattern } },
+          { user: { email: { _ilike: pattern } } },
+          { user: { first_name: { _ilike: pattern } } },
+          { user: { last_name: { _ilike: pattern } } },
+        ],
+      });
+    }
+    const lifecycleStatus = filters?.lifecycleStatus?.trim();
+    if (lifecycleStatus) {
+      conditions.push({ lifecycle_status: { _eq: lifecycleStatus } });
+    }
+    if (conditions.length === 0) return {};
+    if (conditions.length === 1) return conditions[0];
+    return { _and: conditions };
+  }
+
+  /**
+   * ID status must match resolveIdDocumentStatus (latest-upload semantics).
+   * GraphQL cannot express "latest upload" reliably, so callers post-filter.
+   */
+  private matchesIdDocumentStatusFilter(
+    uploads: Array<{ is_approved?: boolean; note?: string | null }>,
+    status: string
+  ): boolean {
+    return this.resolveIdDocumentStatus(uploads) === status;
   }
 
   async getAgentsPaginated(params: {
@@ -347,9 +372,22 @@ export class AdminService {
     page: number;
     limit: number;
     search: string;
+    lifecycleStatus?: string;
+    idDocumentStatus?: string;
+    needsAttention?: boolean;
   }) {
-    const { page, limit, search } = params;
+    const {
+      page,
+      limit,
+      search,
+      lifecycleStatus,
+      idDocumentStatus,
+      needsAttention,
+    } = params;
     const offset = (page - 1) * limit;
+    const where = this.buildBusinessWhere(search, { lifecycleStatus });
+    const needsIdPostFilter = Boolean(idDocumentStatus) || Boolean(needsAttention);
+
     const query = `
       query GetBusinesses(
         $where: businesses_bool_exp
@@ -435,32 +473,76 @@ export class AdminService {
         }
       }
     `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      where: this.buildBusinessWhere(search),
-      limit,
-      offset,
-      idNames: ['id_card', 'passport', 'driver_license'],
-    });
+
+    if (!needsIdPostFilter) {
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        where,
+        limit,
+        offset,
+        idNames: AdminService.ID_DOCUMENT_TYPE_NAMES,
+      });
+      const items = await Promise.all(
+        (result.businesses || []).map((b: any) => this.mapBusinessListItem(b))
+      );
+      const total = result.businesses_aggregate?.aggregate?.count || 0;
+      return { items, total, page, limit };
+    }
+
+    // Post-filter by latest-upload ID status so reject→reupload stays accurate.
+    const matched: any[] = [];
+    let scanOffset = 0;
+    const batchSize = 100;
+    for (;;) {
+      const batch = await this.hasuraSystemService.executeQuery(query, {
+        where,
+        limit: batchSize,
+        offset: scanOffset,
+        idNames: AdminService.ID_DOCUMENT_TYPE_NAMES,
+      });
+      const rows: any[] = batch.businesses || [];
+      if (!rows.length) break;
+      for (const b of rows) {
+        const uploads = b.user?.user_uploads ?? [];
+        const idStatus = this.resolveIdDocumentStatus(uploads);
+        if (
+          idDocumentStatus &&
+          !this.matchesIdDocumentStatusFilter(uploads, idDocumentStatus)
+        ) {
+          continue;
+        }
+        if (needsAttention) {
+          const needs =
+            b.lifecycle_status !== 'active' || idStatus === 'pending';
+          if (!needs) continue;
+        }
+        matched.push(b);
+      }
+      if (rows.length < batchSize) break;
+      scanOffset += batchSize;
+    }
+
+    const pageRows = matched.slice(offset, offset + limit);
     const items = await Promise.all(
-      (result.businesses || []).map(async (b: any) => {
-        const {
-          business_contracts: _contracts,
-          business_addresses,
-          user,
-          ...rest
-        } = b;
-        const { user_uploads: _uploads, ...userRest } = user || {};
-        const verificationSummary = await this.buildVerificationSummary(b);
-        return {
-          ...rest,
-          user: userRest,
-          addresses: (business_addresses || []).map((x: any) => x.address),
-          verificationSummary,
-        };
-      })
+      pageRows.map((b: any) => this.mapBusinessListItem(b))
     );
-    const total = result.businesses_aggregate?.aggregate?.count || 0;
-    return { items, total, page, limit };
+    return { items, total: matched.length, page, limit };
+  }
+
+  private async mapBusinessListItem(b: any) {
+    const {
+      business_contracts: _contracts,
+      business_addresses,
+      user,
+      ...rest
+    } = b;
+    const { user_uploads: _uploads, ...userRest } = user || {};
+    const verificationSummary = await this.buildVerificationSummary(b);
+    return {
+      ...rest,
+      user: userRest,
+      addresses: (business_addresses || []).map((x: any) => x.address),
+      verificationSummary,
+    };
   }
 
   private async buildVerificationSummary(business: any): Promise<{

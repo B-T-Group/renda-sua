@@ -12,10 +12,25 @@ export interface AdminBusinessUser {
   phone_number?: string;
 }
 
+export type AdminIdDocumentStatus =
+  | 'missing'
+  | 'pending'
+  | 'rejected'
+  | 'approved';
+
+export type AdminBusinessLifecycleFilter =
+  | ''
+  | 'created'
+  | 'catalog_ready'
+  | 'payment_setup_pending'
+  | 'payment_verification_pending'
+  | 'active'
+  | 'suspended';
+
 export interface AdminBusinessVerificationSummary {
   contractStatus: string;
   contractComplete: boolean;
-  idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+  idDocumentStatus: AdminIdDocumentStatus;
   blockers?: Array<
     | 'missing_signed_contract'
     | 'missing_active_location'
@@ -61,6 +76,12 @@ export const useAdminBusinesses = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
+  const [lifecycleStatus, setLifecycleStatus] =
+    useState<AdminBusinessLifecycleFilter>('');
+  const [idDocumentStatus, setIdDocumentStatus] = useState<
+    AdminIdDocumentStatus | ''
+  >('');
+  const [needsAttention, setNeedsAttention] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +103,9 @@ export const useAdminBusinesses = () => {
         limit: String(limit),
       });
       if (search) params.set('search', search);
+      if (lifecycleStatus) params.set('lifecycleStatus', lifecycleStatus);
+      if (idDocumentStatus) params.set('idDocumentStatus', idDocumentStatus);
+      if (needsAttention) params.set('needsAttention', 'true');
       const { data } = await callWithLoading(
         () => client.get(`/admin/businesses?${params.toString()}`),
         'admin.loading.fetchBusinesses'
@@ -92,15 +116,25 @@ export const useAdminBusinesses = () => {
         typeof data.total === 'number'
           ? data.total
           : Array.isArray(items)
-          ? items.length
-          : 0
+            ? items.length
+            : 0
       );
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchBusinesses');
     } finally {
       setLoading(false);
     }
-  }, [apiClient, callWithLoading, ensureClient, page, limit, search]);
+  }, [
+    apiClient,
+    callWithLoading,
+    ensureClient,
+    page,
+    limit,
+    search,
+    lifecycleStatus,
+    idDocumentStatus,
+    needsAttention,
+  ]);
 
   const updateBusiness = useCallback(
     async (id: string, updates: UpdateBusinessPayload) => {
@@ -131,13 +165,46 @@ export const useAdminBusinesses = () => {
       const client = ensureClient(apiClient);
       await callWithLoading(
         () =>
-          client.post(`/admin/businesses/${id}/withdrawal-pin`, { clearPin: true }),
+          client.post(`/admin/businesses/${id}/withdrawal-pin`, {
+            clearPin: true,
+          }),
         'admin.loading.clearWithdrawalPin'
       );
       await fetchBusinesses();
     },
     [apiClient, callWithLoading, ensureClient, fetchBusinesses]
   );
+
+  const setSearchAndReset = useCallback((value: string) => {
+    setPage(1);
+    setSearch(value);
+  }, []);
+
+  const setLifecycleStatusAndReset = useCallback(
+    (value: AdminBusinessLifecycleFilter) => {
+      setPage(1);
+      setLifecycleStatus(value);
+    },
+    []
+  );
+
+  const setIdDocumentStatusAndReset = useCallback(
+    (value: AdminIdDocumentStatus | '') => {
+      setPage(1);
+      setIdDocumentStatus(value);
+    },
+    []
+  );
+
+  const setNeedsAttentionAndReset = useCallback((value: boolean) => {
+    setPage(1);
+    setNeedsAttention(value);
+  }, []);
+
+  const setLimitAndReset = useCallback((value: number) => {
+    setPage(1);
+    setLimit(value);
+  }, []);
 
   useEffect(() => {
     fetchBusinesses();
@@ -150,9 +217,15 @@ export const useAdminBusinesses = () => {
       page,
       limit,
       search,
+      lifecycleStatus,
+      idDocumentStatus,
+      needsAttention,
       setPage,
-      setLimit,
-      setSearch,
+      setLimit: setLimitAndReset,
+      setSearch: setSearchAndReset,
+      setLifecycleStatus: setLifecycleStatusAndReset,
+      setIdDocumentStatus: setIdDocumentStatusAndReset,
+      setNeedsAttention: setNeedsAttentionAndReset,
       loading,
       error,
       fetchBusinesses,
@@ -166,6 +239,14 @@ export const useAdminBusinesses = () => {
       page,
       limit,
       search,
+      lifecycleStatus,
+      idDocumentStatus,
+      needsAttention,
+      setLimitAndReset,
+      setSearchAndReset,
+      setLifecycleStatusAndReset,
+      setIdDocumentStatusAndReset,
+      setNeedsAttentionAndReset,
       loading,
       error,
       fetchBusinesses,

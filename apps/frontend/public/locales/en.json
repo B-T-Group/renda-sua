@@ -602,6 +602,40 @@
       "catalogMissingApprovedProduct": "Approved product: no",
       "catalogPendingProduct": "item pending moderation",
       "catalogDraftHelp": "Business stays Draft until a product is approved at an active location (and the contract is signed).",
+      "pageSubtitle": "Triage merchant lifecycle, ID review, and payment readiness.",
+      "empty": "No businesses found.",
+      "emptyFiltered": "No businesses match these filters.",
+      "docs": "Docs",
+      "messages": "Messages",
+      "filters": {
+        "lifecycle": "Lifecycle",
+        "lifecycleAll": "All lifecycles",
+        "idDocuments": "ID documents",
+        "idAll": "All ID statuses",
+        "needsAttention": "Needs attention"
+      },
+      "lifecycle": {
+        "draft": "Draft",
+        "catalogReady": "Catalog ready",
+        "paymentSetupPending": "Payment setup",
+        "paymentVerificationPending": "Payment verification",
+        "active": "Active",
+        "suspended": "Suspended",
+        "unknown": "Unknown"
+      },
+      "idStatus": {
+        "missing": "ID missing",
+        "pending": "ID pending review",
+        "rejected": "ID rejected",
+        "approved": "ID approved"
+      },
+      "meta": {
+        "storefrontOn": "Storefront on",
+        "storefrontOff": "Storefront off",
+        "canAcceptOrders": "Can accept orders",
+        "cannotAcceptOrders": "Cannot accept orders",
+        "created": "Created {{date}}"
+      },
       "checklist": {
         "contract": "Contract",
         "identity": "Identity",

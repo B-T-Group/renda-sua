@@ -585,16 +585,43 @@ export class AdminController {
 
   @Get('businesses')
   @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
+  @ApiOperation({ summary: 'List businesses with optional triage filters' })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({
+    name: 'lifecycleStatus',
+    required: false,
+    description:
+      'created | catalog_ready | payment_setup_pending | payment_verification_pending | active | suspended',
+  })
+  @ApiQuery({
+    name: 'idDocumentStatus',
+    required: false,
+    description: 'missing | pending | rejected | approved',
+  })
+  @ApiQuery({
+    name: 'needsAttention',
+    required: false,
+    description: 'When true, lifecycle != active OR ID pending review',
+  })
   async getBusinesses(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('lifecycleStatus') lifecycleStatus?: string,
+    @Query('idDocumentStatus') idDocumentStatus?: string,
+    @Query('needsAttention') needsAttention?: string
   ) {
     try {
       const result = await this.adminService.getBusinessesPaginated({
         page: Number(page) || 1,
         limit: Number(limit) || 10,
         search: search || '',
+        lifecycleStatus: lifecycleStatus || undefined,
+        idDocumentStatus: idDocumentStatus || undefined,
+        needsAttention:
+          needsAttention === 'true' || needsAttention === '1',
       });
       return { success: true, ...result };
     } catch (error: any) {
