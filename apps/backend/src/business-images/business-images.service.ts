@@ -423,7 +423,7 @@ export class BusinessImagesService {
 
   async deleteBusinessImage(businessId: string, imageId: string): Promise<void> {
     await this.ensureImageBelongsToBusiness(businessId, imageId);
-    const result = await this.hasuraUserService.executeMutation<{
+    const result = await this.hasuraSystemService.executeMutation<{
       delete_item_images_by_pk: { id: string } | null;
     }>(DELETE_ITEM_IMAGE, { id: imageId });
     if (!result.delete_item_images_by_pk) {
@@ -558,7 +558,7 @@ export class BusinessImagesService {
     changes: Record<string, unknown>
   ): Promise<BusinessImage> {
     await this.ensureImageBelongsToBusiness(businessId, imageId);
-    const result = await this.hasuraUserService.executeMutation<{
+    const result = await this.hasuraSystemService.executeMutation<{
       update_item_images_by_pk: BusinessImage | null;
     }>(UPDATE_ITEM_IMAGE, {
       id: imageId,
