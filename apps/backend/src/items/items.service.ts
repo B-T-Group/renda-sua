@@ -1,9 +1,4 @@
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -195,7 +190,7 @@ export class ItemsService {
     const nextDesc =
       typeof updates.description === 'string'
         ? updates.description
-        : (item.description ?? '');
+        : item.description ?? '';
     await this.syncEmbeddings(itemId, nextName, nextDesc, {
       previousName: item.name,
       previousDescription: item.description ?? '',
