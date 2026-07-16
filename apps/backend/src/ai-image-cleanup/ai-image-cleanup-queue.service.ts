@@ -31,10 +31,10 @@ export class AiImageCleanupQueueService {
   }
 
   async enqueueJob(jobId: string): Promise<boolean> {
+    // Prefer SQS in deployed development; inline only for tests / AI_IMAGE_CLEANUP_INLINE.
     const preferInline =
       process.env.AI_IMAGE_CLEANUP_INLINE === 'true' ||
-      process.env.NODE_ENV === 'test' ||
-      process.env.NODE_ENV === 'development';
+      process.env.NODE_ENV === 'test';
     if (preferInline || !this.queueUrl) {
       this.runLocalHandlers(jobId);
       return true;
