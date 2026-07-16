@@ -727,6 +727,7 @@
       "actions": "Actions",
       "approved": "Approuvé",
       "approve": "Approuver",
+      "approveUndoReject": "Approuver (annuler le refus)",
       "rejected": "Refusé",
       "contentType": "Type de Contenu",
       "documentType": "Type de Document",

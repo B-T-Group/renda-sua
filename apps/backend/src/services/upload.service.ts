@@ -486,14 +486,16 @@ export class UploadService {
    * @returns Promise<void>
    */
   async approveUpload(uploadId: string): Promise<void> {
+    // Clear note so a mistaken reject can be fully undone (reject stores reason in note).
     const approveMutation = `
       mutation ApproveUserUpload($uploadId: uuid!) {
         update_user_uploads_by_pk(
           pk_columns: { id: $uploadId }
-          _set: { is_approved: true }
+          _set: { is_approved: true, note: null }
         ) {
           id
           is_approved
+          note
         }
       }
     `;

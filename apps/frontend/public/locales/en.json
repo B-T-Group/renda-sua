@@ -969,6 +969,7 @@
       "actions": "Actions",
       "approved": "Approved",
       "approve": "Approve",
+      "approveUndoReject": "Approve (undo rejection)",
       "rejected": "Rejected",
       "contentType": "Content Type",
       "documentType": "Document Type",

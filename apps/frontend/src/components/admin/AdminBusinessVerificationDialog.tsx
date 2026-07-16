@@ -694,7 +694,7 @@ export const AdminBusinessVerificationDialog: React.FC<
                               ) : null}
                             </Box>
                             <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                              {!doc.is_approved && !rejected ? (
+                              {!doc.is_approved ? (
                                 <Button
                                   size="small"
                                   color="success"
@@ -708,7 +708,12 @@ export const AdminBusinessVerificationDialog: React.FC<
                                   disabled={approveLoadingId !== null}
                                   onClick={() => void handleApproveUpload(doc.id)}
                                 >
-                                  {t('admin.uploads.approve', 'Approve')}
+                                  {rejected
+                                    ? t(
+                                        'admin.uploads.approveUndoReject',
+                                        'Approve (undo rejection)'
+                                      )
+                                    : t('admin.uploads.approve', 'Approve')}
                                 </Button>
                               ) : null}
                               {!doc.is_approved ? (
