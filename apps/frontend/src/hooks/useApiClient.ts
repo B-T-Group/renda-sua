@@ -28,6 +28,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   const substrings = [
     '/track-site-event',
     '/admin/site-events',
+    '/admin/performance',
     '/users/me',
     '/auth/email-availability',
     '/auth/phone-availability',

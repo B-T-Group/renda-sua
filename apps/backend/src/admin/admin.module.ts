@@ -8,6 +8,8 @@ import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycl
 import { SiteEventsModule } from '../site-events/site-events.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AdminSiteEventsController } from './admin-site-events.controller';
+import { AdminPerformanceController } from './admin-performance.controller';
+import { AdminPerformanceService } from './admin-performance.service';
 import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -45,9 +47,11 @@ import { AdminAuthModule } from './admin-auth.module';
     AdminController,
     ConfigurationsController,
     AdminSiteEventsController,
+    AdminPerformanceController,
     RbacAdminController,
   ],
   providers: [
+    AdminPerformanceService,
     AdminMessageService,
     AdminService,
     ConfigurationsService,

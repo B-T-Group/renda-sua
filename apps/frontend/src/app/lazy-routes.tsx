@@ -13,6 +13,9 @@ export const AdminConfigurationPage = lazy(() =>
 export const AdminPendingMobilePaymentsPage = lazy(() =>
   import('../components/pages/AdminPendingMobilePaymentsPage')
 );
+export const AdminPerformancePage = lazy(() =>
+  import('../components/pages/AdminPerformancePage')
+);
 export const AdminSiteEventsPage = lazy(() =>
   import('../components/pages/AdminSiteEventsPage')
 );

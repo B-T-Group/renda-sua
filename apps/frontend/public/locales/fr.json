@@ -303,6 +303,38 @@
         "captionEventSubject": "Chaque part : un type de CTA et un sujet (ex. consultation sur un produit donné)."
       }
     },
+    "performance": {
+      "pageTitle": "Performance de la plateforme",
+      "pageDescription": "Croissance des inscriptions et du catalogue par marché et par période.",
+      "pageKeywords": "admin, performance, indicateurs, marchés, agents",
+      "unauthorized": "Vous n’êtes pas autorisé à accéder à cette page",
+      "marketFilter": "Marché",
+      "allMarkets": "Tous les marchés",
+      "periods": {
+        "thisWeek": "Cette semaine",
+        "lastWeek": "Semaine dernière",
+        "thisMonth": "Ce mois-ci",
+        "lastMonth": "Mois dernier",
+        "thisYear": "Cette année",
+        "lastYear": "Année dernière"
+      },
+      "metrics": {
+        "businessesEnrolled": "Entreprises inscrites",
+        "clientsAdded": "Clients ajoutés",
+        "agentsAdded": "Agents ajoutés",
+        "saleItemsAdded": "Articles en vente ajoutés",
+        "rentalItemsAdded": "Articles en location ajoutés"
+      },
+      "topAgents": {
+        "deliveriesTitle": "Meilleurs agents par livraisons",
+        "referralsTitle": "Meilleurs agents par parrainages d’entreprises",
+        "agent": "Agent",
+        "code": "Code",
+        "deliveriesCount": "Livraisons",
+        "referralsCount": "Parrainages",
+        "empty": "Aucune donnée pour cette période"
+      }
+    },
     "businesses": {
       "aiTokens": "Jetons IA",
       "aiTokensHelp": "Crédits IA restants pour le nettoyage d'images. Les super-utilisateurs reçoivent au moins 1000.",
@@ -1349,6 +1381,8 @@
       "pendingMobilePaymentsModuleDescription": "Transactions MyPVit ou Freemopay bloquées : statut prestataire et rejeu des callbacks",
       "siteEventsModule": "Événements site",
       "siteEventsModuleDescription": "Rapports et export CSV des événements d’analytique client",
+      "performanceModule": "Performance de la plateforme",
+      "performanceModuleDescription": "Croissance des inscriptions et du catalogue par marché, plus les meilleurs agents",
       "firstItem": {
         "saleTitle": "Ajoutez votre premier produit",
         "saleBody": "Téléversez des photos, créez l’article avec l’IA ou manuellement, puis ajoutez-le à un emplacement pour la vente.",

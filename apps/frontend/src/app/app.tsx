@@ -497,6 +497,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/performance"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminPerformancePage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Content Management routes */}
             <Route

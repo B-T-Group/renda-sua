@@ -467,6 +467,21 @@ export function useBusinessDashboardModules({
         requiredPermission: PlatformPermissions.OPS_SITE_EVENTS,
         path: '/admin/site-events',
       },
+      {
+        title: t(
+          'business.dashboard.performanceModule',
+          'Platform performance'
+        ),
+        description: t(
+          'business.dashboard.performanceModuleDescription',
+          'Enrollment and catalog growth by market, plus top performing agents'
+        ),
+        icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00695c',
+        requiredPermission: PlatformPermissions.DASHBOARD_PLATFORM_STATS,
+        path: '/admin/performance',
+      },
     ];
 
     const adminHubModule: BusinessDashboardModule = {

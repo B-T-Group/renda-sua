@@ -545,6 +545,38 @@
         "captionEventSubject": "Each slice: one CTA type and one subject together (e.g. browse on a given product)."
       }
     },
+    "performance": {
+      "pageTitle": "Platform performance",
+      "pageDescription": "Enrollment and catalog growth by market and period.",
+      "pageKeywords": "admin, performance, metrics, markets, agents",
+      "unauthorized": "You are not authorized to access this page",
+      "marketFilter": "Market",
+      "allMarkets": "All markets",
+      "periods": {
+        "thisWeek": "This week",
+        "lastWeek": "Last week",
+        "thisMonth": "This month",
+        "lastMonth": "Last month",
+        "thisYear": "This year",
+        "lastYear": "Last year"
+      },
+      "metrics": {
+        "businessesEnrolled": "Businesses enrolled",
+        "clientsAdded": "Clients added",
+        "agentsAdded": "Agents added",
+        "saleItemsAdded": "Sale items added",
+        "rentalItemsAdded": "Rental items added"
+      },
+      "topAgents": {
+        "deliveriesTitle": "Top agents by deliveries",
+        "referralsTitle": "Top agents by business referrals",
+        "agent": "Agent",
+        "code": "Code",
+        "deliveriesCount": "Deliveries",
+        "referralsCount": "Referrals",
+        "empty": "No data for this period"
+      }
+    },
     "businesses": {
       "aiTokens": "AI tokens",
       "aiTokensHelp": "Remaining AI credits for image cleanup. Super users are granted at least 1000.",
@@ -1607,6 +1639,8 @@
       "pendingMobilePaymentsModuleDescription": "Stuck MyPVit or Freemopay transactions: view provider status and replay callbacks",
       "siteEventsModule": "Site events",
       "siteEventsModuleDescription": "Reporting and CSV export for client analytics events",
+      "performanceModule": "Platform performance",
+      "performanceModuleDescription": "Enrollment and catalog growth by market, plus top performing agents",
       "firstItem": {
         "saleTitle": "Add your first product",
         "saleBody": "Upload photos, create your item with AI or manually, then add it to a location so customers can buy.",
