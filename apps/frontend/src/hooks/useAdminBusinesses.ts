@@ -16,6 +16,13 @@ export interface AdminBusinessVerificationSummary {
   contractStatus: string;
   contractComplete: boolean;
   idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
+  blockers?: Array<
+    | 'missing_signed_contract'
+    | 'missing_active_location'
+    | 'missing_approved_product'
+    | 'missing_payment_verification'
+  >;
+  rail?: 'stripe' | 'mobile_money';
 }
 
 export interface AdminBusiness {

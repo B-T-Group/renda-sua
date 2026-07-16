@@ -634,5 +634,66 @@ export class UploadService {
         HttpStatus.NOT_FOUND
       );
     }
+
+    const fetchUploadQuery = `
+      query GetUploadWithType($uploadId: uuid!) {
+        user_uploads_by_pk(id: $uploadId) {
+          user_id
+          document_type {
+            name
+          }
+        }
+      }
+    `;
+    const uploadData = await this.hasuraSystemService.executeQuery(
+      fetchUploadQuery,
+      { uploadId }
+    );
+    const upload = uploadData?.user_uploads_by_pk as
+      | { user_id: string; document_type: { name: string } | null }
+      | undefined;
+    if (
+      upload?.document_type?.name &&
+      ID_DOCUMENT_TYPE_NAMES.includes(upload.document_type.name)
+    ) {
+      void this.notifyBusinessIdRejectedIfNeeded(
+        upload.user_id,
+        upload.document_type.name,
+        message
+      );
+    }
+  }
+
+  private async notifyBusinessIdRejectedIfNeeded(
+    userId: string,
+    documentType: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      const businessQuery = `
+        query BusinessByUserId($userId: uuid!) {
+          businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const businessResult = await this.hasuraSystemService.executeQuery(
+        businessQuery,
+        { userId }
+      );
+      const business = (
+        businessResult?.businesses as { id: string }[] | undefined
+      )?.[0];
+      if (!business) return;
+      await this.notificationsService.sendBusinessIdDocumentRejectedEmail({
+        businessUserId: userId,
+        documentType,
+        reason,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `notifyBusinessIdRejectedIfNeeded: ${error?.message ?? String(error)}`
+      );
+    }
   }
 }

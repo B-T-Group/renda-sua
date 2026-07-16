@@ -2341,6 +2341,52 @@ export class NotificationsService {
     }
   }
 
+  async sendBusinessIdDocumentRejectedEmail(params: {
+    businessUserId: string;
+    documentType: string;
+    reason: string;
+  }): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(params.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Business ID rejected email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
+      const reason = escapeHtmlForEmail(params.reason.trim());
+      if (locale === 'fr') {
+        await this.sendSimpleLifecycleEmail({
+          to: u.email,
+          subject: `Pièce d'identité refusée — ${docLabel}`,
+          html: `
+            <p>Votre <strong>${escapeHtmlForEmail(docLabel)}</strong> a été refusée.</p>
+            <p><strong>Motif :</strong> ${reason}</p>
+            <p>Veuillez téléverser une nouvelle pièce d'identité depuis Documents dans l'application.</p>
+            <p>— Rendasua</p>
+          `,
+        });
+        return;
+      }
+      await this.sendSimpleLifecycleEmail({
+        to: u.email,
+        subject: `ID document rejected — ${docLabel}`,
+        html: `
+          <p>Your <strong>${escapeHtmlForEmail(docLabel)}</strong> has been rejected.</p>
+          <p><strong>Reason:</strong> ${reason}</p>
+          <p>Please upload a new ID document from Documents in the app.</p>
+          <p>— Rendasua</p>
+        `,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessIdDocumentRejectedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   private async listSuperuserRecipients(): Promise<
     Array<{ userId: string; email: string | null }>
   > {

@@ -6,6 +6,7 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
+import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AdminSiteEventsController } from './admin-site-events.controller';
 import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
@@ -33,6 +34,7 @@ import { AdminAuthModule } from './admin-auth.module';
     NotificationsModule,
     SiteEventsModule,
     MerchantLifecycleModule,
+    StripePaymentsModule,
     BusinessContractsModule,
     BusinessItemsModule,
     RentalListingAiReviewModule,

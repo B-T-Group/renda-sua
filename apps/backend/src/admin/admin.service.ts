@@ -3,7 +3,20 @@ import { BusinessContractTemplatesService } from '../business-contracts/business
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import {
+  aggregatePaymentCapabilityForProvider,
+  paymentProviderForRail,
+} from '../merchant-lifecycle/merchant-lifecycle-status.util';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { WithdrawalPinService } from './withdrawal-pin.service';
+
+export type AdminVerificationBlocker =
+  | 'missing_signed_contract'
+  | 'missing_active_location'
+  | 'missing_approved_product'
+  | 'missing_payment_verification';
+
+export type AdminPaymentRail = 'stripe' | 'mobile_money';
 
 const GET_AGENTS_QUERY = `
   query GetAgents {
@@ -192,7 +205,8 @@ export class AdminService {
     private readonly withdrawalPinService: WithdrawalPinService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly businessContractsService: BusinessContractsService,
-    private readonly contractTemplatesService: BusinessContractTemplatesService
+    private readonly contractTemplatesService: BusinessContractTemplatesService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
 
   private buildAgentWhere(search: string, unverifiedOnly?: boolean): any {
@@ -427,50 +441,110 @@ export class AdminService {
       offset,
       idNames: ['id_card', 'passport', 'driver_license'],
     });
-    const items = (result.businesses || []).map((b: any) => {
-      const {
-        business_contracts: _contracts,
-        business_addresses,
-        user,
-        ...rest
-      } = b;
-      const { user_uploads: _uploads, ...userRest } = user || {};
-      return {
-        ...rest,
-        user: userRest,
-        addresses: (business_addresses || []).map((x: any) => x.address),
-        verificationSummary: this.buildVerificationSummary(b),
-      };
-    });
+    const items = await Promise.all(
+      (result.businesses || []).map(async (b: any) => {
+        const {
+          business_contracts: _contracts,
+          business_addresses,
+          user,
+          ...rest
+        } = b;
+        const { user_uploads: _uploads, ...userRest } = user || {};
+        const verificationSummary = await this.buildVerificationSummary(b);
+        return {
+          ...rest,
+          user: userRest,
+          addresses: (business_addresses || []).map((x: any) => x.address),
+          verificationSummary,
+        };
+      })
+    );
     const total = result.businesses_aggregate?.aggregate?.count || 0;
     return { items, total, page, limit };
   }
 
-  private buildVerificationSummary(business: any): {
+  private async buildVerificationSummary(business: any): Promise<{
     contractStatus: string;
     contractComplete: boolean;
     idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
-  } {
+    blockers: AdminVerificationBlocker[];
+    rail: AdminPaymentRail;
+  }> {
     const contract = business.business_contracts?.[0] ?? null;
     const legacySigned = !!business.merchant_agreement_accepted_at;
     const boldSignSigned =
       contract?.status === 'signed' && !contract?.invalidated_at;
-    const contractComplete = boldSignSigned || legacySigned;
+    // Authoritative check — must match lifecycle / verification detail.
+    const contractComplete =
+      await this.businessContractsService.hasValidSignedContract(business.id);
     let contractStatus = 'missing';
-    if (boldSignSigned) {
+    if (contractComplete && boldSignSigned) {
       contractStatus = 'signed';
-    } else if (legacySigned) {
+    } else if (contractComplete && legacySigned) {
       contractStatus = 'legacy_signed';
+    } else if (contractComplete) {
+      contractStatus = 'signed';
     } else if (contract?.status) {
       contractStatus = String(contract.status);
     }
+    const { blockers, rail } = await this.resolveVerificationExtras(
+      business.id,
+      contractComplete
+    );
     return {
       contractStatus,
       contractComplete,
       idDocumentStatus: this.resolveIdDocumentStatus(
         business.user?.user_uploads ?? []
       ),
+      blockers,
+      rail,
     };
+  }
+
+  private async resolveVerificationExtras(
+    businessId: string,
+    contractComplete: boolean
+  ): Promise<{
+    blockers: AdminVerificationBlocker[];
+    rail: AdminPaymentRail;
+    catalog: {
+      complete: boolean;
+      hasLocation: boolean;
+      hasApprovedItem: boolean;
+      hasPendingItem: boolean;
+    };
+  }> {
+    const [catalog, rail, accounts] = await Promise.all([
+      this.merchantLifecycleService.getCatalogStep(businessId),
+      this.paymentRoutingService.resolveRailForBusiness(businessId),
+      this.merchantLifecycleService.listPaymentAccounts(businessId),
+    ]);
+    const blockers: AdminVerificationBlocker[] = [];
+    if (!contractComplete) blockers.push('missing_signed_contract');
+    if (!catalog.hasLocation) blockers.push('missing_active_location');
+    if (!catalog.hasApprovedItem) blockers.push('missing_approved_product');
+    const provider = paymentProviderForRail(rail);
+    const paymentCapability = aggregatePaymentCapabilityForProvider(
+      accounts.map(
+        (a: {
+          provider: string;
+          capability_status: string;
+        }) => ({
+          provider: a.provider as any,
+          capability_status: a.capability_status as any,
+        })
+      ),
+      provider
+    );
+    if (
+      contractComplete &&
+      catalog.complete &&
+      paymentCapability !== 'VERIFIED'
+    ) {
+      blockers.push('missing_payment_verification');
+    }
+    return { blockers, rail, catalog };
   }
 
   private resolveIdDocumentStatus(
@@ -741,6 +815,7 @@ export class AdminService {
         ) {
           id
           file_name
+          content_type
           is_approved
           note
           created_at
@@ -752,17 +827,29 @@ export class AdminService {
       businessId,
       idNames: ['id_card', 'passport', 'driver_license'],
     });
+    const business = result.businesses_by_pk;
+    const latestContract =
+      await this.businessContractsService.getContractStatus(businessId);
+    const contractComplete = Boolean(
+      latestContract?.complete ||
+        result.business_merchant_agreement_acceptances?.[0]
+    );
+    const extras = await this.resolveVerificationExtras(
+      businessId,
+      contractComplete
+    );
     return {
-      business: result.businesses_by_pk,
+      business,
       latestAcceptance: result.business_merchant_agreement_acceptances?.[0] ?? null,
       identityDocuments: result.user_uploads ?? [],
-      paymentAccounts: result.businesses_by_pk?.payment_accounts ?? [],
+      paymentAccounts: business?.payment_accounts ?? [],
       contracts: await this.businessContractsService.listContractsForBusiness(
         businessId
       ),
-      latestContract: await this.businessContractsService.getContractStatus(
-        businessId
-      ),
+      latestContract,
+      rail: extras.rail,
+      blockers: extras.blockers,
+      catalog: extras.catalog,
     };
   }
 
