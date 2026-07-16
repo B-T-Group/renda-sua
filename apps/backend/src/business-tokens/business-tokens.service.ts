@@ -26,7 +26,8 @@ import {
 export type TokenUsageSubjectType =
   | 'business_image'
   | 'rental_item_image'
-  | 'preview';
+  | 'preview'
+  | 'ai_image_cleanup';
 
 export interface ConsumeTokenParams {
   businessId: string;
@@ -133,14 +134,46 @@ export class BusinessTokensService {
   }
 
   async refundToken(businessId: string): Promise<void> {
+    await this.refundTokens(businessId, CLEANUP_TOKEN_COST);
+  }
+
+  async refundTokens(businessId: string, amount: number): Promise<void> {
+    if (!Number.isInteger(amount) || amount <= 0) return;
     await this.hasuraSystemService.executeMutation(
-      `mutation RefundAiToken($id: uuid!, $amount: Int!) {
+      `mutation RefundAiTokens($id: uuid!, $amount: Int!) {
         update_businesses_by_pk(pk_columns: { id: $id }, _inc: { ai_tokens: $amount }) {
           ai_tokens
         }
       }`,
-      { id: businessId, amount: CLEANUP_TOKEN_COST }
+      { id: businessId, amount }
     );
+  }
+
+  /** Atomically reserve `amount` tokens. Returns balance after, or null if insufficient. */
+  async tryReserveTokens(
+    businessId: string,
+    amount: number
+  ): Promise<number | null> {
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new BadRequestException('Token amount must be a positive integer');
+    }
+    const result = await this.hasuraSystemService.executeMutation(
+      `mutation ReserveAiTokens($id: uuid!, $cost: Int!, $delta: Int!) {
+        update_businesses(
+          where: { id: { _eq: $id }, ai_tokens: { _gte: $cost } }
+          _inc: { ai_tokens: $delta }
+        ) {
+          returning { ai_tokens }
+        }
+      }`,
+      { id: businessId, cost: amount, delta: -amount }
+    );
+    const row = result.update_businesses?.returning?.[0];
+    return row ? row.ai_tokens : null;
+  }
+
+  async recordCleanupUsage(params: ConsumeTokenParams & { tokensConsumed: number }) {
+    await this.insertUsage(params);
   }
 
   async grantPackTokens(

@@ -5,13 +5,15 @@ import {
   Container,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
+import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+import AiImageCleanupPendingCard from '../business/AiImageCleanupPendingCard';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessClientsHero } from '../business/BusinessClientsHero';
@@ -35,6 +37,7 @@ const BusinessDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const { accounts } = useAccountInfo();
+  const { getPending } = useAiImageCleanup();
   const previewAccounts = accounts.slice(0, DASHBOARD_ACCOUNT_PREVIEW_LIMIT);
   const hasMoreAccounts = accounts.length > DASHBOARD_ACCOUNT_PREVIEW_LIMIT;
   const {
@@ -43,6 +46,29 @@ const BusinessDashboard: React.FC = () => {
     error: aggregatesError,
   } = useDashboardAggregates(profile?.business?.id);
   const { status: verificationStatus } = useBusinessVerification(!!profile?.business?.id);
+
+  const [cleanupPendingCount, setCleanupPendingCount] = useState(0);
+  const [cleanupPendingJobId, setCleanupPendingJobId] = useState<string | null>(null);
+  const [cleanupPendingItemName, setCleanupPendingItemName] = useState<string | undefined>();
+
+  const loadCleanupPending = useCallback(async () => {
+    try {
+      const data = await getPending();
+      const jobs = data.jobs ?? [];
+      setCleanupPendingCount(data.pendingResultCount ?? 0);
+      setCleanupPendingJobId(jobs[0]?.id ?? null);
+      setCleanupPendingItemName(jobs[0]?.item?.name);
+    } catch {
+      setCleanupPendingCount(0);
+      setCleanupPendingJobId(null);
+      setCleanupPendingItemName(undefined);
+    }
+  }, [getPending]);
+
+  useEffect(() => {
+    if (!profile?.business?.id) return;
+    void loadCleanupPending();
+  }, [loadCleanupPending, profile?.business?.id]);
 
   const mainInterest =
     profile?.business?.main_interest ?? 'sell_items';
@@ -119,6 +145,15 @@ const BusinessDashboard: React.FC = () => {
       />
 
       <BusinessVerificationBanner />
+
+      <AiImageCleanupPendingCard
+        pendingCount={cleanupPendingCount}
+        itemName={cleanupPendingItemName}
+        onClick={() => {
+          if (!cleanupPendingJobId) return;
+          navigate(`/business/items/ai-image-cleanup/${cleanupPendingJobId}`);
+        }}
+      />
 
       <BusinessGetReadyChecklist
         status={verificationStatus}

@@ -1,0 +1,41 @@
+table:
+  name: ai_image_cleanup_jobs
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: requested_by_user
+    using:
+      foreign_key_constraint_on: requested_by_user_id
+array_relationships:
+  - name: results
+    using:
+      foreign_key_constraint_on:
+        column: job_id
+        table:
+          name: ai_image_cleanup_results
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - item_id
+        - requested_by_user_id
+        - status
+        - tokens_reserved
+        - tokens_consumed
+        - tokens_refunded
+        - created_at
+        - updated_at
+        - completed_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

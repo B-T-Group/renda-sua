@@ -271,6 +271,52 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `ItemAiReviewQueueUrl-${environment}`,
     });
 
+    // FIFO SQS + Lambda for async AI image cleanup (merchant opt-in)
+    const aiImageCleanupQueue = new sqs.Queue(
+      this,
+      `AiImageCleanupQueue-${environment}`,
+      {
+        queueName: `ai-image-cleanup-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(16),
+      }
+    );
+
+    const aiImageCleanupHandler = new lambda.Function(
+      this,
+      `AiImageCleanupHandler-${environment}`,
+      {
+        functionName: `ai-image-cleanup-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/ai-image-cleanup-handler'),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    aiImageCleanupHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(aiImageCleanupQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    new cdk.CfnOutput(this, `AiImageCleanupQueueUrl-${environment}`, {
+      value: aiImageCleanupQueue.queueUrl,
+      description: 'SQS Queue URL for async AI image cleanup',
+      exportName: `AiImageCleanupQueueUrl-${environment}`,
+    });
+
     // FIFO SQS + Lambda for commerce / Shopify sync jobs
     const commerceSyncQueue = new sqs.Queue(
       this,

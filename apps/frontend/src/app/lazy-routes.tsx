@@ -85,6 +85,9 @@ export const BusinessImagesPage = lazy(() =>
 export const BusinessAiTokensPage = lazy(() =>
   import('../components/pages/BusinessAiTokensPage')
 );
+export const BusinessAiImageCleanupReviewPage = lazy(() =>
+  import('../components/pages/BusinessAiImageCleanupReviewPage')
+);
 export const BusinessItemsPage = lazy(() =>
   import('../components/pages/BusinessItemsPage')
 );

@@ -47,6 +47,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [step, setStep] = useState(0);
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+  const [asyncCleanupRequested, setAsyncCleanupRequested] = useState(false);
   const [item, setItem] = useState<CreatedSaleItemSummary | null>(null);
   const [locationName, setLocationName] = useState<string | undefined>(undefined);
   const [savedAsDraft, setSavedAsDraft] = useState(false);
@@ -177,7 +178,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         {step === 0 && (
           <FirstSaleItemUploadStep
             intent={intent}
-            onComplete={(ids, uploadedFiles) => {
+            onComplete={(ids, uploadedFiles, cleanupRequested) => {
+              setAsyncCleanupRequested(cleanupRequested);
               setImagePreviewUrls((prev) => {
                 prev.forEach((u) => URL.revokeObjectURL(u));
                 return uploadedFiles.map((f) => URL.createObjectURL(f));
@@ -197,6 +199,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             imageIds={imageIds}
             imagePreviewUrls={imagePreviewUrls}
             existingItem={item}
+            asyncCleanupRequested={asyncCleanupRequested}
             onComplete={(s) => {
               setItem(s);
               setStep(2);

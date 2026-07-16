@@ -1655,6 +1655,25 @@ export class NotificationsService {
     );
   }
 
+  async sendAiImageCleanupReadyPush(params: {
+    userId: string;
+    title: string;
+    body: string;
+    data: Record<string, string>;
+  }): Promise<{ webSent: number; expoSent: number }> {
+    return this.sendPushNotificationByUserId(
+      params.userId,
+      params.title,
+      params.body,
+      params.data,
+      {
+        priority: 'high',
+        sound: 'default',
+        channelId: 'default',
+      }
+    );
+  }
+
   /**
    * Notify a previously-offered agent that the order was taken by another
    * courier, so the app can dismiss the active offer screen.

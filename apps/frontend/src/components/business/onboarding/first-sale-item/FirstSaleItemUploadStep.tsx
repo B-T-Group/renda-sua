@@ -1,6 +1,5 @@
 import {
   AutoAwesome as AutoAwesomeIcon,
-  CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
   ErrorOutline as ErrorOutlineIcon,
@@ -15,7 +14,6 @@ import {
   Collapse,
   Dialog,
   DialogContent,
-  Divider,
   IconButton,
   Paper,
   Stack,
@@ -27,13 +25,12 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
-import ImageCleanupPreviewDialog from '../../../dialogs/ImageCleanupPreviewDialog';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useAws } from '../../../../hooks/useAws';
 import { useImageValidation } from '../../../../hooks/useImageValidation';
 import type { ImageValidationResult } from '../../../../types/imageValidation';
-import { fileMimeType, fileToBase64 } from '../../../../utils/imageFileToBase64';
 import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
@@ -42,7 +39,11 @@ const minPhotos = 2;
 
 interface FirstSaleItemUploadStepProps {
   intent?: SaleItemFromImageIntent;
-  onComplete: (imageIds: string[], files: File[]) => void;
+  onComplete: (
+    imageIds: string[],
+    files: File[],
+    asyncCleanupRequested: boolean
+  ) => void;
 }
 
 const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
@@ -52,33 +53,28 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, updateBusinessAiTokens } = useUserProfileContext();
+  const { profile } = useUserProfileContext();
   const { generateImageUploadUrl } = useAws();
   const { bulkCreateImages, submitting } = useBusinessImages();
-  const {
-    validateFiles,
-    metadataFromResults,
-    cleanupPreview,
-    validating,
-    cleanupLoading,
-  } = useImageValidation();
+  const { validateFiles, metadataFromResults, validating } = useImageValidation();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
-  const [cleanedFlags, setCleanedFlags] = useState<boolean[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [validationResults, setValidationResults] = useState<ImageValidationResult[]>([]);
-  const [cleanupIndex, setCleanupIndex] = useState<number | null>(null);
-  const [cleanupB64, setCleanupB64] = useState<string | null>(null);
   const [showCleanupStep, setShowCleanupStep] = useState(false);
   const [guidelinesOpen, setGuidelinesOpen] = useState(
     () => sessionStorage.getItem(GUIDELINES_DISMISSED_KEY) !== '1'
   );
 
-  const cleanupEnabled = (profile?.business?.ai_tokens ?? 0) > 0;
+  const aiTokensRemaining = profile?.business?.ai_tokens ?? 0;
+  const cleanupEnabled = aiTokensRemaining > 0;
+  const tokenCost = files.length;
+  const canAfford = aiTokensRemaining >= tokenCost;
   const bucketName = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
 
   const objectUrls = useMemo(
@@ -100,7 +96,6 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const addFiles = useCallback((next: File[]) => {
     if (!next.length) return;
     setFiles((prev) => [...prev, ...next]);
-    setCleanedFlags((prev) => [...prev, ...next.map(() => false)]);
   }, []);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,7 +127,6 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       return prev;
     });
     setFiles((prev) => prev.filter((_, idx) => idx !== i));
-    setCleanedFlags((prev) => prev.filter((_, idx) => idx !== i));
     setValidationResults((prev) => prev.filter((_, idx) => idx !== i));
   };
 
@@ -144,59 +138,37 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       next.unshift(picked);
       return next;
     });
-    setCleanedFlags((prev) => {
-      const next = [...prev];
-      const [picked] = next.splice(i, 1);
-      next.unshift(picked);
-      return next;
-    });
     setPreviewIndex(null);
   };
 
-  const runCleanupForIndex = async (index: number) => {
-    const file = files[index];
-    if (!file) return;
-    const result = validationResults[index];
-    const issues = [...(result?.errors ?? []), ...(result?.warnings ?? [])];
-    setCleanupIndex(index);
-    setCleanupB64(null);
-    try {
-      const preview = await cleanupPreview({
-        imageBase64: await fileToBase64(file),
-        mimeType: fileMimeType(file),
-        issues,
+  const doUpload = async (
+    bid: string,
+    results: ImageValidationResult[],
+    asyncCleanupRequested: boolean
+  ) => {
+    const meta = metadataFromResults(results);
+    const prefix = `businesses/${bid}/images`;
+    const errMsg = t('business.onboarding.firstSale.upload.presignError', 'Failed to prepare image upload');
+    const payloads = [];
+    for (let i = 0; i < files.length; i++) {
+      payloads.push({
+        ...(await presignUploadLibraryImage(files[i], bucketName, prefix, generateImageUploadUrl, errMsg)),
+        ...meta[i],
       });
-      setCleanupB64(preview.b64_json);
-      if (typeof preview.ai_tokens_remaining === 'number') {
-        updateBusinessAiTokens(preview.ai_tokens_remaining);
-      }
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('business.images.cleanup.error', 'Failed to cleanup image'),
-        { variant: 'error' }
-      );
-      setCleanupIndex(null);
     }
-  };
-
-  const acceptCleanup = async () => {
-    if (cleanupIndex === null || !cleanupB64) return;
-    const blob = await fetch(`data:image/png;base64,${cleanupB64}`).then((r) => r.blob());
-    const cleaned = new File([blob], `cleaned-${files[cleanupIndex].name}.png`, {
-      type: 'image/png',
-    });
-    setFiles((prev) => {
-      const next = [...prev];
-      next[cleanupIndex] = cleaned;
-      return next;
-    });
-    setCleanedFlags((prev) => {
-      const next = [...prev];
-      next[cleanupIndex] = true;
-      return next;
-    });
-    setCleanupIndex(null);
-    setCleanupB64(null);
+    const ids = await bulkCreateImages({ images: payloads }, { skipRefetch: true });
+    if (!ids.length) {
+      throw new Error(t('business.onboarding.firstSale.upload.noIds', 'Upload did not return image ids'));
+    }
+    enqueueSnackbar(
+      t('business.onboarding.firstSale.upload.success', 'Images uploaded successfully'),
+      { variant: 'success' }
+    );
+    onComplete(
+      ids.map((r) => r.id),
+      files,
+      asyncCleanupRequested
+    );
   };
 
   const handleContinue = async () => {
@@ -217,7 +189,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         setShowCleanupStep(true);
         return;
       }
-      await doUpload(bid, validation.results);
+      await doUpload(bid, validation.results, false);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
@@ -228,34 +200,28 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     }
   };
 
-  const doUpload = async (bid: string, results: ImageValidationResult[]) => {
-    const meta = metadataFromResults(results);
-    const prefix = `businesses/${bid}/images`;
-    const errMsg = t('business.onboarding.firstSale.upload.presignError', 'Failed to prepare image upload');
-    const payloads = [];
-    for (let i = 0; i < files.length; i++) {
-      payloads.push({
-        ...(await presignUploadLibraryImage(files[i], bucketName, prefix, generateImageUploadUrl, errMsg)),
-        ...meta[i],
-      });
-    }
-    const ids = await bulkCreateImages({ images: payloads }, { skipRefetch: true });
-    if (!ids.length) {
-      throw new Error(t('business.onboarding.firstSale.upload.noIds', 'Upload did not return image ids'));
-    }
-    enqueueSnackbar(
-      t('business.onboarding.firstSale.upload.success', 'Images uploaded successfully'),
-      { variant: 'success' }
-    );
-    onComplete(ids.map((r) => r.id), files);
-  };
-
-  const handleUploadAndContinue = async () => {
+  const handleOptInAndUpload = async () => {
     const bid = profile?.business?.id;
     if (!bid) return;
     setBusy(true);
     try {
-      await doUpload(bid, validationResults);
+      await doUpload(bid, validationResults, true);
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
+        { variant: 'error' }
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSkipAndUpload = async () => {
+    const bid = profile?.business?.id;
+    if (!bid) return;
+    setBusy(true);
+    try {
+      await doUpload(bid, validationResults, false);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
@@ -269,119 +235,78 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   if (showCleanupStep) {
     return (
       <Stack spacing={2.5}>
-        <Box>
+        <Box sx={{ textAlign: 'center' }}>
+          <AutoAwesomeIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
           <Typography variant="h6" fontWeight={600} gutterBottom>
-            {t('business.images.cleanup.enhanceTitle', 'Enhance your photos')}
+            {t('business.images.asyncCleanup.title', 'Clean up photos with AI?')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t(
-              'business.images.cleanup.enhanceHint',
-              'Optionally use AI to clean up each photo before publishing. You can skip any or all.'
+              'business.images.asyncCleanup.hint',
+              'We’ll clean your photos in the background after you create the product. You’ll get a notification to review before and after.'
             )}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        </Box>
+
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Typography variant="body2">
             {t(
-              'business.images.cleanup.tokenCostWithBalance',
-              'This uses 1 AI token. You have {{count}} left.',
-              { count: profile?.business?.ai_tokens ?? 0 }
+              'business.images.asyncCleanup.tokenCost',
+              'Uses {{count}} AI tokens (1 per photo). You have {{balance}}.',
+              { count: tokenCost, balance: aiTokensRemaining }
             )}
           </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          {files.map((f, i) => (
-            <Box
-              key={`${f.name}-${f.size}-${f.lastModified}-${i}`}
-              sx={{ position: 'relative', width: { xs: 'calc(50% - 8px)', sm: 140 }, flexShrink: 0 }}
-            >
-              <Box
-                component="img"
-                src={objectUrls[i]}
-                alt={t('business.onboarding.firstSale.upload.photoAlt', 'Product photo {{n}}', { n: i + 1 })}
-                sx={{
-                  width: '100%',
-                  height: { xs: 130, sm: 140 },
-                  objectFit: 'cover',
-                  borderRadius: 2,
-                  border: 1,
-                  borderColor: 'divider',
-                  display: 'block',
-                }}
-              />
-              {i === 0 && (
-                <Chip
-                  size="small"
-                  color="primary"
-                  label={t('business.onboarding.firstSale.upload.mainPhoto', 'Main')}
-                  sx={{ position: 'absolute', top: 4, left: 4, height: 22, fontSize: '0.7rem', fontWeight: 600 }}
-                />
+          {!canAfford ? (
+            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+              {t(
+                'business.images.asyncCleanup.insufficientTokens',
+                'Not enough tokens for all photos.'
               )}
-              {cleanedFlags[i] && (
-                <Tooltip title={t('business.images.cleanup.enhanced', 'Enhanced with AI')}>
-                  <CheckCircleIcon
-                    fontSize="small"
-                    color="success"
-                    sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'background.paper', borderRadius: '50%' }}
-                  />
-                </Tooltip>
-              )}
-              <Button
-                size="small"
-                variant="outlined"
-                fullWidth
-                startIcon={
-                  cleanupLoading && cleanupIndex === i ? (
-                    <CircularProgress size={14} color="inherit" />
-                  ) : (
-                    <AutoAwesomeIcon fontSize="small" />
-                  )
-                }
-                disabled={cleanupLoading || cleanedFlags[i]}
-                onClick={() => void runCleanupForIndex(i)}
-                sx={{ mt: 0.75, fontSize: '0.75rem', textTransform: 'none' }}
-              >
-                {cleanedFlags[i]
-                  ? t('business.images.cleanup.enhanced', 'Enhanced')
-                  : cleanupLoading && cleanupIndex === i
-                    ? t('business.images.cleanup.enhancing', 'Enhancing…')
-                    : t('business.images.cleanup.enhanceBtn', 'Enhance with AI')}
-              </Button>
-            </Box>
-          ))}
-        </Box>
-        <Divider />
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <Button
-            variant="outlined"
-            onClick={() => void handleUploadAndContinue()}
-            disabled={busy || submitting || cleanupLoading}
-            fullWidth={isNarrow}
-            startIcon={busy || submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            {busy || submitting
-              ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
-              : t('business.images.cleanup.skipAll', 'Skip & upload')}
-          </Button>
+            </Typography>
+          ) : null}
+        </Paper>
+
+        <Stack spacing={1.5}>
           <Button
             variant="contained"
-            onClick={() => void handleUploadAndContinue()}
-            disabled={busy || submitting || cleanupLoading}
-            fullWidth={isNarrow}
-            startIcon={busy || submitting ? <CircularProgress size={16} color="inherit" /> : <CloudUploadIcon />}
+            onClick={() => void handleOptInAndUpload()}
+            disabled={busy || submitting || !canAfford}
+            fullWidth
+            startIcon={
+              busy || submitting ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <AutoAwesomeIcon />
+              )
+            }
+            sx={{ minHeight: 48, textTransform: 'none' }}
           >
             {busy || submitting
               ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
-              : t('business.images.cleanup.uploadAndContinue', 'Upload & Continue')}
+              : t('business.images.asyncCleanup.yes', 'Yes, clean in background')}
+          </Button>
+          {!canAfford ? (
+            <Button
+              variant="outlined"
+              onClick={() => navigate('/business/ai-tokens')}
+              fullWidth
+              sx={{ minHeight: 48, textTransform: 'none' }}
+            >
+              {t('business.images.asyncCleanup.buyTokens', 'Buy AI tokens')}
+            </Button>
+          ) : null}
+          <Button
+            variant="outlined"
+            onClick={() => void handleSkipAndUpload()}
+            disabled={busy || submitting}
+            fullWidth
+            sx={{ minHeight: 48, textTransform: 'none' }}
+          >
+            {busy || submitting
+              ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
+              : t('business.images.asyncCleanup.noThanks', 'No thanks')}
           </Button>
         </Stack>
-        <ImageCleanupPreviewDialog
-          open={cleanupIndex !== null}
-          onClose={() => { setCleanupIndex(null); setCleanupB64(null); }}
-          originalUrl={cleanupIndex !== null ? objectUrls[cleanupIndex] ?? '' : ''}
-          cleanedB64={cleanupB64}
-          loading={cleanupLoading}
-          onAccept={() => void acceptCleanup()}
-          onReject={() => { setCleanupIndex(null); setCleanupB64(null); }}
-        />
       </Stack>
     );
   }
@@ -665,16 +590,6 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
               : t('business.onboarding.firstSale.upload.continue', 'Continue')}
         </Button>
       </Stack>
-
-      <ImageCleanupPreviewDialog
-        open={cleanupIndex !== null && !showCleanupStep}
-        onClose={() => { setCleanupIndex(null); setCleanupB64(null); }}
-        originalUrl={cleanupIndex !== null ? objectUrls[cleanupIndex] ?? '' : ''}
-        cleanedB64={cleanupB64}
-        loading={cleanupLoading}
-        onAccept={() => void acceptCleanup()}
-        onReject={() => { setCleanupIndex(null); setCleanupB64(null); }}
-      />
     </Stack>
   );
 };

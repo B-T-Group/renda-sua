@@ -697,6 +697,14 @@ function App() {
               }
             />
             <Route
+              path="/business/items/ai-image-cleanup/:jobId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessAiImageCleanupReviewPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/images"
               element={
                 <ProtectedRoute>

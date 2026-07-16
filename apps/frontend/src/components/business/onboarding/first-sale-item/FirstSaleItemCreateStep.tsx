@@ -27,6 +27,7 @@ import { useApiClient } from '../../../../hooks/useApiClient';
 import { useBrands } from '../../../../hooks/useBrands';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useCategories, useSubcategories } from '../../../../hooks/useCategories';
+import { useAiImageCleanup } from '../../../../hooks/useAiImageCleanup';
 import { useCreateItemFromImage } from '../../../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import { Item, useItems } from '../../../../hooks/useItems';
@@ -46,6 +47,7 @@ interface FirstSaleItemCreateStepProps {
   imageIds: string[];
   imagePreviewUrls: string[];
   existingItem?: CreatedSaleItemSummary | null;
+  asyncCleanupRequested?: boolean;
   onComplete: (summary: CreatedSaleItemSummary) => void;
 }
 
@@ -82,14 +84,16 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
   imageIds,
   imagePreviewUrls,
   existingItem,
+  asyncCleanupRequested = false,
   onComplete,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfileContext();
+  const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const apiClient = useApiClient();
+  const { requestCleanup } = useAiImageCleanup();
   const { updateItem } = useItems(profile?.business?.id, { skipInitialItemsFetch: true });
   const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const { isStripeRail, loading: stripeRailLoading, status: stripeRailStatus } =
@@ -269,6 +273,28 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     }
     const failedIds = await linkExtraImages(associateImageToItem, itemId, extraIds);
     if (failedIds.length > 0) setExtraLinkWarning(true);
+    if (asyncCleanupRequested) {
+      try {
+        const cleanupRes = await requestCleanup(itemId);
+        if (typeof cleanupRes?.data?.ai_tokens_remaining === 'number') {
+          updateBusinessAiTokens(cleanupRes.data.ai_tokens_remaining);
+        }
+        enqueueSnackbar(
+          t(
+            'business.images.asyncCleanup.started',
+            'AI cleanup started — we’ll notify you when ready.'
+          ),
+          { variant: 'info' }
+        );
+      } catch (e: any) {
+        enqueueSnackbar(
+          e?.response?.data?.message ||
+            e?.message ||
+            t('business.images.asyncCleanup.startFailed', 'Could not start AI cleanup'),
+          { variant: 'error' }
+        );
+      }
+    }
     enqueueSnackbar(
       t('business.onboarding.firstSale.create.success', 'Product created'),
       { variant: 'success' }

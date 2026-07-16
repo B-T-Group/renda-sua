@@ -13,7 +13,9 @@ function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
   const method = (config.method ?? 'get').toLowerCase();
   if (
     method === 'post' &&
-    (url.includes('/cleanup') || url.includes('/images/cleanup-preview'))
+    (url.includes('/cleanup') ||
+      url.includes('/images/cleanup-preview') ||
+      url.includes('/ai-image-cleanup'))
   ) {
     config.timeout = environment.imageCleanupRequestTimeoutMs;
   }
@@ -35,6 +37,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/ai/image-item-suggestions',
     '/ai/item-refinement-suggestions',
     '/business-items/create-from-image',
+    '/business-items/ai-image-cleanup',
     '/aws/presigned-url/image',
     '/business-images/bulk',
     '/orders/complete-delivery',
