@@ -3,6 +3,10 @@ import {
   BusinessImagesService,
 } from './business-images.service';
 
+jest.mock('../item-ai-review/item-ai-review.service', () => ({
+  ItemAiReviewService: class ItemAiReviewService {},
+}));
+
 describe('BusinessImagesService mutations', () => {
   const businessId = 'business-1';
   const imageId = 'image-1';
