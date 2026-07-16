@@ -1,0 +1,101 @@
+# Backend-Specific Cursor Rules
+
+## Import Management
+
+### Remove Unused Imports
+- Always remove unused imports before committing
+- Use TypeScript's built-in unused import detection
+- Common unused imports to watch for:
+  - `ApiResponse` from `@nestjs/swagger` when not using `@ApiResponse()` decorator
+  - Unused types/interfaces
+  - Unused utility functions
+
+### TypeScript Strict Checks
+- Enable `noUnusedLocals` and `noUnusedParameters` in development
+- Run `tsc --noEmit` to check for unused imports before committing
+- Use ESLint rule `@typescript-eslint/no-unused-vars` with `"error"` severity
+
+## Pre-Commit Checklist
+Before committing backend code, ensure:
+1. ✅ No unused imports (check TypeScript errors)
+2. ✅ No unused variables or parameters
+3. ✅ All `hasuraUserService` mutations changed to `hasuraSystemService` where authorization is done at controller level
+4. ✅ Proper error handling with typed catch blocks (`catch (error: any)`)
+5. ✅ Swagger decorators on all new endpoints
+6. ✅ Methods under 20 lines (extract helpers if needed)
+
+## Backend Service Patterns
+
+### Hasura Service Usage
+- **Use `HasuraSystemService`** when:
+  - Authorization is already validated at the controller level
+  - Operating on behalf of a validated business/user
+  - Performing admin operations
+  
+- **Use `HasuraUserService`** when:
+  - Relying on Hasura RLS for authorization
+  - Need user-scoped data filtering
+  - Query operations with role-based access
+
+### Error Handling
+```typescript
+// Good - with type annotation
+} catch (error: any) {
+  return {
+    success: false,
+    message: error.message || 'Operation failed',
+  };
+}
+
+// Bad - without type annotation
+} catch (error) {
+  // TypeScript error: 'error' is of type 'unknown'
+  return { success: false, message: error.message };
+}
+```
+
+## Validation Rules
+
+### File Size Limits
+- Images: 10MB max (matches AI Vision service limit)
+- Documents: 50MB max
+- Always validate file size before generating presigned URLs
+- Provide clear error messages with actual vs. max size
+
+### API Documentation
+Always include on new endpoints:
+- `@ApiOperation()` with summary and description
+- `@ApiResponse()` for each status code
+- `@ApiBody()` for complex request bodies
+- `@ApiBearerAuth()` for authenticated endpoints
+- `@ApiTags()` for logical grouping
+
+## Code Quality
+
+### Method Length
+- Keep methods under 20 lines
+- Extract complex logic into private helper methods
+- Use descriptive method names
+
+### Type Safety
+- Always create TypeScript interfaces for:
+  - GraphQL query/mutation responses
+  - API request/response bodies
+  - Service method parameters and return types
+- Never use `any` except in catch blocks
+
+### Mutation Pattern
+When a mutation requires business ownership validation:
+```typescript
+// Controller validates ownership
+const businessId = await this.getBusinessIdOrThrow();
+
+// Service uses system service (authorization already done)
+await this.service.performOperation(businessId, data);
+
+// In service:
+async performOperation(businessId: string, data: any) {
+  // No need to check ownership again
+  return this.hasuraSystemService.executeMutation(...);
+}
+```
