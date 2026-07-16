@@ -71,13 +71,6 @@ export interface AiReviewRow {
   admin_override_action: string | null;
   created_at: string;
   completed_at: string | null;
-  proposed_images?: Array<{
-    id: string;
-    source_image_id: string | null;
-    image_url: string;
-    s3_key: string | null;
-    display_order: number;
-  }>;
   item?: {
     id: string;
     name: string;

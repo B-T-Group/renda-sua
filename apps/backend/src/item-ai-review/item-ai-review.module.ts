@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AiGenerationModule } from '../ai/ai-generation.module';
-import { AwsModule } from '../aws/aws.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
@@ -19,8 +17,6 @@ import { ItemAiReviewService } from './item-ai-review.service';
     AuthModule,
     HasuraModule,
     NotificationsModule,
-    AiGenerationModule,
-    AwsModule,
     ImageValidationModule,
     MerchantLifecycleModule,
   ],

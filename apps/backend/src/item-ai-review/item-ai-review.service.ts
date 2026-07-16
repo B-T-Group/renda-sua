@@ -1,8 +1,5 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AiService } from '../ai/ai.service';
-import { AwsService } from '../aws/aws.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -26,8 +23,6 @@ export class ItemAiReviewService {
     private readonly queue: ItemAiReviewQueueService,
     private readonly model: ItemAiReviewModelService,
     private readonly notifications: NotificationsService,
-    private readonly aiService: AiService,
-    private readonly awsService: AwsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService
@@ -283,7 +278,6 @@ export class ItemAiReviewService {
     result: AiReviewModelResult,
     modelMeta: Record<string, unknown>
   ): Promise<void> {
-    await this.maybeGenerateProposedImages(item, reviewId, result);
     await this.completeReview(reviewId, 'proposal', result, modelMeta);
     const applied = await this.patchItemStatusIfAiReviewing(
       item.id,
@@ -417,8 +411,10 @@ export class ItemAiReviewService {
     const summary = [
       result.proposedTitle ? `Suggested title: ${result.proposedTitle}` : null,
       result.proposedDescription ? 'Suggested description updates' : null,
+      // Cleanup is merchant opt-in (consumes AI tokens); the review only
+      // recommends it — it never generates cleaned images itself.
       result.imageActions.some((a) => a.action === 'cleanup')
-        ? 'Suggested cleaned images'
+        ? 'Photo cleanup recommended — you can run AI cleanup (uses tokens)'
         : null,
     ]
       .filter(Boolean)
@@ -434,71 +430,5 @@ export class ItemAiReviewService {
       businessUserId: item.business.user_id,
       proposalSummary: summary || result.reason,
     });
-  }
-
-  private async maybeGenerateProposedImages(
-    item: ItemForAiReview,
-    reviewId: string,
-    result: AiReviewModelResult
-  ): Promise<void> {
-    const cleanupIds = new Set(
-      result.imageActions
-        .filter((a) => a.action === 'cleanup')
-        .map((a) => a.imageId)
-    );
-    if (!cleanupIds.size) return;
-    const objects: Array<Record<string, unknown>> = [];
-    let order = 0;
-    const maxCleanups = 2;
-    let cleaned = 0;
-    for (const img of item.item_images ?? []) {
-      if (!cleanupIds.has(img.id) || cleaned >= maxCleanups) continue;
-      const uploaded = await this.cleanupAndUpload(item, img.image_url);
-      if (!uploaded) continue;
-      cleaned += 1;
-      objects.push({
-        review_id: reviewId,
-        source_image_id: img.id,
-        image_url: uploaded.url,
-        s3_key: uploaded.key,
-        display_order: order++,
-      });
-    }
-    if (objects.length) {
-      await this.hasura.executeMutation(Q.INSERT_PROPOSED_IMAGES, { objects });
-    }
-  }
-
-  private async cleanupAndUpload(
-    item: ItemForAiReview,
-    imageUrl: string
-  ): Promise<{ url: string; key: string } | null> {
-    try {
-      const cleaned = await this.aiService.cleanupProductImage(imageUrl);
-      const buffer = Buffer.from(cleaned.b64_json, 'base64');
-      const bucket =
-        this.awsService.getDefaultBucketName() ||
-        process.env.S3_BUCKET_NAME ||
-        'rendasua-uploads';
-      const region = this.configService.get('aws')?.region || 'ca-central-1';
-      const key = `businesses/${item.business_id}/item-ai-proposals/${item.id}/${Date.now()}.png`;
-      await this.awsService.getS3Client().send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: buffer,
-          ContentType: 'image/png',
-        })
-      );
-      return {
-        url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
-        key,
-      };
-    } catch (error: any) {
-      this.logger.warn(
-        `Image cleanup skipped for item ${item.id}: ${error?.message}`
-      );
-      return null;
-    }
   }
 }

@@ -447,7 +447,12 @@ export const useItems = (
   const acceptItemAiProposal = useCallback(
     async (
       itemId: string,
-      edits?: { title?: string; description?: string }
+      edits?: {
+        applyTitle?: boolean;
+        applyDescription?: boolean;
+        title?: string;
+        description?: string;
+      }
     ) => {
       const { data } = await apiClient.post<{ success: boolean }>(
         `/business-items/items/${itemId}/ai-proposal/accept`,
@@ -515,11 +520,5 @@ export interface BusinessItemAiProposalPayload {
     decision_reason: string | null;
     proposed_title: string | null;
     proposed_description: string | null;
-    proposed_images?: Array<{
-      id: string;
-      source_image_id: string | null;
-      image_url: string;
-      display_order: number;
-    }>;
   } | null;
 }

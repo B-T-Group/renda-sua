@@ -3,8 +3,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  FormControlLabel,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -35,6 +37,8 @@ const BusinessRentalAiProposalPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [applyTitle, setApplyTitle] = useState(false);
+  const [applyDescription, setApplyDescription] = useState(false);
 
   useEffect(() => {
     if (!listingId) return;
@@ -57,6 +61,8 @@ const BusinessRentalAiProposalPage: React.FC = () => {
             res.listing?.rental_item.description ??
             ''
         );
+        setApplyTitle(!!res.proposal?.proposed_title);
+        setApplyDescription(!!res.proposal?.proposed_description);
       } catch (e: any) {
         if (cancelled) return;
         enqueueSnackbar(
@@ -86,17 +92,27 @@ const BusinessRentalAiProposalPage: React.FC = () => {
     navigate('/business/rentals/catalog');
   };
 
-  const onAccept = async () => {
+  const onAccept = async (asIs: boolean) => {
     if (!listingId || data?.listing?.id !== listingId) return;
     setBusy(true);
     try {
-      const ok = await acceptBusinessAiProposal(listingId, {
-        title: title.trim(),
-        description: description.trim(),
-      });
+      const edits = asIs
+        ? { applyTitle: false, applyDescription: false }
+        : {
+            applyTitle,
+            applyDescription,
+            ...(applyTitle ? { title: title.trim() } : {}),
+            ...(applyDescription ? { description: description.trim() } : {}),
+          };
+      const ok = await acceptBusinessAiProposal(listingId, edits);
       if (!ok) throw new Error('Accept failed');
       enqueueSnackbar(
-        t('business.rentals.aiProposal.acceptSuccess', 'Proposal accepted'),
+        asIs
+          ? t(
+              'business.rentals.aiProposal.publishAsIsSuccess',
+              'Published without changes'
+            )
+          : t('business.rentals.aiProposal.acceptSuccess', 'Proposal accepted'),
         { variant: 'success' }
       );
       goBackToItem();
@@ -184,17 +200,35 @@ const BusinessRentalAiProposalPage: React.FC = () => {
               <Typography variant="caption" color="text.secondary">
                 {t('business.rentals.aiProposal.currentTitle', 'Current title')}
               </Typography>
-              <Typography sx={{ mb: 2 }}>{original?.name}</Typography>
-              <TextField
-                fullWidth
-                label={t(
-                  'business.rentals.aiProposal.suggestedTitle',
-                  'Suggested title'
-                )}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={busy}
-              />
+              <Typography sx={{ mb: 1 }}>{original?.name}</Typography>
+              {proposal?.proposed_title ? (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={applyTitle}
+                        onChange={(e) => setApplyTitle(e.target.checked)}
+                        disabled={busy}
+                      />
+                    }
+                    label={t(
+                      'business.rentals.aiProposal.applyTitle',
+                      'Use AI suggested title'
+                    )}
+                  />
+                  <TextField
+                    fullWidth
+                    sx={{ mt: 1 }}
+                    label={t(
+                      'business.rentals.aiProposal.suggestedTitle',
+                      'Suggested title'
+                    )}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    disabled={busy || !applyTitle}
+                  />
+                </>
+              ) : null}
               <Typography
                 variant="caption"
                 color="text.secondary"
@@ -205,68 +239,81 @@ const BusinessRentalAiProposalPage: React.FC = () => {
                   'Current description'
                 )}
               </Typography>
-              <Typography sx={{ mb: 2, whiteSpace: 'pre-wrap' }}>
+              <Typography sx={{ mb: 1, whiteSpace: 'pre-wrap' }}>
                 {original?.description || '—'}
               </Typography>
-              <TextField
-                fullWidth
-                multiline
-                minRows={4}
-                label={t(
-                  'business.rentals.aiProposal.suggestedDescription',
-                  'Suggested description'
-                )}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={busy}
-              />
+              {proposal?.proposed_description ? (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={applyDescription}
+                        onChange={(e) => setApplyDescription(e.target.checked)}
+                        disabled={busy}
+                      />
+                    }
+                    label={t(
+                      'business.rentals.aiProposal.applyDescription',
+                      'Use AI suggested description'
+                    )}
+                  />
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={4}
+                    sx={{ mt: 1 }}
+                    label={t(
+                      'business.rentals.aiProposal.suggestedDescription',
+                      'Suggested description'
+                    )}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={busy || !applyDescription}
+                  />
+                </>
+              ) : null}
             </Paper>
-
-            {(proposal?.proposed_images?.length ?? 0) > 0 ? (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {t(
-                    'business.rentals.aiProposal.cleanedImages',
-                    'Suggested cleaned images'
-                  )}
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {proposal?.proposed_images?.map((img) => (
-                    <Box
-                      key={img.id}
-                      component="img"
-                      src={img.image_url}
-                      alt=""
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        objectFit: 'cover',
-                        borderRadius: 1,
-                        bgcolor: 'action.hover',
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Paper>
-            ) : null}
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button
                 variant="contained"
-                disabled={busy}
-                onClick={() => void onAccept()}
+                disabled={busy || (!applyTitle && !applyDescription)}
+                onClick={() => void onAccept(false)}
                 startIcon={busy ? <CircularProgress size={16} /> : undefined}
               >
-                {t('business.rentals.aiProposal.accept', 'Accept & publish')}
+                {t(
+                  'business.rentals.aiProposal.applySelected',
+                  'Apply selected & publish'
+                )}
               </Button>
               <Button
                 variant="outlined"
                 disabled={busy}
+                onClick={() => void onAccept(true)}
+              >
+                {t(
+                  'business.rentals.aiProposal.publishAsIs',
+                  'Publish without changes'
+                )}
+              </Button>
+              <Button
+                variant="text"
+                color="inherit"
+                disabled={busy}
                 onClick={() => void onDecline()}
               >
-                {t('business.rentals.aiProposal.decline', 'Decline & resubmit')}
+                {t(
+                  'business.rentals.aiProposal.decline',
+                  'Decline & resubmit for AI review'
+                )}
               </Button>
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              {t(
+                'business.rentals.aiProposal.actionsHint',
+                '"Publish without changes" publishes the listing exactly as you wrote it. Declining sends it back for another AI review.'
+              )}
+            </Typography>
           </Stack>
         )}
       </Box>

@@ -27,7 +27,8 @@ export class ItemAiProposalController {
 
   @Post(':itemId/ai-proposal/accept')
   @ApiOperation({
-    summary: 'Accept AI proposal (optionally with slight title/description edits)',
+    summary:
+      'Approve & publish the item. Each AI suggestion can be applied or skipped via applyTitle/applyDescription (set both to false to publish unchanged).',
   })
   @ApiParam({ name: 'itemId', format: 'uuid' })
   @ApiBody({ type: AcceptAiProposalDto })

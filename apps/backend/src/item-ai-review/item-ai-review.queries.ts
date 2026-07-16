@@ -89,14 +89,6 @@ export const COMPLETE_AI_REVIEW = `
   }
 `;
 
-export const INSERT_PROPOSED_IMAGES = `
-  mutation InsertProposedImages($objects: [item_ai_proposed_images_insert_input!]!) {
-    insert_item_ai_proposed_images(objects: $objects) {
-      affected_rows
-    }
-  }
-`;
-
 export const SET_ITEM_AI_REVIEWING = `
   mutation SetItemAiReviewing($id: uuid!) {
     update_items(
@@ -219,15 +211,6 @@ export const UPDATE_ITEM_COPY = `
   }
 `;
 
-export const INSERT_ITEM_IMAGE = `
-  mutation InsertItemImage($object: item_images_insert_input!) {
-    insert_item_images_one(object: $object) {
-      id
-      image_url
-    }
-  }
-`;
-
 export const GET_AI_PROPOSAL_FOR_ITEM = `
   query GetAiProposalForItem($itemId: uuid!) {
     items_by_pk(id: $itemId) {
@@ -261,13 +244,6 @@ export const GET_AI_PROPOSAL_FOR_ITEM = `
       rubric
       created_at
       completed_at
-      proposed_images(order_by: { display_order: asc }) {
-        id
-        source_image_id
-        image_url
-        s3_key
-        display_order
-      }
     }
   }
 `;
@@ -352,13 +328,6 @@ export const AI_REVIEW_BY_PK = `
       admin_override_action
       created_at
       completed_at
-      proposed_images(order_by: { display_order: asc }) {
-        id
-        source_image_id
-        image_url
-        s3_key
-        display_order
-      }
       item {
         id
         name

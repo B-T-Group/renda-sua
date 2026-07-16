@@ -35,7 +35,6 @@ export class RentalListingAiProposalService {
       throw new HttpException('No AI proposal found', HttpStatus.NOT_FOUND);
     }
     await this.applyAcceptedCopy(listing.rental_item.id, review, dto);
-    await this.applyProposedImages(listing, review);
     await this.markApproved(listingId);
     return { success: true };
   }
@@ -100,40 +99,22 @@ export class RentalListingAiProposalService {
     review: any,
     dto: AcceptAiProposalDto
   ): Promise<void> {
-    const name = (dto.title ?? review.proposed_title)?.trim();
-    const description = (
-      dto.description ?? review.proposed_description
-    )?.trim();
     const _set: Record<string, string> = {};
-    if (name) _set.name = name;
-    if (description != null && description !== '') {
-      _set.description = description;
+    if (dto.applyTitle !== false) {
+      const name = (dto.title ?? review.proposed_title)?.trim();
+      if (name) _set.name = name;
+    }
+    if (dto.applyDescription !== false) {
+      const description = (
+        dto.description ?? review.proposed_description
+      )?.trim();
+      if (description) _set.description = description;
     }
     if (!Object.keys(_set).length) return;
     await this.hasuraSystem.executeMutation(Q.UPDATE_RENTAL_ITEM_COPY, {
       id: itemId,
       _set,
     });
-  }
-
-  private async applyProposedImages(listing: any, review: any): Promise<void> {
-    const images = review.proposed_images ?? [];
-    if (!images.length) return;
-    let order =
-      (listing.rental_item.rental_item_images?.length ?? 0) + 1;
-    for (const img of images) {
-      await this.hasuraSystem.executeMutation(Q.INSERT_RENTAL_ITEM_IMAGE, {
-        object: {
-          business_id: listing.rental_item.business_id,
-          rental_item_id: listing.rental_item.id,
-          image_url: img.image_url,
-          s3_key: img.s3_key,
-          display_order: order++,
-          status: 'assigned',
-          is_ai_cleaned: true,
-        },
-      });
-    }
   }
 
   private async markApproved(listingId: string): Promise<void> {

@@ -40,12 +40,6 @@ export interface AdminAiReviewDetail extends AdminAiReviewRow {
   proposed_description?: string | null;
   rejection_fields?: string[];
   admin_feedback_notes?: string | null;
-  proposed_images?: Array<{
-    id: string;
-    source_image_id: string | null;
-    image_url: string;
-    display_order: number;
-  }>;
 }
 
 export interface AdminAiReviewsPagination {

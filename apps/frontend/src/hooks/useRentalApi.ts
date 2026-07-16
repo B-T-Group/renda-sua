@@ -120,12 +120,6 @@ export interface BusinessAiProposalPayload {
     decision_reason: string | null;
     proposed_title: string | null;
     proposed_description: string | null;
-    proposed_images?: Array<{
-      id: string;
-      source_image_id: string | null;
-      image_url: string;
-      display_order: number;
-    }>;
   } | null;
 }
 
@@ -523,7 +517,12 @@ export function useRentalApi() {
   const acceptBusinessAiProposal = useCallback(
     async (
       listingId: string,
-      edits?: { title?: string; description?: string }
+      edits?: {
+        applyTitle?: boolean;
+        applyDescription?: boolean;
+        title?: string;
+        description?: string;
+      }
     ) => {
       const { data } = await api.post<{ success: boolean }>(
         `/rentals/business/listings/${listingId}/ai-proposal/accept`,

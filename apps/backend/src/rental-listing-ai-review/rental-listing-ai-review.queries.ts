@@ -81,14 +81,6 @@ export const COMPLETE_AI_REVIEW = `
   }
 `;
 
-export const INSERT_PROPOSED_IMAGES = `
-  mutation InsertProposedImages($objects: [rental_listing_ai_proposed_images_insert_input!]!) {
-    insert_rental_listing_ai_proposed_images(objects: $objects) {
-      affected_rows
-    }
-  }
-`;
-
 export const SET_LISTING_AI_REVIEWING = `
   mutation SetListingAiReviewing($id: uuid!) {
     update_rental_location_listings(
@@ -205,15 +197,6 @@ export const UPDATE_RENTAL_ITEM_COPY = `
   }
 `;
 
-export const INSERT_RENTAL_ITEM_IMAGE = `
-  mutation InsertRentalItemImage($object: rental_item_images_insert_input!) {
-    insert_rental_item_images_one(object: $object) {
-      id
-      image_url
-    }
-  }
-`;
-
 export const GET_AI_PROPOSAL_FOR_LISTING = `
   query GetAiProposalForListing($listingId: uuid!) {
     rental_location_listings_by_pk(id: $listingId) {
@@ -247,13 +230,6 @@ export const GET_AI_PROPOSAL_FOR_LISTING = `
       rubric
       created_at
       completed_at
-      proposed_images(order_by: { display_order: asc }) {
-        id
-        source_image_id
-        image_url
-        s3_key
-        display_order
-      }
     }
   }
 `;
@@ -341,13 +317,6 @@ export const AI_REVIEW_BY_PK = `
       admin_override_action
       created_at
       completed_at
-      proposed_images(order_by: { display_order: asc }) {
-        id
-        source_image_id
-        image_url
-        s3_key
-        display_order
-      }
       listing {
         id
         moderation_status

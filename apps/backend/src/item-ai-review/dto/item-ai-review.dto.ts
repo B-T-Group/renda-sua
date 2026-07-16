@@ -1,14 +1,44 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AcceptAiProposalDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'Apply the suggested title (or the provided title override). Set to false to keep the current title. Defaults to true.',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  applyTitle?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Apply the suggested description (or the provided description override). Set to false to keep the current description. Defaults to true.',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  applyDescription?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Title to apply instead of the AI-proposed title. Ignored when applyTitle is false.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   title?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'Description to apply instead of the AI-proposed description. Ignored when applyDescription is false.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(8000)

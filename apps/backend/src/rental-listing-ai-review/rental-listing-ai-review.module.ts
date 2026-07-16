@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AiGenerationModule } from '../ai/ai-generation.module';
-import { AwsModule } from '../aws/aws.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -17,8 +15,6 @@ import { RentalListingAiReviewService } from './rental-listing-ai-review.service
     AuthModule,
     HasuraModule,
     NotificationsModule,
-    AiGenerationModule,
-    AwsModule,
   ],
   controllers: [
     RentalListingAiReviewInternalController,

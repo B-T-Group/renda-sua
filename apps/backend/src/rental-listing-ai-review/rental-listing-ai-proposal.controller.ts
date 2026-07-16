@@ -27,7 +27,8 @@ export class RentalListingAiProposalController {
 
   @Post(':listingId/ai-proposal/accept')
   @ApiOperation({
-    summary: 'Accept AI proposal (optionally with slight title/description edits)',
+    summary:
+      'Approve & publish the listing. Each AI suggestion can be applied or skipped via applyTitle/applyDescription (set both to false to publish unchanged).',
   })
   @ApiParam({ name: 'listingId', format: 'uuid' })
   @ApiBody({ type: AcceptAiProposalDto })
