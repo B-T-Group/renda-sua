@@ -14,7 +14,7 @@ describe('buildMerchantContractFormFields', () => {
     });
     expect(fields).toEqual([
       { id: 'companyName', value: 'Home Cake' },
-      { id: 'address_line1', value: '12 Rue Example' },
+      { id: 'addressLine1', value: '12 Rue Example' },
       { id: 'state', value: 'Centre' },
       { id: 'phone', value: '+237600000000' },
       { id: 'email', value: 'owner@example.com' },
