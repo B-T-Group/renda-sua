@@ -5,7 +5,6 @@ import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { CommissionsService } from '../commissions/commissions.service';
-import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
@@ -26,15 +25,32 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
+import { RbacService } from '../rbac/rbac.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
 import { LocationsService } from '../locations/locations.service';
+
+jest.mock('../commissions/commissions.service', () => ({
+  CommissionsService: class CommissionsService {},
+}));
+
+interface PickupOrderInternals {
+  getOrderDetails(orderId: string): Promise<unknown>;
+  finalizeStripeCapturedOrderPayment(orderNumber: string): Promise<void>;
+  completeOrderWithSideEffects(
+    order: unknown,
+    historyMessage: string
+  ): Promise<void>;
+}
 
 describe('OrdersService', () => {
   let service: OrdersService;
+  let pickupOrderInternals: PickupOrderInternals;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
-  let configService: jest.Mocked<ConfigService<Configuration>>;
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
@@ -198,6 +214,8 @@ describe('OrdersService', () => {
         { provide: LoyaltyService, useValue: {} },
         { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
         { provide: StripeCheckoutService, useValue: {} },
+        { provide: StripeTaxCheckoutBuilderService, useValue: {} },
+        { provide: StripeTaxCalculationService, useValue: {} },
         {
           provide: StripeCaptureService,
           useValue: {
@@ -220,13 +238,18 @@ describe('OrdersService', () => {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
+        { provide: OrderSystemJobsService, useValue: {} },
+        {
+          provide: RbacService,
+          useValue: { hasPermission: jest.fn().mockResolvedValue(false) },
+        },
       ],
     }).compile();
 
     service = module.get<OrdersService>(OrdersService);
+    pickupOrderInternals = service as unknown as PickupOrderInternals;
     hasuraUserService = module.get(HasuraUserService);
     hasuraSystemService = module.get(HasuraSystemService);
-    configService = module.get(ConfigService);
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
@@ -300,10 +323,15 @@ describe('OrdersService', () => {
   });
 
   describe('completePreparation', () => {
-    it('should complete preparation successfully from confirmed status', async () => {
+    it('does not capture an authorized pickup payment before handoff', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+      jest.spyOn(pickupOrderInternals, 'getOrderDetails').mockResolvedValue({
+        ...mockOrder,
+        current_status: 'confirmed',
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_now',
+        payment_source: 'credit_card',
+        payment_status: 'authorized',
       });
       orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
@@ -318,6 +346,9 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('ready_for_pickup');
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).not.toHaveBeenCalled();
     });
 
     it('should complete preparation successfully from preparing status', async () => {
@@ -338,6 +369,117 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('ready_for_pickup');
+    });
+  });
+
+  describe('confirmClientPickup', () => {
+    const pickupOrder = {
+      ...mockOrder,
+      current_status: 'ready_for_pickup',
+      fulfillment_method: 'pickup',
+      payment_timing: 'pay_now',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      business: { id: 'business-123', user_id: 'user-123' },
+      client: { id: 'client-123', user_id: 'client-456' },
+      order_items: [],
+    };
+
+    it('captures, settles, and completes an authorized pickup order', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      jest
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
+        .mockResolvedValueOnce(pickupOrder)
+        .mockResolvedValueOnce({ ...pickupOrder, current_status: 'complete' });
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: true,
+      });
+      const finalizeSpy = jest
+        .spyOn(pickupOrderInternals, 'finalizeStripeCapturedOrderPayment')
+        .mockResolvedValue(undefined);
+      const itemSettlementSpy = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue(undefined);
+      const deliverySettlementSpy = jest
+        .spyOn(service, 'processOrderDeliveryPayment')
+        .mockResolvedValue(undefined);
+      const completionSpy = jest
+        .spyOn(pickupOrderInternals, 'completeOrderWithSideEffects')
+        .mockResolvedValue(undefined);
+
+      const result = await service.confirmClientPickup(pickupOrder.id);
+
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).toHaveBeenCalledWith({
+        orderId: pickupOrder.id,
+        orderNumber: pickupOrder.order_number,
+      });
+      expect(finalizeSpy).toHaveBeenCalledWith(pickupOrder.order_number);
+      expect(itemSettlementSpy).toHaveBeenCalledWith(pickupOrder.id);
+      expect(deliverySettlementSpy).toHaveBeenCalledWith(pickupOrder.id);
+      expect(completionSpy).toHaveBeenCalledWith(
+        pickupOrder,
+        'Order completed after client pickup confirmation'
+      );
+      expect(result.order.current_status).toBe('complete');
+    });
+
+    it('stops settlement and completion when Stripe capture fails', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      jest
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
+        .mockResolvedValue(pickupOrder);
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: false,
+        message: 'Capture declined',
+      });
+      const itemSettlementSpy = jest.spyOn(service, 'processOrderPayment');
+      const deliverySettlementSpy = jest.spyOn(
+        service,
+        'processOrderDeliveryPayment'
+      );
+      const completionSpy = jest.spyOn(
+        pickupOrderInternals,
+        'completeOrderWithSideEffects'
+      );
+
+      await expect(service.confirmClientPickup(pickupOrder.id)).rejects.toThrow(
+        new HttpException('Capture declined', HttpStatus.PAYMENT_REQUIRED)
+      );
+      expect(itemSettlementSpy).not.toHaveBeenCalled();
+      expect(deliverySettlementSpy).not.toHaveBeenCalled();
+      expect(completionSpy).not.toHaveBeenCalled();
+    });
+
+    it('settles an already-paid pickup without capturing again', async () => {
+      const paidPickupOrder = {
+        ...pickupOrder,
+        payment_source: 'wallet',
+        payment_status: 'paid',
+      };
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      jest
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
+        .mockResolvedValue(paidPickupOrder);
+      const itemSettlementSpy = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue(undefined);
+      const deliverySettlementSpy = jest
+        .spyOn(service, 'processOrderDeliveryPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(pickupOrderInternals, 'completeOrderWithSideEffects')
+        .mockResolvedValue(undefined);
+
+      await service.confirmClientPickup(pickupOrder.id);
+
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).not.toHaveBeenCalled();
+      expect(itemSettlementSpy).toHaveBeenCalledWith(pickupOrder.id);
+      expect(deliverySettlementSpy).toHaveBeenCalledWith(pickupOrder.id);
     });
   });
 
