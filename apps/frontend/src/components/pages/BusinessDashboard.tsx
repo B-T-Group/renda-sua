@@ -13,7 +13,9 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import AiImageCleanupPendingCard from '../business/AiImageCleanupPendingCard';
+import LocationTransferPendingCard from '../business/LocationTransferPendingCard';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessClientsHero } from '../business/BusinessClientsHero';
@@ -69,6 +71,14 @@ const BusinessDashboard: React.FC = () => {
     if (!profile?.business?.id) return;
     void loadCleanupPending();
   }, [loadCleanupPending, profile?.business?.id]);
+
+  const { incoming: incomingTransfers, fetchPending: fetchPendingTransfers } =
+    useLocationTransfers(profile?.business?.id);
+
+  useEffect(() => {
+    if (!profile?.business?.id) return;
+    void fetchPendingTransfers();
+  }, [fetchPendingTransfers, profile?.business?.id]);
 
   const mainInterest =
     profile?.business?.main_interest ?? 'sell_items';
@@ -145,6 +155,19 @@ const BusinessDashboard: React.FC = () => {
       />
 
       <BusinessVerificationBanner />
+
+      <LocationTransferPendingCard
+        pendingCount={incomingTransfers.length}
+        fromBusinessName={incomingTransfers[0]?.from_business?.name}
+        onClick={() => {
+          const first = incomingTransfers[0];
+          navigate(
+            first
+              ? `/business/locations?transferRequestId=${first.id}`
+              : '/business/locations'
+          );
+        }}
+      />
 
       <AiImageCleanupPendingCard
         pendingCount={cleanupPendingCount}
