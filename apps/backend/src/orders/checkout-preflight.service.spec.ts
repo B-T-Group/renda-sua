@@ -18,6 +18,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
@@ -83,6 +84,7 @@ describe('CheckoutPreflightService', () => {
   let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
   let mobilePaymentsService: jest.Mocked<MobilePaymentsService>;
   let loyaltyService: jest.Mocked<LoyaltyService>;
+  let deliveryAvailabilityService: jest.Mocked<DeliveryAvailabilityService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -142,6 +144,17 @@ describe('CheckoutPreflightService', () => {
             normalizeCountryCode: jest.fn((c: string) => c),
           },
         },
+        {
+          provide: DeliveryAvailabilityService,
+          useValue: {
+            evaluate: jest.fn().mockResolvedValue({
+              available: true,
+              estimatedDeliveryMinutes: null,
+              reason: null,
+              ruleId: null,
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -151,6 +164,7 @@ describe('CheckoutPreflightService', () => {
     paymentRoutingService = module.get(PaymentRoutingService);
     mobilePaymentsService = module.get(MobilePaymentsService);
     loyaltyService = module.get(LoyaltyService);
+    deliveryAvailabilityService = module.get(DeliveryAvailabilityService);
   });
 
   function mockInventory(rows: ReturnType<typeof makeInventoryRow>[]) {
@@ -427,6 +441,93 @@ describe('CheckoutPreflightService', () => {
     expect(result.can_proceed).toBe(true);
     expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
     expect(result.groups[0]?.allowed_payment_timings).toEqual(['pay_now']);
+  });
+
+  // -------------------------------------------------------------------------
+  // Cart delivery availability (Phase 3): multi-merchant cart with one
+  // seller group forced unavailable.
+  // -------------------------------------------------------------------------
+  it('reports per-group and aggregated delivery availability when one seller cannot deliver', async () => {
+    const row1 = makeInventoryRow({
+      id: 'inv-1',
+      businessId: 'biz-available',
+      ownerUserId: 'owner-1',
+      payAtPickup: true,
+    });
+    const row2 = makeInventoryRow({
+      id: 'inv-2',
+      businessId: 'biz-unavailable',
+      ownerUserId: 'owner-2',
+      payAtPickup: true,
+    });
+    mockInventory([row1, row2]);
+
+    (deliveryAvailabilityService.evaluate as jest.Mock).mockImplementation(
+      (ctx: { businessId: string }) =>
+        Promise.resolve(
+          ctx.businessId === 'biz-unavailable'
+            ? {
+                available: false,
+                estimatedDeliveryMinutes: null,
+                reason: 'NO_ELIGIBLE_AGENT',
+                ruleId: 'agent-in-region',
+              }
+            : {
+                available: true,
+                estimatedDeliveryMinutes: 45,
+                reason: null,
+                ruleId: null,
+              }
+        )
+    );
+
+    const dto: CheckoutPreflightDto = {
+      items: [
+        { business_inventory_id: 'inv-1', quantity: 1 },
+        { business_inventory_id: 'inv-2', quantity: 1 },
+      ],
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    const availableGroup = result.groups.find(
+      (g) => g.business_id === 'biz-available'
+    );
+    const unavailableGroup = result.groups.find(
+      (g) => g.business_id === 'biz-unavailable'
+    );
+    expect(availableGroup?.delivery_availability?.available).toBe(true);
+    expect(
+      availableGroup?.delivery_availability?.estimated_delivery_minutes
+    ).toBe(45);
+    expect(unavailableGroup?.delivery_availability?.available).toBe(false);
+    // Reason codes must never leak to clients (reason-blind product rule).
+    expect(unavailableGroup?.delivery_availability).not.toHaveProperty(
+      'reason'
+    );
+    expect(availableGroup?.pickup_eligible).toBe(true);
+    expect(unavailableGroup?.pickup_eligible).toBe(true);
+    expect(result.delivery_availability?.available).toBe(false);
+  });
+
+  it('skips delivery availability evaluation for pickup carts', async () => {
+    mockInventory([makeInventoryRow({ payAtPickup: true })]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'pickup',
+      provisional_country: 'CM',
+      payment_timing: 'pay_at_pickup',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(deliveryAvailabilityService.evaluate).not.toHaveBeenCalled();
+    expect(result.delivery_availability).toBeNull();
+    expect(result.groups[0]?.delivery_availability).toBeNull();
+    expect(result.groups[0]?.pickup_eligible).toBe(true);
   });
 
   it('blocks checkout when merchant cannot accept orders', async () => {

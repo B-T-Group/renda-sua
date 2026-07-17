@@ -25,7 +25,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../../contexts/CartContext';
@@ -36,6 +36,12 @@ import { useCheckout } from '../../hooks/useCheckout';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
+import {
+  SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
+  SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP,
+  SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -88,6 +94,9 @@ interface OrderSummaryProps {
   businessDeliveryFees: Map<string, BusinessDeliveryFee>;
   fastDeliveryFee: number;
   requiresFastDelivery: boolean;
+  fulfillment: 'delivery' | 'pickup';
+  /** Seller groups that currently cannot deliver (reason-blind). */
+  unavailableBusinessIds: Set<string>;
   formatCurrency: (amount: number, currency?: string) => string;
   discountCodeDraft: string;
   onDiscountCodeDraftChange: (value: string) => void;
@@ -105,6 +114,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   businessDeliveryFees,
   fastDeliveryFee,
   requiresFastDelivery,
+  fulfillment,
+  unavailableBusinessIds,
   formatCurrency,
   discountCodeDraft,
   onDiscountCodeDraftChange,
@@ -174,6 +185,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             {t('checkout.businessOrder', 'Order from Business')}
           </Typography>
 
+          {fulfillment === 'delivery' &&
+            unavailableBusinessIds.has(business.businessId) && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {t(
+                  'orders.deliveryAvailability.groupUnavailable',
+                  'This seller cannot deliver right now.'
+                )}
+              </Alert>
+            )}
+
           {/* Items */}
           {business.items.map((item) => (
             <Box
@@ -227,7 +248,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 {t('checkout.deliveryFee', 'Delivery Fee')}
               </Typography>
               <Box sx={{ textAlign: 'right' }}>
-                {business.deliveryFeeLoading ? (
+                {fulfillment === 'pickup' ? (
+                  <Typography
+                    variant="body2"
+                    fontWeight="medium"
+                    component="span"
+                    color="success.main"
+                  >
+                    {t('checkout.pickupNoFee', 'Waived (store pickup)')}
+                  </Typography>
+                ) : business.deliveryFeeLoading ? (
                   <CircularProgress size={16} />
                 ) : business.deliveryFeeError ? (
                   <Typography variant="body2" color="error" component="span">
@@ -509,6 +539,9 @@ const CheckoutPage: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // State
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(
+    'delivery'
+  );
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
@@ -570,12 +603,13 @@ const CheckoutPage: React.FC = () => {
         quantity: item.quantity,
         ...(item.variantId ? { item_variant_id: item.variantId } : {}),
       })),
-      ...(selectedAddressId
-        ? { delivery_address_id: selectedAddressId, fulfillment_method: 'delivery' as const }
+      fulfillment_method: fulfillment,
+      ...(fulfillment === 'delivery' && selectedAddressId
+        ? { delivery_address_id: selectedAddressId }
         : {}),
       payment_timing: 'pay_now' as const,
     };
-  }, [cartItems, selectedAddressId]);
+  }, [cartItems, fulfillment, selectedAddressId]);
 
   const checkoutPreflight = useCheckoutPreflight(
     checkoutPreflightRequest,
@@ -584,6 +618,34 @@ const CheckoutPage: React.FC = () => {
 
   const showTaxAtCheckoutNotice =
     checkoutPreflight?.tax_notice === 'calculated_at_checkout';
+
+  // Store pickup is offered only when every seller group supports it.
+  const preflightGroups = checkoutPreflight?.groups ?? [];
+  const pickupEligible =
+    preflightGroups.length > 0 &&
+    preflightGroups.every((g) => g.pickup_eligible === true);
+
+  // Reason-blind delivery availability (aggregated + per seller group).
+  const deliveryUnavailable =
+    fulfillment === 'delivery' &&
+    checkoutPreflight?.delivery_availability?.available === false;
+  const unavailableBusinessIds = useMemo(
+    () =>
+      new Set(
+        preflightGroups
+          .filter((g) => g.delivery_availability?.available === false)
+          .map((g) => g.business_id)
+      ),
+    [preflightGroups]
+  );
+
+  // Pickup on the Mobile Money rail is paid on collection; Stripe pickup is
+  // authorized at checkout. The resolver decides — the UI just forwards it.
+  const paymentTiming: 'pay_now' | 'pay_at_pickup' =
+    fulfillment === 'pickup' &&
+    checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+      ? 'pay_at_pickup'
+      : 'pay_now';
 
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
@@ -603,7 +665,12 @@ const CheckoutPage: React.FC = () => {
   // Fetch delivery fees for each business group
   useEffect(() => {
     const fetchBusinessDeliveryFees = async () => {
-      if (!selectedAddressId || cartItems.length === 0 || !apiClient) {
+      if (
+        fulfillment === 'pickup' ||
+        !selectedAddressId ||
+        cartItems.length === 0 ||
+        !apiClient
+      ) {
         setBusinessDeliveryFees(new Map());
         return;
       }
@@ -698,12 +765,44 @@ const CheckoutPage: React.FC = () => {
 
     fetchBusinessDeliveryFees();
   }, [
+    fulfillment,
     selectedAddressId,
     cartItems,
     requiresFastDelivery,
     apiClient,
     getCartByBusiness,
   ]);
+
+  // Leaving pickup mode (or losing eligibility) falls back to delivery.
+  useEffect(() => {
+    if (fulfillment === 'pickup' && checkoutPreflight && !pickupEligible) {
+      setFulfillment('delivery');
+    }
+  }, [checkoutPreflight, fulfillment, pickupEligible]);
+
+  // Delivery availability funnel analytics (reason-blind):
+  // unavailable shown -> switched to pickup -> pickup order created.
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const unavailableTrackedRef = useRef(false);
+  useEffect(() => {
+    if (deliveryUnavailable && !unavailableTrackedRef.current) {
+      unavailableTrackedRef.current = true;
+      trackSiteEvent({
+        eventType: SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
+        metadata: { checkout_mode: 'cart' },
+      });
+    }
+  }, [deliveryUnavailable, trackSiteEvent]);
+
+  const handleSwitchToPickup = useCallback(() => {
+    if (deliveryUnavailable) {
+      trackSiteEvent({
+        eventType: SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
+        metadata: { checkout_mode: 'cart' },
+      });
+    }
+    setFulfillment('pickup');
+  }, [deliveryUnavailable, trackSiteEvent]);
 
   // Checkout hook
   const {
@@ -740,7 +839,10 @@ const CheckoutPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (cartItems.length === 0 || !selectedAddressId) return;
+    if (cartItems.length === 0) return;
+    const isPickup = fulfillment === 'pickup';
+    if (!isPickup && !selectedAddressId) return;
+    if (!isPickup && deliveryUnavailable) return;
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -760,21 +862,29 @@ const CheckoutPage: React.FC = () => {
 
       const orders = await createOrdersFromCart(
         cartItems,
-        selectedAddressId,
+        isPickup ? null : selectedAddressId,
         phoneNumber,
         undefined, // specialInstructions removed
         discountCodeToApply,
-        requiresFastDelivery,
+        isPickup ? false : requiresFastDelivery,
         fastDeliveryFee,
-        'pay_now',
-        deliveryWindow
+        paymentTiming,
+        !isPickup && deliveryWindow
           ? {
               slot_id: deliveryWindow.slot_id,
               preferred_date: deliveryWindow.preferred_date,
               special_instructions: deliveryWindow.special_instructions,
             }
-          : undefined
+          : undefined,
+        fulfillment
       );
+
+      if (isPickup) {
+        trackSiteEvent({
+          eventType: SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP,
+          metadata: { checkout_mode: 'cart', order_count: orders.length },
+        });
+      }
 
       // Stripe-currency single order: redirect to hosted Checkout.
       const redirected = await maybeRedirectToStripeCheckout(orders);
@@ -897,72 +1007,146 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.deliveryInformation', 'Delivery Information')}
               </Typography>
 
-              {/* Address Selection */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                  {t('checkout.deliveryAddress', 'Delivery Address')}
-                </Typography>
-
-                {addressesLoading ? (
-                  <Skeleton variant="rectangular" height={56} />
-                ) : (
-                  <FormControl fullWidth>
-                    <InputLabel>
-                      {t('checkout.selectAddress', 'Select Address')}
-                    </InputLabel>
-                    <Select
-                      value={selectedAddressId}
-                      onChange={(e) => setSelectedAddressId(e.target.value)}
-                      label={t('checkout.selectAddress', 'Select Address')}
+              {/* Fulfillment method (pickup offered when all sellers support it) */}
+              {pickupEligible && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                    {t('checkout.fulfillmentTitle', 'How do you want to receive your order?')}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant={fulfillment === 'delivery' ? 'contained' : 'outlined'}
+                      onClick={() => setFulfillment('delivery')}
+                      disabled={checkoutLoading}
                     >
-                      {addresses.map((addr) => (
-                        <MenuItem key={addr.address.id} value={addr.address.id}>
-                          <Box>
-                            <Typography variant="body2">
-                              {addr.address.address_line_1}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {addr.address.city}, {addr.address.state}{' '}
-                              {addr.address.postal_code}
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
+                      {t('checkout.fulfillmentDelivery', 'Delivery')}
+                    </Button>
+                    <Button
+                      variant={fulfillment === 'pickup' ? 'contained' : 'outlined'}
+                      onClick={handleSwitchToPickup}
+                      disabled={checkoutLoading}
+                    >
+                      {t('checkout.fulfillmentPickup', 'Store pickup')}
+                    </Button>
+                  </Stack>
+                  {fulfillment === 'pickup' && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 1 }}
+                    >
+                      {t(
+                        'checkout.pickupNotice',
+                        'No delivery fee. Collect your order at each store once it is ready.'
+                      )}
+                    </Typography>
+                  )}
+                </Box>
+              )}
 
-                <Button
-                  variant="outlined"
-                  onClick={handleOpenAddressDialog}
-                  sx={{ mt: 1 }}
+              {/* Delivery unavailable (reason-blind) */}
+              {deliveryUnavailable && (
+                <Alert
+                  severity="warning"
+                  sx={{ mb: 3 }}
+                  action={
+                    pickupEligible ? (
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={handleSwitchToPickup}
+                      >
+                        {t('checkout.fulfillmentPickup', 'Store pickup')}
+                      </Button>
+                    ) : undefined
+                  }
                 >
-                  {t('checkout.addNewAddress', 'Add New Address')}
-                </Button>
-              </Box>
+                  {t(
+                    'orders.deliveryAvailability.unavailable',
+                    'Delivery is currently unavailable.'
+                  )}
+                  {pickupEligible && (
+                    <>
+                      {' '}
+                      {t(
+                        'orders.deliveryAvailability.pickupInstead',
+                        'You can still pick up this order at the store.'
+                      )}
+                    </>
+                  )}
+                </Alert>
+              )}
 
-              {/* Fast Delivery Option */}
-              {isEnabledForLocation(userCountry, userState) &&
-                fastDeliveryConfig && (
-                  <FastDeliveryOption
-                    config={fastDeliveryConfig}
-                    selected={requiresFastDelivery}
-                    onToggle={setRequiresFastDelivery}
-                    formatCurrency={formatCurrency}
+              {fulfillment === 'delivery' && (
+                <>
+                  {/* Address Selection */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                      {t('checkout.deliveryAddress', 'Delivery Address')}
+                    </Typography>
+
+                    {addressesLoading ? (
+                      <Skeleton variant="rectangular" height={56} />
+                    ) : (
+                      <FormControl fullWidth>
+                        <InputLabel>
+                          {t('checkout.selectAddress', 'Select Address')}
+                        </InputLabel>
+                        <Select
+                          value={selectedAddressId}
+                          onChange={(e) => setSelectedAddressId(e.target.value)}
+                          label={t('checkout.selectAddress', 'Select Address')}
+                        >
+                          {addresses.map((addr) => (
+                            <MenuItem key={addr.address.id} value={addr.address.id}>
+                              <Box>
+                                <Typography variant="body2">
+                                  {addr.address.address_line_1}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {addr.address.city}, {addr.address.state}{' '}
+                                  {addr.address.postal_code}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+
+                    <Button
+                      variant="outlined"
+                      onClick={handleOpenAddressDialog}
+                      sx={{ mt: 1 }}
+                    >
+                      {t('checkout.addNewAddress', 'Add New Address')}
+                    </Button>
+                  </Box>
+
+                  {/* Fast Delivery Option */}
+                  {isEnabledForLocation(userCountry, userState) &&
+                    fastDeliveryConfig && (
+                      <FastDeliveryOption
+                        config={fastDeliveryConfig}
+                        selected={requiresFastDelivery}
+                        onToggle={setRequiresFastDelivery}
+                        formatCurrency={formatCurrency}
+                      />
+                    )}
+
+                  {/* Delivery Time Window */}
+                  <DeliveryTimeWindowSelector
+                    countryCode={selectedAddress?.country || 'GA'}
+                    stateCode={selectedAddress?.state}
+                    onChange={handleDeliveryWindowChange}
+                    isFastDelivery={requiresFastDelivery}
+                    loading={checkoutLoading}
                   />
-                )}
-
-              {/* Delivery Time Window */}
-              <DeliveryTimeWindowSelector
-                countryCode={selectedAddress?.country || 'GA'}
-                stateCode={selectedAddress?.state}
-                onChange={handleDeliveryWindowChange}
-                isFastDelivery={requiresFastDelivery}
-                loading={checkoutLoading}
-              />
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -1144,8 +1328,12 @@ const CheckoutPage: React.FC = () => {
           <OrderSummary
             cartItems={cartItems}
             businessDeliveryFees={businessDeliveryFees}
-            fastDeliveryFee={fastDeliveryFee}
-            requiresFastDelivery={requiresFastDelivery}
+            fastDeliveryFee={fulfillment === 'pickup' ? 0 : fastDeliveryFee}
+            requiresFastDelivery={
+              fulfillment === 'pickup' ? false : requiresFastDelivery
+            }
+            fulfillment={fulfillment}
+            unavailableBusinessIds={unavailableBusinessIds}
             formatCurrency={formatCurrency}
             discountCodeDraft={discountCodeDraft}
             onDiscountCodeDraftChange={setDiscountCodeDraft}
@@ -1167,7 +1355,11 @@ const CheckoutPage: React.FC = () => {
             fullWidth
             size="large"
             onClick={handleSubmit}
-            disabled={!selectedAddressId || checkoutLoading}
+            disabled={
+              checkoutLoading ||
+              (fulfillment === 'delivery' &&
+                (!selectedAddressId || deliveryUnavailable))
+            }
             sx={{
               mt: 3,
               // Add extra bottom margin on mobile for clients to ensure visibility above bottom nav

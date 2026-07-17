@@ -10,6 +10,8 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { toPublicDeliveryAvailability } from '../delivery-availability/delivery-availability.types';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
@@ -25,6 +27,7 @@ import {
   CheckoutMethod,
   CheckoutPreflightDto,
   CheckoutPreflightResponseDto,
+  DeliveryAvailabilityDto,
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
@@ -50,7 +53,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           can_accept_orders
           user { id }
         }
-        address { country }
+        address { country state latitude longitude }
       }
       item {
         id
@@ -81,6 +84,9 @@ const ADDRESS_COUNTRY_QUERY = `
   query GetAddressCountry($addressId: uuid!) {
     addresses_by_pk(id: $addressId) {
       country
+      state
+      latitude
+      longitude
     }
   }
 `;
@@ -96,7 +102,8 @@ export class CheckoutPreflightService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly configService: ConfigService,
-    private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService
+    private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
+    private readonly deliveryAvailabilityService: DeliveryAvailabilityService
   ) {}
 
   async resolve(
@@ -248,6 +255,7 @@ export class CheckoutPreflightService {
     // 5. Delivery country validation
     // -----------------------------------------------------------------------
     let deliveryCountry: string | null = null;
+    let deliveryCoords: { lat: number; lon: number } | null = null;
 
     if (dto.delivery_address_id && fulfillment === 'delivery') {
       try {
@@ -255,8 +263,14 @@ export class CheckoutPreflightService {
           ADDRESS_COUNTRY_QUERY,
           { addressId: dto.delivery_address_id }
         );
-        deliveryCountry =
-          (addrResult.addresses_by_pk?.country ?? '').trim().toUpperCase() || null;
+        const addr = addrResult.addresses_by_pk;
+        deliveryCountry = (addr?.country ?? '').trim().toUpperCase() || null;
+        if (addr?.latitude != null && addr?.longitude != null) {
+          deliveryCoords = {
+            lat: Number(addr.latitude),
+            lon: Number(addr.longitude),
+          };
+        }
       } catch (err: any) {
         this.logger.warn('Preflight address fetch failed', err?.message);
       }
@@ -312,7 +326,18 @@ export class CheckoutPreflightService {
         : VerificationMethod.PHONE;
 
     // -----------------------------------------------------------------------
-    // 7. Build per-group summaries
+    // 7. Delivery availability per seller group (rule-based, reason-blind)
+    // -----------------------------------------------------------------------
+    const availabilityByBusiness =
+      await this.evaluateGroupsDeliveryAvailability(
+        businessMap,
+        fulfillment,
+        dto,
+        deliveryCoords
+      );
+
+    // -----------------------------------------------------------------------
+    // 8. Build per-group summaries
     // -----------------------------------------------------------------------
     const groups: CheckoutGroupDto[] = [];
     let requiresPaymentPhoneOverall = false;
@@ -490,12 +515,14 @@ export class CheckoutPreflightService {
         is_first_order_client: isFirstOrderClient,
         total: subtotal + (deliveryFee ?? 0),
         mobile_money_provider: mobileMoneyProvider,
+        delivery_availability: availabilityByBusiness.get(businessId) ?? null,
+        pickup_eligible: allPayAtPickup,
         items: itemLines,
       });
     }
 
     // -----------------------------------------------------------------------
-    // 8. Discount pre-validation (authenticated only, best-effort)
+    // 9. Discount pre-validation (authenticated only, best-effort)
     // -----------------------------------------------------------------------
     let discountPreview: CheckoutDiscountPreviewDto | null = null;
     if (dto.discount_code?.trim() && isAuthenticated) {
@@ -523,7 +550,7 @@ export class CheckoutPreflightService {
     }
 
     // -----------------------------------------------------------------------
-    // 9. Wallet & buyer rail (authenticated only)
+    // 10. Wallet & buyer rail (authenticated only)
     // -----------------------------------------------------------------------
     let buyerRail: 'stripe' | 'mobile_money' | null = null;
     let canPayWithWallet: boolean | null = null;
@@ -553,7 +580,7 @@ export class CheckoutPreflightService {
     }
 
     // -----------------------------------------------------------------------
-    // 10. Assemble response
+    // 11. Assemble response
     // -----------------------------------------------------------------------
     const canProceed = blockers.length === 0;
     const stripeManualCapture =
@@ -587,12 +614,80 @@ export class CheckoutPreflightService {
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
       tax_notice: taxNotice,
+      delivery_availability:
+        fulfillment === 'delivery'
+          ? this.aggregateDeliveryAvailability(groups)
+          : null,
     };
   }
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Evaluates delivery availability once per seller group. Returns an empty
+   * map for pickup fulfillment (delivery rules do not apply).
+   */
+  private async evaluateGroupsDeliveryAvailability(
+    businessMap: Map<string, any>,
+    fulfillment: string,
+    dto: CheckoutPreflightDto,
+    deliveryCoords: { lat: number; lon: number } | null
+  ): Promise<Map<string, DeliveryAvailabilityDto>> {
+    const map = new Map<string, DeliveryAvailabilityDto>();
+    if (fulfillment !== 'delivery') return map;
+
+    await Promise.all(
+      [...businessMap.entries()].map(async ([businessId, group]) => {
+        const address = group.inventoryRows[0]?.business_location?.address;
+        const result = await this.deliveryAvailabilityService.evaluate({
+          businessId,
+          sellerCountry: group.sellerCountry ?? '',
+          sellerState: (address?.state ?? '').trim(),
+          pickupLat:
+            address?.latitude != null ? Number(address.latitude) : null,
+          pickupLon:
+            address?.longitude != null ? Number(address.longitude) : null,
+          deliveryAddressId: dto.delivery_address_id,
+          deliveryLat: deliveryCoords?.lat ?? null,
+          deliveryLon: deliveryCoords?.lon ?? null,
+          itemIds: [
+            ...new Set(
+              group.inventoryRows
+                .map((inv: any) => inv?.item?.id)
+                .filter(Boolean) as string[]
+            ),
+          ],
+          inventoryIds: group.inventoryRows
+            .map((inv: any) => inv?.id)
+            .filter(Boolean),
+          requiresFastDelivery: dto.requires_fast_delivery === true,
+          verifiedAgentDelivery: dto.verified_agent_delivery === true,
+          evaluatedAt: new Date(),
+        });
+        map.set(businessId, toPublicDeliveryAvailability(result));
+      })
+    );
+    return map;
+  }
+
+  /** Delivery is available overall only when every seller group can deliver. */
+  private aggregateDeliveryAvailability(
+    groups: CheckoutGroupDto[]
+  ): DeliveryAvailabilityDto {
+    const perGroup = groups.map((g) => g.delivery_availability);
+    const available =
+      perGroup.length > 0 && perGroup.every((a) => a?.available === true);
+    const estimates = perGroup
+      .map((a) => a?.estimated_delivery_minutes)
+      .filter((v): v is number => v != null);
+    return {
+      available,
+      estimated_delivery_minutes:
+        available && estimates.length > 0 ? Math.max(...estimates) : null,
+    };
+  }
 
   private earlyExit(
     blockers: CheckoutBlockerDto[],
@@ -615,6 +710,7 @@ export class CheckoutPreflightService {
       requires_payment_phone: false,
       stripe_retry_unsupported: true,
       stripe_manual_capture: false,
+      delivery_availability: null,
     };
   }
 

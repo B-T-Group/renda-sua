@@ -29,6 +29,7 @@ import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.servic
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { LocationsService } from '../locations/locations.service';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -219,6 +220,17 @@ describe('OrdersService', () => {
         {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
+        },
+        {
+          provide: DeliveryAvailabilityService,
+          useValue: {
+            evaluate: jest.fn().mockResolvedValue({
+              available: true,
+              estimatedDeliveryMinutes: null,
+              reason: null,
+              ruleId: null,
+            }),
+          },
         },
       ],
     }).compile();

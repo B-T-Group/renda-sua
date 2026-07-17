@@ -1,6 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
+import type { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrderOffersService } from './order-offers.service';
@@ -35,11 +37,20 @@ describe('OrderOffersService', () => {
       ),
     } as unknown as jest.Mocked<ConfigService<Configuration>>;
 
+    // Real query service on top of the same Hasura mock so the existing
+    // agent_locations fixtures keep flowing through eligibility filtering.
+    const eligibleAgentsQueryService = new EligibleAgentsQueryService(
+      hasuraSystemService,
+      // Fixtures always carry region addresses, so reverse-geocode is unused.
+      {} as unknown as GoogleDistanceService
+    );
+
     service = new OrderOffersService(
       hasuraSystemService,
       commissionsService,
       notificationsService,
-      configService
+      configService,
+      eligibleAgentsQueryService
     );
   });
 

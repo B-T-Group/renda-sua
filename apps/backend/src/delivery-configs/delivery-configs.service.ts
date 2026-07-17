@@ -155,6 +155,18 @@ export class DeliveryConfigService {
   }
 
   /**
+   * Max distance (km) between the business pickup location and an eligible
+   * agent for delivery to be offered at checkout. Fallback 20 km.
+   */
+  async getDeliveryAvailabilityRadiusKm(countryCode: string): Promise<number> {
+    const value = await this.getDeliveryConfig(
+      countryCode,
+      'delivery_availability_radius_km'
+    );
+    return typeof value === 'number' && value > 0 ? value : 20;
+  }
+
+  /**
    * Get normal delivery base fee
    */
   async getNormalDeliveryBaseFee(countryCode: string): Promise<number> {

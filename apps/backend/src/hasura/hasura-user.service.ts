@@ -893,6 +893,8 @@ export class HasuraUserService {
           state
           postal_code
           country
+          latitude
+          longitude
           is_primary
           address_type
           created_at

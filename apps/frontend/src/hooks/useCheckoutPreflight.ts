@@ -15,10 +15,31 @@ export interface CheckoutPreflightRequest {
   phone_number?: string;
 }
 
+export interface CheckoutDeliveryAvailability {
+  available: boolean;
+  estimated_delivery_minutes: number | null;
+}
+
+export interface CheckoutPreflightGroup {
+  business_id: string;
+  business_name?: string;
+  /** Null when fulfillment is pickup. */
+  delivery_availability?: CheckoutDeliveryAvailability | null;
+  /** True when every item in this seller group supports store pickup. */
+  pickup_eligible?: boolean;
+}
+
 export interface CheckoutPreflightResult {
   tax_notice?: CheckoutPreflightTaxNotice;
   checkout_method?: 'STRIPE' | 'MOBILE_MONEY';
   can_proceed?: boolean;
+  groups?: CheckoutPreflightGroup[];
+  /**
+   * Aggregated delivery availability. Null when fulfillment is pickup.
+   * When `available` is false, show the generic "Delivery is currently
+   * unavailable." message and steer the user to store pickup.
+   */
+  delivery_availability?: CheckoutDeliveryAvailability | null;
 }
 
 export function useCheckoutPreflight(

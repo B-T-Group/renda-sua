@@ -241,6 +241,16 @@ export interface OrderOffersConfig {
   maxAgents: number;
 }
 
+/** Checkout-time delivery availability gate (rule-based). */
+export interface DeliveryAvailabilityConfig {
+  /**
+   * When true (default), POST /orders rejects delivery orders whose
+   * availability evaluation fails. Set DELIVERY_AVAILABILITY_ENFORCE=false to
+   * disable the hard gate (rollback lever) while keeping evaluation/logging.
+   */
+  enforceEnabled: boolean;
+}
+
 /** Shared secret for Lambda → Nest internal notification routes (e.g. SMS). */
 export interface NotificationsInternalConfig {
   apiKey: string;
@@ -379,6 +389,7 @@ export interface Configuration {
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
   orderOffers: OrderOffersConfig;
+  deliveryAvailability: DeliveryAvailabilityConfig;
   push: PushConfig;
   messaging: MessagingConfig;
   sms: SmsConfig;
@@ -696,6 +707,9 @@ export default (): Configuration => {
     orderOffers: {
       ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '180', 10),
       maxAgents: parseInt(process.env.OFFER_MAX_AGENTS ?? '5', 10),
+    },
+    deliveryAvailability: {
+      enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

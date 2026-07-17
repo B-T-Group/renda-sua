@@ -4101,6 +4101,11 @@
         "outForDelivery": "Out for delivery (picked up / in transit → out for delivery)",
         "deliver": "Deliver (out for delivery → delivered)"
       }
+    },
+    "deliveryAvailability": {
+      "unavailable": "Delivery is currently unavailable.",
+      "pickupInstead": "You can still pick up this order at the store.",
+      "groupUnavailable": "This seller cannot deliver right now."
     }
   },
   "items": {
@@ -5138,7 +5143,12 @@
     "multipleOrdersNotice": "Your items will be split into {{count}} separate orders",
     "success": "Orders created successfully!",
     "error": "Failed to create orders: {{error}}",
-    "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders."
+    "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders.",
+    "fulfillmentTitle": "How do you want to receive your order?",
+    "fulfillmentDelivery": "Delivery",
+    "fulfillmentPickup": "Store pickup",
+    "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
+    "pickupNoFee": "Waived (store pickup)"
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",

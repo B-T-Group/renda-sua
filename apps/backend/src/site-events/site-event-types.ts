@@ -16,6 +16,9 @@ export const SITE_EVENT_TYPES_V1 = [
   'inventory.checkout_dialog.open',
   'inventory.checkout_dialog.continue_click',
   'inventory.checkout_dialog.auth_redirect',
+  'checkout.delivery_unavailable_shown',
+  'checkout.switched_to_pickup',
+  'checkout.order_created_pickup',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];

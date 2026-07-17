@@ -12,12 +12,13 @@ interface CreateOrderRequest {
     quantity: number;
     item_variant_id?: string;
   }>;
-  delivery_address_id: string;
+  delivery_address_id?: string;
+  fulfillment_method?: 'delivery' | 'pickup';
   phone_number?: string;
   special_instructions?: string;
   requires_fast_delivery?: boolean;
   discount_code?: string;
-  payment_timing?: 'pay_now' | 'pay_at_delivery';
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   delivery_window?: {
     slot_id: string;
     preferred_date: string;
@@ -127,18 +128,19 @@ export const useCheckout = () => {
   const createOrdersFromCart = useCallback(
     async (
       cartItems: CartItem[],
-      deliveryAddressId: string,
+      deliveryAddressId: string | null,
       phoneNumber?: string,
       specialInstructions?: string,
       discountCode?: string,
       requiresFastDelivery?: boolean,
       fastDeliveryFee?: number,
-      paymentTiming: 'pay_now' | 'pay_at_delivery' = 'pay_now',
+      paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' = 'pay_now',
       deliveryWindow?: {
         slot_id: string;
         preferred_date: string;
         special_instructions?: string;
-      }
+      },
+      fulfillmentMethod: 'delivery' | 'pickup' = 'delivery'
     ): Promise<OrderResult[]> => {
       if (!apiClient) {
         throw new Error('API client not available');
@@ -158,7 +160,10 @@ export const useCheckout = () => {
             quantity: item.quantity,
             ...(item.variantId && { item_variant_id: item.variantId }),
           })),
-          delivery_address_id: deliveryAddressId,
+          ...(fulfillmentMethod === 'delivery' && deliveryAddressId
+            ? { delivery_address_id: deliveryAddressId }
+            : {}),
+          fulfillment_method: fulfillmentMethod,
           phone_number: phoneNumber,
           payment_timing: paymentTiming,
         });
@@ -182,6 +187,21 @@ export const useCheckout = () => {
           });
         }
 
+        if (
+          fulfillmentMethod === 'delivery' &&
+          preflight?.delivery_availability?.available === false
+        ) {
+          const message = t(
+            'orders.deliveryAvailability.unavailable',
+            'Delivery is currently unavailable.'
+          );
+          throw Object.assign(new Error(message), {
+            response: {
+              data: { error: 'DELIVERY_UNAVAILABLE', message },
+            },
+          });
+        }
+
         // Group items by business
         const itemsByBusiness = groupItemsByBusiness(cartItems);
 
@@ -194,13 +214,19 @@ export const useCheckout = () => {
               quantity: item.quantity,
               ...(item.variantId && { item_variant_id: item.variantId }),
             })),
-            delivery_address_id: deliveryAddressId,
+            ...(fulfillmentMethod === 'delivery' && deliveryAddressId
+              ? { delivery_address_id: deliveryAddressId }
+              : {}),
+            fulfillment_method: fulfillmentMethod,
             phone_number: phoneNumber,
             special_instructions: specialInstructions,
             discount_code: discountCode,
-            requires_fast_delivery: requiresFastDelivery,
+            requires_fast_delivery:
+              fulfillmentMethod === 'pickup' ? false : requiresFastDelivery,
             payment_timing: paymentTiming,
-            delivery_window: deliveryWindow,
+            ...(fulfillmentMethod === 'delivery' && deliveryWindow
+              ? { delivery_window: deliveryWindow }
+              : {}),
           };
 
           const response = await apiClient.post('/orders', orderData);

@@ -20,6 +20,21 @@ function toRad(value: number): number {
   return (value * Math.PI) / 180;
 }
 
+/**
+ * Region values come from several sources (profile addresses, reverse
+ * geocoding, business addresses) with inconsistent casing/whitespace, so
+ * comparisons must be trim + case insensitive.
+ */
+function sameRegionValue(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  return (
+    (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase() &&
+    (a ?? '').trim() !== ''
+  );
+}
+
 /** Haversine distance in kilometers. */
 export function haversineDistanceKm(
   lat1: number,
@@ -115,7 +130,10 @@ export function addressesMatchRegion(
 ): boolean {
   const region = regionFromAddresses(addresses);
   if (!region) return false;
-  return region.country === country && region.state === state;
+  return (
+    sameRegionValue(region.country, country) &&
+    sameRegionValue(region.state, state)
+  );
 }
 
 /** Region match using profile address or GPS reverse-geocode fallback. */
@@ -133,6 +151,7 @@ export async function agentMatchesRegion(params: {
   });
   if (!region) return false;
   return (
-    region.country === params.targetCountry && region.state === params.targetState
+    sameRegionValue(region.country, params.targetCountry) &&
+    sameRegionValue(region.state, params.targetState)
   );
 }

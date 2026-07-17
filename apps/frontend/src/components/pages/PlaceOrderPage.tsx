@@ -48,7 +48,7 @@ import {
 } from '@mui/material';
 import { alpha, keyframes, Theme } from '@mui/material/styles';
 import { parsePhoneNumber } from 'libphonenumber-js';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Link as RouterLink,
@@ -69,6 +69,11 @@ import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import {
+  SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
+  SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
@@ -238,6 +243,8 @@ interface OrderSummaryProps {
   isMobile: boolean;
   error?: string | null;
   showTaxAtCheckoutNotice?: boolean;
+  /** True when the platform cannot currently deliver this order. */
+  deliveryUnavailable?: boolean;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -275,6 +282,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   isMobile,
   error,
   showTaxAtCheckoutNotice = false,
+  deliveryUnavailable = false,
 }) => {
   const { t } = useTranslation();
   const hasDealPrices = resolvedPricing.hasDeal;
@@ -430,6 +438,24 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {formatCurrency(subtotal, selectedItem.item.currency)}
             </Typography>
           </Box>
+
+          {deliveryUnavailable && !pickupSelected && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t(
+                'orders.deliveryAvailability.unavailable',
+                'Delivery is currently unavailable.'
+              )}
+              {pickupEligible && (
+                <>
+                  {' '}
+                  {t(
+                    'orders.deliveryAvailability.pickupInstead',
+                    'You can still pick up this order at the store.'
+                  )}
+                </>
+              )}
+            </Alert>
+          )}
 
           {pickupEligible && onPickupChange && (
             <Paper
@@ -757,6 +783,7 @@ const PlaceOrderPage: React.FC = () => {
     'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'
   >('pay_now');
   const [pickupAtStore, setPickupAtStore] = useState(false);
+  const { trackSiteEvent } = useTrackSiteEvent();
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentChoiceDialogOpen, setPaymentChoiceDialogOpen] = useState(false);
   
@@ -1714,6 +1741,37 @@ const PlaceOrderPage: React.FC = () => {
     (checkoutPreflight?.checkout_method === 'STRIPE' ||
       itemCountrySupportsStripe);
 
+  // Reason-blind delivery availability from preflight: when false, delivery
+  // ordering is blocked and store pickup is promoted instead.
+  const deliveryUnavailable =
+    !isPickupOrder &&
+    checkoutPreflight?.delivery_availability?.available === false;
+
+  // Funnel analytics: track the first time the unavailable notice is shown.
+  const unavailableTrackedRef = useRef(false);
+  useEffect(() => {
+    if (deliveryUnavailable && !unavailableTrackedRef.current) {
+      unavailableTrackedRef.current = true;
+      trackSiteEvent({
+        eventType: SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
+        metadata: { checkout_mode: 'single' },
+      });
+    }
+  }, [deliveryUnavailable, trackSiteEvent]);
+
+  const handlePickupChange = useCallback(
+    (selected: boolean) => {
+      if (selected && deliveryUnavailable) {
+        trackSiteEvent({
+          eventType: SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
+          metadata: { checkout_mode: 'single' },
+        });
+      }
+      setPickupAtStore(selected);
+    },
+    [deliveryUnavailable, trackSiteEvent]
+  );
+
   // Validate phone number country - must be before early returns
   const phoneValidation = useMemo(() => {
     const phoneToValidate = useDifferentPhone
@@ -1828,6 +1886,7 @@ const PlaceOrderPage: React.FC = () => {
   const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&
+    !deliveryUnavailable &&
     (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
   const canPlaceOrder =
     variantSelectionValid &&
@@ -2868,7 +2927,7 @@ const PlaceOrderPage: React.FC = () => {
               pickupEligible={isPickupEligible}
               pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
-              onPickupChange={setPickupAtStore}
+              onPickupChange={handlePickupChange}
               pickupLocationLabel={pickupLocationSummary || undefined}
               deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={
@@ -2899,6 +2958,7 @@ const PlaceOrderPage: React.FC = () => {
               isMobile
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
+              deliveryUnavailable={deliveryUnavailable}
             />
 
             {/* Fixed bottom nav */}
@@ -3732,7 +3792,7 @@ const PlaceOrderPage: React.FC = () => {
               pickupEligible={isPickupEligible}
               pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
-              onPickupChange={setPickupAtStore}
+              onPickupChange={handlePickupChange}
               pickupLocationLabel={pickupLocationSummary || undefined}
               deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={
@@ -3763,6 +3823,7 @@ const PlaceOrderPage: React.FC = () => {
               isMobile={isMobile}
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
+              deliveryUnavailable={deliveryUnavailable}
             />
           </Grid>
         </Grid>

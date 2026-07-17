@@ -1,11 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import {
-  agentMatchesRegion,
-  haversineDistanceKm,
-} from '../common/agent-proximity.util';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { GoogleDistanceService } from '../google/google-distance.service';
 import { LocationsService } from '../locations/locations.service';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 
@@ -30,30 +25,12 @@ interface ClientAddress {
   is_primary?: boolean | null;
 }
 
-interface NearbyAgentRow {
-  latitude: number | string;
-  longitude: number | string;
-  agent: {
-    is_available: boolean;
-    is_verified: boolean;
-    status: string;
-    agent_addresses: Array<{
-      address: {
-        country?: string | null;
-        state?: string | null;
-        is_primary?: boolean | null;
-      } | null;
-    }>;
-  } | null;
-}
-
 @Injectable()
 export class ClientsService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService,
     private readonly locationsService: LocationsService,
-    private readonly googleDistanceService: GoogleDistanceService
+    private readonly eligibleAgentsQueryService: EligibleAgentsQueryService
   ) {}
 
   /**
@@ -64,10 +41,15 @@ export class ClientsService {
     const coords = await this.resolveClientCoords();
     if (!coords) return { count: 0 };
 
-    const rows = await this.fetchAgentLocations();
-    const distances = await this.eligibleDistances(rows, coords);
-    distances.sort((a, b) => a - b);
-    return { count: Math.min(distances.length, MAX_NEARBY_AGENTS) };
+    const candidates = await this.eligibleAgentsQueryService.findEligibleAgents(
+      {
+        originLat: coords.latitude,
+        originLon: coords.longitude,
+        targetCountry: coords.country,
+        targetState: coords.state,
+      }
+    );
+    return { count: Math.min(candidates.length, MAX_NEARBY_AGENTS) };
   }
 
   private async resolveClientCoords(): Promise<ClientCoords | null> {
@@ -145,65 +127,4 @@ export class ClientsService {
     );
   }
 
-  private async fetchAgentLocations(): Promise<NearbyAgentRow[]> {
-    const query = `
-      query NearbyAgents {
-        agent_locations {
-          latitude
-          longitude
-          agent {
-            is_available
-            is_verified
-            status
-            agent_addresses(where: { address: { status: { _eq: active } } }) {
-              address {
-                country
-                state
-                is_primary
-              }
-            }
-          }
-        }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {});
-    return (result?.agent_locations as NearbyAgentRow[]) ?? [];
-  }
-
-  private async eligibleDistances(
-    rows: NearbyAgentRow[],
-    coords: ClientCoords
-  ): Promise<number[]> {
-    const distances: number[] = [];
-    const reverseGeocode = async (lat: number, lng: number) => {
-      const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
-      return { country: geo.country, state: geo.state };
-    };
-    for (const row of rows) {
-      const agent = row.agent;
-      if (!agent) continue;
-      if (!agent.is_available || !agent.is_verified) continue;
-      if (agent.status === 'suspended') continue;
-      const matches = await agentMatchesRegion({
-        agentAddresses: agent.agent_addresses,
-        agentLocation: {
-          latitude: Number(row.latitude),
-          longitude: Number(row.longitude),
-        },
-        targetCountry: coords.country,
-        targetState: coords.state,
-        reverseGeocode,
-      });
-      if (!matches) continue;
-      distances.push(
-        haversineDistanceKm(
-          coords.latitude,
-          coords.longitude,
-          Number(row.latitude),
-          Number(row.longitude)
-        )
-      );
-    }
-    return distances;
-  }
 }

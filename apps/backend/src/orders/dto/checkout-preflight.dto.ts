@@ -92,6 +92,15 @@ export class CheckoutPreflightDto {
   @IsOptional()
   @IsBoolean()
   requires_fast_delivery?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Set when the order will require a verified (internal) delivery agent, so availability is evaluated against the same agent pool as order creation.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  verified_agent_delivery?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +126,20 @@ export class CheckoutBlockerDto {
 
   @ApiProperty({ description: 'Human-readable message (English default).' })
   message!: string;
+}
+
+export class DeliveryAvailabilityDto {
+  @ApiProperty({
+    description:
+      'Whether delivery can currently be offered. When false, clients should show "Delivery is currently unavailable." and steer to store pickup. No internal reason is ever exposed.',
+  })
+  available!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Estimated delivery time in minutes when known.',
+    nullable: true,
+  })
+  estimated_delivery_minutes!: number | null;
 }
 
 export class CheckoutItemLineDto {
@@ -193,6 +216,20 @@ export class CheckoutGroupDto {
     example: 'freemopay',
   })
   mobile_money_provider?: string | null;
+
+  @ApiPropertyOptional({
+    type: DeliveryAvailabilityDto,
+    description:
+      'Delivery availability for this seller group. Null when the requested fulfillment is pickup.',
+    nullable: true,
+  })
+  delivery_availability?: DeliveryAvailabilityDto | null;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every item in this group supports store pickup checkout.',
+  })
+  pickup_eligible?: boolean;
 
   @ApiProperty({ type: [CheckoutItemLineDto] })
   items!: CheckoutItemLineDto[];
@@ -304,4 +341,12 @@ export class CheckoutPreflightResponseDto {
     enum: ['calculated_at_checkout'],
   })
   tax_notice?: 'calculated_at_checkout' | null;
+
+  @ApiPropertyOptional({
+    type: DeliveryAvailabilityDto,
+    description:
+      'Aggregated delivery availability across all seller groups (available only when every group can deliver). Null when the requested fulfillment is pickup.',
+    nullable: true,
+  })
+  delivery_availability?: DeliveryAvailabilityDto | null;
 }

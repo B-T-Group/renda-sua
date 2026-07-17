@@ -3838,6 +3838,11 @@
         "outForDelivery": "En livraison (récupérée / en transit → en livraison)",
         "deliver": "Livrer (en livraison → livrée)"
       }
+    },
+    "deliveryAvailability": {
+      "unavailable": "La livraison est actuellement indisponible.",
+      "pickupInstead": "Vous pouvez toujours récupérer cette commande en magasin.",
+      "groupUnavailable": "Ce vendeur ne peut pas livrer pour le moment."
     }
   },
   "items": {
@@ -4875,7 +4880,12 @@
     "multipleOrdersNotice": "Vos articles seront divisés en {{count}} commandes séparées",
     "success": "Commandes créées avec succès !",
     "error": "Échec de la création des commandes : {{error}}",
-    "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes."
+    "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes.",
+    "fulfillmentTitle": "Comment souhaitez-vous recevoir votre commande ?",
+    "fulfillmentDelivery": "Livraison",
+    "fulfillmentPickup": "Retrait en magasin",
+    "pickupNotice": "Pas de frais de livraison. Récupérez votre commande dans chaque magasin dès qu'elle est prête.",
+    "pickupNoFee": "Offert (retrait en magasin)"
   },
   "agentOnboarding": {
     "title": "Comment Fonctionnent les Livraisons",

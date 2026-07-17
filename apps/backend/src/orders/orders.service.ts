@@ -9,6 +9,7 @@ import { assertMobileLocationConsentAccepted } from '../agents/agent-location-cl
 import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -375,6 +376,7 @@ export class OrdersService {
     private readonly locationsService: LocationsService,
     private readonly orderSystemJobsService: OrderSystemJobsService,
     private readonly rbacService: RbacService,
+    private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook
   ) {}
@@ -6916,6 +6918,69 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Rejects delivery orders when the availability rules fail (unless
+   * DELIVERY_AVAILABILITY_ENFORCE=false). The public error message never
+   * exposes the internal reason.
+   */
+  private async assertDeliveryAvailable(
+    inventories: any[],
+    deliveryAddress: any,
+    clientId: string,
+    requiresFastDelivery: boolean,
+    verifiedAgentDelivery: boolean
+  ): Promise<void> {
+    const inventory = inventories[0];
+    const address = inventory?.business_location?.address;
+    const result = await this.deliveryAvailabilityService.evaluate({
+      businessId: inventory?.business_location?.business?.id ?? '',
+      // Same normalization as checkout preflight so both gates agree and the
+      // country_delivery_configs radius lookup (keyed by uppercase ISO code)
+      // resolves identically.
+      sellerCountry: (address?.country ?? '').trim().toUpperCase(),
+      sellerState: (address?.state ?? '').trim(),
+      pickupLat: address?.latitude != null ? Number(address.latitude) : null,
+      pickupLon: address?.longitude != null ? Number(address.longitude) : null,
+      deliveryAddressId: deliveryAddress?.id,
+      deliveryLat:
+        deliveryAddress?.latitude != null
+          ? Number(deliveryAddress.latitude)
+          : null,
+      deliveryLon:
+        deliveryAddress?.longitude != null
+          ? Number(deliveryAddress.longitude)
+          : null,
+      deliveryCountry: deliveryAddress?.country ?? undefined,
+      deliveryState: deliveryAddress?.state ?? undefined,
+      itemIds: [
+        ...new Set(
+          inventories.map((inv) => inv?.item?.id).filter(Boolean) as string[]
+        ),
+      ],
+      inventoryIds: inventories.map((inv) => inv?.id).filter(Boolean),
+      requiresFastDelivery,
+      verifiedAgentDelivery,
+      clientId,
+      evaluatedAt: new Date(),
+    });
+    if (result.available) return;
+
+    const enforce =
+      this.configService.get<Configuration['deliveryAvailability']>(
+        'deliveryAvailability'
+      )?.enforceEnabled !== false;
+    if (!enforce) return;
+
+    throw new HttpException(
+      {
+        success: false,
+        error: 'DELIVERY_UNAVAILABLE',
+        message: 'Delivery is currently unavailable.',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   private zeroPickupDeliveryFee(currency: string): {
     deliveryFee: number;
     method: 'distance_based' | 'flat_fee';
@@ -7040,6 +7105,8 @@ export class OrdersService {
               state
               postal_code
               country
+              latitude
+              longitude
             }
             business {
               id
@@ -7246,6 +7313,19 @@ export class OrdersService {
           HttpStatus.BAD_REQUEST
         );
       }
+    }
+
+    // Hard delivery availability gate — clients must not be able to place a
+    // delivery order the platform cannot currently fulfill. The public error
+    // intentionally carries no internal reason.
+    if (fulfillmentMethod === 'delivery') {
+      await this.assertDeliveryAvailable(
+        businessInventories,
+        address,
+        client.id,
+        orderData.requires_fast_delivery === true,
+        orderData.verified_agent_delivery === true
+      );
     }
 
     // Calculate total weight for delivery fee calculation (variant weight overrides item weight)

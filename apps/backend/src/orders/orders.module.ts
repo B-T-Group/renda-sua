@@ -3,6 +3,7 @@ import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
 import { CommissionsModule } from '../commissions/commissions.module';
+import { DeliveryAvailabilityModule } from '../delivery-availability/delivery-availability.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { LocationsModule } from '../locations/locations.module';
@@ -38,6 +39,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     AdminModule,
     AgentsModule,
     DeliveryModule,
+    DeliveryAvailabilityModule,
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,

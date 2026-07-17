@@ -56,6 +56,17 @@ export const SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK =
 export const SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT =
   'inventory.checkout_dialog.auth_redirect' as const;
 
+// Delivery availability funnel (reason-blind on the client):
+// unavailable shown -> switched to pickup -> pickup order created.
+export const SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN =
+  'checkout.delivery_unavailable_shown' as const;
+
+export const SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP =
+  'checkout.switched_to_pickup' as const;
+
+export const SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP =
+  'checkout.order_created_pickup' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -73,7 +84,10 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_CARD_IMAGE_LIGHTBOX_OPEN
   | typeof SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_OPEN
   | typeof SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK
-  | typeof SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT;
+  | typeof SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT
+  | typeof SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN
+  | typeof SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP
+  | typeof SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

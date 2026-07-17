@@ -1,12 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  agentMatchesRegion,
-  haversineDistanceKm,
-} from '../common/agent-proximity.util';
+import { haversineDistanceKm } from '../common/agent-proximity.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
-import { GoogleDistanceService } from '../google/google-distance.service';
+import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -28,26 +25,6 @@ interface OfferOrderDetails {
     } | null;
   } | null;
   business?: { name?: string | null } | null;
-}
-
-interface EligibleAgentRow {
-  latitude: number | string;
-  longitude: number | string;
-  agent: {
-    id: string;
-    is_available: boolean;
-    is_verified: boolean;
-    is_internal: boolean;
-    status: string;
-    user: { id: string } | null;
-    agent_addresses: Array<{
-      address: {
-        country?: string | null;
-        state?: string | null;
-        is_primary?: boolean | null;
-      } | null;
-    }>;
-  } | null;
 }
 
 interface CandidateAgent {
@@ -116,7 +93,7 @@ export class OrderOffersService {
     private readonly commissionsService: CommissionsService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly googleDistanceService: GoogleDistanceService
+    private readonly eligibleAgentsQueryService: EligibleAgentsQueryService
   ) {}
 
   private get ttlSeconds(): number {
@@ -550,69 +527,23 @@ export class OrderOffersService {
     const businessCountry = order.business_location?.address?.country;
     const businessState = order.business_location?.address?.state;
 
-    const query = `
-      query EligibleAgents {
-        agent_locations {
-          latitude
-          longitude
-          agent {
-            id
-            is_available
-            is_verified
-            is_internal
-            status
-            user {
-              id
-            }
-            agent_addresses(where: { address: { status: { _eq: active } } }) {
-              address {
-                country
-                state
-                is_primary
-              }
-            }
-          }
-        }
+    const candidates = await this.eligibleAgentsQueryService.findEligibleAgents(
+      {
+        originLat: pickupLat,
+        originLon: pickupLon,
+        targetCountry: businessCountry ?? '',
+        targetState: businessState ?? '',
+        internalOnly: order.verified_agent_delivery,
       }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {});
-    const rows = (result?.agent_locations as EligibleAgentRow[]) ?? [];
+    );
 
-    const eligible: CandidateAgent[] = [];
-    for (const row of rows) {
-      const agent = row.agent;
-      if (!agent || !agent.user?.id) continue;
-      if (!agent.is_available || !agent.is_verified) continue;
-      if (agent.status === 'suspended') continue;
-      if (order.verified_agent_delivery && !agent.is_internal) continue;
-
-      const matches = await agentMatchesRegion({
-        agentAddresses: agent.agent_addresses,
-        agentLocation: {
-          latitude: Number(row.latitude),
-          longitude: Number(row.longitude),
-        },
-        targetCountry: businessCountry,
-        targetState: businessState,
-        reverseGeocode: async (lat, lng) => {
-          const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
-          return { country: geo.country, state: geo.state };
-        },
-      });
-      if (!matches) continue;
-
-      const distanceKm = haversineDistanceKm(
-        pickupLat,
-        pickupLon,
-        Number(row.latitude),
-        Number(row.longitude)
-      );
-      eligible.push({
-        agentId: agent.id,
-        userId: agent.user.id,
-        distanceKm,
-      });
-    }
+    const eligible: CandidateAgent[] = candidates
+      .filter((c) => c.userId != null)
+      .map((c) => ({
+        agentId: c.agentId,
+        userId: c.userId as string,
+        distanceKm: c.distanceKm,
+      }));
 
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
     withPushToken.sort((a, b) => a.distanceKm - b.distanceKm);
