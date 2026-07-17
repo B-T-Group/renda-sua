@@ -59,7 +59,7 @@ export class PdfService {
       // 4. Upload PDF to S3 and save to user_uploads
       const uploadRecord = await this.uploadReceiptToS3(
         pdfBuffer,
-        orderId,
+        orderData.order_number,
         userId
       );
 
@@ -322,17 +322,17 @@ export class PdfService {
   /**
    * Upload PDF to S3 and save record to user_uploads table
    * @param pdfBuffer PDF buffer
-   * @param orderId Order ID
+   * @param orderNumber Human-readable order number (not UUID)
    * @param userId User ID
    * @returns Promise with upload record
    */
   private async uploadReceiptToS3(
     pdfBuffer: Buffer,
-    orderId: string,
+    orderNumber: string,
     _userId: string
   ): Promise<any> {
     try {
-      const fileName = `receipt-${orderId}-${Date.now()}.pdf`;
+      const fileName = `receipt-${orderNumber}.pdf`;
       const contentType = 'application/pdf';
       const fileSize = pdfBuffer.length;
 
@@ -342,7 +342,8 @@ export class PdfService {
         file_name: fileName,
         content_type: contentType,
         file_size: fileSize,
-        note: `Receipt for order ${orderId}`,
+        note: `Receipt for order ${orderNumber}`,
+        is_approved: true,
       };
 
       const uploadResult = await this.uploadService.generateUploadUrl(

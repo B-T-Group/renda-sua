@@ -13,6 +13,8 @@ export interface UploadData {
   file_size: number;
   document_type_id: number;
   note?: string;
+  /** When true, insert as approved (system-generated docs like receipts). */
+  is_approved?: boolean;
 }
 
 export interface PresignedUrlResponse {
@@ -259,7 +261,16 @@ export class UploadService {
 
     // Save record in user_uploads table
     const insertMutation = `
-      mutation InsertUserUpload($user_id: uuid!, $document_type_id: Int!, $note: String, $content_type: String!, $key: String!, $file_name: String!, $file_size: bigint!) {
+      mutation InsertUserUpload(
+        $user_id: uuid!,
+        $document_type_id: Int!,
+        $note: String,
+        $content_type: String!,
+        $key: String!,
+        $file_name: String!,
+        $file_size: bigint!,
+        $is_approved: Boolean!
+      ) {
         insert_user_uploads_one(object: {
           user_id: $user_id,
           document_type_id: $document_type_id,
@@ -268,7 +279,7 @@ export class UploadService {
           key: $key,
           file_name: $file_name,
           file_size: $file_size,
-          is_approved: false
+          is_approved: $is_approved
         }) {
           id
           user_id
@@ -295,6 +306,7 @@ export class UploadService {
         key: key,
         file_name: uploadData.file_name,
         file_size: uploadData.file_size,
+        is_approved: uploadData.is_approved === true,
       }
     );
 
