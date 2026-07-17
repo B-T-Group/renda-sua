@@ -60,7 +60,10 @@ export class AiImageCleanupController {
   }
 
   @Post('ai-image-cleanup/results/:resultId/reject')
-  @ApiOperation({ summary: 'Reject cleaned image and keep the original' })
+  @ApiOperation({
+    summary:
+      'Reject a ready cleaned image (keep original), or dismiss a failed result from review',
+  })
   @ApiParam({ name: 'resultId', format: 'uuid' })
   async reject(@Param('resultId') resultId: string) {
     return this.cleanupService.rejectResult(resultId);

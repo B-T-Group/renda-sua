@@ -8,6 +8,7 @@ export interface AiImageCleanupResult {
   cleaned_image_url: string | null;
   status: string;
   error_message: string | null;
+  retry_of_result_id?: string | null;
 }
 
 export interface AiImageCleanupJob {

@@ -192,6 +192,10 @@ export class AiImageCleanupService implements OnModuleInit {
       );
     }
     const inserted = await this.insertRetryResult(result);
+    // Hide the superseded failure/reject so the review list only shows the new attempt.
+    if (result.status === 'failed' || result.status === 'rejected') {
+      await this.markResult(result.id, 'rejected');
+    }
     await this.tokens.recordCleanupUsage({
       businessId,
       userId,
@@ -541,11 +545,8 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private async maybeCompleteJob(jobId: string): Promise<void> {
     const job = await this.loadJob(jobId);
-    const open = (job.results ?? []).some(
-      (r) =>
-        r.status === 'queued' ||
-        r.status === 'processing' ||
-        r.status === 'ready'
+    const open = (job.results ?? []).some((r) =>
+      ['queued', 'processing', 'ready', 'failed'].includes(r.status)
     );
     if (open) return;
     await this.hasura.executeMutation(Q.UPDATE_JOB, {

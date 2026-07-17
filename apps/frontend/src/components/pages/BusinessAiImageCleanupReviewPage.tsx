@@ -57,24 +57,36 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     void load();
   }, [load]);
 
+  const snackForAction = (action: 'accept' | 'reject' | 'retry' | 'dismiss') => {
+    if (action === 'accept') {
+      return t('business.images.asyncCleanup.acceptSuccess', 'Image updated');
+    }
+    if (action === 'dismiss') {
+      return t(
+        'business.images.asyncCleanup.dismissSuccess',
+        'Removed from review'
+      );
+    }
+    if (action === 'reject') {
+      return t('business.images.asyncCleanup.rejectSuccess', 'Kept original');
+    }
+    return t('business.images.asyncCleanup.retryStarted', 'Retry started');
+  };
+
   const runAction = async (
     resultId: string,
-    action: 'accept' | 'reject' | 'retry'
+    action: 'accept' | 'reject' | 'retry' | 'dismiss'
   ) => {
     setBusyId(resultId);
     try {
       if (action === 'accept') await acceptResult(resultId);
-      else if (action === 'reject') await rejectResult(resultId);
-      else await retryResult(resultId);
+      else if (action === 'reject' || action === 'dismiss') {
+        await rejectResult(resultId);
+      } else {
+        await retryResult(resultId);
+      }
       await load();
-      enqueueSnackbar(
-        action === 'accept'
-          ? t('business.images.asyncCleanup.acceptSuccess', 'Image updated')
-          : action === 'reject'
-            ? t('business.images.asyncCleanup.rejectSuccess', 'Kept original')
-            : t('business.images.asyncCleanup.retryStarted', 'Retry started'),
-        { variant: 'success' }
-      );
+      enqueueSnackbar(snackForAction(action), { variant: 'success' });
     } catch (e: any) {
       enqueueSnackbar(
         e?.message ||
@@ -93,7 +105,10 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     }
   };
 
-  const readyCount = results.filter((r) => r.status === 'ready').length;
+  const visibleResults = results.filter((r) =>
+    isVisibleCleanupResult(r, results)
+  );
+  const readyCount = visibleResults.filter((r) => r.status === 'ready').length;
 
   if (loading) {
     return (
@@ -142,7 +157,15 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
       ) : null}
 
       <Stack spacing={2}>
-        {results.map((result) => (
+        {visibleResults.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'business.images.asyncCleanup.emptyReview',
+              'Nothing left to review for this cleanup.'
+            )}
+          </Typography>
+        ) : null}
+        {visibleResults.map((result) => (
           <Paper key={result.id} variant="outlined" sx={{ p: 2 }}>
             <Box
               sx={{
@@ -248,19 +271,31 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                 </>
               ) : null}
               {result.status === 'failed' || result.status === 'rejected' ? (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled={!!busyId}
-                  startIcon={
-                    busyId === result.id ? (
-                      <CircularProgress size={14} color="inherit" />
-                    ) : undefined
-                  }
-                  onClick={() => void runAction(result.id, 'retry')}
-                >
-                  {t('business.images.asyncCleanup.retry', 'Retry')}
-                </Button>
+                <>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={!!busyId}
+                    startIcon={
+                      busyId === result.id ? (
+                        <CircularProgress size={14} color="inherit" />
+                      ) : undefined
+                    }
+                    onClick={() => void runAction(result.id, 'retry')}
+                  >
+                    {t('business.images.asyncCleanup.retry', 'Retry')}
+                  </Button>
+                  {result.status === 'failed' ? (
+                    <Button
+                      color="error"
+                      size="small"
+                      disabled={!!busyId}
+                      onClick={() => void runAction(result.id, 'dismiss')}
+                    >
+                      {t('business.images.asyncCleanup.dismiss', 'Dismiss')}
+                    </Button>
+                  ) : null}
+                </>
               ) : null}
             </Stack>
           </Paper>
@@ -273,5 +308,15 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     </Container>
   );
 };
+
+function isVisibleCleanupResult(
+  result: AiImageCleanupResult,
+  all: AiImageCleanupResult[]
+): boolean {
+  if (result.status === 'accepted') return false;
+  if (all.some((r) => r.retry_of_result_id === result.id)) return false;
+  if (result.status === 'rejected' && !result.cleaned_image_url) return false;
+  return true;
+}
 
 export default BusinessAiImageCleanupReviewPage;
