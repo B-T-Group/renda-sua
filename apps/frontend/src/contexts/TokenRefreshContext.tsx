@@ -1,6 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import React, { createContext, ReactNode, useContext, useEffect } from 'react';
-import { tokenService } from '../services/tokenService';
+import { personaAuthorizationParams, tokenService } from '../services/tokenService';
 
 interface TokenRefreshContextType {
   refreshToken: () => Promise<string | null>;
@@ -26,7 +26,7 @@ export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({
     // Setup initial token refresh if user is authenticated
     if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
       auth0
-        .getAccessTokenSilently()
+        .getAccessTokenSilently(personaAuthorizationParams())
         .then((token) => {
           if (token) {
             tokenService.scheduleTokenRefresh(token);

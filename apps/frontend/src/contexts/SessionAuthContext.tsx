@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 import { environment } from '../config/environment';
+import { personaAuthorizationParams } from '../services/tokenService';
 
 type JwtPayload = Record<string, any>;
 
@@ -108,6 +109,8 @@ async function refreshWithAuth0(refreshToken: string): Promise<{
   token_type: string;
   expires_in: number;
 }> {
+  const activePersona = personaAuthorizationParams().authorizationParams
+    ?.active_persona;
   const res = await fetch(`https://${environment.auth0.domain}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -115,6 +118,7 @@ async function refreshWithAuth0(refreshToken: string): Promise<{
       grant_type: 'refresh_token',
       client_id: environment.auth0.clientId,
       refresh_token: refreshToken,
+      ...(activePersona ? { active_persona: activePersona } : {}),
     }),
   });
   if (!res.ok) {
@@ -186,7 +190,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const getAccessToken = useCallback(async () => {
     if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
-      return await auth0.getAccessTokenSilently();
+      return await auth0.getAccessTokenSilently(personaAuthorizationParams());
     }
 
     const session = readPasswordlessSession();

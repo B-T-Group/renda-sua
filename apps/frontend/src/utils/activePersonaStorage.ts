@@ -33,3 +33,12 @@ export function activePersonaHeaderForUser(userId: string): string | undefined {
   if (s?.userId === userId && s.persona) return s.persona;
   return undefined;
 }
+
+/**
+ * Stored persona slug for silent token refreshes. The Auth0 action validates
+ * it against the user's allowed personas, so a mismatched value falls back
+ * safely server-side.
+ */
+export function readStoredActivePersonaSlug(): PersonaSlug | undefined {
+  return readStoredActivePersona()?.persona;
+}

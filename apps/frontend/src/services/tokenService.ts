@@ -1,4 +1,17 @@
 import { Auth0ContextInterface } from '@auth0/auth0-react';
+import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
+
+/**
+ * Silent refreshes must re-send the stored persona, otherwise the Auth0
+ * action falls back to a default role and Hasura queries run with the
+ * wrong permissions until the user logs out and back in.
+ */
+export function personaAuthorizationParams(): {
+  authorizationParams?: { active_persona: string };
+} {
+  const persona = readStoredActivePersonaSlug();
+  return persona ? { authorizationParams: { active_persona: persona } } : {};
+}
 
 export interface TokenRefreshService {
   refreshToken: () => Promise<string | null>;
@@ -24,7 +37,10 @@ class TokenService implements TokenRefreshService {
 
     try {
       console.log('Refreshing token...');
-      const token = await this.auth0.getAccessTokenSilently({ cacheMode: 'off' });
+      const token = await this.auth0.getAccessTokenSilently({
+        cacheMode: 'off',
+        ...personaAuthorizationParams(),
+      });
       
       if (token) {
         console.log('Token refreshed successfully');
@@ -52,7 +68,9 @@ class TokenService implements TokenRefreshService {
 
     try {
       // First try to get cached token
-      const token = await this.auth0.getAccessTokenSilently();
+      const token = await this.auth0.getAccessTokenSilently(
+        personaAuthorizationParams()
+      );
       
       // Check if token is expired or will expire soon
       if (this.isTokenExpired(token)) {
@@ -134,11 +152,16 @@ export const createTokenRefreshInterceptor = (
       
       try {
         // Clear cache and get fresh token
-        await getAccessTokenSilently({ cacheMode: 'off' });
-        
+        await getAccessTokenSilently({
+          cacheMode: 'off',
+          ...personaAuthorizationParams(),
+        });
+
         // Retry the original request
         if (error.config) {
-          const newToken = await getAccessTokenSilently();
+          const newToken = await getAccessTokenSilently(
+            personaAuthorizationParams()
+          );
           error.config.headers.Authorization = `Bearer ${newToken}`;
           
           // Return a new request with the refreshed token
