@@ -19,6 +19,7 @@ import {
   BoldsignClientService,
   type RemindDocumentResult,
 } from './boldsign-client.service';
+import { buildMerchantContractFormFields } from './boldsign-merchant-form-fields';
 import {
   canTransitionContractStatus,
   mapBoldSignEventToStatus,
@@ -30,6 +31,13 @@ import {
   ContractStatus,
   ContractStatusSnapshot,
 } from './business-contracts.types';
+
+interface ContractSignerContext {
+  name: string;
+  email: string;
+  locale: 'en' | 'fr';
+  existingFormFields: ReturnType<typeof buildMerchantContractFormFields>;
+}
 
 @Injectable()
 export class BusinessContractsService {
@@ -342,7 +350,7 @@ export class BusinessContractsService {
   private async sendBoldSignForRow(
     contract: BusinessContractRow,
     template?: Awaited<ReturnType<BusinessContractsDatabaseService['getActiveTemplate']>>,
-    signer?: Awaited<ReturnType<BusinessContractsService['getSignerForBusiness']>>
+    signer?: ContractSignerContext
   ): Promise<BusinessContractRow> {
     const blocked = await this.resolveInFlightConflict(contract);
     if (blocked) return blocked;
@@ -350,8 +358,7 @@ export class BusinessContractsService {
     const resolvedTemplate =
       template ?? (await this.db.getTemplateById(contract.contract_template_id));
     const resolvedSigner =
-      signer ??
-      (await this.getSignerForBusiness(contract.business_id));
+      signer ?? (await this.getSignerForBusiness(contract.business_id));
     if (!resolvedTemplate) {
       throw new BadRequestException('Contract template not found');
     }
@@ -371,6 +378,7 @@ export class BusinessContractsService {
         message: 'Please review and sign your merchant partnership agreement.',
         expirationDays: this.config.expirationDays,
         reminderIntervalDays: this.config.reminderIntervalDays,
+        existingFormFields: resolvedSigner.existingFormFields,
       });
       return await this.markContractSent(contract, documentId);
     } catch (error: any) {
@@ -613,16 +621,38 @@ export class BusinessContractsService {
     );
   }
 
-  private async getSignerForBusiness(businessId: string) {
+  private async getSignerForBusiness(
+    businessId: string
+  ): Promise<ContractSignerContext> {
     const query = `
-      query Signer($id: uuid!) {
+      query ContractSigner($id: uuid!) {
         businesses_by_pk(id: $id) {
           name
-          user { email first_name last_name preferred_language }
+          user {
+            email
+            first_name
+            last_name
+            preferred_language
+            phone_number
+          }
+          business_addresses(
+            where: { address: { status: { _eq: active } } }
+            order_by: { created_at: asc }
+            limit: 1
+          ) {
+            address {
+              address_line_1
+              address_line_2
+              city
+              state
+            }
+          }
         }
       }
     `;
-    const res = await this.hasuraSystemService.executeQuery(query, { id: businessId });
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      id: businessId,
+    });
     const biz = res.businesses_by_pk;
     if (!biz?.user?.email) {
       throw new BadRequestException('Business owner email required for contract');
@@ -631,7 +661,23 @@ export class BusinessContractsService {
       `${biz.user.first_name ?? ''} ${biz.user.last_name ?? ''}`.trim() ||
       biz.name;
     const locale = biz.user.preferred_language?.startsWith('fr') ? 'fr' : 'en';
-    return { name, email: biz.user.email, locale };
+    const address = biz.business_addresses?.[0]?.address;
+    const addressLine1 = [address?.address_line_1, address?.address_line_2]
+      .filter((part: string | null | undefined) => !!part?.trim())
+      .join(', ');
+    return {
+      name,
+      email: biz.user.email,
+      locale,
+      existingFormFields: buildMerchantContractFormFields({
+        companyName: biz.name,
+        addressLine1: addressLine1 || address?.city,
+        state: address?.state,
+        phone: biz.user.phone_number,
+        email: biz.user.email,
+        signerName: name,
+      }),
+    };
   }
 
   private resolveTemplateId(

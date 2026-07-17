@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import type { BoldSignConfig, Configuration } from '../config/configuration';
+import type { BoldSignExistingFormField } from './boldsign-merchant-form-fields';
 
 export interface SendFromTemplateParams {
   templateId: string;
@@ -11,6 +12,7 @@ export interface SendFromTemplateParams {
   message?: string;
   expirationDays?: number;
   reminderIntervalDays?: number;
+  existingFormFields?: BoldSignExistingFormField[];
 }
 
 export type RemindDocumentResult =
@@ -41,23 +43,37 @@ export class BoldsignClientService {
   async sendUsingTemplate(
     params: SendFromTemplateParams
   ): Promise<{ documentId: string }> {
-    const body = new URLSearchParams();
-    body.set('title', params.title);
-    if (params.message) body.set('message', params.message);
-    body.set('roles[0][roleIndex]', '1');
-    body.set('roles[0][signerName]', params.signerName);
-    body.set('roles[0][signerEmail]', params.signerEmail);
-    if (params.expirationDays) {
-      body.set('expiryDays', String(params.expirationDays));
+    const role: Record<string, unknown> = {
+      roleIndex: 1,
+      signerName: params.signerName,
+      signerEmail: params.signerEmail,
+    };
+    if (params.existingFormFields?.length) {
+      role.existingFormFields = params.existingFormFields;
     }
+
+    const body: Record<string, unknown> = {
+      title: params.title,
+      roles: [role],
+    };
+    if (params.message) body.message = params.message;
+    if (params.expirationDays) body.expiryDays = params.expirationDays;
     if (params.reminderIntervalDays) {
-      body.set('reminderSettings[reminderDays]', String(params.reminderIntervalDays));
+      body.reminderSettings = {
+        enableAutoReminder: true,
+        reminderDays: params.reminderIntervalDays,
+      };
     }
 
     const res = await this.http.post(
       `/v1/template/send?templateId=${encodeURIComponent(params.templateId)}`,
-      body.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      body,
+      {
+        headers: {
+          'Content-Type':
+            'application/json;odata.metadata=minimal;odata.streaming=true',
+        },
+      }
     );
     const documentId = res.data?.documentId ?? res.data?.document?.documentId;
     if (!documentId) {
