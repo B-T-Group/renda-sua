@@ -317,15 +317,13 @@ describe('OrdersService', () => {
   describe('completePreparation', () => {
     it('does not capture an authorized pickup payment before handoff', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...mockOrder,
-          current_status: 'confirmed',
-          fulfillment_method: 'pickup',
-          payment_timing: 'pay_now',
-          payment_source: 'credit_card',
-          payment_status: 'authorized',
-        },
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        ...mockOrder,
+        current_status: 'confirmed',
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_now',
+        payment_source: 'credit_card',
+        payment_status: 'authorized',
       });
       orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
