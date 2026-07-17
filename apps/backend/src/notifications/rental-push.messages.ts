@@ -66,6 +66,75 @@ export function buildRentalPeriodEndedPush(params: {
   };
 }
 
+export function buildRentalBookingReservedPush(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  forBusiness: boolean;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  if (params.forBusiness) {
+    return {
+      title: fr ? 'Location réservée' : 'Rental reserved',
+      body: fr
+        ? `${params.rentalItemName} (${params.bookingNumber}) est réservé. Le client paiera au retrait.`
+        : `${params.rentalItemName} (${params.bookingNumber}) is reserved. The client will pay at pickup.`,
+    };
+  }
+  return {
+    title: fr ? 'Location réservée' : 'Rental reserved',
+    body: fr
+      ? `${params.rentalItemName} (${params.bookingNumber}) est réservé. Payez au retrait pour commencer.`
+      : `${params.rentalItemName} (${params.bookingNumber}) is reserved. Pay at pickup to start.`,
+  };
+}
+
+export function buildRentalBookingCancelledPush(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  cancelledBy: 'client' | 'business' | 'system';
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  if (params.cancelledBy === 'system') {
+    return {
+      title: fr ? 'Réservation expirée' : 'Reservation expired',
+      body: fr
+        ? `La réservation de ${params.rentalItemName} (${params.bookingNumber}) a expiré car le paiement n'a pas été effectué au retrait. Aucun frais.`
+        : `The reservation for ${params.rentalItemName} (${params.bookingNumber}) expired because payment was not completed at pickup. No charge.`,
+    };
+  }
+  const byClient = params.cancelledBy === 'client';
+  return {
+    title: fr ? 'Location annulée' : 'Rental cancelled',
+    body: fr
+      ? `${params.rentalItemName} (${params.bookingNumber}) a été annulée par ${byClient ? 'le client' : 'le commerce'}. Aucun frais.`
+      : `${params.rentalItemName} (${params.bookingNumber}) was cancelled by the ${byClient ? 'client' : 'business'}. No charge.`,
+  };
+}
+
+export function buildRentalEndingSoonPush(params: {
+  rentalItemName: string;
+  forBusiness: boolean;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  if (params.forBusiness) {
+    return {
+      title: fr ? 'Fin de location dans 30 min' : 'Rental ends in 30 min',
+      body: fr
+        ? `La location de ${params.rentalItemName} se termine dans 30 minutes. Préparez le retour.`
+        : `The rental of ${params.rentalItemName} ends in 30 minutes. Prepare for the return.`,
+    };
+  }
+  return {
+    title: fr ? 'Fin de location dans 30 min' : 'Rental ends in 30 min',
+    body: fr
+      ? `Votre location de ${params.rentalItemName} se termine dans 30 minutes. Retournez l'article à temps pour éviter des frais supplémentaires.`
+      : `Your rental of ${params.rentalItemName} ends in 30 minutes. Return the item on time to avoid extra charges.`,
+  };
+}
+
 export function buildRentalBookingRequestPush(params: {
   rentalItemName: string;
   preferredLanguage?: string | null;

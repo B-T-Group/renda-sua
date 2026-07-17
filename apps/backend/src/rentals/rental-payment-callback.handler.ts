@@ -23,6 +23,13 @@ export class RentalPaymentCallbackHandler implements PaymentCallbackHandler {
     await this.rentalsService.processRentalBookingPayment(transaction);
   }
 
+  /** Stripe manual-capture authorization (contract + deposit held on card). */
+  async onPaymentAuthorized(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    await this.rentalsService.processRentalBookingAuthorization(transaction);
+  }
+
   async onPaymentFailure(
     transaction: MobilePaymentTransaction,
     _message: string

@@ -40,6 +40,7 @@ import { ItemActivationValidationService } from '../image-validation/item-activa
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
 import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
 import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payments-database.service';
 import { StripeService } from '../stripe-payments/stripe.service';
@@ -49,6 +50,12 @@ import { resolveRentalListingRejectionReasons } from '../common/moderation-rejec
 import * as Q from './rentals-queries';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
+
+/** Default security deposit = 8x the listing hourly rate (business can overwrite). */
+const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
+
+/** Stripe authorizations expire after ~7 days; keep bookings safely inside that window. */
+const RENTAL_STRIPE_MAX_BOOKING_DAYS = 6;
 
 export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
 
@@ -61,6 +68,17 @@ export interface RentalBookingActionResult {
   payment_transaction_id?: string;
   confirmed?: boolean;
   paymentPending?: boolean;
+  /** Booking is capacity-held without payment; contract is collected at pickup. */
+  reserved?: boolean;
+}
+
+export interface RentalReturnSettlement {
+  contract: number;
+  deposit: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  /** Final Stripe capture: contract + overtime capped by the deposit. */
+  stripeCharge: number;
 }
 
 export type RentalListingsSort =
@@ -302,6 +320,7 @@ export class RentalsService {
     private readonly stripeCheckoutService: StripeCheckoutService,
     private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService,
     private readonly stripeService: StripeService,
+    private readonly stripeCaptureService: StripeCaptureService,
     private readonly rentalListingAiReviewService: RentalListingAiReviewService
   ) {}
 
@@ -951,6 +970,25 @@ export class RentalsService {
       user.id,
       snap.currency
     );
+    const rail = await this.paymentRoutingService.resolveRailForUser(user.id);
+    if (rail === 'stripe') {
+      this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
+      const deposit =
+        Math.max(0, Number(booking.security_deposit_amount) || 0) ||
+        this.snapshotSecurityDeposit(snap);
+      return this.initiateStripeRentalPayment({
+        bookingId,
+        bookingNumber,
+        amount: Number((total + deposit).toFixed(2)),
+        currency: snap.currency,
+        clientAccountId: clientAccount.id,
+        userId: user.id,
+        email: user.email,
+        stripePaymentMethod: options?.stripe_payment_method,
+      });
+    }
+    // Legacy pay-now retry for proposed non-Stripe bookings created before
+    // reserve-and-pay-at-pickup: wallet if the balance covers, else mobile money.
     const availableBalance = Number(clientAccount?.available_balance ?? 0);
     if (availableBalance >= total) {
       await this.placeHoldForBooking(
@@ -959,6 +997,7 @@ export class RentalsService {
         total,
         snap.currency
       );
+      await this.markBookingPaymentStatus(bookingId, 'paid');
       await this.finalizeRentalBookingConfirmation(
         bookingId,
         booking.rental_request_id,
@@ -980,7 +1019,6 @@ export class RentalsService {
       userId: user.id,
       phoneNumber: user.phone_number || '',
       email: user.email,
-      stripePaymentMethod: options?.stripe_payment_method,
     });
   }
 
@@ -1003,8 +1041,12 @@ export class RentalsService {
     if (req.status === 'available') {
       const booking = req.rental_booking as { id?: string; status?: string } | null | undefined;
       if (booking?.id && booking.status === 'proposed') {
+        await this.cancelStripeAuthorizationIfAny(
+          await this.fetchBooking(booking.id)
+        );
         await this.patchBooking(booking.id, {
           status: 'cancelled',
+          payment_status: 'cancelled',
           contract_expires_at: null,
         });
         await this.logHistory(
@@ -1079,6 +1121,10 @@ export class RentalsService {
     if (Number.isNaN(dayPrice) || dayPrice < 0) {
       throw new HttpException('Invalid base_price_per_day', HttpStatus.BAD_REQUEST);
     }
+    const securityDeposit = this.resolveListingSecurityDeposit(
+      dto.security_deposit_amount,
+      price
+    );
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
     const row = await this.hasuraUserService.executeMutation<{
       insert_rental_location_listings_one: { id: string } | null;
@@ -1090,6 +1136,7 @@ export class RentalsService {
         dropoff_instructions: dto.dropoff_instructions?.trim() ?? '',
         base_price_per_hour: price,
         base_price_per_day: dayPrice,
+        security_deposit_amount: securityDeposit,
         min_rental_hours: minHours,
         max_rental_hours: maxHours,
         units_available: dto.units_available,
@@ -1301,6 +1348,12 @@ export class RentalsService {
       }
       out.base_price_per_day = p;
     }
+    if (dto.security_deposit_amount !== undefined) {
+      out.security_deposit_amount = this.resolveListingSecurityDeposit(
+        dto.security_deposit_amount,
+        0
+      );
+    }
     if (dto.min_rental_hours !== undefined) {
       out.min_rental_hours = dto.min_rental_hours;
     }
@@ -1314,6 +1367,26 @@ export class RentalsService {
       out.is_active = dto.is_active;
     }
     return out;
+  }
+
+  /** Explicit deposit when provided, otherwise 8x the hourly rate. */
+  private resolveListingSecurityDeposit(
+    raw: number | undefined,
+    hourlyRate: number
+  ): number {
+    if (raw !== undefined) {
+      const v = Number(raw);
+      if (Number.isNaN(v) || v < 0) {
+        throw new HttpException(
+          'Invalid security_deposit_amount',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return Number(v.toFixed(2));
+    }
+    return Number(
+      (hourlyRate * RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2)
+    );
   }
 
   private async assertListingMinMaxAfterPatch(
@@ -1666,33 +1739,130 @@ export class RentalsService {
       req,
       this.normalizeUnitsRequested(req.units_requested)
     );
-    const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
-    const total = Number(snap.total);
-
-    const clientAccount = await this.hasuraSystemService.getAccount(userId, snap.currency);
-    const availableBalance = Number(clientAccount?.available_balance ?? 0);
-
-    if (availableBalance >= total) {
-      await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
-      await this.finalizeRentalBookingConfirmation(bookingId, requestId, userId);
-      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
-    }
-
     if (!bookingNumber) {
       throw new HttpException('Missing booking_number for this rental booking', HttpStatus.BAD_REQUEST);
     }
-
-    return this.initiateUnpaidRentalPayment({
+    return this.acceptProposedBookingByRail({
       bookingId,
       bookingNumber,
-      amount: total,
-      currency: snap.currency,
-      clientAccountId: clientAccount.id,
+      requestId,
+      req,
       userId,
-      phoneNumber,
       email,
       stripePaymentMethod,
     });
+  }
+
+  /**
+   * Rail-specific acceptance of a proposed contract:
+   * - Stripe: authorize contract + security deposit now (manual capture);
+   *   booking confirms on the `authorized` webhook.
+   * - Wallet / mobile money: reserve without paying; contract is collected at pickup.
+   */
+  private async acceptProposedBookingByRail(params: {
+    bookingId: string;
+    bookingNumber: string;
+    requestId: string;
+    req: any;
+    userId: string;
+    email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
+  }): Promise<RentalBookingActionResult> {
+    const snap = params.req.rental_pricing_snapshot as RentalPricingSnapshotDto;
+    const rail = await this.paymentRoutingService.resolveRailForUser(params.userId);
+    if (rail !== 'stripe') {
+      return this.reserveRentalBookingForPickup(
+        params.bookingId,
+        params.requestId,
+        params.userId
+      );
+    }
+    this.assertStripeRentalEndWithinAuthWindow(
+      this.requestWindowEnvelope(params.req).endAt
+    );
+    const total = Number(snap.total);
+    const deposit = this.snapshotSecurityDeposit(snap);
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      params.userId,
+      snap.currency
+    );
+    return this.initiateStripeRentalPayment({
+      bookingId: params.bookingId,
+      bookingNumber: params.bookingNumber,
+      amount: Number((total + deposit).toFixed(2)),
+      currency: snap.currency,
+      clientAccountId: clientAccount.id,
+      userId: params.userId,
+      email: params.email,
+      stripePaymentMethod: params.stripePaymentMethod,
+    });
+  }
+
+  /** Wallet / mobile money: hold capacity without payment; pay at pickup. */
+  private async reserveRentalBookingForPickup(
+    bookingId: string,
+    requestId: string,
+    userId: string
+  ): Promise<RentalBookingActionResult> {
+    await this.patchBooking(bookingId, {
+      status: 'reserved',
+      contract_expires_at: null,
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'pending',
+    });
+    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+      id: requestId,
+      status: 'booked',
+    });
+    await this.logHistory(
+      bookingId,
+      'reserved',
+      'proposed',
+      userId,
+      'client',
+      'Reserved without payment - contract due at pickup'
+    );
+    await this.notifyRentalBookingReserved(bookingId);
+    return {
+      success: true,
+      bookingId,
+      payment_rail: 'mobile_money',
+      reserved: true,
+    };
+  }
+
+  private async notifyRentalBookingReserved(bookingId: string): Promise<void> {
+    try {
+      const booking = await this.fetchBooking(bookingId);
+      await this.notificationsService.sendRentalBookingReservedPush({
+        clientUserId: booking?.client?.user_id,
+        businessUserId: booking?.business?.user_id,
+        rentalItemName:
+          booking?.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId,
+        bookingNumber: booking?.booking_number ?? '',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `notifyRentalBookingReserved: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  /** Stripe rail: the booking must end before the card authorization could expire. */
+  private assertStripeRentalEndWithinAuthWindow(endAtIso: string): void {
+    const limit =
+      Date.now() + RENTAL_STRIPE_MAX_BOOKING_DAYS * 24 * 60 * 60 * 1000;
+    if (new Date(endAtIso).getTime() > limit) {
+      throw new HttpException(
+        {
+          success: false,
+          message: `Card payments support rentals ending within ${RENTAL_STRIPE_MAX_BOOKING_DAYS} days`,
+          error: 'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   private async createLegacyRentalBooking(
@@ -1712,36 +1882,10 @@ export class RentalsService {
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
-    const clientAccount = await this.hasuraSystemService.getAccount(userId, snap.currency);
-    const availableBalance = Number(clientAccount?.available_balance ?? 0);
-
-    // Wallet path: insert a confirmed booking immediately.
-    if (availableBalance >= total) {
-      const bookingRow = await this.insertBookingRow(req, clientId, snap, total);
-      const bookingId = bookingRow.insert_rental_bookings_one.id;
-      try {
-        await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
-      } catch (e: any) {
-        await this.deleteBooking(bookingId);
-        throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
-      }
-
-      await this.finalizeRentalBookingConfirmation(
-        bookingId,
-        requestId,
-        userId,
-        null,
-        'Booking created'
-      );
-      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
-    }
-
-    // Payment path: insert a proposed booking and initiate payment by rail.
     const contractExpiresAt = req.expires_at as string | null | undefined;
     if (!contractExpiresAt) {
       throw new HttpException('Missing contract_expires_at', HttpStatus.BAD_REQUEST);
     }
-
     const bookingRow = await this.insertProposedBookingRow(
       req,
       clientId,
@@ -1751,16 +1895,13 @@ export class RentalsService {
     );
     const bookingId = bookingRow.insert_rental_bookings_one.id;
     const bookingNumber = bookingRow.insert_rental_bookings_one.booking_number;
-
     try {
-      return await this.initiateUnpaidRentalPayment({
+      return await this.acceptProposedBookingByRail({
         bookingId,
         bookingNumber,
-        amount: total,
-        currency: snap.currency,
-        clientAccountId: clientAccount.id,
+        requestId,
+        req,
         userId,
-        phoneNumber,
         email,
         stripePaymentMethod,
       });
@@ -1771,7 +1912,7 @@ export class RentalsService {
   }
 
   /**
-   * Start Stripe Checkout/PaymentSheet or mobile-money push for an unpaid proposed booking.
+   * Mobile-money push for an unpaid proposed booking (legacy pay-now retry path).
    */
   private async initiateUnpaidRentalPayment(params: {
     bookingId: string;
@@ -1782,12 +1923,7 @@ export class RentalsService {
     userId: string;
     phoneNumber: string;
     email?: string | null;
-    stripePaymentMethod?: 'payment_sheet';
   }): Promise<RentalBookingActionResult> {
-    const rail = await this.paymentRoutingService.resolveRailForUser(params.userId);
-    if (rail === 'stripe') {
-      return this.initiateStripeRentalPayment(params);
-    }
     const momoPending =
       await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
         params.bookingNumber
@@ -1899,7 +2035,7 @@ export class RentalsService {
       entityId: params.bookingNumber,
       bookingId: params.bookingId,
       customerEmail: params.email ?? undefined,
-      captureMethod: 'automatic',
+      captureMethod: 'manual',
     });
     if (!intent.clientSecret) {
       throw new HttpException(
@@ -1934,7 +2070,7 @@ export class RentalsService {
       entityId: params.bookingNumber,
       bookingId: params.bookingId,
       customerEmail: params.email ?? undefined,
-      captureMethod: 'automatic',
+      captureMethod: 'manual',
     });
     if (!checkout.paymentUrl) {
       throw new HttpException(
@@ -2092,9 +2228,9 @@ export class RentalsService {
   }
 
   /**
-   * Called from mobile payment webhooks after the client account is credited.
-   * It confirms the existing `rental_bookings` proposed row, places a hold,
-   * and generates the client PIN.
+   * Called from payment webhooks after the client account is credited.
+   * Confirms unpaid `proposed`/`reserved` bookings (hold + PIN) and settles
+   * pending overtime on `awaiting_return` bookings.
    */
   async processRentalBookingPayment(transaction: any): Promise<void> {
     const bookingNumber = transaction?.entity_id || transaction?.reference;
@@ -2102,7 +2238,6 @@ export class RentalsService {
       this.logger.warn('processRentalBookingPayment: missing bookingNumber');
       return;
     }
-
     const booking = await this.fetchBookingByBookingNumber(bookingNumber);
     if (!booking) {
       this.logger.warn(
@@ -2110,12 +2245,25 @@ export class RentalsService {
       );
       return;
     }
-
-    if (booking.status !== 'proposed') {
-      // Idempotency: already confirmed/cancelled.
+    if (booking.status === 'proposed' || booking.status === 'reserved') {
+      await this.confirmBookingAfterContractPayment(booking, bookingNumber);
       return;
     }
+    if (
+      booking.status === 'awaiting_return' &&
+      Number(booking.overtime_amount) > 0
+    ) {
+      await this.finalizeRentalOvertimeAfterPayment(booking);
+      return;
+    }
+    // Idempotency: already confirmed / cancelled / completed.
+  }
 
+  /** Wallet credit landed: hold the contract, mark paid, confirm + PIN. */
+  private async confirmBookingAfterContractPayment(
+    booking: any,
+    bookingNumber: string
+  ): Promise<void> {
     const hold = await this.getHold(booking.id);
     if (!hold || hold.status !== 'active') {
       await this.placeHoldForBooking(
@@ -2125,7 +2273,6 @@ export class RentalsService {
         booking.currency
       );
     }
-
     const clientUserId = booking.client?.user_id as string | undefined;
     if (!clientUserId) {
       this.logger.warn(
@@ -2133,14 +2280,65 @@ export class RentalsService {
       );
       return;
     }
-
+    await this.markBookingPaymentStatus(booking.id, 'paid');
     await this.finalizeRentalBookingConfirmation(
       booking.id,
       booking.rental_request_id,
-      clientUserId
+      clientUserId,
+      booking.status,
+      booking.status === 'reserved'
+        ? 'Contract paid at pickup'
+        : 'Booking confirmed'
     );
   }
 
+  /**
+   * Called from Stripe webhooks when a manual-capture authorization succeeds:
+   * confirm the booking without moving wallet funds (capture happens at return).
+   */
+  async processRentalBookingAuthorization(transaction: any): Promise<void> {
+    const bookingNumber = transaction?.entity_id || transaction?.reference;
+    if (!bookingNumber) {
+      this.logger.warn('processRentalBookingAuthorization: missing bookingNumber');
+      return;
+    }
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking || booking.status !== 'proposed') {
+      return;
+    }
+    const clientUserId = booking.client?.user_id as string | undefined;
+    if (!clientUserId) {
+      this.logger.warn(
+        `processRentalBookingAuthorization: missing client user_id for ${bookingNumber}`
+      );
+      return;
+    }
+    await this.patchBooking(booking.id, {
+      payment_status: 'authorized',
+      authorized_amount: Number(transaction.amount),
+      payment_timing: 'pay_now',
+    });
+    await this.finalizeRentalBookingConfirmation(
+      booking.id,
+      booking.rental_request_id,
+      clientUserId,
+      'proposed',
+      'Card authorized (contract + deposit)'
+    );
+  }
+
+  private async markBookingPaymentStatus(
+    bookingId: string,
+    status: 'pending' | 'authorized' | 'paid' | 'cancelled'
+  ): Promise<void> {
+    await this.patchBooking(bookingId, { payment_status: status });
+  }
+
+  /**
+   * Free cancellation before the rental starts, for client or business:
+   * releases the wallet hold, cancels any Stripe authorization, and frees
+   * the reserved capacity. Not available once the rental is active.
+   */
   async cancelRentalBooking(bookingId: string) {
     const user = await this.hasuraUserService.getUser();
     const booking = await this.fetchBooking(bookingId);
@@ -2155,14 +2353,80 @@ export class RentalsService {
     if (!isClient && !isBusiness) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
-    if (booking.status !== 'confirmed') {
-      throw new HttpException('Only confirmed bookings can be cancelled this way', HttpStatus.BAD_REQUEST);
+    const cancellable =
+      (booking.status === 'confirmed' || booking.status === 'reserved') &&
+      !booking.actual_start_at;
+    if (!cancellable) {
+      throw new HttpException(
+        'Only reserved or confirmed bookings can be cancelled before the rental starts',
+        HttpStatus.BAD_REQUEST
+      );
     }
     await this.releaseHoldIfNeeded(bookingId, booking);
-    await this.updateBookingStatus(bookingId, 'cancelled');
-    await this.logHistory(bookingId, 'cancelled', 'confirmed', user.id, isClient ? 'client' : 'business', 'Cancelled');
+    await this.cancelStripeAuthorizationIfAny(booking);
+    await this.patchBooking(bookingId, {
+      status: 'cancelled',
+      payment_status: 'cancelled',
+      contract_expires_at: null,
+    });
+    const cancelledBy: 'client' | 'business' = isClient ? 'client' : 'business';
+    await this.logHistory(
+      bookingId,
+      'cancelled',
+      booking.status,
+      user.id,
+      cancelledBy,
+      'Cancelled before start (no charge)'
+    );
     await this.deliveryPinService.clearPinForOrder(bookingId);
+    await this.notifyRentalBookingCancelled(booking, cancelledBy);
     return { success: true };
+  }
+
+  /**
+   * Void a pending/authorized Stripe payment for this booking (no-op
+   * otherwise). Throws on a real void failure so callers do not mark the
+   * booking cancelled while a card hold is still outstanding.
+   */
+  private async cancelStripeAuthorizationIfAny(booking: any): Promise<void> {
+    const bookingNumber = booking.booking_number as string | undefined;
+    if (!bookingNumber) return;
+    const result = await this.stripeCaptureService.cancelOrderPaymentIntent({
+      orderNumber: bookingNumber,
+      orderId: booking.id,
+    });
+    if (!result.success && !result.skipped) {
+      this.logger.error(
+        `cancelStripeAuthorizationIfAny failed for ${bookingNumber}: ${result.message}`
+      );
+      throw new HttpException(
+        'Could not release the card authorization. Please try again.',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+  }
+
+  private async notifyRentalBookingCancelled(
+    booking: any,
+    cancelledBy: 'client' | 'business'
+  ): Promise<void> {
+    try {
+      await this.notificationsService.sendRentalBookingCancelledPush({
+        recipientUserId:
+          cancelledBy === 'client'
+            ? booking.business?.user_id
+            : booking.client?.user_id,
+        rentalItemName:
+          booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        bookingNumber: booking.booking_number ?? '',
+        cancelledBy,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `notifyRentalBookingCancelled: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   async getStartPinForClient(bookingId: string) {
@@ -2177,7 +2441,7 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('PIN only for confirmed bookings', HttpStatus.GONE);
     }
-    let pin = await this.deliveryPinService.getPinForClient(bookingId);
+    const pin = await this.deliveryPinService.getPinForClient(bookingId);
     if (!pin) {
       throw new HttpException(
         'Delivery PIN is temporarily unavailable. Please try again in a moment.',
@@ -2259,18 +2523,349 @@ export class RentalsService {
     if (booking.status !== 'awaiting_return') {
       throw new HttpException('Booking is not awaiting return', HttpStatus.BAD_REQUEST);
     }
-    await this.settleBooking(booking);
+    const actualEndAt = await this.resolveActualReturnAt(booking);
+    const settlement = this.computeRentalSettlement(booking, actualEndAt);
+    if (booking.payment_status === 'authorized') {
+      await this.settleStripeAuthorizedBooking(booking, settlement);
+    } else {
+      const settled = await this.settleWalletHeldBooking(booking, settlement);
+      if (!settled) {
+        return {
+          success: true,
+          overtimeDue: true,
+          overtimeAmount: settlement.overtimeAmount,
+          paymentPending: true,
+        };
+      }
+    }
+    await this.completeRentalBookingAfterSettle(bookingId, user.id, 'business');
+    return { success: true, overtimeAmount: settlement.overtimeAmount };
+  }
+
+  /** Stamp the return moment once so overtime math and retries stay stable. */
+  private async resolveActualReturnAt(booking: any): Promise<string> {
+    const existing = booking.actual_end_at as string | null | undefined;
+    if (existing) return existing;
+    const now = new Date().toISOString();
+    await this.patchBooking(booking.id, { actual_end_at: now });
+    return now;
+  }
+
+  /**
+   * Return-time math (per rental deposit policy):
+   * - early return still pays the full contract;
+   * - late return owes ceil(hours past booked end) at the listing hourly rate;
+   * - on Stripe the overtime comes out of the deposit (capped by it).
+   */
+  private computeRentalSettlement(
+    booking: any,
+    actualEndAtIso: string
+  ): RentalReturnSettlement {
+    const contract = Number(booking.total_amount);
+    const deposit = Math.max(0, Number(booking.security_deposit_amount) || 0);
+    const units = Math.max(1, Number(booking.units_booked) || 1);
+    const hourly = this.resolveBookingHourlyRate(booking);
+    const lateMs =
+      new Date(actualEndAtIso).getTime() - new Date(booking.end_at).getTime();
+    const overtimeHours = Math.max(0, Math.ceil(lateMs / 3600000));
+    const overtimeAmount = Number((overtimeHours * hourly * units).toFixed(2));
+    return {
+      contract,
+      deposit,
+      overtimeHours,
+      overtimeAmount,
+      stripeCharge: Number(
+        (contract + Math.min(overtimeAmount, deposit)).toFixed(2)
+      ),
+    };
+  }
+
+  private resolveBookingHourlyRate(booking: any): number {
+    const snap = booking.rental_pricing_snapshot as
+      | RentalPricingSnapshotDto
+      | undefined;
+    const hourlyLine = (snap?.lines ?? []).find(
+      (l): l is RentalPricingLine & { ratePerHour: number } =>
+        l.kind === 'hourly'
+    );
+    const fromSnapshot =
+      Number(hourlyLine?.ratePerHour) || Number(snap?.ratePerHour);
+    if (Number.isFinite(fromSnapshot) && fromSnapshot > 0) return fromSnapshot;
+    return Math.max(
+      0,
+      Number(booking.rental_location_listing?.base_price_per_hour) || 0
+    );
+  }
+
+  /** Capture contract + capped overtime from the Stripe authorization; ledger the proceeds. */
+  private async settleStripeAuthorizedBooking(
+    booking: any,
+    settlement: RentalReturnSettlement
+  ): Promise<void> {
+    const authorized =
+      Number(booking.authorized_amount) ||
+      settlement.contract + settlement.deposit;
+    const charge = Math.min(settlement.stripeCharge, authorized);
+    const capture = await this.stripeCaptureService.captureRentalBookingPaymentIntent({
+      bookingId: booking.id,
+      bookingNumber: booking.booking_number,
+      amountToCapture: charge,
+    });
+    if (!capture.success) {
+      throw new HttpException(
+        capture.message || 'Stripe capture failed',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    await this.creditClientWalletForStripeCapture(booking, charge);
+    await this.registerRentalProceedsLedger(booking, charge, 'Stripe capture');
+    await this.patchBooking(booking.id, {
+      captured_amount: charge,
+      overtime_amount: Number(
+        Math.min(settlement.overtimeAmount, settlement.deposit).toFixed(2)
+      ),
+      payment_status: 'paid',
+    });
+  }
+
+  /**
+   * Wallet/mobile-money settle: release the contract hold and pay the business.
+   * Overtime (no deposit on these rails) is charged from the wallet when the
+   * balance covers it; otherwise a mobile-money push is sent and the booking
+   * stays `awaiting_return` until the overtime payment lands.
+   */
+  private async settleWalletHeldBooking(
+    booking: any,
+    settlement: RentalReturnSettlement
+  ): Promise<boolean> {
+    if (settlement.overtimeAmount <= 0) {
+      await this.settleBooking(booking);
+      return true;
+    }
+    await this.patchBooking(booking.id, {
+      overtime_amount: settlement.overtimeAmount,
+    });
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      booking.client.user_id,
+      booking.currency
+    );
+    if (
+      Number(clientAccount?.available_balance ?? 0) >= settlement.overtimeAmount
+    ) {
+      await this.settleBooking(booking);
+      await this.registerRentalProceedsLedger(
+        booking,
+        settlement.overtimeAmount,
+        'Overtime'
+      );
+      return true;
+    }
+    await this.initiateRentalOvertimePayment(
+      booking,
+      settlement.overtimeAmount,
+      clientAccount.id
+    );
+    return false;
+  }
+
+  /** Charge the client wallet and credit the business account for `amount`. */
+  private async registerRentalProceedsLedger(
+    booking: any,
+    amount: number,
+    label: string
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      booking.client.user_id,
+      booking.currency
+    );
+    const locId = booking.rental_location_listing?.business_location_id;
+    if (!locId) {
+      throw new HttpException('Location missing', HttpStatus.BAD_REQUEST);
+    }
+    const businessAccount =
+      await this.hasuraSystemService.ensureAccountForBusinessLocation(locId);
+    if (!businessAccount?.id) {
+      throw new HttpException('Business account missing', HttpStatus.BAD_REQUEST);
+    }
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount,
+      transactionType: 'payment',
+      memo: `Rental ${label} ${booking.id}`,
+      referenceId: booking.id,
+    });
+    await this.accountsService.registerTransaction({
+      accountId: businessAccount.id,
+      amount,
+      transactionType: 'deposit',
+      memo: `Rental ${label} proceeds ${booking.id}`,
+      referenceId: booking.id,
+    });
+  }
+
+  /** Stripe capture credits the client wallet first so payment + proceeds net to zero. */
+  private async creditClientWalletForStripeCapture(
+    booking: any,
+    amount: number
+  ): Promise<void> {
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      booking.client.user_id,
+      booking.currency
+    );
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount,
+      transactionType: 'deposit',
+      memo: `Stripe rental capture ${booking.id}`,
+      referenceId: booking.id,
+    });
+  }
+
+  /** Push a mobile-money request for outstanding overtime at return. */
+  private async initiateRentalOvertimePayment(
+    booking: any,
+    overtimeAmount: number,
+    clientAccountId: string
+  ): Promise<void> {
+    const bookingNumber = booking.booking_number as string;
+    const pending =
+      await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+        bookingNumber
+      );
+    if (pending) return;
+    const clientUser = await this.fetchUserContact(booking.client.user_id);
+    await this.initiateRentalBookingPayment({
+      bookingNumber,
+      amount: overtimeAmount,
+      currency: booking.currency,
+      clientAccountId,
+      userId: booking.client.user_id,
+      phoneNumber: clientUser?.phone_number || '',
+      email: clientUser?.email,
+      reference: this.createRentalPaymentReference(),
+      paymentEntity: 'rental_booking',
+    });
+  }
+
+  /** Overtime mobile-money payment landed: ledger it, settle the hold, complete. */
+  private async finalizeRentalOvertimeAfterPayment(booking: any): Promise<void> {
+    const overtime = Number(booking.overtime_amount) || 0;
+    await this.registerRentalProceedsLedger(booking, overtime, 'Overtime');
+    const hold = await this.getHold(booking.id);
+    if (hold?.status === 'active') {
+      await this.settleBooking(booking);
+    }
+    await this.completeRentalBookingAfterSettle(booking.id, null, 'system');
+  }
+
+  private async completeRentalBookingAfterSettle(
+    bookingId: string,
+    userId: string | null,
+    changedByType: 'business' | 'system'
+  ): Promise<void> {
     await this.updateBookingStatus(bookingId, 'completed');
     await this.logHistory(
       bookingId,
       'completed',
       'awaiting_return',
-      user.id,
-      'business',
+      userId,
+      changedByType,
       'Return confirmed'
     );
     await this.deliveryPinService.clearPinForOrder(bookingId);
-    return { success: true };
+  }
+
+  private async fetchUserContact(
+    userId: string
+  ): Promise<{ phone_number?: string | null; email?: string | null } | null> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: { phone_number?: string | null; email?: string | null } | null;
+    }>(
+      `query UserContact($id: uuid!) { users_by_pk(id: $id) { phone_number email } }`,
+      { id: userId }
+    );
+    return r.users_by_pk ?? null;
+  }
+
+  /**
+   * Business-initiated payment of the contract at pickup for a `reserved`
+   * booking: wallet when the client balance covers it, otherwise a
+   * mobile-money push to the client's phone. PIN start stays gated on payment.
+   */
+  async initiateRentalPickupPayment(
+    bookingId: string
+  ): Promise<RentalBookingActionResult> {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
+      throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.business_id !== user.business.id) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    if (booking.status !== 'reserved') {
+      throw new HttpException(
+        'Pickup payment applies to reserved bookings only',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const total = Number(booking.total_amount);
+    const clientUserId = booking.client.user_id as string;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      clientUserId,
+      booking.currency
+    );
+    if (Number(clientAccount?.available_balance ?? 0) >= total) {
+      await this.placeHoldForBooking(
+        bookingId,
+        booking.client_id,
+        total,
+        booking.currency
+      );
+      await this.markBookingPaymentStatus(bookingId, 'paid');
+      await this.finalizeRentalBookingConfirmation(
+        bookingId,
+        booking.rental_request_id,
+        clientUserId,
+        'reserved',
+        'Contract paid at pickup (wallet)'
+      );
+      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
+    }
+    return this.pushMomoPickupPayment(booking, clientAccount.id, clientUserId);
+  }
+
+  private async pushMomoPickupPayment(
+    booking: any,
+    clientAccountId: string,
+    clientUserId: string
+  ): Promise<RentalBookingActionResult> {
+    const bookingNumber = booking.booking_number as string;
+    const pending =
+      await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+        bookingNumber
+      );
+    if (!pending) {
+      const clientUser = await this.fetchUserContact(clientUserId);
+      await this.initiateRentalBookingPayment({
+        bookingNumber,
+        amount: Number(booking.total_amount),
+        currency: booking.currency,
+        clientAccountId,
+        userId: clientUserId,
+        phoneNumber: clientUser?.phone_number || '',
+        email: clientUser?.email,
+        reference: this.createRentalPaymentReference(),
+        paymentEntity: 'rental_booking',
+      });
+    }
+    return {
+      success: true,
+      bookingId: booking.id,
+      payment_rail: 'mobile_money',
+      paymentPending: true,
+    };
   }
 
   private async fetchListing(id: string) {
@@ -2606,14 +3201,25 @@ export class RentalsService {
         });
       }
     }
+    const depositPerUnit = Math.max(
+      0,
+      Number(listing.security_deposit_amount) || 0
+    );
     return {
-      version: 3,
+      version: 4,
       currency: listing.rental_item.currency,
       total: Number(total.toFixed(2)),
       unitsBooked: units,
+      securityDeposit: Number((depositPerUnit * units).toFixed(2)),
       lines,
       computedAt: new Date().toISOString(),
     };
+  }
+
+  /** Deposit snapshotted on the pricing contract (v4+); 0 for older snapshots. */
+  private snapshotSecurityDeposit(snap: RentalPricingSnapshotDto): number {
+    const v = Number(snap.securityDeposit);
+    return Number.isFinite(v) && v > 0 ? Number(v.toFixed(2)) : 0;
   }
 
   private normalizeUnitsRequested(value: unknown): number {
@@ -2782,34 +3388,6 @@ export class RentalsService {
     };
   }
 
-  private async insertBookingRow(
-    req: any,
-    clientId: string,
-    snap: RentalPricingSnapshotDto,
-    total: number
-  ) {
-    const unitsBooked = this.normalizeUnitsRequested(req.units_requested);
-    return this.hasuraSystemService.executeMutation<{
-      insert_rental_bookings_one: { id: string; booking_number: string };
-    }>(Q.INSERT_RENTAL_BOOKING, {
-      object: {
-        rental_request_id: req.id,
-        client_id: clientId,
-        business_id: req.rental_location_listing.rental_item.business_id,
-        rental_location_listing_id: req.rental_location_listing_id,
-        start_at: this.requestWindowEnvelope(req).startAt,
-        end_at: this.requestWindowEnvelope(req).endAt,
-        total_amount: total,
-        currency: snap.currency,
-        rental_pricing_snapshot: snap,
-        booking_number: this.createRentalBookingNumber(),
-        status: 'confirmed',
-        units_booked: unitsBooked,
-        rental_booking_windows: this.bookingWindowsNestedInput(req),
-      },
-    });
-  }
-
   private async insertProposedBookingRow(
     req: any,
     clientId: string,
@@ -2836,6 +3414,7 @@ export class RentalsService {
         status: 'proposed',
         contract_expires_at: contractExpiresAt,
         units_booked: unitsBooked,
+        security_deposit_amount: this.snapshotSecurityDeposit(snap),
         rental_booking_windows: this.bookingWindowsNestedInput(req),
       },
     });

@@ -58,6 +58,16 @@ export class UpdateBusinessRentalListingDto {
   @Min(0)
   base_price_per_day?: number;
 
+  @ApiProperty({
+    required: false,
+    description:
+      'Security deposit authorized/charged on top of the rental total (defaults to 8x hourly rate)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  security_deposit_amount?: number;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsInt()

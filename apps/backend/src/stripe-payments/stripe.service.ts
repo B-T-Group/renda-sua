@@ -317,13 +317,20 @@ export class StripeService {
 
   async capturePaymentIntent(
     paymentIntentId: string,
-    idempotencyKey: string
+    idempotencyKey: string,
+    partialCapture?: { amount: number; currency: string }
   ): Promise<Stripe.PaymentIntent> {
-    return this.getClient().paymentIntents.capture(
-      paymentIntentId,
-      {},
-      { idempotencyKey }
-    );
+    const params: Stripe.PaymentIntentCaptureParams = partialCapture
+      ? {
+          amount_to_capture: this.toMinorUnits(
+            partialCapture.amount,
+            partialCapture.currency
+          ),
+        }
+      : {};
+    return this.getClient().paymentIntents.capture(paymentIntentId, params, {
+      idempotencyKey,
+    });
   }
 
   async cancelPaymentIntent(

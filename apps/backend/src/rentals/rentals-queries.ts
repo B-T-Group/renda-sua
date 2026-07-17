@@ -10,6 +10,7 @@ export const GET_LISTING_FOR_REQUEST = `
       units_available
       base_price_per_hour
       base_price_per_day
+      security_deposit_amount
       weekly_availability(order_by: { weekday: asc }) {
         weekday
         is_available
@@ -87,6 +88,7 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
       id
       base_price_per_hour
       base_price_per_day
+      security_deposit_amount
       min_rental_hours
       max_rental_hours
       units_available
@@ -153,6 +155,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
       moderation_status
       base_price_per_hour
       base_price_per_day
+      security_deposit_amount
       min_rental_hours
       max_rental_hours
       units_available
@@ -238,6 +241,7 @@ export const GET_RENTAL_REQUEST_FULL = `
         units_available
         base_price_per_hour
         base_price_per_day
+        security_deposit_amount
         weekly_availability(order_by: { weekday: asc }) {
           weekday
           is_available
@@ -312,7 +316,7 @@ export const LIST_TAKEN_RENTAL_BOOKING_WINDOWS = `
         rental_booking: {
           rental_location_listing_id: { _eq: $listingId }
           _or: [
-            { status: { _in: [confirmed, active, awaiting_return] } }
+            { status: { _in: [reserved, confirmed, active, awaiting_return] } }
             {
               _and: [
                 { status: { _eq: proposed } }
@@ -348,7 +352,7 @@ export const LIST_OVERLAPPING_BOOKING_WINDOWS = `
         rental_booking: {
           rental_location_listing_id: { _eq: $listingId }
           _or: [
-            { status: { _in: [confirmed, active, awaiting_return] } }
+            { status: { _in: [reserved, confirmed, active, awaiting_return] } }
             {
               _and: [
                 { status: { _eq: proposed } }
@@ -379,7 +383,7 @@ export const LIST_COMMITTED_RENTAL_BOOKING_WINDOWS_FOR_LISTING = `
         rental_booking: {
           rental_location_listing_id: { _eq: $listingId }
           _or: [
-            { status: { _in: [confirmed, active, awaiting_return] } }
+            { status: { _in: [reserved, confirmed, active, awaiting_return] } }
             {
               _and: [
                 { status: { _eq: proposed } }
@@ -438,6 +442,17 @@ export const GET_RENTAL_BOOKING_FULL = `
       total_amount
       currency
       status
+      contract_expires_at
+      units_booked
+      security_deposit_amount
+      authorized_amount
+      captured_amount
+      overtime_amount
+      payment_timing
+      payment_status
+      actual_start_at
+      actual_end_at
+      end_reminder_sent_at
       rental_pricing_snapshot
       rental_start_pin_hash
       rental_start_pin_attempts
@@ -448,6 +463,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       business { id user_id name }
       rental_location_listing {
         business_location_id
+        base_price_per_hour
         rental_item { name }
       }
     }
@@ -469,6 +485,14 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       total_amount
       currency
       contract_expires_at
+      security_deposit_amount
+      authorized_amount
+      captured_amount
+      overtime_amount
+      payment_timing
+      payment_status
+      actual_start_at
+      actual_end_at
       rental_pricing_snapshot
       client_id
       business_id
@@ -526,6 +550,16 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       total_amount
       currency
       status
+      contract_expires_at
+      units_booked
+      security_deposit_amount
+      authorized_amount
+      captured_amount
+      overtime_amount
+      payment_timing
+      payment_status
+      actual_start_at
+      actual_end_at
       rental_pricing_snapshot
       rental_start_pin_hash
       rental_start_pin_attempts
@@ -536,6 +570,7 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       business { id user_id name }
       rental_location_listing {
         business_location_id
+        base_price_per_hour
         rental_item { name }
       }
     }
@@ -612,6 +647,21 @@ export const UPDATE_RENTAL_REQUEST_STATUS = `
   }
 `;
 
+export const LIST_ACTIVE_BOOKINGS_ENDING_SOON = `
+  query ListActiveBookingsEndingSoon($now: timestamptz!, $until: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: active }
+        end_at: { _gt: $now, _lte: $until }
+        end_reminder_sent_at: { _is_null: true }
+      }
+    ) {
+      id
+      end_at
+    }
+  }
+`;
+
 export const LIST_ACTIVE_BOOKINGS_PAST_END = `
   query ListActiveBookingsPastEnd($now: timestamptz!) {
     rental_bookings(
@@ -655,6 +705,7 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        security_deposit_amount
         is_active
         deleted_at
         moderation_status
@@ -689,6 +740,7 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        security_deposit_amount
         min_rental_hours
         max_rental_hours
         units_available
@@ -825,6 +877,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         id
         base_price_per_hour
         base_price_per_day
+        security_deposit_amount
         business_location {
           name
         }
@@ -837,6 +890,8 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         id
         status
         contract_expires_at
+        payment_timing
+        payment_status
       }
     }
   }
@@ -854,6 +909,10 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       currency
       units_booked
       contract_expires_at
+      security_deposit_amount
+      overtime_amount
+      payment_timing
+      payment_status
       created_at
       rental_request_id
       rental_pricing_snapshot
@@ -915,11 +974,16 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         status
         booking_number
         actual_start_at
+        payment_timing
+        payment_status
+        total_amount
+        overtime_amount
       }
       rental_location_listing {
         id
         base_price_per_hour
         base_price_per_day
+        security_deposit_amount
         weekly_availability(order_by: { weekday: asc }) {
           weekday
           is_available
@@ -952,7 +1016,7 @@ export const GET_BUSINESS_RENTAL_SCHEDULE = `
   query GetBusinessRentalSchedule($businessId: uuid!, $rentalItemId: uuid!) {
     rental_bookings(
       where: {
-        status: { _in: [proposed, confirmed, active, awaiting_return] }
+        status: { _in: [proposed, reserved, confirmed, active, awaiting_return] }
         rental_location_listing: {
           rental_item: { business_id: { _eq: $businessId } }
           rental_item_id: { _eq: $rentalItemId }
@@ -1009,6 +1073,20 @@ export const LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS = `
   }
 `;
 
+export const LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS = `
+  query ListExpiredReservedRentalBookings($cutoff: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: reserved }
+        start_at: { _lte: $cutoff }
+        actual_start_at: { _is_null: true }
+      }
+    ) {
+      id
+    }
+  }
+`;
+
 export const INSERT_BUSINESS_RENTAL_ITEM = `
   mutation InsertBusinessRentalItem($object: rental_items_insert_input!) {
     insert_rental_items_one(object: $object) {
@@ -1054,7 +1132,7 @@ export const COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_LISTING = `
     rental_bookings_aggregate(
       where: {
         rental_location_listing_id: { _eq: $listingId }
-        status: { _in: [proposed, confirmed, active, awaiting_return] }
+        status: { _in: [proposed, reserved, confirmed, active, awaiting_return] }
       }
     ) {
       aggregate {
@@ -1084,7 +1162,7 @@ export const COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_RENTAL_ITEM = `
     rental_bookings_aggregate(
       where: {
         rental_location_listing: { rental_item_id: { _eq: $rentalItemId } }
-        status: { _in: [proposed, confirmed, active, awaiting_return] }
+        status: { _in: [proposed, reserved, confirmed, active, awaiting_return] }
       }
     ) {
       aggregate {

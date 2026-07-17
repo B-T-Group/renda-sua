@@ -134,6 +134,66 @@ export class StripeCaptureService {
     return tx.account_id;
   }
 
+  /**
+   * Capture a manual-capture rental authorization, optionally for less than
+   * the authorized amount (unused authorization is released by Stripe).
+   * Marks the transaction `success` synchronously so the later
+   * `payment_intent.succeeded` webhook is a no-op; the caller is responsible
+   * for wallet/ledger movements of the captured amount.
+   */
+  async captureRentalBookingPaymentIntent(params: {
+    bookingId: string;
+    bookingNumber: string;
+    amountToCapture: number;
+  }): Promise<{ success: boolean; message?: string; captured?: boolean }> {
+    const tx = await this.databaseService.getTransactionByEntityId(
+      params.bookingNumber
+    );
+    if (!tx?.stripe_payment_intent_id) {
+      return { success: false, message: 'No Stripe payment found for booking' };
+    }
+    if (tx.status === 'success') {
+      return { success: true, message: 'Already captured', captured: true };
+    }
+    if (tx.status !== 'authorized' && tx.status !== 'capture_pending') {
+      return {
+        success: false,
+        message: `Cannot capture transaction in status ${tx.status}`,
+      };
+    }
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'capture_pending',
+    });
+    try {
+      const pi = await this.stripeService.capturePaymentIntent(
+        tx.stripe_payment_intent_id,
+        `capture_rental_${params.bookingId}`,
+        { amount: params.amountToCapture, currency: tx.currency }
+      );
+      if (pi.status !== 'succeeded') {
+        return { success: true, message: 'Capture initiated', captured: false };
+      }
+      await this.databaseService.updateTransaction(tx.id, {
+        status: 'success',
+        captured_at: new Date().toISOString(),
+        amount: params.amountToCapture,
+      });
+      this.logger.log(
+        `stripe_capture_success rental=${params.bookingNumber} tx=${tx.id} amount=${params.amountToCapture}`
+      );
+      return { success: true, captured: true };
+    } catch (error: any) {
+      await this.databaseService.updateTransaction(tx.id, {
+        status: 'authorized',
+        error_message: error?.message || 'Capture failed',
+      });
+      this.logger.error(
+        `Capture failed for rental ${params.bookingNumber}: ${error?.message}`
+      );
+      return { success: false, message: error?.message || 'Capture failed' };
+    }
+  }
+
   async cancelOrderPaymentIntent(params: {
     orderNumber: string;
     orderId?: string;

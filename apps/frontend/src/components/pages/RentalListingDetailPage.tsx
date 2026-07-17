@@ -581,6 +581,25 @@ const RentalListingDetailPage: React.FC = () => {
                       {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}
                     </Typography>
                   </Typography>
+                  {Number(row.security_deposit_amount ?? 0) > 0 ? (
+                    <>
+                      <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
+                        {formatMoney(
+                          Number(row.security_deposit_amount ?? 0),
+                          row.rental_item.currency
+                        )}{' '}
+                        <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>
+                          {t('rentals.detail.securityDeposit', 'Security deposit (card rentals)')}
+                        </Typography>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t(
+                          'rentals.detail.securityDepositHint',
+                          'Held on your card with the rental total and only used for extra hours past your booked end time.'
+                        )}
+                      </Typography>
+                    </>
+                  ) : null}
                   <Stack direction="row" gap={2} flexWrap="wrap" sx={{ mt: 2 }}>
                     <Box>
                       <Typography variant="caption" color="text.secondary" display="block">

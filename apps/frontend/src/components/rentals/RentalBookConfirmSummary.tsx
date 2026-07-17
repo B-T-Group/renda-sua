@@ -45,10 +45,13 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export interface RentalBookConfirmSummaryProps {
   row: ClientRentalRequestRow;
+  /** Card rail shows the deposit/authorization terms; other rails show pay-at-pickup. */
+  isStripeRail?: boolean;
 }
 
 export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> = ({
   row,
+  isStripeRail,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -129,6 +132,15 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
             value={formatRentalMoney(quote.total, quote.currency)}
           />
         ) : null}
+        {isStripeRail && quote?.securityDeposit ? (
+          <DetailRow
+            label={t(
+              'rentals.clientRequests.bookConfirmLabelDeposit',
+              'Security deposit'
+            )}
+            value={formatRentalMoney(quote.securityDeposit, quote.currency)}
+          />
+        ) : null}
         {deadlineIso ? (
           <DetailRow
             label={t('rentals.clientRequests.bookConfirmLabelAcceptBy', 'Offer valid until')}
@@ -147,6 +159,37 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
           </Typography>
         </>
       ) : null}
+      <Divider sx={{ my: 1.5 }} />
+      <Stack spacing={0.75}>
+        {isStripeRail && quote?.securityDeposit ? (
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {t(
+              'rentals.clientRequests.paymentTermsCard',
+              'Card payments: {{authorized}} is held on your card (rental + deposit). The deposit only covers extra hours past your booked end time — the final charge at return is at least the rental total. Booking must end within 6 days.',
+              {
+                authorized: formatRentalMoney(
+                  (quote?.total ?? 0) + (quote?.securityDeposit ?? 0),
+                  quote?.currency ?? 'XAF'
+                ),
+              }
+            )}
+          </Typography>
+        ) : null}
+        {!isStripeRail ? (
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {t(
+              'rentals.clientRequests.paymentTermsPickup',
+              'Mobile money / wallet: reserve now for free and pay the rental total at pickup.'
+            )}
+          </Typography>
+        ) : null}
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+          {t(
+            'rentals.clientRequests.freeCancelBeforeStart',
+            'Free cancellation any time before the rental starts.'
+          )}
+        </Typography>
+      </Stack>
     </Paper>
   );
 };

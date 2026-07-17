@@ -60,6 +60,17 @@ export class RentalPricingSnapshotDto {
 
   @ApiProperty({
     required: false,
+    description:
+      'Security deposit (version 4+): authorized on top of the contract total on the Stripe rail',
+    example: 20000,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  securityDeposit?: number;
+
+  @ApiProperty({
+    required: false,
     description: 'Per-window breakdown (version 3+)',
     type: 'array',
     items: { type: 'object' },
@@ -87,7 +98,12 @@ export function isValidRentalPricingSnapshot(
   ) {
     return false;
   }
-  if (o.version === 3 && o.lines != null && !Array.isArray(o.lines)) {
+  if (
+    typeof o.version === 'number' &&
+    o.version >= 3 &&
+    o.lines != null &&
+    !Array.isArray(o.lines)
+  ) {
     return false;
   }
   return true;

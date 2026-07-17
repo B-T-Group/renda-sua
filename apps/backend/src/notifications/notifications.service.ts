@@ -61,8 +61,11 @@ import {
   type RatePromptKind,
 } from './rating-push.messages';
 import {
+  buildRentalBookingCancelledPush,
   buildRentalBookingConfirmedPush,
   buildRentalBookingRequestPush,
+  buildRentalBookingReservedPush,
+  buildRentalEndingSoonPush,
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
@@ -1232,6 +1235,152 @@ export class NotificationsService {
         `sendRentalBookingConfirmedPush: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /** Push to client + business when a booking is reserved (pay at pickup). */
+  async sendRentalBookingReservedPush(params: {
+    clientUserId?: string | null;
+    businessUserId?: string | null;
+    rentalItemName: string;
+    bookingId: string;
+    bookingNumber: string;
+  }): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const data = {
+      type: 'rental_booking_reserved',
+      rentalBookingId: params.bookingId,
+      url: `/rentals/bookings/${params.bookingId}`,
+    };
+    await Promise.all(
+      [
+        { userId: params.clientUserId, forBusiness: false },
+        { userId: params.businessUserId, forBusiness: true },
+      ]
+        .filter((r) => r.userId?.trim())
+        .map(async (r) => {
+          const u = await this.getUserRowForEmail(r.userId as string);
+          const msg = buildRentalBookingReservedPush({
+            rentalItemName: params.rentalItemName,
+            bookingNumber: params.bookingNumber,
+            forBusiness: r.forBusiness,
+            preferredLanguage: u?.preferred_language,
+          });
+          await this.sendPushNotificationByUserId(
+            r.userId as string,
+            msg.title,
+            msg.body,
+            data
+          );
+        })
+    );
+  }
+
+  /** Push to the non-cancelling party when a booking is cancelled before start. */
+  async sendRentalBookingCancelledPush(params: {
+    recipientUserId?: string | null;
+    rentalItemName: string;
+    bookingId: string;
+    bookingNumber: string;
+    cancelledBy: 'client' | 'business' | 'system';
+  }): Promise<void> {
+    const uid = params.recipientUserId?.trim();
+    if (!uid) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const u = await this.getUserRowForEmail(uid);
+    const msg = buildRentalBookingCancelledPush({
+      rentalItemName: params.rentalItemName,
+      bookingNumber: params.bookingNumber,
+      cancelledBy: params.cancelledBy,
+      preferredLanguage: u?.preferred_language,
+    });
+    await this.sendPushNotificationByUserId(uid, msg.title, msg.body, {
+      type: 'rental_booking_cancelled',
+      rentalBookingId: params.bookingId,
+      url: `/rentals/bookings/${params.bookingId}`,
+    });
+  }
+
+  /** T−30m end-of-rental reminder: email + push to both client and business. */
+  async sendRentalEndingSoonNotifications(
+    payload: RentalPeriodEndedEmailPayload
+  ): Promise<void> {
+    try {
+      const [cu, bu] = await Promise.all([
+        this.getUserRowForEmail(payload.clientUserId),
+        this.getUserRowForEmail(payload.businessUserId),
+      ]);
+      const vars = {
+        bookingId: payload.bookingId,
+        rentalItemName: payload.rentalItemName,
+        endAt: payload.endAt,
+      };
+      if (cu?.email) {
+        await this.sendEmail({
+          to: cu.email,
+          templateKey: this.mapKeyForLanguage(
+            'client_rental_ending_soon',
+            normalizeLanguage(cu.preferred_language)
+          ),
+          variables: vars,
+        });
+      }
+      if (bu?.email) {
+        await this.sendEmail({
+          to: bu.email,
+          templateKey: this.mapKeyForLanguage(
+            'business_rental_ending_soon',
+            normalizeLanguage(bu.preferred_language)
+          ),
+          variables: vars,
+        });
+      }
+      await this.sendRentalEndingSoonPush(
+        payload,
+        cu?.preferred_language,
+        bu?.preferred_language
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `sendRentalEndingSoonNotifications: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async sendRentalEndingSoonPush(
+    payload: RentalPeriodEndedEmailPayload,
+    clientLang?: string | null,
+    businessLang?: string | null
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const data = {
+      type: 'rental_ending_soon',
+      rentalBookingId: payload.bookingId,
+      url: `/rentals/bookings/${payload.bookingId}`,
+    };
+    const clientMsg = buildRentalEndingSoonPush({
+      rentalItemName: payload.rentalItemName,
+      forBusiness: false,
+      preferredLanguage: clientLang,
+    });
+    const businessMsg = buildRentalEndingSoonPush({
+      rentalItemName: payload.rentalItemName,
+      forBusiness: true,
+      preferredLanguage: businessLang,
+    });
+    await Promise.all([
+      this.sendPushNotificationByUserId(
+        payload.clientUserId,
+        clientMsg.title,
+        clientMsg.body,
+        data
+      ),
+      this.sendPushNotificationByUserId(
+        payload.businessUserId,
+        businessMsg.title,
+        businessMsg.body,
+        data
+      ),
+    ]);
   }
 
   private async getUserRowForEmail(userId: string): Promise<{

@@ -1718,7 +1718,10 @@
         "itemRemovedBanner": "Cet article a été retiré du catalogue. La modification n’est plus disponible.",
         "listingRemovedBanner": "Cette annonce a été supprimée.",
         "catalogBadge": "Retiré du catalogue"
-      }
+      },
+      "securityDeposit": "Caution",
+      "securityDepositHelper": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
+      "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires."
     },
     "failedDeliveries": {
       "title": "Livraisons échouées",
@@ -4206,7 +4209,7 @@
       "cancelOfferTitle": "Annuler cette réservation ?",
       "cancelOfferMessage": "Vous renoncez à cette offre. Le contrat proposé sera annulé et vous pourrez envoyer une nouvelle demande plus tard si vous le souhaitez.",
       "bookConfirmTitle": "Vérifier et confirmer votre réservation",
-      "bookConfirmMessage": "En poursuivant, vous nous autorisez à envoyer une demande de paiement sécurisée au numéro de mobile indiqué sur votre profil. La réservation n’est confirmée qu’après votre validation de cette demande. Si vous ne validez pas dans les délais, l’offre peut expirer.",
+      "bookConfirmMessage": "En continuant, votre réservation est conservée gratuitement — aucun paiement maintenant. Vous payez le total de la location au retrait (portefeuille ou mobile money). Annulation gratuite avant le début de la location.",
       "bookConfirmButton": "Continuer",
       "bookConfirmSummaryHeading": "Récapitulatif de la réservation",
       "bookConfirmLabelItem": "Article",
@@ -4223,8 +4226,14 @@
       "bookError": "Impossible de finaliser la réservation",
       "cancelSuccess": "Demande annulée",
       "cancelError": "Impossible d’annuler la demande",
-      "bookConfirmMessageStripe": "En poursuivant, vous serez redirigé vers une page Stripe Checkout sécurisée pour payer par carte. Votre réservation est confirmée après le succès du paiement. Si vous ne finalisez pas à temps, l’offre peut expirer.",
-      "bookConfirmButtonStripe": "Continuer vers le paiement"
+      "bookConfirmMessageStripe": "En continuant, vous serez redirigé vers une page Stripe Checkout sécurisée. Le total de la location plus la caution est réservé sur votre carte — rien n’est débité avant le retour de l’article, et le montant final est au minimum le total de la location. Annulation gratuite avant le début de la location.",
+      "bookConfirmButtonStripe": "Continuer vers le paiement",
+      "bookConfirmLabelDeposit": "Caution",
+      "paymentTermsCard": "Paiement par carte : {{authorized}} est réservé sur votre carte (location + caution). La caution ne couvre que les heures supplémentaires après la fin prévue — le montant final au retour est au minimum le total de la location. La réservation doit se terminer sous 6 jours.",
+      "paymentTermsPickup": "Mobile money / portefeuille : réservez gratuitement et payez le total de la location au retrait.",
+      "freeCancelBeforeStart": "Annulation gratuite à tout moment avant le début de la location.",
+      "bookReserved": "Réservé — payez au retrait pour commencer votre location",
+      "bookConfirmButtonReserve": "Réserver maintenant"
     },
     "loginToViewRequests": "Connectez-vous pour voir vos demandes",
     "catalog": {
@@ -4274,7 +4283,9 @@
       "howItWorksStep1": "Envoyez une demande avec vos dates et heures de début et de fin souhaitées. Aucun paiement à cette étape.",
       "howItWorksStep2": "L’entreprise vérifie la disponibilité et répond. Suivez l’état dans vos demandes de location.",
       "howItWorksStep3": "Si elle confirme la disponibilité, vous pourrez finaliser une réservation à partir de cette demande, selon les conditions indiquées.",
-      "howItWorksStep4": "La prestation a lieu chez l’entreprise. Respectez les consignes de prise en charge et de retour indiquées sur cette page."
+      "howItWorksStep4": "La prestation a lieu chez l’entreprise. Respectez les consignes de prise en charge et de retour indiquées sur cette page.",
+      "securityDeposit": "Caution (locations par carte)",
+      "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue."
     },
     "bookingDetail": {
       "paymentPendingTitle": "En attente de paiement",
@@ -4283,8 +4294,20 @@
       "retryPayment": "Réessayer le paiement",
       "retryPaymentSuccess": "Demande de paiement envoyée. Finalisez le paiement pour confirmer votre réservation.",
       "retryPaymentError": "Impossible de relancer le paiement",
-      "paymentConfirmed": "Paiement confirmé"
-    }
+      "paymentConfirmed": "Paiement confirmé",
+      "securityDeposit": "Caution",
+      "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}} {{currency}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
+      "payAtPickup": "Rien n’est payé pour le moment — le total de la location est dû au retrait.",
+      "overtimeDue": "Heures supplémentaires : {{amount}} {{currency}}",
+      "reservedClientHint": "Votre réservation est conservée gratuitement. Payez le total de la location au retrait pour recevoir votre code PIN de démarrage.",
+      "reservedBusinessHint": "Réservé sans paiement. Encaissez le total de la location au retrait — le code PIN de démarrage se débloque après le paiement.",
+      "collectPickupPayment": "Encaisser le paiement",
+      "pickupPaid": "Paiement encaissé — location confirmée",
+      "pickupPaymentSent": "Demande mobile money envoyée au client. La réservation sera confirmée dès réception du paiement.",
+      "pickupPaymentError": "Impossible d’encaisser le paiement"
+    },
+    "cancelError": "Impossible d’annuler la réservation",
+    "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué."
   },
   "profile": {
     "accountOverview": "Aperçu du Compte",

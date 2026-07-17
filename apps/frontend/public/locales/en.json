@@ -2005,7 +2005,10 @@
         "itemRemovedBanner": "This rental was removed from the catalog. Editing is disabled.",
         "listingRemovedBanner": "This listing was removed.",
         "catalogBadge": "Removed from catalog"
-      }
+      },
+      "securityDeposit": "Security deposit",
+      "securityDepositHelper": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
+      "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours."
     },
     "failedDeliveries": {
       "title": "Failed Deliveries",
@@ -4469,7 +4472,7 @@
       "cancelOfferTitle": "Cancel this reservation?",
       "cancelOfferMessage": "You will withdraw from this offer. The proposed contract will be cancelled and you can send a new request later if you wish.",
       "bookConfirmTitle": "Review and confirm your reservation",
-      "bookConfirmMessage": "By continuing, you authorize us to send a secure payment request to the mobile number on your profile. Your reservation is only confirmed after you approve that request. If you do not approve it in time, this offer may lapse.",
+      "bookConfirmMessage": "By continuing, your reservation is held for free — no payment now. You pay the rental total at pickup (wallet or mobile money). Free cancellation before the rental starts.",
       "bookConfirmButton": "Continue",
       "bookConfirmSummaryHeading": "Reservation summary",
       "bookConfirmLabelItem": "Item",
@@ -4486,8 +4489,14 @@
       "bookError": "Could not complete booking",
       "cancelSuccess": "Request cancelled",
       "cancelError": "Could not cancel request",
-      "bookConfirmMessageStripe": "By continuing, you will be redirected to a secure Stripe Checkout page to pay by card. Your reservation is confirmed after payment succeeds. If you do not complete payment in time, this offer may lapse.",
-      "bookConfirmButtonStripe": "Continue to payment"
+      "bookConfirmMessageStripe": "By continuing, you will be redirected to a secure Stripe Checkout page. The rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.",
+      "bookConfirmButtonStripe": "Continue to payment",
+      "bookConfirmLabelDeposit": "Security deposit",
+      "paymentTermsCard": "Card payments: {{authorized}} is held on your card (rental + deposit). The deposit only covers extra hours past your booked end time — the final charge at return is at least the rental total. Booking must end within 6 days.",
+      "paymentTermsPickup": "Mobile money / wallet: reserve now for free and pay the rental total at pickup.",
+      "freeCancelBeforeStart": "Free cancellation any time before the rental starts.",
+      "bookReserved": "Reserved — pay at pickup to start your rental",
+      "bookConfirmButtonReserve": "Reserve now"
     },
     "loginToViewRequests": "Log in to view your requests",
     "catalog": {
@@ -4537,7 +4546,9 @@
       "howItWorksStep1": "Send a request with your preferred start and end date and time. Nothing is charged at this step.",
       "howItWorksStep2": "The business checks availability and responds. You can track the status under your rental requests.",
       "howItWorksStep3": "If they confirm availability, you can complete a booking from that request using the terms they shared.",
-      "howItWorksStep4": "The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive."
+      "howItWorksStep4": "The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.",
+      "securityDeposit": "Security deposit (card rentals)",
+      "securityDepositHint": "Held on your card with the rental total and only used for extra hours past your booked end time."
     },
     "bookingDetail": {
       "paymentPendingTitle": "Waiting for payment",
@@ -4546,8 +4557,20 @@
       "retryPayment": "Retry payment",
       "retryPaymentSuccess": "Payment request sent. Complete payment to confirm your booking.",
       "retryPaymentError": "Could not retry payment",
-      "paymentConfirmed": "Payment confirmed"
-    }
+      "paymentConfirmed": "Payment confirmed",
+      "securityDeposit": "Security deposit",
+      "authorizedOnCard": "Held on your card (rental + deposit): {{amount}} {{currency}}. The final charge at return is at least the rental total; the deposit only covers extra hours.",
+      "payAtPickup": "Nothing paid yet — the rental total is due at pickup.",
+      "overtimeDue": "Extra hours: {{amount}} {{currency}}",
+      "reservedClientHint": "Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.",
+      "reservedBusinessHint": "Reserved without payment. Collect the rental total at pickup — the start PIN unlocks after payment.",
+      "collectPickupPayment": "Collect payment",
+      "pickupPaid": "Payment collected — rental confirmed",
+      "pickupPaymentSent": "Mobile money request sent to the client. The booking confirms once payment lands.",
+      "pickupPaymentError": "Could not collect payment"
+    },
+    "cancelError": "Could not cancel booking",
+    "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid."
   },
   "profile": {
     "accountOverview": "Account Overview",

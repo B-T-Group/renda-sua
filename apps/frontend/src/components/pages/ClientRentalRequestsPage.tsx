@@ -130,9 +130,15 @@ const ClientRentalRequestsPage: React.FC = () => {
         window.location.href = res.checkout_url;
         return;
       }
-      enqueueSnackbar(t('rentals.clientRequests.bookSuccess', 'Booking created'), {
-        variant: 'success',
-      });
+      enqueueSnackbar(
+        res.reserved
+          ? t(
+              'rentals.clientRequests.bookReserved',
+              'Reserved — pay at pickup to start your rental'
+            )
+          : t('rentals.clientRequests.bookSuccess', 'Booking created'),
+        { variant: 'success' }
+      );
       navigate(`/rentals/bookings/${res.bookingId}`);
     } catch (e: unknown) {
       enqueueSnackbar(
@@ -357,15 +363,20 @@ const ClientRentalRequestsPage: React.FC = () => {
           isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmMessageStripe',
-                'By continuing, you will be redirected to a secure Stripe Checkout page to pay by card. Your reservation is confirmed after payment succeeds. If you do not complete payment in time, this offer may lapse.'
+                'By continuing, you will be redirected to a secure Stripe Checkout page. The rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
               )
             : t(
                 'rentals.clientRequests.bookConfirmMessage',
-                'By continuing, you authorize us to send a secure payment request to the mobile number on your profile. Your reservation is only confirmed after you approve that request. If you do not approve it in time, this offer may lapse.'
+                'By continuing, your reservation is held for free — no payment now. You pay the rental total at pickup (wallet or mobile money). Free cancellation before the rental starts.'
               )
         }
         additionalContent={
-          bookConfirmRow ? <RentalBookConfirmSummary row={bookConfirmRow} /> : null
+          bookConfirmRow ? (
+            <RentalBookConfirmSummary
+              row={bookConfirmRow}
+              isStripeRail={isStripeRail}
+            />
+          ) : null
         }
         confirmText={
           isStripeRail
@@ -373,7 +384,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                 'rentals.clientRequests.bookConfirmButtonStripe',
                 'Continue to payment'
               )
-            : t('rentals.clientRequests.bookConfirmButton', 'Continue')
+            : t('rentals.clientRequests.bookConfirmButtonReserve', 'Reserve now')
         }
         confirmColor="primary"
         loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}

@@ -480,11 +480,32 @@ export class RentalsController {
 
   @Post('bookings/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel confirmed booking (client or business)' })
+  @ApiOperation({
+    summary:
+      'Cancel a reserved or confirmed booking before start, free of charge (client or business)',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Cancelled' })
+  @ApiResponse({ status: 200, description: 'Cancelled (hold released / authorization voided)' })
+  @ApiResponse({ status: 400, description: 'Booking already started or not cancellable' })
   async cancelBooking(@Param('id') bookingId: string) {
     return this.rentalsService.cancelRentalBooking(bookingId);
+  }
+
+  @Post('bookings/:id/pickup-payment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Collect the contract amount at pickup for a reserved booking (business): wallet debit or mobile money push',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Payment collected (confirmed: true) or mobile money push sent (paymentPending: true)',
+  })
+  @ApiResponse({ status: 400, description: 'Booking is not reserved' })
+  async initiatePickupPayment(@Param('id') bookingId: string) {
+    return this.rentalsService.initiateRentalPickupPayment(bookingId);
   }
 
   @Get('bookings/:id')

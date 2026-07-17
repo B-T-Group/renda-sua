@@ -26,6 +26,7 @@ export interface RentalPricingSnapshotBody {
   unitsBooked?: number;
   ratePerHour?: number;
   hours?: number;
+  securityDeposit?: number;
   lines?: RentalPricingSnapshotLine[];
   computedAt: string;
 }
@@ -70,6 +71,7 @@ export interface BusinessRentalListingDetail {
   business_location_id: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  security_deposit_amount?: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
@@ -137,6 +139,7 @@ export interface UpdateBusinessRentalListingBody {
   dropoff_instructions?: string;
   base_price_per_hour?: number;
   base_price_per_day?: number;
+  security_deposit_amount?: number;
   min_rental_hours?: number;
   max_rental_hours?: number | null;
   units_available?: number;
@@ -278,6 +281,7 @@ export interface RentalBookingActionResult {
   checkout_url?: string;
   paymentPending?: boolean;
   confirmed?: boolean;
+  reserved?: boolean;
 }
 
 export interface RentalBookingPaymentStatus {
@@ -297,6 +301,14 @@ export interface RentalBookingDetail {
   end_at: string;
   total_amount: number;
   currency: string;
+  security_deposit_amount?: number | string | null;
+  authorized_amount?: number | string | null;
+  captured_amount?: number | string | null;
+  overtime_amount?: number | string | null;
+  payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
+  payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
   rental_pricing_snapshot?: unknown;
   client_id: string;
   business_id: string;
@@ -471,6 +483,7 @@ export function useRentalApi() {
       dropoff_instructions?: string;
       base_price_per_hour: number;
       base_price_per_day: number;
+      security_deposit_amount?: number;
       min_rental_hours?: number;
       max_rental_hours?: number | null;
       units_available: number;
@@ -619,6 +632,16 @@ export function useRentalApi() {
     [api]
   );
 
+  const initiatePickupPayment = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(
+        `/rentals/bookings/${bookingId}/pickup-payment`
+      );
+      return data as RentalBookingActionResult;
+    },
+    [api]
+  );
+
   const getStartPin = useCallback(
     async (bookingId: string) => {
       const { data } = await api.get(`/rentals/bookings/${bookingId}/start-pin`);
@@ -669,7 +692,12 @@ export function useRentalApi() {
       const { data } = await api.post(
         `/rentals/bookings/${bookingId}/confirm-return`
       );
-      return data as { success: boolean };
+      return data as {
+        success: boolean;
+        overtimeDue?: boolean;
+        overtimeAmount?: number;
+        paymentPending?: boolean;
+      };
     },
     [api]
   );
@@ -717,6 +745,7 @@ export function useRentalApi() {
     retryBookingPayment,
     cancelClientRentalRequest,
     cancelBooking,
+    initiatePickupPayment,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,

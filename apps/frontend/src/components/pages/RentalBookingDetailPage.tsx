@@ -54,6 +54,7 @@ const RentalBookingDetailPage: React.FC = () => {
     fetchBookingDetail,
     getStartPin,
     cancelBooking,
+    initiatePickupPayment,
     verifyStartPin,
     generateOverwrite,
     confirmReturn,
@@ -222,15 +223,57 @@ const RentalBookingDetailPage: React.FC = () => {
   const statusChipColor =
     status === 'confirmed'
       ? ('success' as const)
-      : status === 'active'
+      : status === 'reserved'
         ? ('info' as const)
-        : status === 'awaiting_return'
-          ? ('warning' as const)
-          : status === 'completed'
-            ? ('default' as const)
-            : status === 'cancelled'
-              ? ('error' as const)
-              : ('default' as const);
+        : status === 'active'
+          ? ('info' as const)
+          : status === 'awaiting_return'
+            ? ('warning' as const)
+            : status === 'completed'
+              ? ('default' as const)
+              : status === 'cancelled'
+                ? ('error' as const)
+                : ('default' as const);
+
+  const depositAmount = Number(booking.security_deposit_amount) || 0;
+  const authorizedAmount = Number(booking.authorized_amount) || 0;
+  const overtimeAmount = Number(booking.overtime_amount) || 0;
+  const cancellableBeforeStart =
+    (status === 'confirmed' || status === 'reserved') && !booking.actual_start_at;
+
+  const handleCancelBooking = async () => {
+    try {
+      await cancelBooking(bookingId);
+      setInfo(t('rentals.cancelled', 'Booking cancelled'));
+      void load();
+    } catch (e: unknown) {
+      setError(
+        apiErrorMessage(e, t('rentals.cancelError', 'Could not cancel booking'))
+      );
+    }
+  };
+
+  const handlePickupPayment = async () => {
+    try {
+      const res = await initiatePickupPayment(bookingId);
+      setInfo(
+        res.confirmed
+          ? t('rentals.bookingDetail.pickupPaid', 'Payment collected — rental confirmed')
+          : t(
+              'rentals.bookingDetail.pickupPaymentSent',
+              'Mobile money request sent to the client. The booking confirms once payment lands.'
+            )
+      );
+      void load();
+    } catch (e: unknown) {
+      setError(
+        apiErrorMessage(
+          e,
+          t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment')
+        )
+      );
+    }
+  };
 
   return (
     <>
@@ -323,6 +366,20 @@ const RentalBookingDetailPage: React.FC = () => {
                 'rentals.pinShareHint',
                 'Share this code with the owner to start the rental.'
               )}
+            </Alert>
+          ) : null}
+
+          {booking.status === 'reserved' ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {isClient
+                ? t(
+                    'rentals.bookingDetail.reservedClientHint',
+                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
+                  )
+                : t(
+                    'rentals.bookingDetail.reservedBusinessHint',
+                    'Reserved without payment. Collect the rental total at pickup — the start PIN unlocks after payment.'
+                  )}
             </Alert>
           ) : null}
 
@@ -441,6 +498,51 @@ const RentalBookingDetailPage: React.FC = () => {
                   <Typography variant="h5" fontWeight={900} color="success.dark">
                     {booking.total_amount} {booking.currency}
                   </Typography>
+                  <Stack spacing={0.5} sx={{ mt: 1 }}>
+                    {depositAmount > 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
+                        <strong>
+                          {depositAmount} {booking.currency}
+                        </strong>
+                      </Typography>
+                    ) : null}
+                    {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'rentals.bookingDetail.authorizedOnCard',
+                          'Held on your card (rental + deposit): {{amount}} {{currency}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                          { amount: authorizedAmount, currency: booking.currency }
+                        )}
+                      </Typography>
+                    ) : null}
+                    {booking.payment_timing === 'pay_at_pickup' &&
+                    booking.payment_status === 'pending' ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'rentals.bookingDetail.payAtPickup',
+                          'Nothing paid yet — the rental total is due at pickup.'
+                        )}
+                      </Typography>
+                    ) : null}
+                    {overtimeAmount > 0 ? (
+                      <Typography variant="body2" color="warning.main" fontWeight={700}>
+                        {t(
+                          'rentals.bookingDetail.overtimeDue',
+                          'Extra hours: {{amount}} {{currency}}',
+                          { amount: overtimeAmount, currency: booking.currency }
+                        )}
+                      </Typography>
+                    ) : null}
+                    {cancellableBeforeStart ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'rentals.clientRequests.freeCancelBeforeStart',
+                          'Free cancellation any time before the rental starts.'
+                        )}
+                      </Typography>
+                    ) : null}
+                  </Stack>
                 </Box>
               </Stack>
             </Paper>
@@ -476,42 +578,59 @@ const RentalBookingDetailPage: React.FC = () => {
               </Paper>
             ) : null}
 
-            {(isClient && booking.status === 'confirmed') ||
-            (isBusiness && (booking.status === 'confirmed' || booking.status === 'awaiting_return')) ? (
+            {(isClient && (booking.status === 'confirmed' || booking.status === 'reserved')) ||
+            (isBusiness &&
+              (booking.status === 'confirmed' ||
+                booking.status === 'reserved' ||
+                booking.status === 'awaiting_return')) ? (
               <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
                 <Typography variant="h6" fontWeight={900} sx={{ mb: 1.5 }}>
                   {t('common.actions', 'Actions')}
                 </Typography>
 
-                {isClient && booking.status === 'confirmed' ? (
+                {isClient && (booking.status === 'confirmed' || booking.status === 'reserved') ? (
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    {booking.status === 'confirmed' ? (
+                      <Button
+                        variant="contained"
+                        onClick={async () => {
+                          try {
+                            const r = await getStartPin(bookingId);
+                            setPinValue(r.pin);
+                            setPinModalOpen(true);
+                            setError(null);
+                          } catch (e: unknown) {
+                            setError(e instanceof Error ? e.message : 'Error');
+                          }
+                        }}
+                      >
+                        {t('rentals.showStartPin', 'Show start PIN')}
+                      </Button>
+                    ) : null}
+                    {cancellableBeforeStart ? (
+                      <Button
+                        color="warning"
+                        variant="outlined"
+                        onClick={() => void handleCancelBooking()}
+                      >
+                        {t('rentals.cancelBooking', 'Cancel booking')}
+                      </Button>
+                    ) : null}
+                  </Stack>
+                ) : null}
+
+                {isBusiness && booking.status === 'reserved' ? (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                     <Button
                       variant="contained"
-                      onClick={async () => {
-                        try {
-                          const r = await getStartPin(bookingId);
-                          setPinValue(r.pin);
-                          setPinModalOpen(true);
-                          setError(null);
-                        } catch (e: unknown) {
-                          setError(e instanceof Error ? e.message : 'Error');
-                        }
-                      }}
+                      onClick={() => void handlePickupPayment()}
                     >
-                      {t('rentals.showStartPin', 'Show start PIN')}
+                      {t('rentals.bookingDetail.collectPickupPayment', 'Collect payment')}
                     </Button>
                     <Button
                       color="warning"
                       variant="outlined"
-                      onClick={async () => {
-                        try {
-                          await cancelBooking(bookingId);
-                          setInfo(t('rentals.cancelled', 'Booking cancelled'));
-                          void load();
-                        } catch (e: unknown) {
-                          setError(e instanceof Error ? e.message : 'Error');
-                        }
-                      }}
+                      onClick={() => void handleCancelBooking()}
                     >
                       {t('rentals.cancelBooking', 'Cancel booking')}
                     </Button>
@@ -566,6 +685,15 @@ const RentalBookingDetailPage: React.FC = () => {
                         >
                           {t('rentals.genOverwrite', 'Generate overwrite code')}
                         </Button>
+                        {cancellableBeforeStart ? (
+                          <Button
+                            color="warning"
+                            variant="outlined"
+                            onClick={() => void handleCancelBooking()}
+                          >
+                            {t('rentals.cancelBooking', 'Cancel booking')}
+                          </Button>
+                        ) : null}
                       </Stack>
                     </Stack>
                   </Box>
@@ -577,8 +705,17 @@ const RentalBookingDetailPage: React.FC = () => {
                     color="success"
                     onClick={async () => {
                       try {
-                        await confirmReturn(bookingId);
-                        setInfo(t('rentals.completed', 'Completed and settled'));
+                        const res = await confirmReturn(bookingId);
+                        if (res.paymentPending || res.overtimeDue) {
+                          setInfo(
+                            t(
+                              'rentals.returnOvertimePending',
+                              'Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.'
+                            )
+                          );
+                        } else {
+                          setInfo(t('rentals.completed', 'Completed and settled'));
+                        }
                         void load();
                       } catch (e: unknown) {
                         setError(e instanceof Error ? e.message : 'Error');

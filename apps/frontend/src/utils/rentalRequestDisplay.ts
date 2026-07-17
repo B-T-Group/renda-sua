@@ -38,6 +38,7 @@ export function parseRentalSelectionWindows(raw: unknown): RentalSelectionWindow
 export type ParsedRentalPricingSnapshot = {
   total: number;
   currency: string;
+  securityDeposit?: number;
   lines?: RentalPricingSnapshotLine[];
 };
 
@@ -74,7 +75,11 @@ export function parseRentalPricingSnapshot(snap: unknown): ParsedRentalPricingSn
     const parsed = o.lines.filter(isPricingLine);
     if (parsed.length) lines = parsed;
   }
-  return { total, currency, lines };
+  const securityDeposit =
+    typeof o.securityDeposit === 'number' && o.securityDeposit > 0
+      ? o.securityDeposit
+      : undefined;
+  return { total, currency, securityDeposit, lines };
 }
 
 export function formatRentalMoney(amount: number, currency: string): string {

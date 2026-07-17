@@ -55,6 +55,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const [selLoc, setSelLoc] = useState('');
   const [price, setPrice] = useState('');
   const [priceDay, setPriceDay] = useState('');
+  const [deposit, setDeposit] = useState('');
   const [minD, setMinD] = useState('1');
   const [maxD, setMaxD] = useState('');
   const [pickup, setPickup] = useState('');
@@ -103,6 +104,9 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           dropoff_instructions: dropoff,
           base_price_per_hour: hourly,
           base_price_per_day: daily,
+          ...(deposit.trim() !== ''
+            ? { security_deposit_amount: Number(deposit) }
+            : {}),
           min_rental_hours: Number(minD) || 1,
           max_rental_hours: maxD ? Number(maxD) : null,
           units_available: unitsNum,
@@ -379,6 +383,16 @@ const BusinessRentalsCatalogPage: React.FC = () => {
             helperText={t(
               'business.rentals.pricePerDayHint',
               'Leave empty to use 12 × hourly rate'
+            )}
+          />
+          <TextField
+            label={t('business.rentals.securityDeposit', 'Security deposit')}
+            value={deposit}
+            onChange={(e) => setDeposit(e.target.value)}
+            type="number"
+            helperText={t(
+              'business.rentals.securityDepositCreateHint',
+              'Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.'
             )}
           />
           <TextField label={t('rentals.minHours', 'Min hours')} value={minD} onChange={(e) => setMinD(e.target.value)} />

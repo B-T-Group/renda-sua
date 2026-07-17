@@ -83,6 +83,11 @@ function subjectForTemplate(name: string): string {
       ? 'Commande à proximité — Rendasua'
       : 'Order near you — Rendasua';
   }
+  if (name.includes('rental_ending_soon')) {
+    return name.endsWith('_fr')
+      ? 'Location — fin dans 30 minutes — Rendasua'
+      : 'Rental ends in 30 minutes — Rendasua';
+  }
   if (name.includes('rental_period_ended')) {
     return name.endsWith('_fr')
       ? 'Location — fin de période — Rendasua'
