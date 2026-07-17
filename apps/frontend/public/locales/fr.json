@@ -3164,6 +3164,7 @@
     "readyForPickup": "Marquer comme prêt",
     "requestPayment": "Demander le paiement",
     "requestPickupPayment": "Demander le paiement au retrait",
+    "confirmClientPickup": "Confirmer le retrait",
     "markPaidInCash": "Marquer payé en espèces",
     "payAtDeliveryPaymentInitiated": "Demande de paiement envoyée au client",
     "payAtDeliveryPaymentFailed": "Impossible de lancer le paiement",
@@ -3257,7 +3258,13 @@
       "businessInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois qu’il l’aura acceptée, la commande se terminera automatiquement.",
       "payAtPickupShort": "Paiement au retrait",
       "businessInitiateSubtitle": "Le paiement est encaissé lorsque le client retire sa commande.",
-      "paymentRequestSent": "Demande de paiement envoyée au client."
+      "paymentRequestSent": "Demande de paiement envoyée au client.",
+      "payAtCheckoutHint": "Votre carte est autorisée lors de la commande et débitée lorsque vous la retirez en magasin.",
+      "confirmPickupTitle": "Confirmer le retrait par le client",
+      "confirmPickupBodyAuthorized": "Confirmez que le client a retiré cette commande. Le paiement par carte autorisé sera débité et la commande marquée comme terminée.",
+      "confirmPickupBodyPaid": "Confirmez que le client a retiré cette commande. La commande sera marquée comme terminée.",
+      "confirmPickupSuccess": "Retrait confirmé. La commande est terminée.",
+      "confirmPickupError": "Impossible de confirmer le retrait"
     },
     "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {

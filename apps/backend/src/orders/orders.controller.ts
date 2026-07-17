@@ -547,6 +547,20 @@ export class OrdersController {
     );
   }
 
+  @Post(':id/confirm-pickup')
+  @ApiOperation({
+    summary: 'Confirm client picked up a store-pickup order (business only)',
+    description:
+      'For paid or card-authorized pickup orders in ready_for_pickup, the business confirms the client collected the order. Captures the authorized card payment (Stripe manual capture), settles, and marks the order complete. Pay-at-pickup (mobile money) orders are completed by their payment callback instead.',
+  })
+  @ApiResponse({ status: 200, description: 'Pickup confirmed; order completed' })
+  @ApiResponse({ status: 400, description: 'Invalid order state' })
+  @ApiResponse({ status: 402, description: 'Order payment is not authorized or paid' })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  async confirmClientPickup(@Param('id') orderId: string) {
+    return this.ordersService.confirmClientPickup(orderId);
+  }
+
   @Post(':id/mark-paid-in-cash-exception')
   @ApiOperation({
     summary: 'Mark pay-at-delivery order as paid in cash (exception, agent only)',

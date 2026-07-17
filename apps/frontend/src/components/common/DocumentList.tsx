@@ -51,6 +51,13 @@ import {
 } from '../../hooks/useDocumentManagement';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 
+/** System-generated types with no review workflow; approval status is hidden. */
+const AUTO_APPROVED_TYPE_NAMES = [
+  'order_receipt',
+  'rendasua_contract_agreement',
+  'rendasua_training_completion',
+];
+
 interface DocumentListProps {
   documents: UserDocument[];
   documentTypes: DocumentType[];
@@ -446,13 +453,21 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          badgeContent={
-                            document.is_approved ? 'Approved' : 'Pending'
-                          }
-                          color={document.is_approved ? 'success' : 'warning'}
-                          sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem' } }}
-                        />
+                        {AUTO_APPROVED_TYPE_NAMES.includes(
+                          document.document_type?.name
+                        ) ? (
+                          <Typography variant="body2" color="text.secondary">
+                            -
+                          </Typography>
+                        ) : (
+                          <Badge
+                            badgeContent={
+                              document.is_approved ? 'Approved' : 'Pending'
+                            }
+                            color={document.is_approved ? 'success' : 'warning'}
+                            sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem' } }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">

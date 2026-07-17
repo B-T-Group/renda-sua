@@ -13,8 +13,6 @@ export interface UploadData {
   file_size: number;
   document_type_id: number;
   note?: string;
-  /** When true, insert as approved (system-generated docs like receipts). */
-  is_approved?: boolean;
 }
 
 export interface PresignedUrlResponse {
@@ -33,6 +31,17 @@ export interface UploadRecord {
 }
 
 const ID_DOCUMENT_TYPE_NAMES = ['id_card', 'passport', 'driver_license'];
+
+/**
+ * System-generated document types that never go through admin review and are
+ * therefore inserted as approved. Client apps hide the approval status for
+ * these types.
+ */
+export const AUTO_APPROVED_DOCUMENT_TYPE_NAMES = [
+  'order_receipt',
+  'rendasua_contract_agreement',
+  'rendasua_training_completion',
+];
 
 @Injectable()
 export class UploadService {
@@ -210,18 +219,36 @@ export class UploadService {
   /**
    * Generate a presigned URL for uploading a new file
    * @param uploadData Upload data including file details
+   * @param targetUser When set, the upload is stored for this user instead of
+   *   the request user (system-generated documents such as order receipts,
+   *   which may be triggered by another party, e.g. a business confirming
+   *   pickup).
    * @returns Promise<{ upload_record: any; presigned_url: string; expires_at: Date }>
    */
-  async generateUploadUrl(uploadData: UploadData): Promise<{
+  async generateUploadUrl(
+    uploadData: UploadData,
+    targetUser?: { userId: string; persona: string }
+  ): Promise<{
     upload_record: any;
     presigned_url: string;
     expires_at: Date;
   }> {
-    const user = await this.hasuraUserService.getUser();
-    const persona = resolveActivePersona(
-      user,
-      this.hasuraUserService.getActivePersonaHeader()
-    );
+    let ownerId: string;
+    let persona: string;
+    let requestUser: Awaited<
+      ReturnType<HasuraUserService['getUser']>
+    > | null = null;
+    if (targetUser) {
+      ownerId = targetUser.userId;
+      persona = targetUser.persona;
+    } else {
+      requestUser = await this.hasuraUserService.getUser();
+      ownerId = requestUser.id;
+      persona = resolveActivePersona(
+        requestUser,
+        this.hasuraUserService.getActivePersonaHeader()
+      );
+    }
 
     // Validate required fields
     if (
@@ -241,7 +268,15 @@ export class UploadService {
       throw new Error('File size exceeds maximum allowed size of 10MB');
     }
 
-    const key = `${persona}/${user.id}/${uploadData.document_type_id}/${uploadData.file_name}`;
+    // Approval is decided server-side by document type; callers cannot set it.
+    const documentTypeName = await this.getDocumentTypeName(
+      uploadData.document_type_id
+    );
+    const isApproved = documentTypeName
+      ? AUTO_APPROVED_DOCUMENT_TYPE_NAMES.includes(documentTypeName)
+      : false;
+
+    const key = `${persona}/${ownerId}/${uploadData.document_type_id}/${uploadData.file_name}`;
 
     // Generate presigned URL for S3 upload
     const presignedUrlResponse =
@@ -251,7 +286,7 @@ export class UploadService {
         contentType: uploadData.content_type,
         expiresIn: 3600, // 1 hour
         metadata: {
-          'user-id': user.id,
+          'user-id': ownerId,
           'user-type': persona,
           'document-type-id': uploadData.document_type_id.toString(),
           'file-size': uploadData.file_size.toString(),
@@ -299,23 +334,23 @@ export class UploadService {
     const uploadRecord = await this.hasuraSystemService.executeMutation(
       insertMutation,
       {
-        user_id: user.id,
+        user_id: ownerId,
         document_type_id: uploadData.document_type_id,
         note: uploadData.note || null,
         content_type: uploadData.content_type,
         key: key,
         file_name: uploadData.file_name,
         file_size: uploadData.file_size,
-        is_approved: uploadData.is_approved === true,
+        is_approved: isApproved,
       }
     );
 
     const inserted = uploadRecord.insert_user_uploads_one as
       | { id: string }
       | undefined;
-    if (inserted?.id && persona === 'business') {
+    if (inserted?.id && requestUser && persona === 'business') {
       void this.notifyBusinessIdUploadIfNeeded(
-        user,
+        requestUser,
         uploadData.document_type_id,
         inserted.id
       );

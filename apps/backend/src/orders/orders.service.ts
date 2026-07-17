@@ -1308,9 +1308,6 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    if ((order as any).fulfillment_method === 'pickup') {
-      await this.captureStripeAuthorizedOrderIfNeeded(order);
-    }
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup'
@@ -1336,6 +1333,76 @@ export class OrdersService {
     return this.processBatch(request, (orderId) =>
       this.completePreparation({ orderId, notes: request.notes })
     );
+  }
+
+  /**
+   * Business confirms the client collected a pickup order at the store.
+   * Captures the authorized card payment (Stripe manual capture), settles
+   * item/delivery shares, and completes the order. MoMo pay-at-pickup orders
+   * are completed by their payment callback instead (initiatePayAtPickupPayment).
+   */
+  async confirmClientPickup(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can confirm client pickup'
+    );
+    const order = await this.getOrderDetails(orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    this.assertConfirmClientPickupAllowed(order, user.id);
+
+    // Capture the authorized PaymentIntent; marks the order paid via the
+    // payment finalizer. No-op when the order is already paid (e.g. wallet).
+    await this.captureStripeAuthorizedOrderIfNeeded(order);
+
+    // Settlement and completion are idempotent.
+    await this.processOrderPayment(orderId);
+    await this.processOrderDeliveryPayment(orderId);
+    await this.completeOrderWithSideEffects(
+      order,
+      'Order completed after client pickup confirmation'
+    );
+
+    const updatedOrder = await this.getOrderDetails(orderId);
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Pickup confirmed; order completed',
+    };
+  }
+
+  private assertConfirmClientPickupAllowed(
+    order: Orders,
+    userId: string
+  ): void {
+    if (order.business.user_id !== userId)
+      throw new HttpException(
+        'Unauthorized to confirm pickup for this order',
+        HttpStatus.FORBIDDEN
+      );
+    if ((order as any).fulfillment_method !== 'pickup')
+      throw new HttpException(
+        'Only store pickup orders can be confirmed as picked up',
+        HttpStatus.BAD_REQUEST
+      );
+    if (order.current_status !== 'ready_for_pickup')
+      throw new HttpException(
+        `Cannot confirm pickup for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    if ((order as any).payment_timing === 'pay_at_pickup')
+      throw new HttpException(
+        'Pay-at-pickup orders are completed by the pickup payment request',
+        HttpStatus.BAD_REQUEST
+      );
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus !== 'authorized' && paymentStatus !== 'paid')
+      throw new HttpException(
+        'Order payment must be authorized or paid before confirming pickup',
+        HttpStatus.PAYMENT_REQUIRED
+      );
   }
 
   async claimOrder(request: GetOrderRequest, platformHeader?: string) {
@@ -2973,7 +3040,8 @@ export class OrdersService {
       await this.buildTaxParamsForOrderRetry(order.id);
     const captureMethod =
       this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
-        order.business_location?.address?.country ?? undefined
+        order.business_location?.address?.country ?? undefined,
+        (order as any).fulfillment_method === 'pickup' ? 'pickup' : 'delivery'
       );
     const customerDisplayName =
       `${order.client?.user?.first_name || ''} ${order.client?.user?.last_name || ''}`.trim() ||
@@ -6056,37 +6124,50 @@ export class OrdersService {
     await this.processOrderPayment(order.id);
     await this.processOrderDeliveryPayment(order.id);
 
-    await this.setOrderCompleteSystem(order.id);
+    await this.completeOrderWithSideEffects(
+      order,
+      'Order completed after pay-at-delivery payment confirmation'
+    );
+  }
 
-    // Completion side effects (best-effort)
+  /**
+   * Mark the order complete in system context and run the best-effort
+   * completion side effects (inventory, receipt, completion message, rewards).
+   */
+  private async completeOrderWithSideEffects(
+    order: Orders,
+    historyMessage: string
+  ): Promise<void> {
+    await this.setOrderCompleteSystem(order.id, historyMessage);
+
     try {
       const orderWithDetails = await this.getOrderDetails(order.id);
       const orderItems = orderWithDetails?.order_items || [];
       await this.updateInventoryOnCompletion(orderItems);
     } catch (error: any) {
       this.logger.error(
-        `Failed to update inventory after PoD completion: ${error.message}`
+        `Failed to update inventory after completion: ${error.message}`
       );
     }
     try {
       await this.pdfService.generateReceipt(order.id, order.client.user_id);
     } catch (error: any) {
       this.logger.error(
-        `Failed to generate receipt after PoD completion: ${error.message}`
+        `Failed to generate receipt after completion: ${error.message}`
       );
     }
     try {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed after PoD completion: ${error.message}`
+        `Failed to send order.completed after completion: ${error.message}`
       );
     }
     try {
       await this.handleOrderCompletionRewards(order.id);
     } catch (error: any) {
       this.logger.error(
-        `Failed to handle loyalty rewards after PoD completion: ${error.message}`
+        `Failed to handle loyalty rewards after completion: ${error.message}`
       );
     }
   }
@@ -6113,7 +6194,10 @@ export class OrdersService {
     });
   }
 
-  private async setOrderCompleteSystem(orderId: string): Promise<void> {
+  private async setOrderCompleteSystem(
+    orderId: string,
+    historyMessage = 'Order completed after pay-at-delivery payment confirmation'
+  ): Promise<void> {
     const at = new Date().toISOString();
     const mutation = `
       mutation CompleteOrderSystem($orderId: uuid!, $at: timestamptz!) {
@@ -6136,7 +6220,7 @@ export class OrdersService {
         await this.createStatusHistoryEntry(
           orderId,
           'complete',
-          'Order completed after pay-at-delivery payment confirmation',
+          historyMessage,
           'system',
           changedBy
         );
@@ -7864,7 +7948,8 @@ export class OrdersService {
       );
       const captureMethod =
         this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
-          sellerCountry ?? undefined
+          sellerCountry ?? undefined,
+          fulfillmentMethod
         );
 
       const taxCheckoutParams = this.buildStripeTaxCheckoutParams({
@@ -8624,10 +8709,12 @@ export class OrdersService {
       | 'pay_at_delivery'
       | 'pay_at_pickup'
       | undefined;
+    const isPickupFulfillment =
+      (order as any).fulfillment_method === 'pickup';
     const itemStatuses =
       paymentTiming === 'pay_at_delivery'
         ? ['assigned_to_agent', 'picked_up', 'out_for_delivery', 'complete']
-        : paymentTiming === 'pay_at_pickup'
+        : paymentTiming === 'pay_at_pickup' || isPickupFulfillment
           ? ['ready_for_pickup', 'complete']
           : ['assigned_to_agent', 'picked_up'];
     if (!itemStatuses.includes(order.current_status)) {
@@ -8743,7 +8830,8 @@ export class OrdersService {
       | undefined;
 
     const deliveryStatuses =
-      paymentTiming === 'pay_at_pickup'
+      paymentTiming === 'pay_at_pickup' ||
+      (order as any).fulfillment_method === 'pickup'
         ? ['ready_for_pickup', 'complete']
         : ['out_for_delivery', 'complete'];
     if (!deliveryStatuses.includes(order.current_status)) {

@@ -828,6 +828,31 @@ export const useBackendOrders = () => {
     });
   };
 
+  const confirmClientPickup = async (orderId: string): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post(
+          `/orders/${orderId}/confirm-pickup`,
+          {}
+        );
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to confirm pickup'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
   const retryOrderPayment = async (orderId: string): Promise<any> => {
     if (!apiClient) {
       throw new Error(
@@ -1023,6 +1048,7 @@ export const useBackendOrders = () => {
     completeDelivery,
     initiatePayAtDeliveryPayment,
     initiatePayAtPickupPayment,
+    confirmClientPickup,
     retryOrderPayment,
     markPaidInCashException,
     reconcileCashException,

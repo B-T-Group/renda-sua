@@ -476,7 +476,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                       {pickupPayAtCheckout
                         ? t(
                             'orders.pickup.payAtCheckoutHint',
-                            'Pay securely by card when you place your order, then pick up at the store.'
+                            'Your card is authorized when you place the order and charged when you collect it at the store.'
                           )
                         : t(
                             'orders.pickup.payAtPickupHint',

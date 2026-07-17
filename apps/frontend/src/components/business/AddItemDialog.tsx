@@ -95,7 +95,7 @@ export default function AddItemDialog({
     business_id: businessId,
     is_active: true,
     pay_on_delivery_enabled: false,
-    pay_at_pickup_enabled: false,
+    pay_at_pickup_enabled: true,
     min_order_quantity: 1,
     max_order_quantity: 1,
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
@@ -295,7 +295,7 @@ export default function AddItemDialog({
           business_id: businessId,
           is_active: true,
           pay_on_delivery_enabled: false,
-          pay_at_pickup_enabled: false,
+          pay_at_pickup_enabled: true,
           min_order_quantity: 1,
         });
         setTabValue(0);

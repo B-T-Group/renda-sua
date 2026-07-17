@@ -3424,6 +3424,7 @@
     "readyForPickup": "Set as ready",
     "requestPayment": "Request payment",
     "requestPickupPayment": "Request pickup payment",
+    "confirmClientPickup": "Confirm pickup",
     "markPaidInCash": "Mark paid in cash",
     "payAtDeliveryPaymentInitiated": "Payment request sent to the client",
     "payAtDeliveryPaymentFailed": "Failed to initiate payment",
@@ -3517,7 +3518,13 @@
       "businessInitiateHelp": "Send a mobile payment request to the client. When they approve it, the order will complete automatically.",
       "payAtPickupShort": "Pay at pickup",
       "businessInitiateSubtitle": "Payment is collected when the customer picks up the order.",
-      "paymentRequestSent": "Payment request sent to the client."
+      "paymentRequestSent": "Payment request sent to the client.",
+      "payAtCheckoutHint": "Your card is authorized when you place the order and charged when you collect it at the store.",
+      "confirmPickupTitle": "Confirm client pickup",
+      "confirmPickupBodyAuthorized": "Confirm the client collected this order. The authorized card payment will be charged and the order marked complete.",
+      "confirmPickupBodyPaid": "Confirm the client collected this order. The order will be marked complete.",
+      "confirmPickupSuccess": "Pickup confirmed. The order is complete.",
+      "confirmPickupError": "Failed to confirm pickup"
     },
     "trackInMyOrders": "Track progress in My Orders",
     "actions": {

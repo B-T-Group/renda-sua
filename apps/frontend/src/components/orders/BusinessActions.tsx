@@ -125,6 +125,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const {
     confirmOrder,
     completePreparation,
+    confirmClientPickup,
     generateDeliveryOverwriteCode,
     reconcileCashException,
   } = useBackendOrders();
@@ -230,6 +231,31 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [overwriteCodeDialogOpen, setOverwriteCodeDialogOpen] = useState(false);
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
+  const [confirmPickupDialogOpen, setConfirmPickupDialogOpen] = useState(false);
+
+  const handleConfirmClientPickup = async () => {
+    setLoading(true);
+    try {
+      await confirmClientPickup(order.id);
+      onShowNotification?.(
+        t(
+          'orders.pickup.confirmPickupSuccess',
+          'Pickup confirmed. The order is complete.'
+        ),
+        'success'
+      );
+      setConfirmPickupDialogOpen(false);
+      onActionComplete?.();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('orders.pickup.confirmPickupError', 'Failed to confirm pickup');
+      onShowNotification?.(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGenerateOverwriteCode = async () => {
     setLoading(true);
@@ -394,6 +420,19 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             icon: <PaymentsOutlined />,
           });
         }
+        if (
+          order.fulfillment_method === 'pickup' &&
+          order.payment_timing !== 'pay_at_pickup' &&
+          (order.payment_status === 'authorized' ||
+            order.payment_status === 'paid')
+        ) {
+          actions.push({
+            label: t('orderActions.confirmClientPickup', 'Confirm pickup'),
+            action: () => setConfirmPickupDialogOpen(true),
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+        }
         break;
 
       case 'delivered':
@@ -551,6 +590,44 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             }}
           >
             {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmPickupDialogOpen}
+        onClose={() => setConfirmPickupDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.pickup.confirmPickupTitle', 'Confirm client pickup')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            {order.payment_status === 'authorized'
+              ? t(
+                  'orders.pickup.confirmPickupBodyAuthorized',
+                  'Confirm the client collected this order. The authorized card payment will be charged and the order marked complete.'
+                )
+              : t(
+                  'orders.pickup.confirmPickupBodyPaid',
+                  'Confirm the client collected this order. The order will be marked complete.'
+                )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmPickupDialogOpen(false)}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={16} /> : <CheckCircle />}
+            onClick={handleConfirmClientPickup}
+          >
+            {t('orderActions.confirmClientPickup', 'Confirm pickup')}
           </Button>
         </DialogActions>
       </Dialog>

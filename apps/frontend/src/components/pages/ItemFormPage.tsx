@@ -153,7 +153,7 @@ const ItemFormPage: React.FC = () => {
     is_perishable: false,
     requires_special_handling: false,
     pay_on_delivery_enabled: false,
-    pay_at_pickup_enabled: false,
+    pay_at_pickup_enabled: true,
     min_order_quantity: 1,
     max_order_quantity: null,
     item_sub_category_id: null,

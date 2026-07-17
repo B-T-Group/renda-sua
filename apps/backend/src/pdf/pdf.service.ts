@@ -329,7 +329,7 @@ export class PdfService {
   private async uploadReceiptToS3(
     pdfBuffer: Buffer,
     orderNumber: string,
-    _userId: string
+    userId: string
   ): Promise<any> {
     try {
       const fileName = `receipt-${orderNumber}.pdf`;
@@ -343,11 +343,14 @@ export class PdfService {
         content_type: contentType,
         file_size: fileSize,
         note: `Receipt for order ${orderNumber}`,
-        is_approved: true,
       };
 
+      // Receipts belong to the client who placed the order, even when receipt
+      // generation is triggered by another party (agent delivery, business
+      // pickup confirmation, payment callbacks).
       const uploadResult = await this.uploadService.generateUploadUrl(
-        uploadData
+        uploadData,
+        { userId, persona: 'client' }
       );
 
       // Upload PDF to S3 using presigned URL
