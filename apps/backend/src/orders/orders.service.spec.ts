@@ -5,7 +5,6 @@ import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { CommissionsService } from '../commissions/commissions.service';
-import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
@@ -38,11 +37,20 @@ jest.mock('../commissions/commissions.service', () => ({
   CommissionsService: class CommissionsService {},
 }));
 
+interface PickupOrderInternals {
+  getOrderDetails(orderId: string): Promise<unknown>;
+  finalizeStripeCapturedOrderPayment(orderNumber: string): Promise<void>;
+  completeOrderWithSideEffects(
+    order: unknown,
+    historyMessage: string
+  ): Promise<void>;
+}
+
 describe('OrdersService', () => {
   let service: OrdersService;
+  let pickupOrderInternals: PickupOrderInternals;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
-  let configService: jest.Mocked<ConfigService<Configuration>>;
   let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
@@ -239,9 +247,9 @@ describe('OrdersService', () => {
     }).compile();
 
     service = module.get<OrdersService>(OrdersService);
+    pickupOrderInternals = service as unknown as PickupOrderInternals;
     hasuraUserService = module.get(HasuraUserService);
     hasuraSystemService = module.get(HasuraSystemService);
-    configService = module.get(ConfigService);
     agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
@@ -317,7 +325,7 @@ describe('OrdersService', () => {
   describe('completePreparation', () => {
     it('does not capture an authorized pickup payment before handoff', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      jest.spyOn(pickupOrderInternals, 'getOrderDetails').mockResolvedValue({
         ...mockOrder,
         current_status: 'confirmed',
         fulfillment_method: 'pickup',
@@ -380,7 +388,7 @@ describe('OrdersService', () => {
     it('captures, settles, and completes an authorized pickup order', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
       jest
-        .spyOn(service as any, 'getOrderDetails')
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
         .mockResolvedValueOnce(pickupOrder)
         .mockResolvedValueOnce({ ...pickupOrder, current_status: 'complete' });
       stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
@@ -388,7 +396,7 @@ describe('OrdersService', () => {
         captured: true,
       });
       const finalizeSpy = jest
-        .spyOn(service as any, 'finalizeStripeCapturedOrderPayment')
+        .spyOn(pickupOrderInternals, 'finalizeStripeCapturedOrderPayment')
         .mockResolvedValue(undefined);
       const itemSettlementSpy = jest
         .spyOn(service, 'processOrderPayment')
@@ -397,7 +405,7 @@ describe('OrdersService', () => {
         .spyOn(service, 'processOrderDeliveryPayment')
         .mockResolvedValue(undefined);
       const completionSpy = jest
-        .spyOn(service as any, 'completeOrderWithSideEffects')
+        .spyOn(pickupOrderInternals, 'completeOrderWithSideEffects')
         .mockResolvedValue(undefined);
 
       const result = await service.confirmClientPickup(pickupOrder.id);
@@ -421,7 +429,7 @@ describe('OrdersService', () => {
     it('stops settlement and completion when Stripe capture fails', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
       jest
-        .spyOn(service as any, 'getOrderDetails')
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
         .mockResolvedValue(pickupOrder);
       stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
         success: false,
@@ -433,7 +441,7 @@ describe('OrdersService', () => {
         'processOrderDeliveryPayment'
       );
       const completionSpy = jest.spyOn(
-        service as any,
+        pickupOrderInternals,
         'completeOrderWithSideEffects'
       );
 
@@ -453,7 +461,7 @@ describe('OrdersService', () => {
       };
       hasuraUserService.getUser.mockResolvedValue(mockUser);
       jest
-        .spyOn(service as any, 'getOrderDetails')
+        .spyOn(pickupOrderInternals, 'getOrderDetails')
         .mockResolvedValue(paidPickupOrder);
       const itemSettlementSpy = jest
         .spyOn(service, 'processOrderPayment')
@@ -462,7 +470,7 @@ describe('OrdersService', () => {
         .spyOn(service, 'processOrderDeliveryPayment')
         .mockResolvedValue(undefined);
       jest
-        .spyOn(service as any, 'completeOrderWithSideEffects')
+        .spyOn(pickupOrderInternals, 'completeOrderWithSideEffects')
         .mockResolvedValue(undefined);
 
       await service.confirmClientPickup(pickupOrder.id);
