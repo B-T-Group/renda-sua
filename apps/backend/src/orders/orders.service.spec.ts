@@ -162,17 +162,29 @@ describe('OrdersService', () => {
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
         { provide: MobilePaymentsService, useValue: {} },
-        { provide: MobilePaymentsDatabaseService, useValue: {
-          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
-          getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
-        } },
+        {
+          provide: MobilePaymentsDatabaseService,
+          useValue: {
+            hasPendingClaimOrderForOrderNumber: jest
+              .fn()
+              .mockResolvedValue(false),
+            getOrderNumbersWithPendingClaimOrder: jest
+              .fn()
+              .mockResolvedValue([]),
+          },
+        },
         { provide: NotificationsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
-        { provide: CommissionsService, useValue: {
-          getCommissionConfigs: jest.fn().mockResolvedValue({}),
-          calculateAgentEarningsSync: jest.fn().mockReturnValue({ delivery_commission: 500 }),
-        } },
+        {
+          provide: CommissionsService,
+          useValue: {
+            getCommissionConfigs: jest.fn().mockResolvedValue({}),
+            calculateAgentEarningsSync: jest
+              .fn()
+              .mockReturnValue({ delivery_commission: 500 }),
+          },
+        },
         { provide: PdfService, useValue: {} },
         { provide: OrderQueueService, useValue: {} },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
@@ -187,16 +199,21 @@ describe('OrdersService', () => {
         {
           provide: OrderRefundsService,
           useValue: {
-            legacyDirectFullRefund: jest.fn().mockRejectedValue(
-              new HttpException(
-                'Direct refunds via this endpoint are disabled. Clients should submit a refund request; admins should use POST /admin/refunds/force.',
-                HttpStatus.GONE
-              )
-            ),
+            legacyDirectFullRefund: jest
+              .fn()
+              .mockRejectedValue(
+                new HttpException(
+                  'Direct refunds via this endpoint are disabled. Clients should submit a refund request; admins should use POST /admin/refunds/force.',
+                  HttpStatus.GONE
+                )
+              ),
           },
         },
         { provide: LoyaltyService, useValue: {} },
-        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        {
+          provide: PaymentRoutingService,
+          useValue: { resolveRailForBusiness: jest.fn() },
+        },
         { provide: StripeCheckoutService, useValue: {} },
         {
           provide: StripeCaptureService,
@@ -215,10 +232,15 @@ describe('OrdersService', () => {
             markOfferExpired: jest.fn(),
           },
         },
-        { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
+        {
+          provide: CancellationPolicyService,
+          useValue: { getPolicy: jest.fn() },
+        },
         {
           provide: LocationsService,
-          useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
+          useValue: {
+            getLatestAgentLocation: jest.fn().mockResolvedValue(null),
+          },
         },
       ],
     }).compile();
@@ -389,7 +411,9 @@ describe('OrdersService', () => {
 
       const result = await service.confirmClientPickup(pickupOrder.id);
 
-      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).toHaveBeenCalledWith({
         orderId: pickupOrder.id,
         orderNumber: pickupOrder.order_number,
       });
@@ -633,7 +657,9 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('picked_up');
-      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).not.toHaveBeenCalled();
     });
 
     it('captures authorized Stripe payment at pickup', async () => {
@@ -647,7 +673,9 @@ describe('OrdersService', () => {
         },
       });
       hasuraSystemService.executeMutation.mockResolvedValue({
-        order_holds: [{ id: 'hold-1', item_settlement_completed_at: '2024-01-02' }],
+        order_holds: [
+          { id: 'hold-1', item_settlement_completed_at: '2024-01-02' },
+        ],
       });
       stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
         success: true,
@@ -667,7 +695,9 @@ describe('OrdersService', () => {
 
       await service.pickUpOrder({ orderId: 'order-123' });
 
-      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+      expect(
+        stripeCaptureService.captureOrderPaymentIntent
+      ).toHaveBeenCalledWith({
         orderId: 'order-123',
         orderNumber: assignedOrder.order_number,
       });
@@ -1491,18 +1521,18 @@ describe('OrdersService', () => {
       hasuraUserService.getActivePersonaHeader.mockReturnValue('agent');
       hasuraSystemService.getAllUserAddresses = jest
         .fn()
-        .mockResolvedValue([
-          { country: 'CM', state: '', is_primary: true },
-        ]);
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('GetAgentStatus')) {
-          return { agents_by_pk: { status: 'active' } };
+        .mockResolvedValue([{ country: 'CM', state: '', is_primary: true }]);
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('GetAgentStatus')) {
+            return { agents_by_pk: { status: 'active' } };
+          }
+          if (query.includes('OpenOrders')) {
+            return { orders: [openOrderRow] };
+          }
+          return {};
         }
-        if (query.includes('OpenOrders')) {
-          return { orders: [openOrderRow] };
-        }
-        return {};
-      });
+      );
     });
 
     it('returns country preview with canClaim false for unverified agents', async () => {
@@ -1520,9 +1550,9 @@ describe('OrdersService', () => {
         ...mockAgentUser,
         agent: { id: 'agent-123', user_id: 'agent-123', is_verified: true },
       });
-      hasuraSystemService.getAllUserAddresses = jest.fn().mockResolvedValue([
-        { country: 'CM', state: '', is_primary: true },
-      ]);
+      hasuraSystemService.getAllUserAddresses = jest
+        .fn()
+        .mockResolvedValue([{ country: 'CM', state: '', is_primary: true }]);
       (service as any).locationsService = {
         getLatestAgentLocation: jest.fn().mockResolvedValue({
           agentId: 'agent-123',
@@ -1547,12 +1577,14 @@ describe('OrdersService', () => {
 
     it('returns empty orders for suspended agents', async () => {
       hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('GetAgentStatus')) {
-          return { agents_by_pk: { status: 'suspended' } };
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('GetAgentStatus')) {
+            return { agents_by_pk: { status: 'suspended' } };
+          }
+          return { orders: [openOrderRow] };
         }
-        return { orders: [openOrderRow] };
-      });
+      );
 
       const result = await service.getOpenOrders();
 
