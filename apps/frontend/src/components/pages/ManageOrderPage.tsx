@@ -50,7 +50,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import rendasuaLogo from '../../assets/rendasua.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
@@ -58,6 +58,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
+import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
@@ -65,7 +66,7 @@ import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
-import RatingDialog from '../dialogs/RatingDialog';
+import RatingDialog, { type RatingDialogMode } from '../dialogs/RatingDialog';
 import ReportIssueDialog from '../dialogs/ReportIssueDialog';
 import AgentActions from '../orders/AgentActions';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
@@ -224,6 +225,11 @@ const ManageOrderPage: React.FC = () => {
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
+  const { eligibility, refetch: refetchEligibility } =
+    useOrderRatingEligibility(
+      orderId || '',
+      order?.current_status === 'complete' && activePersona !== 'business'
+    );
   const { isActive: orderSubscriptionActive } = useOrderSubscription({
     orderId: orderId ?? null,
     onOrderUpdate: refetch,
@@ -250,13 +256,33 @@ const ManageOrderPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [reportIssueDialogOpen, setReportIssueDialogOpen] = useState(false);
-  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [ratingDialogMode, setRatingDialogMode] =
+    useState<RatingDialogMode | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const api = useApiClient();
   const [notificationAlert, setNotificationAlert] = useState<{
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   } | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+
+  // Auto-open the rating dialog from ?rate=agent|item|client (push deep links).
+  // Only consume the param when the dialog actually opens; if the user is not
+  // yet eligible (e.g. item rating still locked), keep the intent so a later
+  // eligibility refresh can honor it.
+  useEffect(() => {
+    const rateParam = searchParams.get('rate');
+    if (!rateParam || !eligibility) return;
+    const eligibleByMode: Record<string, boolean> = {
+      agent: eligibility.canRateAgent,
+      item: eligibility.canRateItem,
+      client: eligibility.canRateClient,
+    };
+    if (!eligibleByMode[rateParam]) return;
+    setRatingDialogMode(rateParam as RatingDialogMode);
+    searchParams.delete('rate');
+    setSearchParams(searchParams, { replace: true });
+  }, [eligibility, searchParams, setSearchParams]);
 
   // Helper functions
   const getStatusColor = (status: string) => {
@@ -1792,21 +1818,59 @@ const ManageOrderPage: React.FC = () => {
                       />
                     )}
 
-                    {/* Rating button */}
-                    {order.current_status === 'complete' &&
-                      activePersona &&
-                      activePersona !== 'business' &&
-                      ratings.length === 0 && (
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          startIcon={<Star />}
-                          onClick={() => setRatingDialogOpen(true)}
-                          fullWidth
+                    {/* Rating buttons (eligibility-driven) */}
+                    {eligibility?.canRateAgent && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Star />}
+                        onClick={() => setRatingDialogMode('agent')}
+                        fullWidth
+                      >
+                        {t('orders.actions.rateAgent', 'Rate Delivery Agent')}
+                      </Button>
+                    )}
+                    {eligibility?.canRateItem && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Star />}
+                        onClick={() => setRatingDialogMode('item')}
+                        fullWidth
+                      >
+                        {t('orders.actions.rateItems', 'Rate Your Items')}
+                      </Button>
+                    )}
+                    {eligibility &&
+                      !eligibility.canRateItem &&
+                      activePersona === 'client' &&
+                      eligibility.itemRatingUnlocksAt &&
+                      new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
+                      eligibility.items.some((i) => !i.rated) && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textAlign: 'center' }}
                         >
-                          {t('orders.actions.rateOrder', 'Rate Order')}
-                        </Button>
+                          {t('orders.itemRatingUnlocksOn', {
+                            defaultValue: 'You can rate your items from {{date}}',
+                            date: new Date(
+                              eligibility.itemRatingUnlocksAt
+                            ).toLocaleDateString(),
+                          })}
+                        </Typography>
                       )}
+                    {eligibility?.canRateClient && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Star />}
+                        onClick={() => setRatingDialogMode('client')}
+                        fullWidth
+                      >
+                        {t('orders.actions.rateClient', 'Rate Client')}
+                      </Button>
+                    )}
 
                     {/* History button */}
                     <Button
@@ -1944,18 +2008,15 @@ const ManageOrderPage: React.FC = () => {
 
       {/* Rating Dialog */}
       <RatingDialog
-        open={ratingDialogOpen}
-        onClose={() => setRatingDialogOpen(false)}
+        open={ratingDialogMode !== null}
+        onClose={() => setRatingDialogMode(null)}
         orderId={order.id}
         orderNumber={order.order_number}
-        userType={
-          (activePersona ?? 'client') as 'client' | 'agent' | 'business'
-        }
-        orderStatus={order.current_status}
-        orderData={order}
+        mode={ratingDialogMode ?? 'agent'}
+        eligibility={eligibility}
         onRatingSubmitted={() => {
-          // Refresh the ratings data
           refetchRatings();
+          refetchEligibility();
         }}
       />
     </>

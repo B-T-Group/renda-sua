@@ -55,7 +55,11 @@ import {
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
-import { buildRatingReceivedPushMessage } from './rating-push.messages';
+import {
+  buildRatePromptPushMessage,
+  buildRatingReceivedPushMessage,
+  type RatePromptKind,
+} from './rating-push.messages';
 import {
   buildRentalBookingConfirmedPush,
   buildRentalBookingRequestPush,
@@ -532,6 +536,42 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendRatingReceivedPush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  /** Push prompting the client to rate their agent (on completion) or item(s) (after the delay). */
+  async sendRatePromptPush(params: {
+    clientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    kind: RatePromptKind;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const clientUserId = params.clientUserId?.trim();
+    if (!clientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const { title, body } = buildRatePromptPushMessage({
+      kind: params.kind,
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    const rateTarget = params.kind === 'rate_agent' ? 'agent' : 'item';
+
+    try {
+      await this.sendPushNotificationByUserId(clientUserId, title, body, {
+        url: `/orders/${params.orderId}?rate=${rateTarget}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        type: params.kind,
+        event: params.kind,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendRatePromptPush (${params.kind}) failed for order ${params.orderNumber}: ${
           error?.message ?? String(error)
         }`
       );

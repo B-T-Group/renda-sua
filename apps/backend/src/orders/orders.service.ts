@@ -2331,6 +2331,7 @@ export class OrdersService {
         `Failed to handle loyalty rewards after completion: ${error.message}`
       );
     }
+    await this.sendRateAgentPromptToClient(order.id);
 
     await this.deliveryPinService.clearPinForOrder(order.id);
 
@@ -3364,6 +3365,7 @@ export class OrdersService {
         `Failed to handle loyalty rewards for cash exception completion: ${error.message}`
       );
     }
+    await this.sendRateAgentPromptToClient(orderId);
 
     return { success: true, message: 'Cash exception recorded' };
   }
@@ -6140,6 +6142,17 @@ export class OrdersService {
     order: Orders,
     historyMessage: string
   ): Promise<void> {
+    // Idempotency guard: repeated payment callbacks must not re-run completion.
+    // Re-running would overwrite completed_at (delaying the item-rating unlock)
+    // and re-send the rate-agent push to the client.
+    const freshOrder = await this.getOrderDetails(order.id);
+    if (freshOrder?.current_status === 'complete') {
+      this.logger.log(
+        `Order ${order.order_number} is already complete; skipping completion side effects`
+      );
+      return;
+    }
+
     await this.setOrderCompleteSystem(order.id, historyMessage);
 
     try {
@@ -6170,6 +6183,50 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to handle loyalty rewards after completion: ${error.message}`
+      );
+    }
+    await this.sendRateAgentPromptToClient(order.id);
+  }
+
+  /** Best-effort push prompting the client to rate their delivery agent. */
+  private async sendRateAgentPromptToClient(orderId: string): Promise<void> {
+    try {
+      const query = `
+        query OrderForRateAgentPrompt($orderId: uuid!) {
+          orders_by_pk(id: $orderId) {
+            order_number
+            assigned_agent_id
+            client {
+              user_id
+              user { preferred_language }
+            }
+            ratings(
+              where: { rating_type: { _eq: client_to_agent } }
+              limit: 1
+            ) {
+              id
+            }
+          }
+        }
+      `;
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        orderId,
+      });
+      const order = response.orders_by_pk;
+      if (!order?.assigned_agent_id || !order?.client?.user_id) return;
+      // Client already rated the agent; no need to prompt again.
+      if ((order.ratings?.length ?? 0) > 0) return;
+
+      await this.notificationsService.sendRatePromptPush({
+        clientUserId: order.client.user_id,
+        orderId,
+        orderNumber: order.order_number,
+        kind: 'rate_agent',
+        preferredLanguage: order.client.user?.preferred_language ?? null,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to send rate-agent prompt for order ${orderId}: ${error.message}`
       );
     }
   }

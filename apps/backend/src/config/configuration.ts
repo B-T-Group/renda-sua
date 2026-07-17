@@ -233,6 +233,12 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+/** Client rating prompts (rate agent on completion, rate item after delay). */
+export interface RatingConfig {
+  /** Days after order completion before the client is prompted to rate the item(s). */
+  itemRatingDelayDays: number;
+}
+
 /** Push-based delivery offers to the closest eligible agents. */
 export interface OrderOffersConfig {
   /** Seconds an offer remains acceptable before it expires. */
@@ -388,6 +394,7 @@ export interface Configuration {
   deepseek: DeepseekConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
+  rating: RatingConfig;
   orderOffers: OrderOffersConfig;
   deliveryAvailability: DeliveryAvailabilityConfig;
   push: PushConfig;
@@ -703,6 +710,12 @@ export default (): Configuration => {
     },
     notificationsInternal: {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+    },
+    rating: {
+      itemRatingDelayDays: parseInt(
+        process.env.ITEM_RATING_DELAY_DAYS || '7',
+        10
+      ),
     },
     orderOffers: {
       ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '180', 10),

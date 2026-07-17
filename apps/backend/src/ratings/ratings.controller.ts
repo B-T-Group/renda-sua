@@ -98,6 +98,121 @@ export class RatingsController {
     }
   }
 
+  @Get('order/:orderId/eligibility')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get the current user rating eligibility for an order',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Eligibility retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        eligibility: {
+          type: 'object',
+          properties: {
+            canRateAgent: { type: 'boolean' },
+            canRateItem: { type: 'boolean' },
+            canRateClient: { type: 'boolean' },
+            itemRatingUnlocksAt: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
+            agentId: { type: 'string', format: 'uuid', nullable: true },
+            clientId: { type: 'string', format: 'uuid', nullable: true },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  name: { type: 'string' },
+                  rated: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order or user profile not found' })
+  async getOrderRatingEligibility(@Param('orderId') orderId: string) {
+    try {
+      const userId = this.hasuraUserService.getUserId();
+      const eligibility = await this.ratingsService.getOrderRatingEligibility(
+        orderId,
+        userId
+      );
+      return { success: true, eligibility };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to retrieve rating eligibility',
+        eligibility: null,
+      };
+    }
+  }
+
+  @Public()
+  @Get('aggregate/:entityType/:entityId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get the public rating aggregate for an entity (agent, client, item, ...)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Rating aggregate retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        aggregate: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            entity_type: { type: 'string' },
+            entity_id: { type: 'string', format: 'uuid' },
+            total_ratings: { type: 'number' },
+            average_rating: { type: 'number' },
+            rating_1_count: { type: 'number' },
+            rating_2_count: { type: 'number' },
+            rating_3_count: { type: 'number' },
+            rating_4_count: { type: 'number' },
+            rating_5_count: { type: 'number' },
+            last_rating_at: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
+          },
+        },
+      },
+    },
+  })
+  async getRatingAggregate(
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string
+  ) {
+    try {
+      const aggregate = await this.ratingsService.getRatingAggregate(
+        entityType,
+        entityId
+      );
+      return { success: true, aggregate };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to retrieve rating aggregate',
+        aggregate: null,
+      };
+    }
+  }
+
   @Get('rental-booking/:bookingId')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)

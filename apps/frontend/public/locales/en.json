@@ -3534,6 +3534,9 @@
       "confirm": "Confirm",
       "confirmOrder": "Confirm Order",
       "finishPreparing": "Finish Preparing",
+      "rateAgent": "Rate Delivery Agent",
+      "rateClient": "Rate Client",
+      "rateItems": "Rate Your Items",
       "rateOrder": "Rate Order",
       "readyForPickup": "Set as ready",
       "refund": "Refund",
@@ -3545,6 +3548,7 @@
     "addAnotherAddress": "Add Another Address",
     "addDeliveryAddress": "Add Delivery Address",
     "addPhoneNumber": "Add Phone Number",
+    "itemRatingUnlocksOn": "You can rate your items from {{date}}",
     "agent": {
       "actionRequired": {
         "in_transit": "Action Required: Update delivery status",
@@ -4820,6 +4824,7 @@
   "rating": {
     "dialog": {
       "agentCommentPlaceholder": "Share your experience with the delivery agent...",
+      "allItemsRated": "You have already rated all items in this order.",
       "businessNotAllowed": "Business users cannot rate orders.",
       "clientCommentPlaceholder": "Share your experience with the client...",
       "comment": "Comment (optional)",
@@ -4828,12 +4833,25 @@
       "rateAgent": "Rate the Delivery Agent",
       "rateClient": "Rate the Client",
       "rateItem": "Rate the Item",
+      "rateItems": "Rate Your Items",
       "submit": "Submit Rating",
+      "submitError": "Failed to submit rating",
       "submitting": "Submitting...",
       "success": "Rating submitted successfully!",
       "title": "Rate Your Experience"
     },
+    "myRatings": {
+      "agentSubtitle": "What clients say about your deliveries",
+      "clientSubtitle": "What delivery agents say about working with you",
+      "count": "{{count}} rating(s)",
+      "empty": "No ratings yet. Ratings appear here after completed orders.",
+      "loadMore": "Load more reviews",
+      "title": "My Ratings"
+    },
     "orderRatings": "Order Ratings",
+    "summary": {
+      "compact": "{{avg}} ({{count}})"
+    },
     "types": {
       "agentToClient": "Agent → Client",
       "clientToAgent": "Client → Agent",

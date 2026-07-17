@@ -53,6 +53,7 @@ import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import MissingEmailBanner from '../common/MissingEmailBanner';
+import MyRatingsSection from '../common/MyRatingsSection';
 import PhoneInput from '../common/PhoneInput';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 import { PhoneVerificationDialog } from '../dialogs/PhoneVerificationDialog';
@@ -1034,6 +1035,18 @@ const Profile: React.FC = () => {
             compactView={false}
             emptyStateMessage={t('profile.noAccountsMessage')}
           />
+        </Box>
+      )}
+
+      {/* Ratings received by the active persona */}
+      {profile && activePersona === 'agent' && profile.agent?.id && (
+        <Box sx={{ mt: 4 }}>
+          <MyRatingsSection entityType="agent" entityId={profile.agent.id} />
+        </Box>
+      )}
+      {profile && activePersona === 'client' && profile.client?.id && (
+        <Box sx={{ mt: 4 }}>
+          <MyRatingsSection entityType="client" entityId={profile.client.id} />
         </Box>
       )}
 

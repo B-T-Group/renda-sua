@@ -5,6 +5,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateRatingDto, RatingType } from './dto/create-rating.dto';
@@ -28,6 +30,25 @@ interface OrderData {
   assigned_agent_id?: string;
   current_status: string;
   created_at: string;
+  completed_at?: string | null;
+  order_items?: Array<{ item_id: string; item_name: string }>;
+}
+
+export interface OrderRatingEligibilityItem {
+  id: string;
+  name: string;
+  rated: boolean;
+}
+
+export interface OrderRatingEligibility {
+  canRateAgent: boolean;
+  canRateItem: boolean;
+  canRateClient: boolean;
+  /** When client_to_item ratings unlock; null until the order is completed. */
+  itemRatingUnlocksAt: string | null;
+  agentId: string | null;
+  clientId: string | null;
+  items: OrderRatingEligibilityItem[];
 }
 
 export interface Rating {
@@ -67,8 +88,26 @@ export class RatingsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
+
+  private getItemRatingDelayDays(): number {
+    return (
+      this.configService.get<Configuration['rating']>('rating')
+        ?.itemRatingDelayDays ?? 7
+    );
+  }
+
+  /** When client_to_item ratings unlock for the order; null until completed. */
+  getItemRatingUnlocksAt(completedAt?: string | null): Date | null {
+    if (!completedAt) return null;
+    const completed = new Date(completedAt).getTime();
+    if (Number.isNaN(completed)) return null;
+    return new Date(
+      completed + this.getItemRatingDelayDays() * 24 * 60 * 60 * 1000
+    );
+  }
 
   async createRating(
     createRatingDto: CreateRatingDto,
@@ -114,11 +153,19 @@ export class RatingsService {
       throw new ForbiddenException('You are not authorized to rate this order');
     }
 
+    if (createRatingDto.ratingType === RatingType.CLIENT_TO_ITEM) {
+      this.assertClientToItemAllowed(order, createRatingDto);
+    }
+
     // Check if user already rated this order for this type
+    // (client_to_item is deduped per line item, other types per order)
     const existingRating = await this.getExistingRating(
       orderId,
       createRatingDto.ratingType,
-      userProfile.id
+      userProfile.id,
+      createRatingDto.ratingType === RatingType.CLIENT_TO_ITEM
+        ? createRatingDto.ratedEntityId
+        : undefined
     );
     if (existingRating) {
       throw new BadRequestException(
@@ -186,6 +233,23 @@ export class RatingsService {
     } catch (error: any) {
       console.error('Error creating rating:', error);
       throw new BadRequestException('Failed to create rating');
+    }
+  }
+
+  /** Item ratings unlock only after the configured delay and must target an order line item. */
+  private assertClientToItemAllowed(
+    order: OrderData,
+    dto: CreateRatingDto
+  ): void {
+    const itemIds = (order.order_items ?? []).map((i) => i.item_id);
+    if (!itemIds.includes(dto.ratedEntityId)) {
+      throw new BadRequestException('Item is not part of this order');
+    }
+    const unlocksAt = this.getItemRatingUnlocksAt(order.completed_at);
+    if (!unlocksAt || unlocksAt.getTime() > Date.now()) {
+      throw new BadRequestException(
+        `Item ratings unlock ${this.getItemRatingDelayDays()} days after the order is completed`
+      );
     }
   }
 
@@ -608,6 +672,85 @@ export class RatingsService {
     }
   }
 
+  /** Per-user rating eligibility for an order (drives Rate CTAs on web/mobile). */
+  async getOrderRatingEligibility(
+    orderId: string,
+    userId: string
+  ): Promise<OrderRatingEligibility> {
+    const [order, userProfile, ratings] = await Promise.all([
+      this.getOrder(orderId),
+      this.getUserProfile(userId),
+      this.getRatingsForOrder(orderId),
+    ]);
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    if (!userProfile) {
+      throw new NotFoundException('User profile not found');
+    }
+    return this.buildEligibility(order, userProfile, ratings);
+  }
+
+  private buildEligibility(
+    order: OrderData,
+    userProfile: UserProfile,
+    ratings: Rating[]
+  ): OrderRatingEligibility {
+    const isComplete = order.current_status === 'complete';
+    const isClientRater =
+      !!userProfile.client && order.client_id === userProfile.client.id;
+    const isAgentRater =
+      !!userProfile.agent && order.assigned_agent_id === userProfile.agent.id;
+    const myRatings = ratings.filter(
+      (r) => r.rater_user_id === userProfile.id
+    );
+    const hasRated = (type: string) =>
+      myRatings.some((r) => r.rating_type === type);
+
+    const ratedItemIds = new Set(
+      myRatings
+        .filter((r) => r.rating_type === 'client_to_item')
+        .map((r) => r.rated_entity_id)
+    );
+    const items = this.dedupeOrderItems(order).map((item) => ({
+      id: item.item_id,
+      name: item.item_name,
+      rated: ratedItemIds.has(item.item_id),
+    }));
+
+    const unlocksAt = this.getItemRatingUnlocksAt(order.completed_at);
+    const itemRatingUnlocked = !!unlocksAt && unlocksAt.getTime() <= Date.now();
+
+    return {
+      canRateAgent:
+        isComplete &&
+        isClientRater &&
+        !!order.assigned_agent_id &&
+        !hasRated('client_to_agent'),
+      canRateItem:
+        isComplete &&
+        isClientRater &&
+        itemRatingUnlocked &&
+        items.some((i) => !i.rated),
+      canRateClient:
+        isComplete && isAgentRater && !hasRated('agent_to_client'),
+      itemRatingUnlocksAt: unlocksAt ? unlocksAt.toISOString() : null,
+      agentId: order.assigned_agent_id ?? null,
+      clientId: order.client_id ?? null,
+      items,
+    };
+  }
+
+  private dedupeOrderItems(
+    order: OrderData
+  ): Array<{ item_id: string; item_name: string }> {
+    const seen = new Map<string, { item_id: string; item_name: string }>();
+    for (const item of order.order_items ?? []) {
+      if (!seen.has(item.item_id)) seen.set(item.item_id, item);
+    }
+    return Array.from(seen.values());
+  }
+
   private async getOrder(orderId: string): Promise<OrderData | null> {
     const query = `
       query GetOrder($orderId: uuid!) {
@@ -619,6 +762,11 @@ export class RatingsService {
           assigned_agent_id
           current_status
           created_at
+          completed_at
+          order_items {
+            item_id
+            item_name
+          }
         }
       }
     `;
@@ -697,11 +845,16 @@ export class RatingsService {
   private async getExistingRating(
     orderId: string,
     ratingType: string,
-    userId: string
+    userId: string,
+    ratedEntityId?: string
   ): Promise<Rating | null> {
+    const entityFilter = ratedEntityId
+      ? ', rated_entity_id: {_eq: $ratedEntityId}'
+      : '';
+    const entityVar = ratedEntityId ? ', $ratedEntityId: uuid!' : '';
     const query = `
-      query GetExistingRating($orderId: uuid!, $ratingType: rating_type_enum!, $userId: uuid!) {
-        ratings(where: {order_id: {_eq: $orderId}, rating_type: {_eq: $ratingType}, rater_user_id: {_eq: $userId}}) {
+      query GetExistingRating($orderId: uuid!, $ratingType: rating_type_enum!, $userId: uuid!${entityVar}) {
+        ratings(where: {order_id: {_eq: $orderId}, rating_type: {_eq: $ratingType}, rater_user_id: {_eq: $userId}${entityFilter}}) {
           id
           order_id
           rating_type
@@ -723,6 +876,7 @@ export class RatingsService {
         orderId,
         ratingType,
         userId,
+        ...(ratedEntityId ? { ratedEntityId } : {}),
       });
       return response.ratings[0] || null;
     } catch (error: any) {

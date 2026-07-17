@@ -41,6 +41,7 @@ import {
 import { useApiClient } from '../../hooks/useApiClient';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClientActions from '../orders/ClientActions';
+import OrderRatingCtas from './OrderRatingCtas';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
@@ -645,6 +646,9 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
 
   const actionsRow = (
     <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" flexShrink={0}>
+      {(userType === 'client' || userType === 'agent') && (
+        <OrderRatingCtas orderId={order.id} orderStatus={currentStatus} />
+      )}
       {primaryAction && (
         <Button
           variant="contained"

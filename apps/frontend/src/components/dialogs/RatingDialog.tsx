@@ -14,19 +14,26 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
+import type { OrderRatingEligibility } from '../../hooks/useOrderRatingEligibility';
+
+export type RatingDialogMode = 'agent' | 'item' | 'client';
 
 export interface RatingDialogProps {
   open: boolean;
   onClose: () => void;
   orderId: string;
   orderNumber: string;
-  userType: 'client' | 'agent' | 'business';
-  orderStatus: string;
-  orderData?: any; // Order data to extract entity IDs
-  onRatingSubmitted?: () => void; // Callback to refresh ratings
+  mode: RatingDialogMode;
+  eligibility: OrderRatingEligibility | null;
+  onRatingSubmitted?: () => void;
 }
 
-interface RatingData {
+interface RatingEntry {
+  rating: number;
+  comment: string;
+}
+
+interface CreateRatingBody {
   orderId: string;
   ratingType: 'client_to_agent' | 'client_to_item' | 'agent_to_client';
   ratedEntityType: 'agent' | 'client' | 'item';
@@ -36,14 +43,15 @@ interface RatingData {
   isPublic: boolean;
 }
 
+const emptyEntry: RatingEntry = { rating: 0, comment: '' };
+
 const RatingDialog: React.FC<RatingDialogProps> = ({
   open,
   onClose,
   orderId,
   orderNumber,
-  userType,
-  orderStatus,
-  orderData,
+  mode,
+  eligibility,
   onRatingSubmitted,
 }) => {
   const { t } = useTranslation();
@@ -51,143 +59,176 @@ const RatingDialog: React.FC<RatingDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [singleEntry, setSingleEntry] = useState<RatingEntry>(emptyEntry);
+  const [itemEntries, setItemEntries] = useState<Record<string, RatingEntry>>(
+    {}
+  );
+  // Items saved during this dialog session, so a retry after a partial
+  // failure never resubmits (and never double-rates) already-saved items.
+  const [savedItemIds, setSavedItemIds] = useState<Set<string>>(new Set());
 
-  // Rating state
-  const [agentRating, setAgentRating] = useState<number>(0);
-  const [agentComment, setAgentComment] = useState('');
-  const [itemRating, setItemRating] = useState<number>(0);
-  const [itemComment, setItemComment] = useState('');
-  const [clientRating, setClientRating] = useState<number>(0);
-  const [clientComment, setClientComment] = useState('');
+  const unratedItems = (eligibility?.items ?? []).filter(
+    (i) => !i.rated && !savedItemIds.has(i.id)
+  );
 
-  // Extract entity IDs from order data
-  const agentId = orderData?.assigned_agent_id || '';
-  const itemId = orderData?.order_items?.[0]?.item?.id || '';
-  const clientId = orderData?.client?.id || '';
-
-  const canRate = orderStatus === 'complete';
-
-  const handleSubmitRating = async (ratingData: RatingData) => {
-    if (!apiClient) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await apiClient.post('/ratings', ratingData);
-
-      if (response.data.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          onClose();
-          setSuccess(false);
-          // Call the callback to refresh ratings
-          if (onRatingSubmitted) {
-            onRatingSubmitted();
-          }
-        }, 2000);
-      } else {
-        setError(response.data.message || 'Failed to submit rating');
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit rating');
-    } finally {
-      setLoading(false);
-    }
+  const titleByMode: Record<RatingDialogMode, string> = {
+    agent: t('rating.dialog.rateAgent', 'Rate the Delivery Agent'),
+    item: t('rating.dialog.rateItems', 'Rate Your Items'),
+    client: t('rating.dialog.rateClient', 'Rate the Client'),
   };
 
-  const handleSubmitAll = async () => {
-    const ratings: RatingData[] = [];
-
-    // Client can rate agent and item
-    if (userType === 'client') {
-      if (agentRating > 0 && agentId) {
-        ratings.push({
+  const buildBodies = (): CreateRatingBody[] => {
+    if (mode === 'agent' && eligibility?.agentId && singleEntry.rating > 0) {
+      return [
+        {
           orderId,
           ratingType: 'client_to_agent',
           ratedEntityType: 'agent',
-          ratedEntityId: agentId,
-          rating: agentRating,
-          comment: agentComment,
+          ratedEntityId: eligibility.agentId,
+          rating: singleEntry.rating,
+          comment: singleEntry.comment || undefined,
           isPublic: true,
-        });
-      }
-
-      if (itemRating > 0 && itemId) {
-        ratings.push({
-          orderId,
-          ratingType: 'client_to_item',
-          ratedEntityType: 'item',
-          ratedEntityId: itemId,
-          rating: itemRating,
-          comment: itemComment,
-          isPublic: true,
-        });
-      }
+        },
+      ];
     }
-
-    // Agent can rate client
-    if (userType === 'agent') {
-      if (clientRating > 0 && clientId) {
-        ratings.push({
+    if (mode === 'client' && eligibility?.clientId && singleEntry.rating > 0) {
+      return [
+        {
           orderId,
           ratingType: 'agent_to_client',
           ratedEntityType: 'client',
-          ratedEntityId: clientId,
-          rating: clientRating,
-          comment: clientComment,
+          ratedEntityId: eligibility.clientId,
+          rating: singleEntry.rating,
+          comment: singleEntry.comment || undefined,
           isPublic: true,
-        });
-      }
+        },
+      ];
     }
+    if (mode === 'item') {
+      return unratedItems
+        .map((item) => ({ item, entry: itemEntries[item.id] ?? emptyEntry }))
+        .filter(({ entry }) => entry.rating > 0)
+        .map(({ item, entry }) => ({
+          orderId,
+          ratingType: 'client_to_item' as const,
+          ratedEntityType: 'item' as const,
+          ratedEntityId: item.id,
+          rating: entry.rating,
+          comment: entry.comment || undefined,
+          isPublic: true,
+        }));
+    }
+    return [];
+  };
 
-    // Submit all ratings
-    for (const rating of ratings) {
-      await handleSubmitRating(rating);
+  const hasSomethingToSubmit = buildBodies().length > 0;
+
+  const isDuplicateRatingError = (message: string): boolean =>
+    /already (rated|exists)|duplicate/i.test(message);
+
+  const submitOne = async (
+    body: CreateRatingBody
+  ): Promise<{ ok: boolean; message: string }> => {
+    try {
+      const response = await apiClient!.post('/ratings', body);
+      if (response.data.success) return { ok: true, message: '' };
+      const message = response.data.message || '';
+      // An already-saved rating (e.g. from a previous partial submit) counts as done.
+      return { ok: isDuplicateRatingError(message), message };
+    } catch (err: any) {
+      const message = err.response?.data?.message || err.message || '';
+      return { ok: isDuplicateRatingError(message), message };
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!apiClient) return;
+    setLoading(true);
+    setError(null);
+
+    // Submit every rating independently: one failure must not abort the rest,
+    // and successes are tracked so retries only resend what actually failed.
+    const failures: string[] = [];
+    for (const body of buildBodies()) {
+      const { ok, message } = await submitOne(body);
+      if (ok && mode === 'item') {
+        setSavedItemIds((prev) => new Set(prev).add(body.ratedEntityId));
+      }
+      if (!ok) failures.push(message);
+    }
+    setLoading(false);
+
+    if (failures.length > 0) {
+      setError(
+        failures[0] || t('rating.dialog.submitError', 'Failed to submit rating')
+      );
+      return;
+    }
+    setSuccess(true);
+    setTimeout(() => {
+      handleReset();
+      onClose();
+      onRatingSubmitted?.();
+    }, 1500);
+  };
+
+  const handleReset = () => {
+    setSingleEntry(emptyEntry);
+    setItemEntries({});
+    setSavedItemIds(new Set());
+    setError(null);
+    setSuccess(false);
   };
 
   const handleClose = () => {
-    if (!loading) {
-      onClose();
-      // Reset form
-      setAgentRating(0);
-      setAgentComment('');
-      setItemRating(0);
-      setItemComment('');
-      setClientRating(0);
-      setClientComment('');
-      setError(null);
-      setSuccess(false);
-    }
+    if (loading) return;
+    // Some ratings may have been saved before a partial failure; let the
+    // parent refresh eligibility so the UI reflects them.
+    const hadPartialSave = savedItemIds.size > 0;
+    handleReset();
+    onClose();
+    if (hadPartialSave) onRatingSubmitted?.();
   };
 
-  if (!canRate) {
-    return (
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {t('rating.dialog.title', 'Rate Your Experience')}
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="info">
-            {t(
-              'rating.dialog.orderNotComplete',
-              'You can only rate orders that have been completed.'
-            )}
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>{t('common.close', 'Close')}</Button>
-        </DialogActions>
-      </Dialog>
-    );
-  }
+  const setItemEntry = (itemId: string, patch: Partial<RatingEntry>) => {
+    setItemEntries((prev) => ({
+      ...prev,
+      [itemId]: { ...(prev[itemId] ?? emptyEntry), ...patch },
+    }));
+  };
+
+  const renderStarsAndComment = (
+    entry: RatingEntry,
+    onChange: (patch: Partial<RatingEntry>) => void,
+    commentPlaceholder: string
+  ) => (
+    <>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+        <MuiRating
+          value={entry.rating}
+          onChange={(_, value) => onChange({ rating: value || 0 })}
+          size="large"
+        />
+        <Typography variant="body2" color="text.secondary">
+          {entry.rating > 0 && `${entry.rating}/5`}
+        </Typography>
+      </Box>
+      <TextField
+        fullWidth
+        multiline
+        rows={3}
+        label={t('rating.dialog.comment', 'Comment (optional)')}
+        value={entry.comment}
+        onChange={(e) => onChange({ comment: e.target.value })}
+        placeholder={commentPlaceholder}
+      />
+    </>
+  );
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {t('rating.dialog.title', 'Rate Your Experience')} - Order #
-        {orderNumber}
+        {titleByMode[mode]} — #{orderNumber}
       </DialogTitle>
       <DialogContent>
         {error && (
@@ -195,141 +236,74 @@ const RatingDialog: React.FC<RatingDialogProps> = ({
             {error}
           </Alert>
         )}
-
         {success && (
           <Alert severity="success" sx={{ mb: 2 }}>
             {t('rating.dialog.success', 'Rating submitted successfully!')}
           </Alert>
         )}
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Client can rate agent and item */}
-          {userType === 'client' && (
-            <>
-              {/* Agent Rating */}
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  {t('rating.dialog.rateAgent', 'Rate the Delivery Agent')}
-                </Typography>
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}
-                >
-                  <MuiRating
-                    value={agentRating}
-                    onChange={(_, value) => setAgentRating(value || 0)}
-                    size="large"
-                  />
-                  <Typography variant="body2" color="text.secondary">
-                    {agentRating > 0 && `${agentRating}/5`}
-                  </Typography>
-                </Box>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label={t('rating.dialog.comment', 'Comment (optional)')}
-                  value={agentComment}
-                  onChange={(e) => setAgentComment(e.target.value)}
-                  placeholder={t(
-                    'rating.dialog.agentCommentPlaceholder',
-                    'Share your experience with the delivery agent...'
-                  )}
-                />
-              </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+          {mode === 'agent' &&
+            renderStarsAndComment(
+              singleEntry,
+              (patch) => setSingleEntry((prev) => ({ ...prev, ...patch })),
+              t(
+                'rating.dialog.agentCommentPlaceholder',
+                'Share your experience with the delivery agent...'
+              )
+            )}
 
-              {/* Item Rating */}
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  {t('rating.dialog.rateItem', 'Rate the Item')}
-                </Typography>
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}
-                >
-                  <MuiRating
-                    value={itemRating}
-                    onChange={(_, value) => setItemRating(value || 0)}
-                    size="large"
-                  />
-                  <Typography variant="body2" color="text.secondary">
-                    {itemRating > 0 && `${itemRating}/5`}
-                  </Typography>
-                </Box>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label={t('rating.dialog.comment', 'Comment (optional)')}
-                  value={itemComment}
-                  onChange={(e) => setItemComment(e.target.value)}
-                  placeholder={t(
-                    'rating.dialog.itemCommentPlaceholder',
-                    'Share your thoughts about the item quality...'
-                  )}
-                />
-              </Box>
-            </>
-          )}
+          {mode === 'client' &&
+            renderStarsAndComment(
+              singleEntry,
+              (patch) => setSingleEntry((prev) => ({ ...prev, ...patch })),
+              t(
+                'rating.dialog.clientCommentPlaceholder',
+                'Share your experience with the client...'
+              )
+            )}
 
-          {/* Agent can rate client */}
-          {userType === 'agent' && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                {t('rating.dialog.rateClient', 'Rate the Client')}
-              </Typography>
-              <Box
-                sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}
-              >
-                <MuiRating
-                  value={clientRating}
-                  onChange={(_, value) => setClientRating(value || 0)}
-                  size="large"
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {clientRating > 0 && `${clientRating}/5`}
-                </Typography>
-              </Box>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label={t('rating.dialog.comment', 'Comment (optional)')}
-                value={clientComment}
-                onChange={(e) => setClientComment(e.target.value)}
-                placeholder={t(
-                  'rating.dialog.clientCommentPlaceholder',
-                  'Share your experience with the client...'
+          {mode === 'item' &&
+            (unratedItems.length === 0 ? (
+              <Alert severity="info">
+                {t(
+                  'rating.dialog.allItemsRated',
+                  'You have already rated all items in this order.'
                 )}
-              />
-            </Box>
-          )}
-
-          {/* Business users cannot rate */}
-          {userType === 'business' && (
-            <Alert severity="info">
-              {t(
-                'rating.dialog.businessNotAllowed',
-                'Business users cannot rate orders.'
-              )}
-            </Alert>
-          )}
+              </Alert>
+            ) : (
+              unratedItems.map((item) => (
+                <Box key={item.id}>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    {item.name}
+                  </Typography>
+                  {renderStarsAndComment(
+                    itemEntries[item.id] ?? emptyEntry,
+                    (patch) => setItemEntry(item.id, patch),
+                    t(
+                      'rating.dialog.itemCommentPlaceholder',
+                      'Share your thoughts about the item quality...'
+                    )
+                  )}
+                </Box>
+              ))
+            ))}
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        {userType !== 'business' && (
-          <Button
-            onClick={handleSubmitAll}
-            variant="contained"
-            disabled={loading || (!agentRating && !itemRating && !clientRating)}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
-          >
-            {loading
-              ? t('rating.dialog.submitting', 'Submitting...')
-              : t('rating.dialog.submit', 'Submit Rating')}
-          </Button>
-        )}
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={loading || !hasSomethingToSubmit}
+          startIcon={loading ? <CircularProgress size={20} /> : null}
+        >
+          {loading
+            ? t('rating.dialog.submitting', 'Submitting...')
+            : t('rating.dialog.submit', 'Submit Rating')}
+        </Button>
       </DialogActions>
     </Dialog>
   );

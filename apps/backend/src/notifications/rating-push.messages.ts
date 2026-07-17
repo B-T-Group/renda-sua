@@ -63,3 +63,39 @@ export function buildRatingReceivedPushMessage(params: {
       };
   }
 }
+
+export type RatePromptKind = 'rate_agent' | 'rate_item';
+
+/** Push prompting the client to rate their agent (on completion) or item (after the delay). */
+export function buildRatePromptPushMessage(params: {
+  kind: RatePromptKind;
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const orderRef = params.orderNumber;
+
+  if (locale === 'fr') {
+    if (params.kind === 'rate_agent') {
+      return {
+        title: 'Comment était votre livraison ?',
+        body: `Évaluez votre livreur pour la commande ${orderRef}`,
+      };
+    }
+    return {
+      title: 'Que pensez-vous de votre achat ?',
+      body: `Évaluez les articles de la commande ${orderRef}`,
+    };
+  }
+
+  if (params.kind === 'rate_agent') {
+    return {
+      title: 'How was your delivery?',
+      body: `Rate your delivery agent for order ${orderRef}`,
+    };
+  }
+  return {
+    title: 'How are you liking your purchase?',
+    body: `Rate the items from order ${orderRef}`,
+  };
+}

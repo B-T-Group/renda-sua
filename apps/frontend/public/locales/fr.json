@@ -3274,6 +3274,9 @@
       "confirm": "Confirmer",
       "confirmOrder": "Confirmer la Commande",
       "finishPreparing": "Terminer la Préparation",
+      "rateAgent": "Évaluer l'agent de livraison",
+      "rateClient": "Évaluer le client",
+      "rateItems": "Évaluer vos articles",
       "rateOrder": "Évaluer la Commande",
       "readyForPickup": "Marquer comme prêt",
       "refund": "Rembourser",
@@ -3285,6 +3288,7 @@
     "addAnotherAddress": "Ajouter une Autre Adresse",
     "addDeliveryAddress": "Ajouter une Adresse de Livraison",
     "addPhoneNumber": "Ajouter un Numéro de Téléphone",
+    "itemRatingUnlocksOn": "Vous pourrez évaluer vos articles à partir du {{date}}",
     "agent": {
       "actionRequired": {
         "in_transit": "Action Requise : Mettre à jour le statut de livraison",
@@ -4557,6 +4561,7 @@
   "rating": {
     "dialog": {
       "agentCommentPlaceholder": "Partagez votre expérience avec l'agent de livraison...",
+      "allItemsRated": "Vous avez déjà évalué tous les articles de cette commande.",
       "businessNotAllowed": "Les utilisateurs entreprise ne peuvent pas évaluer les commandes.",
       "clientCommentPlaceholder": "Partagez votre expérience avec le client...",
       "comment": "Commentaire (optionnel)",
@@ -4565,16 +4570,29 @@
       "rateAgent": "Évaluer l'Agent de Livraison",
       "rateClient": "Évaluer le Client",
       "rateItem": "Évaluer l'Article",
+      "rateItems": "Évaluer vos articles",
       "submit": "Soumettre l'Évaluation",
+      "submitError": "Échec de l'envoi de l'évaluation",
       "submitting": "Soumission en cours...",
       "success": "Évaluation soumise avec succès !",
       "title": "Évaluez Votre Expérience"
     },
-    "orderRatings": "Order Ratings",
+    "myRatings": {
+      "agentSubtitle": "Ce que les clients disent de vos livraisons",
+      "clientSubtitle": "Ce que les agents de livraison disent de vous",
+      "count": "{{count}} évaluation(s)",
+      "empty": "Aucune évaluation pour le moment. Les évaluations apparaissent ici après les commandes terminées.",
+      "loadMore": "Voir plus d'avis",
+      "title": "Mes évaluations"
+    },
+    "orderRatings": "Évaluations de la commande",
+    "summary": {
+      "compact": "{{avg}} ({{count}})"
+    },
     "types": {
       "agentToClient": "Agent → Client",
       "clientToAgent": "Client → Agent",
-      "clientToItem": "Client → Item"
+      "clientToItem": "Client → Article"
     }
   },
   "seo": {

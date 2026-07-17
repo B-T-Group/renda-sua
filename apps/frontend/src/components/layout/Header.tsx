@@ -54,6 +54,7 @@ import Logo from '../common/Logo';
 import MobileBalanceChip from '../common/MobileBalanceChip';
 import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
+import UserRatingSummary from '../common/UserRatingSummary';
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
@@ -754,6 +755,22 @@ const Header: React.FC = () => {
                           ? 'Client Account'
                           : 'User Account'}
                       </Typography>
+                      {userType === 'agent' && profile?.agent?.id && (
+                        <Box sx={{ mt: 0.5 }}>
+                          <UserRatingSummary
+                            entityType="agent"
+                            entityId={profile.agent.id}
+                          />
+                        </Box>
+                      )}
+                      {userType === 'client' && profile?.client?.id && (
+                        <Box sx={{ mt: 0.5 }}>
+                          <UserRatingSummary
+                            entityType="client"
+                            entityId={profile.client.id}
+                          />
+                        </Box>
+                      )}
                     </Box>
 
                     <MenuItem
