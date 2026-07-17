@@ -2,6 +2,9 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AiService } from '../ai/ai.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { toImageUrlBundle } from '../image-thumbnails/image-thumbnail.mapper';
+import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
+import type { ImageUrlBundle } from '../image-thumbnails/image-thumbnails.types';
 import { CreateRentalFromImageDto } from './dto/create-rental-from-image.dto';
 
 export interface RentalFromImageSuggestionsResponse {
@@ -40,6 +43,9 @@ export interface RentalItemImage {
   status: string;
   is_ai_cleaned: boolean;
   display_order: number;
+  thumbnail?: string | null;
+  thumbnail_status?: string | null;
+  display_url?: string | null;
   created_at: string;
   rental_item?: { id: string; name: string } | null;
 }
@@ -94,6 +100,9 @@ const RENTAL_ITEM_IMAGE_FIELDS = `
   status
   is_ai_cleaned
   display_order
+  thumbnail
+  thumbnail_status
+  display_url
   created_at
   rental_item {
     id
@@ -229,7 +238,8 @@ export class RentalItemImagesService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly aiService: AiService
+    private readonly aiService: AiService,
+    private readonly imageThumbnailsService: ImageThumbnailsService
   ) {}
 
   async getRentalItemImages(
@@ -241,7 +251,10 @@ export class RentalItemImagesService {
       status?: string;
       search?: string;
     }
-  ): Promise<{ images: RentalItemImage[]; total: number }> {
+  ): Promise<{
+    images: (RentalItemImage & { urls: ImageUrlBundle })[];
+    total: number;
+  }> {
     const where = this.buildListWhere(businessId, options);
     const limit = options.pageSize;
     const offset = (options.page - 1) * options.pageSize;
@@ -250,7 +263,7 @@ export class RentalItemImagesService {
         rental_item_images: RentalItemImage[];
         rental_item_images_aggregate: { aggregate: { count: number } };
       }>(GET_RENTAL_ITEM_IMAGES, { where, limit, offset });
-      const images = result.rental_item_images ?? [];
+      const images = this.withUrlBundles(result.rental_item_images ?? []);
       const total =
         result.rental_item_images_aggregate?.aggregate?.count ?? 0;
       return { images, total };
@@ -259,11 +272,17 @@ export class RentalItemImagesService {
         const data = await this.hasuraSystemService.executeQuery<{
           rental_item_images: RentalItemImage[];
         }>(GET_RENTAL_ITEM_IMAGES_DATA_ONLY, { where, limit, offset });
-        const images = data.rental_item_images ?? [];
+        const images = this.withUrlBundles(data.rental_item_images ?? []);
         return { images, total: images.length };
       }
       throw error;
     }
+  }
+
+  private withUrlBundles(
+    images: RentalItemImage[]
+  ): (RentalItemImage & { urls: ImageUrlBundle })[] {
+    return images.map((img) => ({ ...img, urls: toImageUrlBundle(img) }));
   }
 
   async bulkCreate(
@@ -297,7 +316,12 @@ export class RentalItemImagesService {
     }>(INSERT_RENTAL_ITEM_IMAGES, {
       objects,
     });
-    return row?.insert_rental_item_images?.returning ?? [];
+    const created = row?.insert_rental_item_images?.returning ?? [];
+    void this.imageThumbnailsService.enqueueMany(
+      'rental_item_image',
+      created.map((c) => c.id)
+    );
+    return created;
   }
 
   async associateRentalItem(
@@ -342,7 +366,15 @@ export class RentalItemImagesService {
     await this.applyRentalItemLinkSideEffects(businessId, cleaned);
     this.mergeAiCleanedTag(current, cleaned);
     if (!Object.keys(cleaned).length) return current;
-    return this.applyImageUpdate(businessId, imageId, cleaned);
+    const updated = await this.applyImageUpdate(businessId, imageId, cleaned);
+    // Original bytes changed — old thumbnail is stale, regenerate asynchronously
+    if (
+      typeof cleaned.image_url === 'string' &&
+      cleaned.image_url !== current.image_url
+    ) {
+      void this.imageThumbnailsService.regenerate('rental_item_image', imageId);
+    }
+    return updated;
   }
 
   async deleteImage(businessId: string, imageId: string): Promise<void> {

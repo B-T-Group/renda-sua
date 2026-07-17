@@ -144,7 +144,7 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
                 }}
               >
                 <img
-                  src={image.image_url}
+                  src={image.display_url ?? image.image_url}
                   alt={image.alt_text || ''}
                   style={{
                     width: '100%',
@@ -1391,7 +1391,7 @@ const BusinessImagesPage: React.FC = () => {
                       <CardMedia
                         component="img"
                         height="168"
-                        image={img.image_url}
+                        image={img.display_url ?? img.image_url}
                         alt={img.alt_text || ''}
                         sx={{
                           objectFit: 'cover',

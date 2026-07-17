@@ -58,6 +58,9 @@ select_permissions:
         - image_url
         - alt_text
         - display_order
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -95,6 +98,11 @@ select_permissions:
         - validation_errors
         - validation_warnings
         - validated_at
+        - thumbnail
+        - thumbnail_s3_key
+        - thumbnail_status
+        - thumbnail_error
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -110,6 +118,9 @@ select_permissions:
         - image_url
         - alt_text
         - display_order
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:

@@ -6,6 +6,7 @@ import { BusinessItemsAccessService } from './business-items-access.service';
 import { BusinessLocationTransferService } from './business-location-transfer.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { BusinessImagesModule } from '../business-images/business-images.module';
+import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { ItemsModule } from '../items/items.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
@@ -18,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     AuthModule,
     BusinessImagesModule,
+    ImageThumbnailsModule,
     AiGenerationModule,
     ItemsModule,
     ItemAiReviewModule,

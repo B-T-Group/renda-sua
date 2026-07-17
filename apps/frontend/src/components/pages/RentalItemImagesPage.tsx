@@ -632,7 +632,7 @@ const RentalItemImagesPage: React.FC = () => {
                 <CardMedia
                   component="img"
                   height="160"
-                  image={img.image_url}
+                  image={img.display_url ?? img.image_url}
                   alt={img.alt_text || ''}
                   sx={{ objectFit: 'cover' }}
                 />

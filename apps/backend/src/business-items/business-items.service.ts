@@ -10,6 +10,7 @@ import { CreateItemDto } from '../items/dto/create-item.dto';
 import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import { PermissionService } from '../auth/permission.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
@@ -98,6 +99,9 @@ const GET_ITEMS = `
         alt_text
         display_order
         is_ai_cleaned
+        thumbnail
+        thumbnail_status
+        display_url
         created_at
       }
       item_tags {
@@ -131,6 +135,9 @@ const GET_ITEMS = `
         sort_order
         item_variant_images(order_by: { display_order: asc }) {
           id
+          display_url
+          thumbnail
+          thumbnail_status
           image_url
           alt_text
           caption
@@ -288,6 +295,9 @@ const GET_SINGLE_ITEM = `
         alt_text
         display_order
         is_ai_cleaned
+        thumbnail
+        thumbnail_status
+        display_url
         created_at
       }
       item_tags {
@@ -321,6 +331,9 @@ const GET_SINGLE_ITEM = `
         sort_order
         item_variant_images(order_by: { display_order: asc }) {
           id
+          display_url
+          thumbnail
+          thumbnail_status
           image_url
           alt_text
           caption
@@ -733,7 +746,8 @@ export class BusinessItemsService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly permissionService: PermissionService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly stripeTaxCodesService: StripeTaxCodesService
+    private readonly stripeTaxCodesService: StripeTaxCodesService,
+    private readonly imageThumbnailsService: ImageThumbnailsService
   ) {}
 
   private triggerLifecycleRecompute(businessId: string): void {
@@ -1993,7 +2007,9 @@ export class BusinessItemsService {
                 id: mainImage.id,
               });
             }
-            await this.hasuraUserService.executeMutation(INSERT_ITEM_IMAGE, {
+            const insertedImage = await this.hasuraUserService.executeMutation<{
+              insert_item_images_one: { id: string } | null;
+            }>(INSERT_ITEM_IMAGE, {
               imageData: {
                 business_id: businessId,
                 item_id: itemId,
@@ -2005,6 +2021,13 @@ export class BusinessItemsService {
                 uploaded_by: userId,
               },
             });
+            const newImageId = insertedImage?.insert_item_images_one?.id;
+            if (newImageId) {
+              void this.imageThumbnailsService.enqueueGeneration(
+                'item_image',
+                newImageId
+              );
+            }
             this.logger.log(`CSV upload: inserted image for item="${row.name}" id=${itemId}`);
             details.inserted.push(`Image: ${row.name}`);
             insertedCount++;

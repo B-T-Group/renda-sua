@@ -84,6 +84,9 @@ export interface InventoryItem {
       alt_text?: string;
       caption?: string;
       display_order: number;
+      thumbnail?: string | null;
+      thumbnail_status?: string | null;
+      display_url?: string | null;
     }>;
     tags?: Array<{ id: string; name: string }>;
     collections?: Array<{ id: string; slug: string; name: string }>;

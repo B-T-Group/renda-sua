@@ -5,7 +5,17 @@ export type OrderableItemImage = {
   image_url: string;
   image_type: ImageType | 'primary';
   display_order?: number;
+  /** Generated column: thumbnail when ready, else original image_url. */
+  display_url?: string | null;
 };
+
+/** List/grid display URL: prefer the generated thumbnail, fall back to the original. */
+export function itemImageDisplayUrl(
+  image: { image_url: string; display_url?: string | null } | undefined | null
+): string | null {
+  if (!image) return null;
+  return image.display_url ?? image.image_url ?? null;
+}
 
 /** Treat both "main" and legacy/alternate "primary" as preferred hero image types. */
 export function isPrimaryItemImageType(

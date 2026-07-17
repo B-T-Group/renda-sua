@@ -4157,6 +4157,9 @@ export class OrdersService {
                 image_url
                 image_type
                 display_order
+                thumbnail
+                thumbnail_status
+                display_url
               }
             }
           }
@@ -4956,6 +4959,9 @@ export class OrdersService {
                 alt_text
                 image_type
                 display_order
+                thumbnail
+                thumbnail_status
+                display_url
               }
             }
           }
@@ -6931,6 +6937,9 @@ export class OrdersService {
             sort_order
             item_variant_images(order_by: { display_order: asc }) {
               id
+              display_url
+              thumbnail
+              thumbnail_status
               image_url
               alt_text
               caption
@@ -6988,6 +6997,9 @@ export class OrdersService {
               sort_order
               item_variant_images(order_by: { display_order: asc }) {
                 id
+                display_url
+                thumbnail
+                thumbnail_status
                 image_url
                 alt_text
                 caption

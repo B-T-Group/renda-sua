@@ -18,6 +18,7 @@ insert_permissions:
       columns:
         - item_variant_id
         - image_url
+        - s3_key
         - alt_text
         - caption
         - display_order
@@ -33,6 +34,9 @@ select_permissions:
         - caption
         - display_order
         - is_primary
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -49,6 +53,9 @@ select_permissions:
         - caption
         - display_order
         - is_primary
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -65,6 +72,9 @@ select_permissions:
         - caption
         - display_order
         - is_primary
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -84,6 +94,9 @@ select_permissions:
         - caption
         - display_order
         - is_primary
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -100,6 +113,9 @@ select_permissions:
         - caption
         - display_order
         - is_primary
+        - thumbnail
+        - thumbnail_status
+        - display_url
         - created_at
         - updated_at
       filter:
@@ -111,6 +127,7 @@ update_permissions:
     permission:
       columns:
         - image_url
+        - s3_key
         - alt_text
         - caption
         - display_order

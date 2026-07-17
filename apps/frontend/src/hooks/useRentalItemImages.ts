@@ -19,6 +19,9 @@ export interface RentalItemImage {
   status: string;
   is_ai_cleaned?: boolean;
   display_order?: number;
+  thumbnail?: string | null;
+  thumbnail_status?: string | null;
+  display_url?: string | null;
   created_at: string;
   rental_item?: { id: string; name: string } | null;
 }

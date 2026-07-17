@@ -14,6 +14,7 @@ import { BusinessTokensService } from '../business-tokens/business-tokens.servic
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { isActivePersona } from '../users/persona.util';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
@@ -35,7 +36,8 @@ export class AiImageCleanupService implements OnModuleInit {
     private readonly awsService: AwsService,
     private readonly queue: AiImageCleanupQueueService,
     private readonly notifications: NotificationsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly imageThumbnails: ImageThumbnailsService
   ) {}
 
   onModuleInit(): void {
@@ -145,6 +147,8 @@ export class AiImageCleanupService implements OnModuleInit {
         is_ai_cleaned: true,
       },
     });
+    // Original bytes were replaced — invalidate and regenerate the thumbnail
+    void this.imageThumbnails.regenerate('item_image', result.business_image_id);
     await this.markResult(resultId, 'accepted');
     await this.maybeCompleteJob(result.job_id);
     return { success: true };

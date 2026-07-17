@@ -1,5 +1,13 @@
 // Define the possible image types based on the database enum
-export type ImageType = 'main' | 'thumbnail' | 'detail' | 'gallery' | 'angle';
+// ('thumbnail' was removed as a role — generated thumbnails live in the `thumbnail` column)
+export type ImageType = 'main' | 'detail' | 'gallery' | 'angle';
+
+export type ThumbnailStatus =
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'failed'
+  | 'skipped';
 
 export interface ItemImage {
   id: string;
@@ -11,6 +19,9 @@ export interface ItemImage {
   display_order?: number;
   uploaded_by?: string;
   is_ai_cleaned?: boolean;
+  thumbnail?: string | null;
+  thumbnail_status?: ThumbnailStatus;
+  display_url?: string;
   created_at: string;
   updated_at?: string;
 }

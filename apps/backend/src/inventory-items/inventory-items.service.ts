@@ -123,6 +123,9 @@ export interface InventoryItem {
       alt_text?: string;
       caption?: string;
       display_order: number;
+      thumbnail?: string | null;
+      thumbnail_status?: string | null;
+      display_url?: string | null;
     }>;
     tags?: Array<{ id: string; name: string }>;
     collections?: Array<{ id: string; slug: string; name: string }>;
@@ -339,6 +342,9 @@ const CATALOG_INVENTORY_LIST_GQL = `
           alt_text
           caption
           display_order
+          thumbnail
+          thumbnail_status
+          display_url
         }
         item_tags {
           tag {
@@ -371,6 +377,9 @@ const CATALOG_INVENTORY_LIST_GQL = `
           sort_order
           item_variant_images(order_by: { display_order: asc }) {
             id
+            display_url
+            thumbnail
+            thumbnail_status
             image_url
             alt_text
             caption
@@ -1576,7 +1585,10 @@ export class InventoryItemsService {
       kind: 'product',
       inventoryId: row.id,
       title,
-      imageUrl: row.item?.item_images?.[0]?.image_url ?? null,
+      imageUrl:
+        row.item?.item_images?.[0]?.display_url ??
+        row.item?.item_images?.[0]?.image_url ??
+        null,
       price: Number(row.selling_price ?? 0),
       currency: row.item?.currency ?? 'XAF',
     });
@@ -1698,6 +1710,7 @@ export class InventoryItemsService {
             currency
             item_images(limit: 1, order_by: { display_order: asc }) {
               image_url
+              display_url
             }
             item_sub_category {
               item_category {
@@ -1823,6 +1836,7 @@ export class InventoryItemsService {
               limit: 1
             ) {
               image_url
+              display_url
             }
             item_collections {
               collection { slug }
@@ -1836,7 +1850,10 @@ export class InventoryItemsService {
     });
     const seenItemsBySlug = new Map<string, Set<string>>();
     for (const row of result?.business_inventory ?? []) {
-      const imageUrl = row?.item?.item_images?.[0]?.image_url?.trim();
+      const imageUrl = (
+        row?.item?.item_images?.[0]?.display_url ??
+        row?.item?.item_images?.[0]?.image_url
+      )?.trim();
       const itemId = row?.item_id as string | undefined;
       if (!imageUrl || !itemId) continue;
       for (const ic of row?.item?.item_collections ?? []) {
@@ -1936,6 +1953,9 @@ export class InventoryItemsService {
               alt_text
               caption
               display_order
+              thumbnail
+              thumbnail_status
+              display_url
             }
             item_tags {
               tag {
@@ -1968,6 +1988,9 @@ export class InventoryItemsService {
               sort_order
               item_variant_images(order_by: { display_order: asc }) {
                 id
+                display_url
+                thumbnail
+                thumbnail_status
                 image_url
                 alt_text
                 caption
@@ -2241,6 +2264,9 @@ export class InventoryItemsService {
                 alt_text
                 caption
                 display_order
+                thumbnail
+                thumbnail_status
+                display_url
               }
               item_tags {
                 tag { id name }

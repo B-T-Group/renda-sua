@@ -18,6 +18,9 @@ export interface BusinessImage {
   tags: string[];
   status: string;
   is_ai_cleaned?: boolean;
+  thumbnail?: string | null;
+  thumbnail_status?: string | null;
+  display_url?: string | null;
   created_at: string;
   item?: { id: string; name: string; sku: string | null } | null;
 }

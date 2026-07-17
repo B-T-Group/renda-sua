@@ -6,6 +6,8 @@ export interface ItemVariantImage {
   caption?: string | null;
   display_order: number;
   is_primary: boolean;
+  /** Server-resolved display URL: thumbnail when ready, else image_url. */
+  display_url?: string | null;
 }
 
 export interface ItemVariant {
@@ -50,7 +52,7 @@ export function primaryVariantImageUrl(
   const primary =
     images.find((im) => im.is_primary === true) ??
     [...images].sort((a, b) => a.display_order - b.display_order)[0];
-  return primary?.image_url ?? null;
+  return primary?.display_url ?? primary?.image_url ?? null;
 }
 
 /**

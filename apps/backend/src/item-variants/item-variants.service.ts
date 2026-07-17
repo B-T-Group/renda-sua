@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import type { CreateItemVariantDto } from './dto/create-item-variant.dto';
 import type { CreateItemVariantImageDto } from './dto/create-item-variant-image.dto';
 import type { UpdateItemVariantDto } from './dto/update-item-variant.dto';
@@ -23,6 +24,9 @@ const VARIANT_FIELDS = `
   updated_at
   item_variant_images(order_by: { display_order: asc }) {
     id
+    display_url
+    thumbnail
+    thumbnail_status
     image_url
     alt_text
     caption
@@ -35,7 +39,10 @@ const VARIANT_FIELDS = `
 
 @Injectable()
 export class ItemVariantsService {
-  constructor(private readonly hasuraUserService: HasuraUserService) {}
+  constructor(
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly imageThumbnailsService: ImageThumbnailsService
+  ) {}
 
   private async assertSkuUniqueForItem(
     itemId: string,
@@ -304,9 +311,16 @@ export class ItemVariantsService {
       }
     `;
     const res = await this.hasuraUserService.executeMutation<{
-      insert_item_variant_images_one: unknown;
+      insert_item_variant_images_one: { id: string } | null;
     }>(m, { object });
-    return res.insert_item_variant_images_one;
+    const created = res.insert_item_variant_images_one;
+    if (created?.id) {
+      void this.imageThumbnailsService.enqueueGeneration(
+        'item_variant_image',
+        created.id
+      );
+    }
+    return created;
   }
 
   private async clearPrimaryImagesForVariant(
@@ -422,6 +436,10 @@ export class ItemVariantsService {
     const res = await this.hasuraUserService.executeMutation<{
       update_item_variant_images_by_pk: unknown;
     }>(m, { id: imageId, _set });
+    // Original bytes changed — old thumbnail is stale, regenerate asynchronously
+    if (typeof _set.image_url === 'string') {
+      void this.imageThumbnailsService.regenerate('item_variant_image', imageId);
+    }
     return res.update_item_variant_images_by_pk;
   }
 

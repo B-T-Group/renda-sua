@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AiImageCleanupController } from './ai-image-cleanup.controller';
 import { AiImageCleanupInternalController } from './ai-image-cleanup-internal.controller';
@@ -18,6 +19,7 @@ import { AiImageCleanupService } from './ai-image-cleanup.service';
     AiGenerationModule,
     AwsModule,
     BusinessTokensModule,
+    ImageThumbnailsModule,
   ],
   controllers: [AiImageCleanupController, AiImageCleanupInternalController],
   providers: [AiImageCleanupQueueService, AiImageCleanupService],

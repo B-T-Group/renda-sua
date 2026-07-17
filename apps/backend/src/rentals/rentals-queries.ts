@@ -112,6 +112,9 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
         }
         rental_item_images(order_by: { display_order: asc }) {
           id
+          display_url
+          thumbnail
+          thumbnail_status
           image_url
           alt_text
         }
@@ -176,6 +179,9 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
         }
         rental_item_images(order_by: { display_order: asc }) {
           id
+          display_url
+          thumbnail
+          thumbnail_status
           image_url
           alt_text
         }
@@ -480,6 +486,9 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
           name
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
+            display_url
+            thumbnail
+            thumbnail_status
             image_url
             alt_text
           }
@@ -635,6 +644,9 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
       operation_mode
       rental_item_images(order_by: { display_order: asc }) {
         id
+        display_url
+        thumbnail
+        thumbnail_status
         image_url
         display_order
       }
@@ -666,6 +678,9 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
       operation_mode
       rental_item_images(order_by: { display_order: asc }) {
         id
+        display_url
+        thumbnail
+        thumbnail_status
         image_url
         display_order
       }
@@ -852,6 +867,9 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
           currency
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
+            display_url
+            thumbnail
+            thumbnail_status
             image_url
           }
         }
@@ -913,6 +931,9 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
           currency
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
+            display_url
+            thumbnail
+            thumbnail_status
             image_url
             alt_text
           }

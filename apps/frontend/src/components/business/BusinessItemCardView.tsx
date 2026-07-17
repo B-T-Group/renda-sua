@@ -68,6 +68,12 @@ interface ItemImage {
   image_url: string;
   alt_text?: string;
   display_order?: number;
+  display_url?: string | null;
+}
+
+/** Card/grid URL: prefer the generated thumbnail, fall back to the original. */
+function cardImageUrl(img: ItemImage): string {
+  return img.display_url ?? img.image_url;
 }
 
 /** Main image first, then others sorted by display_order (matches listing API). */
@@ -490,7 +496,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                 )}
                 <CardMedia
                   component="img"
-                  image={displayImage.image_url}
+                  image={cardImageUrl(displayImage)}
                   alt={displayImage.alt_text || item.name}
                   sx={{
                     width: '100%',
@@ -595,7 +601,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                   >
                     <Box
                       component="img"
-                      src={img.image_url}
+                      src={cardImageUrl(img)}
                       alt=""
                       sx={{
                         width: '100%',

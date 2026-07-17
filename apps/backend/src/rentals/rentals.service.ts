@@ -204,7 +204,14 @@ export interface PublicRentalListingRow {
     operation_mode: string;
     deleted_at?: string | null;
     rental_category: { id: string; name: string };
-    rental_item_images: Array<{ id: string; image_url: string; alt_text?: string }>;
+    rental_item_images: Array<{
+      id: string;
+      image_url: string;
+      alt_text?: string;
+      thumbnail?: string | null;
+      thumbnail_status?: string | null;
+      display_url?: string | null;
+    }>;
     business: {
       id: string;
       name: string;

@@ -317,6 +317,67 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `AiImageCleanupQueueUrl-${environment}`,
     });
 
+    // FIFO SQS + Lambda for async image thumbnail generation
+    const imageThumbnailsDlq = new sqs.Queue(
+      this,
+      `ImageThumbnailsDlq-${environment}`,
+      {
+        queueName: `image-thumbnails-dlq-${environment}.fifo`,
+        fifo: true,
+        retentionPeriod: cdk.Duration.days(14),
+      }
+    );
+
+    const imageThumbnailsQueue = new sqs.Queue(
+      this,
+      `ImageThumbnailsQueue-${environment}`,
+      {
+        queueName: `image-thumbnails-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        // Must exceed Lambda timeout (thumbnail generation is fast; 5 min budget).
+        visibilityTimeout: cdk.Duration.minutes(6),
+        deadLetterQueue: {
+          queue: imageThumbnailsDlq,
+          maxReceiveCount: 5,
+        },
+      }
+    );
+
+    const imageThumbnailsHandler = new lambda.Function(
+      this,
+      `ImageThumbnailsHandler-${environment}`,
+      {
+        functionName: `image-thumbnails-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/image-thumbnails-handler'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    imageThumbnailsHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(imageThumbnailsQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    new cdk.CfnOutput(this, `ImageThumbnailsQueueUrl-${environment}`, {
+      value: imageThumbnailsQueue.queueUrl,
+      description: 'SQS Queue URL for async image thumbnail generation',
+      exportName: `ImageThumbnailsQueueUrl-${environment}`,
+    });
+
     // FIFO SQS + Lambda for commerce / Shopify sync jobs
     const commerceSyncQueue = new sqs.Queue(
       this,

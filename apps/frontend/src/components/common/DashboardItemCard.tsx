@@ -42,7 +42,10 @@ import {
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
-import { orderedItemImages } from '../../utils/orderedItemImages';
+import {
+  itemImageDisplayUrl,
+  orderedItemImages,
+} from '../../utils/orderedItemImages';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
@@ -140,7 +143,8 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       ? 0
       : Math.min(activeImageIndex, galleryImages.length - 1);
   const displayImage = galleryImages[displayIdx];
-  const displayImageUrl = displayImage?.image_url ?? null;
+  const displayImageUrl = itemImageDisplayUrl(displayImage);
+  const lightboxImageUrl = displayImage?.image_url ?? null;
   const hasMultipleImages = galleryImages.length > 1;
 
   const goPrevImage = () => {
@@ -498,7 +502,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               >
                 <Box
                   component="img"
-                  src={img.image_url}
+                  src={itemImageDisplayUrl(img) ?? img.image_url}
                   alt=""
                   sx={{
                     width: '100%',
@@ -1143,7 +1147,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               >
                 <Box
                   component="img"
-                  src={displayImageUrl}
+                  src={lightboxImageUrl ?? displayImageUrl}
                   alt={
                     displayImage?.alt_text || inventory.item.name
                   }

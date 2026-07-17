@@ -1,6 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { toImageUrlBundle } from '../image-thumbnails/image-thumbnail.mapper';
+import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
+import type { ImageUrlBundle } from '../image-thumbnails/image-thumbnails.types';
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 
 export interface BusinessImage {
@@ -20,12 +23,15 @@ export interface BusinessImage {
   tags: string[];
   status: string;
   is_ai_cleaned: boolean;
+  thumbnail?: string | null;
+  thumbnail_status?: string | null;
+  display_url?: string | null;
   created_at: string;
   item?: { id: string; name: string; sku: string | null } | null;
 }
 
 export interface PaginatedBusinessImages {
-  images: BusinessImage[];
+  images: (BusinessImage & { urls: ImageUrlBundle })[];
   total: number;
 }
 
@@ -78,6 +84,9 @@ const LIBRARY_IMAGE_FIELDS = `
   tags
   status
   is_ai_cleaned
+  thumbnail
+  thumbnail_status
+  display_url
   created_at
   item {
     id
@@ -236,7 +245,8 @@ export class BusinessImagesService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly itemAiReviewService: ItemAiReviewService
+    private readonly itemAiReviewService: ItemAiReviewService,
+    private readonly imageThumbnailsService: ImageThumbnailsService
   ) {}
 
   async getBusinessImages(
@@ -275,7 +285,7 @@ export class BusinessImagesService {
         item_images: BusinessImage[];
         item_images_aggregate: { aggregate: { count: number } };
       }>(GET_ITEM_IMAGES_PAGE, { where, limit, offset });
-      const images = result.item_images ?? [];
+      const images = this.withUrlBundles(result.item_images ?? []);
       const total = result.item_images_aggregate?.aggregate?.count ?? 0;
       return { images, total };
     } catch (error: any) {
@@ -283,11 +293,17 @@ export class BusinessImagesService {
         const data = await this.hasuraSystemService.executeQuery<{
           item_images: BusinessImage[];
         }>(GET_ITEM_IMAGES_PAGE_DATA, { where, limit, offset });
-        const images = data.item_images ?? [];
+        const images = this.withUrlBundles(data.item_images ?? []);
         return { images, total: images.length };
       }
       throw error;
     }
+  }
+
+  private withUrlBundles(
+    images: BusinessImage[]
+  ): (BusinessImage & { urls: ImageUrlBundle })[] {
+    return images.map((img) => ({ ...img, urls: toImageUrlBundle(img) }));
   }
 
   async bulkCreateBusinessImages(
@@ -327,7 +343,12 @@ export class BusinessImagesService {
     }>(INSERT_ITEM_IMAGES, {
       objects,
     });
-    return row?.insert_item_images?.returning ?? [];
+    const created = row?.insert_item_images?.returning ?? [];
+    void this.imageThumbnailsService.enqueueMany(
+      'item_image',
+      created.map((c) => c.id)
+    );
+    return created;
   }
 
   async associateImageToItem(
@@ -453,7 +474,19 @@ export class BusinessImagesService {
     if (!Object.keys(cleanedChanges).length) {
       return current;
     }
-    return this.applyImageUpdate(businessId, imageId, cleanedChanges);
+    const updated = await this.applyImageUpdate(
+      businessId,
+      imageId,
+      cleanedChanges
+    );
+    // Original bytes changed — old thumbnail is stale, regenerate asynchronously
+    if (
+      typeof cleanedChanges.image_url === 'string' &&
+      cleanedChanges.image_url !== current.image_url
+    ) {
+      void this.imageThumbnailsService.regenerate('item_image', imageId);
+    }
+    return updated;
   }
 
   async searchItems(
