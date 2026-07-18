@@ -81,7 +81,7 @@ import {
 import type { ImageType } from '../../types/image';
 import {
   effectiveVariantUnitPrice,
-  primaryVariantImageUrl,
+  orderedVariantImages,
   unitPriceWithListingDeal,
 } from '../../types/itemVariant';
 import { orderedItemImages } from '../../utils/orderedItemImages';
@@ -945,34 +945,43 @@ const PlaceOrderPage: React.FC = () => {
       display_order?: number;
     };
 
-    const imgs = (selectedItem?.item?.item_images ?? []) as PlaceOrderItemImage[];
-    const normalized: Array<PlaceOrderItemImage & { image_type: ImageType }> =
-      imgs.map((img) => ({
+    const parentImgs = (selectedItem?.item?.item_images ?? []) as PlaceOrderItemImage[];
+    const parentNormalized: Array<PlaceOrderItemImage & { image_type: ImageType }> =
+      parentImgs.map((img) => ({
         ...img,
         image_type: img.image_type ?? 'gallery',
       }));
+    const parentOrdered = orderedItemImages(parentNormalized);
 
-    return orderedItemImages(normalized);
-  }, [selectedItem?.item?.item_images]);
+    const variantOnly = orderedVariantImages(selectedVariant)
+      .map((img) => {
+        const image_url = img.display_url?.trim() || img.image_url?.trim() || '';
+        return {
+          id: img.id,
+          image_url,
+          image_type: 'gallery' as ImageType,
+          alt_text: img.alt_text ?? undefined,
+          caption: img.caption ?? undefined,
+          display_order: img.display_order,
+        };
+      })
+      .filter((img) => img.image_url.length > 0);
+
+    return variantOnly.length > 0 ? variantOnly : parentOrdered;
+  }, [selectedItem?.item?.item_images, selectedVariant]);
 
   const [selectedItemImageIndex, setSelectedItemImageIndex] = useState(0);
   const [itemImagePreviewOpen, setItemImagePreviewOpen] = useState(false);
   useEffect(() => {
     setSelectedItemImageIndex(0);
-  }, [selectedItem?.id]);
-
-  const variantPrimaryImageUrl = useMemo(
-    () => primaryVariantImageUrl(selectedVariant),
-    [selectedVariant]
-  );
+  }, [selectedItem?.id, selectedVariantId]);
 
   const heroDisplayUrl = useMemo(() => {
-    if (variantPrimaryImageUrl) return variantPrimaryImageUrl;
     return (
       orderedSelectedItemImages[selectedItemImageIndex]?.image_url ??
       orderedSelectedItemImages[0]?.image_url
     );
-  }, [variantPrimaryImageUrl, orderedSelectedItemImages, selectedItemImageIndex]);
+  }, [orderedSelectedItemImages, selectedItemImageIndex]);
 
   const openSelectedItemImagePreview = useCallback(
     (index = 0) => {
@@ -2931,7 +2940,7 @@ const PlaceOrderPage: React.FC = () => {
                 strikeOriginal: listingUnitPricing.strikeOriginal,
                 hasDeal: listingUnitPricing.hasDeal,
               }}
-              displayImageSrc={variantPrimaryImageUrl}
+              displayImageSrc={heroDisplayUrl}
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
@@ -3796,7 +3805,7 @@ const PlaceOrderPage: React.FC = () => {
                 strikeOriginal: listingUnitPricing.strikeOriginal,
                 hasDeal: listingUnitPricing.hasDeal,
               }}
-              displayImageSrc={variantPrimaryImageUrl}
+              displayImageSrc={heroDisplayUrl}
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}

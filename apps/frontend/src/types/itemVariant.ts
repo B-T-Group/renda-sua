@@ -52,7 +52,19 @@ export function primaryVariantImageUrl(
   const primary =
     images.find((im) => im.is_primary === true) ??
     [...images].sort((a, b) => a.display_order - b.display_order)[0];
-  return primary?.display_url ?? primary?.image_url ?? null;
+  const url = primary?.display_url?.trim() || primary?.image_url?.trim();
+  return url || null;
+}
+
+/** Ordered gallery for a variant (primary first). Empty when the variant has no photos. */
+export function orderedVariantImages(
+  variant: ItemVariant | null | undefined
+): ItemVariantImage[] {
+  const images = variant?.item_variant_images ?? [];
+  return [...images].sort((a, b) => {
+    if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+    return (a.display_order ?? 0) - (b.display_order ?? 0);
+  });
 }
 
 /**

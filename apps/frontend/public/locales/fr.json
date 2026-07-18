@@ -3272,7 +3272,8 @@
     "variant": {
       "selectLabel": "Option",
       "label": "Option",
-      "selectRequired": "Choisissez une option"
+      "selectRequired": "Choisissez une option",
+      "chooseOption": "Choisissez une option"
     },
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {

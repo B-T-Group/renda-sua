@@ -79,6 +79,7 @@ import VariantSelector from '../common/VariantSelector';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
+import { orderedVariantImages } from '../../types/itemVariant';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -409,17 +410,34 @@ export default function ItemDetailPage() {
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
-  const [preferVariantHero, setPreferVariantHero] = React.useState(true);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const variantSel = useListingVariantSelection(inventoryItem);
   const { stats: orderStats, loading: orderStatsLoading } = useItemOrderStats(
     inventoryItem?.id ?? null
   );
-  const galleryImages = React.useMemo(
+  const parentGalleryImages = React.useMemo(
     () => orderedItemImages(inventoryItem?.item?.item_images ?? []),
     [inventoryItem?.item?.item_images]
   );
+  const galleryImages = React.useMemo(() => {
+    const selected = variantSel.selectedVariant;
+    if (!selected) return parentGalleryImages;
+    const variantOnly = orderedVariantImages(selected)
+      .map((img) => {
+        const image_url = img.display_url?.trim() || img.image_url?.trim() || '';
+        return {
+          id: img.id,
+          image_url,
+          image_type: 'gallery' as const,
+          alt_text: img.alt_text ?? undefined,
+          caption: img.caption ?? undefined,
+          display_order: img.display_order,
+        };
+      })
+      .filter((img) => img.image_url.length > 0);
+    return variantOnly.length > 0 ? variantOnly : parentGalleryImages;
+  }, [parentGalleryImages, variantSel.selectedVariant]);
   const galleryImageCount = galleryImages.length;
   const { items: similarItems, loading: similarLoading } = useSimilarItems(
     id || null
@@ -445,11 +463,10 @@ export default function ItemDetailPage() {
     if (!inventoryItem?.id) return;
     setSelectedImageIndex(0);
     setImageLightboxOpen(false);
-    setPreferVariantHero(true);
   }, [inventoryItem?.id]);
 
   React.useEffect(() => {
-    setPreferVariantHero(true);
+    setSelectedImageIndex(0);
   }, [variantSel.selectedVariantId]);
 
   const lastPixelViewContentIdRef = React.useRef<string | null>(null);
@@ -480,13 +497,11 @@ export default function ItemDetailPage() {
 
   const goPrevGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;
-    setPreferVariantHero(false);
     setSelectedImageIndex((i) => (i === 0 ? galleryImageCount - 1 : i - 1));
   }, [galleryImageCount]);
 
   const goNextGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;
-    setPreferVariantHero(false);
     setSelectedImageIndex((i) =>
       i >= galleryImageCount - 1 ? 0 : i + 1
     );
@@ -753,12 +768,9 @@ export default function ItemDetailPage() {
   const images = galleryImages;
   const lp = variantSel.listingUnitPricing;
   const primaryImage =
-    variantSel.variantImageUrl ??
-    (images.length > 0 ? images[0].image_url : null);
+    images.length > 0 ? images[0].image_url : variantSel.variantImageUrl;
   const selectedImageUrl =
-    preferVariantHero && variantSel.variantImageUrl
-      ? variantSel.variantImageUrl
-      : images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
+    images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
   const business = inventoryItem.business_location?.business;
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
@@ -967,7 +979,6 @@ export default function ItemDetailPage() {
                   <ButtonBase
                     key={`dot-${idx}`}
                     onClick={() => {
-                      setPreferVariantHero(false);
                       setSelectedImageIndex(idx);
                     }}
                     aria-label={t('items.imageThumbnail', 'View image {{index}}', {
@@ -1011,7 +1022,6 @@ export default function ItemDetailPage() {
                   <ButtonBase
                     key={img.id ?? `${img.image_url}-${idx}`}
                     onClick={() => {
-                      setPreferVariantHero(false);
                       setSelectedImageIndex(idx);
                     }}
                     sx={{
@@ -1175,6 +1185,20 @@ export default function ItemDetailPage() {
               />
             ) : null}
 
+            <VariantSelector
+              variants={variantSel.activeVariants}
+              value={variantSel.selectedVariantId}
+              onChange={variantSel.setSelectedVariantId}
+              listingSellingPrice={inventoryItem.selling_price}
+              priceOverrides={inventoryItem.variant_price_overrides}
+              hasActiveDeal={inventoryItem.hasActiveDeal}
+              originalPrice={inventoryItem.original_price}
+              discountedPrice={inventoryItem.discounted_price}
+              currency={item.currency}
+              disabled={false}
+              formatCurrency={formatCurrency}
+            />
+
             <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
 
             <ItemDetailTrustStrip isVerifiedSeller={Boolean(business?.is_verified)} />
@@ -1199,11 +1223,11 @@ export default function ItemDetailPage() {
                     ) : null}
                     {location.name && ` · ${location.name}`}
                   </Typography>
-                  {business.id ? (
+                  {location.id ? (
                     <Button
                       size="small"
                       component={RouterLink}
-                      to={`/store/${business.id}`}
+                      to={`/store/${location.id}`}
                       sx={{ ml: 0.5 }}
                     >
                       {t('stores.viewStore', 'View store')}
@@ -1269,19 +1293,6 @@ export default function ItemDetailPage() {
                   </Button>
                 ) : (
                   <>
-                    <VariantSelector
-                      variants={variantSel.activeVariants}
-                      value={variantSel.selectedVariantId}
-                      onChange={variantSel.setSelectedVariantId}
-                      listingSellingPrice={inventoryItem.selling_price}
-                      priceOverrides={inventoryItem.variant_price_overrides}
-                      hasActiveDeal={inventoryItem.hasActiveDeal}
-                      originalPrice={inventoryItem.original_price}
-                      discountedPrice={inventoryItem.discounted_price}
-                      currency={item.currency}
-                      disabled={false}
-                      formatCurrency={formatCurrency}
-                    />
                     {isClientUser && (
                       <Button
                         variant="outlined"
