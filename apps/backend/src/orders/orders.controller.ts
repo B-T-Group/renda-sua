@@ -559,9 +559,16 @@ export class OrdersController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['pin'],
       properties: {
         pin: { type: 'string', description: '4-digit client pickup PIN' },
+        useLatestSharedPin: {
+          type: 'boolean',
+          description: 'Use the latest PIN shared by the client in order chat',
+        },
+        pinMessageId: {
+          type: 'string',
+          description: 'Specific shared PIN message id to consume',
+        },
       },
     },
   })
@@ -571,9 +578,17 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Not authorized or invalid PIN' })
   async confirmClientPickup(
     @Param('id') orderId: string,
-    @Body() body: { pin?: string }
+    @Body()
+    body: {
+      pin?: string;
+      useLatestSharedPin?: boolean;
+      pinMessageId?: string;
+    }
   ) {
-    return this.ordersService.confirmClientPickup(orderId, body?.pin ?? '');
+    return this.ordersService.confirmClientPickup(orderId, body?.pin ?? '', {
+      useLatestSharedPin: body?.useLatestSharedPin,
+      pinMessageId: body?.pinMessageId,
+    });
   }
 
   @Post(':id/mark-paid-in-cash-exception')
@@ -1882,13 +1897,16 @@ export class OrdersController {
 
   @Post(':orderId/messages/delivery-pin')
   @ApiOperation({
-    summary: 'Share delivery PIN with assigned agent via order chat',
+    summary: 'Share delivery/pickup PIN via order chat',
     description:
-      'Client-only. Creates a structured DELIVERY_PIN message, auto-mentions the assigned agent, and sends a targeted push notification.',
+      'Client-only. Creates a structured DELIVERY_PIN message. Delivery orders mention the assigned agent; store pickup orders mention the business. Sends a targeted push notification.',
   })
   @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
-  @ApiResponse({ status: 201, description: 'Delivery PIN shared successfully' })
-  @ApiResponse({ status: 400, description: 'No assigned agent or invalid order status' })
+  @ApiResponse({ status: 201, description: 'PIN shared successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'No recipient or invalid order status',
+  })
   @ApiResponse({ status: 403, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'PIN not available' })
   async shareDeliveryPin(@Param('orderId') orderId: string) {
@@ -1906,15 +1924,20 @@ export class OrdersController {
 
   @Get(':orderId/messages/active-delivery-pin')
   @ApiOperation({
-    summary: 'Get the latest active delivery PIN shared in order chat (agent only)',
+    summary:
+      'Get the latest active PIN shared in order chat (agent or business)',
+    description:
+      'Agents receive the PIN for out-for-delivery orders. Businesses receive the PIN for ready store-pickup orders.',
   })
   @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
   @ApiResponse({ status: 200, description: 'Active PIN or null' })
-  @ApiResponse({ status: 403, description: 'Agent only' })
+  @ApiResponse({ status: 403, description: 'Agent or business only' })
   async getActiveDeliveryPin(@Param('orderId') orderId: string) {
     try {
       const active =
-        await this.deliveryPinShareService.getActiveDeliveryPinForAgent(orderId);
+        await this.deliveryPinShareService.getActiveDeliveryPinForCurrentUser(
+          orderId
+        );
       return { success: true, activePin: active };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;

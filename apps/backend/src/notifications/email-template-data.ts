@@ -17,16 +17,16 @@ function esc(s: string): string {
     .replace(/\//g, '&#x2F;');
 }
 
-function labels(locale: EmailLocale) {
+function labels(locale: EmailLocale, isPickup = false) {
   return locale === 'fr'
     ? {
-        est: 'Livraison estimée :',
+        est: isPickup ? 'Date de retrait :' : 'Livraison estimée :',
         spec: 'Instructions spéciales :',
         notes: 'Raison :',
         agent: 'Agent de livraison :',
       }
     : {
-        est: 'Estimated Delivery:',
+        est: isPickup ? 'Pickup date:' : 'Estimated Delivery:',
         spec: 'Special Instructions:',
         notes: 'Reason:',
         agent: 'Delivery Agent:',
@@ -35,10 +35,11 @@ function labels(locale: EmailLocale) {
 
 export function buildEstimatedDeliverySection(
   value: string | undefined,
-  locale: EmailLocale
+  locale: EmailLocale,
+  fulfillmentMethod?: string | null
 ): string {
   if (!value?.trim()) return '';
-  const L = labels(locale);
+  const L = labels(locale, fulfillmentMethod === 'pickup');
   return `<p><strong>${L.est}</strong> ${esc(value)}</p>`;
 }
 
@@ -153,7 +154,8 @@ export function buildResendTemplateVariables(
     ORDER_ITEMS_HTML: buildOrderItemsHtml(data.orderItems || [], cur, variant),
     ESTIMATED_DELIVERY_SECTION_HTML: buildEstimatedDeliverySection(
       data.estimatedDeliveryTime,
-      locale
+      locale,
+      data.fulfillmentMethod
     ),
     SPECIAL_INSTRUCTIONS_SECTION_HTML: buildSpecialInstructionsSection(
       data.specialInstructions,

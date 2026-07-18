@@ -39,6 +39,8 @@ interface DeliveryTimeWindowSelectorProps {
   loading?: boolean;
   validDeliveryWindow?: DeliveryWindowData | null;
   shouldFetchNextAvailable?: boolean;
+  /** When pickup, date label uses pickup wording instead of delivery. */
+  fulfillment?: 'delivery' | 'pickup';
 }
 
 const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
@@ -49,8 +51,10 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
   loading = false,
   validDeliveryWindow,
   shouldFetchNextAvailable = false,
+  fulfillment = 'delivery',
 }) => {
   const { t } = useTranslation();
+  const isPickup = fulfillment === 'pickup';
 
   // Hook to fetch next available day slots
   const {
@@ -317,10 +321,12 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
         {/* Date Selection */}
         <Box>
           <Typography variant="subtitle1" gutterBottom>
-            {t(
-              'orders.deliveryTimeWindow.preferredDate',
-              'Preferred delivery date'
-            )}
+            {isPickup
+              ? t('orders.deliveryTimeWindow.pickupDate', 'Pickup date')
+              : t(
+                  'orders.deliveryTimeWindow.preferredDate',
+                  'Preferred delivery date'
+                )}
           </Typography>
           <DatePicker
             value={selectedDate}

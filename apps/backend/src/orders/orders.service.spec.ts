@@ -26,8 +26,12 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
+import { RbacService } from '../rbac/rbac.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
@@ -207,6 +211,14 @@ describe('OrdersService', () => {
           },
         },
         {
+          provide: StripeTaxCheckoutBuilderService,
+          useValue: {
+            isTaxEnabledForCountry: jest.fn().mockReturnValue(false),
+            normalizeCountryCode: jest.fn((c: string) => c),
+          },
+        },
+        { provide: StripeTaxCalculationService, useValue: {} },
+        {
           provide: OrderOffersService,
           useValue: {
             handleOrderAssigned: jest.fn(),
@@ -221,6 +233,8 @@ describe('OrdersService', () => {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
+        { provide: OrderSystemJobsService, useValue: {} },
+        { provide: RbacService, useValue: {} },
         {
           provide: DeliveryAvailabilityService,
           useValue: {
@@ -568,6 +582,32 @@ describe('OrdersService', () => {
       expect(processSpy).toHaveBeenCalledWith('order-123');
       finalizeSpy.mockRestore();
       processSpy.mockRestore();
+    });
+
+    it('does not capture Stripe when order was already paid from wallet', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        id: 'order-123',
+        order_number: assignedOrder.order_number,
+        payment_timing: 'pay_now',
+        payment_source: 'wallet',
+        payment_status: 'paid',
+        fulfillment_method: 'pickup',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('does not capture Stripe when payment_status is already paid', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        id: 'order-123',
+        order_number: assignedOrder.order_number,
+        payment_timing: 'pay_now',
+        payment_source: 'credit_card',
+        payment_status: 'paid',
+        fulfillment_method: 'pickup',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
     });
 
     it('should throw error if user is not an agent', async () => {

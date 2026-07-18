@@ -1313,19 +1313,20 @@ export class OrdersService {
       );
     }
 
-    // Update order with confirmed delivery window and status
+    // Attach confirmed window before status update so client notifications include the slot.
+    await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
+
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed'
     );
 
-    // Update order's delivery_time_window_id
-    await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
-
     await this.createStatusHistoryEntry(
       request.orderId,
       'confirmed',
-      'Order confirmed by business',
+      isPickupOrder
+        ? 'Order confirmed by business with pickup slot'
+        : 'Order confirmed by business',
       'business',
       user.id,
       request.notes
@@ -1407,7 +1408,11 @@ export class OrdersService {
    * settles item/delivery shares, and completes the order. MoMo pay-at-pickup orders
    * are completed by their payment callback instead (initiatePayAtPickupPayment).
    */
-  async confirmClientPickup(orderId: string, pin: string) {
+  async confirmClientPickup(
+    orderId: string,
+    pin: string,
+    options?: { useLatestSharedPin?: boolean; pinMessageId?: string }
+  ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -1419,7 +1424,27 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     this.assertConfirmClientPickupAllowed(order, user.id);
 
-    const pinTrimmed = pin?.trim() ?? '';
+    let pinTrimmed = pin?.trim() ?? '';
+    let pinMessageId = options?.pinMessageId;
+    if (!pinTrimmed && (options?.useLatestSharedPin || options?.pinMessageId)) {
+      const resolved = await this.deliveryPinShareService.resolvePinForCompletion(
+        orderId,
+        user.id,
+        {
+          pinMessageId: options?.pinMessageId,
+          useLatestSharedPin: options?.useLatestSharedPin,
+        }
+      );
+      if (resolved) {
+        pinTrimmed = resolved.pin;
+        pinMessageId = resolved.messageId;
+      } else if (options?.useLatestSharedPin) {
+        throw new HttpException(
+          'No valid pickup PIN found in the order chat. Ask the client to send the PIN.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
     if (!pinTrimmed) {
       throw new HttpException(
         'Pickup PIN is required to confirm store pickup',
@@ -1428,9 +1453,10 @@ export class OrdersService {
     }
     await this.verifyOrderDeliveryPinForBusiness(order, pinTrimmed);
 
-    // Capture the authorized PaymentIntent; marks the order paid via the
-    // payment finalizer. No-op when the order is already paid (e.g. wallet).
-    await this.captureStripeAuthorizedOrderIfNeeded(order);
+    // Re-read payment fields so a concurrent wallet settle is not double-captured.
+    const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
+    // Capture authorized card PI only. Skips wallet / already-paid orders.
+    await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
 
     // Settlement and completion are idempotent.
     await this.processOrderPayment(orderId);
@@ -1439,6 +1465,10 @@ export class OrdersService {
       order,
       'Order completed after client pickup confirmation'
     );
+
+    if (pinMessageId) {
+      await this.deliveryPinShareService.markPinConsumed(orderId, pinMessageId);
+    }
 
     const updatedOrder = await this.getOrderDetails(orderId);
     return {
@@ -6554,17 +6584,27 @@ export class OrdersService {
 
   /**
    * Capture an authorized Stripe manual-capture order (delivery: on agent pickup;
-   * customer pickup: when business marks ready_for_pickup).
+   * store pickup: when business confirms client pickup with PIN).
+   * No-op when already paid (wallet / prior capture) or not a card authorization.
    */
   private async captureStripeAuthorizedOrderIfNeeded(
     order: Orders
   ): Promise<void> {
-    const paymentSource = (order as any).payment_source;
-    const paymentTiming = (order as any).payment_timing;
+    const paymentSource = (order as any).payment_source as string | undefined;
+    const paymentTiming = (order as any).payment_timing as string | undefined;
+    const paymentStatus = (order as any).payment_status as string | undefined;
+
+    // Wallet / mobile / already-captured orders must never hit Stripe capture.
+    if (paymentStatus === 'paid') {
+      return;
+    }
+    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
+      return;
+    }
     if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
       return;
     }
-    if ((order as any).payment_status !== 'authorized') {
+    if (paymentStatus !== 'authorized') {
       return;
     }
 

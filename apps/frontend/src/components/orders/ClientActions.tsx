@@ -151,8 +151,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           {showPin && (
             <ClientDeliveryPinButton
               orderId={order.id}
-              displayMode={
-                order.fulfillment_method === 'pickup' ? 'show' : 'send'
+              pinAudience={
+                order.fulfillment_method === 'pickup' ? 'business' : 'agent'
               }
               onShowNotification={onShowNotification}
               fullWidth={deliveryPinFullWidth}

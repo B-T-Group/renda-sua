@@ -86,8 +86,8 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
             alerts.push({
               severity: 'success' as const,
               message: t(
-                'client.orders.storeReadyShowPin',
-                'Your order is ready at the store. Come during your pickup slot and show your PIN to the seller to confirm pickup.'
+                'client.orders.storeReadySendPin',
+                'Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.'
               ),
             });
           }

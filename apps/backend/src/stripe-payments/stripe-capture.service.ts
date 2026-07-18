@@ -74,6 +74,31 @@ export class StripeCaptureService {
       };
     }
 
+    // If Stripe already captured (or settled) this PI, sync local tx — do not capture again.
+    try {
+      const existingPi = await this.stripeService.retrievePaymentIntent(
+        tx.stripe_payment_intent_id
+      );
+      if (existingPi?.status === 'succeeded') {
+        const capturedAt = new Date().toISOString();
+        await this.databaseService.updateTransaction(tx.id, {
+          status: 'success',
+          captured_at: capturedAt,
+        });
+        return { success: true, message: 'Already captured on Stripe', captured: true };
+      }
+      if (existingPi?.status && existingPi.status !== 'requires_capture') {
+        return {
+          success: false,
+          message: `Cannot capture PaymentIntent in status ${existingPi.status}`,
+        };
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not retrieve PI before capture for ${params.orderNumber}: ${error?.message}`
+      );
+    }
+
     await this.databaseService.updateTransaction(tx.id, {
       status: 'capture_pending',
     });

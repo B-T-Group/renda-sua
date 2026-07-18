@@ -830,7 +830,8 @@ export const useBackendOrders = () => {
 
   const confirmClientPickup = async (
     orderId: string,
-    pin: string
+    pin: string,
+    options?: { useLatestSharedPin?: boolean; pinMessageId?: string }
   ): Promise<any> => {
     if (!apiClient) {
       throw new Error(
@@ -842,7 +843,11 @@ export const useBackendOrders = () => {
       try {
         const response = await apiClient.post(
           `/orders/${orderId}/confirm-pickup`,
-          { pin }
+          {
+            pin: pin || undefined,
+            useLatestSharedPin: options?.useLatestSharedPin,
+            pinMessageId: options?.pinMessageId,
+          }
         );
         return response.data;
       } catch (err: any) {

@@ -171,18 +171,30 @@ export function buildDeliveryPinSharedPushMessage(params: {
   orderNumber: string;
   senderName: string;
   preferredLanguage?: string | null;
+  fulfillmentMethod?: string | null;
 }): { title: string; body: string } {
   const locale = normalizeLanguage(params.preferredLanguage);
   const sender =
     params.senderName?.trim() || (locale === 'fr' ? 'Le client' : 'The client');
+  const isPickup = params.fulfillmentMethod === 'pickup';
   if (locale === 'fr') {
-    return {
-      title: 'Code PIN de livraison partagé',
-      body: `${sender} a partagé le code PIN de livraison pour la commande ${params.orderNumber}`,
-    };
+    return isPickup
+      ? {
+          title: 'Code PIN de retrait partagé',
+          body: `${sender} a partagé le code PIN de retrait pour la commande ${params.orderNumber}`,
+        }
+      : {
+          title: 'Code PIN de livraison partagé',
+          body: `${sender} a partagé le code PIN de livraison pour la commande ${params.orderNumber}`,
+        };
   }
-  return {
-    title: 'Delivery PIN shared',
-    body: `${sender} shared the delivery PIN for order ${params.orderNumber}`,
-  };
+  return isPickup
+    ? {
+        title: 'Pickup PIN shared',
+        body: `${sender} shared the pickup PIN for order ${params.orderNumber}`,
+      }
+    : {
+        title: 'Delivery PIN shared',
+        body: `${sender} shared the delivery PIN for order ${params.orderNumber}`,
+      };
 }

@@ -519,6 +519,7 @@ export class MessagingService {
           client_id
           assigned_agent_id
           current_status
+          fulfillment_method
           client {
             user_id
             user {

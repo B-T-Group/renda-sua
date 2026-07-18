@@ -472,6 +472,7 @@ export class NotificationsService {
     orderNumber: string;
     senderName: string;
     messageId?: string;
+    fulfillmentMethod?: string | null;
   }): Promise<void> {
     const recipientUserId = params.recipientUserId?.trim();
     if (!recipientUserId) return;
@@ -482,6 +483,7 @@ export class NotificationsService {
       orderNumber: params.orderNumber,
       senderName: params.senderName,
       preferredLanguage: recipient?.preferred_language,
+      fulfillmentMethod: params.fulfillmentMethod,
     });
 
     const highlight = params.messageId ?? '';
@@ -1714,7 +1716,12 @@ export class NotificationsService {
       },
       confirmed: {
         title: 'Order confirmed',
-        body: `Order ${orderNumber} has been confirmed.`,
+        body:
+          data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
+            ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
+            : data?.fulfillmentMethod === 'pickup'
+              ? `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
+              : `Order ${orderNumber} has been confirmed.`,
       },
       preparing: {
         title: 'Order preparing',

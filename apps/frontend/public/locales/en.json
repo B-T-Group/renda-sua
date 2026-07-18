@@ -3894,6 +3894,7 @@
       "reviewSummaryWithEditableAddress": "We will deliver to <address>{{address}}</address> on {{date}} between {{start}} and {{end}}.",
       "selectSlot": "Select a time slot",
       "preferredDate": "Preferred delivery date",
+      "pickupDate": "Pickup date",
       "flexible": "I'm flexible with timing",
       "alternativeDates": "Alternative dates",
       "specialInstructions": "Special delivery instructions",

@@ -61,6 +61,7 @@ export interface MessagingOrder {
   client_id: string;
   assigned_agent_id: string | null;
   current_status?: string;
+  fulfillment_method?: string | null;
   client?: {
     user_id?: string | null;
     user?: {
@@ -97,4 +98,5 @@ export interface MessageCreatedEvent {
   mentionedUserId?: string;
   recipients: ResolvedRecipient[];
   messageType?: string;
+  fulfillmentMethod?: string | null;
 }

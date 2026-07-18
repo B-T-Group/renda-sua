@@ -51,6 +51,7 @@ export class MessageCreatedListener {
         orderNumber: event.orderNumber,
         senderName: event.senderName,
         messageId: event.messageId,
+        fulfillmentMethod: event.fulfillmentMethod,
       });
     } else if (recipient.recipient_type === 'mentioned') {
       await this.notificationsService.sendMentionPush({

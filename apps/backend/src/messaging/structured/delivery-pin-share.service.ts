@@ -74,17 +74,31 @@ export class DeliveryPinShareService {
       );
     }
 
-    const agentUserId = order.assigned_agent?.user_id;
-    if (!agentUserId) {
+    const isPickup = order.fulfillment_method === 'pickup';
+    if (isPickup && order.current_status !== 'ready_for_pickup') {
       throw new HttpException(
-        'An assigned delivery agent is required before sharing the delivery PIN',
+        'Pickup PIN can only be shared when the order is ready for pickup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const sharedToUserId = isPickup
+      ? order.business?.user_id
+      : order.assigned_agent?.user_id;
+    if (!sharedToUserId) {
+      throw new HttpException(
+        isPickup
+          ? 'Business user is required before sharing the pickup PIN'
+          : 'An assigned delivery agent is required before sharing the delivery PIN',
         HttpStatus.BAD_REQUEST
       );
     }
 
     this.assertRateLimit(orderId);
 
-    const pin = await this.deliveryPinService.getPinForClient(orderId);
+    const pin = isPickup
+      ? await this.ensurePinAvailable(orderId)
+      : await this.deliveryPinService.getPinForClient(orderId);
     if (!pin) {
       throw new HttpException(
         'Delivery PIN is not available for this order',
@@ -97,7 +111,7 @@ export class DeliveryPinShareService {
 
     const payload = this.deliveryPinHandler.buildPayload(
       pin,
-      agentUserId,
+      sharedToUserId,
       pinVersion
     );
 
@@ -116,7 +130,8 @@ export class DeliveryPinShareService {
       payload
     );
 
-    await this.insertMention(created.id, agentUserId, 'agent');
+    const mentionPersona: PersonaId = isPickup ? 'business' : 'agent';
+    await this.insertMention(created.id, sharedToUserId, mentionPersona);
 
     const recipients = this.deliveryPinHandler.resolveRecipients(order, payload);
     await this.insertRecipients(created.id, recipients);
@@ -125,7 +140,7 @@ export class DeliveryPinShareService {
       orderId,
       messageId: created.id,
       sharedByUserId: user.id,
-      sharedToUserId: agentUserId,
+      sharedToUserId,
       pinVersion,
       eventType: 'shared',
     });
@@ -133,7 +148,13 @@ export class DeliveryPinShareService {
     const senderName =
       `${created.user?.first_name ?? ''} ${created.user?.last_name ?? ''}`.trim();
 
-    this.dispatchNotification(order, created.id, senderName, agentUserId, recipients);
+    this.dispatchNotification(
+      order,
+      created.id,
+      senderName,
+      sharedToUserId,
+      recipients
+    );
 
     return this.messagingService.enrichSingleMessage(
       {
@@ -145,6 +166,45 @@ export class DeliveryPinShareService {
       order,
       user.id,
       senderPersona
+    );
+  }
+
+  /** Generate + persist a PIN when store-pickup orders lack a retrievable one. */
+  private async ensurePinAvailable(orderId: string): Promise<string | null> {
+    const existing = await this.deliveryPinService.getPinForClient(orderId);
+    if (existing) return existing;
+
+    const pin = this.deliveryPinService.generatePin();
+    const hash = this.deliveryPinService.hashPin(orderId, pin);
+    await this.hasuraSystemService.executeMutation(
+      `mutation SetDeliveryPinHash($orderId: uuid!, $hash: String!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId },
+          _set: { delivery_pin_hash: $hash }
+        ) { id }
+      }`,
+      { orderId, hash }
+    );
+    await this.deliveryPinService.setPinForClient(orderId, pin);
+    return pin;
+  }
+
+  async getActiveDeliveryPinForCurrentUser(orderId: string): Promise<{
+    messageId: string;
+    pin: string;
+    pinVersion: number;
+    sharedAt: string;
+  } | null> {
+    const user = await this.hasuraUserService.getUser();
+    if (isActivePersona(user, 'agent') && user.agent) {
+      return this.getActiveDeliveryPinForAgent(orderId);
+    }
+    if (isActivePersona(user, 'business') && user.business) {
+      return this.getActiveDeliveryPinForBusiness(orderId);
+    }
+    throw new HttpException(
+      'Only the assigned agent or business can read the shared PIN',
+      HttpStatus.FORBIDDEN
     );
   }
 
@@ -167,11 +227,49 @@ export class DeliveryPinShareService {
       return null;
     }
 
+    return this.readActiveSharedPin(orderId, user.id);
+  }
+
+  /** Latest active pickup PIN shared to the order's business in chat. */
+  async getActiveDeliveryPinForBusiness(orderId: string): Promise<{
+    messageId: string;
+    pin: string;
+    pinVersion: number;
+    sharedAt: string;
+  } | null> {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'business') || !user.business) {
+      throw new HttpException('Business only', HttpStatus.FORBIDDEN);
+    }
+
+    const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
+    if (order.business_id !== user.business.id) {
+      throw new HttpException('Not the business for this order', HttpStatus.FORBIDDEN);
+    }
+    if (order.fulfillment_method !== 'pickup') {
+      return null;
+    }
+    if (order.current_status !== 'ready_for_pickup') {
+      return null;
+    }
+
+    return this.readActiveSharedPin(orderId, user.id);
+  }
+
+  private async readActiveSharedPin(
+    orderId: string,
+    sharedToUserId: string
+  ): Promise<{
+    messageId: string;
+    pin: string;
+    pinVersion: number;
+    sharedAt: string;
+  } | null> {
     const message = await this.findLatestActivePinMessage(orderId);
     if (!message) return null;
 
     const payload = message.message_payload as unknown as DeliveryPinPayloadV1;
-    if (payload.sharedToUserId !== user.id || payload.status !== 'active') {
+    if (payload.sharedToUserId !== sharedToUserId || payload.status !== 'active') {
       return null;
     }
 
@@ -194,7 +292,7 @@ export class DeliveryPinShareService {
 
   async resolvePinForCompletion(
     orderId: string,
-    agentUserId: string,
+    recipientUserId: string,
     options: { pinMessageId?: string; useLatestSharedPin?: boolean }
   ): Promise<{ pin: string; messageId: string } | null> {
     if (!options.useLatestSharedPin && !options.pinMessageId) {
@@ -218,7 +316,7 @@ export class DeliveryPinShareService {
     const payload = message.message_payload;
     if (
       payload.status !== 'active' ||
-      payload.sharedToUserId !== agentUserId
+      payload.sharedToUserId !== recipientUserId
     ) {
       return null;
     }
@@ -696,6 +794,7 @@ export class DeliveryPinShareService {
       mentionedUserId,
       recipients,
       messageType: 'DELIVERY_PIN',
+      fulfillmentMethod: order.fulfillment_method,
     };
 
     if (targetedRouting) {

@@ -3637,6 +3637,7 @@
       "reviewSummaryWithEditableAddress": "Nous livrerons à <address>{{address}}</address> le {{date}} entre {{start}} et {{end}}.",
       "selectSlot": "Sélectionner un créneau horaire",
       "preferredDate": "Date de livraison préférée",
+      "pickupDate": "Date de retrait",
       "flexible": "Je suis flexible avec les horaires",
       "alternativeDates": "Dates alternatives",
       "specialInstructions": "Instructions spéciales de livraison",
