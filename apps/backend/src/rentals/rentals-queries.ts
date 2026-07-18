@@ -366,6 +366,7 @@ export const LIST_OVERLAPPING_BOOKING_WINDOWS = `
       start_at
       end_at
       rental_booking {
+        id
         units_booked
       }
     }

@@ -1736,11 +1736,13 @@ export class RentalsService {
     if (!exp || new Date(exp) <= new Date()) {
       throw new HttpException('Contract has expired', HttpStatus.GONE);
     }
+    // Exclude this proposed booking — its windows already hold capacity.
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
       req,
-      this.normalizeUnitsRequested(req.units_requested)
+      this.normalizeUnitsRequested(req.units_requested),
+      bookingId
     );
     if (!bookingNumber) {
       throw new HttpException('Missing booking_number for this rental booking', HttpStatus.BAD_REQUEST);
@@ -3063,16 +3065,17 @@ export class RentalsService {
     listingId: string,
     unitsAvailable: number,
     req: any,
-    requestedUnits: number
+    requestedUnits: number,
+    excludeBookingId?: string
   ): Promise<void> {
     const cap = Math.max(1, Number(unitsAvailable) || 1);
     const want = this.normalizeUnitsRequested(requestedUnits);
     for (const w of this.parseRentalSelectionWindows(req)) {
       if (w.billing === 'all_day' && w.calendarDate) {
         const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
-        await this.assertCapacity(listingId, start, end, cap, want);
+        await this.assertCapacity(listingId, start, end, cap, want, excludeBookingId);
       } else {
-        await this.assertCapacity(listingId, w.start, w.end, cap, want);
+        await this.assertCapacity(listingId, w.start, w.end, cap, want, excludeBookingId);
       }
     }
   }
@@ -3236,9 +3239,15 @@ export class RentalsService {
     start: Date,
     end: Date,
     unitsAvailable: number,
-    requestedUnits: number
+    requestedUnits: number,
+    excludeBookingId?: string
   ) {
-    const used = await this.peakUnitsUsedInInterval(listingId, start, end);
+    const used = await this.peakUnitsUsedInInterval(
+      listingId,
+      start,
+      end,
+      excludeBookingId
+    );
     if (used + requestedUnits > unitsAvailable) {
       throw new HttpException('No units available for these dates', HttpStatus.CONFLICT);
     }
@@ -3248,14 +3257,15 @@ export class RentalsService {
   private async peakUnitsUsedInInterval(
     listingId: string,
     start: Date,
-    end: Date
+    end: Date,
+    excludeBookingId?: string
   ): Promise<number> {
     const now = new Date().toISOString();
     const r = await this.hasuraSystemService.executeQuery<{
       rental_booking_windows: Array<{
         start_at: string;
         end_at: string;
-        rental_booking?: { units_booked?: number | null } | null;
+        rental_booking?: { id?: string; units_booked?: number | null } | null;
       }>;
     }>(Q.LIST_OVERLAPPING_BOOKING_WINDOWS, {
       listingId,
@@ -3263,8 +3273,12 @@ export class RentalsService {
       end: end.toISOString(),
       now,
     });
+    const windows = (r.rental_booking_windows ?? []).filter(
+      (w) =>
+        !excludeBookingId || w.rental_booking?.id !== excludeBookingId
+    );
     return this.peakConcurrentUnits(
-      (r.rental_booking_windows ?? []).map((w) => ({
+      windows.map((w) => ({
         startMs: new Date(w.start_at).getTime(),
         endMs: new Date(w.end_at).getTime(),
         units: Math.max(1, Number(w.rental_booking?.units_booked) || 1),
