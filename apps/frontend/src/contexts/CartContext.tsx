@@ -122,12 +122,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
             lineKey
         );
 
-        // Merge legacy lines (no variantId) with new variant-aware adds for the same listing.
-        if (existingItemIndex < 0 && item.variantId) {
+        // Merge when one line has a variantId and the other does not (same listing).
+        // Covers list/card adds that stamp a single variant vs detail adds before selection init.
+        if (existingItemIndex < 0) {
           existingItemIndex = prevItems.findIndex(
             (cartItem) =>
               cartItem.inventoryItemId === item.inventoryItemId &&
-              !cartItem.variantId
+              Boolean(cartItem.variantId) !== Boolean(item.variantId)
           );
         }
 
