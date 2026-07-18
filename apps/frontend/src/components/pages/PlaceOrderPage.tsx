@@ -866,9 +866,18 @@ const PlaceOrderPage: React.FC = () => {
       setSelectedVariantId(variants[0].id);
       return;
     }
-    const def = variants.find((v) => v.is_default);
-    setSelectedVariantId(def?.id ?? variants[0].id);
-  }, [selectedItem?.id, variantIdsKey, selectedItem]);
+    const fromQuery = new URLSearchParams(location.search).get('variantId');
+    const fromState = (location.state as { variantId?: string } | null)?.variantId;
+    const preferred = fromQuery || fromState || null;
+    if (preferred && variants.some((v) => v.id === preferred)) {
+      setSelectedVariantId(preferred);
+      return;
+    }
+    // Multiple options without a carried selection: require an explicit pick.
+    setSelectedVariantId((prev) =>
+      prev && variants.some((v) => v.id === prev) ? prev : null
+    );
+  }, [selectedItem?.id, variantIdsKey, selectedItem, location.search, location.state]);
 
   const selectedVariant = useMemo(() => {
     if (!selectedVariantId) return null;
@@ -1173,7 +1182,14 @@ const PlaceOrderPage: React.FC = () => {
 
     setDidAutoOpenAnonAddress(true);
     if (isMobile) {
-      navigate(`/items/${id}/place_order/anon-address?anon=1`, { replace: true });
+      const params = new URLSearchParams({ anon: '1' });
+      const variantId =
+        selectedVariantId ||
+        new URLSearchParams(location.search).get('variantId');
+      if (variantId) params.set('variantId', variantId);
+      navigate(`/items/${id}/place_order/anon-address?${params.toString()}`, {
+        replace: true,
+      });
       return;
     }
 
@@ -1201,7 +1217,9 @@ const PlaceOrderPage: React.FC = () => {
     itemOriginCity,
     itemOriginState,
     isPickupOrder,
+    location.search,
     navigate,
+    selectedVariantId,
   ]);
 
   // If the item loads after the address dialog opens, default origin fields when still empty

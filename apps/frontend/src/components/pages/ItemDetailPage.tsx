@@ -409,6 +409,7 @@ export default function ItemDetailPage() {
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const [preferVariantHero, setPreferVariantHero] = React.useState(true);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const variantSel = useListingVariantSelection(inventoryItem);
@@ -444,7 +445,12 @@ export default function ItemDetailPage() {
     if (!inventoryItem?.id) return;
     setSelectedImageIndex(0);
     setImageLightboxOpen(false);
+    setPreferVariantHero(true);
   }, [inventoryItem?.id]);
+
+  React.useEffect(() => {
+    setPreferVariantHero(true);
+  }, [variantSel.selectedVariantId]);
 
   const lastPixelViewContentIdRef = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -474,13 +480,15 @@ export default function ItemDetailPage() {
 
   const goPrevGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;
+    setPreferVariantHero(false);
     setSelectedImageIndex((i) => (i === 0 ? galleryImageCount - 1 : i - 1));
   }, [galleryImageCount]);
 
   const goNextGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;
+    setPreferVariantHero(false);
     setSelectedImageIndex((i) =>
-      i === galleryImageCount - 1 ? 0 : i + 1
+      i >= galleryImageCount - 1 ? 0 : i + 1
     );
   }, [galleryImageCount]);
 
@@ -516,6 +524,15 @@ export default function ItemDetailPage() {
     goNextGalleryImage,
   ]);
 
+  const placeOrderPath = React.useMemo(() => {
+    if (!id) return '';
+    const variantId = variantSel.selectedVariantId;
+    const params = new URLSearchParams();
+    if (variantId) params.set('variantId', variantId);
+    const qs = params.toString();
+    return `/items/${id}/place_order${qs ? `?${qs}` : ''}`;
+  }, [id, variantSel.selectedVariantId]);
+
   const handleOrderClick = () => {
     if (
       variantSel.activeVariants.length > 1 &&
@@ -534,7 +551,7 @@ export default function ItemDetailPage() {
         setAnonBuyNowOpen(true);
         return;
       }
-      navigate(`/items/${id}/place_order`);
+      navigate(placeOrderPath);
     }
   };
 
@@ -739,7 +756,9 @@ export default function ItemDetailPage() {
     variantSel.variantImageUrl ??
     (images.length > 0 ? images[0].image_url : null);
   const selectedImageUrl =
-    images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
+    preferVariantHero && variantSel.variantImageUrl
+      ? variantSel.variantImageUrl
+      : images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
   const business = inventoryItem.business_location?.business;
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
@@ -947,7 +966,10 @@ export default function ItemDetailPage() {
                 return (
                   <ButtonBase
                     key={`dot-${idx}`}
-                    onClick={() => setSelectedImageIndex(idx)}
+                    onClick={() => {
+                      setPreferVariantHero(false);
+                      setSelectedImageIndex(idx);
+                    }}
                     aria-label={t('items.imageThumbnail', 'View image {{index}}', {
                       index: idx + 1,
                     })}
@@ -988,7 +1010,10 @@ export default function ItemDetailPage() {
                 return (
                   <ButtonBase
                     key={img.id ?? `${img.image_url}-${idx}`}
-                    onClick={() => setSelectedImageIndex(idx)}
+                    onClick={() => {
+                      setPreferVariantHero(false);
+                      setSelectedImageIndex(idx);
+                    }}
                     sx={{
                       borderRadius: 1,
                       overflow: 'hidden',
@@ -1630,6 +1655,7 @@ export default function ItemDetailPage() {
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
+        variantId={variantSel.selectedVariantId}
         item={{
           title: item.name,
           imageUrl: primaryImage,

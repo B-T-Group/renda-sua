@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageType } from '../types/image';
+import type {
+  ItemVariant,
+  VariantPriceOverride,
+} from '../types/itemVariant';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
@@ -30,6 +34,8 @@ export interface InventoryItem {
   distance_value?: number;
   avg_rating?: number | null;
   rating_count?: number | null;
+  /** Location-specific variant price overrides (shared stock). */
+  variant_price_overrides?: VariantPriceOverride[];
   item: {
     id: string;
     name: string;
@@ -90,6 +96,7 @@ export interface InventoryItem {
     }>;
     tags?: Array<{ id: string; name: string }>;
     collections?: Array<{ id: string; slug: string; name: string }>;
+    item_variants?: ItemVariant[];
   };
   business_location: {
     id: string;

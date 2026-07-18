@@ -3,7 +3,12 @@ import { Button } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import {
+  catalogRequiresVariantSelection,
+  defaultCatalogVariantId,
+} from '../../utils/catalogVariantCart';
 
 interface OrderDialogProps {
   selectedItem: InventoryItem | null;
@@ -21,12 +26,24 @@ interface OrderDialogProps {
 const OrderDialog: React.FC<OrderDialogProps> = ({ selectedItem, onClose }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
   const handlePlaceOrder = () => {
-    if (selectedItem) {
-      navigate(`/items/${selectedItem.id}/place_order`);
+    if (!selectedItem) return;
+    if (catalogRequiresVariantSelection(selectedItem)) {
+      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
+        variant: 'info',
+      });
+      navigate(`/items/${selectedItem.id}`);
       onClose?.();
+      return;
     }
+    const variantId = defaultCatalogVariantId(selectedItem);
+    const qs = variantId
+      ? `?variantId=${encodeURIComponent(variantId)}`
+      : '';
+    navigate(`/items/${selectedItem.id}/place_order${qs}`);
+    onClose?.();
   };
 
   if (!selectedItem) {

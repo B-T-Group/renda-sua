@@ -3271,7 +3271,8 @@
     },
     "variant": {
       "selectLabel": "Option",
-      "label": "Option"
+      "label": "Option",
+      "selectRequired": "Choisissez une option"
     },
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {
@@ -4005,6 +4006,8 @@
       "calculatingDistance": "Calcul de la distance…",
       "distanceError": "Erreur",
       "availableCount": "{{count}} disponibles",
+      "optionsCount": "{{count}} options",
+      "chooseOption": "Choisissez une option",
       "specialHandling": "Spécial",
       "fragile": "Fragile",
       "perishable": "Périssable"
@@ -5066,6 +5069,7 @@
     "businessOrders": "Commandes par Entreprise",
     "multipleOrdersNotice": "Vos articles seront divisés en {{count}} commandes séparées",
     "itemAdded": "Article ajouté au panier",
+    "chooseOption": "Choisissez une option",
     "itemRemoved": "Article supprimé du panier",
     "quantityUpdated": "Quantité mise à jour",
     "cleared": "Panier vidé",

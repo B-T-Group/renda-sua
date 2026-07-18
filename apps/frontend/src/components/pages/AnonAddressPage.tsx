@@ -111,13 +111,21 @@ const AnonAddressPage: React.FC = () => {
   }, [isAddressReady]);
 
   const backToPlaceOrder = useCallback(() => {
-    const search = isAnonFlow ? '?anon=1&anonAddressDone=1' : '';
+    const params = new URLSearchParams(location.search);
+    const next = new URLSearchParams();
+    if (isAnonFlow || params.get('anon') === '1') {
+      next.set('anon', '1');
+      next.set('anonAddressDone', '1');
+    }
+    const variantId = params.get('variantId');
+    if (variantId) next.set('variantId', variantId);
+    const search = next.toString() ? `?${next.toString()}` : '';
     if (id) {
       navigate(`/items/${id}/place_order${search}`, { replace: true });
       return;
     }
     navigate(-1);
-  }, [id, isAnonFlow, navigate]);
+  }, [id, isAnonFlow, location.search, navigate]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;

@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -19,6 +19,12 @@ import {
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
+import {
+  buildCartItemFromInventory,
+  catalogRequiresVariantSelection,
+  defaultCatalogVariantId,
+} from '../../utils/catalogVariantCart';
+import { useSnackbar } from 'notistack';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 import { useCollections } from '../../hooks/useCollections';
@@ -28,6 +34,8 @@ const ITEMS_PER_PAGE = 24;
 const CollectionLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
   const { isAuthenticated } = useAuth0();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
@@ -64,7 +72,18 @@ const CollectionLandingPage: React.FC = () => {
       openLoginDialog();
       return;
     }
-    window.location.href = `/items/${item.id}/place_order`;
+    if (catalogRequiresVariantSelection(item)) {
+      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
+        variant: 'info',
+      });
+      navigate(`/items/${item.id}`);
+      return;
+    }
+    const variantId = defaultCatalogVariantId(item);
+    const qs = variantId
+      ? `?variantId=${encodeURIComponent(variantId)}`
+      : '';
+    navigate(`/items/${item.id}/place_order${qs}`);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
@@ -73,18 +92,15 @@ const CollectionLandingPage: React.FC = () => {
       openLoginDialog();
       return;
     }
-    addToCart({
-      inventoryItemId: item.id,
-      quantity: 1,
-      businessId: item.business_location.business_id,
-      businessLocationId: item.business_location_id,
-      itemData: {
-        name: item.item.name,
-        price: item.selling_price,
-        currency: item.item.currency,
-        imageUrl: item.item.item_images?.[0]?.image_url,
-      },
-    });
+    const cartItem = buildCartItemFromInventory(item);
+    if (cartItem === 'needs_variant') {
+      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
+        variant: 'info',
+      });
+      navigate(`/items/${item.id}`);
+      return;
+    }
+    addToCart(cartItem);
   };
 
   const title =

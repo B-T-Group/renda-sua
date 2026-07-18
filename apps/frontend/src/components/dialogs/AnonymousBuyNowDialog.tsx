@@ -51,6 +51,8 @@ interface CheckoutItemSummary {
 export interface AnonymousBuyNowDialogProps {
   open: boolean;
   inventoryItemId: string;
+  /** When set, preserved on the post-auth place-order return URL. */
+  variantId?: string | null;
   item: CheckoutItemSummary;
   /** e.g. variant selector when the listing has multiple options */
   variantSlot?: React.ReactNode;
@@ -85,6 +87,7 @@ function getApiErrorMessage(err: unknown): string | undefined {
 const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   open,
   inventoryItemId,
+  variantId,
   item,
   variantSlot,
   onClose,
@@ -139,10 +142,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const firstNameTrimmed = useMemo(() => firstName.trim(), [firstName]);
   const lastNameTrimmed = useMemo(() => lastName.trim(), [lastName]);
 
-  const returnToPathWithAnon = useMemo(
-    () => `/items/${inventoryItemId}/place_order?anon=1`,
-    [inventoryItemId]
-  );
+  const returnToPathWithAnon = useMemo(() => {
+    const params = new URLSearchParams({ anon: '1' });
+    if (variantId) params.set('variantId', variantId);
+    return `/items/${inventoryItemId}/place_order?${params.toString()}`;
+  }, [inventoryItemId, variantId]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) return;

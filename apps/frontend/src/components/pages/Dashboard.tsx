@@ -27,6 +27,12 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
+import {
+  buildCartItemFromInventory,
+  catalogRequiresVariantSelection,
+  defaultCatalogVariantId,
+} from '../../utils/catalogVariantCart';
+import { useSnackbar } from 'notistack';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
@@ -39,6 +45,7 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
+  const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const {
     inventoryItems,
@@ -132,20 +139,31 @@ const Dashboard: React.FC = () => {
 
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
-    navigate(`/items/${item.id}/place_order`);
+    if (catalogRequiresVariantSelection(item)) {
+      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
+        variant: 'info',
+      });
+      navigate(`/items/${item.id}`);
+      return;
+    }
+    const variantId = defaultCatalogVariantId(item);
+    const qs = variantId
+      ? `?variantId=${encodeURIComponent(variantId)}`
+      : '';
+    navigate(`/items/${item.id}/place_order${qs}`);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    const hasDeal =
-      item.hasActiveDeal &&
-      typeof item.original_price === 'number' &&
-      typeof item.discounted_price === 'number' &&
-      item.original_price > 0;
-    const unitPrice =
-      hasDeal && typeof item.discounted_price === 'number'
-        ? item.discounted_price
-        : item.selling_price;
+    const cartItem = buildCartItemFromInventory(item);
+    if (cartItem === 'needs_variant') {
+      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
+        variant: 'info',
+      });
+      navigate(`/items/${item.id}`);
+      return;
+    }
+    const unitPrice = cartItem.itemData.price;
     const contentCategory = metaPixelContentCategoryFromItem(item.item);
     const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
 
@@ -161,29 +179,11 @@ const Dashboard: React.FC = () => {
     });
 
     addToCart({
-      inventoryItemId: item.id,
-      quantity: 1,
-      businessId: item.business_location.business_id,
-      businessLocationId: item.business_location_id,
+      ...cartItem,
       itemData: {
-        name: item.item.name,
-        price: unitPrice,
-        currency: item.item.currency,
+        ...cartItem.itemData,
         ...(contentCategory && { contentCategory }),
         ...(googleCategory && { googleProductCategory: googleCategory }),
-        imageUrl: item.item.item_images?.[0]?.image_url,
-        weight: item.item.weight,
-        maxOrderQuantity: item.item.max_order_quantity || undefined,
-        minOrderQuantity: item.item.min_order_quantity || undefined,
-        originalPrice:
-          hasDeal && typeof item.original_price === 'number' ? item.original_price : undefined,
-        discountedPrice:
-          hasDeal && typeof item.discounted_price === 'number'
-            ? item.discounted_price
-            : undefined,
-        hasActiveDeal: hasDeal,
-        dealEndAt:
-          hasDeal ? item.deal_end_at : undefined,
       },
     });
   };

@@ -3531,7 +3531,8 @@
     },
     "variant": {
       "selectLabel": "Option",
-      "label": "Option"
+      "label": "Option",
+      "selectRequired": "Select an option"
     },
     "selectCountry": "Select a country.",
     "payAtDelivery": {
@@ -4268,6 +4269,8 @@
       "calculatingDistance": "Calculating distance…",
       "distanceError": "Error",
       "availableCount": "{{count}} available",
+      "optionsCount": "{{count}} options",
+      "chooseOption": "Choose an option",
       "specialHandling": "Special",
       "fragile": "Fragile",
       "perishable": "Perishable"
@@ -5329,6 +5332,7 @@
     "businessOrders": "Orders by Business",
     "multipleOrdersNotice": "Your items will be split into {{count}} separate orders",
     "itemAdded": "Item added to cart",
+    "chooseOption": "Choose an option",
     "itemRemoved": "Item removed from cart",
     "quantityUpdated": "Quantity updated",
     "cleared": "Cart cleared",

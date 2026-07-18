@@ -46,6 +46,7 @@ import {
   itemImageDisplayUrl,
   orderedItemImages,
 } from '../../utils/orderedItemImages';
+import { activeCatalogVariants, defaultCatalogVariantId } from '../../utils/catalogVariantCart';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
@@ -113,6 +114,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const galleryImages = useMemo(
     () => orderedItemImages(inventory.item.item_images),
     [inventory.item.item_images]
+  );
+
+  const variantOptionCount = useMemo(
+    () => activeCatalogVariants(inventory).length,
+    [inventory]
   );
 
   const descriptionPreview = useMemo(
@@ -661,8 +667,21 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 display: 'flex',
                 justifyContent: 'flex-end',
                 alignItems: 'center',
+                gap: 0.75,
+                flexWrap: 'wrap',
               }}
             >
+              {variantOptionCount > 1 ? (
+                <Chip
+                  label={t('items.itemCard.optionsCount', '{{count}} options', {
+                    count: variantOptionCount,
+                  })}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              ) : null}
               <Chip
                 label={t('items.itemCard.availableCount', '{{count}} available', {
                   count: inventory.computed_available_quantity,
@@ -970,6 +989,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
                   subjectId: inventory.id,
                 });
+                if (variantOptionCount > 1) {
+                  goToDetails();
+                  return;
+                }
                 setAnonBuyNowOpen(true);
               }}
               size="small"
@@ -1053,6 +1076,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventory.id}
+        variantId={defaultCatalogVariantId(inventory)}
         item={{
           title: inventory.item.name,
           imageUrl: displayImageUrl,

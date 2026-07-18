@@ -42,6 +42,10 @@ export interface CartItem {
 
 interface CartContextType {
   cartItems: CartItem[];
+  /**
+   * Adds a line to the cart. Callers must supply `variantId` when the listing
+   * has multiple active variants (use catalog helpers / detail selection).
+   */
   addToCart: (item: CartItem) => void;
   removeFromCart: (inventoryItemId: string, variantId?: string) => void;
   updateQuantity: (
@@ -112,11 +116,20 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
     (item: CartItem) => {
       setCartItems((prevItems) => {
         const lineKey = cartLineKey(item.inventoryItemId, item.variantId);
-        const existingItemIndex = prevItems.findIndex(
+        let existingItemIndex = prevItems.findIndex(
           (cartItem) =>
             cartLineKey(cartItem.inventoryItemId, cartItem.variantId) ===
             lineKey
         );
+
+        // Merge legacy lines (no variantId) with new variant-aware adds for the same listing.
+        if (existingItemIndex < 0 && item.variantId) {
+          existingItemIndex = prevItems.findIndex(
+            (cartItem) =>
+              cartItem.inventoryItemId === item.inventoryItemId &&
+              !cartItem.variantId
+          );
+        }
 
         if (existingItemIndex >= 0) {
           // Update quantity if item already exists
@@ -139,7 +152,33 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
 
           updatedItems[existingItemIndex] = {
             ...existing,
+            ...(!existing.variantId && item.variantId
+              ? {
+                  variantId: item.variantId,
+                  variantName: item.variantName,
+                }
+              : {}),
             quantity: finalQuantity,
+            itemData: {
+              ...existing.itemData,
+              // Prefer current listing/variant pricing when upgrading a legacy line.
+              ...(!existing.variantId && item.variantId
+                ? {
+                    price: item.itemData.price,
+                    originalPrice: item.itemData.originalPrice,
+                    discountedPrice: item.itemData.discountedPrice,
+                    hasActiveDeal: item.itemData.hasActiveDeal,
+                    dealEndAt: item.itemData.dealEndAt,
+                    imageUrl: item.itemData.imageUrl ?? existing.itemData.imageUrl,
+                    variantImageUrl:
+                      item.itemData.variantImageUrl ??
+                      existing.itemData.variantImageUrl,
+                  }
+                : !existing.itemData.variantImageUrl &&
+                    item.itemData.variantImageUrl
+                  ? { variantImageUrl: item.itemData.variantImageUrl }
+                  : {}),
+            },
           };
           enqueueSnackbar(
             t('cart.itemUpdated', 'Item quantity updated in cart'),
