@@ -31,6 +31,10 @@ import { OrderOffersService } from './order-offers.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
+jest.mock('../stripe-payments/stripe-connect.service', () => ({
+  StripeConnectService: class StripeConnectService {},
+}));
+
 describe('OrdersService', () => {
   let service: OrdersService;
   let hasuraUserService: jest.Mocked<HasuraUserService>;

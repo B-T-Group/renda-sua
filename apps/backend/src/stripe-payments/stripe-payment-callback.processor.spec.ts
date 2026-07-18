@@ -1,5 +1,10 @@
 import { StripePaymentCallbackProcessor } from './stripe-payment-callback.processor';
 
+jest.mock(
+  '../mobile-payments/payment-callback/payment-callback-registry.service',
+  () => ({ PaymentCallbackRegistryService: class PaymentCallbackRegistryService {} })
+);
+
 describe('StripePaymentCallbackProcessor wallet credits', () => {
   it('leaves manual rental capture settlement to the return flow', async () => {
     const processor: any = Object.create(
