@@ -600,6 +600,9 @@ export class RentalsService {
       object: {
         client_id: user.client.id,
         rental_location_listing_id: listing.id,
+        // Legacy NOT NULL envelope columns; also stored as selection windows.
+        requested_start_at: plan.envelopeStartIso,
+        requested_end_at: plan.envelopeEndIso,
         rental_selection_windows: plan.selectionWindowsJson,
         status: 'pending',
         units_requested: unitsRequested,
