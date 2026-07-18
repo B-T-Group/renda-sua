@@ -6,6 +6,7 @@ import { useSupportedCountries } from './useSupportedCountries';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 
 export interface CatalogStore {
+  business_location_id: string;
   business_id: string;
   name: string;
   logo_url: string | null;
@@ -103,7 +104,7 @@ export function useCatalogStores(options: {
 }
 
 export function useCatalogStore(
-  businessId: string | undefined,
+  locationOrBusinessId: string | undefined,
   options: {
     include_unavailable?: boolean;
     owner_preview?: boolean;
@@ -121,10 +122,11 @@ export function useCatalogStore(
   const includeUnavailable = options.include_unavailable ?? false;
   const ownerPreview = options.owner_preview === true;
   const anonymousOrigin = options.anonymousOrigin;
-  const enabled = options.enabled !== false && Boolean(businessId?.trim());
+  const enabled =
+    options.enabled !== false && Boolean(locationOrBusinessId?.trim());
 
   const fetchStore = useCallback(async () => {
-    if (!enabled || !businessId?.trim()) {
+    if (!enabled || !locationOrBusinessId?.trim()) {
       setStore(null);
       setLoading(false);
       return;
@@ -147,17 +149,20 @@ export function useCatalogStore(
         success: boolean;
         data: { store: CatalogStore };
         message?: string;
-      }>(`/inventory-items/stores/${encodeURIComponent(businessId.trim())}`, {
-        params: {
-          ...(country_code && { country_code }),
-          include_unavailable: includeUnavailable,
-          ...(ownerPreview && { owner_preview: true }),
-          ...(anonymousOrigin && {
-            origin_lat: anonymousOrigin.lat,
-            origin_lng: anonymousOrigin.lng,
-          }),
-        },
-      });
+      }>(
+        `/inventory-items/stores/${encodeURIComponent(locationOrBusinessId.trim())}`,
+        {
+          params: {
+            ...(country_code && { country_code }),
+            include_unavailable: includeUnavailable,
+            ...(ownerPreview && { owner_preview: true }),
+            ...(anonymousOrigin && {
+              origin_lat: anonymousOrigin.lat,
+              origin_lng: anonymousOrigin.lng,
+            }),
+          },
+        }
+      );
       if (!data.success) {
         setStore(null);
         setError(data.message || 'Store not found');
@@ -173,7 +178,7 @@ export function useCatalogStore(
   }, [
     api,
     enabled,
-    businessId,
+    locationOrBusinessId,
     isAuthenticated,
     supportedIsos,
     includeUnavailable,
@@ -182,6 +187,7 @@ export function useCatalogStore(
   ]);
 
   useEffect(() => {
+    setStore(null);
     void fetchStore();
   }, [fetchStore]);
 

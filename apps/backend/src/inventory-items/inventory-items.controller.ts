@@ -147,7 +147,7 @@ export class InventoryItemsController {
   @Get('stores')
   @ApiOperation({
     summary:
-      'Public store directory: businesses with visible storefronts and listable inventory',
+      'Public store directory: business locations with visible storefronts and listable inventory',
   })
   @ApiQuery({
     name: 'limit',
@@ -159,7 +159,7 @@ export class InventoryItemsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Filter stores by business name (substring)',
+    description: 'Filter stores by location name (substring)',
   })
   @ApiQuery({
     name: 'country_code',
@@ -236,7 +236,8 @@ export class InventoryItemsController {
   @Public()
   @Get('stores/:businessId')
   @ApiOperation({
-    summary: 'Get a single store header (public or owner preview)',
+    summary:
+      'Get a single store header by business location id (or business id → primary location); public or owner preview',
   })
   @ApiQuery({ name: 'country_code', required: false, type: String })
   @ApiQuery({ name: 'state', required: false, type: String })
@@ -250,7 +251,7 @@ export class InventoryItemsController {
     description:
       'When true and caller is the verified business owner, show hidden/unavailable catalog',
   })
-  @ApiResponse({ status: 200, description: 'Store header' })
+  @ApiResponse({ status: 200, description: 'Store location header' })
   @ApiResponse({ status: 404, description: 'Store not found or not visible' })
   async getInventoryStoreById(
     @Param('businessId') businessId: string,

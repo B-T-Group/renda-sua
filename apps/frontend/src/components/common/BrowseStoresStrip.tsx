@@ -16,7 +16,7 @@ import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 export interface BrowseStoresStripProps {
   stores: CatalogStore[];
   loading: boolean;
-  onStoreClick: (businessId: string) => void;
+  onStoreClick: (businessLocationId: string) => void;
   onSeeAll?: () => void;
 }
 
@@ -175,7 +175,7 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
             variant="overline"
             sx={{ fontWeight: 700, letterSpacing: '0.1em', color: 'text.secondary' }}
           >
-            {t('stores.rowTitle', 'Browse by stores')}
+            {t('stores.rowTitle', 'Browse by store locations')}
           </Typography>
         </Box>
         {onSeeAll ? (
@@ -208,9 +208,9 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
             ))
           : stores.map((store) => (
               <StorePill
-                key={store.business_id}
+                key={store.business_location_id}
                 store={store}
-                onSelect={() => onStoreClick(store.business_id)}
+                onSelect={() => onStoreClick(store.business_location_id)}
                 unnamedLabel={t('stores.unnamed', 'Store')}
                 subtitle={subtitleFor(store)}
                 openingSoonLabel={t(

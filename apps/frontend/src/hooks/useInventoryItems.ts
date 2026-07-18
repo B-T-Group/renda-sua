@@ -153,6 +153,8 @@ export interface GetInventoryItemsQuery {
   owner_preview?: boolean;
   anonymousOrigin?: { lat: number; lng: number } | null;
   collection?: string;
+  /** When false, skip fetching (e.g. wait for store header). */
+  enabled?: boolean;
 }
 
 export interface PaginatedInventoryItems {
@@ -174,6 +176,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { supportedIsos } = useSupportedCountries();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<{
     total: number;
@@ -184,8 +187,36 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
 
   const apiClient = useApiClient();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const listScopeRef = useRef<string>('');
+
+  const listScopeKey = [
+    query.search ?? '',
+    query.category ?? '',
+    query.subcategory ?? '',
+    query.business_name ?? '',
+    query.brand ?? '',
+    query.min_price ?? '',
+    query.max_price ?? '',
+    query.currency ?? '',
+    query.sort ?? '',
+    query.include_unavailable ?? '',
+    query.business_location_id ?? '',
+    query.business_id ?? '',
+    query.owner_preview ?? '',
+    query.collection ?? '',
+    query.is_active ?? '',
+  ].join('|');
 
   const fetchInventoryItems = useCallback(async () => {
+    if (query.enabled === false) {
+      setInventoryItems([]);
+      setPagination(null);
+      setLoading(false);
+      setLoadingMore(false);
+      setError(null);
+      return;
+    }
+
     // Cancel any in-flight request so it cannot overwrite results from this request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -193,7 +224,18 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    setLoading(true);
+    const scopeChanged = listScopeRef.current !== listScopeKey;
+    listScopeRef.current = listScopeKey;
+    const requestedPage = query.page || 1;
+    // Filter/sort/location changes can race ahead of page reset; always replace then.
+    const page = scopeChanged ? 1 : requestedPage;
+    const isLoadMore = page > 1 && !scopeChanged;
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setLoadingMore(false);
+    }
     setError(null);
 
     // Logged-in: backend uses user address; do not pass country_code/state.
@@ -218,7 +260,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     try {
       const response = await apiClient.get<ApiResponse>('/inventory-items', {
         params: {
-          page: query.page || 1,
+          page,
           limit: query.limit || 20,
           is_active: query.is_active !== undefined ? query.is_active : true,
           ...(query.search && { search: query.search }),
@@ -257,7 +299,16 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       if (controller.signal.aborted) return;
 
       if (response.data.success) {
-        setInventoryItems(response.data.data.items);
+        const nextItems = response.data.data.items;
+        if (isLoadMore) {
+          setInventoryItems((prev) => {
+            const seen = new Set(prev.map((item) => item.id));
+            const appended = nextItems.filter((item) => !seen.has(item.id));
+            return appended.length > 0 ? [...prev, ...appended] : prev;
+          });
+        } else {
+          setInventoryItems(nextItems);
+        }
         setPagination({
           total: response.data.data.total,
           page: response.data.data.page,
@@ -283,7 +334,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       console.error('Error fetching inventory items:', err);
     } finally {
       if (!controller.signal.aborted) {
-        setLoading(false);
+        if (isLoadMore) {
+          setLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
       }
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
@@ -292,6 +347,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   }, [
     isAuthenticated,
     supportedIsos,
+    listScopeKey,
     query.page,
     query.limit,
     query.is_active,
@@ -309,6 +365,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.business_id,
     query.owner_preview,
     query.collection,
+    query.enabled,
     query.anonymousOrigin?.lat,
     query.anonymousOrigin?.lng,
   ]);
@@ -324,6 +381,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   return {
     inventoryItems,
     loading,
+    loadingMore,
     error,
     pagination,
     refetch,

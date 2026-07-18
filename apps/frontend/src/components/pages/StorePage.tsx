@@ -39,7 +39,9 @@ import { alpha } from '@mui/material/styles';
 const ITEMS_PER_PAGE = 24;
 
 const StorePage: React.FC = () => {
-  const { businessId } = useParams<{ businessId: string }>();
+  const { businessId: locationOrBusinessId } = useParams<{
+    businessId: string;
+  }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -55,27 +57,42 @@ const StorePage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
   const isClientUser = profile?.user_type_id === 'client';
-  const isOwnerPreview =
-    previewMode &&
-    Boolean(profile?.business?.id) &&
-    profile?.business?.id === businessId;
+  const wantsOwnerPreview =
+    previewMode && Boolean(profile?.business?.id);
 
   const { store, loading: storeLoading, error: storeError } = useCatalogStore(
-    businessId,
+    locationOrBusinessId,
     {
-      include_unavailable: isOwnerPreview,
-      owner_preview: isOwnerPreview,
+      owner_preview: wantsOwnerPreview,
       anonymousOrigin: browserGeo,
     }
   );
 
+  const isOwnerPreview =
+    wantsOwnerPreview &&
+    Boolean(store?.business_id) &&
+    profile?.business?.id === store?.business_id;
+
+  const storeMatchesRoute =
+    Boolean(store) &&
+    (store?.business_location_id === locationOrBusinessId ||
+      store?.business_id === locationOrBusinessId);
+
   const { inventoryItems, loading, error, pagination } = useInventoryItems({
+    enabled: Boolean(storeMatchesRoute && store?.business_location_id),
     page: currentPage,
     limit: ITEMS_PER_PAGE,
     is_active: true,
-    business_id: businessId,
-    include_unavailable: isOwnerPreview ? true : undefined,
-    owner_preview: isOwnerPreview,
+    business_location_id: storeMatchesRoute
+      ? store?.business_location_id
+      : undefined,
+    ...(isOwnerPreview && store?.business_id
+      ? {
+          business_id: store.business_id,
+          include_unavailable: true,
+          owner_preview: true,
+        }
+      : {}),
     anonymousOrigin: browserGeo,
   });
 
@@ -124,7 +141,9 @@ const StorePage: React.FC = () => {
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/store/${businessId}`;
+    const shareId =
+      store?.business_location_id ?? locationOrBusinessId;
+    const url = `${window.location.origin}/store/${shareId}`;
     const name = store?.name?.trim() || t('stores.unnamed', 'Store');
     const text = t(
       'stores.shareMessage',
@@ -141,7 +160,8 @@ const StorePage: React.FC = () => {
   const name = store?.name?.trim() || t('stores.unnamed', 'Store');
   const openingSoon =
     !!store?.is_storefront_visible && !store?.can_accept_orders;
-  const isEmpty = !loading && inventoryItems.length === 0;
+  const catalogLoading = storeLoading || loading;
+  const isEmpty = !catalogLoading && inventoryItems.length === 0;
   const palette = storeAvatarPalette(name);
 
   return (
@@ -294,17 +314,32 @@ const StorePage: React.FC = () => {
                     />
                   ) : null}
                 </Box>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => void handleShare()}
-                  sx={{
-                    bgcolor: palette.bg,
-                    '&:hover': { bgcolor: palette.bg, filter: 'brightness(0.92)' },
-                  }}
-                >
-                  {t('stores.share', 'Share store')}
-                </Button>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => void handleShare()}
+                    sx={{
+                      bgcolor: palette.bg,
+                      '&:hover': {
+                        bgcolor: palette.bg,
+                        filter: 'brightness(0.92)',
+                      },
+                    }}
+                  >
+                    {t('stores.share', 'Share store')}
+                  </Button>
+                  {isOwnerPreview ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      component={RouterLink}
+                      to="/business/items"
+                    >
+                      {t('stores.manageItems', 'Manage items')}
+                    </Button>
+                  ) : null}
+                </Box>
               </Box>
             </Box>
 
@@ -397,11 +432,11 @@ const StorePage: React.FC = () => {
         ))}
       </Box>
 
-      {!loading && inventoryItems.length === 0 && !previewMode ? (
+      {!catalogLoading && inventoryItems.length === 0 && !previewMode ? (
         <Typography color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
           {t(
             'stores.catalogEmpty',
-            'No products available in this store right now.'
+            'No products available at this location right now.'
           )}
         </Typography>
       ) : null}

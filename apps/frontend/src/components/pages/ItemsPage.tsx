@@ -13,8 +13,8 @@ import {
     Card,
     CardContent,
     Chip,
+    CircularProgress,
     Container,
-    Pagination,
     Paper,
     Stack,
     Skeleton,
@@ -23,7 +23,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
@@ -286,6 +286,7 @@ const ItemsPage: React.FC = () => {
   const {
     inventoryItems,
     loading,
+    loadingMore,
     error,
     pagination,
   } = useInventoryItems({
@@ -385,6 +386,39 @@ const ItemsPage: React.FC = () => {
   ]);
 
   const totalPages = pagination?.totalPages ?? 0;
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const pageAdvanceLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadingMore) {
+      pageAdvanceLockRef.current = false;
+    }
+  }, [loadingMore]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (
+          entry?.isIntersecting &&
+          !loading &&
+          !loadingMore &&
+          !pageAdvanceLockRef.current &&
+          currentPage < totalPages
+        ) {
+          pageAdvanceLockRef.current = true;
+          setCurrentPage((p) => p + 1);
+        }
+      },
+      { root: null, rootMargin: '200px', threshold: 0 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, currentPage, totalPages]);
 
   // Dashboard-specific logic for authenticated clients
   const isClient =
@@ -428,12 +462,6 @@ const ItemsPage: React.FC = () => {
       ) ?? null
     );
   }, [isClient, orders]);
-
-  const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
-    setCurrentPage(value);
-    // Smooth scroll to top of page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   /** Catalog list is server-paginated; filter panel only drives `filters` + API query. */
   const handleCatalogFilterPanelItems = useCallback(
@@ -558,16 +586,12 @@ const ItemsPage: React.FC = () => {
     const dealsDisplay = pickUniqueCatalogItems(dealsItems, seen, 8);
     const topRatedDisplay = pickUniqueCatalogItems(topRatedItems, seen, 8);
     const popularDisplay = pickUniqueCatalogItems(popularItems, seen, 8);
-    const catalogDisplay =
-      currentPage === 1
-        ? filterExcludedCatalogItems(inventoryItems, seen)
-        : inventoryItems;
+    const catalogDisplay = filterExcludedCatalogItems(inventoryItems, seen);
 
     return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
   }, [
     hasActiveFilters,
     showCuratedSections,
-    currentPage,
     dealsItems,
     topRatedItems,
     popularItems,
@@ -1223,17 +1247,21 @@ const ItemsPage: React.FC = () => {
               </Box>
             ) : null}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                <Pagination
-                  count={totalPages}
-                  page={currentPage}
-                  onChange={handlePageChange}
-                  color="primary"
-                />
+            {currentPage < totalPages ? (
+              <Box ref={loadMoreSentinelRef} sx={{ height: 1, width: '100%' }} />
+            ) : null}
+
+            {loadingMore ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  py: 3,
+                }}
+              >
+                <CircularProgress size={28} />
               </Box>
-            )}
+            ) : null}
           </>
         )}
         </Box>

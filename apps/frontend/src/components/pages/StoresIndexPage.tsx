@@ -43,21 +43,21 @@ const StoresIndexPage: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
       <SEOHead
-        title={t('stores.listTitle', 'Stores')}
+        title={t('stores.listTitle', 'Store locations')}
         description={t(
           'stores.listSeoDescription',
-          'Browse local stores on Rendasua.'
+          'Browse local store locations on Rendasua.'
         )}
       />
       <Typography variant="h4" fontWeight={800} gutterBottom>
-        {t('stores.listTitle', 'Stores')}
+        {t('stores.listTitle', 'Store locations')}
       </Typography>
       <TextField
         fullWidth
         size="small"
         value={searchDraft}
         onChange={(e) => setSearchDraft(e.target.value)}
-        placeholder={t('stores.searchPlaceholder', 'Search stores')}
+        placeholder={t('stores.searchPlaceholder', 'Search store locations')}
         sx={{ mb: 2, maxWidth: 420 }}
         InputProps={{
           startAdornment: (
@@ -84,8 +84,10 @@ const StoresIndexPage: React.FC = () => {
               const palette = storeAvatarPalette(name);
               return (
                 <ButtonBase
-                  key={store.business_id}
-                  onClick={() => navigate(`/store/${store.business_id}`)}
+                  key={store.business_location_id}
+                  onClick={() =>
+                    navigate(`/store/${store.business_location_id}`)
+                  }
                   sx={{ textAlign: 'left', borderRadius: 2 }}
                 >
                   <Paper
@@ -147,7 +149,7 @@ const StoresIndexPage: React.FC = () => {
       </Box>
       {!loading && stores.length === 0 ? (
         <Typography color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
-          {t('stores.empty', 'No stores to show yet.')}
+          {t('stores.empty', 'No store locations to show yet.')}
         </Typography>
       ) : null}
     </Container>

@@ -244,8 +244,9 @@ export interface TopInventoryLocationRow {
 }
 
 export interface TopInventoryStoreRow {
+  business_location_id: string;
   business_id: string;
-  name: string;
+  name: string; // location name
   logo_url: string | null;
   item_count: number;
   is_verified: boolean;
@@ -953,25 +954,25 @@ export class InventoryItemsService {
   }
 
   /**
-   * Distinct catalog `item_id` counts per business (matches store product grid totals).
+   * Distinct catalog `item_id` counts per business location (matches store product grid).
    * Pages through matching inventory rows so counts are not truncated by a single scan limit.
    */
-  private async countDistinctCatalogItemsByBusiness(
+  private async countDistinctCatalogItemsByLocation(
     where: Record<string, unknown>
   ): Promise<Map<string, number>> {
-    const itemIdsByBiz = new Map<string, Set<string>>();
+    const itemIdsByLoc = new Map<string, Set<string>>();
     const chunk = 1000;
     let offset = 0;
     for (;;) {
       const scanQuery = `
-        query ScanBizItemIds(
+        query ScanLocItemIds(
           $where: business_inventory_bool_exp!
           $lim: Int!
           $off: Int!
         ) {
           business_inventory(where: $where, limit: $lim, offset: $off) {
             item_id
-            business_location { business_id }
+            business_location_id
           }
         }
       `;
@@ -981,16 +982,16 @@ export class InventoryItemsService {
       );
       const rows: {
         item_id?: string;
-        business_location?: { business_id?: string } | null;
+        business_location_id?: string;
       }[] = scanResult.business_inventory ?? [];
       for (const r of rows) {
-        const bizId = r.business_location?.business_id;
+        const locId = r.business_location_id;
         const itemId = r.item_id;
-        if (!bizId || !itemId) continue;
-        let set = itemIdsByBiz.get(bizId);
+        if (!locId || !itemId) continue;
+        let set = itemIdsByLoc.get(locId);
         if (!set) {
           set = new Set();
-          itemIdsByBiz.set(bizId, set);
+          itemIdsByLoc.set(locId, set);
         }
         set.add(itemId);
       }
@@ -1004,17 +1005,18 @@ export class InventoryItemsService {
       }
     }
     const counts = new Map<string, number>();
-    for (const [id, set] of itemIdsByBiz) {
+    for (const [id, set] of itemIdsByLoc) {
       counts.set(id, set.size);
     }
     return counts;
   }
 
-  private async fetchStoreDetailsByIds(ids: string[]): Promise<
+  private async fetchStoreLocationDetailsByIds(ids: string[]): Promise<
     Map<
       string,
       {
         id: string;
+        business_id: string;
         name: string;
         is_verified: boolean;
         can_accept_orders: boolean;
@@ -1025,21 +1027,22 @@ export class InventoryItemsService {
       }
     >
   > {
+    if (ids.length === 0) return new Map();
     const query = `
-      query StoreDetails($ids: [uuid!]!) {
-        businesses(where: { id: { _in: $ids } }) {
+      query StoreLocationDetails($ids: [uuid!]!) {
+        business_locations(where: { id: { _in: $ids } }) {
           id
+          business_id
           name
-          is_verified
-          can_accept_orders
-          is_storefront_visible
-          business_locations(
-            where: { is_active: { _eq: true } }
-            order_by: [{ is_primary: desc }, { created_at: asc }]
-            limit: 1
-          ) {
-            logo_url
-            address { latitude longitude }
+          logo_url
+          business {
+            is_verified
+            can_accept_orders
+            is_storefront_visible
+          }
+          address {
+            latitude
+            longitude
           }
         }
       }
@@ -1047,33 +1050,57 @@ export class InventoryItemsService {
     const res = await this.hasuraSystemService.executeQuery(query, { ids });
     const rows: Array<{
       id: string;
+      business_id: string;
       name: string;
-      is_verified?: boolean;
-      can_accept_orders?: boolean;
-      is_storefront_visible?: boolean;
-      business_locations?: Array<{
-        logo_url?: string | null;
-        address?: { latitude?: number | null; longitude?: number | null } | null;
-      }>;
-    }> = res.businesses ?? [];
+      logo_url?: string | null;
+      business?: {
+        is_verified?: boolean;
+        can_accept_orders?: boolean;
+        is_storefront_visible?: boolean;
+      } | null;
+      address?: { latitude?: number | null; longitude?: number | null } | null;
+    }> = res.business_locations ?? [];
     return new Map(
-      rows.map((b) => {
-        const loc = b.business_locations?.[0];
-        return [
-          b.id,
-          {
-            id: b.id,
-            name: b.name,
-            is_verified: b.is_verified === true,
-            can_accept_orders: b.can_accept_orders === true,
-            is_storefront_visible: b.is_storefront_visible === true,
-            logo_url: loc?.logo_url ?? null,
-            latitude: loc?.address?.latitude ?? null,
-            longitude: loc?.address?.longitude ?? null,
-          },
-        ];
-      })
+      rows.map((loc) => [
+        loc.id,
+        {
+          id: loc.id,
+          business_id: loc.business_id,
+          name: loc.name,
+          is_verified: loc.business?.is_verified === true,
+          can_accept_orders: loc.business?.can_accept_orders === true,
+          is_storefront_visible: loc.business?.is_storefront_visible === true,
+          logo_url: loc.logo_url ?? null,
+          latitude: loc.address?.latitude ?? null,
+          longitude: loc.address?.longitude ?? null,
+        },
+      ])
     );
+  }
+
+  /** Primary (or first active) location for a business — owner preview / legacy URLs. */
+  private async resolvePrimaryLocationIdForBusiness(
+    businessId: string
+  ): Promise<string | null> {
+    const query = `
+      query PrimaryStoreLocation($businessId: uuid!) {
+        business_locations(
+          where: {
+            business_id: { _eq: $businessId }
+            is_active: { _eq: true }
+          }
+          order_by: [{ is_primary: desc }, { created_at: asc }]
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+    });
+    const rows: Array<{ id: string }> = res.business_locations ?? [];
+    return rows[0]?.id ?? null;
   }
 
   private rankTopStoresByOrigin(
@@ -1081,6 +1108,7 @@ export class InventoryItemsService {
     byId: Map<
       string,
       {
+        business_id: string;
         name: string;
         logo_url: string | null;
         is_verified: boolean;
@@ -1094,14 +1122,14 @@ export class InventoryItemsService {
     take: number
   ): TopInventoryStoreRow[] {
     const scored = [...counts.keys()].map((id) => {
-      const biz = byId.get(id);
+      const loc = byId.get(id);
       let distance_meters: number | null = null;
-      if (origin && biz?.latitude != null && biz?.longitude != null) {
+      if (origin && loc?.latitude != null && loc?.longitude != null) {
         distance_meters = haversineMeters(
           origin.lat,
           origin.lng,
-          Number(biz.latitude),
-          Number(biz.longitude)
+          Number(loc.latitude),
+          Number(loc.longitude)
         );
       }
       return { id, item_count: counts.get(id) ?? 0, distance_meters };
@@ -1117,15 +1145,16 @@ export class InventoryItemsService {
       scored.sort((a, b) => b.item_count - a.item_count);
     }
     return scored.slice(0, take).map(({ id, item_count, distance_meters }) => {
-      const biz = byId.get(id);
+      const loc = byId.get(id);
       return {
-        business_id: id,
-        name: biz?.name ?? '',
-        logo_url: biz?.logo_url ?? null,
+        business_location_id: id,
+        business_id: loc?.business_id ?? '',
+        name: loc?.name ?? '',
+        logo_url: loc?.logo_url ?? null,
         item_count,
-        is_verified: biz?.is_verified === true,
-        can_accept_orders: biz?.can_accept_orders === true,
-        is_storefront_visible: biz?.is_storefront_visible === true,
+        is_verified: loc?.is_verified === true,
+        can_accept_orders: loc?.can_accept_orders === true,
+        is_storefront_visible: loc?.is_storefront_visible === true,
         distance_meters:
           origin && distance_meters != null ? distance_meters : null,
       };
@@ -1133,7 +1162,7 @@ export class InventoryItemsService {
   }
 
   /**
-   * Public store directory: businesses with visible storefronts and listable inventory.
+   * Public store directory: business locations with visible storefronts and listable inventory.
    */
   async getTopInventoryStores(
     limit = 20,
@@ -1156,14 +1185,18 @@ export class InventoryItemsService {
       state,
     });
     if ('unsupported' in built) return [];
-    const counts = await this.countDistinctCatalogItemsByBusiness(built.where);
+    const counts = await this.countDistinctCatalogItemsByLocation(built.where);
     if (counts.size === 0) return [];
     const origin = await this.resolveTopLocationsOrigin(query);
-    const byId = await this.fetchStoreDetailsByIds([...counts.keys()]);
+    const byId = await this.fetchStoreLocationDetailsByIds([...counts.keys()]);
+    for (const id of [...counts.keys()]) {
+      if (!byId.has(id)) counts.delete(id);
+    }
+    if (counts.size === 0) return [];
     const q = query.search?.trim().toLowerCase();
     if (q) {
-      for (const [id, biz] of byId) {
-        if (!biz.name.toLowerCase().includes(q)) {
+      for (const [id, loc] of byId) {
+        if (!loc.name.toLowerCase().includes(q)) {
           counts.delete(id);
           byId.delete(id);
         }
@@ -1175,9 +1208,10 @@ export class InventoryItemsService {
 
   /**
    * Store header for public browse or explicit owner preview.
+   * Resolves `id` as a business_location_id first; falls back to primary location for a business id.
    */
   async getInventoryStoreById(
-    businessId: string,
+    idParam: string,
     query: Pick<
       GetInventoryItemsQuery,
       | 'country_code'
@@ -1189,26 +1223,36 @@ export class InventoryItemsService {
       | 'owner_preview'
     > = {}
   ): Promise<TopInventoryStoreRow | null> {
-    const id = businessId.trim();
+    const id = idParam.trim();
     if (!id) return null;
+
+    let locationId = id;
+    let byId = await this.fetchStoreLocationDetailsByIds([locationId]);
+    let loc = byId.get(locationId);
+    if (!loc) {
+      const primaryId = await this.resolvePrimaryLocationIdForBusiness(id);
+      if (!primaryId) return null;
+      locationId = primaryId;
+      byId = await this.fetchStoreLocationDetailsByIds([locationId]);
+      loc = byId.get(locationId);
+    }
+    if (!loc) return null;
+
     const ownerPreview = await this.resolveOwnerPreview(
-      id,
+      loc.business_id,
       query.owner_preview === true
     );
-    const byId = await this.fetchStoreDetailsByIds([id]);
-    const biz = byId.get(id);
-    if (!biz) return null;
-    if (!ownerPreview && !biz.is_storefront_visible) return null;
+    if (!ownerPreview && !loc.is_storefront_visible) return null;
+
     const { country_code, state } = await this.resolveInventoryListGeo(query);
-    const includeUnavailable = ownerPreview
-      ? true
-      : (query.include_unavailable ?? false);
+    // Only owners get unavailable stock; ignore client include_unavailable otherwise.
+    const includeUnavailable = ownerPreview;
     const built = await this.buildInventoryCatalogWhere({
       is_active: query.is_active !== undefined ? query.is_active : true,
       include_unavailable: includeUnavailable,
       country_code,
       state,
-      business_id: id,
+      business_location_id: locationId,
       ownerPreview,
     });
     let item_count = 0;
@@ -1216,24 +1260,26 @@ export class InventoryItemsService {
       item_count = await this.countDistinctCatalogItemIds(built.where);
     }
     if (!ownerPreview && item_count === 0) return null;
+
     const origin = await this.resolveTopLocationsOrigin(query);
     let distance_meters: number | null = null;
-    if (origin && biz.latitude != null && biz.longitude != null) {
+    if (origin && loc.latitude != null && loc.longitude != null) {
       distance_meters = haversineMeters(
         origin.lat,
         origin.lng,
-        Number(biz.latitude),
-        Number(biz.longitude)
+        Number(loc.latitude),
+        Number(loc.longitude)
       );
     }
     return {
-      business_id: id,
-      name: biz.name,
-      logo_url: biz.logo_url,
+      business_location_id: locationId,
+      business_id: loc.business_id,
+      name: loc.name,
+      logo_url: loc.logo_url,
       item_count,
-      is_verified: biz.is_verified,
-      can_accept_orders: biz.can_accept_orders,
-      is_storefront_visible: biz.is_storefront_visible,
+      is_verified: loc.is_verified,
+      can_accept_orders: loc.can_accept_orders,
+      is_storefront_visible: loc.is_storefront_visible,
       distance_meters: origin ? distance_meters : null,
     };
   }
