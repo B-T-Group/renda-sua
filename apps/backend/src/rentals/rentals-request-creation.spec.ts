@@ -1,12 +1,24 @@
 import * as Q from './rentals-queries';
 import { RentalsService } from './rentals.service';
 
+interface RentalsServiceHarness {
+  createRentalRequest: RentalsService['createRentalRequest'];
+  hasuraUserService: { getUser: jest.Mock };
+  hasuraSystemService: { executeMutation: jest.Mock };
+  fetchListing: jest.Mock;
+  assertListingBookable: jest.Mock;
+  validateRentalRequestWindowsPlan: jest.Mock;
+  emailBusinessNewRentalRequest: jest.Mock;
+}
+
 describe('RentalsService.createRentalRequest', () => {
   it('persists the min/max request envelope with selection windows', async () => {
     const executeMutation = jest.fn().mockResolvedValue({
       insert_rental_requests_one: { id: 'request-1' },
     });
-    const service: any = Object.create(RentalsService.prototype);
+    const service = Object.create(
+      RentalsService.prototype
+    ) as RentalsServiceHarness;
     service.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         user_type_id: 'client',
