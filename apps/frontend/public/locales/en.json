@@ -3988,6 +3988,7 @@
     "phoneNumberRequired": "Phone number is required when using a different phone number",
     "phoneNumberRequiredMessage": "Phone number is required for mobile payments.",
     "phoneNumberNeededForOrder": "Please add a phone number to complete your order.",
+    "approxPickupDistance": "~{{km}} km away",
     "pickupAddress": "Pickup from",
     "pickupLocation": "Pickup Location",
     "routeInfo": "Route Information",

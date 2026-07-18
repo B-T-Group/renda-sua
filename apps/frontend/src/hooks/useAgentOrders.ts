@@ -97,6 +97,8 @@ export interface Order {
   updated_at: string;
   delivery_commission?: number; // Computed field for agents
   agent_hold_amount?: number; // Amount required by agent to claim this order
+  /** Approximate km from agent GPS to pickup (open orders). */
+  pickup_distance_km?: number | null;
   client: Client;
   business: Business;
   business_location: BusinessLocation;

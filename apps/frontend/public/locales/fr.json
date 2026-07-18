@@ -3729,6 +3729,7 @@
     "phoneNumberRequired": "Le numéro de téléphone est requis lors de l'utilisation d'un numéro de téléphone différent",
     "phoneNumberRequiredMessage": "Le numéro de téléphone est requis pour les paiements mobiles.",
     "phoneNumberNeededForOrder": "Veuillez ajouter un numéro de téléphone pour finaliser votre commande.",
+    "approxPickupDistance": "~{{km}} km",
     "pickupAddress": "Récupérer depuis",
     "pickupLocation": "Lieu de Récupération",
     "routeInfo": "Informations sur l'Itinéraire",

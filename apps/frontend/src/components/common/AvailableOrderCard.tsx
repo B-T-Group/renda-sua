@@ -448,6 +448,20 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               >
                 <strong>{t('orders.pickupAddress', 'Pickup')}:</strong>{' '}
                 {formatAddress(order.business_location?.address)}
+                {order.pickup_distance_km != null &&
+                  Number.isFinite(order.pickup_distance_km) && (
+                    <>
+                      {' · '}
+                      <Box
+                        component="span"
+                        sx={{ color: 'primary.main', fontWeight: 700 }}
+                      >
+                        {t('orders.approxPickupDistance', '~{{km}} km away', {
+                          km: order.pickup_distance_km.toFixed(1),
+                        })}
+                      </Box>
+                    </>
+                  )}
               </Typography>
               {order.business_location?.address?.instructions && (
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', lineHeight: 1.3, mt: 0.25 }}>

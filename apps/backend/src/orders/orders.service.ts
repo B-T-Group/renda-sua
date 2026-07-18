@@ -60,6 +60,7 @@ import {
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
 import {
+  haversineDistanceKm,
   resolveAgentOperatingRegion,
   resolveAgentPreviewCountry,
 } from '../common/agent-proximity.util';
@@ -868,6 +869,36 @@ export class OrdersService {
       ...order,
       agent_caution_amount: cautionByCurrency.get(order.currency) ?? 0,
     }));
+  }
+
+  private parseFiniteCoord(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /** Approximate straight-line km from agent GPS to pickup (null if unknown). */
+  private attachPickupDistances(
+    orders: any[],
+    agentLocation: { latitude: number; longitude: number } | null
+  ): any[] {
+    if (!agentLocation || !orders.length) return orders;
+    return orders.map((order) => {
+      const lat = this.parseFiniteCoord(
+        order.business_location?.address?.latitude
+      );
+      const lng = this.parseFiniteCoord(
+        order.business_location?.address?.longitude
+      );
+      if (lat == null || lng == null) return order;
+      const km = haversineDistanceKm(
+        agentLocation.latitude,
+        agentLocation.longitude,
+        lat,
+        lng
+      );
+      return { ...order, pickup_distance_km: Math.round(km * 10) / 10 };
+    });
   }
 
   /**
@@ -4438,6 +4469,8 @@ export class OrdersService {
               state
               country
               postal_code
+              latitude
+              longitude
               instructions
             }
           }
@@ -4448,6 +4481,8 @@ export class OrdersService {
             state
             country
             postal_code
+            latitude
+            longitude
             instructions
           }
           currency
@@ -4518,10 +4553,14 @@ export class OrdersService {
       user.id,
       transformedOrders
     );
+    const ordersWithDistance = this.attachPickupDistances(
+      ordersWithAgentCaution,
+      locationCoords
+    );
 
     return {
       success: true,
-      orders: ordersWithAgentCaution,
+      orders: ordersWithDistance,
       canClaim,
       previewMode,
     };
