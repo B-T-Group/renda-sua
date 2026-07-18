@@ -128,3 +128,53 @@ describe('assertStripeRentalEndWithinAuthWindow', () => {
     );
   });
 });
+
+describe('Stripe rental payment state safety', () => {
+  it('does not settle the ledger before Stripe confirms capture', async () => {
+    const service: any = Object.create(RentalsService.prototype);
+    service.stripeCaptureService = {
+      captureRentalBookingPaymentIntent: jest.fn().mockResolvedValue({
+        success: true,
+        captured: false,
+      }),
+    };
+    service.creditClientWalletForStripeCapture = jest.fn();
+    service.registerRentalProceedsLedger = jest.fn();
+    service.patchBooking = jest.fn();
+
+    await expect(
+      service.settleStripeAuthorizedBooking(
+        makeBooking({
+          booking_number: 'RNT-1',
+          authorized_amount: 480,
+        }),
+        {
+          contract: 160,
+          deposit: 320,
+          overtimeAmount: 0,
+          stripeCharge: 160,
+        }
+      )
+    ).rejects.toThrow('Stripe capture is still processing');
+    expect(service.creditClientWalletForStripeCapture).not.toHaveBeenCalled();
+    expect(service.patchBooking).not.toHaveBeenCalled();
+  });
+
+  it('releases an authorization that lands after booking cancellation', async () => {
+    const service: any = Object.create(RentalsService.prototype);
+    const booking = {
+      id: 'b1',
+      booking_number: 'RNT-1',
+      status: 'cancelled',
+    };
+    service.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(booking);
+    service.cancelStripeAuthorizationIfAny = jest.fn().mockResolvedValue(undefined);
+
+    await service.processRentalBookingAuthorization({
+      entity_id: 'RNT-1',
+      amount: 480,
+    });
+
+    expect(service.cancelStripeAuthorizationIfAny).toHaveBeenCalledWith(booking);
+  });
+});

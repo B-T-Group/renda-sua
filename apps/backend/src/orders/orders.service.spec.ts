@@ -30,6 +30,14 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
+import { RbacService } from '../rbac/rbac.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
+
+jest.mock('../stripe-payments/stripe-connect.service', () => ({
+  StripeConnectService: class StripeConnectService {},
+}));
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -217,6 +225,10 @@ describe('OrdersService', () => {
           },
         },
         { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
+        { provide: StripeTaxCheckoutBuilderService, useValue: {} },
+        { provide: StripeTaxCalculationService, useValue: {} },
+        { provide: OrderSystemJobsService, useValue: {} },
+        { provide: RbacService, useValue: { hasPermission: jest.fn() } },
         {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
@@ -568,6 +580,27 @@ describe('OrdersService', () => {
       expect(processSpy).toHaveBeenCalledWith('order-123');
       finalizeSpy.mockRestore();
       processSpy.mockRestore();
+    });
+
+    it('does not hand off an order while Stripe capture is processing', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...assignedOrder,
+          payment_timing: 'pay_now',
+          payment_source: 'credit_card',
+          payment_status: 'authorized',
+        },
+      });
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: false,
+      });
+
+      await expect(
+        service.pickUpOrder({ orderId: 'order-123' })
+      ).rejects.toMatchObject({ status: HttpStatus.PAYMENT_REQUIRED });
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
 
     it('should throw error if user is not an agent', async () => {
