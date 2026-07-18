@@ -8,7 +8,7 @@ import {
   Stepper,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
@@ -28,6 +28,17 @@ const FirstRentalItemFlow: React.FC = () => {
   const [upload, setUpload] = useState<FirstRentalUploadResult | null>(null);
   const [item, setItem] = useState<CreatedRentalItemSummary | null>(null);
   const [savedAsDraft, setSavedAsDraft] = useState(false);
+
+  const locationPreviewUrl = useMemo(() => {
+    const file = upload?.files?.[upload.mainImageIndex];
+    return file ? URL.createObjectURL(file) : null;
+  }, [upload]);
+
+  useEffect(() => {
+    return () => {
+      if (locationPreviewUrl) URL.revokeObjectURL(locationPreviewUrl);
+    };
+  }, [locationPreviewUrl]);
 
   if (!profile?.business) {
     return <Navigate to="/dashboard" replace />;
@@ -83,6 +94,7 @@ const FirstRentalItemFlow: React.FC = () => {
         {step === 2 && item && (
           <FirstRentalItemLocationStep
             item={item}
+            imagePreviewUrl={locationPreviewUrl}
             onComplete={(asDraft) => {
               setSavedAsDraft(asDraft);
               setStep(3);

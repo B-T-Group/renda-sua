@@ -1475,8 +1475,10 @@
           "error": "Échec du téléversement"
         },
         "create": {
-          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de toutes vos photos.",
+          "hint": "Nous remplissons les détails à partir de vos photos. Modifiez ce que vous voulez avant de continuer.",
           "fillWithAi": "Remplir avec l’IA",
+          "rerunAi": "Relancer l’IA",
+          "aiFilledBanner": "Rempli à partir de vos photos — modifiez librement",
           "aiWorking": "Analyse de vos images…",
           "name": "Nom",
           "category": "Catégorie",
@@ -1550,10 +1552,13 @@
           "error": "Échec du téléversement"
         },
         "create": {
-          "hint": "Choisissez quelle photo l’IA doit analyser, remplissez les champs, puis continuez.",
+          "hint": "Nous remplissons les détails à partir de vos photos. Modifiez ce que vous voulez avant de continuer.",
           "aiSourceLabel": "Photo pour les suggestions IA",
           "aiSourceBadge": "IA",
           "fillWithAi": "Remplir les détails avec l’IA",
+          "rerunAi": "Relancer l’IA",
+          "aiFilledBanner": "Rempli à partir de vos photos — modifiez librement",
+          "aiOverwriteBody": "L’IA remplacera les champs déjà renseignés. Continuer ?",
           "aiWorking": "Analyse de votre image…",
           "categoryHint": "Catégorie suggérée : {{hint}}. Choisissez la correspondance la plus proche ci-dessous si besoin.",
           "name": "Nom",
@@ -1572,6 +1577,7 @@
           "pricePerHour": "Prix par heure",
           "pricePerDay": "Prix par jour",
           "pricePerDayHint": "Laisser vide pour utiliser 12 × le tarif horaire",
+          "weeklyHoursHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Ajustez avant de publier.",
           "finish": "Terminer",
           "publish": "Publier la location",
           "saveDraft": "Enregistrer comme brouillon",
@@ -1592,6 +1598,15 @@
           "viewItem": "Voir l’article à louer"
         }
       }
+    },
+    "listingPreview": {
+      "title": "Aperçu de l’annonce",
+      "buyerHint": "Aperçu approximatif de ce que verront les clients",
+      "cta": "Prévisualiser l’annonce",
+      "noPhoto": "Aucune photo",
+      "atLocation": "À {{name}}",
+      "qty": "Stock : {{count}}",
+      "weeklyHoursPreview": "{{count}} jours ouverts / semaine"
     },
     "rentals": {
       "pageTitle": "Locations",

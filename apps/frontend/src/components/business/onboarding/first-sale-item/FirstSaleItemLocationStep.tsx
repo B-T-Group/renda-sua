@@ -21,15 +21,18 @@ import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useBusinessInventory } from '../../../../hooks/useBusinessInventory';
 import { useItems } from '../../../../hooks/useItems';
 import LocationModal from '../../LocationModal';
+import ListingPreviewDialog from '../../ListingPreviewDialog';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 
 interface FirstSaleItemLocationStepProps {
   item: CreatedSaleItemSummary;
+  imagePreviewUrl?: string | null;
   onComplete: (savedAsDraft: boolean, locationName?: string) => void;
 }
 
 const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
   item,
+  imagePreviewUrl,
   onComplete,
 }) => {
   const { t } = useTranslation();
@@ -56,6 +59,7 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
   const [locationId, setLocationId] = useState('');
   const [qty, setQty] = useState('1');
   const [modalOpen, setModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -208,6 +212,16 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <Button
+          variant="outlined"
+          onClick={() => setPreviewOpen(true)}
+          disabled={busy}
+          fullWidth={isNarrow}
+          size="large"
+          sx={{ minHeight: 48 }}
+        >
+          {t('business.listingPreview.cta', 'Preview listing')}
+        </Button>
+        <Button
           variant="contained"
           onClick={() => void finish(true)}
           disabled={busy || !locationId}
@@ -237,6 +251,26 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
         onSave={saveLocation}
         businessPrimaryCountry={primaryAddressCountry}
         loading={locLoading}
+      />
+      <ListingPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        model={{
+          title: item.name,
+          imageUrl: imagePreviewUrl,
+          priceLine:
+            item.price != null ? `${item.currency} ${item.price}` : null,
+          locationLine: list.find((l) => l.id === locationId)?.name
+            ? t('business.listingPreview.atLocation', 'At {{name}}', {
+                name: list.find((l) => l.id === locationId)?.name,
+              })
+            : null,
+          metaLines: [
+            t('business.listingPreview.qty', 'Stock: {{count}}', {
+              count: Math.max(0, Number.parseInt(qty, 10) || 0),
+            }),
+          ],
+        }}
       />
     </Stack>
   );

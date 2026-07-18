@@ -71,12 +71,14 @@ const hasAnyFieldFilled = (
   name: string,
   categoryName: string,
   subCategoryName: string,
+  brandName: string,
   description: string,
   price: string
 ) =>
   name.trim() !== '' ||
   categoryName.trim() !== '' ||
   subCategoryName.trim() !== '' ||
+  brandName.trim() !== '' ||
   description.trim() !== '' ||
   price.trim() !== '';
 
@@ -116,8 +118,27 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     STRIPE_TAX_CODE_GENERAL_TANGIBLE
   );
   const [aiOverwriteDialogOpen, setAiOverwriteDialogOpen] = useState(false);
+  const [aiFilled, setAiFilled] = useState(false);
   const [extraLinkWarning, setExtraLinkWarning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const autoStartedKey = useRef<string | null>(null);
+  const overwriteNextSuggestions = useRef(false);
+  const fieldsRef = useRef({
+    name: '',
+    categoryName: '',
+    subCategoryName: '',
+    brandName: '',
+    description: '',
+    price: '',
+  });
+  fieldsRef.current = {
+    name,
+    categoryName,
+    subCategoryName,
+    brandName,
+    description,
+    price,
+  };
 
   const { suggestions, loading: sugLoading, error: sugError } =
     useImageItemSuggestions(imageIds, { autoWhen: false, trigger: aiTrigger });
@@ -176,14 +197,35 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     if (!suggestions) return;
     if (existingItem?.id && !itemForEdit) return;
     if (skipAiHydrate && itemForEdit) return;
-    setName(suggestions.name || '');
-    setCategoryName(suggestions.categoryName || '');
-    setSubCategoryName(suggestions.subCategoryName || '');
-    setBrandName(suggestions.brandName || '');
-    setDescription(suggestions.descriptionSuggestion || '');
-    setPrice(
-      suggestions.price != null && !Number.isNaN(suggestions.price) ? String(suggestions.price) : ''
+    const force = overwriteNextSuggestions.current;
+    overwriteNextSuggestions.current = false;
+    const current = fieldsRef.current;
+    let applied = false;
+    const nextOrKeep = (filled: string, next?: string | null) => {
+      if (!next) return filled;
+      if (force || !filled.trim()) {
+        applied = true;
+        return next;
+      }
+      return filled;
+    };
+    setName(nextOrKeep(current.name, suggestions.name || ''));
+    setCategoryName(nextOrKeep(current.categoryName, suggestions.categoryName || ''));
+    setSubCategoryName(
+      nextOrKeep(current.subCategoryName, suggestions.subCategoryName || '')
     );
+    setBrandName(nextOrKeep(current.brandName, suggestions.brandName || ''));
+    setDescription(
+      nextOrKeep(current.description, suggestions.descriptionSuggestion || '')
+    );
+    if (suggestions.price != null && !Number.isNaN(suggestions.price)) {
+      const priceText = String(suggestions.price);
+      if (force || !current.price.trim()) {
+        setPrice(priceText);
+        applied = true;
+      }
+    }
+    if (applied) setAiFilled(true);
   }, [suggestions, itemForEdit, existingItem?.id, skipAiHydrate]);
 
   useEffect(() => {
@@ -191,22 +233,41 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     enqueueSnackbar(sugError, { variant: 'error' });
   }, [sugError, enqueueSnackbar]);
 
+  useEffect(() => {
+    const key = imageIds.filter(Boolean).join(',');
+    if (!key || existingItem?.id || autoStartedKey.current === key) return;
+    autoStartedKey.current = key;
+    setSkipAiHydrate(false);
+    setAiTrigger((n) => (n < 1 ? 1 : n + 1));
+  }, [existingItem?.id, imageIds]);
+
   const cancelAi = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
   const requestAi = useCallback(() => {
-    if (hasAnyFieldFilled(name, categoryName, subCategoryName, description, price)) {
+    if (
+      hasAnyFieldFilled(
+        name,
+        categoryName,
+        subCategoryName,
+        brandName,
+        description,
+        price
+      )
+    ) {
       setAiOverwriteDialogOpen(true);
       return;
     }
     setSkipAiHydrate(false);
+    overwriteNextSuggestions.current = false;
     setAiTrigger((n) => n + 1);
-  }, [name, categoryName, subCategoryName, description, price]);
+  }, [name, categoryName, subCategoryName, brandName, description, price]);
 
   const confirmAiOverwrite = () => {
     setAiOverwriteDialogOpen(false);
     setSkipAiHydrate(false);
+    overwriteNextSuggestions.current = true;
     setAiTrigger((n) => n + 1);
   };
 
@@ -302,7 +363,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
     onComplete({ id: itemId, name: name.trim(), price: numericPrice, currency: lockedCurrency });
   };
 
-  const formDisabled = sugLoading || createLoading || saveBusy || itemLoading;
+  const formDisabled = createLoading || saveBusy || itemLoading;
   const priceNumber = Number(price.trim());
   const priceValid = price.trim() !== '' && !Number.isNaN(priceNumber) && priceNumber > 0;
   const requiredComplete =
@@ -333,7 +394,7 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
       >
         {t(
           'business.onboarding.firstSale.create.hint',
-          'Fill in the details below. Optionally use AI once to suggest fields from all your photos.'
+          'We fill details from your photos automatically. Edit anything before continuing.'
         )}
       </Typography>
 
@@ -342,6 +403,15 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
           {t('business.onboarding.firstSale.create.extraLinkWarning', 'Some extra photos could not be linked to this product.')}
         </Alert>
       )}
+
+      {aiFilled && !sugLoading ? (
+        <Alert severity="success" variant="outlined">
+          {t(
+            'business.onboarding.firstSale.create.aiFilledBanner',
+            'Filled from your photos — edit anything'
+          )}
+        </Alert>
+      ) : null}
 
       {imagePreviewUrls.length > 0 ? (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
@@ -365,11 +435,13 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
         variant="outlined"
         startIcon={<AutoAwesomeIcon />}
         onClick={requestAi}
-        disabled={formDisabled || !primaryId}
+        disabled={formDisabled || sugLoading || !primaryId}
         fullWidth={isNarrow}
         sx={{ minHeight: 48 }}
       >
-        {t('business.onboarding.firstSale.create.fillWithAi', 'Fill details with AI')}
+        {aiFilled
+          ? t('business.onboarding.firstSale.create.rerunAi', 'Re-run AI')
+          : t('business.onboarding.firstSale.create.fillWithAi', 'Fill details with AI')}
       </Button>
 
       <Portal>

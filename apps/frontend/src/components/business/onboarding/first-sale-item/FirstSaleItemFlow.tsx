@@ -209,6 +209,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         {step === 2 && item && (
           <FirstSaleItemLocationStep
             item={item}
+            imagePreviewUrl={imagePreviewUrls[0]}
             onComplete={(asDraft, locName) => {
               setSavedAsDraft(asDraft);
               setLocationName(locName);

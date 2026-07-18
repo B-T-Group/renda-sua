@@ -11,7 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageCleanupLoadingAnimation from '../../../common/ImageCleanupLoadingAnimation';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
@@ -21,6 +21,20 @@ import { useRentalFromImageSuggestions } from '../../../../hooks/useRentalFromIm
 import { useRentalItemImages } from '../../../../hooks/useRentalItemImages';
 import RentalCategoryAutocomplete from '../../RentalCategoryAutocomplete';
 import type { FirstRentalUploadResult } from './firstRentalUploadTypes';
+
+function rentalFieldsFilled(
+  name: string,
+  description: string,
+  rentalCategoryId: string,
+  tags: string[]
+): boolean {
+  return (
+    name.trim() !== '' ||
+    description.trim() !== '' ||
+    rentalCategoryId.trim() !== '' ||
+    tags.length > 0
+  );
+}
 
 export interface CreatedRentalItemSummary {
   id: string;
@@ -78,9 +92,24 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
   const [description, setDescription] = useState('');
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiCategoryHint, setAiCategoryHint] = useState<string | null>(null);
+  const [aiFilled, setAiFilled] = useState(false);
+  const autoStartedKey = useRef<string | null>(null);
+  const overwriteNextSuggestions = useRef(false);
+  const fieldsRef = useRef({
+    name: '',
+    description: '',
+    rentalCategoryId: '',
+    aiSuggestedTags: [] as string[],
+  });
 
   const sourceId = imageIds[sourceImageIndex] ?? '';
   const mainId = imageIds[mainImageIndex] ?? '';
+  fieldsRef.current = {
+    name,
+    description,
+    rentalCategoryId,
+    aiSuggestedTags,
+  };
 
   useEffect(() => {
     const urls = files.map((f) => URL.createObjectURL(f));
@@ -107,15 +136,36 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
 
   useEffect(() => {
     if (!suggestions) return;
-    setName(suggestions.name?.trim() || '');
-    setDescription(suggestions.description?.trim() || '');
-    setRentalCategoryId(suggestions.rental_category_id || '');
-    setAiSuggestedTags(suggestions.suggested_tags ?? []);
+    const force = overwriteNextSuggestions.current;
+    overwriteNextSuggestions.current = false;
+    const current = fieldsRef.current;
+    let applied = false;
+    const nextName = suggestions.name?.trim() || '';
+    const nextDesc = suggestions.description?.trim() || '';
+    const nextCategory = suggestions.rental_category_id || '';
+    const nextTags = suggestions.suggested_tags ?? [];
+    if (nextName && (force || !current.name.trim())) {
+      setName(nextName);
+      applied = true;
+    }
+    if (nextDesc && (force || !current.description.trim())) {
+      setDescription(nextDesc);
+      applied = true;
+    }
+    if (nextCategory && (force || !current.rentalCategoryId.trim())) {
+      setRentalCategoryId(nextCategory);
+      applied = true;
+    }
+    if (nextTags.length && (force || current.aiSuggestedTags.length === 0)) {
+      setAiSuggestedTags(nextTags);
+      applied = true;
+    }
     setAiCategoryHint(
       suggestions.rental_category_id
         ? null
         : suggestions.rentalCategorySuggestion || null
     );
+    if (applied) setAiFilled(true);
   }, [suggestions]);
 
   useEffect(() => {
@@ -128,7 +178,28 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     enqueueSnackbar(createError, { variant: 'error' });
   }, [createError, enqueueSnackbar]);
 
-  const requestAi = () => setAiTrigger((n) => n + 1);
+  useEffect(() => {
+    const key = imageIds.filter(Boolean).join(',');
+    if (!key || autoStartedKey.current === key) return;
+    autoStartedKey.current = key;
+    setAiTrigger((n) => (n < 1 ? 1 : n + 1));
+  }, [imageIds]);
+
+  const requestAi = () => {
+    if (rentalFieldsFilled(name, description, rentalCategoryId, aiSuggestedTags)) {
+      const ok = window.confirm(
+        t(
+          'business.onboarding.firstRental.create.aiOverwriteBody',
+          'AI will overwrite the fields you already filled. Continue?'
+        )
+      );
+      if (!ok) return;
+      overwriteNextSuggestions.current = true;
+    } else {
+      overwriteNextSuggestions.current = false;
+    }
+    setAiTrigger((n) => n + 1);
+  };
 
   const submit = async () => {
     if (!sourceId) return;
@@ -172,7 +243,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     onComplete({ id: rid, name: rname });
   };
 
-  const formDisabled = sugLoading || createLoading;
+  const formDisabled = createLoading;
   const heroUrl = previewUrls[sourceImageIndex];
 
   return (
@@ -180,9 +251,17 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
       <Typography variant="body2" color="text.secondary">
         {t(
           'business.onboarding.firstRental.create.hint',
-          'Choose which photo AI should read, fill in the details, then continue.'
+          'We fill details from your photos automatically. Edit anything before continuing.'
         )}
       </Typography>
+      {aiFilled && !sugLoading ? (
+        <Alert severity="success" variant="outlined">
+          {t(
+            'business.onboarding.firstRental.create.aiFilledBanner',
+            'Filled from your photos — edit anything'
+          )}
+        </Alert>
+      ) : null}
       {imageIds.length > 1 ? (
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -284,12 +363,14 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
         variant="outlined"
         startIcon={<AutoAwesomeIcon />}
         onClick={requestAi}
-        disabled={formDisabled || !sourceId}
+        disabled={formDisabled || sugLoading || !sourceId}
       >
-        {t(
-          'business.onboarding.firstRental.create.fillWithAi',
-          'Fill details with AI'
-        )}
+        {aiFilled
+          ? t('business.onboarding.firstRental.create.rerunAi', 'Re-run AI')
+          : t(
+              'business.onboarding.firstRental.create.fillWithAi',
+              'Fill details with AI'
+            )}
       </Button>
       <Portal>
         <Backdrop

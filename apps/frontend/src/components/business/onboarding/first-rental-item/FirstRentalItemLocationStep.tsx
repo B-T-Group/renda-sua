@@ -19,16 +19,23 @@ import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useBusinessInventory } from '../../../../hooks/useBusinessInventory';
 import { useRentalApi } from '../../../../hooks/useRentalApi';
 import LocationModal from '../../LocationModal';
+import ListingPreviewDialog from '../../ListingPreviewDialog';
+import WeeklyAvailabilityEditor from '../../../rentals/WeeklyAvailabilityEditor';
+import {
+  createDefaultWeeklyAvailability,
+  type WeeklyAvailabilitySlot,
+} from '../../../rentals/businessRentalsShared';
 import type { CreatedRentalItemSummary } from './FirstRentalItemCreateStep';
 
 interface FirstRentalItemLocationStepProps {
   item: CreatedRentalItemSummary;
+  imagePreviewUrl?: string | null;
   onComplete: (savedAsDraft: boolean) => void;
 }
 
 const FirstRentalItemLocationStep: React.FC<
   FirstRentalItemLocationStepProps
-> = ({ item, onComplete }) => {
+> = ({ item, imagePreviewUrl, onComplete }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
@@ -55,7 +62,11 @@ const FirstRentalItemLocationStep: React.FC<
   const [locationId, setLocationId] = useState('');
   const [pricePerHour, setPricePerHour] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
+  const [weeklyAvailability, setWeeklyAvailability] = useState<
+    WeeklyAvailabilitySlot[]
+  >(() => createDefaultWeeklyAvailability());
   const [modalOpen, setModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listingIdsByLocation, setListingIdsByLocation] = useState<
     Record<string, string>
@@ -152,6 +163,7 @@ const FirstRentalItemLocationStep: React.FC<
         base_price_per_hour: hourly,
         base_price_per_day: daily,
         units_available: 1,
+        weekly_availability: weeklyAvailability,
       });
       if (res?.success && res.data?.id) {
         rememberListingId(locId, res.data.id);
@@ -292,7 +304,23 @@ const FirstRentalItemLocationStep: React.FC<
           )}
         />
       </Stack>
+      <WeeklyAvailabilityEditor
+        value={weeklyAvailability}
+        onChange={setWeeklyAvailability}
+        disabled={busy}
+        hint={t(
+          'business.onboarding.firstRental.location.weeklyHoursHint',
+          'Default hours — customers can book in these windows. Adjust before publishing.'
+        )}
+      />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <Button
+          variant="outlined"
+          onClick={() => setPreviewOpen(true)}
+          disabled={busy}
+        >
+          {t('business.listingPreview.cta', 'Preview listing')}
+        </Button>
         <Button
           variant="contained"
           onClick={() => void finish(true)}
@@ -320,6 +348,36 @@ const FirstRentalItemLocationStep: React.FC<
         onSave={saveLocation}
         businessPrimaryCountry={primaryAddressCountry}
         loading={locLoading}
+      />
+      <ListingPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        model={{
+          title: item.name,
+          imageUrl: imagePreviewUrl,
+          priceLine: (() => {
+            const hourly = Number.parseFloat(pricePerHour.trim());
+            if (Number.isNaN(hourly)) return null;
+            const dailyRaw = pricePerDay.trim();
+            const daily =
+              dailyRaw === ''
+                ? Number((hourly * 12).toFixed(2))
+                : Number.parseFloat(dailyRaw);
+            return Number.isNaN(daily)
+              ? `${hourly}/hr`
+              : `${hourly}/hr · ${daily}/day`;
+          })(),
+          locationLine: list.find((l) => l.id === locationId)?.name
+            ? t('business.listingPreview.atLocation', 'At {{name}}', {
+                name: list.find((l) => l.id === locationId)?.name,
+              })
+            : null,
+          metaLines: [
+            t('business.listingPreview.weeklyHoursPreview', '{{count}} open days/week', {
+              count: weeklyAvailability.filter((s) => s.is_available).length,
+            }),
+          ],
+        }}
       />
     </Stack>
   );

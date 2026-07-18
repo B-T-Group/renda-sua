@@ -1762,8 +1762,10 @@
           "error": "Failed to upload images"
         },
         "create": {
-          "hint": "Fill in the details below. Optionally use AI once to suggest fields from all your photos.",
+          "hint": "We fill details from your photos automatically. Edit anything before continuing.",
           "fillWithAi": "Fill details with AI",
+          "rerunAi": "Re-run AI",
+          "aiFilledBanner": "Filled from your photos — edit anything",
           "aiWorking": "Analyzing your image…",
           "name": "Name",
           "category": "Category name",
@@ -1837,10 +1839,13 @@
           "error": "Upload failed"
         },
         "create": {
-          "hint": "Choose which photo AI should read, fill in the details, then continue.",
+          "hint": "We fill details from your photos automatically. Edit anything before continuing.",
           "aiSourceLabel": "Photo for AI suggestions",
           "aiSourceBadge": "AI",
           "fillWithAi": "Fill details with AI",
+          "rerunAi": "Re-run AI",
+          "aiFilledBanner": "Filled from your photos — edit anything",
+          "aiOverwriteBody": "AI will overwrite the fields you already filled. Continue?",
           "aiWorking": "Analyzing your image…",
           "categoryHint": "Suggested category: {{hint}}. Pick the closest match below if needed.",
           "name": "Name",
@@ -1859,6 +1864,7 @@
           "pricePerHour": "Price per hour",
           "pricePerDay": "Price per day",
           "pricePerDayHint": "Leave empty to use 12 × hourly rate",
+          "weeklyHoursHint": "Default hours — customers can book in these windows. Adjust before publishing.",
           "finish": "Finish",
           "publish": "Publish rental",
           "saveDraft": "Save as draft",
@@ -1879,6 +1885,15 @@
           "viewItem": "View rental item"
         }
       }
+    },
+    "listingPreview": {
+      "title": "Listing preview",
+      "buyerHint": "Approximate view of what customers will see",
+      "cta": "Preview listing",
+      "noPhoto": "No photo",
+      "atLocation": "At {{name}}",
+      "qty": "Stock: {{count}}",
+      "weeklyHoursPreview": "{{count}} open days/week"
     },
     "rentals": {
       "pageTitle": "Rentals",
