@@ -4,10 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Paper,
   Stack,
   Typography,
@@ -17,21 +13,16 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
-import { useRentalApi } from '../../hooks/useRentalApi';
-import { PinCodeFields } from '../common/PinCodeFields';
 import {
   formatRentalMoney,
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { computeRentalPricingLines, parseRentalSelectionWindowsFromJson } from '../../utils/rentalPricingLines';
-
-function apiErrorMessage(err: unknown, fallback: string): string {
-  const msg = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ?.message;
-  if (typeof msg === 'string' && msg.trim()) return msg;
-  return err instanceof Error && err.message ? err.message : fallback;
-}
+import {
+  computeRentalPricingLines,
+  parseRentalSelectionWindowsFromJson,
+} from '../../utils/rentalPricingLines';
+import { resolveRentalPhase } from '../../utils/rentalPhase';
 
 function formatDateTimeWithoutTimezone(value?: string | null): string {
   if (!value) {
@@ -69,26 +60,22 @@ export interface BusinessRentalRequestCardProps {
   request: BusinessRentalRequestRow;
   onAccept: (request: BusinessRentalRequestRow) => void;
   onReject: (request: BusinessRentalRequestRow) => void;
-  onStartRentalSuccess?: () => void;
 }
 
 export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps> = ({
   request,
   onAccept,
   onReject,
-  onStartRentalSuccess,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
-  const api = useRentalApi();
   const firstName = request.client?.user?.first_name?.trim() || '';
   const lastName = request.client?.user?.last_name?.trim() || '';
   const fullName = `${firstName} ${lastName}`.trim();
   const email = request.client?.user?.email?.trim() || '';
   const phone = request.client?.user?.phone_number?.trim() || '';
   const booking = request.rental_booking ?? null;
-  const bookingIsConfirmed = booking?.status === 'confirmed';
   const bookingIsActive = booking?.status === 'active';
   const actualStartAt = booking?.actual_start_at ?? null;
   const itemName = request.rental_location_listing?.rental_item?.name ?? '—';
@@ -125,27 +112,34 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     request.rental_selection_windows,
   ]);
 
-  const [startModalOpen, setStartModalOpen] = useState(false);
-  const [startPin, setStartPin] = useState('');
-  const [startSubmitting, setStartSubmitting] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
-  const [startSuccess, setStartSuccess] = useState<string | null>(null);
-
-  const displayStatus = useMemo(() => {
-    if (booking?.status === 'active') return 'active';
-    return request.status;
-  }, [booking?.status, request.status]);
+  const phase = useMemo(
+    () =>
+      resolveRentalPhase(
+        {
+          requestStatus: request.status,
+          bookingStatus: booking?.status ?? null,
+        },
+        'business'
+      ),
+    [booking?.status, request.status]
+  );
 
   const statusChipColor = useMemo(() => {
-    if (displayStatus === 'active') return 'success' as const;
-    if (request.status === 'pending') return 'warning' as const;
-    if (request.status === 'available') return 'success' as const;
+    if (phase.phase === 'in_progress') return 'success' as const;
+    if (phase.phase === 'requested') return 'warning' as const;
+    if (phase.phase === 'offer_ready' || phase.phase === 'ready_for_pickup') {
+      return 'success' as const;
+    }
+    if (phase.phase === 'reserved') return 'info' as const;
     if (request.status === 'unavailable') return 'error' as const;
-    if (request.status === 'booked') return 'info' as const;
-    if (request.status === 'expired') return 'default' as const;
-    if (request.status === 'cancelled') return 'default' as const;
     return 'default' as const;
-  }, [displayStatus, request.status]);
+  }, [phase.phase, request.status]);
+
+  const openBookingCta =
+    !!booking?.id &&
+    (phase.businessQueue === 'collect_pay' ||
+      phase.businessQueue === 'start' ||
+      phase.businessQueue === 'return');
 
   return (
     <Paper
@@ -197,156 +191,57 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
           </Avatar>
         )}
 
-        <Stack spacing={1.15} sx={{ minWidth: 0, flex: 1 }}>
+        <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
           <Stack
-            direction={{ xs: 'column', sm: 'row' }}
+            direction="row"
             spacing={1}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            alignItems="flex-start"
             justifyContent="space-between"
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, lineHeight: 1.15 }} noWrap>
+              <Typography variant="subtitle1" fontWeight={900} noWrap>
                 {itemName}
               </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.35, fontWeight: 600 }}
-              >
-                {selectionWindows.length
-                  ? `${formatDateTimeWithoutTimezone(selectionWindows[0].start_at)} → ${formatDateTimeWithoutTimezone(selectionWindows[selectionWindows.length - 1].end_at)}`
-                  : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {fullName || email || phone || '—'}
               </Typography>
             </Box>
             <Chip
               size="small"
               color={statusChipColor}
-              sx={{ fontWeight: 800, flexShrink: 0 }}
-              label={
-                displayStatus === 'active'
-                  ? t('rentals.inProgress', 'In progress')
-                  : t(`rentals.requestStatus.${request.status}`, request.status)
-              }
+              label={t(phase.labelKey, request.status)}
+              sx={{ fontWeight: 800 }}
             />
           </Stack>
 
-          <Typography variant="caption" color="text.secondary">
-            {t('business.rentals.requestCreatedAt', 'Requested on')}:{' '}
-            {formatDateOnly(request.created_at)}
-          </Typography>
-
-          {selectionWindows.length ? (
-            <Box
-              sx={{
-                mt: 0.35,
-                p: 1.15,
-                borderRadius: 1.5,
-                border: 1,
-                borderColor: 'divider',
-                bgcolor: alpha(theme.palette.primary.main, 0.04),
-              }}
-            >
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }} display="block">
-                {t('business.rentals.requestWindows', 'Requested windows')}
-              </Typography>
-              <Stack spacing={0.75} sx={{ mt: 0.8 }}>
-                {selectionWindows.map((window, index) => (
-                  <Stack
-                    key={`${window.start_at}-${window.end_at}-${index}`}
-                    direction={{ xs: 'column', sm: 'row' }}
-                    spacing={0.5}
-                    justifyContent="space-between"
-                    sx={{
-                      py: 0.65,
-                      px: 0.9,
-                      borderRadius: 1,
-                      bgcolor: 'background.paper',
-                      border: 1,
-                      borderColor: alpha(theme.palette.divider, 0.8),
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {`${index + 1}. ${formatDateTimeWithoutTimezone(window.start_at)} → ${formatDateTimeWithoutTimezone(window.end_at)}`}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 800, color: 'success.dark' }}>
-                      {formatRentalMoney(pricingPreview.lines[index]?.subtotal ?? 0, pricingPreview.currency)}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1, pt: 0.8, borderTop: 1, borderColor: 'divider' }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {t('business.rentals.ownerTotalFromRequest', 'Owner total from this request')}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 900, color: 'success.main' }}>
-                  {formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
-                </Typography>
-              </Stack>
-            </Box>
-          ) : null}
-
           {bookingIsActive && actualStartAt ? (
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {t('rentals.startedAt', 'Started at')}:{' '}
+            <Alert severity="success" sx={{ py: 0.5 }}>
+              {t('rentals.inProgress', 'In progress')} —{' '}
               {formatDateTimeWithoutTimezone(actualStartAt)}
-            </Typography>
-          ) : null}
-
-          {startSuccess ? (
-            <Alert severity="success" sx={{ mt: 0.25 }}>
-              {startSuccess}
             </Alert>
           ) : null}
 
-          {bookingIsConfirmed && (fullName || email || phone) ? (
-            <Box
-              sx={{
-                mt: 0.15,
-                p: 1.25,
-                borderRadius: 2,
-                border: 1,
-                borderColor: alpha(theme.palette.info.main, 0.25),
-                bgcolor: alpha(theme.palette.info.main, 0.06),
-              }}
-            >
-              <Typography variant="caption" color="text.secondary" display="block">
-                {t('business.rentals.clientDetails', 'Client details')}
-              </Typography>
-              {fullName ? (
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {t('common.name', 'Name')}: {fullName}
-                </Typography>
-              ) : null}
-              {phone ? (
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {t('common.phone', 'Phone')}: {phone}
-                </Typography>
-              ) : null}
-              {email ? (
-                <Typography variant="body2" color="text.secondary">
-                  {t('common.email', 'Email')}: {email}
-                </Typography>
-              ) : null}
-            </Box>
-          ) : null}
-
-          {request.client_request_note?.trim() ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mt: 0.15, whiteSpace: 'pre-wrap' }}
-            >
-              <strong>{t('business.rentals.clientRequestNote', 'Client note')}:</strong>{' '}
-              {request.client_request_note.trim()}
+          {phase.nextStepKey ? (
+            <Typography variant="body2" color="text.secondary">
+              {t(phase.nextStepKey, '')}
             </Typography>
           ) : null}
 
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.15 }}>
-            <strong>{t('rentals.requestForm.units', 'Quantity')}:</strong>{' '}
-            {request.units_requested ?? 1}
+          <Typography variant="body2" color="text.secondary">
+            {selectionWindows.length
+              ? selectionWindows
+                  .map((w) =>
+                    w.billing === 'all_day'
+                      ? formatDateOnly(w.start_at)
+                      : `${formatDateTimeWithoutTimezone(w.start_at)} → ${formatDateTimeWithoutTimezone(w.end_at)}`
+                  )
+                  .join(' · ')
+              : '—'}
           </Typography>
 
-          <Box sx={{ flex: 1 }} />
+          <Typography variant="body2" fontWeight={700}>
+            {formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
+          </Typography>
 
           <Stack
             direction="row"
@@ -356,7 +251,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             {request.status === 'pending' ? (
               <>
                 <Button size="small" variant="contained" onClick={() => onAccept(request)}>
-                  {t('business.rentals.accept', 'Accept')}
+                  {t('rentals.actions.accept', 'Accept')}
                 </Button>
                 <Button
                   size="small"
@@ -364,100 +259,37 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                   color="warning"
                   onClick={() => onReject(request)}
                 >
-                  {t('business.rentals.reject', 'Reject')}
+                  {t('rentals.actions.decline', 'Decline')}
                 </Button>
               </>
             ) : null}
 
-            {request.status === 'booked' && bookingIsConfirmed && booking?.id ? (
+            {openBookingCta && booking?.id ? (
               <Button
                 size="small"
                 variant="contained"
-                color="success"
-                onClick={() => {
-                  setStartError(null);
-                  setStartSuccess(null);
-                  setStartPin('');
-                  setStartModalOpen(true);
-                }}
+                onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
               >
-                {t('business.rentals.startRental', 'Start rental')}
+                {phase.businessQueue === 'collect_pay'
+                  ? t('rentals.actions.collectPayment', 'Collect payment')
+                  : phase.businessQueue === 'start'
+                    ? t('rentals.actions.verifyStartPin', 'Verify start PIN')
+                    : phase.businessQueue === 'return'
+                      ? t('rentals.actions.confirmReturn', 'Confirm return')
+                      : t('rentals.actions.openBooking', 'Open booking')}
               </Button>
-            ) : null}
-
-            {booking?.id ? (
+            ) : booking?.id ? (
               <Button
                 size="small"
                 variant="outlined"
                 onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
               >
-                {t('rentals.clientRequests.viewBooking', 'View reservation')}
+                {t('rentals.actions.openBooking', 'Open booking')}
               </Button>
             ) : null}
           </Stack>
         </Stack>
       </Stack>
-
-      <Dialog
-        open={startModalOpen}
-        onClose={() => !startSubmitting && setStartModalOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>{t('business.rentals.startRental', 'Start rental')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            {t(
-              'business.rentals.startRentalHint',
-              'Ask the client for their start PIN and enter it to begin the rental.'
-            )}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            {t('rentals.clientPin', 'Client PIN')}
-          </Typography>
-          <PinCodeFields
-            value={startPin}
-            onChange={setStartPin}
-            length={4}
-            disabled={startSubmitting}
-            autoFocus
-          />
-          {startError ? (
-            <Alert severity="error" sx={{ mt: 1.25 }}>
-              {startError}
-            </Alert>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStartModalOpen(false)} disabled={startSubmitting}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            disabled={startSubmitting || startPin.trim().length !== 4 || !booking?.id}
-            onClick={async () => {
-              if (!booking?.id) return;
-              setStartSubmitting(true);
-              setStartError(null);
-              try {
-                await api.verifyStartPin(booking.id, { pin: startPin.trim() });
-                setStartModalOpen(false);
-                setStartSuccess(t('rentals.started', 'Rental started'));
-                onStartRentalSuccess?.();
-              } catch (e: unknown) {
-                setStartError(
-                  apiErrorMessage(e, t('common.error', 'Error'))
-                );
-              } finally {
-                setStartSubmitting(false);
-              }
-            }}
-          >
-            {t('business.rentals.confirmStart', 'Start')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Paper>
   );
 };

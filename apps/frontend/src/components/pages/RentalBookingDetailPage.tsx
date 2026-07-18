@@ -18,15 +18,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   type RentalBookingDetail,
   type RentalBookingPaymentStatus,
   useRentalApi,
 } from '../../hooks/useRentalApi';
-import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
+import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -34,6 +35,7 @@ import {
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
+import { messagesDefaultExpanded } from '../../utils/rentalPhase';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -329,7 +331,7 @@ const RentalBookingDetailPage: React.FC = () => {
   return (
     <>
       <SEOHead title={title} />
-      <Box sx={{ minHeight: '100%', pb: 5, bgcolor: alpha(theme.palette.divider, 0.04) }}>
+      <Box sx={{ minHeight: '100%', pb: { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
         <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
           <Button
             onClick={() => navigate(-1)}
@@ -382,59 +384,134 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
-          {showPaymentPending ? (
-            <Alert
-              severity="warning"
-              sx={{ mb: 2 }}
+          <Box sx={{ mb: 2 }}>
+            <RentalPhaseBanner
+              bookingStatus={status}
+              role={isBusiness ? 'business' : 'client'}
               action={
-                <Button
-                  color="inherit"
-                  size="small"
-                  disabled={retryingPayment}
-                  onClick={() => void handleRetryPayment()}
-                >
-                  {t('rentals.bookingDetail.retryPayment', 'Retry payment')}
-                </Button>
+                showPaymentPending ? (
+                  <Stack spacing={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      {isStripePending
+                        ? t(
+                            'rentals.bookingDetail.paymentPendingStripe',
+                            'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
+                          )
+                        : t(
+                            'rentals.bookingDetail.paymentPendingMomo',
+                            'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
+                          )}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      disabled={retryingPayment}
+                      onClick={() => void handleRetryPayment()}
+                    >
+                      {t('rentals.actions.completePayment', 'Complete payment')}
+                    </Button>
+                  </Stack>
+                ) : isClient && booking.status === 'confirmed' ? (
+                  <Stack spacing={1}>
+                    <Button
+                      variant="contained"
+                      disabled={sharingPin}
+                      onClick={async () => {
+                        if (!bookingId) return;
+                        setSharingPin(true);
+                        try {
+                          await shareStartPin(bookingId);
+                          setInfo(
+                            t(
+                              'rentals.messaging.startPin.sentConfirmation',
+                              'PIN shared in booking chat. The business will be notified.'
+                            )
+                          );
+                          setError(null);
+                        } catch (e: unknown) {
+                          setError(
+                            e instanceof Error
+                              ? e.message
+                              : t(
+                                  'rentals.messaging.startPin.unavailable',
+                                  'Start PIN is not available. Try again in a moment.'
+                                )
+                          );
+                        } finally {
+                          setSharingPin(false);
+                        }
+                      }}
+                    >
+                      {t('rentals.actions.sendStartPin', 'Send start PIN')}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={async () => {
+                        try {
+                          const r = await getStartPin(bookingId);
+                          setPinValue(r.pin);
+                          setPinModalOpen(true);
+                          setError(null);
+                        } catch (e: unknown) {
+                          setError(e instanceof Error ? e.message : 'Error');
+                        }
+                      }}
+                    >
+                      {t('rentals.actions.showStartPin', 'Show PIN on screen')}
+                    </Button>
+                  </Stack>
+                ) : isBusiness && booking.status === 'reserved' ? (
+                  <Button
+                    variant="contained"
+                    onClick={() => void handlePickupPayment()}
+                  >
+                    {t('rentals.actions.collectPayment', 'Collect payment')}
+                  </Button>
+                ) : isBusiness && booking.status === 'confirmed' ? (
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      const el = document.getElementById('rental-verify-start');
+                      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                  >
+                    {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
+                  </Button>
+                ) : isBusiness &&
+                  (booking.status === 'active' ||
+                    booking.status === 'awaiting_return') ? (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => {
+                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnDialogOpen(true);
+                    }}
+                  >
+                    {t('rentals.actions.confirmReturn', 'Confirm return')}
+                  </Button>
+                ) : null
               }
-            >
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
-                {t(
-                  'rentals.bookingDetail.paymentPendingTitle',
-                  'Waiting for payment'
-                )}
-              </Typography>
-              {isStripePending
-                ? t(
-                    'rentals.bookingDetail.paymentPendingStripe',
-                    'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
-                  )
-                : t(
-                    'rentals.bookingDetail.paymentPendingMomo',
-                    'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
-                  )}
-            </Alert>
-          ) : null}
+            />
+          </Box>
 
-          {isClient && booking.status === 'confirmed' ? (
+          {isClient &&
+          (booking.status === 'active' ||
+            booking.status === 'awaiting_return') ? (
             <Alert severity="info" sx={{ mb: 2 }}>
               {t(
-                'rentals.pinShareHint',
-                'Share this code with the owner to start the rental.'
+                'rentals.nextStep.returnReminder',
+                'Return by {{time}} at {{location}}. The business will confirm when the item is back.',
+                { time: endLocal, location: locationName }
               )}
-            </Alert>
-          ) : null}
-
-          {booking.status === 'reserved' ? (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {isClient
-                ? t(
-                    'rentals.bookingDetail.reservedClientHint',
-                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
-                  )
-                : t(
-                    'rentals.bookingDetail.reservedBusinessHint',
-                    'Reserved without payment. Collect the rental total at pickup — the start PIN unlocks after payment.'
-                  )}
+              {overtimeAmount > 0
+                ? ` ${t(
+                    'rentals.nextStep.overtimePending',
+                    'Overtime payment in progress: {{amount}}.',
+                    {
+                      amount: `${overtimeAmount} ${booking.currency}`,
+                    }
+                  )}`
+                : ''}
             </Alert>
           ) : null}
 
@@ -644,90 +721,28 @@ const RentalBookingDetailPage: React.FC = () => {
                   {t('common.actions', 'Actions')}
                 </Typography>
 
-                {isClient && (booking.status === 'confirmed' || booking.status === 'reserved') ? (
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
-                    {booking.status === 'confirmed' ? (
-                      <>
-                        <Button
-                          variant="contained"
-                          onClick={async () => {
-                            try {
-                              const r = await getStartPin(bookingId);
-                              setPinValue(r.pin);
-                              setPinModalOpen(true);
-                              setError(null);
-                            } catch (e: unknown) {
-                              setError(e instanceof Error ? e.message : 'Error');
-                            }
-                          }}
-                        >
-                          {t('rentals.showStartPin', 'Show start PIN')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          disabled={sharingPin}
-                          onClick={async () => {
-                            if (!bookingId) return;
-                            setSharingPin(true);
-                            try {
-                              await shareStartPin(bookingId);
-                              setInfo(
-                                t(
-                                  'rentals.messaging.startPin.sentConfirmation',
-                                  'PIN shared in booking chat. The business will be notified.'
-                                )
-                              );
-                              setError(null);
-                            } catch (e: unknown) {
-                              setError(
-                                e instanceof Error
-                                  ? e.message
-                                  : t(
-                                      'rentals.messaging.startPin.unavailable',
-                                      'Start PIN is not available. Try again in a moment.'
-                                    )
-                              );
-                            } finally {
-                              setSharingPin(false);
-                            }
-                          }}
-                        >
-                          {t('rentals.messaging.startPin.sendPin', 'Send start PIN')}
-                        </Button>
-                      </>
-                    ) : null}
-                    {cancellableBeforeStart ? (
-                      <Button
-                        color="warning"
-                        variant="outlined"
-                        onClick={() => void handleCancelBooking()}
-                      >
-                        {t('rentals.cancelBooking', 'Cancel booking')}
-                      </Button>
-                    ) : null}
-                  </Stack>
+                {isClient && cancellableBeforeStart ? (
+                  <Button
+                    color="warning"
+                    variant="outlined"
+                    onClick={() => void handleCancelBooking()}
+                  >
+                    {t('rentals.cancelBooking', 'Cancel booking')}
+                  </Button>
                 ) : null}
 
-                {isBusiness && booking.status === 'reserved' ? (
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                    <Button
-                      variant="contained"
-                      onClick={() => void handlePickupPayment()}
-                    >
-                      {t('rentals.bookingDetail.collectPickupPayment', 'Collect payment')}
-                    </Button>
-                    <Button
-                      color="warning"
-                      variant="outlined"
-                      onClick={() => void handleCancelBooking()}
-                    >
-                      {t('rentals.cancelBooking', 'Cancel booking')}
-                    </Button>
-                  </Stack>
+                {isBusiness && booking.status === 'reserved' && cancellableBeforeStart ? (
+                  <Button
+                    color="warning"
+                    variant="outlined"
+                    onClick={() => void handleCancelBooking()}
+                  >
+                    {t('rentals.cancelBooking', 'Cancel booking')}
+                  </Button>
                 ) : null}
 
                 {isBusiness && booking.status === 'confirmed' ? (
-                  <Box sx={{ mt: isClient ? 2 : 0 }}>
+                  <Box id="rental-verify-start" sx={{ mt: isClient ? 2 : 0 }}>
                     <Stack spacing={1.25}>
                       {sharedPin ? (
                         <Alert severity="info">
@@ -809,20 +824,6 @@ const RentalBookingDetailPage: React.FC = () => {
                   </Box>
                 ) : null}
 
-                {isBusiness &&
-                (booking.status === 'active' ||
-                  booking.status === 'awaiting_return') ? (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => {
-                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
-                      setReturnDialogOpen(true);
-                    }}
-                  >
-                    {t('rentals.confirmReturn', 'Confirm return')}
-                  </Button>
-                ) : null}
               </Paper>
             ) : null}
 
@@ -831,13 +832,104 @@ const RentalBookingDetailPage: React.FC = () => {
                 entityType="rental_booking"
                 entityId={bookingId}
                 title={t('rentals.messages.title', 'Messages')}
-                defaultExpanded
+                defaultExpanded={messagesDefaultExpanded(booking.status)}
                 maxVisibleMessages={5}
               />
             ) : null}
           </Stack>
         </Container>
       </Box>
+
+      {(showPaymentPending ||
+        (isClient && booking.status === 'confirmed') ||
+        (isBusiness &&
+          (booking.status === 'reserved' ||
+            booking.status === 'confirmed' ||
+            booking.status === 'active' ||
+            booking.status === 'awaiting_return'))) && (
+        <Box
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10,
+            p: 1.5,
+            bgcolor: 'background.paper',
+            borderTop: 1,
+            borderColor: 'divider',
+            boxShadow: 3,
+          }}
+        >
+          {showPaymentPending ? (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={retryingPayment}
+              onClick={() => void handleRetryPayment()}
+            >
+              {t('rentals.actions.completePayment', 'Complete payment')}
+            </Button>
+          ) : isClient && booking.status === 'confirmed' ? (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={sharingPin}
+              onClick={async () => {
+                if (!bookingId) return;
+                setSharingPin(true);
+                try {
+                  await shareStartPin(bookingId);
+                  setInfo(
+                    t(
+                      'rentals.messaging.startPin.sentConfirmation',
+                      'PIN shared in booking chat. The business will be notified.'
+                    )
+                  );
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : 'Error');
+                } finally {
+                  setSharingPin(false);
+                }
+              }}
+            >
+              {t('rentals.actions.sendStartPin', 'Send start PIN')}
+            </Button>
+          ) : isBusiness && booking.status === 'reserved' ? (
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => void handlePickupPayment()}
+            >
+              {t('rentals.actions.collectPayment', 'Collect payment')}
+            </Button>
+          ) : isBusiness && booking.status === 'confirmed' ? (
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => {
+                const el = document.getElementById('rental-verify-start');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+            >
+              {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
+            </Button>
+          ) : isBusiness ? (
+            <Button
+              fullWidth
+              variant="contained"
+              color="success"
+              onClick={() => {
+                setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                setReturnDialogOpen(true);
+              }}
+            >
+              {t('rentals.actions.confirmReturn', 'Confirm return')}
+            </Button>
+          ) : null}
+        </Box>
+      )}
 
       <Dialog
         open={pinModalOpen}

@@ -3,18 +3,14 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Paper,
   Stack,
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useRentalApi, type ClientRentalRequestRow } from '../../hooks/useRentalApi';
+import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -22,19 +18,21 @@ import {
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
+import { resolveRentalPhase } from '../../utils/rentalPhase';
 
-function statusChipColor(
-  status: string
+function phaseChipColor(
+  phase: string
 ): 'default' | 'primary' | 'success' | 'error' | 'warning' | 'info' {
-  switch (status) {
-    case 'pending':
+  switch (phase) {
+    case 'requested':
+    case 'reserved':
       return 'warning';
-    case 'available':
+    case 'offer_ready':
+    case 'ready_for_pickup':
+    case 'in_progress':
       return 'success';
-    case 'unavailable':
-      return 'error';
-    case 'booked':
-      return 'info';
+    case 'done':
+      return 'default';
     default:
       return 'default';
   }
@@ -69,21 +67,22 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const api = useRentalApi();
-  const [pinInfo, setPinInfo] = useState<string | null>(null);
-  const [pinLoading, setPinLoading] = useState(false);
-  const [pinModalOpen, setPinModalOpen] = useState(false);
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
   const locName = listing?.business_location?.name;
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
-  const statusLabel = t(`rentals.requestStatus.${row.status}`, row.status);
+  const phase = resolveRentalPhase(
+    {
+      requestStatus: row.status,
+      bookingStatus: row.rental_booking?.status ?? null,
+    },
+    'client'
+  );
+  const statusLabel = t(phase.labelKey, row.status);
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
   const reasonCode = row.unavailable_reason_code?.trim();
   const bookingId = row.rental_booking?.id;
-  const bookingStatus = row.rental_booking?.status;
-  const canRevealPin = row.status === 'booked' && bookingId && bookingStatus === 'confirmed';
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
 
   return (
@@ -120,11 +119,17 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           </Box>
           <Chip
             label={statusLabel}
-            color={statusChipColor(row.status)}
+            color={phaseChipColor(phase.phase)}
             size="small"
             sx={{ fontWeight: 600, flexShrink: 0 }}
           />
         </Stack>
+
+        {phase.nextStepKey ? (
+          <Typography variant="body2" color="text.secondary">
+            {t(phase.nextStepKey, '')}
+          </Typography>
+        ) : null}
 
         <Stack direction="row" alignItems="flex-start" gap={1}>
           <CalendarMonth sx={{ fontSize: 18, color: 'text.secondary', mt: 0.2 }} />
@@ -245,84 +250,18 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             </Button>
           ) : null}
           {row.status === 'booked' && bookingId ? (
-            <>
-              {canRevealPin ? (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={pinLoading}
-                  onClick={async () => {
-                    setPinLoading(true);
-                    try {
-                      const r = await api.getStartPin(bookingId);
-                      setPinInfo(r.pin);
-                      setPinModalOpen(true);
-                    } catch (e: unknown) {
-                      setPinInfo(null);
-                      setPinModalOpen(false);
-                    } finally {
-                      setPinLoading(false);
-                    }
-                  }}
-                >
-                  {t('rentals.showStartPin', 'Show start PIN')}
-                </Button>
-              ) : null}
-              <Button
-                size="small"
-                variant="contained"
-                color="info"
-                onClick={() => onViewBooking(bookingId)}
-              >
-                {t('rentals.clientRequests.viewBooking', 'View booking')}
-              </Button>
-            </>
+            <Button
+              size="small"
+              variant="contained"
+              color="info"
+              onClick={() => onViewBooking(bookingId)}
+            >
+              {t('rentals.actions.openBooking', 'Open booking')}
+            </Button>
           ) : null}
         </Stack>
         </Stack>
       </Paper>
-
-      <Dialog
-        open={pinModalOpen}
-        onClose={() => setPinModalOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          {t('rentals.showStartPin', 'Show start PIN')}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            {t('rentals.yourPin', 'Your start PIN')}
-          </Typography>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 900,
-              letterSpacing: 4,
-              textAlign: 'center',
-              py: 1,
-              borderRadius: 2,
-              border: 1,
-              borderColor: 'divider',
-              bgcolor: alpha(theme.palette.info.main, 0.06),
-            }}
-          >
-            {pinInfo ?? '—'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.25 }}>
-            {t(
-              'rentals.pinShareHint',
-              'Share this code with the owner to start the rental.'
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPinModalOpen(false)}>
-            {t('common.close', 'Close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };

@@ -353,19 +353,15 @@ const HowItWorksNotes: React.FC = () => {
   const steps = [
     t(
       'rentals.detail.howItWorksStep1',
-      'Send a request with your preferred start and end date and time. Nothing is charged at this step.'
+      'Request the dates you want. Nothing is charged yet.'
     ),
     t(
       'rentals.detail.howItWorksStep2',
-      'The business checks availability and responds. You can track the status under your rental requests.'
+      'When the business accepts, book and pay (or reserve to pay at pickup).'
     ),
     t(
       'rentals.detail.howItWorksStep3',
-      'If they confirm availability, you can complete a booking from that request using the terms they shared.'
-    ),
-    t(
-      'rentals.detail.howItWorksStep4',
-      'The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.'
+      'At pickup, send your start PIN in chat. Return by the booked end time.'
     ),
   ];
 

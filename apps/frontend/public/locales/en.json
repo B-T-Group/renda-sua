@@ -4543,10 +4543,10 @@
       "daysUnit": "days",
       "howItWorksTitle": "How it works",
       "howItWorksIntro": "Rentals on Rendasua are coordinated with the business in a few steps:",
-      "howItWorksStep1": "Send a request with your preferred start and end date and time. Nothing is charged at this step.",
-      "howItWorksStep2": "The business checks availability and responds. You can track the status under your rental requests.",
-      "howItWorksStep3": "If they confirm availability, you can complete a booking from that request using the terms they shared.",
-      "howItWorksStep4": "The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.",
+      "howItWorksStep1": "Request the dates you want. Nothing is charged yet.",
+      "howItWorksStep2": "When the business accepts, book and pay (or reserve to pay at pickup).",
+      "howItWorksStep3": "At pickup, send your start PIN in chat. Return by the booked end time.",
+      "howItWorksStep4": "At pickup, send your start PIN in chat. Return by the booked end time.",
       "securityDeposit": "Security deposit (card rentals)",
       "securityDepositHint": "Held on your card with the rental total and only used for extra hours past your booked end time."
     },
@@ -4555,9 +4555,67 @@
       "reserved": "Reserved — pay at pickup",
       "confirmed": "Confirmed",
       "active": "In progress",
-      "awaiting_return": "Awaiting return",
+      "awaiting_return": "Return due",
       "completed": "Completed",
       "cancelled": "Cancelled"
+    },
+    "phases": {
+      "requested": "Requested",
+      "offerReady": "Offer ready",
+      "reserved": "Reserved — pay at pickup",
+      "readyForPickup": "Ready for pickup",
+      "inProgress": "In progress",
+      "done": "Done"
+    },
+    "hub": {
+      "title": "My rentals",
+      "actionNeeded": "Action needed",
+      "upcoming": "Upcoming",
+      "past": "Past",
+      "emptyActionNeeded": "Nothing needs your attention right now.",
+      "emptyUpcoming": "No upcoming rentals.",
+      "emptyPast": "No past rentals yet.",
+      "emptyAll": "You have no rental requests or bookings yet."
+    },
+    "actions": {
+      "bookOffer": "Book offer",
+      "completePayment": "Complete payment",
+      "sendStartPin": "Send start PIN",
+      "showStartPin": "Show PIN on screen",
+      "verifyStartPin": "Verify start PIN",
+      "collectPayment": "Collect payment",
+      "confirmReturn": "Confirm return",
+      "openBooking": "Open booking",
+      "rate": "Rate rental",
+      "accept": "Accept",
+      "decline": "Decline"
+    },
+    "queue": {
+      "respond": "Respond",
+      "collectPay": "Collect pay",
+      "start": "Start",
+      "return": "Return",
+      "all": "All"
+    },
+    "nextStep": {
+      "label": "Next step",
+      "requestedClient": "Waiting for the business to respond to your request.",
+      "requestedBusiness": "Review this request and accept or decline.",
+      "offerReadyClient": "Book this offer to reserve your rental.",
+      "offerReadyBusiness": "Waiting for the client to complete booking.",
+      "proposedClient": "Complete payment to confirm this booking.",
+      "proposedBusiness": "Waiting for the client to complete payment.",
+      "reservedClient": "Pay the rental total at pickup to unlock your start PIN.",
+      "reservedBusiness": "Collect payment at pickup, then verify the start PIN.",
+      "confirmedClient": "Send your start PIN in chat when you pick up the item.",
+      "confirmedBusiness": "Verify the client PIN to start the rental at pickup.",
+      "activeClient": "Your rental is in progress. Return the item by the booked end time.",
+      "activeBusiness": "Rental in progress. Confirm return when the item is back.",
+      "awaitingReturnClient": "Please return the item. The business will confirm the return.",
+      "awaitingReturnBusiness": "Confirm return when the item is back to settle the booking.",
+      "completed": "This rental is complete.",
+      "returnReminder": "Return by {{time}} at {{location}}. The business will confirm when the item is back.",
+      "overtimePending": "Overtime payment in progress: {{amount}}."
     },
     "messages": {
       "title": "Messages"
@@ -4573,7 +4631,10 @@
         "sendPin": "Send start PIN",
         "sentConfirmation": "PIN shared in booking chat. The business will be notified.",
         "unavailable": "Start PIN is not available. Try again in a moment.",
-        "usingShared": "Using the start PIN shared by the client in chat."
+        "usingShared": "Using the start PIN shared by the client in chat.",
+        "noShared": "The client has not shared a start PIN in chat yet. Ask them to tap Send start PIN, or enter it manually.",
+        "enterManually": "Enter PIN manually instead",
+        "resolving": "Looking for shared start PIN…"
       }
     },
     "bookingDetail": {

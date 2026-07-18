@@ -3,12 +3,10 @@ import {
   Box,
   Button,
   Container,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -30,6 +28,10 @@ import {
   isProposedContractOpen,
 } from '../rentals/ClientRentalRequestRowCard';
 import SEOHead from '../seo/SEOHead';
+import {
+  resolveRentalPhase,
+  type RentalHubGroup,
+} from '../../utils/rentalPhase';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   const m = (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -42,21 +44,8 @@ function rentalBookingErrorIsExpired(err: unknown): boolean {
   return status === 410 || /expired/i.test(apiErrorMessage(err, ''));
 }
 
-const RENTAL_REQUEST_STATUSES = [
-  'pending',
-  'available',
-  'unavailable',
-  'booked',
-  'expired',
-  'cancelled',
-] as const;
-
-type RentalRequestStatusValue = (typeof RENTAL_REQUEST_STATUSES)[number];
-
 const statusFilterFormSx = {
   width: '100%',
-  minWidth: { xs: 0, sm: 240 },
-  maxWidth: '100%',
 } as const;
 
 const ClientRentalRequestsPage: React.FC = () => {
@@ -75,12 +64,20 @@ const ClientRentalRequestsPage: React.FC = () => {
   const [cancelModalId, setCancelModalId] = useState<string | null>(null);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [bookConfirmRequestId, setBookConfirmRequestId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<RentalRequestStatusValue | ''>('');
+  const [hubSegment, setHubSegment] = useState<RentalHubGroup>('action_needed');
 
   const filteredRows = useMemo(() => {
-    if (!statusFilter) return rows;
-    return rows.filter((r) => r.status === statusFilter);
-  }, [rows, statusFilter]);
+    return rows.filter((r) => {
+      const info = resolveRentalPhase(
+        {
+          requestStatus: r.status,
+          bookingStatus: r.rental_booking?.status ?? null,
+        },
+        'client'
+      );
+      return info.hubGroup === hubSegment;
+    });
+  }, [rows, hubSegment]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -228,7 +225,7 @@ const ClientRentalRequestsPage: React.FC = () => {
 
   return (
     <>
-      <SEOHead title={t('rentals.myRequests', 'My rental requests')} />
+      <SEOHead title={t('rentals.hub.title', 'My rentals')} />
       <Box
         sx={{
           minHeight: '100%',
@@ -246,7 +243,7 @@ const ClientRentalRequestsPage: React.FC = () => {
           </Button>
 
           <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 0.5 }}>
-            {t('rentals.myRequests', 'My rental requests')}
+            {t('rentals.hub.title', 'My rentals')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 560 }}>
             {t(
@@ -261,55 +258,44 @@ const ClientRentalRequestsPage: React.FC = () => {
             </Typography>
           ) : null}
 
-          {rows.length > 0 ? (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                mb: 2,
-                borderRadius: 2,
-                border: 1,
-                borderColor: 'divider',
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              mb: 2,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+              ...statusFilterFormSx,
+            }}
+          >
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={hubSegment}
+              onChange={(_e, value: RentalHubGroup | null) => {
+                if (value) setHubSegment(value);
               }}
             >
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={2}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                justifyContent="space-between"
-              >
-                <FormControl size="small" sx={statusFilterFormSx}>
-                  <InputLabel id="rental-requests-filter-status">
-                    {t('rentals.clientRequests.filterStatus', 'Status')}
-                  </InputLabel>
-                  <Select
-                    labelId="rental-requests-filter-status"
-                    label={t('rentals.clientRequests.filterStatus', 'Status')}
-                    value={statusFilter}
-                    onChange={(e) =>
-                      setStatusFilter(e.target.value as RentalRequestStatusValue | '')
-                    }
-                  >
-                    <MenuItem value="">
-                      <em>{t('rentals.clientRequests.filterAll', 'All statuses')}</em>
-                    </MenuItem>
-                    {RENTAL_REQUEST_STATUSES.map((s) => (
-                      <MenuItem key={s} value={s}>
-                        {t(`rentals.requestStatus.${s}`, s)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-                  {t('rentals.clientRequests.resultsCount', {
-                    defaultValue: '{{shown}} of {{total}} requests',
-                    shown: filteredRows.length,
-                    total: rows.length,
-                  })}
-                </Typography>
-              </Stack>
-            </Paper>
-          ) : null}
+              <ToggleButton value="action_needed">
+                {t('rentals.hub.actionNeeded', 'Action needed')}
+              </ToggleButton>
+              <ToggleButton value="upcoming">
+                {t('rentals.hub.upcoming', 'Upcoming')}
+              </ToggleButton>
+              <ToggleButton value="past">{t('rentals.hub.past', 'Past')}</ToggleButton>
+            </ToggleButtonGroup>
+            {rows.length > 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                {t('rentals.clientRequests.resultsCount', {
+                  defaultValue: '{{shown}} of {{total}} requests',
+                  shown: filteredRows.length,
+                  total: rows.length,
+                })}
+              </Typography>
+            ) : null}
+          </Paper>
 
           <Stack spacing={2}>
             {filteredRows.map((req) => (
@@ -328,7 +314,7 @@ const ClientRentalRequestsPage: React.FC = () => {
           {rows.length === 0 && !error ? (
             <Box sx={{ py: 6, textAlign: 'center' }}>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                {t('rentals.noRequests', 'No requests yet')}
+                {t('rentals.hub.emptyAll', 'You have no rental requests or bookings yet.')}
               </Typography>
               <Button variant="contained" onClick={() => navigate('/rentals')}>
                 {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
@@ -339,14 +325,15 @@ const ClientRentalRequestsPage: React.FC = () => {
           {rows.length > 0 && filteredRows.length === 0 && !error ? (
             <Box sx={{ py: 4, textAlign: 'center' }}>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                {t(
-                  'rentals.clientRequests.noResultsForFilter',
-                  'No requests match this status. Try another filter or show all.'
-                )}
+                {hubSegment === 'action_needed'
+                  ? t(
+                      'rentals.hub.emptyActionNeeded',
+                      'Nothing needs your attention right now.'
+                    )
+                  : hubSegment === 'upcoming'
+                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals.')
+                    : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Typography>
-              <Button variant="outlined" onClick={() => setStatusFilter('')}>
-                {t('rentals.clientRequests.showAllStatuses', 'Show all statuses')}
-              </Button>
             </Box>
           ) : null}
         </Container>

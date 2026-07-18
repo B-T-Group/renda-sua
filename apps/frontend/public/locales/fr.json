@@ -4280,10 +4280,10 @@
       "daysUnit": "jours",
       "howItWorksTitle": "Comment ça marche",
       "howItWorksIntro": "Sur Rendasua, la location se fait avec l’entreprise en quelques étapes :",
-      "howItWorksStep1": "Envoyez une demande avec vos dates et heures de début et de fin souhaitées. Aucun paiement à cette étape.",
-      "howItWorksStep2": "L’entreprise vérifie la disponibilité et répond. Suivez l’état dans vos demandes de location.",
-      "howItWorksStep3": "Si elle confirme la disponibilité, vous pourrez finaliser une réservation à partir de cette demande, selon les conditions indiquées.",
-      "howItWorksStep4": "La prestation a lieu chez l’entreprise. Respectez les consignes de prise en charge et de retour indiquées sur cette page.",
+      "howItWorksStep1": "Demandez les dates souhaitées. Rien n’est facturé pour le moment.",
+      "howItWorksStep2": "Quand l’entreprise accepte, réservez et payez (ou payez au retrait).",
+      "howItWorksStep3": "Au retrait, envoyez votre code PIN dans la discussion. Ramenez l’article avant la fin prévue.",
+      "howItWorksStep4": "Au retrait, envoyez votre code PIN dans la discussion. Ramenez l’article avant la fin prévue.",
       "securityDeposit": "Caution (locations par carte)",
       "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue."
     },
@@ -4292,9 +4292,67 @@
       "reserved": "Réservé — payer au retrait",
       "confirmed": "Confirmé",
       "active": "En cours",
-      "awaiting_return": "En attente de retour",
+      "awaiting_return": "Retour dû",
       "completed": "Terminé",
       "cancelled": "Annulé"
+    },
+    "phases": {
+      "requested": "Demandé",
+      "offerReady": "Offre prête",
+      "reserved": "Réservé — payer au retrait",
+      "readyForPickup": "Prêt pour le retrait",
+      "inProgress": "En cours",
+      "done": "Terminé"
+    },
+    "hub": {
+      "title": "Mes locations",
+      "actionNeeded": "Action requise",
+      "upcoming": "À venir",
+      "past": "Passées",
+      "emptyActionNeeded": "Rien ne nécessite votre attention pour le moment.",
+      "emptyUpcoming": "Aucune location à venir.",
+      "emptyPast": "Aucune location passée.",
+      "emptyAll": "Vous n’avez encore aucune demande ni réservation."
+    },
+    "actions": {
+      "bookOffer": "Réserver l’offre",
+      "completePayment": "Finaliser le paiement",
+      "sendStartPin": "Envoyer le code PIN",
+      "showStartPin": "Afficher le code PIN",
+      "verifyStartPin": "Vérifier le code PIN",
+      "collectPayment": "Encaisser le paiement",
+      "confirmReturn": "Confirmer le retour",
+      "openBooking": "Ouvrir la réservation",
+      "rate": "Noter la location",
+      "accept": "Accepter",
+      "decline": "Refuser"
+    },
+    "queue": {
+      "respond": "Répondre",
+      "collectPay": "Encaisser",
+      "start": "Démarrer",
+      "return": "Retour",
+      "all": "Tout"
+    },
+    "nextStep": {
+      "label": "Prochaine étape",
+      "requestedClient": "En attente de la réponse du commerçant.",
+      "requestedBusiness": "Examinez cette demande et acceptez ou refusez.",
+      "offerReadyClient": "Réservez cette offre pour confirmer votre location.",
+      "offerReadyBusiness": "En attente que le client finalise la réservation.",
+      "proposedClient": "Finalisez le paiement pour confirmer cette réservation.",
+      "proposedBusiness": "En attente du paiement du client.",
+      "reservedClient": "Payez le total de la location au retrait pour débloquer votre code PIN.",
+      "reservedBusiness": "Encaissez le paiement au retrait, puis vérifiez le code PIN.",
+      "confirmedClient": "Envoyez votre code PIN dans la discussion lors du retrait.",
+      "confirmedBusiness": "Vérifiez le code PIN du client pour démarrer la location.",
+      "activeClient": "Votre location est en cours. Ramenez l’article avant la fin prévue.",
+      "activeBusiness": "Location en cours. Confirmez le retour lorsque l’article est revenu.",
+      "awaitingReturnClient": "Veuillez ramener l’article. Le commerçant confirmera le retour.",
+      "awaitingReturnBusiness": "Confirmez le retour lorsque l’article est revenu pour solder la location.",
+      "completed": "Cette location est terminée.",
+      "returnReminder": "Retournez avant {{time}} à {{location}}. Le commerçant confirmera le retour.",
+      "overtimePending": "Paiement des heures supplémentaires en cours : {{amount}}."
     },
     "messages": {
       "title": "Messages"
@@ -4310,7 +4368,10 @@
         "sendPin": "Envoyer le code PIN",
         "sentConfirmation": "Code PIN partagé dans la discussion. Le commerçant sera notifié.",
         "unavailable": "Le code PIN n’est pas disponible. Réessayez dans un moment.",
-        "usingShared": "Utilisation du code PIN partagé par le client dans la discussion."
+        "usingShared": "Utilisation du code PIN partagé par le client dans la discussion.",
+        "noShared": "Le client n’a pas encore partagé de code PIN. Demandez-lui d’envoyer le code PIN, ou saisissez-le manuellement.",
+        "enterManually": "Saisir le code manuellement",
+        "resolving": "Recherche du code PIN partagé…"
       }
     },
     "bookingDetail": {

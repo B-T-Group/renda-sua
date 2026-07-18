@@ -4,6 +4,8 @@ import {
   AccordionSummary,
   Box,
   Paper,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -18,6 +20,20 @@ import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDia
 import { BusinessRentalRequestCard } from '../rentals/BusinessRentalRequestCard';
 import BusinessRentalsStudioShell from '../rentals/BusinessRentalsStudioShell';
 import LoadingPage from '../common/LoadingPage';
+import {
+  BUSINESS_QUEUE_FILTERS,
+  matchesBusinessQueue,
+  resolveRentalPhase,
+  type BusinessActionQueue,
+} from '../../utils/rentalPhase';
+
+const QUEUE_LABELS: Record<BusinessActionQueue, [string, string]> = {
+  respond: ['rentals.queue.respond', 'Respond'],
+  collect_pay: ['rentals.queue.collectPay', 'Collect pay'],
+  start: ['rentals.queue.start', 'Start'],
+  return: ['rentals.queue.return', 'Return'],
+  all: ['rentals.queue.all', 'All'],
+};
 
 const BusinessRentalsRequestsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -26,6 +42,7 @@ const BusinessRentalsRequestsPage: React.FC = () => {
   const { respondRequest, fetchBusinessRentalRequests } = useRentalApi();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('all');
   const [respondTarget, setRespondTarget] = useState<{
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
@@ -59,11 +76,24 @@ const BusinessRentalsRequestsPage: React.FC = () => {
     [requests]
   );
 
-  const { availableRequests, unavailableRequests } = useMemo(() => {
-    const unavailable = sortedRequests.filter((r) => r.status === 'unavailable');
-    const available = sortedRequests.filter((r) => r.status !== 'unavailable');
-    return { availableRequests: available, unavailableRequests: unavailable };
-  }, [sortedRequests]);
+  const queuedRequests = useMemo(() => {
+    return sortedRequests.filter((r) => {
+      if (r.status === 'unavailable') return false;
+      const info = resolveRentalPhase(
+        {
+          requestStatus: r.status,
+          bookingStatus: r.rental_booking?.status ?? null,
+        },
+        'business'
+      );
+      return matchesBusinessQueue(info, queueFilter);
+    });
+  }, [queueFilter, sortedRequests]);
+
+  const unavailableRequests = useMemo(
+    () => sortedRequests.filter((r) => r.status === 'unavailable'),
+    [sortedRequests]
+  );
 
   if (!businessId) {
     return (
@@ -87,6 +117,34 @@ const BusinessRentalsRequestsPage: React.FC = () => {
           'Review and respond to client booking requests.'
         )}
       >
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1.5,
+            mb: 2,
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            size="small"
+            value={queueFilter}
+            onChange={(_e, value: BusinessActionQueue | null) => {
+              if (value) setQueueFilter(value);
+            }}
+            sx={{ flexWrap: 'wrap' }}
+          >
+            {BUSINESS_QUEUE_FILTERS.map((q) => (
+              <ToggleButton key={q} value={q} sx={{ flex: '1 1 auto', minWidth: 72 }}>
+                {t(QUEUE_LABELS[q][0], QUEUE_LABELS[q][1])}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Paper>
+
         {requests.length === 0 && (
           <Paper
             elevation={0}
@@ -110,19 +168,26 @@ const BusinessRentalsRequestsPage: React.FC = () => {
             </Typography>
           </Paper>
         )}
+
+        {requests.length > 0 && queuedRequests.length === 0 ? (
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
+            {t('business.rentals.emptyQueue', 'No items in this queue.')}
+          </Typography>
+        ) : null}
+
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {availableRequests.map((req) => (
+          {queuedRequests.map((req) => (
             <BusinessRentalRequestCard
               key={req.id}
               request={req}
               onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
               onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
-              onStartRentalSuccess={() => void loadRequests()}
             />
           ))}
         </Box>
 
-        {unavailableRequests.length > 0 ? (
+        {unavailableRequests.length > 0 &&
+        (queueFilter === 'all' || queueFilter === 'respond') ? (
           <Accordion
             defaultExpanded={false}
             elevation={0}
@@ -151,7 +216,6 @@ const BusinessRentalsRequestsPage: React.FC = () => {
                     onReject={(selected) =>
                       setRespondTarget({ req: selected, mode: 'unavailable' })
                     }
-                    onStartRentalSuccess={() => void loadRequests()}
                   />
                 ))}
               </Box>
