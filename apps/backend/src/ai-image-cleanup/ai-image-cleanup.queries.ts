@@ -2,6 +2,7 @@ export const JOB_FIELDS = `
   id
   business_id
   item_id
+  item_variant_id
   requested_by_user_id
   status
   tokens_reserved
@@ -16,6 +17,7 @@ export const RESULT_FIELDS = `
   id
   job_id
   business_image_id
+  item_variant_image_id
   original_image_url
   original_s3_key
   cleaned_image_url
@@ -49,6 +51,7 @@ export const GET_JOB_WITH_RESULTS = `
     ai_image_cleanup_jobs_by_pk(id: $id) {
       ${JOB_FIELDS}
       item { id name }
+      item_variant { id name }
       results(order_by: { created_at: asc }) {
         ${RESULT_FIELDS}
       }
@@ -67,6 +70,7 @@ export const GET_PENDING_JOBS = `
     ) {
       ${JOB_FIELDS}
       item { id name }
+      item_variant { id name }
       results(where: { status: { _in: [ready, failed] } }, order_by: { created_at: asc }) {
         ${RESULT_FIELDS}
       }
@@ -79,6 +83,21 @@ export const GET_OPEN_JOB_FOR_ITEM = `
     ai_image_cleanup_jobs(
       where: {
         item_id: { _eq: $itemId }
+        item_variant_id: { _is_null: true }
+        status: { _in: [queued, processing, ready_for_review] }
+      }
+      limit: 1
+    ) {
+      id status
+    }
+  }
+`;
+
+export const GET_OPEN_JOB_FOR_VARIANT = `
+  query GetOpenAiImageCleanupJobForVariant($variantId: uuid!) {
+    ai_image_cleanup_jobs(
+      where: {
+        item_variant_id: { _eq: $variantId }
         status: { _in: [queued, processing, ready_for_review] }
       }
       limit: 1
@@ -109,6 +128,30 @@ export const GET_ITEM_IMAGES = `
       is_ai_cleaned
       item_id
       business_id
+    }
+  }
+`;
+
+export const GET_VARIANT_IMAGES = `
+  query GetVariantImagesForCleanup($variantId: uuid!) {
+    item_variants_by_pk(id: $variantId) {
+      id
+      name
+      item_id
+      item {
+        id
+        business_id
+      }
+    }
+    item_variant_images(
+      where: { item_variant_id: { _eq: $variantId } }
+      order_by: [{ display_order: asc }, { created_at: asc }]
+    ) {
+      id
+      image_url
+      s3_key
+      is_ai_cleaned
+      item_variant_id
     }
   }
 `;
@@ -153,9 +196,39 @@ export const UPDATE_RESULT = `
   }
 `;
 
+export const REJECT_ACTIONABLE_RESULTS = `
+  mutation RejectActionableAiImageCleanupResults(
+    $jobId: uuid!
+    $updatedAt: timestamptz!
+    $completedAt: timestamptz!
+  ) {
+    update_ai_image_cleanup_results(
+      where: {
+        job_id: { _eq: $jobId }
+        status: { _in: [ready, failed] }
+      }
+      _set: {
+        status: rejected
+        updated_at: $updatedAt
+        completed_at: $completedAt
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const UPDATE_ITEM_IMAGE = `
   mutation ApplyCleanedItemImage($id: uuid!, $_set: item_images_set_input!) {
     update_item_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
+      id image_url s3_key is_ai_cleaned
+    }
+  }
+`;
+
+export const UPDATE_VARIANT_IMAGE = `
+  mutation ApplyCleanedVariantImage($id: uuid!, $_set: item_variant_images_set_input!) {
+    update_item_variant_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
       id image_url s3_key is_ai_cleaned
     }
   }
@@ -168,6 +241,7 @@ export const GET_RESULT = `
       job {
         ${JOB_FIELDS}
         item { id name }
+        item_variant { id name }
       }
     }
   }

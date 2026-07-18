@@ -8,6 +8,7 @@ import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.modu
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AiImageCleanupController } from './ai-image-cleanup.controller';
 import { AiImageCleanupInternalController } from './ai-image-cleanup-internal.controller';
+import { AiImageCleanupVariantController } from './ai-image-cleanup-variant.controller';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
 import { AiImageCleanupService } from './ai-image-cleanup.service';
 
@@ -21,7 +22,11 @@ import { AiImageCleanupService } from './ai-image-cleanup.service';
     BusinessTokensModule,
     ImageThumbnailsModule,
   ],
-  controllers: [AiImageCleanupController, AiImageCleanupInternalController],
+  controllers: [
+    AiImageCleanupController,
+    AiImageCleanupVariantController,
+    AiImageCleanupInternalController,
+  ],
   providers: [AiImageCleanupQueueService, AiImageCleanupService],
   exports: [AiImageCleanupService],
 })

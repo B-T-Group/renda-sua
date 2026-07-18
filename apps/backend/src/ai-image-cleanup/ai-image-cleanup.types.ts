@@ -17,7 +17,8 @@ export type AiImageCleanupResultStatus =
 export interface AiImageCleanupResultRow {
   id: string;
   job_id: string;
-  business_image_id: string;
+  business_image_id: string | null;
+  item_variant_image_id: string | null;
   original_image_url: string;
   original_s3_key: string | null;
   cleaned_image_url: string | null;
@@ -34,6 +35,7 @@ export interface AiImageCleanupJobRow {
   id: string;
   business_id: string;
   item_id: string;
+  item_variant_id: string | null;
   requested_by_user_id: string | null;
   status: AiImageCleanupJobStatus;
   tokens_reserved: number;
@@ -44,4 +46,12 @@ export interface AiImageCleanupJobRow {
   completed_at: string | null;
   results?: AiImageCleanupResultRow[];
   item?: { id: string; name: string } | null;
+  item_variant?: { id: string; name: string } | null;
 }
+
+export type CleanupEligibleImage = {
+  id: string;
+  image_url: string;
+  s3_key: string | null;
+  source: 'item_image' | 'variant_image';
+};

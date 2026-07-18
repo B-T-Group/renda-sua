@@ -59,7 +59,9 @@ const BusinessDashboard: React.FC = () => {
       const jobs = data.jobs ?? [];
       setCleanupPendingCount(data.pendingResultCount ?? 0);
       setCleanupPendingJobId(jobs[0]?.id ?? null);
-      setCleanupPendingItemName(jobs[0]?.item?.name);
+      setCleanupPendingItemName(
+        jobs[0]?.item_variant?.name ?? jobs[0]?.item?.name
+      );
     } catch {
       setCleanupPendingCount(0);
       setCleanupPendingJobId(null);

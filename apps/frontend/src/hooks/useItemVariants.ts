@@ -142,12 +142,12 @@ export function useItemVariants(itemId: string | null) {
     async (
       variantId: string,
       payload: CreateItemVariantImagePayload
-    ): Promise<unknown | null> => {
+    ): Promise<{ id: string; image_url: string } | null> => {
       if (!apiClient) return null;
-      const res = await apiClient.post<{ success: boolean; data: unknown }>(
-        `/item-variants/${variantId}/images`,
-        payload
-      );
+      const res = await apiClient.post<{
+        success: boolean;
+        data: { id: string; image_url: string };
+      }>(`/item-variants/${variantId}/images`, payload);
       return res.data.success ? res.data.data : null;
     },
     [apiClient]

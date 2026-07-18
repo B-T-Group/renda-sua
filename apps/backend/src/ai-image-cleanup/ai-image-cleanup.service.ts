@@ -22,6 +22,7 @@ import * as Q from './ai-image-cleanup.queries';
 import type {
   AiImageCleanupJobRow,
   AiImageCleanupResultRow,
+  CleanupEligibleImage,
 } from './ai-image-cleanup.types';
 
 @Injectable()
@@ -51,8 +52,49 @@ export class AiImageCleanupService implements OnModuleInit {
     imageIds?: string[]
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
-    await this.assertNoOpenJob(itemId);
-    const images = await this.loadEligibleImages(itemId, businessId, imageIds);
+    await this.assertNoOpenJobForItem(itemId);
+    const images = await this.loadEligibleItemImages(
+      itemId,
+      businessId,
+      imageIds
+    );
+    return this.enqueueCleanupJob({
+      businessId,
+      userId,
+      itemId,
+      itemVariantId: null,
+      images,
+    });
+  }
+
+  async requestVariantCleanup(
+    variantId: string,
+    imageIds?: string[]
+  ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
+    const { businessId, userId } = await this.requireBusinessContext();
+    await this.assertNoOpenJobForVariant(variantId);
+    const { itemId, images } = await this.loadEligibleVariantImages(
+      variantId,
+      businessId,
+      imageIds
+    );
+    return this.enqueueCleanupJob({
+      businessId,
+      userId,
+      itemId,
+      itemVariantId: variantId,
+      images,
+    });
+  }
+
+  private async enqueueCleanupJob(args: {
+    businessId: string;
+    userId: string;
+    itemId: string;
+    itemVariantId: string | null;
+    images: CleanupEligibleImage[];
+  }): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
+    const { businessId, userId, itemId, itemVariantId, images } = args;
     const tokenCost = images.length * CLEANUP_TOKEN_COST;
     const balanceAfter = await this.tokens.tryReserveTokens(
       businessId,
@@ -71,7 +113,13 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     let job: AiImageCleanupJobRow | null = null;
     try {
-      job = await this.createJob(businessId, itemId, userId, tokenCost);
+      job = await this.createJob(
+        businessId,
+        itemId,
+        userId,
+        tokenCost,
+        itemVariantId
+      );
       await this.createResults(job.id, images);
       await this.tokens.recordCleanupUsage({
         businessId,
@@ -139,18 +187,64 @@ export class AiImageCleanupService implements OnModuleInit {
     if (!result.cleaned_image_url) {
       throw new HttpException('No cleaned image available', HttpStatus.BAD_REQUEST);
     }
-    await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
-      id: result.business_image_id,
-      _set: {
-        image_url: result.cleaned_image_url,
-        s3_key: result.cleaned_s3_key,
-        is_ai_cleaned: true,
-      },
-    });
-    // Original bytes were replaced — invalidate and regenerate the thumbnail
-    void this.imageThumbnails.regenerate('item_image', result.business_image_id);
+    const patch = {
+      image_url: result.cleaned_image_url,
+      s3_key: result.cleaned_s3_key,
+      is_ai_cleaned: true,
+    };
+    if (result.item_variant_image_id) {
+      await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
+        id: result.item_variant_image_id,
+        _set: patch,
+      });
+      void this.imageThumbnails.regenerate(
+        'item_variant_image',
+        result.item_variant_image_id
+      );
+    } else if (result.business_image_id) {
+      await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
+        id: result.business_image_id,
+        _set: patch,
+      });
+      void this.imageThumbnails.regenerate('item_image', result.business_image_id);
+    } else {
+      throw new HttpException('Result has no source image', HttpStatus.BAD_REQUEST);
+    }
     await this.markResult(resultId, 'accepted');
     await this.maybeCompleteJob(result.job_id);
+    return { success: true };
+  }
+
+  async cancelJob(jobId: string): Promise<{ success: boolean }> {
+    const { businessId } = await this.requireBusinessContext();
+    const job = await this.loadJob(jobId);
+    this.assertJobOwned(job, businessId);
+    if (job.status !== 'ready_for_review' && job.status !== 'failed') {
+      throw new HttpException(
+        'Only ready or failed cleanup jobs can be cancelled',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(Q.REJECT_ACTIONABLE_RESULTS, {
+      jobId,
+      updatedAt: now,
+      completedAt: now,
+    });
+    // Accepted results stay applied; if any exist, mark completed rather than
+    // cancelled so history reflects that some cleaned images were kept.
+    const refreshed = await this.loadJob(jobId);
+    const anyAccepted = (refreshed.results ?? []).some(
+      (r) => r.status === 'accepted'
+    );
+    await this.hasura.executeMutation(Q.UPDATE_JOB, {
+      id: jobId,
+      _set: {
+        status: anyAccepted ? 'completed' : 'cancelled',
+        completed_at: now,
+        updated_at: now,
+      },
+    });
     return { success: true };
   }
 
@@ -329,7 +423,10 @@ export class AiImageCleanupService implements OnModuleInit {
     const lang =
       data.businesses_by_pk?.user?.preferred_language?.toLowerCase() ?? 'en';
     const isFr = lang.startsWith('fr');
-    const itemName = job.item?.name ?? (isFr ? 'votre article' : 'your item');
+    const itemName =
+      job.item_variant?.name ??
+      job.item?.name ??
+      (isFr ? 'votre article' : 'your item');
     const title = anyReady
       ? isFr
         ? 'Photos nettoyées prêtes'
@@ -353,6 +450,7 @@ export class AiImageCleanupService implements OnModuleInit {
           type: 'ai_image_cleanup_ready',
           jobId: job.id,
           itemId: job.item_id,
+          ...(job.item_variant_id ? { variantId: job.item_variant_id } : {}),
           url: `/business/items/ai-image-cleanup/${job.id}`,
         },
       });
@@ -399,7 +497,7 @@ export class AiImageCleanupService implements OnModuleInit {
     return { businessId: user.business.id, userId: user.id };
   }
 
-  private async assertNoOpenJob(itemId: string): Promise<void> {
+  private async assertNoOpenJobForItem(itemId: string): Promise<void> {
     const data = await this.hasura.executeQuery<{
       ai_image_cleanup_jobs: { id: string }[];
     }>(Q.GET_OPEN_JOB_FOR_ITEM, { itemId });
@@ -411,11 +509,23 @@ export class AiImageCleanupService implements OnModuleInit {
     }
   }
 
-  private async loadEligibleImages(
+  private async assertNoOpenJobForVariant(variantId: string): Promise<void> {
+    const data = await this.hasura.executeQuery<{
+      ai_image_cleanup_jobs: { id: string }[];
+    }>(Q.GET_OPEN_JOB_FOR_VARIANT, { variantId });
+    if (data.ai_image_cleanup_jobs?.length) {
+      throw new HttpException(
+        'An AI cleanup job is already in progress for this variant',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async loadEligibleItemImages(
     itemId: string,
     businessId: string,
     imageIds?: string[]
-  ) {
+  ): Promise<CleanupEligibleImage[]> {
     const data = await this.hasura.executeQuery<{
       items_by_pk: { id: string; business_id: string } | null;
       item_images: Array<{
@@ -430,7 +540,7 @@ export class AiImageCleanupService implements OnModuleInit {
       throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
     }
     let images = (data.item_images ?? []).filter((i) => !i.is_ai_cleaned);
-    if (imageIds?.length) {
+    if (imageIds != null) {
       const wanted = new Set(imageIds);
       images = images.filter((i) => wanted.has(i.id));
     }
@@ -440,14 +550,64 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.BAD_REQUEST
       );
     }
-    return images;
+    return images.map((img) => ({
+      id: img.id,
+      image_url: img.image_url,
+      s3_key: img.s3_key,
+      source: 'item_image' as const,
+    }));
+  }
+
+  private async loadEligibleVariantImages(
+    variantId: string,
+    businessId: string,
+    imageIds?: string[]
+  ): Promise<{ itemId: string; images: CleanupEligibleImage[] }> {
+    const data = await this.hasura.executeQuery<{
+      item_variants_by_pk: {
+        id: string;
+        item_id: string;
+        item: { id: string; business_id: string } | null;
+      } | null;
+      item_variant_images: Array<{
+        id: string;
+        image_url: string;
+        s3_key: string | null;
+        is_ai_cleaned: boolean;
+      }>;
+    }>(Q.GET_VARIANT_IMAGES, { variantId });
+    const variant = data.item_variants_by_pk;
+    if (!variant?.item || variant.item.business_id !== businessId) {
+      throw new HttpException('Variant not found', HttpStatus.NOT_FOUND);
+    }
+    let images = (data.item_variant_images ?? []).filter((i) => !i.is_ai_cleaned);
+    if (imageIds != null) {
+      const wanted = new Set(imageIds);
+      images = images.filter((i) => wanted.has(i.id));
+    }
+    if (!images.length) {
+      throw new HttpException(
+        'No eligible images to clean',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return {
+      itemId: variant.item_id,
+      images: images.map((img) => ({
+        id: img.id,
+        image_url: img.image_url,
+        s3_key: img.s3_key,
+        source: 'variant_image' as const,
+      })),
+    };
   }
 
   private async createJob(
     businessId: string,
     itemId: string,
     userId: string,
-    tokensReserved: number
+    tokensReserved: number,
+    itemVariantId: string | null
   ): Promise<AiImageCleanupJobRow> {
     const data = await this.hasura.executeMutation<{
       insert_ai_image_cleanup_jobs_one: AiImageCleanupJobRow;
@@ -455,6 +615,7 @@ export class AiImageCleanupService implements OnModuleInit {
       object: {
         business_id: businessId,
         item_id: itemId,
+        item_variant_id: itemVariantId,
         requested_by_user_id: userId,
         status: 'queued',
         tokens_reserved: tokensReserved,
@@ -465,12 +626,13 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private async createResults(
     jobId: string,
-    images: Array<{ id: string; image_url: string; s3_key: string | null }>
+    images: CleanupEligibleImage[]
   ): Promise<void> {
     await this.hasura.executeMutation(Q.INSERT_RESULTS, {
       objects: images.map((img) => ({
         job_id: jobId,
-        business_image_id: img.id,
+        business_image_id: img.source === 'item_image' ? img.id : null,
+        item_variant_image_id: img.source === 'variant_image' ? img.id : null,
         original_image_url: img.image_url,
         original_s3_key: img.s3_key,
         status: 'queued',
@@ -571,6 +733,7 @@ export class AiImageCleanupService implements OnModuleInit {
         {
           job_id: result.job_id,
           business_image_id: result.business_image_id,
+          item_variant_image_id: result.item_variant_image_id,
           original_image_url: result.original_image_url,
           original_s3_key: result.original_s3_key,
           status: 'queued',

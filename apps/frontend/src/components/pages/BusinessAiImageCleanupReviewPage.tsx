@@ -23,12 +23,15 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
-  const { getJob, acceptResult, rejectResult, retryResult } = useAiImageCleanup();
+  const { getJob, acceptResult, rejectResult, retryResult, cancelJob } =
+    useAiImageCleanup();
 
   const [results, setResults] = useState<AiImageCleanupResult[]>([]);
   const [itemName, setItemName] = useState('');
+  const [canCancel, setCanCancel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     if (!jobId) return;
@@ -40,8 +43,11 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
           t('business.images.asyncCleanup.jobNotFound', 'Cleanup job not found')
         );
       }
-      setItemName(job.item?.name ?? '');
+      setItemName(job.item_variant?.name ?? job.item?.name ?? '');
       setResults(job.results ?? []);
+      setCanCancel(
+        job.status === 'ready_for_review' || job.status === 'failed'
+      );
     } catch (e: any) {
       enqueueSnackbar(
         e?.message ||
@@ -105,6 +111,37 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     }
   };
 
+  const cancelAll = async () => {
+    if (!jobId) return;
+    const confirmed = window.confirm(
+      t(
+        'business.images.asyncCleanup.cancelAllConfirmBody',
+        'Remaining cleaned photos will be discarded. Photos you already accepted stay applied. Other originals stay unchanged.'
+      )
+    );
+    if (!confirmed) return;
+    setCancelling(true);
+    try {
+      await cancelJob(jobId);
+      enqueueSnackbar(
+        t('business.images.asyncCleanup.cancelAllSuccess', 'Cleanup cancelled'),
+        { variant: 'success' }
+      );
+      navigate('/dashboard');
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.message ||
+          t(
+            'business.images.asyncCleanup.cancelAllFailed',
+            'Could not cancel cleanup'
+          ),
+        { variant: 'error' }
+      );
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const visibleResults = results.filter((r) =>
     isVisibleCleanupResult(r, results)
   );
@@ -149,7 +186,7 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
         <Button
           variant="contained"
           onClick={() => void acceptAllReady()}
-          disabled={!!busyId}
+          disabled={!!busyId || cancelling}
           sx={{ mb: 2 }}
         >
           {t('business.images.asyncCleanup.acceptAll', 'Accept all ready')}
@@ -250,7 +287,7 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                   <Button
                     variant="contained"
                     size="small"
-                    disabled={!!busyId}
+                    disabled={!!busyId || cancelling}
                     startIcon={
                       busyId === result.id ? (
                         <CircularProgress size={14} color="inherit" />
@@ -263,7 +300,7 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                   <Button
                     variant="outlined"
                     size="small"
-                    disabled={!!busyId}
+                    disabled={!!busyId || cancelling}
                     onClick={() => void runAction(result.id, 'reject')}
                   >
                     {t('business.images.cleanup.reject', 'Reject')}
@@ -275,7 +312,7 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                   <Button
                     variant="outlined"
                     size="small"
-                    disabled={!!busyId}
+                    disabled={!!busyId || cancelling}
                     startIcon={
                       busyId === result.id ? (
                         <CircularProgress size={14} color="inherit" />
@@ -289,7 +326,7 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                     <Button
                       color="error"
                       size="small"
-                      disabled={!!busyId}
+                      disabled={!!busyId || cancelling}
                       onClick={() => void runAction(result.id, 'dismiss')}
                     >
                       {t('business.images.asyncCleanup.dismiss', 'Dismiss')}
@@ -302,7 +339,23 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
         ))}
       </Stack>
 
-      <Button sx={{ mt: 3 }} onClick={() => navigate('/dashboard')}>
+      {canCancel ? (
+        <Button
+          color="error"
+          variant="outlined"
+          sx={{ mt: 2 }}
+          disabled={!!busyId || cancelling}
+          onClick={() => void cancelAll()}
+        >
+          {cancelling ? (
+            <CircularProgress size={16} color="inherit" />
+          ) : (
+            t('business.images.asyncCleanup.cancelAll', 'Cancel all')
+          )}
+        </Button>
+      ) : null}
+
+      <Button sx={{ mt: 3 }} onClick={() => navigate('/dashboard')} disabled={cancelling}>
         {t('common.done', 'Done')}
       </Button>
     </Container>

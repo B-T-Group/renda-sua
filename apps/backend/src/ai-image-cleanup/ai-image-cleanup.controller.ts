@@ -76,4 +76,16 @@ export class AiImageCleanupController {
     const data = await this.cleanupService.retryResult(resultId);
     return { success: true, data };
   }
+
+  @Post('ai-image-cleanup/jobs/:jobId/cancel')
+  @ApiOperation({
+    summary:
+      'Cancel a ready/failed cleanup job: keep originals and leave without applying',
+  })
+  @ApiParam({ name: 'jobId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Job cancelled' })
+  @ApiResponse({ status: 400, description: 'Job cannot be cancelled' })
+  async cancel(@Param('jobId') jobId: string) {
+    return this.cleanupService.cancelJob(jobId);
+  }
 }

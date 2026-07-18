@@ -43,6 +43,7 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
 }) => {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const captureRef = useRef<HTMLInputElement>(null);
   const visible = visibleImages(images);
 
   const previewSrc = (img: StagedImage) =>
@@ -213,14 +214,33 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
           e.target.value = '';
         }}
       />
-      <Button
-        size="small"
-        variant="outlined"
-        sx={{ mt: 2 }}
-        onClick={() => inputRef.current?.click()}
-      >
-        {t('business.variants.uploadImage', 'Upload image')}
-      </Button>
+      <input
+        ref={captureRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          addFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => inputRef.current?.click()}
+        >
+          {t('business.variants.uploadImage', 'Upload image')}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => captureRef.current?.click()}
+        >
+          {t('business.variants.takePhoto', 'Take photo')}
+        </Button>
+      </Stack>
     </Box>
   );
 };

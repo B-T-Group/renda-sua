@@ -8,6 +8,9 @@ object_relationships:
   - name: item
     using:
       foreign_key_constraint_on: item_id
+  - name: item_variant
+    using:
+      foreign_key_constraint_on: item_variant_id
   - name: requested_by_user
     using:
       foreign_key_constraint_on: requested_by_user_id
@@ -26,6 +29,7 @@ select_permissions:
         - id
         - business_id
         - item_id
+        - item_variant_id
         - requested_by_user_id
         - status
         - tokens_reserved
