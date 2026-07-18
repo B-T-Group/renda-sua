@@ -30,6 +30,8 @@ import {
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   useMediaQuery,
   useTheme,
@@ -40,11 +42,28 @@ import { useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
 import { sortOrdersByModifiedDesc } from '../../utils/orderListSort';
+import {
+  BUSINESS_ORDER_QUEUE_FILTERS,
+  matchesBusinessOrderQueue,
+  matchesOrderHub,
+  orderToPhaseInput,
+  resolveOrderPhase,
+  type BusinessOrderQueue,
+  type OrderHubFilter,
+} from '../../utils/orderPhase';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
 import OrdersGroupedList from '../orders/OrdersGroupedList';
 
 import SEOHead from '../seo/SEOHead';
+
+const QUEUE_LABELS: Record<BusinessOrderQueue, [string, string]> = {
+  confirm: ['orders.queue.confirm', 'Confirm'],
+  prep: ['orders.queue.prep', 'Prep'],
+  pickup: ['orders.queue.pickup', 'Pickup'],
+  issues: ['orders.queue.issues', 'Issues'],
+  all: ['orders.queue.all', 'All'],
+};
 
 const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
   pending: '#fff3e0',
@@ -177,6 +196,9 @@ const OrdersPage: React.FC = () => {
   });
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<string>('all');
+  const [hubSegment, setHubSegment] = useState<OrderHubFilter>('all');
+  const [queueFilter, setQueueFilter] =
+    useState<BusinessOrderQueue>('all');
 
   // Use unified orders hook that handles user type on backend
   const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
@@ -281,16 +303,41 @@ const OrdersPage: React.FC = () => {
   );
 
   const filteredOrdersByTab = useMemo(() => {
-    if (selectedTab === 'all') {
-      return orders || [];
+    let list = orders || [];
+    if (selectedTab !== 'all') {
+      const tabStatuses =
+        tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
+      list = list.filter((order) =>
+        tabStatuses.includes(order.current_status || '')
+      );
     }
-
-    const tabStatuses =
-      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
-    return (orders || []).filter((order) =>
-      tabStatuses.includes(order.current_status || '')
-    );
-  }, [orders, selectedTab, tabGroups]);
+    if (isOrdersClient) {
+      list = list.filter((order) =>
+        matchesOrderHub(
+          resolveOrderPhase(orderToPhaseInput(order), 'client'),
+          hubSegment
+        )
+      );
+    }
+    if (isOrdersBusiness && !isCashReconciliationView) {
+      list = list.filter((order) =>
+        matchesBusinessOrderQueue(
+          resolveOrderPhase(orderToPhaseInput(order), 'business'),
+          queueFilter
+        )
+      );
+    }
+    return list;
+  }, [
+    orders,
+    selectedTab,
+    tabGroups,
+    isOrdersClient,
+    hubSegment,
+    isOrdersBusiness,
+    isCashReconciliationView,
+    queueFilter,
+  ]);
 
   const sortedOrdersForList = useMemo(
     () => sortOrdersByModifiedDesc(filteredOrdersByTab),
@@ -776,6 +823,73 @@ const OrdersPage: React.FC = () => {
           </Box>
         </Drawer>
 
+        {/* Client hub / Business queue */}
+        {isOrdersClient && (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 1.5,
+              mb: 2,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={hubSegment}
+              onChange={(_e, value: OrderHubFilter | null) => {
+                if (value) setHubSegment(value);
+              }}
+            >
+              <ToggleButton value="all">
+                {t('orders.hub.all', 'All')}
+              </ToggleButton>
+              <ToggleButton value="action_needed">
+                {t('orders.hub.actionNeeded', 'Action needed')}
+              </ToggleButton>
+              <ToggleButton value="waiting">
+                {t('orders.hub.waiting', 'Waiting')}
+              </ToggleButton>
+              <ToggleButton value="past">
+                {t('orders.hub.past', 'Past')}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Paper>
+        )}
+
+        {isOrdersBusiness && !isCashReconciliationView && (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 1.5,
+              mb: 2,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={queueFilter}
+              onChange={(_e, value: BusinessOrderQueue | null) => {
+                if (value) setQueueFilter(value);
+              }}
+              sx={{ flexWrap: 'wrap' }}
+            >
+              {BUSINESS_ORDER_QUEUE_FILTERS.map((q) => (
+                <ToggleButton key={q} value={q} sx={{ flex: '1 1 auto', minWidth: 72 }}>
+                  {t(QUEUE_LABELS[q][0], QUEUE_LABELS[q][1])}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Paper>
+        )}
+
         {/* Status Tabs */}
         <Paper sx={{ mb: 3, display: 'flex', flexDirection: 'column' }}>
           <Tabs
@@ -896,18 +1010,34 @@ const OrdersPage: React.FC = () => {
                     'orders.noCashReconciliationOrders',
                     'No orders are waiting for cash reconciliation right now.'
                   )
-                : selectedTab === 'all'
-                  ? t(
-                      'orders.noOrdersMessage',
-                      'When you place an order, it will appear here'
-                    )
-                  : t(
-                      'orders.noOrdersInTab',
-                      `No orders found in ${
-                        tabGroups[selectedTab as keyof typeof tabGroups]?.label ||
-                        'this category'
-                      }`
-                    )}
+                : isOrdersClient
+                  ? hubSegment === 'action_needed'
+                    ? t(
+                        'orders.hub.emptyActionNeeded',
+                        'Nothing needs your attention right now.'
+                      )
+                    : hubSegment === 'waiting'
+                      ? t('orders.hub.emptyWaiting', 'No orders waiting.')
+                      : hubSegment === 'past'
+                        ? t('orders.hub.emptyPast', 'No past orders yet.')
+                        : t(
+                            'orders.hub.emptyAll',
+                            'When you place an order, it will appear here.'
+                          )
+                  : isOrdersBusiness && queueFilter !== 'all'
+                    ? t('orders.queue.empty', 'No items in this queue.')
+                    : selectedTab === 'all'
+                      ? t(
+                          'orders.noOrdersMessage',
+                          'When you place an order, it will appear here'
+                        )
+                      : t(
+                          'orders.noOrdersInTab',
+                          `No orders found in ${
+                            tabGroups[selectedTab as keyof typeof tabGroups]
+                              ?.label || 'this category'
+                          }`
+                        )}
             </Typography>
             {selectedTab !== 'all' && (
               <Button

@@ -10,7 +10,6 @@ import {
   Phone,
   Receipt,
   Refresh as RefreshIcon,
-  CurrencyExchange,
   ShoppingBag,
   Star,
   Store,
@@ -75,12 +74,20 @@ import BusinessOrderAlerts from '../orders/BusinessOrderAlerts';
 import ClientActions from '../orders/ClientActions';
 import { ClientDeliveryPinButton } from '../orders/ClientDeliveryPinButton';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
+import { OrderPhaseBanner } from '../orders/OrderPhaseBanner';
 import {
   isRefundOrderStatus,
   RefundProgressCard,
 } from '../orders/RefundProgressCard';
 import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
 import SEOHead from '../seo/SEOHead';
+import {
+  ORDER_PRIMARY_ACTION_LABEL,
+  messagesDefaultExpandedForOrder,
+  orderProgressSteps,
+  orderToPhaseInput,
+  resolveOrderPhase,
+} from '../../utils/orderPhase';
 import { getPaymentStatusChipColor } from '../../utils/orderUtils';
 
 // Custom Step Connector
@@ -328,20 +335,23 @@ const ManageOrderPage: React.FC = () => {
   };
 
   const getOrderStep = (status: string): number => {
-    const steps = {
-      pending: 0,
-      pending_payment: 0,
-      confirmed: 1,
-      preparing: 2,
-      ready_for_pickup: 3,
-      assigned_to_agent: 3,
-      picked_up: 4,
-      in_transit: 4,
-      out_for_delivery: 4,
-      delivered: 5,
-      complete: 5,
+    const stepKeys = orderProgressSteps(order?.fulfillment_method);
+    const statusMap: Record<string, string> = {
+      pending: 'pending',
+      pending_payment: 'pending',
+      confirmed: 'confirmed',
+      preparing: 'confirmed',
+      ready_for_pickup: 'ready_for_pickup',
+      assigned_to_agent: 'assigned_to_agent',
+      picked_up: 'assigned_to_agent',
+      in_transit: 'assigned_to_agent',
+      out_for_delivery: 'out_for_delivery',
+      delivered: 'complete',
+      complete: 'complete',
     };
-    return steps[status as keyof typeof steps] ?? 0;
+    const key = statusMap[status] ?? status;
+    const idx = stepKeys.indexOf(key);
+    return idx >= 0 ? idx : 0;
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -537,12 +547,86 @@ const ManageOrderPage: React.FC = () => {
   }
 
   const fulfillmentStep = isRefundOrderStatus(order.current_status)
-    ? 5
+    ? Math.max(orderProgressSteps(order.fulfillment_method).length - 1, 0)
     : getOrderStep(order.current_status);
   const hideFulfillmentProgress = ['cancelled', 'failed'].includes(
     order.current_status
   );
   const isPickupFulfillment = order.fulfillment_method === 'pickup';
+  const progressStepKeys = orderProgressSteps(order.fulfillment_method);
+  const progressMax = Math.max(progressStepKeys.length - 1, 1);
+  const phaseRole =
+    activePersona === 'business' || activePersona === 'agent'
+      ? activePersona
+      : 'client';
+  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), phaseRole);
+  const [primaryLabelKey, primaryLabelDefault] =
+    ORDER_PRIMARY_ACTION_LABEL[phaseInfo.primaryActionId];
+
+  const handleRetryPaymentFromBanner = async () => {
+    try {
+      const isStripeOrder =
+        order.payment_source === 'credit_card' || isStripeRail;
+      const result = await retryOrderPayment(order.id);
+      if (isStripeOrder && result.checkout_url) {
+        window.location.assign(result.checkout_url);
+        return;
+      }
+      enqueueSnackbar(
+        t(
+          isStripeOrder
+            ? 'orders.retryPayment.successStripe'
+            : 'orders.retryPayment.success',
+          isStripeOrder ? 'Opening checkout…' : 'Payment request sent.'
+        ),
+        { variant: 'success' }
+      );
+      await refetch();
+    } catch (error: any) {
+      enqueueSnackbar(
+        error?.message ||
+          t('orders.retryPayment.error', 'Failed to retry payment'),
+        { variant: 'error' }
+      );
+    }
+  };
+
+  const handlePrimaryPhaseAction = () => {
+    const id = phaseInfo.primaryActionId;
+    if (id === 'pay') {
+      void handleRetryPaymentFromBanner();
+      return;
+    }
+    if (id === 'rate') {
+      if (eligibility?.canRateAgent) setRatingDialogMode('agent');
+      else if (eligibility?.canRateItem) setRatingDialogMode('item');
+      else if (eligibility?.canRateClient) setRatingDialogMode('client');
+    }
+  };
+
+  const phaseBannerAction =
+    phaseInfo.primaryActionId === 'send_pin' ? (
+      <ClientDeliveryPinButton
+        orderId={order.id}
+        fullWidth
+        onShowNotification={handleShowNotification}
+      />
+    ) : phaseInfo.primaryActionId !== 'none' &&
+      ['pay', 'rate'].includes(phaseInfo.primaryActionId) ? (
+      <Button
+        variant="contained"
+        fullWidth
+        onClick={handlePrimaryPhaseAction}
+        disabled={
+          phaseInfo.primaryActionId === 'rate' &&
+          !eligibility?.canRateAgent &&
+          !eligibility?.canRateItem &&
+          !eligibility?.canRateClient
+        }
+      >
+        {t(primaryLabelKey, primaryLabelDefault)}
+      </Button>
+    ) : null;
 
   return (
     <>
@@ -561,11 +645,12 @@ const ManageOrderPage: React.FC = () => {
           // Add bottom padding on mobile for agents to account for sticky action bar + bottom nav
           // Add bottom padding on mobile for clients to account for bottom nav (64px) + action buttons
           paddingBottom:
-            activePersona === 'agent' && isMobile
+            isMobile &&
+            (activePersona === 'agent' ||
+              activePersona === 'client' ||
+              activePersona === 'business')
               ? { xs: '200px', md: 4 }
-              : activePersona === 'client' && isMobile
-                ? { xs: '140px', md: 4 }
-                : 4,
+              : 4,
         }}
       >
         <Container
@@ -655,6 +740,18 @@ const ManageOrderPage: React.FC = () => {
                 {notificationAlert.message}
               </Alert>
             )}
+
+            {(activePersona === 'client' ||
+              activePersona === 'business' ||
+              activePersona === 'agent') && (
+              <Box sx={{ mb: 3 }}>
+                <OrderPhaseBanner
+                  order={order}
+                  role={phaseRole}
+                  action={phaseBannerAction}
+                />
+              </Box>
+            )}
           </Box>
 
           {/* Order Progress Stepper */}
@@ -673,36 +770,13 @@ const ManageOrderPage: React.FC = () => {
                   connector={<ColorlibConnector />}
                   sx={{ display: { xs: 'none', md: 'flex' } }}
                 >
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.pending', 'Order Placed')}
-                    </StepLabel>
-                  </Step>
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.confirmed', 'Confirmed')}
-                    </StepLabel>
-                  </Step>
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.preparing', 'Preparing')}
-                    </StepLabel>
-                  </Step>
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.ready', 'Ready')}
-                    </StepLabel>
-                  </Step>
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.inTransit', 'In Transit')}
-                    </StepLabel>
-                  </Step>
-                  <Step>
-                    <StepLabel StepIconComponent={ColorlibStepIcon}>
-                      {t('orders.status.delivered', 'Delivered')}
-                    </StepLabel>
-                  </Step>
+                  {progressStepKeys.map((stepKey) => (
+                    <Step key={stepKey}>
+                      <StepLabel StepIconComponent={ColorlibStepIcon}>
+                        {t(`common.orderStatus.${stepKey}`, stepKey)}
+                      </StepLabel>
+                    </Step>
+                  ))}
                 </Stepper>
 
                 {/* Mobile Progress Bar */}
@@ -714,11 +788,11 @@ const ManageOrderPage: React.FC = () => {
                       gutterBottom
                     >
                       {t('orders.progress', 'Progress')}:{' '}
-                      {Math.round((fulfillmentStep / 5) * 100)}%
+                      {Math.round((fulfillmentStep / progressMax) * 100)}%
                     </Typography>
                     <LinearProgress
                       variant="determinate"
-                      value={(fulfillmentStep / 5) * 100}
+                      value={(fulfillmentStep / progressMax) * 100}
                       sx={{ height: 8, borderRadius: 1 }}
                     />
                   </Box>
@@ -1516,7 +1590,9 @@ const ManageOrderPage: React.FC = () => {
                       entityType="order"
                       entityId={order.id}
                       title={t('messages.orderMessages', 'Order Messages')}
-                      defaultExpanded={true}
+                      defaultExpanded={messagesDefaultExpandedForOrder(
+                        order.current_status
+                      )}
                       maxVisibleMessages={10}
                       compact={false}
                     />
@@ -1800,22 +1876,27 @@ const ManageOrderPage: React.FC = () => {
                       </>
                     )}
                     {activePersona === 'business' && (
-                      <BusinessActions
-                        order={order}
-                        onActionComplete={() => refetch()}
-                        onShowNotification={handleShowNotification}
-                        onShowHistory={() => setHistoryDialogOpen(true)}
-                      />
+                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                        <BusinessActions
+                          order={order}
+                          onActionComplete={() => refetch()}
+                          onShowNotification={handleShowNotification}
+                          onShowHistory={() => setHistoryDialogOpen(true)}
+                        />
+                      </Box>
                     )}
                     {activePersona === 'client' && (
-                      <ClientActions
-                        order={order}
-                        onActionComplete={() => refetch()}
-                        onShowNotification={handleShowNotification}
-                        hideDeliveryPin={
-                          order.current_status === 'out_for_delivery'
-                        }
-                      />
+                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                        <ClientActions
+                          order={order}
+                          onActionComplete={() => refetch()}
+                          onShowNotification={handleShowNotification}
+                          hideDeliveryPin={
+                            order.current_status === 'out_for_delivery' ||
+                            phaseInfo.primaryActionId === 'send_pin'
+                          }
+                        />
+                      </Box>
                     )}
 
                     {/* Rating buttons (eligibility-driven) */}
@@ -1935,6 +2016,46 @@ const ManageOrderPage: React.FC = () => {
             </Box>
           </Box>
         )}
+
+        {/* Mobile Sticky Action Bar for Client / Business */}
+        {(activePersona === 'client' || activePersona === 'business') &&
+          isMobile && (
+            <Box
+              sx={{
+                position: 'fixed',
+                bottom: 64,
+                left: 0,
+                right: 0,
+                zIndex: 1100,
+                display: { xs: 'block', md: 'none' },
+                maxHeight: '40vh',
+                overflowY: 'auto',
+                bgcolor: 'background.paper',
+                borderTop: 1,
+                borderColor: 'divider',
+                boxShadow: 3,
+              }}
+            >
+              <Box sx={{ p: 2 }}>
+                {activePersona === 'business' ? (
+                  <BusinessActions
+                    order={order}
+                    onActionComplete={() => refetch()}
+                    onShowNotification={handleShowNotification}
+                    onShowHistory={() => setHistoryDialogOpen(true)}
+                  />
+                ) : (
+                  <ClientActions
+                    order={order}
+                    onActionComplete={() => refetch()}
+                    onShowNotification={handleShowNotification}
+                    hideDeliveryPin={phaseInfo.primaryActionId === 'send_pin'}
+                    deliveryPinFullWidth
+                  />
+                )}
+              </Box>
+            </Box>
+          )}
       </Box>
 
       {/* Confirmation Modal */}

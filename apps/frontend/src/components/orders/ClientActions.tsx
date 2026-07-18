@@ -1,7 +1,8 @@
-import { Cancel, Undo } from '@mui/icons-material';
-import { Box, Button, Typography } from '@mui/material';
+import { Cancel, CheckCircle, Undo } from '@mui/icons-material';
+import { Box, Button } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import { isWithinRefundWindow } from '../../hooks/useOrderRefunds';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
@@ -26,13 +27,14 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   order,
   onActionComplete,
   onShowNotification,
-  onShowHistory,
   hideDeliveryPin = false,
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
+  const { completeOrder } = useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -50,8 +52,46 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     onShowNotification?.(errorMessage, 'error');
   };
 
+  const handleCompleteOrder = async () => {
+    setCompleting(true);
+    try {
+      await completeOrder({ orderId: order.id });
+      onShowNotification?.(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('messages.orderCompleteError', 'Failed to complete order'),
+        'error'
+      );
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const getAvailableActions = () => {
-    const actions = [];
+    const actions: Array<{
+      label: string;
+      action: () => void;
+      color: 'error' | 'warning' | 'success';
+      icon: React.ReactNode;
+      variant?: 'outlined' | 'contained';
+      loading?: boolean;
+    }> = [];
+
+    if (order.current_status === 'delivered') {
+      actions.push({
+        label: t('orders.actions.completeOrder', 'Complete Order'),
+        action: () => void handleCompleteOrder(),
+        color: 'success',
+        icon: <CheckCircle />,
+        variant: 'contained',
+        loading: completing,
+      });
+    }
 
     if (
       [
@@ -65,7 +105,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       actions.push({
         label: t('orderActions.cancelOrder', 'Cancel Order'),
         action: handleCancelClick,
-        color: 'error' as const,
+        color: 'error',
         icon: <Cancel />,
       });
     }
@@ -77,7 +117,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       actions.push({
         label: t('orders.refunds.requestButton', 'Request refund'),
         action: () => setRefundOpen(true),
-        color: 'warning' as const,
+        color: 'warning',
         icon: <Undo />,
       });
     }
@@ -130,10 +170,11 @@ const ClientActions: React.FC<ClientActionsProps> = ({
               {availableActions.map((action, index) => (
                 <Button
                   key={index}
-                  variant="outlined"
+                  variant={action.variant ?? 'outlined'}
                   color={action.color}
                   onClick={action.action}
                   startIcon={action.icon}
+                  disabled={Boolean(action.loading)}
                   sx={{
                     minWidth: { xs: 0, sm: 120 },
                     width: { xs: '100%', sm: 'auto' },

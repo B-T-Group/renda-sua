@@ -125,6 +125,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const {
     confirmOrder,
     completePreparation,
+    completeOrder,
     confirmClientPickup,
     generateDeliveryOverwriteCode,
     reconcileCashException,
@@ -223,6 +224,26 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
               'Failed to complete preparation'
             );
       onShowNotification?.(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    setLoading(true);
+    try {
+      await completeOrder({ orderId: order.id });
+      onShowNotification?.(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('messages.orderCompleteError', 'Failed to complete order'),
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -436,6 +457,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'delivered':
+        actions.push({
+          label: t('orders.actions.completeOrder', 'Complete Order'),
+          action: handleCompleteOrder,
+          color: 'success' as const,
+          icon: <CheckCircle />,
+        });
         break;
 
       case 'complete':
