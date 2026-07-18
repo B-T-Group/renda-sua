@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   NotFoundException,
   Param,
@@ -32,6 +33,8 @@ import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
+import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
+import { RentalBookingMessagingService } from './rental-booking-messaging.service';
 import { RentalsService } from './rentals.service';
 
 @ApiTags('rentals')
@@ -39,7 +42,10 @@ import { RentalsService } from './rentals.service';
 @Controller('rentals')
 @Throttle({ short: { limit: 60, ttl: 60000 } })
 export class RentalsController {
-  constructor(private readonly rentalsService: RentalsService) {}
+  constructor(
+    private readonly rentalsService: RentalsService,
+    private readonly rentalBookingMessaging: RentalBookingMessagingService
+  ) {}
 
   @Public()
   @Get('categories')
@@ -556,10 +562,131 @@ export class RentalsController {
 
   @Post('bookings/:id/confirm-return')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm return after period ended (business)' })
+  @ApiOperation({
+    summary:
+      'Confirm return (business). Allowed while active (early) or awaiting_return.',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Completed and settled' })
-  async confirmReturn(@Param('id') bookingId: string) {
-    return this.rentalsService.confirmRentalReturn(bookingId);
+  @ApiBody({ type: ConfirmRentalReturnDto, required: false })
+  @ApiResponse({ status: 200, description: 'Completed and settled (or overtime pending)' })
+  async confirmReturn(
+    @Param('id') bookingId: string,
+    @Body() body: ConfirmRentalReturnDto
+  ) {
+    return this.rentalsService.confirmRentalReturn(
+      bookingId,
+      body?.actualEndAt
+    );
+  }
+
+  @Get('bookings/:id/messages')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'List messages for a rental booking (client and business)',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: '{ success: true, messages: [...] }' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Booking not found' })
+  async getBookingMessages(@Param('id') bookingId: string) {
+    try {
+      const messages = await this.rentalBookingMessaging.getMessages(bookingId);
+      return { success: true, messages };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('bookings/:id/messages')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Post a message on a rental booking thread' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['message'],
+      properties: {
+        message: { type: 'string' },
+        mentionedUserId: { type: 'string', format: 'uuid', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: '{ success: true, message: {...} }' })
+  async createBookingMessage(
+    @Param('id') bookingId: string,
+    @Body() body: { message: string; mentionedUserId?: string }
+  ) {
+    try {
+      const message = await this.rentalBookingMessaging.createMessage(
+        bookingId,
+        body.message,
+        body.mentionedUserId
+      );
+      return { success: true, message };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('bookings/:id/mentionable-participants')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Participants the current user may @mention on this booking',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: '{ success: true, participants: [...] }' })
+  async getBookingMentionableParticipants(@Param('id') bookingId: string) {
+    try {
+      const participants =
+        await this.rentalBookingMessaging.getMentionableParticipants(bookingId);
+      return { success: true, participants };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('bookings/:id/messages/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark rental booking messages as read up to a message' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['lastReadMessageId'],
+      properties: {
+        lastReadMessageId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Read receipts recorded' })
+  async markBookingMessagesRead(
+    @Param('id') bookingId: string,
+    @Body() body: { lastReadMessageId: string }
+  ) {
+    try {
+      await this.rentalBookingMessaging.markMessagesRead(
+        bookingId,
+        body.lastReadMessageId
+      );
+      return { success: true };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

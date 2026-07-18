@@ -2516,7 +2516,15 @@ export class RentalsService {
     return { overwriteCode: code };
   }
 
-  async confirmRentalReturn(bookingId: string) {
+  /**
+   * Business confirms the item was returned. Allowed while `active` (early
+   * return) or `awaiting_return`. Optional `actualEndAt` drives overtime math
+   * and defaults to now.
+   */
+  async confirmRentalReturn(
+    bookingId: string,
+    actualEndAtInput?: string
+  ) {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
@@ -2525,16 +2533,34 @@ export class RentalsService {
     if (!booking || booking.business_id !== user.business.id) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
-    if (booking.status !== 'awaiting_return') {
-      throw new HttpException('Booking is not awaiting return', HttpStatus.BAD_REQUEST);
+    if (booking.status !== 'awaiting_return' && booking.status !== 'active') {
+      throw new HttpException(
+        'Booking must be active or awaiting return',
+        HttpStatus.BAD_REQUEST
+      );
     }
-    const actualEndAt = await this.resolveActualReturnAt(booking);
+    const previousStatus = booking.status as 'active' | 'awaiting_return';
+    const actualEndAt = await this.resolveActualReturnAt(
+      booking,
+      actualEndAtInput
+    );
     const settlement = this.computeRentalSettlement(booking, actualEndAt);
     if (booking.payment_status === 'authorized') {
       await this.settleStripeAuthorizedBooking(booking, settlement);
     } else {
       const settled = await this.settleWalletHeldBooking(booking, settlement);
       if (!settled) {
+        if (previousStatus === 'active') {
+          await this.patchBooking(bookingId, { status: 'awaiting_return' });
+          await this.logHistory(
+            bookingId,
+            'awaiting_return',
+            'active',
+            user.id,
+            'business',
+            'Return recorded; overtime payment pending'
+          );
+        }
         return {
           success: true,
           overtimeDue: true,
@@ -2543,17 +2569,57 @@ export class RentalsService {
         };
       }
     }
-    await this.completeRentalBookingAfterSettle(bookingId, user.id, 'business');
+    await this.completeRentalBookingAfterSettle(
+      bookingId,
+      user.id,
+      'business',
+      previousStatus === 'active' ? 'active' : 'awaiting_return'
+    );
     return { success: true, overtimeAmount: settlement.overtimeAmount };
   }
 
-  /** Stamp the return moment once so overtime math and retries stay stable. */
-  private async resolveActualReturnAt(booking: any): Promise<string> {
+  /**
+   * Stamp the return moment once so overtime math and retries stay stable.
+   * When not already set, uses the owner-selected time (or now).
+   */
+  private async resolveActualReturnAt(
+    booking: any,
+    actualEndAtInput?: string
+  ): Promise<string> {
     const existing = booking.actual_end_at as string | null | undefined;
     if (existing) return existing;
-    const now = new Date().toISOString();
-    await this.patchBooking(booking.id, { actual_end_at: now });
-    return now;
+    const iso = this.normalizeReturnActualEndAt(booking, actualEndAtInput);
+    await this.patchBooking(booking.id, { actual_end_at: iso });
+    return iso;
+  }
+
+  private normalizeReturnActualEndAt(
+    booking: any,
+    actualEndAtInput?: string
+  ): string {
+    const end = actualEndAtInput?.trim()
+      ? new Date(actualEndAtInput.trim())
+      : new Date();
+    if (Number.isNaN(end.getTime())) {
+      throw new HttpException('Invalid actualEndAt', HttpStatus.BAD_REQUEST);
+    }
+    const now = Date.now();
+    if (end.getTime() > now + 60_000) {
+      throw new HttpException(
+        'Return time cannot be in the future',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const startedAt = booking.actual_start_at
+      ? new Date(booking.actual_start_at).getTime()
+      : null;
+    if (startedAt != null && end.getTime() < startedAt) {
+      throw new HttpException(
+        'Return time cannot be before the rental start',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return end.toISOString();
   }
 
   /**
@@ -2767,13 +2833,14 @@ export class RentalsService {
   private async completeRentalBookingAfterSettle(
     bookingId: string,
     userId: string | null,
-    changedByType: 'business' | 'system'
+    changedByType: 'business' | 'system',
+    previousStatus: 'active' | 'awaiting_return' = 'awaiting_return'
   ): Promise<void> {
     await this.updateBookingStatus(bookingId, 'completed');
     await this.logHistory(
       bookingId,
       'completed',
-      'awaiting_return',
+      previousStatus,
       userId,
       changedByType,
       'Return confirmed'

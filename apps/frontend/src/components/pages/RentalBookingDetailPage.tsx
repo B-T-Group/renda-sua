@@ -26,6 +26,7 @@ import {
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
+import { UserMessagesComponent } from '../common/UserMessagesComponent';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -40,6 +41,12 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   const m = (err as { response?: { data?: { message?: string } } })?.response?.data
     ?.message;
   return typeof m === 'string' && m.trim() ? m : fallback;
+}
+
+/** Local `datetime-local` value (YYYY-MM-DDTHH:mm) from a Date. */
+function toDateTimeLocalValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const RentalBookingDetailPage: React.FC = () => {
@@ -72,6 +79,11 @@ const RentalBookingDetailPage: React.FC = () => {
   const [info, setInfo] = useState<string | null>(null);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinValue, setPinValue] = useState<string | null>(null);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnAtLocal, setReturnAtLocal] = useState(() =>
+    toDateTimeLocalValue(new Date())
+  );
+  const [returning, setReturning] = useState(false);
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -310,7 +322,11 @@ const RentalBookingDetailPage: React.FC = () => {
               </Stack>
             </Box>
             <Chip
-              label={t('rentals.status', 'Status') + ': ' + status}
+              label={
+                t('rentals.status', 'Status') +
+                ': ' +
+                t(`rentals.bookingStatus.${status}`, status)
+              }
               color={statusChipColor}
               sx={{ fontWeight: 800 }}
             />
@@ -582,6 +598,7 @@ const RentalBookingDetailPage: React.FC = () => {
             (isBusiness &&
               (booking.status === 'confirmed' ||
                 booking.status === 'reserved' ||
+                booking.status === 'active' ||
                 booking.status === 'awaiting_return')) ? (
               <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
                 <Typography variant="h6" fontWeight={900} sx={{ mb: 1.5 }}>
@@ -699,33 +716,31 @@ const RentalBookingDetailPage: React.FC = () => {
                   </Box>
                 ) : null}
 
-                {isBusiness && booking.status === 'awaiting_return' ? (
+                {isBusiness &&
+                (booking.status === 'active' ||
+                  booking.status === 'awaiting_return') ? (
                   <Button
                     variant="contained"
                     color="success"
-                    onClick={async () => {
-                      try {
-                        const res = await confirmReturn(bookingId);
-                        if (res.paymentPending || res.overtimeDue) {
-                          setInfo(
-                            t(
-                              'rentals.returnOvertimePending',
-                              'Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.'
-                            )
-                          );
-                        } else {
-                          setInfo(t('rentals.completed', 'Completed and settled'));
-                        }
-                        void load();
-                      } catch (e: unknown) {
-                        setError(e instanceof Error ? e.message : 'Error');
-                      }
+                    onClick={() => {
+                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnDialogOpen(true);
                     }}
                   >
                     {t('rentals.confirmReturn', 'Confirm return')}
                   </Button>
                 ) : null}
               </Paper>
+            ) : null}
+
+            {bookingId && booking.status !== 'cancelled' ? (
+              <UserMessagesComponent
+                entityType="rental_booking"
+                entityId={bookingId}
+                title={t('rentals.messages.title', 'Messages')}
+                defaultExpanded
+                maxVisibleMessages={5}
+              />
             ) : null}
           </Stack>
         </Container>
@@ -767,6 +782,73 @@ const RentalBookingDetailPage: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setPinModalOpen(false)}>
             {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={returnDialogOpen}
+        onClose={() => !returning && setReturnDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('rentals.confirmReturn', 'Confirm return')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'rentals.returnAtHint',
+              'Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.'
+            )}
+          </Typography>
+          <TextField
+            label={t('rentals.returnAt', 'Return date and time')}
+            type="datetime-local"
+            value={returnAtLocal}
+            onChange={(e) => setReturnAtLocal(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+            disabled={returning}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReturnDialogOpen(false)} disabled={returning}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={returning || !returnAtLocal}
+            onClick={async () => {
+              if (!bookingId || !returnAtLocal) return;
+              setReturning(true);
+              try {
+                const actualEndAt = new Date(returnAtLocal).toISOString();
+                const res = await confirmReturn(bookingId, { actualEndAt });
+                setReturnDialogOpen(false);
+                if (res.paymentPending || res.overtimeDue) {
+                  setInfo(
+                    t(
+                      'rentals.returnOvertimePending',
+                      'Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.'
+                    )
+                  );
+                } else {
+                  setInfo(t('rentals.completed', 'Completed and settled'));
+                }
+                void load();
+              } catch (e: unknown) {
+                setError(
+                  apiErrorMessage(
+                    e,
+                    e instanceof Error ? e.message : 'Error'
+                  )
+                );
+              } finally {
+                setReturning(false);
+              }
+            }}
+          >
+            {t('rentals.confirmReturn', 'Confirm return')}
           </Button>
         </DialogActions>
       </Dialog>

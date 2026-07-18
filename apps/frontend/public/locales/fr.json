@@ -4287,6 +4287,18 @@
       "securityDeposit": "Caution (locations par carte)",
       "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue."
     },
+    "bookingStatus": {
+      "proposed": "En attente de paiement",
+      "reserved": "Réservé — payer au retrait",
+      "confirmed": "Confirmé",
+      "active": "En cours",
+      "awaiting_return": "En attente de retour",
+      "completed": "Terminé",
+      "cancelled": "Annulé"
+    },
+    "messages": {
+      "title": "Messages"
+    },
     "bookingDetail": {
       "paymentPendingTitle": "En attente de paiement",
       "paymentPendingStripe": "Finalisez le paiement par carte sur Stripe Checkout pour confirmer cette réservation. Utilisez Réessayer le paiement si vous avez fermé la page de paiement.",
@@ -4307,7 +4319,9 @@
       "pickupPaymentError": "Impossible d’encaisser le paiement"
     },
     "cancelError": "Impossible d’annuler la réservation",
-    "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué."
+    "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
+    "returnAt": "Date et heure de retour",
+    "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires."
   },
   "profile": {
     "accountOverview": "Aperçu du Compte",

@@ -688,9 +688,10 @@ export function useRentalApi() {
   );
 
   const confirmReturn = useCallback(
-    async (bookingId: string) => {
+    async (bookingId: string, body?: { actualEndAt?: string }) => {
       const { data } = await api.post(
-        `/rentals/bookings/${bookingId}/confirm-return`
+        `/rentals/bookings/${bookingId}/confirm-return`,
+        body ?? {}
       );
       return data as {
         success: boolean;

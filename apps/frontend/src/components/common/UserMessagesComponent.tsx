@@ -21,8 +21,11 @@ import { useTranslation } from 'react-i18next';
 import { useOrderParticipants } from '../../hooks/useOrderParticipants';
 import type { MentionableParticipant, OrderMessage } from '../../hooks/useOrderMessages';
 import { useOrderMessages } from '../../hooks/useOrderMessages';
+import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
+import { useRentalBookingParticipants } from '../../hooks/useRentalBookingParticipants';
 import { useUserMessages, type UserMessage } from '../../hooks/useUserMessages';
 import { MessageRenderer } from '../messaging/MessageRenderer';
+import { MentionChip } from './MentionChip';
 import { MentionPicker } from './MentionPicker';
 import { PersonaBadge } from './PersonaBadge';
 import { RichTextEditor } from './RichTextEditor';
@@ -48,12 +51,22 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 }) => {
   const { t } = useTranslation();
   const isOrder = entityType === 'order';
+  const isRentalBooking = entityType === 'rental_booking';
+  const usesRestThread = isOrder || isRentalBooking;
 
   const orderMessagesHook = useOrderMessages();
+  const rentalMessagesHook = useRentalBookingMessages();
   const userMessagesHook = useUserMessages();
-  const { participants, loading: participantsLoading } = useOrderParticipants(
-    isOrder ? entityId : null
+  const orderParticipants = useOrderParticipants(isOrder ? entityId : null);
+  const rentalParticipants = useRentalBookingParticipants(
+    isRentalBooking ? entityId : null
   );
+  const participants = isRentalBooking
+    ? rentalParticipants.participants
+    : orderParticipants.participants;
+  const participantsLoading = isRentalBooking
+    ? rentalParticipants.loading
+    : orderParticipants.loading;
 
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [newMessage, setNewMessage] = useState('');
@@ -68,7 +81,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 
   const entityMessages = isOrder
     ? (orderMessagesHook.messages as OrderMessage[])
-    : (userMessagesHook.getMessagesForEntity(entityType, entityId) as UserMessage[]);
+    : isRentalBooking
+      ? (rentalMessagesHook.messages as OrderMessage[])
+      : (userMessagesHook.getMessagesForEntity(entityType, entityId) as UserMessage[]);
 
   const normalizedMessages: UserMessage[] = entityMessages.map((msg) => ({
     id: msg.id,
@@ -93,23 +108,28 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   useEffect(() => {
     if (isOrder && entityId) {
       orderMessagesHook.fetchMessages(entityId);
+    } else if (isRentalBooking && entityId) {
+      rentalMessagesHook.fetchMessages(entityId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId, isOrder]);
+  }, [entityType, entityId, isOrder, isRentalBooking]);
 
   useEffect(() => {
-    if (isOrder && expanded && entityMessages.length > 0) {
-      const lastMessage = entityMessages[0];
+    if (!usesRestThread || !expanded || entityMessages.length === 0) return;
+    const lastMessage = entityMessages[0];
+    if (isOrder) {
       orderMessagesHook.markMessagesRead(entityId, lastMessage.id);
+    } else if (isRentalBooking) {
+      rentalMessagesHook.markMessagesRead(entityId, lastMessage.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, isOrder]);
+  }, [expanded, usesRestThread, isOrder, isRentalBooking]);
 
   const handleMessageChange = useCallback(
     (text: string) => {
       setNewMessage(text);
 
-      if (!isOrder) return;
+      if (!usesRestThread) return;
 
       const atIndex = text.lastIndexOf('@');
       if (atIndex !== -1 && atIndex === text.length - 1) {
@@ -126,7 +146,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
         setMentionPickerOpen(false);
       }
     },
-    [isOrder, mentionPickerOpen]
+    [usesRestThread, mentionPickerOpen]
   );
 
   const handleMentionSelect = useCallback(
@@ -157,6 +177,12 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
           newMessage.trim(),
           selectedMention?.userId
         );
+      } else if (isRentalBooking) {
+        success = await rentalMessagesHook.sendMessage(
+          entityId,
+          newMessage.trim(),
+          selectedMention?.userId
+        );
       } else {
         success = await userMessagesHook.createMessage(entityType, entityId, newMessage.trim());
       }
@@ -166,6 +192,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
         setSelectedMention(null);
         if (!expanded) setExpanded(true);
         if (isOrder) await orderMessagesHook.refetch(entityId);
+        if (isRentalBooking) await rentalMessagesHook.refetch(entityId);
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -177,7 +204,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     entityType,
     entityId,
     isOrder,
+    isRentalBooking,
     orderMessagesHook,
+    rentalMessagesHook,
     userMessagesHook,
     sending,
     expanded,
@@ -194,11 +223,15 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
       .replace(/\n/g, '<br>');
 
   const getOrderMessage = (msg: UserMessage): OrderMessage | undefined =>
-    isOrder
+    usesRestThread
       ? (entityMessages as OrderMessage[]).find((m) => m.id === msg.id)
       : undefined;
 
-  const error = isOrder ? orderMessagesHook.error : userMessagesHook.error;
+  const error = isOrder
+    ? orderMessagesHook.error
+    : isRentalBooking
+      ? rentalMessagesHook.error
+      : userMessagesHook.error;
 
   if (error) {
     return (
@@ -292,7 +325,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                               )}
                             </Box>
                             <Typography variant="caption" color="text.secondary">
-                              {isOrder
+                              {usesRestThread
                                 ? new Date(message.created_at).toLocaleString()
                                 : userMessagesHook.formatDate(message.created_at)}
                             </Typography>
@@ -387,7 +420,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 
                   <MentionPicker
                     anchorEl={composerRef.current}
-                    open={mentionPickerOpen && isOrder}
+                    open={mentionPickerOpen && usesRestThread}
                     participants={participants}
                     loading={participantsLoading}
                     query={mentionQuery}
@@ -399,7 +432,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                     value={newMessage}
                     onChange={handleMessageChange}
                     placeholder={
-                      isOrder
+                      usesRestThread
                         ? t('messages.mentionPlaceholder', 'Type your message... Use @ to mention')
                         : t('messages.placeholder', 'Type your message...')
                     }
@@ -469,7 +502,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                         )}
                       </Box>
                       <Typography variant="caption" color="text.secondary">
-                        {isOrder
+                        {usesRestThread
                           ? new Date(message.created_at).toLocaleString()
                           : userMessagesHook.formatDate(message.created_at)}
                       </Typography>

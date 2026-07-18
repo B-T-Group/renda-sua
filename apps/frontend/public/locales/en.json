@@ -4550,6 +4550,18 @@
       "securityDeposit": "Security deposit (card rentals)",
       "securityDepositHint": "Held on your card with the rental total and only used for extra hours past your booked end time."
     },
+    "bookingStatus": {
+      "proposed": "Awaiting payment",
+      "reserved": "Reserved — pay at pickup",
+      "confirmed": "Confirmed",
+      "active": "In progress",
+      "awaiting_return": "Awaiting return",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "messages": {
+      "title": "Messages"
+    },
     "bookingDetail": {
       "paymentPendingTitle": "Waiting for payment",
       "paymentPendingStripe": "Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.",
@@ -4570,7 +4582,9 @@
       "pickupPaymentError": "Could not collect payment"
     },
     "cancelError": "Could not cancel booking",
-    "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid."
+    "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
+    "returnAt": "Return date and time",
+    "returnAtHint": "Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime."
   },
   "profile": {
     "accountOverview": "Account Overview",
