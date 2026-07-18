@@ -13,7 +13,7 @@ import { createHash } from 'crypto';
 import { AwsService } from '../aws/aws.service';
 import type { BoldSignConfig, Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import type { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   BoldsignClientService,
@@ -50,7 +50,14 @@ export class BusinessContractsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
-    @Inject(forwardRef(() => MerchantLifecycleService))
+    @Inject(
+      forwardRef(() => {
+        // Lazy require breaks the ESM cycle with MerchantLifecycleService.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        return require('../merchant-lifecycle/merchant-lifecycle.service')
+          .MerchantLifecycleService;
+      })
+    )
     private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 

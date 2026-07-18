@@ -18,6 +18,8 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessTokensService } from './business-tokens.service';
 import { PurchaseTokenPackDto } from './dto/purchase-token-pack.dto';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('business-tokens')
 @Controller('business-tokens')
@@ -40,8 +42,8 @@ export class BusinessTokensController {
   @ApiOperation({ summary: 'Get AI token balance for the current business' })
   @ApiResponse({ status: 200, description: 'Token balance' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async getBalance() {
-    const businessId = await this.requireBusinessId();
+  async getBalance(@ReqContext() ctx: RequestContext) {
+    const businessId = await this.requireBusinessId(ctx);
     const ai_tokens = await this.businessTokensService.getBalance(businessId);
     return { success: true, data: { ai_tokens } };
   }
@@ -49,8 +51,8 @@ export class BusinessTokensController {
   @Get('usage')
   @ApiOperation({ summary: 'List recent AI token usage for the current business' })
   @ApiResponse({ status: 200, description: 'Usage history' })
-  async listUsage(@Query('limit') limit?: string) {
-    const businessId = await this.requireBusinessId();
+  async listUsage(@ReqContext() ctx: RequestContext, @Query('limit') limit?: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const parsed = limit ? Number.parseInt(limit, 10) : 50;
     const data = await this.businessTokensService.listUsage(
       businessId,
@@ -72,8 +74,8 @@ export class BusinessTokensController {
     return { success: true, data };
   }
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     if (!user?.business?.id) {
       throw new HttpException(
         { success: false, error: 'User has no business' },

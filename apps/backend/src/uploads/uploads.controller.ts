@@ -15,6 +15,8 @@ import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UploadService } from '../services/upload.service';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 export interface UploadData {
   file_name: string;
@@ -52,14 +54,14 @@ export class UploadsController {
       },
     },
   })
-  async getMeHasIdDocument(): Promise<{
+  async getMeHasIdDocument(@ReqContext() ctx: RequestContext): Promise<{
     hasIdDocument: boolean;
     idDocumentStatus: 'missing' | 'pending' | 'rejected' | 'approved';
   }> {
-    const user = await this.hasuraUserService.getUser();
+    const user = await this.hasuraUserService.getUser(ctx);
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.getActivePersonaHeader(ctx)
     );
     if ((active !== 'agent' && active !== 'business') || !user.id) {
       return { hasIdDocument: false, idDocumentStatus: 'missing' };
@@ -69,8 +71,8 @@ export class UploadsController {
 
   @Get('me')
   @ApiOperation({ summary: 'List current user uploads' })
-  async listMyUploads() {
-    const user = await this.hasuraUserService.getUser();
+  async listMyUploads(@ReqContext() ctx: RequestContext) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const uploads = await this.uploadService.listUserUploads(user.id);
     return { success: true, data: { uploads } };
   }
@@ -106,9 +108,9 @@ export class UploadsController {
   }
 
   @Get(':id/view')
-  async getUserUploadPresignedUrl(@Param('id') uploadId: string) {
+  async getUserUploadPresignedUrl(@ReqContext() ctx: RequestContext, @Param('id') uploadId: string) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
 
       // Permission check using permission service
       const canAccess = await this.permissionService.canViewUserUpload(
@@ -147,9 +149,9 @@ export class UploadsController {
   }
 
   @Delete(':id')
-  async deleteUpload(@Param('id') uploadId: string) {
+  async deleteUpload(@ReqContext() ctx: RequestContext, @Param('id') uploadId: string) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
 
       // Permission check using permission service
       const canDelete = await this.permissionService.canDeleteUserUpload(
@@ -188,9 +190,9 @@ export class UploadsController {
   }
 
   @Patch(':id/approve')
-  async approveUpload(@Param('id') uploadId: string) {
+  async approveUpload(@ReqContext() ctx: RequestContext, @Param('id') uploadId: string) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
 
       // Check if user is a business admin
       const isAdmin = await this.permissionService.hasPlatformPermission(
@@ -241,11 +243,12 @@ export class UploadsController {
   @ApiResponse({ status: 200, description: 'Document rejected successfully' })
   @ApiResponse({ status: 403, description: 'Access denied' })
   async rejectUpload(
+    @ReqContext() ctx: RequestContext,
     @Param('id') uploadId: string,
     @Body('message') message: string
   ) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const isAdmin = await this.permissionService.hasPlatformPermission(
         user.id,
         PlatformPermissions.OPS_USER_DOCUMENTS

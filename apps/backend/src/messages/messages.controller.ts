@@ -10,6 +10,8 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MessagesService } from './messages.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('messages')
 @Controller('messages')
@@ -29,6 +31,7 @@ export class MessagesController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiResponse({ status: 200, description: 'Messages for the current user' })
   async getMyMessages(
+    @ReqContext() ctx: RequestContext,
     @Query('entity_type') entityType?: string,
     @Query('entity_id') entityId?: string,
     @Query('search') search?: string,
@@ -36,7 +39,7 @@ export class MessagesController {
     @Query('limit') limit?: string
   ) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const result = await this.messagesService.getMyMessages(user.id, {
         entity_type: entityType,
         entity_id: entityId,

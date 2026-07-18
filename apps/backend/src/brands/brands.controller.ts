@@ -24,6 +24,8 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { Public } from '../auth/public.decorator';
 import { BrandsService } from './brands.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 export interface CreateBrandDto {
   name: string;
@@ -130,10 +132,11 @@ export class BrandsController {
     description: 'Forbidden - Admin privileges required',
   })
   async createBrand(
+    @ReqContext() ctx: RequestContext,
     @Body() createBrandDto: CreateBrandDto
   ) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
 
       if (user.user_type_id !== 'business' || !user.business) {
         throw new HttpException(

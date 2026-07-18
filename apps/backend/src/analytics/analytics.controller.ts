@@ -12,6 +12,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { BusinessAnalytics } from './analytics.service';
 import { AnalyticsService } from './analytics.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('Analytics')
 @Controller('analytics')
@@ -30,10 +32,11 @@ export class AnalyticsController {
   @ApiResponse({ status: 200, description: 'Business analytics' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
   async getBusinessAnalytics(
+    @ReqContext() ctx: RequestContext,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string
   ): Promise<BusinessAnalytics> {
-    const userId = this.hasuraUserService.getUserId();
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }

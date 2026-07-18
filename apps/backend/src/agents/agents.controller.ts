@@ -30,6 +30,8 @@ import {
   UpdateLocationTrackingConsentDto,
 } from './dto/update-location-tracking-consent.dto';
 import { UpdateAgentAvailabilityDto } from './dto/update-agent-availability.dto';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -128,10 +130,10 @@ export class AgentsController {
     private readonly agentReferralsService: AgentReferralsService
   ) {}
 
-  private requireAgentActor(user: any): string {
+  private requireAgentActor(user: any, ctx: RequestContext): string {
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.getActivePersonaHeader(ctx)
     );
     if (active !== 'agent' || !user.agent?.id) {
       throw new HttpException(
@@ -219,11 +221,11 @@ export class AgentsController {
   }
 
   @Get('active_orders')
-  async getActiveOrders() {
+  async getActiveOrders(@ReqContext() ctx: RequestContext) {
     try {
       // Get the current agent's ID
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       // Query for active orders assigned to this agent
       // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
@@ -422,10 +424,10 @@ export class AgentsController {
   })
   @ApiResponse({ status: 403, description: 'User is not an agent' })
   @ApiResponse({ status: 500, description: 'Failed to load referral summary' })
-  async getReferredBusinessesSummary() {
+  async getReferredBusinessesSummary(@ReqContext() ctx: RequestContext) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
       const [referredBusinessCount, agentCode] = await Promise.all([
         this.agentReferralsService.getReferredBusinessCount(agentId),
         this.agentReferralsService.getAgentCodeById(agentId),
@@ -450,10 +452,10 @@ export class AgentsController {
   }
 
   @Get('earnings-summary')
-  async getEarningsSummary() {
+  async getEarningsSummary(@ReqContext() ctx: RequestContext) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
       const agentUserId = user.id;
 
       // Start and end of today (server date, UTC)
@@ -693,8 +695,8 @@ export class AgentsController {
   }
 
   @Get('hold-percentage')
-  async getHoldPercentage() {
-    const user = await this.hasuraUserService.getUser();
+  async getHoldPercentage(@ReqContext() ctx: RequestContext) {
+    const user = await this.hasuraUserService.getUser(ctx);
     if (!user?.agent) {
       throw new HttpException(
         { success: false, error: 'Only agents can access hold percentage' },
@@ -707,13 +709,13 @@ export class AgentsController {
   }
 
   @Post('pick_up_order')
-  async pickUpOrder(@Body() request: PickUpOrderRequest) {
+  async pickUpOrder(@ReqContext() ctx: RequestContext, @Body() request: PickUpOrderRequest) {
     try {
       const { order_id } = request;
 
       // Get the current agent's ID
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       // Update the order with the agent ID and status
       const mutation = `
@@ -771,11 +773,11 @@ export class AgentsController {
   }
 
   @Post('complete_onboarding')
-  async completeOnboarding() {
+  async completeOnboarding(@ReqContext() ctx: RequestContext) {
     try {
       // Get the current agent's ID
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       // Update the agent's onboarding_complete status
       const mutation = `
@@ -834,10 +836,10 @@ export class AgentsController {
   })
   @ApiResponse({ status: 200, description: 'Current preference' })
   @ApiResponse({ status: 403, description: 'Not an agent' })
-  async getAutoWithdrawCommissions() {
+  async getAutoWithdrawCommissions(@ReqContext() ctx: RequestContext) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       const query = `
         query AgentAutoWithdrawGet($id: uuid!) {
@@ -890,11 +892,12 @@ export class AgentsController {
   @ApiResponse({ status: 200, description: 'Preference updated' })
   @ApiResponse({ status: 403, description: 'Not an agent' })
   async setAutoWithdrawCommissions(
+    @ReqContext() ctx: RequestContext,
     @Body() body: { auto_withdraw_commissions: boolean }
   ) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       const mutation = `
         mutation SetAgentAutoWithdraw($id: uuid!, $auto: Boolean!) {
@@ -954,10 +957,10 @@ export class AgentsController {
     description: 'Cannot become unavailable while active orders are assigned',
   })
   @ApiResponse({ status: 403, description: 'Not an agent' })
-  async updateAvailability(@Body() body: UpdateAgentAvailabilityDto) {
+  async updateAvailability(@ReqContext() ctx: RequestContext, @Body() body: UpdateAgentAvailabilityDto) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
 
       if (body.available === false) {
         const activeOrderCount =
@@ -1007,11 +1010,12 @@ export class AgentsController {
   @ApiResponse({ status: 400, description: 'Invalid transition' })
   @ApiResponse({ status: 403, description: 'Not an agent' })
   async updateLocationTrackingConsent(
+    @ReqContext() ctx: RequestContext,
     @Body() body: UpdateLocationTrackingConsentDto
   ) {
     try {
-      const user = await this.hasuraUserService.getUser();
-      const agentId = this.requireAgentActor(user);
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
       const current = await this.getAgentLocationConsent(
         agentId,
         body.platform

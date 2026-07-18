@@ -21,6 +21,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import type { TransactionRequest } from './accounts.service';
 import { AccountsService } from './accounts.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('accounts')
 @Controller('accounts')
@@ -87,9 +89,9 @@ export class AccountsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAccountInfo() {
+  async getAccountInfo(@ReqContext() ctx: RequestContext) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       if (!user?.id) {
         throw new HttpException(
           { success: false, error: 'User not found' },
@@ -225,9 +227,9 @@ export class AccountsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Account not found' })
-  async getAccountById(@Param('accountId') accountId: string) {
+  async getAccountById(@ReqContext() ctx: RequestContext, @Param('accountId') accountId: string) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       if (!user?.id) {
         throw new HttpException(
           { success: false, error: 'User not found' },
@@ -302,9 +304,9 @@ export class AccountsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAccounts() {
+  async getAccounts(@ReqContext() ctx: RequestContext) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       if (!user?.id) {
         throw new HttpException(
           { success: false, error: 'User not found' },
@@ -363,9 +365,9 @@ export class AccountsController {
   }
 
   @Post()
-  async createAccount(@Body() accountData: { currency: string }) {
+  async createAccount(@ReqContext() ctx: RequestContext, @Body() accountData: { currency: string }) {
     try {
-      const userId = this.hasuraUserService.getUserId();
+      const userId = this.hasuraUserService.getUserId(ctx);
 
       const getUserQuery = `
         query GetUserByIdForAccount($userId: uuid!) {

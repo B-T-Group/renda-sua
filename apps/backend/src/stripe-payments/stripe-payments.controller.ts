@@ -43,6 +43,8 @@ import {
 import { StripePayoutService } from './stripe-payout.service';
 import { StripeRefundService } from './stripe-refund.service';
 import { StripeService } from './stripe.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('stripe-payments')
 @Controller('stripe-payments')
@@ -71,9 +73,9 @@ export class StripePaymentsController {
   @ApiResponse({ status: 400, description: 'Invalid request' })
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   @HttpCode(HttpStatus.CREATED)
-  async initiate(@Body() body: InitiateStripePaymentDto) {
+  async initiate(@ReqContext() ctx: RequestContext, @Body() body: InitiateStripePaymentDto) {
     try {
-      const email = body.customerEmail || (await this.resolveUserEmail());
+      const email = body.customerEmail || (await this.resolveUserEmail(ctx));
       const result = await this.checkoutService.createCheckout({
         amount: body.amount,
         currency: body.currency,
@@ -104,8 +106,8 @@ export class StripePaymentsController {
   @ApiResponse({ status: 201, description: 'Payout initiated' })
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   @HttpCode(HttpStatus.CREATED)
-  async withdraw(@Body() body: WithdrawStripeDto) {
-    const user = await this.hasuraUserService.getUser();
+  async withdraw(@ReqContext() ctx: RequestContext, @Body() body: WithdrawStripeDto) {
+    const user = await this.hasuraUserService.getUser(ctx);
     await this.assertAccountBelongsToUser(body.accountId, user.id);
     const result = await this.payoutService.executePayout(
       {
@@ -149,9 +151,9 @@ export class StripePaymentsController {
     await this.assertAccountBelongsToUser(tx.account_id, userId);
   }
 
-  private async resolveUserEmail(): Promise<string | undefined> {
+  private async resolveUserEmail(ctx: RequestContext): Promise<string | undefined> {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       return user.email ?? undefined;
     } catch {
       return undefined;
@@ -161,8 +163,8 @@ export class StripePaymentsController {
   @Get('transactions/:id/status')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction status (live sync)' })
-  async getStatus(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
+  async getStatus(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -199,8 +201,8 @@ export class StripePaymentsController {
   @Post('transactions/:id/cancel')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a pending Stripe checkout session' })
-  async cancel(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
+  async cancel(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -224,8 +226,8 @@ export class StripePaymentsController {
   @Get('transactions/reference/:reference')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by reference' })
-  async getByReference(@Param('reference') reference: string) {
-    const user = await this.hasuraUserService.getUser();
+  async getByReference(@ReqContext() ctx: RequestContext, @Param('reference') reference: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const tx = await this.databaseService.getTransactionByReference(reference);
     if (!tx) {
       throw new HttpException(
@@ -240,8 +242,8 @@ export class StripePaymentsController {
   @Get('transactions/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction by id' })
-  async getById(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
+  async getById(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const tx = await this.databaseService.getTransactionById(id);
     if (!tx) {
       throw new HttpException(
@@ -257,6 +259,7 @@ export class StripePaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List Stripe transactions' })
   async list(
+    @ReqContext() ctx: RequestContext,
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
     @Query('limit') limit?: string,
@@ -268,7 +271,7 @@ export class StripePaymentsController {
         HttpStatus.BAD_REQUEST
       );
     }
-    const user = await this.hasuraUserService.getUser();
+    const user = await this.hasuraUserService.getUser(ctx);
     await this.assertAccountBelongsToUser(accountId, user.id);
     const data = await this.databaseService.listTransactions({
       accountId,

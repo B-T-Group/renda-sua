@@ -31,6 +31,8 @@ import type {
   CreateRentalItemImageInput,
   UpdateRentalItemImageInput,
 } from './rental-item-images.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 interface BulkCreateBody {
   rental_category_id?: string | null;
@@ -56,13 +58,14 @@ export class RentalItemImagesController {
   @ApiResponse({ status: 200, description: 'Images retrieved' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   async list(
+    @ReqContext() ctx: RequestContext,
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '20',
     @Query('rental_category_id') rentalCategoryId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
     const pageSizeNumber = Math.min(
       Math.max(parseInt(pageSize, 10) || 20, 1),
@@ -94,8 +97,8 @@ export class RentalItemImagesController {
     summary: 'Search rental items by name for association autocomplete',
   })
   @ApiResponse({ status: 200, description: 'Items retrieved' })
-  async searchRentalItems(@Query('q') q: string) {
-    const businessId = await this.requireBusinessId();
+  async searchRentalItems(@ReqContext() ctx: RequestContext, @Query('q') q: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const items = await this.rentalItemImagesService.searchRentalItems(
       businessId,
       q || '',
@@ -135,8 +138,8 @@ export class RentalItemImagesController {
       required: ['images'],
     },
   })
-  async bulkCreate(@Body() body: BulkCreateBody) {
-    const businessId = await this.requireBusinessId();
+  async bulkCreate(@ReqContext() ctx: RequestContext, @Body() body: BulkCreateBody) {
+    const businessId = await this.requireBusinessId(ctx);
     const images = body.images ?? [];
     if (!images.length) {
       throw new HttpException(
@@ -163,8 +166,8 @@ export class RentalItemImagesController {
   @ApiResponse({ status: 200, description: 'Suggestions returned' })
   @ApiResponse({ status: 400, description: 'Image already linked' })
   @ApiBody({ type: RentalFromImageSuggestionsDto })
-  async rentalFromImageSuggestions(@Body() body: RentalFromImageSuggestionsDto) {
-    const user = await this.hasuraUserService.getUser();
+  async rentalFromImageSuggestions(@ReqContext() ctx: RequestContext, @Body() body: RentalFromImageSuggestionsDto) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -190,8 +193,8 @@ export class RentalItemImagesController {
   @ApiResponse({ status: 201, description: 'Rental item created' })
   @ApiResponse({ status: 400, description: 'Image already linked or invalid mode data' })
   @ApiBody({ type: CreateRentalFromImageDto })
-  async createRentalFromImage(@Body() body: CreateRentalFromImageDto) {
-    const user = await this.hasuraUserService.getUser();
+  async createRentalFromImage(@ReqContext() ctx: RequestContext, @Body() body: CreateRentalFromImageDto) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -217,10 +220,11 @@ export class RentalItemImagesController {
     },
   })
   async associate(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: { rental_item_id: string }
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     await this.rentalItemImagesService.associateRentalItem(
       businessId,
       id,
@@ -233,8 +237,8 @@ export class RentalItemImagesController {
   @ApiOperation({
     summary: 'Unlink image from rental item (keeps row in library)',
   })
-  async disassociate(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async disassociate(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     await this.rentalItemImagesService.disassociateRentalItem(
       businessId,
       id
@@ -265,10 +269,11 @@ export class RentalItemImagesController {
     },
   })
   async patch(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: UpdateRentalItemImageInput
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const image = await this.rentalItemImagesService.updateImage(
       businessId,
       id,
@@ -279,8 +284,8 @@ export class RentalItemImagesController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a rental library image' })
-  async remove(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async remove(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     await this.rentalItemImagesService.deleteImage(businessId, id);
     return { success: true };
   }
@@ -291,8 +296,8 @@ export class RentalItemImagesController {
   })
   @ApiResponse({ status: 200, description: 'Returns b64_json for preview' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  async cleanup(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
+  async cleanup(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
@@ -325,8 +330,8 @@ export class RentalItemImagesController {
     };
   }
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(

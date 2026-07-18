@@ -25,6 +25,8 @@ import type { Configuration } from '../config/configuration';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 interface RequestWithUser extends Request {
   user?: { sub?: string; id?: string };
@@ -52,6 +54,7 @@ export class NotificationsController {
   @ApiResponse({ status: 200, description: 'Subscription saved' })
   @ApiResponse({ status: 400, description: 'Invalid subscription' })
   async pushSubscribe(
+    @ReqContext() ctx: RequestContext,
     @Body()
     body: {
       endpoint: string;
@@ -59,7 +62,7 @@ export class NotificationsController {
     },
     @Req() request: RequestWithUser
   ) {
-    const userId = this.hasuraUserService.getUserId();
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
@@ -90,10 +93,11 @@ export class NotificationsController {
   @ApiResponse({ status: 400, description: 'Invalid or missing expoPushToken' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async registerPushToken(
+    @ReqContext() ctx: RequestContext,
     @Body() body: { expoPushToken?: string; deviceId?: string },
     @Req() request: RequestWithUser
   ) {
-    const userId = this.hasuraUserService.getUserId();
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
@@ -124,8 +128,8 @@ export class NotificationsController {
     description: 'Registration flags and optional per-token match',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getPushTokenStatus(@Query('expoPushToken') expoPushToken: string | undefined) {
-    const userId = this.hasuraUserService.getUserId();
+  async getPushTokenStatus(@ReqContext() ctx: RequestContext, @Query('expoPushToken') expoPushToken: string | undefined) {
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
@@ -143,10 +147,11 @@ export class NotificationsController {
     description: 'Test push sent or reason it was not sent',
   })
   async testPush(
+    @ReqContext() ctx: RequestContext,
     @Body() body: { title?: string; body?: string },
     @Req() request: RequestWithUser
   ) {
-    const userId = this.hasuraUserService.getUserId();
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }

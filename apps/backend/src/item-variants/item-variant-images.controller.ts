@@ -19,6 +19,8 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateItemVariantImageDto } from './dto/update-item-variant-image.dto';
 import { ItemVariantsService } from './item-variants.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('item-variants')
 @Controller('item-variant-images')
@@ -30,8 +32,8 @@ export class ItemVariantImagesController {
     private readonly itemVariantsService: ItemVariantsService
   ) {}
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -46,10 +48,11 @@ export class ItemVariantImagesController {
   @ApiOperation({ summary: 'Update a variant image' })
   @ApiResponse({ status: 200, description: 'Image updated' })
   async updateImage(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() dto: UpdateItemVariantImageDto
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.itemVariantsService.updateVariantImage(
       businessId,
       id,
@@ -62,8 +65,8 @@ export class ItemVariantImagesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a variant image' })
   @ApiResponse({ status: 200, description: 'Image deleted' })
-  async deleteImage(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async deleteImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     await this.itemVariantsService.deleteVariantImage(businessId, id);
     return { success: true };
   }

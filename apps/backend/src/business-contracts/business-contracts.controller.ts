@@ -18,6 +18,8 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessContractsService } from './business-contracts.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('business-contracts')
 @Controller('business-contracts')
@@ -33,8 +35,8 @@ export class BusinessContractsController {
   @Get('status')
   @ApiOperation({ summary: 'Get current merchant contract status' })
   @ApiResponse({ status: 200, description: 'Contract status' })
-  async getStatus() {
-    const businessId = await this.requireBusinessId();
+  async getStatus(@ReqContext() ctx: RequestContext) {
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.contractsService.getContractStatus(businessId);
     return { success: true, data };
   }
@@ -42,8 +44,8 @@ export class BusinessContractsController {
   @Post('resend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend or remind merchant contract' })
-  async resend() {
-    const businessId = await this.requireBusinessId();
+  async resend(@ReqContext() ctx: RequestContext) {
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.contractsService.resendContract(businessId);
     return { success: true, data };
   }
@@ -54,8 +56,8 @@ export class BusinessContractsController {
     summary: 'Refresh merchant contract status from BoldSign',
   })
   @ApiResponse({ status: 200, description: 'Updated contract status' })
-  async refresh() {
-    const businessId = await this.requireBusinessId();
+  async refresh(@ReqContext() ctx: RequestContext) {
+    const businessId = await this.requireBusinessId(ctx);
     const data =
       await this.contractsService.refreshContractForBusiness(businessId);
     return { success: true, data };
@@ -63,16 +65,16 @@ export class BusinessContractsController {
 
   @Get(':id/download')
   @ApiOperation({ summary: 'Download signed contract PDF' })
-  async download(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async download(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const url = await this.contractsService.getDownloadUrl(id, businessId, 'pdf');
     return { success: true, data: { url } };
   }
 
   @Get(':id/audit-certificate')
   @ApiOperation({ summary: 'Download contract audit certificate' })
-  async auditCertificate(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async auditCertificate(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const url = await this.contractsService.getDownloadUrl(
       id,
       businessId,
@@ -81,8 +83,8 @@ export class BusinessContractsController {
     return { success: true, data: { url } };
   }
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(

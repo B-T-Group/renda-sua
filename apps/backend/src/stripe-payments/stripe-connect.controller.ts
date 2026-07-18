@@ -14,6 +14,8 @@ import {
 } from '@nestjs/swagger';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { StripeConnectService } from './stripe-connect.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('stripe-connect')
 @ApiBearerAuth()
@@ -24,8 +26,8 @@ export class StripeConnectController {
     private readonly hasuraUserService: HasuraUserService
   ) {}
 
-  private async userId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async userId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     return user.id;
   }
 
@@ -33,8 +35,8 @@ export class StripeConnectController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create the Stripe Connect account for the user' })
   @ApiResponse({ status: 201, description: 'Connect account ensured' })
-  async createAccount() {
-    const userId = await this.userId();
+  async createAccount(@ReqContext() ctx: RequestContext) {
+    const userId = await this.userId(ctx);
     const account = await this.connectService.ensureAccount(userId);
     return {
       success: true,
@@ -52,6 +54,7 @@ export class StripeConnectController {
   @ApiOperation({ summary: 'Get a hosted Connect onboarding link' })
   @ApiResponse({ status: 201, description: 'Onboarding link created' })
   async accountLink(
+    @ReqContext() ctx: RequestContext,
     @Body()
     body: {
       returnUrl?: string;
@@ -59,7 +62,7 @@ export class StripeConnectController {
       platform?: 'mobile' | 'web';
     }
   ) {
-    const userId = await this.userId();
+    const userId = await this.userId(ctx);
     const link = await this.connectService.createOnboardingLink(userId, {
       returnUrl: body?.returnUrl,
       refreshUrl: body?.refreshUrl,
@@ -75,8 +78,8 @@ export class StripeConnectController {
     description:
       'Connect status including connected/charges/payouts/details flags and the resolved payment rail (stripe | mobile_money)',
   })
-  async status() {
-    const userId = await this.userId();
+  async status(@ReqContext() ctx: RequestContext) {
+    const userId = await this.userId(ctx);
     const data = await this.connectService.getStatus(userId);
     return { success: true, data };
   }
@@ -85,8 +88,8 @@ export class StripeConnectController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Get an Express dashboard login link' })
   @ApiResponse({ status: 201, description: 'Login link created' })
-  async loginLink() {
-    const userId = await this.userId();
+  async loginLink(@ReqContext() ctx: RequestContext) {
+    const userId = await this.userId(ctx);
     const link = await this.connectService.createLoginLink(userId);
     return { success: true, data: link };
   }

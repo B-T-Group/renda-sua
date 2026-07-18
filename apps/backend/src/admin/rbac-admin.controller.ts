@@ -23,6 +23,8 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminService } from './admin.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('admin-rbac')
 @Controller('admin/rbac')
@@ -94,11 +96,12 @@ export class RbacAdminController {
   @ApiResponse({ status: 200, description: 'Roles updated' })
   @ApiResponse({ status: 400, description: 'Invalid roles' })
   async setUserRoles(
+    @ReqContext() ctx: RequestContext,
     @Param('userId') userId: string,
     @Body() body: { roles: string[] }
   ) {
     try {
-      const granter = await this.hasuraUserService.getUser();
+      const granter = await this.hasuraUserService.getUser(ctx);
       const roles = await this.rbacService.setUserRoles(
         userId,
         body?.roles ?? [],

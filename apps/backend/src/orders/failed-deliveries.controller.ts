@@ -23,6 +23,8 @@ import type { ResolutionRequest } from './failed-deliveries.service';
 import { FailedDeliveriesService } from './failed-deliveries.service';
 import type { OrderStatusChangeRequest } from './orders.service';
 import { OrdersService } from './orders.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('Failed Deliveries')
 @Controller('failed-deliveries')
@@ -171,13 +173,14 @@ export class FailedDeliveriesController {
     description: 'Forbidden - Only business users can access this endpoint',
   })
   async getFailedDeliveries(
+    @ReqContext() ctx: RequestContext,
     @Query('status') status?: 'pending' | 'completed',
     @Query('resolution_type')
     resolution_type?: 'agent_fault' | 'client_fault' | 'item_fault'
   ) {
     try {
       // Get business ID from authenticated user
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
 
       if (user.user_type_id !== 'business' || !user.business) {
         throw new HttpException(

@@ -38,6 +38,7 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
+    // Identity comes from RequestContext CLS populated by request middleware.
     const user = await this.hasuraUserService.getUser();
     if (!user?.id) {
       throw new UnauthorizedException('User not authenticated');

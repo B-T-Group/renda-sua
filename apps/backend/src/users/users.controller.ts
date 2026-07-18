@@ -39,6 +39,8 @@ import {
   DEFAULT_USER_TIMEZONE,
   isValidIanaTimezone,
 } from './user-timezone.util';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const PROFILE_PICTURE_ACCEPTED_TYPES = [
@@ -150,9 +152,9 @@ export class UsersController {
   }
 
   @Get('me')
-  async getCurrentUser(@CurrentUser() auth0User: any) {
+  async getCurrentUser(@ReqContext() ctx: RequestContext, @CurrentUser() auth0User: any) {
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const country = await this.resolveUserCountry(user);
       const currency = country
         ? await this.addressesService.resolveCurrencyFromCountry(country)
@@ -182,7 +184,7 @@ export class UsersController {
           is_superuser: access.isSuperuser,
         },
         personalAccountCreated,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
         auth0User: {
           sub: auth0User.sub,
           email: auth0User.email,
@@ -235,6 +237,7 @@ export class UsersController {
   @Post('me/personas/:persona')
   @HttpCode(HttpStatus.OK)
   async addPersona(
+    @ReqContext() ctx: RequestContext,
     @Param('persona') personaParam: string,
     @Body()
     body: {
@@ -249,7 +252,7 @@ export class UsersController {
       throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
     }
     try {
-      return await this.ensurePersonaRecord(persona, body);
+      return await this.ensurePersonaRecord(persona, body, ctx);
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -263,13 +266,13 @@ export class UsersController {
 
   @Post('me/active-persona')
   @HttpCode(HttpStatus.OK)
-  async mirrorActivePersona(@Body() body: { persona: string }) {
+  async mirrorActivePersona(@ReqContext() ctx: RequestContext, @Body() body: { persona: string }) {
     const p = body?.persona?.trim().toLowerCase();
     if (!isPersonaId(p)) {
       throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
     }
     try {
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       this.assertUserHasPersona(user, p);
       await this.hasuraSystemService.executeMutation(
         `
@@ -298,7 +301,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Delete the current user account and anonymize personal data' })
   @ApiResponse({ status: 200, description: 'Account deleted' })
   @ApiResponse({ status: 409, description: 'Cannot delete (e.g. active orders)' })
-  async deleteCurrentUser(@CurrentUser() auth0User: any) {
+  async deleteCurrentUser(@ReqContext() ctx: RequestContext, @CurrentUser() auth0User: any) {
     const auth0Sub = auth0User?.sub?.trim();
     if (!auth0Sub) {
       throw new HttpException(
@@ -307,7 +310,7 @@ export class UsersController {
       );
     }
     try {
-      const userId = this.hasuraUserService.getUserId();
+      const userId = this.hasuraUserService.getUserId(ctx);
       await this.accountDeletionService.deleteAccount(userId, auth0Sub);
       return { success: true };
     } catch (error: any) {
@@ -324,6 +327,7 @@ export class UsersController {
 
   @Post('me/update')
   async updateCurrentUser(
+    @ReqContext() ctx: RequestContext,
     @Body()
     body: {
       firstName: string;
@@ -334,7 +338,7 @@ export class UsersController {
     }
   ) {
     try {
-      const currentUser = await this.hasuraUserService.getUser();
+      const currentUser = await this.hasuraUserService.getUser(ctx);
       const incomingPhone =
         body.phoneNumber !== undefined
           ? this.normalizePhoneForUpdate(body.phoneNumber)
@@ -435,11 +439,11 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Email updated' })
   @ApiResponse({ status: 400, description: 'Invalid email' })
   @ApiResponse({ status: 409, description: 'Email already in use' })
-  async updateCurrentUserEmail(@Body() body: { email?: string }) {
+  async updateCurrentUserEmail(@ReqContext() ctx: RequestContext, @Body() body: { email?: string }) {
     try {
       const email = this.normalizeEmailForUpdate(body?.email);
       this.assertValidEmailOrThrow(email);
-      const currentUser = await this.hasuraUserService.getUser();
+      const currentUser = await this.hasuraUserService.getUser(ctx);
       if (this.normalizeEmailForUpdate(currentUser.email) === email) {
         return { success: true, user: currentUser };
       }
@@ -493,7 +497,7 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Phone updated' })
   @ApiResponse({ status: 400, description: 'Invalid or missing phone, or verified number locked' })
   @ApiResponse({ status: 409, description: 'Phone number already in use by another account' })
-  async updateCurrentUserPhone(@Body() body: { phoneNumber?: string }) {
+  async updateCurrentUserPhone(@ReqContext() ctx: RequestContext, @Body() body: { phoneNumber?: string }) {
     try {
       const phone = this.normalizePhoneForUpdate(body?.phoneNumber);
       if (!phone) {
@@ -502,7 +506,7 @@ export class UsersController {
           HttpStatus.BAD_REQUEST
         );
       }
-      const currentUser = await this.hasuraUserService.getUser();
+      const currentUser = await this.hasuraUserService.getUser(ctx);
       const currentPhone = this.normalizePhoneForUpdate(currentUser.phone_number);
       const phoneChanged = phone !== currentPhone;
       if (!phoneChanged) {
@@ -540,6 +544,7 @@ export class UsersController {
 
   @Post('profile-picture/presigned-url')
   async getProfilePicturePresignedUrl(
+    @ReqContext() ctx: RequestContext,
     @Body()
     body: { contentType: string; fileName: string; fileSize?: number }
   ) {
@@ -573,7 +578,7 @@ export class UsersController {
         );
       }
 
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const ext =
         fileName.split('.').pop()?.toLowerCase() ||
         (contentType === 'image/jpeg' || contentType === 'image/jpg'
@@ -725,6 +730,7 @@ export class UsersController {
 
   @Post('profile')
   async createUserProfile(
+    @ReqContext() ctx: RequestContext,
     @Body()
     profileData: {
       firstName: string;
@@ -767,7 +773,7 @@ export class UsersController {
             success: true,
             user: result.user,
             client: result.client,
-            userId: this.hasuraUserService.getUserId(),
+            userId: this.hasuraUserService.getUserId(ctx),
           };
 
         case 'agent':
@@ -787,7 +793,7 @@ export class UsersController {
             success: true,
             user: result.user,
             agent: result.agent,
-            userId: this.hasuraUserService.getUserId(),
+            userId: this.hasuraUserService.getUserId(ctx),
           };
 
         case 'business':
@@ -811,7 +817,7 @@ export class UsersController {
             success: true,
             user: result.user,
             business: result.business,
-            userId: this.hasuraUserService.getUserId(),
+            userId: this.hasuraUserService.getUserId(ctx),
           };
 
         default:
@@ -851,6 +857,7 @@ export class UsersController {
 
   @Post()
   async createUser(
+    @ReqContext() ctx: RequestContext,
     @Body()
     userData: {
       first_name: string;
@@ -977,7 +984,7 @@ export class UsersController {
           client: inserted.client,
           agent: inserted.agent,
           business: inserted.business,
-          userId: this.hasuraUserService.getUserId(),
+          userId: this.hasuraUserService.getUserId(ctx),
         };
       }
 
@@ -991,7 +998,7 @@ export class UsersController {
       return {
         success: true,
         user,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -1044,9 +1051,10 @@ export class UsersController {
       main_interest?: 'sell_items' | 'rent_items';
       referral_agent_code?: string;
     }
-  ) {
-    const uid = this.hasuraUserService.getUserId();
-    const user = await this.hasuraUserService.getUser();
+  ,
+    ctx: RequestContext) {
+    const uid = this.hasuraUserService.getUserId(ctx);
+    const user = await this.hasuraUserService.getUser(ctx);
     if (persona === 'client') {
       if (userHasPersona(user, 'client'))
         return { success: true, client: user.client };

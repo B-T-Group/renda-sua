@@ -19,6 +19,8 @@ import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { RatingsService } from './ratings.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('ratings')
 @Controller('ratings')
@@ -141,9 +143,9 @@ export class RatingsController {
     },
   })
   @ApiResponse({ status: 404, description: 'Order or user profile not found' })
-  async getOrderRatingEligibility(@Param('orderId') orderId: string) {
+  async getOrderRatingEligibility(@ReqContext() ctx: RequestContext, @Param('orderId') orderId: string) {
     try {
-      const userId = this.hasuraUserService.getUserId();
+      const userId = this.hasuraUserService.getUserId(ctx);
       const eligibility = await this.ratingsService.getOrderRatingEligibility(
         orderId,
         userId
@@ -376,11 +378,12 @@ export class RatingsController {
     },
   })
   async createRating(
+    @ReqContext() ctx: RequestContext,
     @Body() createRatingDto: CreateRatingDto,
     @Request() req: any
   ) {
     try {
-      const userId = this.hasuraUserService.getUserId();
+      const userId = this.hasuraUserService.getUserId(ctx);
       const rating = await this.ratingsService.createRating(
         createRatingDto,
         userId

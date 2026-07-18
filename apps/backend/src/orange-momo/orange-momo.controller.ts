@@ -32,6 +32,8 @@ import {
 } from './dto/orange-momo.dto';
 import type { OrangeCollectionRequest, OrangeMomoResult } from './orange-momo.types';
 import { OrangeMomoService } from './orange-momo.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 const okSchema = {
   type: 'object',
@@ -67,7 +69,7 @@ export class OrangeMomoController {
   @ApiBody({ description: 'Collection request (same shape as MTN)' })
   @ApiResponse({ status: 200, description: 'Collection initiated' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async requestToPay(@Body() request: OrangeCollectionRequest) {
+  async requestToPay(@ReqContext() ctx: RequestContext, @Body() request: OrangeCollectionRequest) {
     try {
       this.logger.log(
         `Orange collection request received: ${JSON.stringify(request)}`
@@ -80,7 +82,7 @@ export class OrangeMomoController {
       ) {
         throw new BadRequestException('Missing required fields');
       }
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const userId = user.id;
       const result = await this.orangeMomoService.requestToPay(request, userId);
       if (!result.status) {

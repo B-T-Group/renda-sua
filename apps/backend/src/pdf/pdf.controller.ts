@@ -28,6 +28,8 @@ import {
   UPDATE_ORDER_LABEL_PRINT,
 } from '../orders/orders.queries';
 import { PdfService } from './pdf.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 const SHIPPING_LABEL_ALLOWED_STATUSES = [
   'confirmed',
@@ -124,12 +126,12 @@ export class PdfController {
       },
     },
   })
-  async generateReceipt(@Param('orderId') orderId: string) {
+  async generateReceipt(@ReqContext() ctx: RequestContext, @Param('orderId') orderId: string) {
     try {
       this.logger.log(`Generating receipt for order ${orderId}`);
 
       // Get current user
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       if (!user) {
         throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
       }
@@ -253,11 +255,12 @@ export class PdfController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getShippingLabel(
+    @ReqContext() ctx: RequestContext,
     @Param('orderId') orderId: string,
     @Query('layout') layout: '4x6' | 'a4-2up' | 'a4-4up' = '4x6',
     @Res({ passthrough: false }) res: Response
   ): Promise<void> {
-    const user = await this.hasuraUserService.getUser();
+    const user = await this.hasuraUserService.getUser(ctx);
     if (!user) {
       throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
     }

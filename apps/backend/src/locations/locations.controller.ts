@@ -31,6 +31,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
 import { LocationsService } from './locations.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 interface RequestWithUser extends Request {
   user?: { sub?: string; id?: string };
@@ -760,9 +762,9 @@ export class LocationsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'User has no agent profile' })
-  async updateMyAgentLocation(@Body() body: UpdateMyAgentLocationDto) {
-    this.ensureAuthenticatedForLocation();
-    const user = await this.hasuraUserService.getUser();
+  async updateMyAgentLocation(@ReqContext() ctx: RequestContext, @Body() body: UpdateMyAgentLocationDto) {
+    this.ensureAuthenticatedForLocation(ctx);
+    const user = await this.hasuraUserService.getUser(ctx);
     const agentId = this.requireAgentIdFromUser(user);
     const row = await this.locationsService.upsertMyAgentLocation(
       agentId,
@@ -806,6 +808,7 @@ export class LocationsController {
   @ApiResponse({ status: 403, description: 'Forbidden - not the order client' })
   @ApiResponse({ status: 404, description: 'Order not found or agent not assigned' })
   async getOrderAgentLocation(
+    @ReqContext() ctx: RequestContext,
     @Param('orderId') orderId: string,
     @Req() request: RequestWithUser
   ): Promise<{
@@ -818,7 +821,7 @@ export class LocationsController {
     };
     error?: string;
   }> {
-    const requestUserId = this.hasuraUserService.getUserId();
+    const requestUserId = this.hasuraUserService.getUserId(ctx);
     if (!requestUserId || requestUserId === 'anonymous') {
       throw new HttpException(
         { success: false, error: 'Unauthorized' },
@@ -920,8 +923,8 @@ export class LocationsController {
     }
   }
 
-  private ensureAuthenticatedForLocation(): void {
-    const userId = this.hasuraUserService.getUserId();
+  private ensureAuthenticatedForLocation(ctx: RequestContext): void {
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       throw new HttpException(
         { success: false, error: 'Unauthorized' },

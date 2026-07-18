@@ -2,6 +2,8 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from './hasura-user.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('diagnostics')
 @Controller('diagnostics/hasura')
@@ -16,9 +18,9 @@ export class HasuraDiagnosticsController {
     description:
       'Returns the decoded Hasura claims from the current user JWT token. Useful for debugging role and permission issues.',
   })
-  async getJwtClaims() {
+  async getJwtClaims(@ReqContext() ctx: RequestContext) {
     try {
-      const userId = this.hasuraUserService.user_id;
+      const userId = this.hasuraUserService.getUserId(ctx);
       const authSub = this.hasuraUserService.getAuthSubject();
 
       // Query to get user's personas

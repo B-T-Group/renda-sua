@@ -18,6 +18,7 @@ export class BusinessAdminGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
+      // Identity comes from RequestContext CLS populated by request middleware.
       const user = await this.hasuraUserService.getUser();
       if (!user?.id) {
         throw new UnauthorizedException('Unauthorized');

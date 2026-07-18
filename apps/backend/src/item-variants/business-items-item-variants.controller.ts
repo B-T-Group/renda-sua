@@ -18,6 +18,8 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateItemVariantDto } from './dto/create-item-variant.dto';
 import { ItemVariantsService } from './item-variants.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('item-variants')
 @Controller('business-items/items')
@@ -29,8 +31,8 @@ export class BusinessItemsItemVariantsController {
     private readonly itemVariantsService: ItemVariantsService
   ) {}
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -45,8 +47,8 @@ export class BusinessItemsItemVariantsController {
   @ApiOperation({ summary: 'List variants for a catalog item' })
   @ApiResponse({ status: 200, description: 'Variants returned' })
   @ApiResponse({ status: 403, description: 'No business' })
-  async listVariants(@Param('itemId') itemId: string) {
-    const businessId = await this.requireBusinessId();
+  async listVariants(@ReqContext() ctx: RequestContext, @Param('itemId') itemId: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const variants = await this.itemVariantsService.listVariantsForItem(
       businessId,
       itemId
@@ -58,10 +60,11 @@ export class BusinessItemsItemVariantsController {
   @ApiOperation({ summary: 'Create a variant for a catalog item' })
   @ApiResponse({ status: 201, description: 'Variant created' })
   async createVariant(
+    @ReqContext() ctx: RequestContext,
     @Param('itemId') itemId: string,
     @Body() dto: CreateItemVariantDto
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.itemVariantsService.createVariant(
       businessId,
       itemId,

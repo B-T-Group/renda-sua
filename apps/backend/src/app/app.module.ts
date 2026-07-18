@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { WinstonModule } from 'nest-winston';
+import { ClsModule } from 'nestjs-cls';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -13,6 +14,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { AiModule } from '../ai/ai.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuthModule } from '../auth/auth.module';
+import { setupRequestContextCls } from '../auth/request-context-cls.setup';
 import { AwsModule } from '../aws/aws.module';
 import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
 import { BrandsModule } from '../brands/brands.module';
@@ -76,6 +78,15 @@ import { AppService } from './app.service';
       cache: true,
       expandVariables: true,
       envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
+    }),
+    ClsModule.forRoot({
+      global: true,
+      middleware: {
+        mount: true,
+        setup: (cls, req) => {
+          setupRequestContextCls(cls, req);
+        },
+      },
     }),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),

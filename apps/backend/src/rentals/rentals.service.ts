@@ -300,6 +300,10 @@ function rentalPricePerDay(row: PublicRentalListingRow): number {
   return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
 }
 
+/**
+ * Singleton rental orchestration.
+ * Request identity comes from nestjs-cls via HasuraUserService (optional explicit RequestContext).
+ */
 @Injectable()
 export class RentalsService {
   private readonly logger = new Logger(RentalsService.name);

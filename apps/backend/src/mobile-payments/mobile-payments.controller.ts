@@ -27,6 +27,8 @@ import type {
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 export interface InitiatePaymentDto {
   amount: number;
@@ -121,7 +123,7 @@ export class MobilePaymentsController {
    * Initiate a mobile payment
    */
   @Post('initiate')
-  async initiatePayment(@Body() paymentRequest: InitiatePaymentDto) {
+  async initiatePayment(@ReqContext() ctx: RequestContext, @Body() paymentRequest: InitiatePaymentDto) {
     try {
       // Validate account balance if accountId is provided
       if (paymentRequest.accountId) {
@@ -301,7 +303,7 @@ export class MobilePaymentsController {
         const accountId = paymentRequest.accountId as string;
         let initiatorUserId: string | undefined;
         try {
-          const user = await this.hasuraUserService.getUser();
+          const user = await this.hasuraUserService.getUser(ctx);
           initiatorUserId = user.id;
         } catch {
           this.logger.warn('Could not get user ID for payment initiation');
@@ -365,7 +367,7 @@ export class MobilePaymentsController {
       // Get the current user's ID for MTN payments
       let userId: string | undefined;
       try {
-        const user = await this.hasuraUserService.getUser();
+        const user = await this.hasuraUserService.getUser(ctx);
         userId = user.id;
       } catch {
         // User may not be authenticated or may not exist yet

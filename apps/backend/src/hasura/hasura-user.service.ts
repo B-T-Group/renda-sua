@@ -1,14 +1,17 @@
 import {
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
   Logger,
-  Scope,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
+import { ClsService } from 'nestjs-cls';
+import {
+  REQUEST_CONTEXT_CLS_KEY,
+  emptyRequestContext,
+  type RequestContext,
+} from '../auth/request-context';
 import { Configuration } from '../config/configuration';
 import {
   Addresses,
@@ -31,8 +34,6 @@ export type MeAgent = Agents & {
   location_tracking_consent_android: AgentLocationTrackingConsent;
   location_tracking_consent_web: AgentLocationTrackingConsent;
 };
-
-const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -92,69 +93,57 @@ export interface OrderResult {
   order_items: any[];
 }
 
-@Injectable({ scope: Scope.REQUEST })
+/**
+ * Singleton Hasura gateway for user-scoped GraphQL.
+ * Auth comes from explicit RequestContext or nestjs-cls (never Nest Scope.REQUEST).
+ */
+@Injectable()
 export class HasuraUserService {
   private readonly logger = new Logger(HasuraUserService.name);
-  /** DB `users.id` from JWT `https://hasura.io/jwt/claims` → `x-hasura-user-id`. */
-  public user_id!: string;
   private readonly hasuraUrl: string;
-  private _authToken: string | null = null;
-  private readonly client: GraphQLClient;
+
   constructor(
-    @Inject(REQUEST) private readonly request: any,
     private readonly configService: ConfigService<Configuration>,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly cls: ClsService
   ) {
     const hasuraConfig = this.configService.get('hasura');
     this.hasuraUrl =
       hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
-    this._authToken = this.extractAuthToken();
-    this.user_id = this._authToken
-      ? this.extractHasuraUserIdFromToken(this._authToken)
-      : 'anonymous';
-
-    // Build headers based on whether we have a token or not
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this._authToken) {
-      headers.Authorization = `Bearer ${this._authToken}`;
-    } else {
-      // Default to anonymous role when no token is present
-      headers['X-Hasura-Role'] = 'anonymous';
-    }
-
-    this.client = new GraphQLClient(this.hasuraUrl, {
-      headers,
-    });
   }
 
-  /**
-   * Get auth token lazily (only when needed)
-   */
-  private get authToken(): string | null {
-    if (!this._authToken) {
-      this._authToken = this.extractAuthToken();
-      this.user_id = this._authToken
-        ? this.extractHasuraUserIdFromToken(this._authToken)
-        : 'anonymous';
+  /** DB `users.id` from JWT claims (CLS / explicit ctx). */
+  get user_id(): string {
+    return this.resolveContext().userId;
+  }
+
+  resolveContext(ctx?: RequestContext): RequestContext {
+    if (ctx) {
+      return ctx;
     }
-    return this._authToken;
+    try {
+      const stored = this.cls.get<RequestContext>(REQUEST_CONTEXT_CLS_KEY);
+      if (stored) {
+        return stored;
+      }
+    } catch {
+      // CLS not active (cron / tests)
+    }
+    return emptyRequestContext();
   }
 
   /**
    * Creates a GraphQL client with user's auth token
    */
-  createGraphQLClient(): any {
+  createGraphQLClient(ctx?: RequestContext): GraphQLClient {
+    const resolved = this.resolveContext(ctx);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    if (this.authToken) {
-      headers.Authorization = `Bearer ${this.authToken}`;
+    if (resolved.authToken) {
+      headers.Authorization = `Bearer ${resolved.authToken}`;
     } else {
-      // Default to anonymous role when no token is present
       headers['X-Hasura-Role'] = 'anonymous';
     }
 
@@ -166,8 +155,12 @@ export class HasuraUserService {
   /**
    * Execute a GraphQL query with user privileges
    */
-  async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
-    return this.client.request<T>(query, variables);
+  async executeQuery<T = any>(
+    query: string,
+    variables?: any,
+    ctx?: RequestContext
+  ): Promise<T> {
+    return this.createGraphQLClient(ctx).request<T>(query, variables);
   }
 
   /**
@@ -175,9 +168,10 @@ export class HasuraUserService {
    */
   async executeMutation<T = any>(
     mutation: string,
-    variables?: any
+    variables?: any,
+    ctx?: RequestContext
   ): Promise<T> {
-    return this.client.request<T>(mutation, variables);
+    return this.createGraphQLClient(ctx).request<T>(mutation, variables);
   }
 
   /**
@@ -549,57 +543,15 @@ export class HasuraUserService {
   }
 
   /**
-   * Extract auth token from request headers
-   */
-  private extractAuthToken(): string | null {
-    const authHeader = this.request?.headers?.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null; // Return null instead of throwing error
-    }
-    return authHeader.substring(7); // Remove 'Bearer ' prefix
-  }
-
-  private decodeJwtPayload(token: string): Record<string, unknown> {
-    const parts = token.split('.');
-    if (parts.length < 2) {
-      throw new Error('Invalid JWT format');
-    }
-    const json = Buffer.from(parts[1], 'base64').toString('utf8');
-    return JSON.parse(json) as Record<string, unknown>;
-  }
-
-  /**
-   * DB user id from Auth0 Action: `x-hasura-user-id` inside `https://hasura.io/jwt/claims`.
-   */
-  private extractHasuraUserIdFromToken(token: string): string {
-    try {
-      const payload = this.decodeJwtPayload(token);
-      const claims = payload[HASURA_JWT_CLAIMS_NAMESPACE] as
-        | Record<string, unknown>
-        | undefined;
-      const id =
-        claims?.['x-hasura-user-id'] ?? claims?.['X-Hasura-User-Id'];
-      if (id === undefined || id === null || String(id).trim() === '') {
-        throw new Error('Missing x-hasura-user-id in Hasura JWT claims');
-      }
-      return String(id);
-    } catch (error: any) {
-      throw new Error(
-        error?.message ||
-          'Invalid JWT token or missing Hasura user id in claims'
-      );
-    }
-  }
-
-  /**
    * Auth0 access token `sub` (for logging / correlation; not stored on `users`).
    */
-  getAuthSubject(): string {
-    if (!this._authToken) {
+  getAuthSubject(ctx?: RequestContext): string {
+    const resolved = this.resolveContext(ctx);
+    if (!resolved.authToken) {
       return 'anonymous';
     }
     try {
-      const payload = this.decodeJwtPayload(this._authToken);
+      const payload = this.decodeJwtPayload(resolved.authToken);
       const sub = payload.sub;
       if (!sub || typeof sub !== 'string') {
         throw new Error('Invalid JWT: missing sub claim');
@@ -615,28 +567,35 @@ export class HasuraUserService {
   /**
    * Same as `user_id` (from Hasura JWT claims); use for permission-aligned lookups.
    */
-  getUserId(): string {
-    return this.user_id;
+  getUserId(ctx?: RequestContext): string {
+    return this.resolveContext(ctx).userId;
   }
 
   /** Raw `X-Active-Persona` header for multi-persona REST flows. */
-  getActivePersonaHeader(): string | undefined {
-    const h = this.request?.headers;
-    if (!h) return undefined;
-    const raw = h['x-active-persona'] ?? h['X-Active-Persona'];
-    return typeof raw === 'string' ? raw : undefined;
+  getActivePersonaHeader(ctx?: RequestContext): string | undefined {
+    return this.resolveContext(ctx).activePersona;
   }
 
   /**
    * Check if the service is properly configured
    */
-  isConfigured(): boolean {
+  isConfigured(ctx?: RequestContext): boolean {
+    const resolved = this.resolveContext(ctx);
     return !!(
       this.hasuraUrl &&
-      this._authToken &&
-      this.user_id &&
-      this.user_id !== 'anonymous'
+      resolved.authToken &&
+      resolved.userId &&
+      resolved.userId !== 'anonymous'
     );
+  }
+
+  private decodeJwtPayload(token: string): Record<string, unknown> {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      throw new Error('Invalid JWT format');
+    }
+    const json = Buffer.from(parts[1], 'base64').toString('utf8');
+    return JSON.parse(json) as Record<string, unknown>;
   }
 
   /**
@@ -749,7 +708,7 @@ export class HasuraUserService {
   /**
    * Get the current user by JWT Hasura user id (`x-hasura-user-id`).
    */
-  async getUser(): Promise<
+  async getUser(ctx?: RequestContext): Promise<
     Users & {
       client?: Clients;
       agent?: MeAgent;
@@ -758,7 +717,9 @@ export class HasuraUserService {
       personas?: PersonaId[];
     }
   > {
-    if (!this.user_id || this.user_id === 'anonymous') {
+    const resolved = this.resolveContext(ctx);
+    const userId = resolved.userId;
+    if (!userId || userId === 'anonymous') {
       throw new Error(
         'No authenticated user. Please provide a valid authentication token.'
       );
@@ -766,10 +727,10 @@ export class HasuraUserService {
 
     try {
       const userData = await this.hasuraSystemService.getUserByIdWithRelations(
-        this.user_id
+        userId
       );
       if (!userData) {
-        throw new Error(`User not found for id: ${this.user_id}`);
+        throw new Error(`User not found for id: ${userId}`);
       }
       if (userData.account_status === 'deleted') {
         throw new HttpException(
@@ -808,7 +769,7 @@ export class HasuraUserService {
           user_type_id: user.user_type_id,
           personas: user.personas,
         },
-        this.getActivePersonaHeader()
+        this.getActivePersonaHeader(resolved)
       );
       const addresses = await this.hasuraSystemService.getAllUserAddresses(
         user.id,
@@ -819,7 +780,7 @@ export class HasuraUserService {
       return user;
     } catch (error: any) {
       this.logger.error('Error in getUser()', {
-        userId: this.user_id,
+        userId,
         error: error.message,
         stack: error.stack,
       });

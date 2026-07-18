@@ -20,6 +20,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { BusinessItemsService } from '../business-items/business-items.service';
 import { ItemRefinementDto } from './dto/item-refinement.dto';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -170,9 +172,10 @@ export class AiController {
     },
   })
   async getImageItemSuggestions(
+    @ReqContext() ctx: RequestContext,
     @Body() body: { imageId?: string; imageIds?: string[] }
   ) {
-    const user = await this.hasuraUserService.getUser();
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -256,8 +259,8 @@ export class AiController {
     description: 'Refinement suggestions generated successfully',
   })
   @ApiResponse({ status: 400, description: 'Item has no images or invalid body' })
-  async getItemRefinementSuggestions(@Body() body: ItemRefinementDto) {
-    const user = await this.hasuraUserService.getUser();
+  async getItemRefinementSuggestions(@ReqContext() ctx: RequestContext, @Body() body: ItemRefinementDto) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(

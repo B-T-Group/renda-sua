@@ -42,6 +42,8 @@ import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
 import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
 import { CreateLocationTransferRequestDto } from './dto/create-location-transfer-request.dto';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -284,17 +286,18 @@ export class BusinessItemsController {
   @ApiBody({ type: CreateLocationTransferRequestDto })
   @ApiResponse({ status: 201, description: 'Transfer request created' })
   async createTransferRequest(
+    @ReqContext() ctx: RequestContext,
     @Param('locationId') locationId: string,
     @Query('businessId') businessId: string | undefined,
     @Body() body: CreateLocationTransferRequestDto
   ) {
-    const ctx = await this.accessService.resolveAccess(businessId);
-    const user = await this.hasuraUserService.getUser();
+    const accessContext = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser(ctx);
     const request = await this.transferService.createRequest({
       locationId,
       toBusinessId: body.toBusinessId,
       confirmBusinessName: body.confirmBusinessName,
-      sourceBusinessId: ctx.targetBusinessId,
+      sourceBusinessId: accessContext.targetBusinessId,
       requestedByUserId: user.id,
       mode: body.mode,
       toLocationId: body.toLocationId,
@@ -360,14 +363,15 @@ export class BusinessItemsController {
   @ApiOperation({ summary: 'Cancel a pending location transfer (source or admin)' })
   @ApiResponse({ status: 200, description: 'Transfer cancelled' })
   async cancelTransferRequest(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Query('businessId') businessId?: string
   ) {
-    const ctx = await this.accessService.resolveAccess(businessId);
-    const user = await this.hasuraUserService.getUser();
+    const accessContext = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser(ctx);
     const request = await this.transferService.cancel(id, {
-      businessId: ctx.targetBusinessId,
-      isAdmin: ctx.isPlatformAdmin,
+      businessId: accessContext.targetBusinessId,
+      isAdmin: accessContext.isPlatformAdmin,
       userId: user.id,
     });
     return { success: true, data: { request } };
@@ -485,13 +489,14 @@ export class BusinessItemsController {
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiBody({ type: CreateItemFromImageDto })
   async createItemFromImage(
+    @ReqContext() ctx: RequestContext,
     @Query('businessId') businessId: string | undefined,
     @Body() body: CreateItemFromImageDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const ctx = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser(ctx);
+    const accessContext = await this.accessService.resolveAccess(businessId);
     const item = await this.businessItemsService.createItemFromImage(
-      ctx.targetBusinessId,
+      accessContext.targetBusinessId,
       body,
       user?.preferred_language ?? 'en'
     );
@@ -773,11 +778,12 @@ export class BusinessItemsController {
   @ApiResponse({ status: 400, description: 'Too many rows or invalid body' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   async csvUpload(
+    @ReqContext() ctx: RequestContext,
     @Query('businessId') businessId: string | undefined,
     @Body() body: CsvUploadRequestDto
   ) {
-    const user = await this.hasuraUserService.getUser();
-    const ctx = await this.accessService.resolveAccess(businessId);
+    const user = await this.hasuraUserService.getUser(ctx);
+    const accessContext = await this.accessService.resolveAccess(businessId);
     const userId = user?.id;
     if (!userId) {
       throw new HttpException(
@@ -809,7 +815,7 @@ export class BusinessItemsController {
     }
     const rowOffset = body?.rowOffset ?? 0;
     const data = await this.businessItemsService.processCsvRows(
-      ctx.targetBusinessId,
+      accessContext.targetBusinessId,
       userId,
       rows,
       rowOffset

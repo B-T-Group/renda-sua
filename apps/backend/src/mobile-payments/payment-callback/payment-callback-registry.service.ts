@@ -1,30 +1,32 @@
 import { Injectable, Type } from '@nestjs/common';
-import { ContextId, ModuleRef } from '@nestjs/core';
-import { OrderPaymentCallbackHandler } from '../../orders/order-payment-callback.handler';
-import { RentalPaymentCallbackHandler } from '../../rentals/rental-payment-callback.handler';
-import { TokenPaymentCallbackHandler } from '../../business-tokens/token-payment-callback.handler';
+import { ModuleRef } from '@nestjs/core';
 import type { PaymentCallbackHandler } from './payment-callback-handler.interface';
 
-const HANDLER_TYPES: Type<PaymentCallbackHandler>[] = [
-  OrderPaymentCallbackHandler,
-  RentalPaymentCallbackHandler,
-  TokenPaymentCallbackHandler,
-];
-
+/**
+ * Resolves payment callback handlers as singletons.
+ * Handler classes are required lazily to avoid circular imports at module load.
+ */
 @Injectable()
 export class PaymentCallbackRegistryService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
-  async getHandlers(contextId: ContextId): Promise<PaymentCallbackHandler[]> {
-    const handlers = await Promise.all(
-      HANDLER_TYPES.map((type) =>
-        this.moduleRef.resolve<PaymentCallbackHandler>(type, contextId, {
-          strict: false,
-        })
+  getHandlers(): PaymentCallbackHandler[] {
+    return this.handlerTypes()
+      .map((type) =>
+        this.moduleRef.get<PaymentCallbackHandler>(type, { strict: false })
       )
-    );
-    return handlers.filter((handler): handler is PaymentCallbackHandler =>
-      Boolean(handler)
-    );
+      .filter((handler): handler is PaymentCallbackHandler => Boolean(handler));
+  }
+
+  private handlerTypes(): Type<PaymentCallbackHandler>[] {
+    // Lazy requires avoid Orders ↔ Stripe ↔ MerchantLifecycle cycles at import time.
+    const { OrderPaymentCallbackHandler } = require('../../orders/order-payment-callback.handler');
+    const { RentalPaymentCallbackHandler } = require('../../rentals/rental-payment-callback.handler');
+    const { TokenPaymentCallbackHandler } = require('../../business-tokens/token-payment-callback.handler');
+    return [
+      OrderPaymentCallbackHandler,
+      RentalPaymentCallbackHandler,
+      TokenPaymentCallbackHandler,
+    ];
   }
 }

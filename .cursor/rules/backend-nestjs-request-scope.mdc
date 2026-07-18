@@ -1,0 +1,83 @@
+---
+description: Prefer singleton NestJS providers; request scope only for edge/infra context
+globs: apps/backend/src/**/*.{ts,spec.ts}
+alwaysApply: false
+---
+
+# NestJS request scope
+
+Request-scoped providers are the **exception**, not the default. Keep business logic **stateless and singleton**. Put request-specific state at the edge (controllers, guards, interceptors, middleware) or in AsyncLocalStorage / `nestjs-cls`.
+
+## Default scope
+
+Unless there is a strong, documented reason otherwise:
+
+- Controllers, services, repositories, gateways, queue processors, scheduled jobs → **singleton**
+- Never mark a service `@Scope(Scope.REQUEST)` without documenting why
+
+## When request scope is allowed
+
+Only for request-specific infrastructure state: authenticated user, tenant, locale, correlation/request ID, GraphQL DataLoaders, per-request cache.
+
+Do **not** store business state in request-scoped services.
+
+## Never inject request-scoped services into business services
+
+```ts
+// ❌ BAD — pulls the whole graph toward request scope
+@Injectable()
+export class OrderService {
+  constructor(private readonly currentUser: CurrentUserService) {}
+}
+
+// ✅ GOOD — pass context as parameters
+@Controller()
+export class OrdersController {
+  create(@CurrentUser() user: User, @Body() dto: CreateOrderDto) {
+    return this.orderService.create(user, dto);
+  }
+}
+
+@Injectable()
+export class OrderService {
+  create(user: User, dto: CreateOrderDto) { /* ... */ }
+}
+```
+
+If several values travel together, pass an explicit context object (`RequestContext` with `userId`, `tenantId?`, `requestId`) — do **not** inject a request-scoped `RequestContextService` into business services.
+
+## Prefer CLS + explicit RequestContext
+
+This backend uses **`nestjs-cls`** (`ClsModule` in `AppModule`) to store `RequestContext` (`userId`, `authToken`, `activePersona`, `requestId`) per HTTP request.
+
+- Controllers: prefer `@ReqContext() ctx: RequestContext` and pass `ctx` into `HasuraUserService` (`getUser(ctx)`, `getUserId(ctx)`, …).
+- `HasuraUserService` is a **singleton** gateway: resolve auth from explicit `ctx` or CLS — never Nest `Scope.REQUEST`.
+- Business services may call `HasuraUserService` without `ctx` when CLS is active; prefer explicit `ctx` on user-facing APIs when practical.
+- Background workers / payment callbacks: do **not** assume CLS is set; use system APIs or pass an explicit context.
+
+Still pass required identity as method parameters when that keeps the contract clear. Do **not** convert the dependency graph to Nest request scope.
+
+## Background workers
+
+Services used by BullMQ, cron, CLI, event handlers, or message consumers must **never** depend on request-scoped providers. The same business service must work from HTTP and background execution.
+
+## Dependency direction
+
+Allowed: Controller → Application Service → Domain Service → Repository.
+
+`RequestContext` may exist only at the application boundary. Never: Business Service → RequestScoped Service.
+
+## Checklist before adding request scope
+
+1. Does this service truly need request-specific state?
+2. Can the value be a method parameter instead?
+3. Would CLS solve it without request scope?
+4. Will this force singleton services into request scope?
+5. Can this still run from queues / scheduled jobs?
+6. Is the request-scoped provider small and infrastructure-focused?
+
+If any answer suggests request scope is unnecessary, keep the service singleton.
+
+## Principle
+
+Business logic must not know whether it was invoked by REST, GraphQL, queue, scheduler, CLI, or tests — only receive the required context and execute.

@@ -1,7 +1,6 @@
 import { webcrypto } from 'crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { ContextIdFactory } from '@nestjs/core';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
@@ -15,6 +14,12 @@ Object.defineProperty(globalThis, 'crypto', {
   configurable: true,
 });
 
+process.env.TWILIO_ACCOUNT_SID ||= 'test_sid';
+process.env.TWILIO_ACCOUNT_TOKEN ||= 'test_token';
+process.env.TWILIO_VERIFY_SERVICE_SID ||= 'test_verify_sid';
+process.env.COMMERCE_TOKEN_ENCRYPTION_KEY ||=
+  'test-commerce-token-encryption-key-32b';
+
 const hasuraSystemMock = {
   request: jest.fn().mockResolvedValue({}),
   executeQuery: jest.fn().mockResolvedValue({ rental_location_listings: [] }),
@@ -23,6 +28,10 @@ const hasuraSystemMock = {
 const hasuraUserMock = {
   getActivePersonaHeader: jest.fn(),
   executeQuery: jest.fn().mockResolvedValue({}),
+  getUser: jest.fn(),
+  getUserId: jest.fn().mockReturnValue('anonymous'),
+  resolveContext: jest.fn(),
+  isConfigured: jest.fn().mockReturnValue(false),
 };
 
 describe('App bootstrap (DI smoke test)', () => {
@@ -51,11 +60,17 @@ describe('App bootstrap (DI smoke test)', () => {
     expect(app.get(OrdersService)).toBeInstanceOf(OrdersService);
   });
 
-  it('registers payment callback handlers from domain modules', async () => {
+  it('registers payment callback handlers from domain modules', () => {
     const registry = app.get(PaymentCallbackRegistryService);
-    const contextId = ContextIdFactory.create();
-    const handlers = await registry.getHandlers(contextId);
+    const handlers = registry.getHandlers();
     expect(handlers.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('OrdersService and RentalsService resolve as singletons without contextId', () => {
+    const ordersA = app.get(OrdersService);
+    const ordersB = app.get(OrdersService);
+    expect(ordersA).toBe(ordersB);
+    expect(app.get(RentalsService)).toBe(app.get(RentalsService));
   });
 
   it('listPublicRentalListings uses injected InventoryItemsService without DI errors', async () => {

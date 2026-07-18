@@ -18,6 +18,8 @@ import type {
     SupportTicketStatus,
 } from './support.service';
 import { SupportService } from './support.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('Support')
 @Controller('support')
@@ -31,8 +33,8 @@ export class SupportController {
   @Post('tickets')
   @ApiOperation({ summary: 'Create a support ticket' })
   @ApiResponse({ status: 201, description: 'Ticket created' })
-  async createTicket(@Body() dto: CreateTicketDto): Promise<SupportTicket> {
-    const userId = this.hasuraUserService.getUserId();
+  async createTicket(@ReqContext() ctx: RequestContext, @Body() dto: CreateTicketDto): Promise<SupportTicket> {
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
@@ -42,8 +44,8 @@ export class SupportController {
   @Get('tickets')
   @ApiOperation({ summary: 'List my support tickets' })
   @ApiResponse({ status: 200, description: 'List of tickets' })
-  async getMyTickets(): Promise<SupportTicket[]> {
-    const userId = this.hasuraUserService.getUserId();
+  async getMyTickets(@ReqContext() ctx: RequestContext): Promise<SupportTicket[]> {
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return [];
     }
@@ -53,8 +55,8 @@ export class SupportController {
   @Get('tickets/:id')
   @ApiOperation({ summary: 'Get ticket by ID' })
   @ApiResponse({ status: 200, description: 'Ticket details' })
-  async getTicket(@Param('id') id: string): Promise<SupportTicket | null> {
-    const userId = this.hasuraUserService.getUserId();
+  async getTicket(@ReqContext() ctx: RequestContext, @Param('id') id: string): Promise<SupportTicket | null> {
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       return null;
     }
@@ -65,10 +67,11 @@ export class SupportController {
   @ApiOperation({ summary: 'Update ticket status (e.g. admin resolve)' })
   @ApiResponse({ status: 200, description: 'Ticket updated' })
   async updateTicketStatus(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: { status: SupportTicketStatus }
   ): Promise<SupportTicket> {
-    const userId = this.hasuraUserService.getUserId();
+    const userId = this.hasuraUserService.getUserId(ctx);
     if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }

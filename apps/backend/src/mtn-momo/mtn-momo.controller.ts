@@ -21,6 +21,8 @@ import type {
   RemittanceRequest,
 } from './mtn-momo.service';
 import { MtnMomoService } from './mtn-momo.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @Controller('mtn-momo')
 @Throttle({ short: { limit: 20, ttl: 60000 } })
@@ -38,7 +40,7 @@ export class MtnMomoController {
    */
   @Post('collection/request-to-pay')
   @HttpCode(HttpStatus.OK)
-  async requestToPay(@Body() request: CollectionRequest) {
+  async requestToPay(@ReqContext() ctx: RequestContext, @Body() request: CollectionRequest) {
     try {
       this.logger.log(
         `Collection request received: ${JSON.stringify(request)}`
@@ -55,7 +57,7 @@ export class MtnMomoController {
       }
 
       // Get the current user's ID from the JWT token
-      const user = await this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser(ctx);
       const userId = user.id;
 
       const result = await this.mtnMomoService.requestToPay(request, userId);

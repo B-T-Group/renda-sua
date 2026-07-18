@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { HasuraSystemService } from './hasura-system.service';
 import { HasuraUserService } from './hasura-user.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 // Note: In a real application, you would implement proper JWT authentication guards
 // For now, this is a simplified example
@@ -22,6 +24,7 @@ export class HasuraController {
 
   @Post('user/create')
   async createUser(
+    @ReqContext() ctx: RequestContext,
     @Body()
     userData: {
       email: string;
@@ -35,7 +38,7 @@ export class HasuraController {
       return {
         success: true,
         user,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
       };
     } catch (error: any) {
       return {
@@ -47,6 +50,7 @@ export class HasuraController {
 
   @Post('user/create_with_client')
   async createUserWithClient(
+    @ReqContext() ctx: RequestContext,
     @Body()
     userData: {
       email: string;
@@ -63,7 +67,7 @@ export class HasuraController {
         success: true,
         user: result.user,
         client: result.client,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
       };
     } catch (error: any) {
       return {
@@ -75,6 +79,7 @@ export class HasuraController {
 
   @Post('user/create_with_agent')
   async createUserWithAgent(
+    @ReqContext() ctx: RequestContext,
     @Body()
     data: {
       user: {
@@ -97,7 +102,7 @@ export class HasuraController {
         success: true,
         user: result.user,
         agent: result.agent,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
       };
     } catch (error: any) {
       return {
@@ -109,6 +114,7 @@ export class HasuraController {
 
   @Post('user/create_with_business')
   async createUserWithBusiness(
+    @ReqContext() ctx: RequestContext,
     @Body()
     data: {
       user: {
@@ -135,7 +141,7 @@ export class HasuraController {
         success: true,
         user: result.user,
         business: result.business,
-        userId: this.hasuraUserService.getUserId(),
+        userId: this.hasuraUserService.getUserId(ctx),
       };
     } catch (error: any) {
       return {
@@ -146,10 +152,10 @@ export class HasuraController {
   }
 
   @Get('user/status')
-  async getUserStatus() {
+  async getUserStatus(@ReqContext() ctx: RequestContext) {
     return {
-      configured: this.hasuraUserService.isConfigured(),
-      userId: this.hasuraUserService.getUserId(),
+      configured: this.hasuraUserService.isConfigured(ctx),
+      userId: this.hasuraUserService.getUserId(ctx),
     };
   }
 }

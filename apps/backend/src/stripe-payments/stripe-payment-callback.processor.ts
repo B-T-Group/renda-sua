@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { ContextIdFactory } from '@nestjs/core';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { AccountsService } from '../accounts/accounts.service';
@@ -37,11 +36,8 @@ export class StripePaymentCallbackProcessor {
     return tx.capture_method === 'manual';
   }
 
-  private async resolveHandlers(
-    req: Request
-  ): Promise<PaymentCallbackHandler[]> {
-    const contextId = ContextIdFactory.getByRequest(req);
-    return this.paymentCallbackRegistry.getHandlers(contextId);
+  private resolveHandlers(): PaymentCallbackHandler[] {
+    return this.paymentCallbackRegistry.getHandlers();
   }
 
   private toCallbackTransaction(
@@ -77,7 +73,7 @@ export class StripePaymentCallbackProcessor {
 
   async onCheckoutSessionCompleted(
     session: Stripe.Checkout.Session,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     const reference = session.client_reference_id || undefined;
     const tx = reference
@@ -107,31 +103,31 @@ export class StripePaymentCallbackProcessor {
         ? await this.stripeService.retrievePaymentIntent(paymentIntentId)
         : null;
       if (pi?.status === 'requires_capture') {
-        await this.applyAuthorized(tx, paymentIntentId, req);
+        await this.applyAuthorized(tx, paymentIntentId);
       } else if (pi?.status === 'succeeded') {
-        await this.applyCaptured(tx, paymentIntentId, req, session);
+        await this.applyCaptured(tx, paymentIntentId, session);
       }
       return;
     }
 
     if (session.payment_status !== 'paid') return;
-    await this.applyCaptured(tx, paymentIntentId, req, session);
+    await this.applyCaptured(tx, paymentIntentId, session);
   }
 
   async onPaymentIntentAmountCapturableUpdated(
     paymentIntent: Stripe.PaymentIntent,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     if (paymentIntent.status !== 'requires_capture') return;
     const tx = await this.resolveTransaction(paymentIntent);
     if (!tx || !this.isManualCapture(tx)) return;
     if (tx.status !== 'pending') return;
-    await this.applyAuthorized(tx, paymentIntent.id, req);
+    await this.applyAuthorized(tx, paymentIntent.id);
   }
 
   async onPaymentIntentSucceeded(
     paymentIntent: Stripe.PaymentIntent,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     const tx = await this.resolveTransaction(paymentIntent);
     if (!tx) {
@@ -160,12 +156,12 @@ export class StripePaymentCallbackProcessor {
       );
       return;
     }
-    await this.applyCaptured(tx, paymentIntent.id, req, undefined, paymentIntent);
+    await this.applyCaptured(tx, paymentIntent.id, undefined, paymentIntent);
   }
 
   async onPaymentIntentCanceled(
     paymentIntent: Stripe.PaymentIntent,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     const tx = await this.resolveTransaction(paymentIntent);
     if (!tx) return;
@@ -188,8 +184,7 @@ export class StripePaymentCallbackProcessor {
     }
     await this.runHandlerFailure(
       tx,
-      isExpired ? 'Payment authorization expired' : 'Payment authorization cancelled',
-      req
+      isExpired ? 'Payment authorization expired' : 'Payment authorization cancelled'
     );
   }
 
@@ -237,8 +232,7 @@ export class StripePaymentCallbackProcessor {
 
   private async applyAuthorized(
     tx: StripePaymentTransaction,
-    paymentIntentId: string | undefined,
-    req: Request
+    paymentIntentId: string | undefined
   ): Promise<void> {
     if (tx.payment_entity === 'order_cash_reconciliation') {
       return;
@@ -252,23 +246,22 @@ export class StripePaymentCallbackProcessor {
     this.logger.log(
       `stripe_payment_authorized entity=${tx.payment_entity} ref=${tx.reference} tx=${tx.id}`
     );
-    await this.runHandlerAuthorized(tx, req);
+    await this.runHandlerAuthorized(tx);
   }
 
   private async applyCaptured(
     tx: StripePaymentTransaction,
     paymentIntentId: string | undefined,
-    req: Request,
     checkoutSession?: Stripe.Checkout.Session,
     paymentIntent?: Stripe.PaymentIntent
   ): Promise<void> {
     if (tx.payment_entity === 'order_cash_reconciliation') {
-      await this.settleCashReconciliation(tx, paymentIntentId, req);
+      await this.settleCashReconciliation(tx, paymentIntentId);
       return;
     }
 
     if (tx.payment_entity === 'token') {
-      await this.finalizeTokenPaymentSuccess(tx, paymentIntentId, req);
+      await this.finalizeTokenPaymentSuccess(tx, paymentIntentId);
       return;
     }
 
@@ -286,15 +279,14 @@ export class StripePaymentCallbackProcessor {
     const updatedTx =
       (await this.databaseService.getTransactionById(tx.id)) ?? tx;
     await this.creditWalletIfNeeded(updatedTx);
-    await this.runHandlerSuccess(updatedTx, req);
+    await this.runHandlerSuccess(updatedTx);
   }
 
   private async finalizeTokenPaymentSuccess(
     tx: StripePaymentTransaction,
-    paymentIntentId: string | undefined,
-    req: Request
+    paymentIntentId: string | undefined
   ): Promise<void> {
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
     if (!handler) {
       throw new Error(
@@ -388,11 +380,10 @@ export class StripePaymentCallbackProcessor {
   }
 
   private async runHandlerAuthorized(
-    tx: StripePaymentTransaction,
-    req: Request
+    tx: StripePaymentTransaction
   ): Promise<void> {
     try {
-      const handlers = await this.resolveHandlers(req);
+      const handlers = this.resolveHandlers();
       const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
       if (handler?.onPaymentAuthorized) {
         await handler.onPaymentAuthorized(this.toCallbackTransaction(tx));
@@ -407,11 +398,10 @@ export class StripePaymentCallbackProcessor {
   }
 
   private async runHandlerSuccess(
-    tx: StripePaymentTransaction,
-    req: Request
+    tx: StripePaymentTransaction
   ): Promise<void> {
     try {
-      const handlers = await this.resolveHandlers(req);
+      const handlers = this.resolveHandlers();
       const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
       if (handler) {
         await handler.onPaymentSuccess(this.toCallbackTransaction(tx));
@@ -427,10 +417,9 @@ export class StripePaymentCallbackProcessor {
 
   private async settleCashReconciliation(
     tx: StripePaymentTransaction,
-    paymentIntentId: string | undefined,
-    req: Request
+    paymentIntentId: string | undefined
   ): Promise<void> {
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
     if (!handler) {
       this.logger.warn(
@@ -450,7 +439,7 @@ export class StripePaymentCallbackProcessor {
 
   async onPaymentFailed(
     paymentIntent: Stripe.PaymentIntent,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     const tx = await this.resolveTransaction(paymentIntent);
     if (!tx || !['pending', 'authorized', 'capture_pending'].includes(tx.status)) return;
@@ -461,12 +450,12 @@ export class StripePaymentCallbackProcessor {
       stripe_payment_intent_id: paymentIntent.id,
       error_message: message,
     });
-    await this.runHandlerFailure(tx, message, req);
+    await this.runHandlerFailure(tx, message);
   }
 
   async onSessionExpired(
     session: Stripe.Checkout.Session,
-    req: Request
+    _req?: Request
   ): Promise<void> {
     const reference = session.client_reference_id || undefined;
     const tx = reference
@@ -477,7 +466,7 @@ export class StripePaymentCallbackProcessor {
       status: 'cancelled',
       error_message: 'Checkout session expired',
     });
-    await this.runHandlerFailure(tx, 'Checkout session expired', req);
+    await this.runHandlerFailure(tx, 'Checkout session expired');
   }
 
   async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
@@ -697,11 +686,10 @@ export class StripePaymentCallbackProcessor {
 
   private async runHandlerFailure(
     tx: StripePaymentTransaction,
-    message: string,
-    req: Request
+    message: string
   ): Promise<void> {
     try {
-      const handlers = await this.resolveHandlers(req);
+      const handlers = this.resolveHandlers();
       const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
       if (handler) {
         await handler.onPaymentFailure(this.toCallbackTransaction(tx), message);

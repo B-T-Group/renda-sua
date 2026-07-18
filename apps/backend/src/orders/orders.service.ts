@@ -341,6 +341,12 @@ export interface OrderWithDetails {
   delivery_time_windows?: Array<Delivery_Time_Windows>;
 }
 
+/**
+ * Singleton order orchestration.
+ * Request identity is resolved via nestjs-cls through HasuraUserService
+ * (optional explicit RequestContext on HasuraUserService methods).
+ * Must remain usable from HTTP and payment callbacks without Nest Scope.REQUEST.
+ */
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);

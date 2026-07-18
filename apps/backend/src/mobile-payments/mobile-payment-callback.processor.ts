@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ContextIdFactory } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
 import type {
@@ -38,14 +37,13 @@ export class MobilePaymentCallbackProcessor {
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService
   ) {}
 
-  private async resolveHandlers(req: Request): Promise<PaymentCallbackHandler[]> {
-    const contextId = ContextIdFactory.getByRequest(req);
-    return this.paymentCallbackRegistry.getHandlers(contextId);
+  private resolveHandlers(): PaymentCallbackHandler[] {
+    return this.paymentCallbackRegistry.getHandlers();
   }
 
   async processMypvitCallback(
     callbackData: MyPVitCallbackDto,
-    req: Request
+    _req?: Request
   ): Promise<MypvitCallbackProcessResult> {
     const tx = await this.databaseService.getTransactionByReference(
       callbackData.merchantReferenceId
@@ -84,21 +82,17 @@ export class MobilePaymentCallbackProcessor {
       tx.payment_entity === 'order_cash_reconciliation';
 
     if (isCashRecSuccess) {
-      await this.settleCashReconciliation(tx, callbackData.transactionId, req);
+      await this.settleCashReconciliation(tx, callbackData.transactionId);
     } else if (
       callbackData.status === 'SUCCESS' &&
       tx.payment_entity === 'token'
     ) {
-      await this.finalizeTokenPaymentSuccess(
-        tx,
-        callbackData.transactionId,
-        req
-      );
+      await this.finalizeTokenPaymentSuccess(tx, callbackData.transactionId);
     } else {
       await this.applyMypvitStatusUpdate(tx, callbackData);
-      await this.applyMypvitSuccessCredit(tx, callbackData, req);
+      await this.applyMypvitSuccessCredit(tx, callbackData);
     }
-    await this.applyMypvitFailureSideEffects(tx, callbackData, req);
+    await this.applyMypvitFailureSideEffects(tx, callbackData);
 
     return {
       responseCode: callbackData.code,
@@ -108,7 +102,7 @@ export class MobilePaymentCallbackProcessor {
 
   async processFreemopayCallback(
     callbackData: FreemopayCallbackDto,
-    req: Request
+    _req?: Request
   ): Promise<FreemopayCallbackProcessResult> {
     const tx = await this.databaseService.getTransactionByTransactionId(
       callbackData.reference
@@ -138,27 +132,26 @@ export class MobilePaymentCallbackProcessor {
       tx.payment_entity === 'order_cash_reconciliation';
 
     if (isCashRecSuccess) {
-      await this.settleCashReconciliation(tx, callbackData.reference, req);
+      await this.settleCashReconciliation(tx, callbackData.reference);
     } else if (
       callbackData.status === 'SUCCESS' &&
       tx.payment_entity === 'token'
     ) {
-      await this.finalizeTokenPaymentSuccess(tx, callbackData.reference, req);
+      await this.finalizeTokenPaymentSuccess(tx, callbackData.reference);
     } else {
       await this.applyFreemopayStatusUpdate(tx, callbackData);
-      await this.applyFreemopaySuccessCredit(tx, callbackData, req);
+      await this.applyFreemopaySuccessCredit(tx, callbackData);
     }
-    await this.applyFreemopayFailureSideEffects(tx, callbackData, req);
+    await this.applyFreemopayFailureSideEffects(tx, callbackData);
 
     return { received: true, reference: callbackData.reference };
   }
 
   private async finalizeTokenPaymentSuccess(
     transaction: MobilePaymentTransaction,
-    providerTransactionId: string,
-    req: Request
+    providerTransactionId: string
   ): Promise<void> {
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(
       handlers,
       transaction.payment_entity
@@ -180,10 +173,9 @@ export class MobilePaymentCallbackProcessor {
 
   private async settleCashReconciliation(
     tx: MobilePaymentTransaction,
-    providerTransactionId: string,
-    req: Request
+    providerTransactionId: string
   ): Promise<void> {
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
     if (!handler) {
       this.logger.warn(
@@ -224,8 +216,7 @@ export class MobilePaymentCallbackProcessor {
 
   private async applyMypvitSuccessCredit(
     transaction: MobilePaymentTransaction,
-    callbackData: MyPVitCallbackDto,
-    req: Request
+    callbackData: MyPVitCallbackDto
   ): Promise<void> {
     if (
       callbackData.status !== 'SUCCESS' ||
@@ -235,7 +226,7 @@ export class MobilePaymentCallbackProcessor {
     }
 
     await this.creditWalletIfNeeded(transaction);
-    await this.runHandlerSuccess(transaction, req);
+    await this.runHandlerSuccess(transaction);
   }
 
   private async creditWalletIfNeeded(
@@ -269,11 +260,10 @@ export class MobilePaymentCallbackProcessor {
   }
 
   private async runHandlerSuccess(
-    transaction: MobilePaymentTransaction,
-    req: Request
+    transaction: MobilePaymentTransaction
   ): Promise<void> {
     try {
-      const handlers = await this.resolveHandlers(req);
+      const handlers = this.resolveHandlers();
       const handler = findPaymentCallbackHandler(
         handlers,
         transaction.payment_entity
@@ -292,13 +282,12 @@ export class MobilePaymentCallbackProcessor {
 
   private async applyMypvitFailureSideEffects(
     transaction: MobilePaymentTransaction,
-    callbackData: MyPVitCallbackDto,
-    req: Request
+    callbackData: MyPVitCallbackDto
   ): Promise<void> {
     if (callbackData.status !== 'FAILED') {
       return;
     }
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(
       handlers,
       transaction.payment_entity
@@ -328,8 +317,7 @@ export class MobilePaymentCallbackProcessor {
 
   private async applyFreemopaySuccessCredit(
     transaction: MobilePaymentTransaction,
-    callbackData: FreemopayCallbackDto,
-    req: Request
+    callbackData: FreemopayCallbackDto
   ): Promise<void> {
     if (
       callbackData.status !== 'SUCCESS' ||
@@ -339,18 +327,17 @@ export class MobilePaymentCallbackProcessor {
     }
 
     await this.creditWalletIfNeeded(transaction);
-    await this.runHandlerSuccess(transaction, req);
+    await this.runHandlerSuccess(transaction);
   }
 
   private async applyFreemopayFailureSideEffects(
     transaction: MobilePaymentTransaction,
-    callbackData: FreemopayCallbackDto,
-    req: Request
+    callbackData: FreemopayCallbackDto
   ): Promise<void> {
     if (callbackData.status !== 'FAILED') {
       return;
     }
-    const handlers = await this.resolveHandlers(req);
+    const handlers = this.resolveHandlers();
     const handler = findPaymentCallbackHandler(
       handlers,
       transaction.payment_entity

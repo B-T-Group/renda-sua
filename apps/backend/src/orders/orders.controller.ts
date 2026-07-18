@@ -42,6 +42,8 @@ import type {
   OrderStatusChangeRequest,
 } from './orders.service';
 import { OrdersService } from './orders.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 export interface UpdateOrderStatusRequest {
   status: string;
@@ -78,9 +80,10 @@ export class OrdersController {
   @ApiBody({ type: CheckoutPreflightDto })
   @ApiResponse({ status: 200, type: CheckoutPreflightResponseDto })
   async resolveCheckoutPreflight(
+    @ReqContext() ctx: RequestContext,
     @Body() dto: CheckoutPreflightDto
   ): Promise<CheckoutPreflightResponseDto> {
-    const isAuthenticated = this.hasuraUserService.isConfigured();
+    const isAuthenticated = this.hasuraUserService.isConfigured(ctx);
     return this.checkoutPreflightService.resolve(dto, isAuthenticated);
   }
 

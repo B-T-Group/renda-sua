@@ -20,6 +20,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CleanupPreviewDto } from './dto/cleanup-preview.dto';
 import { ValidateImagesDto } from './dto/validate-images.dto';
 import { ImageValidationService } from './image-validation.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('images')
 @Controller('images')
@@ -62,8 +64,8 @@ export class ImageValidationController {
   })
   @ApiResponse({ status: 400, description: 'Invalid request' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async validate(@Body() dto: ValidateImagesDto) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async validate(@ReqContext() ctx: RequestContext, @Body() dto: ValidateImagesDto) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const data = await this.imageValidationService.validateImages(
       businessId,
       dto
@@ -80,8 +82,8 @@ export class ImageValidationController {
   @ApiBody({ type: CleanupPreviewDto })
   @ApiResponse({ status: 200, description: 'Cleanup preview generated' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  async cleanupPreview(@Body() dto: CleanupPreviewDto) {
-    const user = await this.hasuraUserService.getUser();
+  async cleanupPreview(@ReqContext() ctx: RequestContext, @Body() dto: CleanupPreviewDto) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -113,8 +115,8 @@ export class ImageValidationController {
     };
   }
 
-  private async getBusinessIdOrThrow(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async getBusinessIdOrThrow(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(

@@ -19,6 +19,8 @@ import { BusinessTokensService } from '../business-tokens/business-tokens.servic
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService, CreateBusinessImageInput } from './business-images.service';
 import type { UpdateBusinessImageInput } from './business-images.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 interface BulkCreateBody {
   sub_category_id?: number | null;
@@ -44,13 +46,14 @@ export class BusinessImagesController {
   @ApiResponse({ status: 200, description: 'Images retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   async getImages(
+    @ReqContext() ctx: RequestContext,
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '20',
     @Query('sub_category_id') subCategoryId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string
   ) {
-    const businessId = await this.getBusinessIdOrThrow();
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
     const pageSizeNumber = Math.min(
       Math.max(parseInt(pageSize, 10) || 20, 1),
@@ -119,8 +122,8 @@ export class BusinessImagesController {
       required: ['images'],
     },
   })
-  async bulkCreate(@Body() body: BulkCreateBody) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async bulkCreate(@ReqContext() ctx: RequestContext, @Body() body: BulkCreateBody) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const images = body.images ?? [];
     if (!images.length) {
       throw new HttpException(
@@ -159,10 +162,11 @@ export class BusinessImagesController {
     },
   })
   async associateImageToItem(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: { item_id: string }
   ) {
-    const businessId = await this.getBusinessIdOrThrow();
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     await this.businessImagesService.associateImageToItem(
       businessId,
       id,
@@ -176,8 +180,8 @@ export class BusinessImagesController {
     summary: 'Unlink image from item (keeps row in library; item_id set null)',
   })
   @ApiResponse({ status: 200, description: 'Image disassociated successfully' })
-  async disassociateImageFromItem(@Param('id') id: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async disassociateImageFromItem(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     await this.businessImagesService.disassociateImageFromItem(
       businessId,
       id
@@ -194,8 +198,8 @@ export class BusinessImagesController {
   @ApiResponse({ status: 400, description: 'Image not linked to an item' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Image not found' })
-  async setImageAsMain(@Param('id') id: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async setImageAsMain(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const image = await this.businessImagesService.setImageAsMainForItem(
       businessId,
       id
@@ -212,8 +216,8 @@ export class BusinessImagesController {
   @ApiResponse({ status: 400, description: 'Image not linked to an item' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Image not found' })
-  async setImageAsGallery(@Param('id') id: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async setImageAsGallery(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const image = await this.businessImagesService.setImageAsGalleryForItem(
       businessId,
       id
@@ -253,10 +257,11 @@ export class BusinessImagesController {
     },
   })
   async updateImage(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: UpdateBusinessImageInput
   ) {
-    const businessId = await this.getBusinessIdOrThrow();
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const image = await this.businessImagesService.updateBusinessImage(
       businessId,
       id,
@@ -270,8 +275,8 @@ export class BusinessImagesController {
   @ApiResponse({ status: 200, description: 'Image deleted successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Image not found' })
-  async deleteImage(@Param('id') id: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async deleteImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     await this.businessImagesService.deleteBusinessImage(businessId, id);
     return { success: true };
   }
@@ -292,10 +297,11 @@ export class BusinessImagesController {
     },
   })
   async removeTag(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() body: { tag: string }
   ) {
-    const businessId = await this.getBusinessIdOrThrow();
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const tag = body?.tag?.trim();
     if (!tag) {
       throw new HttpException(
@@ -334,8 +340,8 @@ export class BusinessImagesController {
   @ApiResponse({ status: 400, description: 'Image was already cleaned with AI' })
   @ApiResponse({ status: 404, description: 'Image not found' })
   @ApiResponse({ status: 429, description: 'OpenAI rate limit exceeded' })
-  async cleanupImage(@Param('id') id: string) {
-    const user = await this.hasuraUserService.getUser();
+  async cleanupImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
@@ -375,8 +381,8 @@ export class BusinessImagesController {
   })
   @ApiResponse({ status: 200, description: 'Items retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async searchItems(@Query('q') q: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+  async searchItems(@ReqContext() ctx: RequestContext, @Query('q') q: string) {
+    const businessId = await this.getBusinessIdOrThrow(ctx);
     const results = await this.businessImagesService.searchItems(
       businessId,
       q || '',
@@ -385,8 +391,8 @@ export class BusinessImagesController {
     return { success: true, data: { items: results } };
   }
 
-  private async getBusinessIdOrThrow(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async getBusinessIdOrThrow(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(

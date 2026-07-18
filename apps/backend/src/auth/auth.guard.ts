@@ -10,7 +10,9 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
 import * as jwksClient from 'jwks-rsa';
+import { ClsService } from 'nestjs-cls';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { setupRequestContextCls } from './request-context-cls.setup';
 
 interface RequestWithUser extends Request {
   user?: any;
@@ -23,7 +25,8 @@ export class AuthGuard implements CanActivate {
 
   constructor(
     private configService: ConfigService,
-    private reflector: Reflector
+    private reflector: Reflector,
+    private readonly cls: ClsService
   ) {
     // Initialize JWKS client lazily to ensure configuration is loaded
     this.jwksClient = null as any;
@@ -69,6 +72,8 @@ export class AuthGuard implements CanActivate {
           );
           this.stripAuthorizationHeader(request);
           delete request.user;
+          // CLS was populated from the unverified Bearer before guards ran.
+          this.refreshRequestContextCls(request);
         }
       }
       return true;
@@ -93,6 +98,19 @@ export class AuthGuard implements CanActivate {
     if (!request.headers) return;
     delete request.headers.authorization;
     delete (request.headers as Record<string, unknown>)['Authorization'];
+  }
+
+  /** Rebuild CLS RequestContext after headers change (e.g. stripped bad token). */
+  private refreshRequestContextCls(request: Request): void {
+    try {
+      setupRequestContextCls(this.cls, request);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to refresh request CLS after stripping token: ${
+          error?.message || error
+        }`
+      );
+    }
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {

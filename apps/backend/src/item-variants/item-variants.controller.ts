@@ -21,6 +21,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateItemVariantImageDto } from './dto/create-item-variant-image.dto';
 import { UpdateItemVariantDto } from './dto/update-item-variant.dto';
 import { ItemVariantsService } from './item-variants.service';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 
 @ApiTags('item-variants')
 @Controller('item-variants')
@@ -32,8 +34,8 @@ export class ItemVariantsController {
     private readonly itemVariantsService: ItemVariantsService
   ) {}
 
-  private async requireBusinessId(): Promise<string> {
-    const user = await this.hasuraUserService.getUser();
+  private async requireBusinessId(ctx: RequestContext): Promise<string> {
+    const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!businessId) {
       throw new HttpException(
@@ -48,8 +50,8 @@ export class ItemVariantsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set this variant as the default for its item' })
   @ApiResponse({ status: 200, description: 'Default updated' })
-  async setDefault(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async setDefault(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.itemVariantsService.setDefaultVariant(
       businessId,
       id
@@ -61,10 +63,11 @@ export class ItemVariantsController {
   @ApiOperation({ summary: 'Add an image to a variant' })
   @ApiResponse({ status: 201, description: 'Image created' })
   async addImage(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() dto: CreateItemVariantImageDto
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.itemVariantsService.addVariantImage(
       businessId,
       id,
@@ -77,10 +80,11 @@ export class ItemVariantsController {
   @ApiOperation({ summary: 'Update a variant' })
   @ApiResponse({ status: 200, description: 'Variant updated' })
   async updateVariant(
+    @ReqContext() ctx: RequestContext,
     @Param('id') id: string,
     @Body() dto: UpdateItemVariantDto
   ) {
-    const businessId = await this.requireBusinessId();
+    const businessId = await this.requireBusinessId(ctx);
     const data = await this.itemVariantsService.updateVariant(
       businessId,
       id,
@@ -93,8 +97,8 @@ export class ItemVariantsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a variant' })
   @ApiResponse({ status: 200, description: 'Variant deleted' })
-  async deleteVariant(@Param('id') id: string) {
-    const businessId = await this.requireBusinessId();
+  async deleteVariant(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const businessId = await this.requireBusinessId(ctx);
     await this.itemVariantsService.deleteVariant(businessId, id);
     return { success: true };
   }
