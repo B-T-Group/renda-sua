@@ -9,6 +9,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { PersonaId } from '../users/persona.types';
 import { isActivePersona } from '../users/persona.util';
+import { RentalStartPinShareService } from './rental-start-pin-share.service';
 
 const ENTITY_TYPE = 'rental_booking';
 
@@ -36,6 +37,8 @@ export type RentalBookingMessage = {
   created_at: string;
   updated_at: string;
   sender_persona?: PersonaId;
+  message_type?: string;
+  structured_content?: Record<string, unknown> | null;
   user?: {
     id: string;
     email?: string;
@@ -56,7 +59,8 @@ export class RentalBookingMessagingService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly rentalStartPinShare: RentalStartPinShareService
   ) {}
 
   async getMessages(bookingId: string): Promise<RentalBookingMessage[]> {
@@ -64,7 +68,8 @@ export class RentalBookingMessagingService {
     const booking = await this.loadBooking(bookingId);
     this.assertAccess(user, booking);
     const rows = await this.fetchMessageRows(bookingId);
-    return rows.map((msg) => this.toMessage(msg, booking));
+    const viewerPersona = this.resolvePersona(user, booking);
+    return rows.map((msg) => this.toMessage(msg, booking, undefined, user.id, viewerPersona));
   }
 
   async createMessage(
@@ -253,7 +258,8 @@ export class RentalBookingMessagingService {
           }
           order_by: { created_at: desc }
         ) {
-          id user_id entity_type entity_id message created_at updated_at
+          id user_id entity_type entity_id message message_type message_payload
+          created_at updated_at
           user { id email first_name last_name }
           mentions { mentioned_user_id mentioned_persona }
         }
@@ -353,7 +359,9 @@ export class RentalBookingMessagingService {
   private toMessage(
     msg: any,
     booking: BookingMessagingRow,
-    senderPersonaOverride?: PersonaId
+    senderPersonaOverride?: PersonaId,
+    viewerUserId?: string,
+    viewerPersona?: PersonaId
   ): RentalBookingMessage {
     const senderPersona =
       senderPersonaOverride ??
@@ -364,6 +372,20 @@ export class RentalBookingMessagingService {
           (p) => p.userId === rawMention.mentioned_user_id
         )
       : undefined;
+    let structured_content: Record<string, unknown> | null = null;
+    if (
+      msg.message_type === 'RENTAL_START_PIN' &&
+      msg.message_payload &&
+      viewerUserId &&
+      (viewerPersona === 'client' || viewerPersona === 'business')
+    ) {
+      structured_content = this.rentalStartPinShare.enrichPinPayload(
+        msg.message_payload,
+        viewerUserId,
+        viewerPersona,
+        booking as any
+      );
+    }
     return {
       id: msg.id,
       user_id: msg.user_id,
@@ -374,6 +396,8 @@ export class RentalBookingMessagingService {
       updated_at: msg.updated_at,
       user: msg.user,
       sender_persona: senderPersona,
+      message_type: msg.message_type,
+      structured_content,
       mention: rawMention
         ? {
             mentionedUserId: rawMention.mentioned_user_id,

@@ -4562,6 +4562,20 @@
     "messages": {
       "title": "Messages"
     },
+    "messaging": {
+      "startPin": {
+        "title": "Start PIN",
+        "cardA11y": "Rental start PIN message",
+        "pinA11y": "Start PIN {{pin}}",
+        "maskedActive": "Start PIN shared with {{business}}",
+        "maskedInactive": "Start PIN (hidden)",
+        "sharedPlain": "Start PIN sent to {{businessName}}",
+        "sendPin": "Send start PIN",
+        "sentConfirmation": "PIN shared in booking chat. The business will be notified.",
+        "unavailable": "Start PIN is not available. Try again in a moment.",
+        "usingShared": "Using the start PIN shared by the client in chat."
+      }
+    },
     "bookingDetail": {
       "paymentPendingTitle": "Waiting for payment",
       "paymentPendingStripe": "Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.",

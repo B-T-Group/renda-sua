@@ -1,5 +1,8 @@
 import {
   ArrowBack as ArrowBackIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Close as CloseIcon,
   HelpOutline as HelpOutlineIcon,
   LocationOn as LocationOnIcon,
   Storefront as StorefrontIcon,
@@ -10,12 +13,16 @@ import {
   Alert,
   Box,
   Button,
+  ButtonBase,
   Card,
   CardContent,
   Chip,
   Container,
+  Dialog,
+  DialogContent,
   Divider,
   Grid,
+  IconButton,
   Paper,
   Stack,
   Typography,
@@ -27,6 +34,8 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
+import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import LoadingPage from '../common/LoadingPage';
 import {
   RENTAL_REQUEST_SECTION_ID,
@@ -81,15 +90,32 @@ const RentalListingGallery: React.FC<GalleryProps> = ({
   title,
   noImageLabel,
 }) => {
+  const { t } = useTranslation();
   const [idx, setIdx] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   useEffect(() => {
     setIdx(0);
   }, [listingKey]);
 
   const current = images[idx];
   const mainSrc = current?.image_url;
+  const canNavigate = images.length > 1;
+
+  const goPrev = useCallback(() => {
+    if (!canNavigate) return;
+    setIdx((i) => (i - 1 + images.length) % images.length);
+  }, [canNavigate, images.length]);
+
+  const goNext = useCallback(() => {
+    if (!canNavigate) return;
+    setIdx((i) => (i + 1) % images.length);
+  }, [canNavigate, images.length]);
+
+  const mainSwipe = useSwipeImageNavigation(goNext, goPrev, canNavigate);
+  const lightboxSwipe = useSwipeImageNavigation(goNext, goPrev, canNavigate);
 
   return (
+    <>
     <Paper
       elevation={0}
       sx={{
@@ -108,17 +134,25 @@ const RentalListingGallery: React.FC<GalleryProps> = ({
         }}
       >
         {mainSrc ? (
-          <Box
-            component="img"
-            src={mainSrc}
-            alt={current?.alt_text || title}
-            sx={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
+          <ButtonBase
+            onClick={() => setLightboxOpen(true)}
+            onTouchStart={mainSwipe.onTouchStart}
+            onTouchEnd={mainSwipe.onTouchEnd}
+            aria-label={t('items.viewImage', 'View image')}
+            sx={{ width: '100%', height: '100%', display: 'block' }}
+          >
+            <Box
+              component="img"
+              src={mainSrc}
+              alt={current?.alt_text || title}
+              sx={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          </ButtonBase>
         ) : (
           <Stack
             alignItems="center"
@@ -146,7 +180,10 @@ const RentalListingGallery: React.FC<GalleryProps> = ({
               key={im.id}
               component="button"
               type="button"
-              onClick={() => setIdx(i)}
+              onClick={() => {
+                setIdx(i);
+                setLightboxOpen(true);
+              }}
               aria-label={`${title} ${i + 1}`}
               sx={{
                 p: 0,
@@ -176,6 +213,88 @@ const RentalListingGallery: React.FC<GalleryProps> = ({
         </Box>
       )}
     </Paper>
+    <Dialog
+      open={lightboxOpen}
+      onClose={() => setLightboxOpen(false)}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{ sx: { bgcolor: 'common.black' } }}
+    >
+      <IconButton
+        aria-label={t('common.close', 'Close')}
+        onClick={() => setLightboxOpen(false)}
+        sx={{
+          position: 'absolute',
+          right: 8,
+          top: 8,
+          zIndex: 1,
+          color: 'common.white',
+        }}
+      >
+        <CloseIcon />
+      </IconButton>
+      <DialogContent sx={{ p: 0, pt: 5, bgcolor: 'common.black' }}>
+        {mainSrc ? (
+          <>
+            <ImageLightboxTapZones
+              showTapZones={canNavigate}
+              onPrevious={goPrev}
+              onNext={goNext}
+              previousLabel={t('common.previous', 'Previous')}
+              nextLabel={t('common.next', 'Next')}
+              onTouchStart={lightboxSwipe.onTouchStart}
+              onTouchEnd={lightboxSwipe.onTouchEnd}
+            >
+              <Box
+                component="img"
+                src={mainSrc}
+                alt={current?.alt_text || title}
+                sx={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  display: 'block',
+                  bgcolor: 'common.black',
+                  touchAction: 'pan-y',
+                }}
+              />
+            </ImageLightboxTapZones>
+            {canNavigate ? (
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="center"
+                spacing={2}
+                sx={{ py: 2, px: 2 }}
+              >
+                <IconButton
+                  onClick={goPrev}
+                  sx={{ color: 'common.white' }}
+                  aria-label={t('common.previous', 'Previous')}
+                >
+                  <ChevronLeftIcon />
+                </IconButton>
+                <Typography variant="body2" sx={{ color: 'grey.300' }}>
+                  {t('public.items.detail.imageCounter', '{{current}} of {{total}}', {
+                    current: idx + 1,
+                    total: images.length,
+                  })}
+                </Typography>
+                <IconButton
+                  onClick={goNext}
+                  sx={{ color: 'common.white' }}
+                  aria-label={t('common.next', 'Next')}
+                >
+                  <ChevronRightIcon />
+                </IconButton>
+              </Stack>
+            ) : null}
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

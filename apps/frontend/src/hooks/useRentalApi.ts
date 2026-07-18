@@ -667,12 +667,46 @@ export function useRentalApi() {
   );
 
   const verifyStartPin = useCallback(
-    async (bookingId: string, body: { pin?: string; overwriteCode?: string }) => {
+    async (
+      bookingId: string,
+      body: {
+        pin?: string;
+        overwriteCode?: string;
+        useLatestSharedPin?: boolean;
+        pinMessageId?: string;
+      }
+    ) => {
       const { data } = await api.post(
         `/rentals/bookings/${bookingId}/verify-start-pin`,
         body
       );
       return data as { success: boolean };
+    },
+    [api]
+  );
+
+  const shareStartPin = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(
+        `/rentals/bookings/${bookingId}/messages/start-pin`
+      );
+      return data as { success: boolean; message?: unknown };
+    },
+    [api]
+  );
+
+  const getActiveStartPin = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.get<{
+        success: boolean;
+        activePin?: {
+          messageId: string;
+          pin: string;
+          pinVersion: number;
+          sharedAt: string;
+        } | null;
+      }>(`/rentals/bookings/${bookingId}/messages/active-start-pin`);
+      return data.activePin ?? null;
     },
     [api]
   );
@@ -750,6 +784,8 @@ export function useRentalApi() {
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,
+    shareStartPin,
+    getActiveStartPin,
     generateOverwrite,
     confirmReturn,
     deleteBusinessRentalListing,

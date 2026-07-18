@@ -63,6 +63,8 @@ const RentalBookingDetailPage: React.FC = () => {
     cancelBooking,
     initiatePickupPayment,
     verifyStartPin,
+    shareStartPin,
+    getActiveStartPin,
     generateOverwrite,
     confirmReturn,
     getBookingPaymentStatus,
@@ -84,6 +86,11 @@ const RentalBookingDetailPage: React.FC = () => {
     toDateTimeLocalValue(new Date())
   );
   const [returning, setReturning] = useState(false);
+  const [sharingPin, setSharingPin] = useState(false);
+  const [sharedPin, setSharedPin] = useState<string | null>(null);
+  const [sharedPinMessageId, setSharedPinMessageId] = useState<string | null>(
+    null
+  );
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -111,6 +118,38 @@ const RentalBookingDetailPage: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) void load();
   }, [load, isAuthenticated]);
+
+  useEffect(() => {
+    if (!bookingId || !isAuthenticated || booking?.status !== 'confirmed') {
+      setSharedPin(null);
+      setSharedPinMessageId(null);
+      return;
+    }
+    if (profile?.business?.id && booking.business_id === profile.business.id) {
+      void getActiveStartPin(bookingId)
+        .then((active) => {
+          if (active?.pin) {
+            setSharedPin(active.pin);
+            setSharedPinMessageId(active.messageId);
+            setPin(active.pin);
+          } else {
+            setSharedPin(null);
+            setSharedPinMessageId(null);
+          }
+        })
+        .catch(() => {
+          setSharedPin(null);
+          setSharedPinMessageId(null);
+        });
+    }
+  }, [
+    booking?.business_id,
+    booking?.status,
+    bookingId,
+    getActiveStartPin,
+    isAuthenticated,
+    profile?.business?.id,
+  ]);
 
   useEffect(() => {
     if (!bookingId || booking?.status !== 'proposed') return;
@@ -608,21 +647,54 @@ const RentalBookingDetailPage: React.FC = () => {
                 {isClient && (booking.status === 'confirmed' || booking.status === 'reserved') ? (
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
                     {booking.status === 'confirmed' ? (
-                      <Button
-                        variant="contained"
-                        onClick={async () => {
-                          try {
-                            const r = await getStartPin(bookingId);
-                            setPinValue(r.pin);
-                            setPinModalOpen(true);
-                            setError(null);
-                          } catch (e: unknown) {
-                            setError(e instanceof Error ? e.message : 'Error');
-                          }
-                        }}
-                      >
-                        {t('rentals.showStartPin', 'Show start PIN')}
-                      </Button>
+                      <>
+                        <Button
+                          variant="contained"
+                          onClick={async () => {
+                            try {
+                              const r = await getStartPin(bookingId);
+                              setPinValue(r.pin);
+                              setPinModalOpen(true);
+                              setError(null);
+                            } catch (e: unknown) {
+                              setError(e instanceof Error ? e.message : 'Error');
+                            }
+                          }}
+                        >
+                          {t('rentals.showStartPin', 'Show start PIN')}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          disabled={sharingPin}
+                          onClick={async () => {
+                            if (!bookingId) return;
+                            setSharingPin(true);
+                            try {
+                              await shareStartPin(bookingId);
+                              setInfo(
+                                t(
+                                  'rentals.messaging.startPin.sentConfirmation',
+                                  'PIN shared in booking chat. The business will be notified.'
+                                )
+                              );
+                              setError(null);
+                            } catch (e: unknown) {
+                              setError(
+                                e instanceof Error
+                                  ? e.message
+                                  : t(
+                                      'rentals.messaging.startPin.unavailable',
+                                      'Start PIN is not available. Try again in a moment.'
+                                    )
+                              );
+                            } finally {
+                              setSharingPin(false);
+                            }
+                          }}
+                        >
+                          {t('rentals.messaging.startPin.sendPin', 'Send start PIN')}
+                        </Button>
+                      </>
                     ) : null}
                     {cancellableBeforeStart ? (
                       <Button
@@ -657,6 +729,20 @@ const RentalBookingDetailPage: React.FC = () => {
                 {isBusiness && booking.status === 'confirmed' ? (
                   <Box sx={{ mt: isClient ? 2 : 0 }}>
                     <Stack spacing={1.25}>
+                      {sharedPin ? (
+                        <Alert severity="info">
+                          {t(
+                            'rentals.messaging.startPin.usingShared',
+                            'Using the start PIN shared by the client in chat.'
+                          )}{' '}
+                          <Typography
+                            component="span"
+                            sx={{ fontFamily: 'monospace', letterSpacing: 2, fontWeight: 700 }}
+                          >
+                            {sharedPin}
+                          </Typography>
+                        </Alert>
+                      ) : null}
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <TextField
                           fullWidth
@@ -676,10 +762,17 @@ const RentalBookingDetailPage: React.FC = () => {
                           variant="contained"
                           onClick={async () => {
                             try {
-                              await verifyStartPin(bookingId, {
-                                pin: pin || undefined,
-                                overwriteCode: ow || undefined,
-                              });
+                              if (sharedPin && pin === sharedPin && !ow) {
+                                await verifyStartPin(bookingId, {
+                                  useLatestSharedPin: true,
+                                  pinMessageId: sharedPinMessageId || undefined,
+                                });
+                              } else {
+                                await verifyStartPin(bookingId, {
+                                  pin: pin || undefined,
+                                  overwriteCode: ow || undefined,
+                                });
+                              }
                               setInfo(t('rentals.started', 'Rental started'));
                               void load();
                             } catch (e: unknown) {

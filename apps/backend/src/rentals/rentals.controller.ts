@@ -35,6 +35,7 @@ import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
+import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { RentalsService } from './rentals.service';
 
 @ApiTags('rentals')
@@ -44,7 +45,8 @@ import { RentalsService } from './rentals.service';
 export class RentalsController {
   constructor(
     private readonly rentalsService: RentalsService,
-    private readonly rentalBookingMessaging: RentalBookingMessagingService
+    private readonly rentalBookingMessaging: RentalBookingMessagingService,
+    private readonly rentalStartPinShare: RentalStartPinShareService
   ) {}
 
   @Public()
@@ -543,12 +545,55 @@ export class RentalsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify start PIN or overwrite (business)' })
   @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: VerifyRentalStartPinDto })
   @ApiResponse({ status: 200, description: 'Rental started' })
   async verifyStartPin(
     @Param('id') bookingId: string,
     @Body() body: VerifyRentalStartPinDto
   ) {
     return this.rentalsService.verifyRentalStartPin(bookingId, body);
+  }
+
+  @Post('bookings/:id/messages/start-pin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Share rental start PIN in booking chat (client). Mentions the business and sends a push.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 201, description: 'PIN shared as structured message' })
+  async shareStartPin(@Param('id') bookingId: string) {
+    try {
+      const message = await this.rentalStartPinShare.shareStartPin(bookingId);
+      return { success: true, message };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('bookings/:id/messages/active-start-pin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get latest active start PIN shared in chat (business only)',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Active PIN or null' })
+  async getActiveStartPin(@Param('id') bookingId: string) {
+    try {
+      const activePin =
+        await this.rentalStartPinShare.getActiveStartPinForBusiness(bookingId);
+      return { success: true, activePin };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post('bookings/:id/start-overwrite-code')

@@ -52,6 +52,7 @@ import {
   buildMentionPushMessage,
   buildNewOrderMessagePushMessage,
   buildNewRentalBookingMessagePushMessage,
+  buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
@@ -388,6 +389,42 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendNewRentalBookingMessagePush failed for booking ${params.bookingNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendRentalStartPinSharedPush(params: {
+    recipientUserId: string;
+    bookingId: string;
+    bookingNumber: string;
+    senderName: string;
+    messageId?: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildRentalStartPinSharedPushMessage({
+      bookingNumber: params.bookingNumber,
+      senderName: params.senderName,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/rentals/bookings/${params.bookingId}`,
+        bookingId: params.bookingId,
+        rentalBookingId: params.bookingId,
+        bookingNumber: params.bookingNumber,
+        messageId: params.messageId,
+        type: 'rental_start_pin_shared',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendRentalStartPinSharedPush failed for booking ${params.bookingNumber}: ${
           error?.message ?? String(error)
         }`
       );

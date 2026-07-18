@@ -4,6 +4,7 @@ import type { MessagingOrder } from '../messaging.types';
 export const MESSAGE_TYPES = [
   'TEXT',
   'DELIVERY_PIN',
+  'RENTAL_START_PIN',
   'SYSTEM',
   'PAYMENT',
   'LOCATION',

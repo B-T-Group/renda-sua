@@ -338,7 +338,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                               />
                             </Box>
                           )}
-                          {orderMsg?.message_type === 'DELIVERY_PIN' && orderMsg ? (
+                          {orderMsg &&
+                          (orderMsg.message_type === 'DELIVERY_PIN' ||
+                            orderMsg.message_type === 'RENTAL_START_PIN') ? (
                             <MessageRenderer message={orderMsg} compact={compact} />
                           ) : (
                           <Typography
@@ -515,7 +517,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                         />
                       </Box>
                     )}
-                    {orderMsg?.message_type === 'DELIVERY_PIN' && orderMsg ? (
+                    {orderMsg &&
+                    (orderMsg.message_type === 'DELIVERY_PIN' ||
+                      orderMsg.message_type === 'RENTAL_START_PIN') ? (
                       <MessageRenderer message={orderMsg} />
                     ) : (
                     <Typography

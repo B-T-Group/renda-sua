@@ -36,6 +36,7 @@ import {
   RentalPricingSnapshotDto,
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
+import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
 import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
@@ -321,7 +322,8 @@ export class RentalsService {
     private readonly stripePaymentsDatabaseService: StripePaymentsDatabaseService,
     private readonly stripeService: StripeService,
     private readonly stripeCaptureService: StripeCaptureService,
-    private readonly rentalListingAiReviewService: RentalListingAiReviewService
+    private readonly rentalListingAiReviewService: RentalListingAiReviewService,
+    private readonly rentalStartPinShare: RentalStartPinShareService
   ) {}
 
   async listPublicRentalListings(
@@ -2479,15 +2481,33 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('Invalid booking status', HttpStatus.BAD_REQUEST);
     }
-    const hasPin = !!body.pin?.trim();
     const hasOw = !!body.overwriteCode?.trim();
+    let pin = body.pin?.trim() || '';
+    if (!hasOw && !pin && (body.useLatestSharedPin || body.pinMessageId)) {
+      const shared = await this.rentalStartPinShare.resolvePinForVerify(
+        bookingId,
+        user.id,
+        {
+          useLatestSharedPin: body.useLatestSharedPin,
+          pinMessageId: body.pinMessageId,
+        }
+      );
+      if (!shared) {
+        throw new HttpException(
+          'No active shared start PIN found in chat',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      pin = shared;
+    }
+    const hasPin = !!pin;
     if (!hasPin && !hasOw) {
       throw new HttpException('pin or overwriteCode required', HttpStatus.BAD_REQUEST);
     }
     if (hasOw) {
       await this.verifyOverwrite(bookingId, booking, body.overwriteCode!.trim());
     } else {
-      await this.verifyPinAttempt(bookingId, booking, body.pin!.trim());
+      await this.verifyPinAttempt(bookingId, booking, pin);
     }
     const now = new Date().toISOString();
     await this.patchBooking(bookingId, {

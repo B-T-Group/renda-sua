@@ -4299,6 +4299,20 @@
     "messages": {
       "title": "Messages"
     },
+    "messaging": {
+      "startPin": {
+        "title": "Code PIN de démarrage",
+        "cardA11y": "Message du code PIN de démarrage",
+        "pinA11y": "Code PIN {{pin}}",
+        "maskedActive": "Code PIN partagé avec {{business}}",
+        "maskedInactive": "Code PIN (masqué)",
+        "sharedPlain": "Code PIN envoyé à {{businessName}}",
+        "sendPin": "Envoyer le code PIN",
+        "sentConfirmation": "Code PIN partagé dans la discussion. Le commerçant sera notifié.",
+        "unavailable": "Le code PIN n’est pas disponible. Réessayez dans un moment.",
+        "usingShared": "Utilisation du code PIN partagé par le client dans la discussion."
+      }
+    },
     "bookingDetail": {
       "paymentPendingTitle": "En attente de paiement",
       "paymentPendingStripe": "Finalisez le paiement par carte sur Stripe Checkout pour confirmer cette réservation. Utilisez Réessayer le paiement si vous avez fermé la page de paiement.",

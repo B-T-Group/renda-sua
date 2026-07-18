@@ -107,6 +107,27 @@ export function buildNewRentalBookingMessagePushMessage(params: {
   };
 }
 
+export function buildRentalStartPinSharedPushMessage(params: {
+  bookingNumber: string;
+  senderName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const sender =
+    params.senderName?.trim() || (locale === 'fr' ? 'le client' : 'the client');
+  const ref = params.bookingNumber?.trim() || '';
+  if (locale === 'fr') {
+    return {
+      title: ref ? `Code PIN · Location ${ref}` : 'Code PIN · Location',
+      body: `${sender} a partagé le code PIN de démarrage`,
+    };
+  }
+  return {
+    title: ref ? `Start PIN · Rental ${ref}` : 'Start PIN · Rental',
+    body: `${sender} shared the rental start PIN`,
+  };
+}
+
 export function buildBusinessOrderCreatedPushMessage(params: {
   orderNumber: string;
   clientName: string;
