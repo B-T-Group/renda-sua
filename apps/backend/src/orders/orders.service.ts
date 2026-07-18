@@ -6458,9 +6458,13 @@ export class OrdersService {
         HttpStatus.PAYMENT_REQUIRED
       );
     }
-    if (result.captured) {
-      await this.finalizeStripeCapturedOrderPayment(order.order_number);
+    if (!result.captured) {
+      throw new HttpException(
+        'Payment capture is still processing; confirm pickup again shortly',
+        HttpStatus.PAYMENT_REQUIRED
+      );
     }
+    await this.finalizeStripeCapturedOrderPayment(order.order_number);
   }
 
   private async finalizeStripeCapturedOrderPayment(

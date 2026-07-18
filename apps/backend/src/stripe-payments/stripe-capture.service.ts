@@ -115,7 +115,7 @@ export class StripeCaptureService {
     if (!tx?.account_id || tx.transaction_type !== 'PAYMENT') {
       return tx?.account_id ?? null;
     }
-    const result = await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerTransactionIfMissing({
       accountId: tx.account_id,
       amount: tx.amount,
       transactionType: 'deposit',

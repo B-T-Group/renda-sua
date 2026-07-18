@@ -365,11 +365,12 @@ export class StripePaymentCallbackProcessor {
     if (
       !tx.account_id ||
       tx.transaction_type !== 'PAYMENT' ||
-      tx.payment_entity === 'token'
+      tx.payment_entity === 'token' ||
+      (tx.payment_entity === 'rental_booking' && this.isManualCapture(tx))
     ) {
       return;
     }
-    const result = await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerTransactionIfMissing({
       accountId: tx.account_id,
       amount: tx.amount,
       transactionType: 'deposit',

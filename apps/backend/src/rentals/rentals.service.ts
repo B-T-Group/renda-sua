@@ -2306,7 +2306,11 @@ export class RentalsService {
       return;
     }
     const booking = await this.fetchBookingByBookingNumber(bookingNumber);
-    if (!booking || booking.status !== 'proposed') {
+    if (!booking) {
+      return;
+    }
+    if (booking.status !== 'proposed') {
+      await this.cancelStripeAuthorizationIfAny(booking);
       return;
     }
     const clientUserId = booking.client?.user_id as string | undefined;
@@ -2620,6 +2624,12 @@ export class RentalsService {
         HttpStatus.BAD_GATEWAY
       );
     }
+    if (!capture.captured) {
+      throw new HttpException(
+        'Stripe capture is still processing',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
     await this.creditClientWalletForStripeCapture(booking, charge);
     await this.registerRentalProceedsLedger(booking, charge, 'Stripe capture');
     await this.patchBooking(booking.id, {
@@ -2691,20 +2701,22 @@ export class RentalsService {
     if (!businessAccount?.id) {
       throw new HttpException('Business account missing', HttpStatus.BAD_REQUEST);
     }
-    await this.accountsService.registerTransaction({
+    const payment = await this.accountsService.registerTransactionIfMissing({
       accountId: clientAccount.id,
       amount,
       transactionType: 'payment',
       memo: `Rental ${label} ${booking.id}`,
       referenceId: booking.id,
     });
-    await this.accountsService.registerTransaction({
+    this.assertLedgerTransaction(payment, `${label} client payment`);
+    const proceeds = await this.accountsService.registerTransactionIfMissing({
       accountId: businessAccount.id,
       amount,
       transactionType: 'deposit',
       memo: `Rental ${label} proceeds ${booking.id}`,
       referenceId: booking.id,
     });
+    this.assertLedgerTransaction(proceeds, `${label} business proceeds`);
   }
 
   /** Stripe capture credits the client wallet first so payment + proceeds net to zero. */
@@ -2716,13 +2728,25 @@ export class RentalsService {
       booking.client.user_id,
       booking.currency
     );
-    await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerTransactionIfMissing({
       accountId: clientAccount.id,
       amount,
       transactionType: 'deposit',
       memo: `Stripe rental capture ${booking.id}`,
       referenceId: booking.id,
     });
+    this.assertLedgerTransaction(result, 'Stripe rental wallet credit');
+  }
+
+  private assertLedgerTransaction(
+    result: { success: boolean; error?: string },
+    label: string
+  ): void {
+    if (result.success) return;
+    throw new HttpException(
+      `${label} failed: ${result.error || 'ledger error'}`,
+      HttpStatus.BAD_GATEWAY
+    );
   }
 
   /** Push a mobile-money request for outstanding overtime at return. */

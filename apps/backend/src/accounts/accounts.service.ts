@@ -165,6 +165,32 @@ export class AccountsService {
     }
   }
 
+  async registerTransactionIfMissing(
+    request: TransactionRequest & { referenceId: string }
+  ): Promise<TransactionResult> {
+    const exists = await this.hasTransactionForReference(request);
+    return exists ? { success: true } : this.registerTransaction(request);
+  }
+
+  private async hasTransactionForReference(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'transactionType' | 'referenceId'
+    >
+  ): Promise<boolean> {
+    const query = `
+      query HasAccountTransaction($accountId: uuid!, $transactionType: transaction_type_enum!, $referenceId: uuid!) {
+        account_transactions(where: {
+          account_id: { _eq: $accountId }
+          transaction_type: { _eq: $transactionType }
+          reference_id: { _eq: $referenceId }
+        }, limit: 1) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, request);
+    return Boolean(result.account_transactions?.[0]?.id);
+  }
+
   /**
    * Determine if transaction is credit/debit and calculate balance updates
    */

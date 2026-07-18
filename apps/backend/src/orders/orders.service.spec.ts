@@ -570,6 +570,27 @@ describe('OrdersService', () => {
       processSpy.mockRestore();
     });
 
+    it('does not hand off an order while Stripe capture is processing', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...assignedOrder,
+          payment_timing: 'pay_now',
+          payment_source: 'credit_card',
+          payment_status: 'authorized',
+        },
+      });
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: false,
+      });
+
+      await expect(
+        service.pickUpOrder({ orderId: 'order-123' })
+      ).rejects.toMatchObject({ status: HttpStatus.PAYMENT_REQUIRED });
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
     it('should throw error if user is not an agent', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
 
