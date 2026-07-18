@@ -247,6 +247,8 @@ export interface TopInventoryStoreRow {
   business_location_id: string;
   business_id: string;
   name: string; // location name
+  /** City from the location address, when available. */
+  city: string | null;
   logo_url: string | null;
   item_count: number;
   is_verified: boolean;
@@ -1018,6 +1020,7 @@ export class InventoryItemsService {
         id: string;
         business_id: string;
         name: string;
+        city: string | null;
         is_verified: boolean;
         can_accept_orders: boolean;
         is_storefront_visible: boolean;
@@ -1041,6 +1044,7 @@ export class InventoryItemsService {
             is_storefront_visible
           }
           address {
+            city
             latitude
             longitude
           }
@@ -1058,7 +1062,11 @@ export class InventoryItemsService {
         can_accept_orders?: boolean;
         is_storefront_visible?: boolean;
       } | null;
-      address?: { latitude?: number | null; longitude?: number | null } | null;
+      address?: {
+        city?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      } | null;
     }> = res.business_locations ?? [];
     return new Map(
       rows.map((loc) => [
@@ -1067,6 +1075,7 @@ export class InventoryItemsService {
           id: loc.id,
           business_id: loc.business_id,
           name: loc.name,
+          city: loc.address?.city?.trim() || null,
           is_verified: loc.business?.is_verified === true,
           can_accept_orders: loc.business?.can_accept_orders === true,
           is_storefront_visible: loc.business?.is_storefront_visible === true,
@@ -1110,6 +1119,7 @@ export class InventoryItemsService {
       {
         business_id: string;
         name: string;
+        city: string | null;
         logo_url: string | null;
         is_verified: boolean;
         can_accept_orders: boolean;
@@ -1150,6 +1160,7 @@ export class InventoryItemsService {
         business_location_id: id,
         business_id: loc?.business_id ?? '',
         name: loc?.name ?? '',
+        city: loc?.city ?? null,
         logo_url: loc?.logo_url ?? null,
         item_count,
         is_verified: loc?.is_verified === true,
@@ -1275,6 +1286,7 @@ export class InventoryItemsService {
       business_location_id: locationId,
       business_id: loc.business_id,
       name: loc.name,
+      city: loc.city,
       logo_url: loc.logo_url,
       item_count,
       is_verified: loc.is_verified,

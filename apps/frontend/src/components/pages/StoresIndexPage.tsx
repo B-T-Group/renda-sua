@@ -81,7 +81,22 @@ const StoresIndexPage: React.FC = () => {
             ))
           : stores.map((store) => {
               const name = store.name?.trim() || t('stores.unnamed', 'Store');
+              const city = store.city?.trim() || null;
               const palette = storeAvatarPalette(name);
+              const itemPhrase = t('stores.itemCount', '{{count}} items', {
+                count: store.item_count,
+              });
+              let meta = itemPhrase;
+              if (
+                store.distance_meters != null &&
+                Number.isFinite(store.distance_meters)
+              ) {
+                const km =
+                  store.distance_meters < 1000
+                    ? (store.distance_meters / 1000).toFixed(1)
+                    : Math.round(store.distance_meters / 1000).toString();
+                meta = `${t('stores.approxKm', '~{{km}} km', { km })} · ${itemPhrase}`;
+              }
               return (
                 <ButtonBase
                   key={store.business_location_id}
@@ -136,10 +151,17 @@ const StoresIndexPage: React.FC = () => {
                       <Typography fontWeight={700} noWrap>
                         {name}
                       </Typography>
+                      {city ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          noWrap
+                        >
+                          {city}
+                        </Typography>
+                      ) : null}
                       <Typography variant="body2" color="text.secondary">
-                        {t('stores.itemCount', '{{count}} items', {
-                          count: store.item_count,
-                        })}
+                        {meta}
                       </Typography>
                     </Box>
                   </Paper>

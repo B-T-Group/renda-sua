@@ -24,13 +24,15 @@ function StorePill({
   store,
   onSelect,
   unnamedLabel,
-  subtitle,
+  cityLabel,
+  metaLabel,
   openingSoonLabel,
 }: {
   store: CatalogStore;
   onSelect: () => void;
   unnamedLabel: string;
-  subtitle: string;
+  cityLabel: string | null;
+  metaLabel: string;
   openingSoonLabel: string;
 }) {
   const theme = useTheme();
@@ -96,11 +98,20 @@ function StorePill({
         <Typography variant="body2" fontWeight={700} noWrap>
           {name}
         </Typography>
+        {cityLabel ? (
+          <Typography
+            variant="caption"
+            sx={{ display: 'block', mt: 0.15, color: 'text.secondary' }}
+            noWrap
+          >
+            {cityLabel}
+          </Typography>
+        ) : null}
         <Typography
           variant="caption"
           sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}
         >
-          {subtitle}
+          {metaLabel}
         </Typography>
         {openingSoon ? (
           <Typography
@@ -129,7 +140,7 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
   const itemCountLabel = (n: number) =>
     t('stores.itemCount', '{{count}} items', { count: n });
 
-  const subtitleFor = (store: CatalogStore) => {
+  const metaFor = (store: CatalogStore) => {
     const itemPhrase = itemCountLabel(store.item_count);
     if (
       store.distance_meters != null &&
@@ -212,7 +223,8 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
                 store={store}
                 onSelect={() => onStoreClick(store.business_location_id)}
                 unnamedLabel={t('stores.unnamed', 'Store')}
-                subtitle={subtitleFor(store)}
+                cityLabel={store.city?.trim() || null}
+                metaLabel={metaFor(store)}
                 openingSoonLabel={t(
                   'business.lifecycle.openingSoonBadge',
                   'Opening Soon'

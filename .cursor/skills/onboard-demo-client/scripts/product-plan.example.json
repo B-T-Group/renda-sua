@@ -1,0 +1,31 @@
+{
+  "sourceUrl": "https://example-merchant.com/shop",
+  "merchantName": "Example Merchant",
+  "location": {
+    "name": "Example Merchant — Main",
+    "phone": null,
+    "email": null,
+    "location_type": "store",
+    "is_primary": false,
+    "address": {
+      "address_line_1": "123 Demo Street",
+      "city": "Douala",
+      "state": "Littoral",
+      "postal_code": null
+    }
+  },
+  "products": [
+    {
+      "name": "Sample Product",
+      "description": "Short real description from the page",
+      "price": 5000,
+      "categoryName": "Grocery",
+      "subCategoryName": "Snacks",
+      "brandName": null,
+      "imageSourceUrl": "https://example-merchant.com/images/sample.jpg",
+      "localImagePath": null,
+      "imageGenerated": false,
+      "inventoryQuantity": 20
+    }
+  ]
+}
