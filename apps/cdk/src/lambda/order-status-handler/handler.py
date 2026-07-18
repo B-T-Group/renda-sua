@@ -156,6 +156,18 @@ def ready_for_pickup_handler(
         "Processing ready_for_pickup status - creating pending notification record",
         order_id=order_id,
     )
+
+    if getattr(order, "fulfillment_method", None) == "pickup":
+        log_info(
+            "Skipping agent proximity notification for store pickup order",
+            order_id=order_id,
+        )
+        return {
+            "success": True,
+            "message": "Store pickup order — no agent proximity notification",
+            "order_id": order_id,
+            "notifications_sent": 0,
+        }
     
     # Check if business location has coordinates
     address = order.business_location.address

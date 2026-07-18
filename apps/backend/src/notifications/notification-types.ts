@@ -41,6 +41,10 @@ export interface NotificationData {
   clientPreferredLanguage?: string;
   businessPreferredLanguage?: string;
   agentPreferredLanguage?: string;
+  /** delivery | pickup — drives ready-for-pickup copy */
+  fulfillmentMethod?: 'delivery' | 'pickup' | string | null;
+  /** pay_now | pay_at_delivery | pay_at_pickup */
+  paymentTiming?: string | null;
 }
 
 export interface RentalPeriodEndedEmailPayload {

@@ -2,6 +2,10 @@ import { Key, Send } from '@mui/icons-material';
 import {
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Link,
   Stack,
   Typography,
@@ -14,6 +18,8 @@ const RESEND_COOLDOWN_MS = 60_000;
 
 export interface ClientDeliveryPinButtonProps {
   orderId: string;
+  /** `send` posts PIN to agent chat; `show` displays PIN for store pickup. */
+  displayMode?: 'send' | 'show';
   fullWidth?: boolean;
   size?: 'large' | 'medium' | 'small';
   variant?: 'contained' | 'outlined';
@@ -26,6 +32,7 @@ export interface ClientDeliveryPinButtonProps {
 
 export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = ({
   orderId,
+  displayMode = 'send',
   fullWidth,
   size = 'large',
   variant = 'contained',
@@ -33,10 +40,12 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
   onSent,
 }) => {
   const { t } = useTranslation();
-  const { sendDeliveryPin } = useBackendOrders();
+  const { sendDeliveryPin, getDeliveryPin } = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [sentAt, setSentAt] = useState<number | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [pinValue, setPinValue] = useState<string | null>(null);
 
   const startCooldown = useCallback(() => {
     const now = Date.now();
@@ -52,6 +61,27 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
       }
     }, 1000);
   }, []);
+
+  const handleShowPin = async () => {
+    setLoading(true);
+    try {
+      const result = await getDeliveryPin(orderId);
+      setPinValue(result.pin);
+      setPinDialogOpen(true);
+      onSent?.();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'orders.deliveryPin.unavailable',
+              'Delivery PIN is not available. If the order was just paid, try again in a moment.'
+            );
+      onShowNotification?.(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSendDeliveryPin = async () => {
     setLoading(true);
@@ -80,6 +110,70 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
     }
   };
 
+  if (displayMode === 'show') {
+    return (
+      <>
+        <Button
+          variant={variant}
+          color="primary"
+          size={size}
+          onClick={() => void handleShowPin()}
+          disabled={loading}
+          fullWidth={fullWidth}
+          startIcon={
+            loading ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              <Key />
+            )
+          }
+          sx={{
+            py: size === 'large' ? 1.5 : undefined,
+            fontWeight: 600,
+            boxShadow: variant === 'contained' ? 2 : undefined,
+          }}
+          aria-label={t(
+            'orders.deliveryPin.showPickupA11y',
+            'Show pickup PIN for the seller'
+          )}
+          aria-busy={loading}
+        >
+          {t('orders.deliveryPin.showPickupPin', 'Show pickup PIN')}
+        </Button>
+        <Dialog
+          open={pinDialogOpen}
+          onClose={() => setPinDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>
+            {t('orders.deliveryPin.pickupTitle', 'Pickup PIN')}
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t(
+                'orders.deliveryPin.shareWithSeller',
+                'Show this PIN to the seller so they can confirm your pickup.'
+              )}
+            </Typography>
+            <Typography
+              variant="h3"
+              align="center"
+              sx={{ letterSpacing: 8, fontFamily: 'monospace', fontWeight: 700 }}
+            >
+              {pinValue}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPinDialogOpen(false)}>
+              {t('common.close', 'Close')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
+    );
+  }
+
   const cooldownActive = cooldownRemaining > 0;
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
 
@@ -89,7 +183,7 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
         variant={variant}
         color="primary"
         size={size}
-        onClick={handleSendDeliveryPin}
+        onClick={() => void handleSendDeliveryPin()}
         disabled={loading}
         fullWidth={fullWidth}
         startIcon={
@@ -135,7 +229,7 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
           component="button"
           type="button"
           variant="caption"
-          onClick={handleSendDeliveryPin}
+          onClick={() => void handleSendDeliveryPin()}
           disabled={loading}
           sx={{ alignSelf: 'flex-start' }}
         >

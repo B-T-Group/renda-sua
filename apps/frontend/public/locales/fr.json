@@ -3332,6 +3332,7 @@
       "confirmPickup": "Confirmer le retrait",
       "collectPickupPayment": "Encaisser au retrait",
       "sendPin": "Envoyer le code PIN",
+      "showPickupPin": "Afficher le PIN de retrait",
       "complete": "Terminer la commande",
       "rate": "Noter la commande",
       "openRefunds": "Gérer le remboursement",
@@ -3446,8 +3447,12 @@
     },
     "deliveryPin": {
       "title": "PIN de livraison",
+      "pickupTitle": "PIN de retrait",
       "viewPin": "Voir le PIN de livraison",
       "shareWithAgent": "Communiquez ce PIN à votre agent de livraison. Il le saisira pour finaliser la livraison.",
+      "shareWithSeller": "Montrez ce PIN au vendeur pour qu'il puisse confirmer votre retrait.",
+      "showPickupPin": "Afficher le PIN de retrait",
+      "showPickupA11y": "Afficher le PIN de retrait pour le vendeur",
       "unavailable": "Le PIN de livraison n'est plus disponible (déjà consulté ou expiré)."
     },
     "messaging": {
@@ -5065,6 +5070,10 @@
     "taxCalculatedAtCheckout": "Calculée au paiement",
     "proceedToCheckout": "Passer à la Caisse",
     "addToCart": "Ajouter au Panier",
+    "addMore": "Ajouter encore",
+    "inCart": "Dans le panier",
+    "inCartCount": "Dans le panier ({{count}})",
+    "inCartA11y": "Dans le panier, quantité {{count}}. Ajouter encore",
     "buyNow": "Acheter Maintenant",
     "removeItem": "Supprimer l'Article",
     "updateQuantity": "Mettre à Jour la Quantité",

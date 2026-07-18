@@ -828,7 +828,10 @@ export const useBackendOrders = () => {
     });
   };
 
-  const confirmClientPickup = async (orderId: string): Promise<any> => {
+  const confirmClientPickup = async (
+    orderId: string,
+    pin: string
+  ): Promise<any> => {
     if (!apiClient) {
       throw new Error(
         'API client not available. Please ensure you are authenticated.'
@@ -839,7 +842,7 @@ export const useBackendOrders = () => {
       try {
         const response = await apiClient.post(
           `/orders/${orderId}/confirm-pickup`,
-          {}
+          { pin }
         );
         return response.data;
       } catch (err: any) {

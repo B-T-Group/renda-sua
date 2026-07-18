@@ -2,6 +2,7 @@ import {
   Build,
   Business,
   Category,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Palette,
@@ -32,6 +33,7 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../../contexts/CartContext';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
@@ -99,6 +101,13 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { getListingQuantityInCart } = useCart();
+  const inCartQuantity = getListingQuantityInCart(inventory.id);
+  const inCart = inCartQuantity > 0;
+  const inCartLabel =
+    inCartQuantity > 1
+      ? t('cart.inCartCount', 'In cart ({{count}})', { count: inCartQuantity })
+      : t('cart.inCart', 'In cart');
 
   const business = inventory.business_location.business;
   const merchantCanAcceptOrders =
@@ -218,6 +227,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const resolvedOrderButtonText = orderButtonText ?? t('common.orderNow', 'Order now');
   const resolvedAddToCartButtonText = addToCartButtonText ?? t('cart.addToCart', 'Add to cart');
   const resolvedBuyNowButtonText = buyNowButtonText ?? t('cart.buyNow', 'Buy now');
+  const resolvedAddToCartLabel = inCart
+    ? t('cart.addMore', 'Add more')
+    : resolvedAddToCartButtonText;
 
   const checkoutPriceText = hasDealPrices
     ? formatCurrency(
@@ -1009,12 +1021,30 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 width: '100%',
               }}
             >
+              {inCart ? (
+                <Chip
+                  icon={<CheckCircle sx={{ fontSize: '16px !important' }} />}
+                  label={inCartLabel}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ alignSelf: 'flex-start', height: 24 }}
+                />
+              ) : null}
               <Button
-                variant="outlined"
+                variant={inCart ? 'contained' : 'outlined'}
+                color="primary"
                 startIcon={<ShoppingCart />}
                 onClick={() => onAddToCart(inventory)}
                 size="small"
                 fullWidth
+                aria-label={
+                  inCart
+                    ? t('cart.inCartA11y', 'In cart, quantity {{count}}. Add more', {
+                        count: inCartQuantity,
+                      })
+                    : resolvedAddToCartButtonText
+                }
                 sx={{
                   minHeight: '36px',
                   whiteSpace: 'nowrap',
@@ -1022,7 +1052,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   overflow: 'hidden',
                 }}
               >
-                {resolvedAddToCartButtonText}
+                {resolvedAddToCartLabel}
               </Button>
               {!merchantCanAcceptOrders ? (
                 <Button variant="outlined" disabled size="small" fullWidth>

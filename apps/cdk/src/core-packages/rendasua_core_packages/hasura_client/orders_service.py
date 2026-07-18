@@ -34,6 +34,8 @@ def get_order_with_location(
         id
         order_number
         current_status
+        fulfillment_method
+        payment_timing
         business_id
         business_location_id
         client_id
@@ -161,6 +163,8 @@ def get_order_with_location(
             id=order_data["id"],
             order_number=order_data["order_number"],
             current_status=order_data.get("current_status", ""),
+            fulfillment_method=order_data.get("fulfillment_method"),
+            payment_timing=order_data.get("payment_timing"),
             business_location=business_location,
             business_location_id=order_data.get("business_location_id", business_location.id),
             business_id=order_data.get("business_id", ""),

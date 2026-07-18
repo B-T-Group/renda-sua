@@ -123,26 +123,33 @@ function deliveryAddressLines(order: {
 
 function formatDeliveryScheduleLabel(order: {
   preferred_delivery_time?: string | null;
+  delivery_time_window_id?: string | null;
   delivery_time_windows?: Array<{
+    id?: string;
     preferred_date?: string | null;
     time_slot_start?: string | null;
     time_slot_end?: string | null;
+    is_confirmed?: boolean | null;
     slot?: { slot_name?: string | null };
   }>;
 }): string | null {
   const windows = order.delivery_time_windows;
   if (windows?.length) {
-    const parts = windows.map((w) => {
+    const linked = order.delivery_time_window_id
+      ? windows.find((w) => w.id === order.delivery_time_window_id)
+      : null;
+    const preferred =
+      linked ?? windows.find((w) => w.is_confirmed) ?? windows[0];
+    if (preferred) {
       const bits = [
-        w.preferred_date,
-        w.slot?.slot_name,
-        w.time_slot_start && w.time_slot_end
-          ? `${w.time_slot_start}–${w.time_slot_end}`
+        preferred.preferred_date,
+        preferred.slot?.slot_name,
+        preferred.time_slot_start && preferred.time_slot_end
+          ? `${preferred.time_slot_start}–${preferred.time_slot_end}`
           : null,
       ].filter(Boolean);
-      return bits.join(' · ');
-    });
-    return parts.filter(Boolean).join(' | ');
+      if (bits.length) return bits.join(' · ');
+    }
   }
   if (order.preferred_delivery_time?.trim()) {
     return order.preferred_delivery_time;
@@ -306,6 +313,10 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
   const lineItemCount = order.order_items?.length ?? 0;
   const [lineItemsOpen, setLineItemsOpen] = useState(lineItemCount <= 3);
   const scheduleLabel = formatDeliveryScheduleLabel(order);
+  const isPickupOrder = order.fulfillment_method === 'pickup';
+  const scheduleCaption = isPickupOrder
+    ? t('orders.card.pickupSlot', 'Pickup slot')
+    : t('orders.card.preferredDelivery', 'Preferred delivery');
 
   // Handle confirm order action
   const handleConfirmOrder = () => {
@@ -794,7 +805,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
             <Box sx={{ minWidth: 140 }}>{pricingBlock}</Box>
           </Box>
 
-          {addressLines.length > 0 && (
+          {!isPickupOrder && addressLines.length > 0 && (
             <Box>
               <Stack direction="row" gap={1.25} alignItems="flex-start">
                 <LocationOn color="action" sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }} />
@@ -817,7 +828,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
               <ScheduleIcon color="action" sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }} />
               <Box>
                 <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" gutterBottom>
-                  {t('orders.card.preferredDelivery', 'Preferred delivery')}
+                  {scheduleCaption}
                 </Typography>
                 <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                   {scheduleLabel}
@@ -1046,7 +1057,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
                   display="block"
                   gutterBottom
                 >
-                  {t('orders.card.preferredDelivery', 'Preferred delivery')}
+                  {scheduleCaption}
                 </Typography>
                 <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                   {scheduleLabel}
@@ -1318,7 +1329,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
                   display="block"
                   gutterBottom
                 >
-                  {t('orders.card.preferredDelivery', 'Preferred delivery')}
+                  {scheduleCaption}
                 </Typography>
                 <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                   {scheduleLabel}

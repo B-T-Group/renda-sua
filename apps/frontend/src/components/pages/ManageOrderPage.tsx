@@ -605,9 +605,13 @@ const ManageOrderPage: React.FC = () => {
   };
 
   const phaseBannerAction =
-    phaseInfo.primaryActionId === 'send_pin' ? (
+    phaseInfo.primaryActionId === 'send_pin' ||
+    phaseInfo.primaryActionId === 'show_pin' ? (
       <ClientDeliveryPinButton
         orderId={order.id}
+        displayMode={
+          phaseInfo.primaryActionId === 'show_pin' ? 'show' : 'send'
+        }
         fullWidth
         onShowNotification={handleShowNotification}
       />
@@ -1893,7 +1897,8 @@ const ManageOrderPage: React.FC = () => {
                           onShowNotification={handleShowNotification}
                           hideDeliveryPin={
                             order.current_status === 'out_for_delivery' ||
-                            phaseInfo.primaryActionId === 'send_pin'
+                            phaseInfo.primaryActionId === 'send_pin' ||
+                            phaseInfo.primaryActionId === 'show_pin'
                           }
                         />
                       </Box>
@@ -2049,7 +2054,10 @@ const ManageOrderPage: React.FC = () => {
                     order={order}
                     onActionComplete={() => refetch()}
                     onShowNotification={handleShowNotification}
-                    hideDeliveryPin={phaseInfo.primaryActionId === 'send_pin'}
+                    hideDeliveryPin={
+                      phaseInfo.primaryActionId === 'send_pin' ||
+                      phaseInfo.primaryActionId === 'show_pin'
+                    }
                     deliveryPinFullWidth
                   />
                 )}

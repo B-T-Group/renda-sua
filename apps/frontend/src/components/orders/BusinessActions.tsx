@@ -253,11 +253,21 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
   const [confirmPickupDialogOpen, setConfirmPickupDialogOpen] = useState(false);
+  const [pickupPin, setPickupPin] = useState('');
+  const [pickupPinError, setPickupPinError] = useState<string | null>(null);
 
   const handleConfirmClientPickup = async () => {
+    const pin = pickupPin.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      setPickupPinError(
+        t('orders.pickup.pinRequired', 'Enter the 4-digit pickup PIN from the client.')
+      );
+      return;
+    }
     setLoading(true);
+    setPickupPinError(null);
     try {
-      await confirmClientPickup(order.id);
+      await confirmClientPickup(order.id, pin);
       onShowNotification?.(
         t(
           'orders.pickup.confirmPickupSuccess',
@@ -266,12 +276,14 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       setConfirmPickupDialogOpen(false);
+      setPickupPin('');
       onActionComplete?.();
     } catch (error) {
       const errorMessage =
         error instanceof Error
           ? error.message
           : t('orders.pickup.confirmPickupError', 'Failed to confirm pickup');
+      setPickupPinError(errorMessage);
       onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
@@ -623,36 +635,57 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       <Dialog
         open={confirmPickupDialogOpen}
-        onClose={() => setConfirmPickupDialogOpen(false)}
+        onClose={() => {
+          if (!loading) {
+            setConfirmPickupDialogOpen(false);
+            setPickupPin('');
+            setPickupPinError(null);
+          }
+        }}
         maxWidth="xs"
         fullWidth
       >
         <DialogTitle>
-          {t('orders.pickup.confirmPickupTitle', 'Confirm client pickup')}
+          {t('orders.pickup.confirmPickupPinTitle', 'Confirm pickup with PIN')}
         </DialogTitle>
         <DialogContent>
-          <Typography>
-            {order.payment_status === 'authorized'
-              ? t(
-                  'orders.pickup.confirmPickupBodyAuthorized',
-                  'Confirm the client collected this order. The authorized card payment will be charged and the order marked complete.'
-                )
-              : t(
-                  'orders.pickup.confirmPickupBodyPaid',
-                  'Confirm the client collected this order. The order will be marked complete.'
-                )}
+          <Typography sx={{ mb: 2 }}>
+            {t(
+              'orders.pickup.confirmPickupPinBody',
+              'Ask the customer for their 4-digit pickup PIN. Confirming will capture the authorized card payment and complete the order.'
+            )}
           </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label={t('orders.pickup.pinLabel', 'Pickup PIN')}
+            value={pickupPin}
+            onChange={(e) => {
+              setPickupPin(e.target.value.replace(/\D/g, '').slice(0, 4));
+              setPickupPinError(null);
+            }}
+            inputProps={{ inputMode: 'numeric', maxLength: 4 }}
+            error={!!pickupPinError}
+            helperText={pickupPinError}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmPickupDialogOpen(false)}>
+          <Button
+            onClick={() => {
+              setConfirmPickupDialogOpen(false);
+              setPickupPin('');
+              setPickupPinError(null);
+            }}
+            disabled={loading}
+          >
             {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="contained"
             color="success"
-            disabled={loading}
+            disabled={loading || pickupPin.length !== 4}
             startIcon={loading ? <CircularProgress size={16} /> : <CheckCircle />}
-            onClick={handleConfirmClientPickup}
+            onClick={() => void handleConfirmClientPickup()}
           >
             {t('orderActions.confirmClientPickup', 'Confirm pickup')}
           </Button>

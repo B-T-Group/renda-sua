@@ -58,6 +58,15 @@ interface CartContextType {
   getCartByBusiness: () => Map<string, CartItem[]>;
   getCartTotal: () => number;
   isItemInCart: (inventoryItemId: string, variantId?: string) => boolean;
+  /** True when any variant of this listing is in the cart. */
+  isListingInCart: (inventoryItemId: string) => boolean;
+  /** Sum of quantities across all variants for this listing. */
+  getListingQuantityInCart: (inventoryItemId: string) => number;
+  /** Quantity for an exact cart line (listing + optional variant). */
+  getLineQuantityInCart: (
+    inventoryItemId: string,
+    variantId?: string
+  ) => number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -319,15 +328,38 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [cartItems]);
 
-  const isItemInCart = useCallback(
+  const getLineQuantityInCart = useCallback(
     (inventoryItemId: string, variantId?: string) => {
       const lineKey = cartLineKey(inventoryItemId, variantId);
-      return cartItems.some(
-        (item) =>
-          cartLineKey(item.inventoryItemId, item.variantId) === lineKey
+      return (
+        cartItems.find(
+          (item) =>
+            cartLineKey(item.inventoryItemId, item.variantId) === lineKey
+        )?.quantity ?? 0
       );
     },
     [cartItems]
+  );
+
+  const getListingQuantityInCart = useCallback(
+    (inventoryItemId: string) => {
+      return cartItems
+        .filter((item) => item.inventoryItemId === inventoryItemId)
+        .reduce((sum, item) => sum + item.quantity, 0);
+    },
+    [cartItems]
+  );
+
+  const isItemInCart = useCallback(
+    (inventoryItemId: string, variantId?: string) => {
+      return getLineQuantityInCart(inventoryItemId, variantId) > 0;
+    },
+    [getLineQuantityInCart]
+  );
+
+  const isListingInCart = useCallback(
+    (inventoryItemId: string) => getListingQuantityInCart(inventoryItemId) > 0,
+    [getListingQuantityInCart]
   );
 
   const value: CartContextType = {
@@ -340,6 +372,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
     getCartByBusiness,
     getCartTotal,
     isItemInCart,
+    isListingInCart,
+    getListingQuantityInCart,
+    getLineQuantityInCart,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

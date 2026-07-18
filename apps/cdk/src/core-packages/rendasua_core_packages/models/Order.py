@@ -25,12 +25,14 @@ class Order(BaseModel):
     delivery_time_window: Optional[DeliveryTimeWindow] | None = None
     delivery_time_window_id: Optional[str] | None = None
     estimated_delivery_time: Optional[datetime.datetime] | None = None
+    fulfillment_method: Optional[str] | None = None
     id: str
     order_hold: Optional[OrderHold] | None = None
     order_number: str
     payment_method: Optional[str] | None = None
     payment_source: Optional[str] | None = None
     payment_status: Optional[str] | None = None
+    payment_timing: Optional[str] | None = None
     per_km_delivery_fee: float
     preferred_delivery_time: Optional[datetime.datetime] | None = None
     requires_fast_delivery: bool

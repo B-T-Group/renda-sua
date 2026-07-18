@@ -1626,7 +1626,8 @@ export class NotificationsService {
     const status = data.orderStatus;
     const { title, body } = this.getPushMessageForOrderStatus(
       status,
-      data.orderNumber
+      data.orderNumber,
+      data
     );
     if (!title || !body) return;
 
@@ -1682,8 +1683,27 @@ export class NotificationsService {
    */
   private getPushMessageForOrderStatus(
     status: string,
-    orderNumber: string
+    orderNumber: string,
+    data?: NotificationData
   ): { title: string; body: string } {
+    if (status === 'ready_for_pickup') {
+      if (data?.fulfillmentMethod === 'pickup') {
+        if (data.paymentTiming === 'pay_at_pickup') {
+          return {
+            title: 'Ready for pickup',
+            body: `Order ${orderNumber} is ready at the store. Pay with mobile money when you pick up.`,
+          };
+        }
+        return {
+          title: 'Ready for pickup',
+          body: `Order ${orderNumber} is ready at the store. Send your PIN to confirm pickup.`,
+        };
+      }
+      return {
+        title: 'Ready for pickup',
+        body: `Order ${orderNumber} is ready for pickup.`,
+      };
+    }
     const messages: Record<
       string,
       { title: string; body: string }

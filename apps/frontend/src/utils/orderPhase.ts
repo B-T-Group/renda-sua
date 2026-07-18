@@ -36,6 +36,7 @@ export type OrderPrimaryActionId =
   | 'confirm_pickup'
   | 'collect_pickup_payment'
   | 'send_pin'
+  | 'show_pin'
   | 'complete'
   | 'rate'
   | 'open_refunds'
@@ -96,8 +97,15 @@ function isPickup(input: OrderPhaseInput): boolean {
 
 function isPinEligible(input: OrderPhaseInput): boolean {
   if (input.paymentTiming === 'pay_at_delivery') return false;
+  if (input.paymentTiming === 'pay_at_pickup') return false;
   if (input.paymentMethod === 'pay_on_delivery') return false;
   return true;
+}
+
+function isPickupPinReady(input: OrderPhaseInput): boolean {
+  if (!isPickup(input) || !isPinEligible(input)) return false;
+  const payment = input.paymentStatus;
+  return payment === 'authorized' || payment === 'paid';
 }
 
 function resolvePhase(input: OrderPhaseInput): OrderPhase {
@@ -272,6 +280,7 @@ function primaryActionFor(
 
   if (role === 'client') {
     if (phase === 'pay') return 'pay';
+    if (phase === 'ready' && pickup && isPickupPinReady(input)) return 'show_pin';
     if (s === 'out_for_delivery' && isPinEligible(input)) return 'send_pin';
     if (s === 'delivered') return 'complete';
     if (s === 'complete') return 'rate';
@@ -388,6 +397,7 @@ export const ORDER_PRIMARY_ACTION_LABEL: Record<
     'Collect pickup payment',
   ],
   send_pin: ['orders.actions.sendPin', 'Send delivery PIN'],
+  show_pin: ['orders.actions.showPickupPin', 'Show pickup PIN'],
   complete: ['orders.actions.complete', 'Complete order'],
   rate: ['orders.actions.rate', 'Rate order'],
   open_refunds: ['orders.actions.openRefunds', 'Manage refund'],

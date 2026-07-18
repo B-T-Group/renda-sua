@@ -3592,6 +3592,7 @@
       "confirmPickup": "Confirm pickup",
       "collectPickupPayment": "Collect pickup payment",
       "sendPin": "Send delivery PIN",
+      "showPickupPin": "Show pickup PIN",
       "complete": "Complete order",
       "rate": "Rate order",
       "openRefunds": "Manage refund",
@@ -3708,8 +3709,12 @@
     },
     "deliveryPin": {
       "title": "Delivery PIN",
+      "pickupTitle": "Pickup PIN",
       "viewPin": "View delivery PIN",
       "shareWithAgent": "Share this PIN with your delivery agent. They will enter it to complete the delivery.",
+      "shareWithSeller": "Show this PIN to the seller so they can confirm your pickup.",
+      "showPickupPin": "Show pickup PIN",
+      "showPickupA11y": "Show pickup PIN for the seller",
       "unavailable": "Delivery PIN is no longer available (already viewed or expired)."
     },
     "messaging": {
@@ -5328,6 +5333,10 @@
     "taxCalculatedAtCheckout": "Calculated at checkout",
     "proceedToCheckout": "Proceed to Checkout",
     "addToCart": "Add to Cart",
+    "addMore": "Add more",
+    "inCart": "In cart",
+    "inCartCount": "In cart ({{count}})",
+    "inCartA11y": "In cart, quantity {{count}}. Add more",
     "buyNow": "Buy Now",
     "removeItem": "Remove Item",
     "updateQuantity": "Update Quantity",

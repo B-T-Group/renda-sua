@@ -129,17 +129,16 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const showPin =
     !hideDeliveryPin &&
     order.payment_timing !== 'pay_at_delivery' &&
+    order.payment_timing !== 'pay_at_pickup' &&
     order.payment_method !== 'pay_on_delivery' &&
-    [
-      'pending',
-      'confirmed',
-      'preparing',
-      'ready_for_pickup',
-      'assigned_to_agent',
-      'picked_up',
-      'in_transit',
-      'out_for_delivery',
-    ].includes(order.current_status);
+    (order.fulfillment_method === 'pickup'
+      ? order.current_status === 'ready_for_pickup' &&
+        (order.payment_status === 'authorized' || order.payment_status === 'paid')
+      : [
+          'picked_up',
+          'in_transit',
+          'out_for_delivery',
+        ].includes(order.current_status));
 
   if (availableActions.length === 0 && !showPin) {
     return null;
@@ -152,6 +151,9 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           {showPin && (
             <ClientDeliveryPinButton
               orderId={order.id}
+              displayMode={
+                order.fulfillment_method === 'pickup' ? 'show' : 'send'
+              }
               onShowNotification={onShowNotification}
               fullWidth={deliveryPinFullWidth}
               size="medium"

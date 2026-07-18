@@ -1,6 +1,7 @@
 import {
   ArrowBack as ArrowBackIcon,
   Business as BusinessIcon,
+  CheckCircle as CheckCircleIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
@@ -405,7 +406,7 @@ export default function ItemDetailPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth0();
   const { profile } = useUserProfileContext();
-  const { addToCart } = useCart();
+  const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
   const { trackViewContent, trackAddToCart } = useMetaPixel();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
@@ -779,6 +780,17 @@ export default function ItemDetailPage() {
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
   const variantSelectionReady =
     variantSel.activeVariants.length <= 1 || !!variantSel.selectedVariantId;
+  const inCartQuantity = variantSel.selectedVariantId
+    ? getLineQuantityInCart(inventoryItem.id, variantSel.selectedVariantId)
+    : getListingQuantityInCart(inventoryItem.id);
+  const inCart = inCartQuantity > 0;
+  const inCartLabel =
+    inCartQuantity > 1
+      ? t('cart.inCartCount', 'In cart ({{count}})', { count: inCartQuantity })
+      : t('cart.inCart', 'In cart');
+  const addToCartLabel = inCart
+    ? t('cart.addMore', 'Add more')
+    : t('cart.addToCart', 'Add to Cart');
   const merchantCanAcceptOrders =
     business?.can_accept_orders ?? business?.is_verified ?? false;
   const hasDeal = lp.hasDeal;
@@ -1295,16 +1307,36 @@ export default function ItemDetailPage() {
                   <>
                     {isClientUser && (
                       <Button
-                        variant="outlined"
+                        variant={inCart ? 'contained' : 'outlined'}
+                        color="primary"
                         startIcon={<ShoppingCart />}
                         onClick={() => handleAddToCart(inventoryItem)}
                         size="medium"
                         fullWidth
                         disabled={!variantSelectionReady}
+                        aria-label={
+                          inCart
+                            ? t(
+                                'cart.inCartA11y',
+                                'In cart, quantity {{count}}. Add more',
+                                { count: inCartQuantity }
+                              )
+                            : t('cart.addToCart', 'Add to Cart')
+                        }
                       >
-                        {t('cart.addToCart', 'Add to Cart')}
+                        {addToCartLabel}
                       </Button>
                     )}
+                    {inCart ? (
+                      <Chip
+                        icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
+                        label={inCartLabel}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        sx={{ alignSelf: 'flex-start', height: 24 }}
+                      />
+                    ) : null}
                     {!merchantCanAcceptOrders ? (
                       <Button variant="outlined" disabled size="medium" fullWidth>
                         {t(

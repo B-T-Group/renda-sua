@@ -73,7 +73,25 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
         break;
 
       case 'ready_for_pickup':
-        if (order.assigned_agent_id) {
+        if (order.fulfillment_method === 'pickup') {
+          if (order.payment_timing === 'pay_at_pickup') {
+            alerts.push({
+              severity: 'success' as const,
+              message: t(
+                'client.orders.storeReadyPayAtPickup',
+                'Your order is ready at the store. Come during your pickup slot — the seller will request mobile money payment when you pick up.'
+              ),
+            });
+          } else {
+            alerts.push({
+              severity: 'success' as const,
+              message: t(
+                'client.orders.storeReadyShowPin',
+                'Your order is ready at the store. Come during your pickup slot and show your PIN to the seller to confirm pickup.'
+              ),
+            });
+          }
+        } else if (order.assigned_agent_id) {
           alerts.push({
             severity: 'success' as const,
             message: t(

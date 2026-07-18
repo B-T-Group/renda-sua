@@ -102,15 +102,17 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     return null;
   }, [order]);
 
-  const windowAddress = useMemo(
-    () =>
-      order?.delivery_address ??
-      order?.business_location?.address ??
-      null,
-    [order]
-  );
+  const windowAddress = useMemo(() => {
+    if (order?.fulfillment_method === 'pickup') {
+      return order?.business_location?.address ?? null;
+    }
+    return (
+      order?.delivery_address ?? order?.business_location?.address ?? null
+    );
+  }, [order]);
   const windowCountryCode = windowAddress?.country?.trim() || 'GA';
   const windowStateCode = windowAddress?.state?.trim() || '';
+  const isPickup = order?.fulfillment_method === 'pickup';
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -169,10 +171,15 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     // Validate that a delivery window is selected
     if (!selectedWindowId && !newWindowData) {
       setError(
-        t(
-          'orders.confirmModal.noWindowSelected',
-          'Please select a delivery time window'
-        )
+        isPickup
+          ? t(
+              'orders.confirmModal.noPickupSlotSelected',
+              'Please select a pickup time slot'
+            )
+          : t(
+              'orders.confirmModal.noWindowSelected',
+              'Please select a delivery time window'
+            )
       );
       return;
     }
@@ -225,6 +232,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     onClose,
     t,
     existingWindows,
+    isPickup,
   ]);
 
   // Early return after all hooks
@@ -372,10 +380,15 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
           <Card>
             <CardContent sx={{ py: 2 }}>
               <Typography variant="h6" gutterBottom>
-                {t(
-                  'orders.confirmModal.deliveryWindow',
-                  'Delivery Time Window'
-                )}
+                {isPickup
+                  ? t(
+                      'orders.confirmModal.pickupSlot',
+                      'Pickup Time Slot'
+                    )
+                  : t(
+                      'orders.confirmModal.deliveryWindow',
+                      'Delivery Time Window'
+                    )}
               </Typography>
 
               {hasExistingWindows && !createNewWindow && (
@@ -385,10 +398,15 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     color="text.secondary"
                     gutterBottom
                   >
-                    {t(
-                      'orders.confirmModal.clientPreferences',
-                      "Client's preferred delivery windows:"
-                    )}
+                    {isPickup
+                      ? t(
+                          'orders.confirmModal.clientPickupPreferences',
+                          "Client's preferred pickup windows:"
+                        )
+                      : t(
+                          'orders.confirmModal.clientPreferences',
+                          "Client's preferred delivery windows:"
+                        )}
                   </Typography>
 
                   <RadioGroup
@@ -479,8 +497,12 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     sx={{ mt: 2 }}
                   >
                     {t(
-                      'orders.confirmModal.createDifferentWindow',
-                      'Create Different Time Window'
+                      isPickup
+                        ? 'orders.confirmModal.createDifferentPickupSlot'
+                        : 'orders.confirmModal.createDifferentWindow',
+                      isPickup
+                        ? 'Choose a Different Pickup Slot'
+                        : 'Create Different Time Window'
                     )}
                   </Button>
                 </Box>
@@ -495,12 +517,20 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   >
                     {createNewWindow
                       ? t(
-                          'orders.confirmModal.createNewWindow',
-                          'Create a new delivery time window:'
+                          isPickup
+                            ? 'orders.confirmModal.createNewPickupSlot'
+                            : 'orders.confirmModal.createNewWindow',
+                          isPickup
+                            ? 'Select a pickup date and time slot:'
+                            : 'Create a new delivery time window:'
                         )
                       : t(
-                          'orders.confirmModal.noClientPreferences',
-                          'No client preferences available. Create a delivery time window:'
+                          isPickup
+                            ? 'orders.confirmModal.noClientPickupPreferences'
+                            : 'orders.confirmModal.noClientPreferences',
+                          isPickup
+                            ? 'No client preferences available. Select a pickup time slot:'
+                            : 'No client preferences available. Create a delivery time window:'
                         )}
                   </Typography>
 

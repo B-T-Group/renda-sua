@@ -313,6 +313,8 @@ export class OrderStatusService {
             id
             order_number
             current_status
+            fulfillment_method
+            payment_timing
             subtotal
             base_delivery_fee
             per_km_delivery_fee
@@ -483,6 +485,8 @@ export class OrderStatusService {
         estimatedDeliveryTime:
           deliveryTimeWindow || order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
+        fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
+        paymentTiming: (order as any).payment_timing ?? null,
       };
     } catch (error: any) {
       this.logger.error(

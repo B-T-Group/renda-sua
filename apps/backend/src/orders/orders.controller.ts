@@ -554,14 +554,26 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Confirm client picked up a store-pickup order (business only)',
     description:
-      'For paid or card-authorized pickup orders in ready_for_pickup, the business confirms the client collected the order. Captures the authorized card payment (Stripe manual capture), settles, and marks the order complete. Pay-at-pickup (mobile money) orders are completed by their payment callback instead.',
+      'For paid or card-authorized pickup orders in ready_for_pickup, the business enters the client PIN to confirm collection. Captures the authorized card payment (Stripe manual capture), settles, and marks the order complete. Pay-at-pickup (mobile money) orders are completed by their payment callback instead.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['pin'],
+      properties: {
+        pin: { type: 'string', description: '4-digit client pickup PIN' },
+      },
+    },
   })
   @ApiResponse({ status: 200, description: 'Pickup confirmed; order completed' })
-  @ApiResponse({ status: 400, description: 'Invalid order state' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or missing PIN' })
   @ApiResponse({ status: 402, description: 'Order payment is not authorized or paid' })
-  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
-  async confirmClientPickup(@Param('id') orderId: string) {
-    return this.ordersService.confirmClientPickup(orderId);
+  @ApiResponse({ status: 403, description: 'Not authorized or invalid PIN' })
+  async confirmClientPickup(
+    @Param('id') orderId: string,
+    @Body() body: { pin?: string }
+  ) {
+    return this.ordersService.confirmClientPickup(orderId, body?.pin ?? '');
   }
 
   @Post(':id/mark-paid-in-cash-exception')

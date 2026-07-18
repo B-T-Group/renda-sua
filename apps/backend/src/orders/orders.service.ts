@@ -1258,10 +1258,13 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Validate that delivery window is provided
+    // Validate that delivery/pickup window is provided
     if (!request.delivery_time_window_id && !request.delivery_window_details) {
+      const isPickup = (order as any).fulfillment_method === 'pickup';
       throw new HttpException(
-        'Delivery time window must be provided to confirm order',
+        isPickup
+          ? 'Pickup time slot must be provided to confirm a store pickup order'
+          : 'Delivery time window must be provided to confirm order',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -1276,7 +1279,14 @@ export class OrdersService {
 
     let confirmedWindowId: string;
 
-    const countryCode = order.delivery_address?.country || 'GA';
+    const isPickupOrder = (order as any).fulfillment_method === 'pickup';
+    const countryCode =
+      (isPickupOrder
+        ? order.business_location?.address?.country
+        : order.delivery_address?.country) ||
+      order.delivery_address?.country ||
+      order.business_location?.address?.country ||
+      'GA';
     const deliveryTimezone = await this.resolveOrderDeliveryTimezone(
       order,
       countryCode
@@ -1347,6 +1357,7 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    await this.ensurePickupPinIfNeeded(order);
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup'
@@ -1374,13 +1385,29 @@ export class OrdersService {
     );
   }
 
+  /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
+  private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
+    if ((order as any).fulfillment_method !== 'pickup') return;
+    if ((order as any).payment_timing === 'pay_at_pickup') return;
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus !== 'authorized' && paymentStatus !== 'paid') return;
+
+    const existingPin = await this.deliveryPinService.getPinForClient(order.id);
+    if (existingPin) return;
+
+    const deliveryPin = this.deliveryPinService.generatePin();
+    const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
+    await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
+    await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+  }
+
   /**
    * Business confirms the client collected a pickup order at the store.
-   * Captures the authorized card payment (Stripe manual capture), settles
-   * item/delivery shares, and completes the order. MoMo pay-at-pickup orders
+   * Requires the client's PIN (Stripe authorized / prepaid). Captures card,
+   * settles item/delivery shares, and completes the order. MoMo pay-at-pickup orders
    * are completed by their payment callback instead (initiatePayAtPickupPayment).
    */
-  async confirmClientPickup(orderId: string) {
+  async confirmClientPickup(orderId: string, pin: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -1391,6 +1418,15 @@ export class OrdersService {
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     this.assertConfirmClientPickupAllowed(order, user.id);
+
+    const pinTrimmed = pin?.trim() ?? '';
+    if (!pinTrimmed) {
+      throw new HttpException(
+        'Pickup PIN is required to confirm store pickup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.verifyOrderDeliveryPinForBusiness(order, pinTrimmed);
 
     // Capture the authorized PaymentIntent; marks the order paid via the
     // payment finalizer. No-op when the order is already paid (e.g. wallet).
@@ -1410,6 +1446,39 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Pickup confirmed; order completed',
     };
+  }
+
+  /** Verify client PIN for business store-pickup confirmation (no agent strike). */
+  private async verifyOrderDeliveryPinForBusiness(
+    order: Orders,
+    pin: string
+  ): Promise<void> {
+    const attempts = (order as any).delivery_pin_attempts ?? 0;
+    if (attempts >= this.deliveryPinService.getMaxPinAttempts()) {
+      throw new HttpException(
+        'Maximum PIN attempts reached for this order. Ask the client to contact support.',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const hash = (order as any).delivery_pin_hash;
+    if (!hash) {
+      throw new HttpException(
+        'This order has no pickup PIN set. Ask the client to refresh the app or contact support.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const valid = this.deliveryPinService.verifyPin(order.id, pin, hash);
+    if (!valid) {
+      const newAttempts = attempts + 1;
+      await this.incrementOrderDeliveryPinAttempts(order.id);
+      if (newAttempts >= this.deliveryPinService.getMaxPinAttempts()) {
+        throw new HttpException(
+          'Maximum PIN attempts reached for this order.',
+          HttpStatus.FORBIDDEN
+        );
+      }
+      throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
+    }
   }
 
   private assertConfirmClientPickupAllowed(
@@ -3610,6 +3679,12 @@ export class OrdersService {
         'Order already completed. PIN is no longer needed.',
         HttpStatus.GONE
       );
+    }
+    if (
+      (order as any).fulfillment_method === 'pickup' &&
+      order.current_status === 'ready_for_pickup'
+    ) {
+      await this.ensurePickupPinIfNeeded(order);
     }
     const pin = await this.deliveryPinService.getPinForClient(orderId);
     if (!pin) {
