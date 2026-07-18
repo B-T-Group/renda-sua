@@ -30,6 +30,10 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
+import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
+import { RbacService } from '../rbac/rbac.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
 
 jest.mock('../stripe-payments/stripe-connect.service', () => ({
   StripeConnectService: class StripeConnectService {},
@@ -221,6 +225,10 @@ describe('OrdersService', () => {
           },
         },
         { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
+        { provide: StripeTaxCheckoutBuilderService, useValue: {} },
+        { provide: StripeTaxCalculationService, useValue: {} },
+        { provide: OrderSystemJobsService, useValue: {} },
+        { provide: RbacService, useValue: { hasPermission: jest.fn() } },
         {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
