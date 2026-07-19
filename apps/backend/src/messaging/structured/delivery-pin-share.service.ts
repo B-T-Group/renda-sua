@@ -20,12 +20,13 @@ import { StructuredMessageTypeRegistry } from './structured-message.registry';
 
 const SHARE_RATE_LIMIT_MS = 10 * 60 * 1000;
 const MAX_SHARES_PER_WINDOW = 3;
+type AuthenticatedUser = Awaited<ReturnType<HasuraUserService['getUser']>>;
 
 @Injectable()
 export class DeliveryPinShareService {
   private readonly logger = new Logger(DeliveryPinShareService.name);
   private readonly recentShareTimestamps = new Map<string, number[]>();
-  /** Coalesce concurrent share requests for the same order into one insert. */
+  /** Coalesce concurrent shares only after authenticating the same order client. */
   private readonly inflightShares = new Map<string, Promise<OrderMessage>>();
 
   constructor(
@@ -49,36 +50,34 @@ export class DeliveryPinShareService {
   }
 
   async shareDeliveryPin(orderId: string): Promise<OrderMessage> {
-    const existing = this.inflightShares.get(orderId);
+    const user = await this.hasuraUserService.getUser();
+    this.requireClient(user);
+    const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
+    await this.messagingService.assertMessagingAccess(user, order);
+    this.assertOrderClient(user, order.client?.user_id);
+
+    const key = `${orderId}:${user.id}`;
+    const existing = this.inflightShares.get(key);
     if (existing) return existing;
 
-    const promise = this.shareDeliveryPinOnce(orderId).finally(() => {
-      if (this.inflightShares.get(orderId) === promise) {
-        this.inflightShares.delete(orderId);
+    const promise = this.shareDeliveryPinOnce(orderId, user, order).finally(() => {
+      if (this.inflightShares.get(key) === promise) {
+        this.inflightShares.delete(key);
       }
     });
-    this.inflightShares.set(orderId, promise);
+    this.inflightShares.set(key, promise);
     return promise;
   }
 
-  private async shareDeliveryPinOnce(orderId: string): Promise<OrderMessage> {
+  private async shareDeliveryPinOnce(
+    orderId: string,
+    user: AuthenticatedUser,
+    order: import('../messaging.types').MessagingOrder
+  ): Promise<OrderMessage> {
     if (!this.isEnabled()) {
       throw new HttpException(
         'Delivery PIN messaging is not enabled',
         HttpStatus.NOT_FOUND
-      );
-    }
-
-    const user = await this.hasuraUserService.getUser();
-    this.requireClient(user);
-
-    const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
-    await this.messagingService.assertMessagingAccess(user, order);
-
-    if (order.client?.user_id !== user.id) {
-      throw new HttpException(
-        'Only the order client can share the delivery PIN',
-        HttpStatus.FORBIDDEN
       );
     }
 
@@ -391,6 +390,18 @@ export class DeliveryPinShareService {
   }): void {
     if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Client only', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private assertOrderClient(
+    user: { id: string },
+    orderClientUserId?: string | null
+  ): void {
+    if (orderClientUserId !== user.id) {
+      throw new HttpException(
+        'Only the order client can share the delivery PIN',
+        HttpStatus.FORBIDDEN
+      );
     }
   }
 
