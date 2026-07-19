@@ -11,7 +11,6 @@ import {
   Verified,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
-import CloseIcon from '@mui/icons-material/Close';
 import {
   Box,
   Button,
@@ -21,8 +20,6 @@ import {
   CardContent,
   CardMedia,
   Chip,
-  Dialog,
-  DialogContent,
   IconButton,
   Rating,
   Tooltip,
@@ -35,13 +32,11 @@ import { useCart } from '../../contexts/CartContext';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
-  SITE_EVENT_INVENTORY_CARD_IMAGE_LIGHTBOX_OPEN,
   SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
   SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
-import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import {
   catalogGalleryForSelection,
   catalogSpecsForSelection,
@@ -58,7 +53,6 @@ import {
 } from '../../utils/shopperVariantSelection';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { CatalogOptionChips } from './CatalogOptionChips';
-import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
 /** Strip HTML and collapse whitespace for card preview text. */
 function plainTextSummary(text: string | null | undefined): string {
@@ -110,7 +104,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   viewsCount,
 }) => {
   const navigate = useNavigate();
-  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
@@ -218,7 +211,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       : Math.min(activeImageIndex, galleryImages.length - 1);
   const displayImage = galleryImages[displayIdx];
   const displayImageUrl = itemImageDisplayUrl(displayImage);
-  const lightboxImageUrl = displayImage?.image_url ?? null;
   const hasMultipleImages = galleryImages.length > 1;
 
   const goPrevImage = () => {
@@ -234,31 +226,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       i === galleryImages.length - 1 ? 0 : i + 1
     );
   };
-
-  useEffect(() => {
-    if (!imageLightboxOpen || galleryImages.length <= 1) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setActiveImageIndex((i) =>
-          i === 0 ? galleryImages.length - 1 : i - 1
-        );
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setActiveImageIndex((i) =>
-          i === galleryImages.length - 1 ? 0 : i + 1
-        );
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [imageLightboxOpen, galleryImages.length]);
-
-  const cardLightboxSwipe = useSwipeImageNavigation(
-    goNextImage,
-    goPrevImage,
-    imageLightboxOpen && hasMultipleImages
-  );
 
   const ratingCount = inventory.rating_count ?? 0;
   const showAggregateRating =
@@ -335,28 +302,18 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         }}
       >
         <Tooltip
-          title={
-            displayImageUrl
-              ? t(
-                  'items.itemCard.openImageGallery',
-                  'Click to view larger'
-                )
-              : ''
-          }
-          disableHoverListener={!displayImageUrl}
+          title={t('items.itemCard.openDetails', {
+            defaultValue: 'Open {{name}} details',
+            name: inventory.item.name,
+          })}
         >
           <Box
             onClick={() => {
-              if (displayImageUrl) {
-                void trackSiteEvent({
-                  eventType: SITE_EVENT_INVENTORY_CARD_IMAGE_LIGHTBOX_OPEN,
-                  subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
-                  subjectId: inventory.id,
-                  metadata: { imageCount: galleryImages.length },
-                });
-                setImageLightboxOpen(true);
-                return;
-              }
+              void trackSiteEvent({
+                eventType: SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
+                subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+                subjectId: inventory.id,
+              });
               goToDetails();
             }}
             sx={{
@@ -366,7 +323,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: displayImageUrl ? 'pointer' : 'default',
+              cursor: 'pointer',
               overflow: 'hidden',
             }}
           >
@@ -1212,144 +1169,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         secondaryCtaLabel={resolvedLoginButtonText}
         openLoginDialogOnSecondaryCta
       />
-
-      {/* Image lightbox */}
-      <Dialog
-        open={imageLightboxOpen}
-        onClose={() => setImageLightboxOpen(false)}
-        maxWidth={false}
-        PaperProps={{
-          sx: {
-            maxHeight: '90vh',
-            maxWidth: '90vw',
-            bgcolor: 'transparent',
-            boxShadow: 'none',
-          },
-        }}
-        slotProps={{
-          backdrop: {
-            sx: { bgcolor: 'rgba(0,0,0,0.85)' },
-          },
-        }}
-        onClick={() => setImageLightboxOpen(false)}
-      >
-        <IconButton
-          aria-label="close"
-          onClick={() => setImageLightboxOpen(false)}
-          sx={{
-            position: 'absolute',
-            right: 8,
-            top: 8,
-            color: 'white',
-            bgcolor: 'rgba(0,0,0,0.5)',
-            zIndex: 1,
-            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
-        <DialogContent
-          onClick={(e) => e.stopPropagation()}
-          sx={{
-            p: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            position: 'relative',
-            gap: 1,
-          }}
-        >
-          {displayImageUrl && (
-            <>
-              {hasMultipleImages && (
-                <IconButton
-                  aria-label={t(
-                    'business.items.cardGalleryPrevious',
-                    'Previous photo'
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goPrevImage();
-                  }}
-                  sx={{
-                    color: 'common.white',
-                    bgcolor: 'rgba(0,0,0,0.45)',
-                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
-                  }}
-                >
-                  <ChevronLeft />
-                </IconButton>
-              )}
-              <ImageLightboxTapZones
-                showTapZones={hasMultipleImages}
-                onPrevious={goPrevImage}
-                onNext={goNextImage}
-                previousLabel={t(
-                  'business.items.cardGalleryPrevious',
-                  'Previous photo'
-                )}
-                nextLabel={t('business.items.cardGalleryNext', 'Next photo')}
-                onTouchStart={cardLightboxSwipe.onTouchStart}
-                onTouchEnd={cardLightboxSwipe.onTouchEnd}
-              >
-                <Box
-                  component="img"
-                  src={lightboxImageUrl ?? displayImageUrl}
-                  alt={inventory.item.name}
-                  sx={{
-                    maxWidth: '100%',
-                    maxHeight: '90vh',
-                    objectFit: 'contain',
-                    display: 'block',
-                    touchAction: 'pan-y',
-                  }}
-                />
-              </ImageLightboxTapZones>
-              {hasMultipleImages && (
-                <IconButton
-                  aria-label={t(
-                    'business.items.cardGalleryNext',
-                    'Next photo'
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goNextImage();
-                  }}
-                  sx={{
-                    color: 'common.white',
-                    bgcolor: 'rgba(0,0,0,0.45)',
-                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
-                  }}
-                >
-                  <ChevronRight />
-                </IconButton>
-              )}
-              {hasMultipleImages && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    position: 'absolute',
-                    bottom: 8,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    color: 'common.white',
-                    bgcolor: 'rgba(0,0,0,0.5)',
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 1,
-                  }}
-                >
-                  {t('items.itemCard.photoIndex', '{{current}} / {{total}}', {
-                    current: displayIdx + 1,
-                    total: galleryImages.length,
-                  })}
-                </Typography>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 };
