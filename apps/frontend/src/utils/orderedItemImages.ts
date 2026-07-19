@@ -1,7 +1,11 @@
 import type { ImageType } from '../types/image';
+import type { ItemVariant } from '../types/itemVariant';
+import { orderedVariantImages } from '../types/itemVariant';
+import { activeCatalogVariants } from './shopperVariantSelection';
 
 /** Minimal fields required to apply main-first + display_order sorting. */
 export type OrderableItemImage = {
+  id?: string;
   image_url: string;
   image_type: ImageType | 'primary';
   display_order?: number;
@@ -45,4 +49,47 @@ export function getPrimaryOrFirstItemImage<T extends OrderableItemImage>(
   images: T[] | undefined
 ): T | undefined {
   return orderedItemImages(images)[0];
+}
+
+export type CatalogGalleryImage = OrderableItemImage & { id: string };
+
+function appendUniqueCatalogImage(
+  out: CatalogGalleryImage[],
+  seen: Set<string>,
+  img: CatalogGalleryImage
+): void {
+  const urls = [img.image_url, img.display_url]
+    .map((u) => u?.trim())
+    .filter((u): u is string => !!u);
+  if (urls.length === 0 || urls.some((u) => seen.has(u))) return;
+  for (const u of urls) seen.add(u);
+  out.push(img);
+}
+
+/**
+ * Catalog card gallery: parent images, then every active variant’s photos.
+ * Dedupes by display URL so shared assets are not repeated.
+ */
+export function catalogGalleryImages(item: {
+  item_images?: OrderableItemImage[];
+  item_variants?: ItemVariant[] | null;
+}): CatalogGalleryImage[] {
+  const seen = new Set<string>();
+  const out: CatalogGalleryImage[] = [];
+  for (const img of orderedItemImages(item.item_images)) {
+    if (!img.id) continue;
+    appendUniqueCatalogImage(out, seen, img as CatalogGalleryImage);
+  }
+  for (const variant of activeCatalogVariants(item.item_variants)) {
+    for (const img of orderedVariantImages(variant)) {
+      appendUniqueCatalogImage(out, seen, {
+        id: img.id,
+        image_url: img.image_url,
+        image_type: 'gallery',
+        display_order: img.display_order,
+        display_url: img.display_url,
+      });
+    }
+  }
+  return out;
 }

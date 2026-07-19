@@ -45,8 +45,8 @@ import {
 } from '../../hooks/useTrackSiteEvent';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import {
+  catalogGalleryImages,
   itemImageDisplayUrl,
-  orderedItemImages,
 } from '../../utils/orderedItemImages';
 import { shopperVariantOptionCount } from '../../utils/catalogVariantCart';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
@@ -121,8 +121,8 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const openingSoonLabel = t('business.lifecycle.openingSoonBadge', 'Opening Soon');
 
   const galleryImages = useMemo(
-    () => orderedItemImages(inventory.item.item_images),
-    [inventory.item.item_images]
+    () => catalogGalleryImages(inventory.item),
+    [inventory.item]
   );
 
   const variantOptionCount = useMemo(
