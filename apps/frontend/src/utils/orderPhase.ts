@@ -189,11 +189,16 @@ function nextStepKeyFor(
           ? 'orders.nextStep.ofdAgent'
           : 'orders.nextStep.ofdBusiness';
     }
+    if (role === 'agent') {
+      if (s === 'assigned_to_agent') return 'orders.nextStep.pickUpAgent';
+      if (s === 'picked_up' || s === 'in_transit') {
+        return 'orders.nextStep.outForDeliveryAgent';
+      }
+      return 'orders.nextStep.inDeliveryAgent';
+    }
     return role === 'client'
       ? 'orders.nextStep.inDeliveryClient'
-      : role === 'agent'
-        ? 'orders.nextStep.inDeliveryAgent'
-        : 'orders.nextStep.inDeliveryBusiness';
+      : 'orders.nextStep.inDeliveryBusiness';
   }
   return null;
 }

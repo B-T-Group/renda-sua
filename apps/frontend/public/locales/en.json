@@ -4221,6 +4221,8 @@
       "readyAgent": "Claim this order to start the delivery.",
       "inDeliveryClient": "Your order is on the way. Have your delivery PIN ready.",
       "inDeliveryAgent": "Continue the delivery workflow for this order.",
+      "pickUpAgent": "Pick up this order from the business to continue delivery.",
+      "outForDeliveryAgent": "Mark the order out for delivery when you are heading to the client.",
       "inDeliveryBusiness": "An agent is delivering this order.",
       "ofdClientPin": "Send your delivery PIN in chat so the agent can complete delivery.",
       "ofdClient": "Your order is arriving. Stay available for the agent.",

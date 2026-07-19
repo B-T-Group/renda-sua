@@ -3958,6 +3958,8 @@
       "readyAgent": "Prenez cette commande pour démarrer la livraison.",
       "inDeliveryClient": "Votre commande est en route. Ayez votre code PIN prêt.",
       "inDeliveryAgent": "Continuez le parcours de livraison.",
+      "pickUpAgent": "Récupérez cette commande chez le commerçant pour continuer la livraison.",
+      "outForDeliveryAgent": "Marquez la commande en cours de livraison lorsque vous vous dirigez vers le client.",
       "inDeliveryBusiness": "Un agent livre cette commande.",
       "ofdClientPin": "Envoyez votre code PIN dans la discussion pour finaliser la livraison.",
       "ofdClient": "Votre commande arrive. Restez disponible pour le livreur.",

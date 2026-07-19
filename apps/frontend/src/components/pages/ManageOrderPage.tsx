@@ -604,18 +604,23 @@ const ManageOrderPage: React.FC = () => {
     }
   };
 
-  const phaseBannerAction =
-    phaseInfo.primaryActionId === 'send_pin' ? (
-      <ClientDeliveryPinButton
-        orderId={order.id}
-        pinAudience={
-          order.fulfillment_method === 'pickup' ? 'business' : 'agent'
-        }
-        fullWidth
-        onShowNotification={handleShowNotification}
-      />
-    ) : phaseInfo.primaryActionId !== 'none' &&
-      ['pay', 'rate'].includes(phaseInfo.primaryActionId) ? (
+  // Agent lifecycle CTAs belong in the phase banner (same as list-card AgentActions).
+  // Desktop sidebar omits the duplicate; mobile keeps the sticky bar for thumb reach.
+  const agentBannerActionIds = [
+    'claim',
+    'pick_up',
+    'out_for_delivery',
+    'complete_delivery',
+  ] as const;
+  const showAgentPrimaryInBanner =
+    activePersona === 'agent' &&
+    agentBannerActionIds.includes(
+      phaseInfo.primaryActionId as (typeof agentBannerActionIds)[number]
+    );
+
+  const clientPhaseBannerButton =
+    phaseInfo.primaryActionId !== 'none' &&
+    ['pay', 'rate'].includes(phaseInfo.primaryActionId) ? (
       <Button
         variant="contained"
         fullWidth
@@ -630,6 +635,28 @@ const ManageOrderPage: React.FC = () => {
         {t(primaryLabelKey, primaryLabelDefault)}
       </Button>
     ) : null;
+
+  const phaseBannerAction =
+    phaseInfo.primaryActionId === 'send_pin' ? (
+      <ClientDeliveryPinButton
+        orderId={order.id}
+        pinAudience={
+          order.fulfillment_method === 'pickup' ? 'business' : 'agent'
+        }
+        fullWidth
+        onShowNotification={handleShowNotification}
+      />
+    ) : showAgentPrimaryInBanner ? (
+      <AgentActions
+        order={order}
+        agentAccounts={accounts}
+        onActionComplete={() => refetch()}
+        onShowNotification={handleShowNotification}
+        mobileView
+      />
+    ) : (
+      clientPhaseBannerButton
+    );
 
   return (
     <>
@@ -1867,15 +1894,17 @@ const ManageOrderPage: React.FC = () => {
                               </Typography>
                             </Alert>
                           )}
-                        {/* Hide agent actions on mobile - they're shown in sticky bottom bar */}
-                        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                          <AgentActions
-                            order={order}
-                            agentAccounts={accounts}
-                            onActionComplete={() => refetch()}
-                            onShowNotification={handleShowNotification}
-                          />
-                        </Box>
+                        {/* Mobile: sticky bar. Desktop: phase banner when primary, else sidebar. */}
+                        {!showAgentPrimaryInBanner && (
+                          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                            <AgentActions
+                              order={order}
+                              agentAccounts={accounts}
+                              onActionComplete={() => refetch()}
+                              onShowNotification={handleShowNotification}
+                            />
+                          </Box>
+                        )}
                       </>
                     )}
                     {activePersona === 'business' && (
@@ -1988,7 +2017,7 @@ const ManageOrderPage: React.FC = () => {
           </Grid>
         </Container>
 
-        {/* Mobile Sticky Action Bar for Agents */}
+        {/* Mobile sticky bar — keeps lifecycle CTAs reachable while scrolling */}
         {activePersona === 'agent' && isMobile && (
           <Box
             sx={{
@@ -2000,6 +2029,10 @@ const ManageOrderPage: React.FC = () => {
               display: { xs: 'block', md: 'none' },
               maxHeight: '50vh',
               overflowY: 'auto',
+              bgcolor: 'background.paper',
+              borderTop: 1,
+              borderColor: 'divider',
+              boxShadow: 3,
               pointerEvents: 'none', // Allow clicks to pass through container
             }}
           >
