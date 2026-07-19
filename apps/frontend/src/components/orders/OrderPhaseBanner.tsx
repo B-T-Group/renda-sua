@@ -36,11 +36,17 @@ export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
   const theme = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
 
+  // Complete orders already show status elsewhere; the next-step alert adds noise.
+  if (order.current_status === 'complete') {
+    return null;
+  }
+
   return (
     <Stack
       spacing={1.5}
       sx={{
         p: 2,
+        mb: 2,
         borderRadius: 2,
         border: 1,
         borderColor: alpha(theme.palette.info.main, 0.35),

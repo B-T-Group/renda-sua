@@ -25,6 +25,8 @@ const MAX_SHARES_PER_WINDOW = 3;
 export class DeliveryPinShareService {
   private readonly logger = new Logger(DeliveryPinShareService.name);
   private readonly recentShareTimestamps = new Map<string, number[]>();
+  /** Coalesce concurrent share requests for the same order into one insert. */
+  private readonly inflightShares = new Map<string, Promise<OrderMessage>>();
 
   constructor(
     private readonly hasuraUserService: HasuraUserService,
@@ -47,6 +49,19 @@ export class DeliveryPinShareService {
   }
 
   async shareDeliveryPin(orderId: string): Promise<OrderMessage> {
+    const existing = this.inflightShares.get(orderId);
+    if (existing) return existing;
+
+    const promise = this.shareDeliveryPinOnce(orderId).finally(() => {
+      if (this.inflightShares.get(orderId) === promise) {
+        this.inflightShares.delete(orderId);
+      }
+    });
+    this.inflightShares.set(orderId, promise);
+    return promise;
+  }
+
+  private async shareDeliveryPinOnce(orderId: string): Promise<OrderMessage> {
     if (!this.isEnabled()) {
       throw new HttpException(
         'Delivery PIN messaging is not enabled',

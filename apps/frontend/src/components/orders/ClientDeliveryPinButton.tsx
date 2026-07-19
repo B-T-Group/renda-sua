@@ -6,7 +6,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 
@@ -40,6 +40,7 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
   const [loading, setLoading] = useState(false);
   const [sentAt, setSentAt] = useState<number | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const inFlightRef = useRef(false);
 
   const startCooldown = useCallback(() => {
     const now = Date.now();
@@ -57,6 +58,8 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
   }, []);
 
   const handleSendDeliveryPin = async () => {
+    if (inFlightRef.current || cooldownRemaining > 0) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
       await sendDeliveryPin(orderId);
@@ -84,6 +87,7 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
             );
       onShowNotification?.(errorMessage, 'error');
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -98,7 +102,7 @@ export const ClientDeliveryPinButton: React.FC<ClientDeliveryPinButtonProps> = (
         color="primary"
         size={size}
         onClick={() => void handleSendDeliveryPin()}
-        disabled={loading}
+        disabled={loading || cooldownActive}
         fullWidth={fullWidth}
         startIcon={
           loading ? (
