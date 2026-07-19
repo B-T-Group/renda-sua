@@ -6,11 +6,12 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCart } from '../../contexts/CartContext';
+import type { CartItem } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   InventoryItem,
@@ -18,13 +19,14 @@ import {
 } from '../../hooks/useInventoryItems';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { useMetaPixel } from '../../hooks/useMetaPixel';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
+import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
-  buildCartItemFromInventory,
-  catalogRequiresVariantSelection,
-  defaultCatalogVariantId,
-} from '../../utils/catalogVariantCart';
-import { useSnackbar } from 'notistack';
+  metaPixelContentCategoryFromItem,
+  metaPixelGoogleProductCategoryFromItem,
+} from '../../utils/metaPixelContentCategory';
+import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 import { useCollections } from '../../hooks/useCollections';
@@ -34,8 +36,6 @@ const ITEMS_PER_PAGE = 24;
 const CollectionLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
   const { isAuthenticated } = useAuth0();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
@@ -62,45 +62,59 @@ const CollectionLandingPage: React.FC = () => {
   });
 
   const { trackView } = useTrackItemView(null);
+  const { trackAddToCart } = useMetaPixel();
 
   const formatCurrency = (amount: number, currency = 'USD') =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 
+  const onCartBuilt = useCallback(
+    (cartItem: CartItem, item: InventoryItem) => {
+      const unitPrice = cartItem.itemData.price;
+      const contentCategory = metaPixelContentCategoryFromItem(item.item);
+      const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
+
+      trackAddToCart({
+        content_type: 'product',
+        content_ids: [item.id],
+        contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+        value: unitPrice,
+        currency: item.item.currency || 'USD',
+        content_name: item.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
+      });
+
+      addToCart({
+        ...cartItem,
+        itemData: {
+          ...cartItem.itemData,
+          ...(contentCategory && { contentCategory }),
+          ...(googleCategory && { googleProductCategory: googleCategory }),
+        },
+      });
+    },
+    [addToCart, trackAddToCart]
+  );
+
+  const variantFlow = useCatalogVariantFlow({
+    onCartBuilt,
+    requireAuth: () => {
+      if (!isAuthenticated) {
+        openLoginDialog();
+        return false;
+      }
+      return true;
+    },
+  });
+
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      openLoginDialog();
-      return;
-    }
-    if (catalogRequiresVariantSelection(item)) {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    const variantId = defaultCatalogVariantId(item);
-    const qs = variantId
-      ? `?variantId=${encodeURIComponent(variantId)}`
-      : '';
-    navigate(`/items/${item.id}/place_order${qs}`);
+    variantFlow.requestOrder(item);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      openLoginDialog();
-      return;
-    }
-    const cartItem = buildCartItemFromInventory(item);
-    if (cartItem === 'needs_variant') {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    addToCart(cartItem);
+    variantFlow.requestAddToCart(item);
   };
 
   const title =
@@ -173,6 +187,14 @@ const CollectionLandingPage: React.FC = () => {
         </Box>
       ) : null}
       {loginMethodDialog}
+      <CatalogVariantPickerDialog
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={variantFlow.onPickerConfirm}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
+      />
     </Container>
   );
 };

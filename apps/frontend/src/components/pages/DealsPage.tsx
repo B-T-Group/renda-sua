@@ -7,24 +7,20 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../contexts/CartContext';
+import type { CartItem } from '../../contexts/CartContext';
 import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
-import {
-  buildCartItemFromInventory,
-  catalogRequiresVariantSelection,
-  defaultCatalogVariantId,
-} from '../../utils/catalogVariantCart';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
-import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from 'notistack';
+import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 
@@ -33,8 +29,6 @@ const DealsPage: React.FC = () => {
   const { isAuthenticated } = useAuth0();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { addToCart } = useCart();
-  const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
@@ -75,65 +69,54 @@ const DealsPage: React.FC = () => {
     openLoginDialog();
   };
 
+  const onCartBuilt = useCallback(
+    (cartItem: CartItem, item: InventoryItem) => {
+      const unitPrice = cartItem.itemData.price;
+      const contentCategory = metaPixelContentCategoryFromItem(item.item);
+      const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
+
+      trackAddToCart({
+        content_type: 'product',
+        content_ids: [item.id],
+        contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+        value: unitPrice,
+        currency: item.item.currency || 'USD',
+        content_name: item.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
+      });
+
+      addToCart({
+        ...cartItem,
+        itemData: {
+          ...cartItem.itemData,
+          ...(contentCategory && { contentCategory }),
+          ...(googleCategory && { googleProductCategory: googleCategory }),
+        },
+      });
+    },
+    [addToCart, trackAddToCart]
+  );
+
+  const variantFlow = useCatalogVariantFlow({
+    onCartBuilt,
+    requireAuth: () => {
+      if (!isAuthenticated) {
+        handleLogin();
+        return false;
+      }
+      return true;
+    },
+  });
+
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      handleLogin();
-      return;
-    }
-    if (catalogRequiresVariantSelection(item)) {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    const variantId = defaultCatalogVariantId(item);
-    const qs = variantId
-      ? `?variantId=${encodeURIComponent(variantId)}`
-      : '';
-    navigate(`/items/${item.id}/place_order${qs}`);
+    variantFlow.requestOrder(item);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      handleLogin();
-      return;
-    }
-
-    const cartItem = buildCartItemFromInventory(item);
-    if (cartItem === 'needs_variant') {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-
-    const unitPrice = cartItem.itemData.price;
-    const contentCategory = metaPixelContentCategoryFromItem(item.item);
-    const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
-
-    trackAddToCart({
-      content_type: 'product',
-      content_ids: [item.id],
-      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
-      value: unitPrice,
-      currency: item.item.currency || 'USD',
-      content_name: item.item.name,
-      ...(contentCategory && { content_category: contentCategory }),
-      ...(googleCategory && { google_product_category: googleCategory }),
-    });
-
-    addToCart({
-      ...cartItem,
-      itemData: {
-        ...cartItem.itemData,
-        ...(contentCategory && { contentCategory }),
-        ...(googleCategory && { googleProductCategory: googleCategory }),
-      },
-    });
+    variantFlow.requestAddToCart(item);
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -259,6 +242,14 @@ const DealsPage: React.FC = () => {
         )}
       </Paper>
       {loginMethodDialog}
+      <CatalogVariantPickerDialog
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={variantFlow.onPickerConfirm}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
+      />
     </Container>
   );
 };

@@ -47,12 +47,9 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
-import {
-  buildCartItemFromInventory,
-  catalogRequiresVariantSelection,
-  defaultCatalogVariantId,
-} from '../../utils/catalogVariantCart';
-import { useSnackbar } from 'notistack';
+import type { CartItem } from '../../contexts/CartContext';
+import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import {
   filterExcludedCatalogItems,
   pickUniqueCatalogItems,
@@ -219,7 +216,6 @@ const ItemsPage: React.FC = () => {
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
-  const { enqueueSnackbar } = useSnackbar();
   const collectionSlug = useMemo(() => {
     return new URLSearchParams(location.search).get('collection') ?? '';
   }, [location.search]);
@@ -483,65 +479,54 @@ const ItemsPage: React.FC = () => {
   const { trackAddToCart } = useMetaPixel();
   const { trackSiteEvent } = useTrackSiteEvent();
 
+  const onCartBuilt = useCallback(
+    (cartItem: CartItem, item: InventoryItem) => {
+      const unitPrice = cartItem.itemData.price;
+      const contentCategory = metaPixelContentCategoryFromItem(item.item);
+      const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
+
+      trackAddToCart({
+        content_type: 'product',
+        content_ids: [item.id],
+        contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+        value: unitPrice,
+        currency: item.item.currency || 'USD',
+        content_name: item.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
+      });
+
+      addToCart({
+        ...cartItem,
+        itemData: {
+          ...cartItem.itemData,
+          ...(contentCategory && { contentCategory }),
+          ...(googleCategory && { googleProductCategory: googleCategory }),
+        },
+      });
+    },
+    [addToCart, trackAddToCart]
+  );
+
+  const variantFlow = useCatalogVariantFlow({
+    onCartBuilt,
+    requireAuth: () => {
+      if (!isAuthenticated) {
+        handleLogin();
+        return false;
+      }
+      return true;
+    },
+  });
+
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      handleLogin();
-      return;
-    }
-    if (catalogRequiresVariantSelection(item)) {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    const variantId = defaultCatalogVariantId(item);
-    const qs = variantId
-      ? `?variantId=${encodeURIComponent(variantId)}`
-      : '';
-    navigate(`/items/${item.id}/place_order${qs}`);
+    variantFlow.requestOrder(item);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    if (!isAuthenticated) {
-      handleLogin();
-      return;
-    }
-
-    const cartItem = buildCartItemFromInventory(item);
-    if (cartItem === 'needs_variant') {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-
-    const unitPrice = cartItem.itemData.price;
-    const contentCategory = metaPixelContentCategoryFromItem(item.item);
-    const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
-
-    trackAddToCart({
-      content_type: 'product',
-      content_ids: [item.id],
-      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
-      value: unitPrice,
-      currency: item.item.currency || 'USD',
-      content_name: item.item.name,
-      ...(contentCategory && { content_category: contentCategory }),
-      ...(googleCategory && { google_product_category: googleCategory }),
-    });
-
-    addToCart({
-      ...cartItem,
-      itemData: {
-        ...cartItem.itemData,
-        ...(contentCategory && { contentCategory }),
-        ...(googleCategory && { googleProductCategory: googleCategory }),
-      },
-    });
+    variantFlow.requestAddToCart(item);
   };
 
   // Format currency helper
@@ -1267,6 +1252,14 @@ const ItemsPage: React.FC = () => {
         </Box>
       </Paper>
       {loginMethodDialog}
+      <CatalogVariantPickerDialog
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={variantFlow.onPickerConfirm}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
+      />
     </Container>
   );
 };

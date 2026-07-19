@@ -66,6 +66,10 @@ import {
 } from '../common/agent-proximity.util';
 import { LocationsService } from '../locations/locations.service';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import {
+  resolveShopperVariant,
+  ShopperVariantResolveException,
+} from './resolve-shopper-variant.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -524,68 +528,24 @@ export class OrdersService {
     orderLine: OrderItem,
     inventoryRow: any
   ): any | null {
-    const rowVariantId = inventoryRow.item_variant_id as string | null | undefined;
-    const activeVariants = inventoryRow.item?.item_variants ?? [];
-    if (rowVariantId) {
-      const rowVariant =
-        (Array.isArray(activeVariants)
-          ? activeVariants.find((v: any) => v?.id === rowVariantId)
-          : null) ||
-        inventoryRow.item_variant ||
-        null;
-      if (!rowVariant) {
+    try {
+      return resolveShopperVariant({
+        requestedVariantId: orderLine.item_variant_id,
+        inventoryRow,
+      });
+    } catch (error: any) {
+      if (error instanceof ShopperVariantResolveException) {
         throw new HttpException(
           {
             success: false,
-            message: 'Inventory variant is unavailable for this product.',
-            error: 'ITEM_VARIANT_INVALID',
+            message: error.message,
+            error: error.code,
           },
           HttpStatus.BAD_REQUEST
         );
       }
-      const requestedId = orderLine.item_variant_id;
-      if (requestedId?.trim() && requestedId !== rowVariantId) {
-        throw new HttpException(
-          {
-            success: false,
-            message: 'Selected variant does not match inventory stock row.',
-            error: 'ITEM_VARIANT_MISMATCH',
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      return rowVariant;
+      throw error;
     }
-    if (!Array.isArray(activeVariants) || activeVariants.length === 0) {
-      return null;
-    }
-    if (activeVariants.length === 1) {
-      return activeVariants[0];
-    }
-    const requestedId = orderLine.item_variant_id;
-    if (!requestedId?.trim()) {
-      throw new HttpException(
-        {
-          success: false,
-          message:
-            'This product has multiple options; please select a variant before ordering.',
-          error: 'ITEM_VARIANT_REQUIRED',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    const match = activeVariants.find((v: any) => v?.id === requestedId);
-    if (!match) {
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Invalid or unavailable variant for this product.',
-          error: 'ITEM_VARIANT_INVALID',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    return match;
   }
 
   private async getActiveDealsByBusinessInventoryIds(
@@ -8002,6 +7962,9 @@ export class OrdersService {
         deal
       );
       const snapshot = this.buildVariantSnapshot(variant, unitPrice);
+      const activeVariants = businessInventory.item?.item_variants ?? [];
+      const choseBaseWithOptions =
+        !variant && Array.isArray(activeVariants) && activeVariants.length > 0;
       return {
         business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,
@@ -8015,6 +7978,7 @@ export class OrdersService {
           variant_name: variant.name,
           ...(snapshot && { variant_snapshot: snapshot }),
         }),
+        ...(choseBaseWithOptions && { variant_name: 'Default' }),
         stripe_tax_code_id:
           businessInventory.item.stripe_tax_code_id ||
           STRIPE_TAX_CODE_GENERAL_TANGIBLE,

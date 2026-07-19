@@ -85,6 +85,12 @@ import {
   unitPriceWithListingDeal,
 } from '../../types/itemVariant';
 import { orderedItemImages } from '../../utils/orderedItemImages';
+import {
+  SHOPPER_BASE_VARIANT_ID,
+  isShopperBaseVariantId,
+  shopperVariantOptions,
+  toOrderItemVariantId,
+} from '../../utils/shopperVariantSelection';
 import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PhoneInput from '../common/PhoneInput';
@@ -841,12 +847,33 @@ const PlaceOrderPage: React.FC = () => {
 
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
-  const activeVariants = useMemo(() => {
+  const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
+  const dbVariants = useMemo(() => {
     const raw = selectedItem?.item?.item_variants ?? [];
     return [...raw]
       .filter((v) => v.is_active !== false)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }, [selectedItem]);
+
+  const parentImageUrl = useMemo(() => {
+    const imgs = selectedItem?.item?.item_images ?? [];
+    const sorted = [...imgs].sort(
+      (a: { display_order?: number }, b: { display_order?: number }) =>
+        (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
+    return sorted[0]?.image_url ?? null;
+  }, [selectedItem]);
+
+  const activeVariants = useMemo(
+    () =>
+      shopperVariantOptions({
+        itemName: selectedItem?.item?.name ?? '',
+        defaultLabel: defaultVariantLabel,
+        variants: dbVariants,
+        parentImageUrl,
+      }),
+    [selectedItem?.item?.name, defaultVariantLabel, dbVariants, parentImageUrl]
+  );
 
   const variantIdsKey = useMemo(
     () => activeVariants.map((v) => v.id).join(','),
@@ -855,34 +882,41 @@ const PlaceOrderPage: React.FC = () => {
 
   useEffect(() => {
     if (!selectedItem) return;
-    const variants = [...(selectedItem.item?.item_variants ?? [])]
-      .filter((v) => v.is_active !== false)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-    if (variants.length === 0) {
+    if (dbVariants.length === 0) {
       setSelectedVariantId(null);
-      return;
-    }
-    if (variants.length === 1) {
-      setSelectedVariantId(variants[0].id);
       return;
     }
     const fromQuery = new URLSearchParams(location.search).get('variantId');
     const fromState = (location.state as { variantId?: string } | null)?.variantId;
-    const preferred = fromQuery || fromState || null;
-    if (preferred && variants.some((v) => v.id === preferred)) {
+    const preferredRaw = fromQuery || fromState || null;
+    const preferred = preferredRaw
+      ? isShopperBaseVariantId(preferredRaw)
+        ? SHOPPER_BASE_VARIANT_ID
+        : preferredRaw
+      : null;
+    if (preferred && activeVariants.some((v) => v.id === preferred)) {
       setSelectedVariantId(preferred);
       return;
     }
-    // Multiple options without a carried selection: require an explicit pick.
     setSelectedVariantId((prev) =>
-      prev && variants.some((v) => v.id === prev) ? prev : null
+      prev && activeVariants.some((v) => v.id === prev) ? prev : null
     );
-  }, [selectedItem?.id, variantIdsKey, selectedItem, location.search, location.state]);
+  }, [
+    selectedItem?.id,
+    variantIdsKey,
+    selectedItem,
+    location.search,
+    location.state,
+    dbVariants.length,
+    activeVariants,
+  ]);
 
   const selectedVariant = useMemo(() => {
-    if (!selectedVariantId) return null;
-    return activeVariants.find((v) => v.id === selectedVariantId) ?? null;
-  }, [activeVariants, selectedVariantId]);
+    if (!selectedVariantId || isShopperBaseVariantId(selectedVariantId)) {
+      return null;
+    }
+    return dbVariants.find((v) => v.id === selectedVariantId) ?? null;
+  }, [dbVariants, selectedVariantId]);
 
   const listingUnitPricing = useMemo(() => {
     if (!selectedItem) {
@@ -1280,7 +1314,9 @@ const PlaceOrderPage: React.FC = () => {
           {
             business_inventory_id: selectedItem.id,
             quantity: quantity,
-            ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
+            ...(toOrderItemVariantId(selectedVariantId)
+              ? { item_variant_id: toOrderItemVariantId(selectedVariantId) }
+              : {}),
           },
         ],
         ...(isPickupOrder
@@ -1729,7 +1765,9 @@ const PlaceOrderPage: React.FC = () => {
         {
           business_inventory_id: selectedItem.id,
           quantity,
-          ...(selectedVariantId ? { item_variant_id: selectedVariantId } : {}),
+          ...(toOrderItemVariantId(selectedVariantId)
+            ? { item_variant_id: toOrderItemVariantId(selectedVariantId) }
+            : {}),
         },
       ],
       ...(isPickupOrder
@@ -1909,7 +1947,7 @@ const PlaceOrderPage: React.FC = () => {
   // Calculate if order can be placed
   const hasProfilePhone = Boolean(profile?.phone_number?.trim());
   const variantSelectionValid =
-    activeVariants.length < 2 || Boolean(selectedVariantId);
+    dbVariants.length === 0 || Boolean(selectedVariantId);
   const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&

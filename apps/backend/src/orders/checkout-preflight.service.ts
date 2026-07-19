@@ -31,6 +31,10 @@ import {
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import {
+  resolveShopperVariant,
+  ShopperVariantResolveException,
+} from './resolve-shopper-variant.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -721,53 +725,19 @@ export class CheckoutPreflightService {
     requestedVariantId: string | undefined,
     inventoryRow: any
   ): any | null {
-    const rowVariantId = inventoryRow.item_variant_id as
-      | string
-      | null
-      | undefined;
-    const activeVariants = inventoryRow.item?.item_variants ?? [];
-    if (rowVariantId) {
-      const rowVariant =
-        (Array.isArray(activeVariants)
-          ? activeVariants.find((v: any) => v?.id === rowVariantId)
-          : null) ||
-        inventoryRow.item_variant ||
-        null;
-      if (!rowVariant) {
+    try {
+      return resolveShopperVariant({
+        requestedVariantId,
+        inventoryRow,
+      });
+    } catch (error: any) {
+      if (error instanceof ShopperVariantResolveException) {
         throw {
-          error: 'ITEM_VARIANT_INVALID',
-          message: 'Inventory variant is unavailable for this product.',
+          error: error.code,
+          message: error.message,
         };
       }
-      if (requestedVariantId?.trim() && requestedVariantId !== rowVariantId) {
-        throw {
-          error: 'ITEM_VARIANT_MISMATCH',
-          message: 'Selected variant does not match inventory stock row.',
-        };
-      }
-      return rowVariant;
+      throw error;
     }
-    if (!Array.isArray(activeVariants) || activeVariants.length === 0) {
-      return null;
-    }
-    if (activeVariants.length === 1) {
-      return activeVariants[0];
-    }
-    if (!requestedVariantId?.trim()) {
-      throw {
-        error: 'ITEM_VARIANT_REQUIRED',
-        message: 'Please select a product option before checkout.',
-      };
-    }
-    const found = activeVariants.find(
-      (v: any) => v?.id === requestedVariantId
-    );
-    if (!found) {
-      throw {
-        error: 'ITEM_VARIANT_INVALID',
-        message: 'Selected product option is not available.',
-      };
-    }
-    return found;
   }
 }

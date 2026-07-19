@@ -6,26 +6,42 @@ import {
   primaryVariantImageUrl,
   unitPriceWithListingDeal,
 } from '../types/itemVariant';
-
-function sortActiveVariants(
-  inventoryItem: InventoryItem | null | undefined
-): ItemVariant[] {
-  const raw = inventoryItem?.item?.item_variants ?? [];
-  return [...raw]
-    .filter((v) => v.is_active !== false)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-}
+import { orderedItemImages } from '../utils/orderedItemImages';
+import {
+  SHOPPER_BASE_VARIANT_ID,
+  activeCatalogVariants,
+  isShopperBaseVariantId,
+  shopperVariantOptions,
+} from '../utils/shopperVariantSelection';
 
 /**
  * Default selection + unit pricing for a catalog listing
  * (location override → variant price → inventory, then listing deal).
+ * Requires an explicit pick when the item has any DB variants (base + variants).
  */
 export function useListingVariantSelection(
-  inventoryItem: InventoryItem | null | undefined
+  inventoryItem: InventoryItem | null | undefined,
+  defaultLabel = 'Default'
 ) {
-  const activeVariants = useMemo(
-    () => sortActiveVariants(inventoryItem),
+  const dbVariants = useMemo(
+    () => activeCatalogVariants(inventoryItem?.item?.item_variants),
     [inventoryItem]
+  );
+
+  const parentImageUrl = useMemo(() => {
+    if (!inventoryItem) return null;
+    return orderedItemImages(inventoryItem.item?.item_images)?.[0]?.image_url ?? null;
+  }, [inventoryItem]);
+
+  const activeVariants = useMemo(
+    () =>
+      shopperVariantOptions({
+        itemName: inventoryItem?.item?.name ?? '',
+        defaultLabel,
+        variants: dbVariants,
+        parentImageUrl,
+      }),
+    [inventoryItem?.item?.name, defaultLabel, dbVariants, parentImageUrl]
   );
 
   const variantIdsKey = useMemo(
@@ -39,25 +55,20 @@ export function useListingVariantSelection(
 
   useEffect(() => {
     if (!inventoryItem) return;
-    const variants = sortActiveVariants(inventoryItem);
-    if (variants.length === 0) {
+    if (dbVariants.length === 0) {
       setSelectedVariantId(null);
       return;
     }
-    if (variants.length === 1) {
-      setSelectedVariantId(variants[0].id);
-      return;
-    }
-    // Multiple options: keep selection only if still valid; otherwise require explicit pick.
     setSelectedVariantId((prev) =>
-      prev && variants.some((v) => v.id === prev) ? prev : null
+      prev && activeVariants.some((v) => v.id === prev) ? prev : null
     );
-  }, [inventoryItem, variantIdsKey]);
+  }, [inventoryItem, variantIdsKey, dbVariants.length, activeVariants]);
 
-  const selectedVariant = useMemo(() => {
+  const selectedVariant = useMemo((): ItemVariant | null => {
     if (!selectedVariantId) return null;
-    return activeVariants.find((v) => v.id === selectedVariantId) ?? null;
-  }, [activeVariants, selectedVariantId]);
+    if (isShopperBaseVariantId(selectedVariantId)) return null;
+    return dbVariants.find((v) => v.id === selectedVariantId) ?? null;
+  }, [dbVariants, selectedVariantId]);
 
   const listingUnitPricing = useMemo(() => {
     if (!inventoryItem) {
@@ -86,12 +97,21 @@ export function useListingVariantSelection(
     [selectedVariant]
   );
 
+  const selectionComplete =
+    dbVariants.length === 0 || selectedVariantId != null;
+
   return {
+    /** Picker options including synthetic base when DB variants exist. */
     activeVariants,
+    dbVariants,
     selectedVariantId,
     setSelectedVariantId,
     selectedVariant,
     listingUnitPricing,
     variantImageUrl,
+    selectionComplete,
+    requiresSelection: dbVariants.length >= 1,
+    isBaseSelected: isShopperBaseVariantId(selectedVariantId),
+    SHOPPER_BASE_VARIANT_ID,
   };
 }

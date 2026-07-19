@@ -3534,7 +3534,11 @@
       "selectLabel": "Option",
       "label": "Option",
       "selectRequired": "Select an option",
-      "chooseOption": "Choose an option"
+      "chooseOption": "Choose an option",
+      "defaultOption": "Default",
+      "selectDialogTitle": "Choose an option",
+      "confirmSelection": "Add to cart",
+      "confirmOrder": "Continue"
     },
     "selectCountry": "Select a country.",
     "payAtDelivery": {

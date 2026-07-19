@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../contexts/CartContext';
+import { toOrderItemVariantId } from '../utils/shopperVariantSelection';
 import { useApiClient } from './useApiClient';
 import { useMetaPixel } from './useMetaPixel';
 
@@ -155,11 +156,14 @@ export const useCheckout = () => {
 
       try {
         const preflightResponse = await apiClient.post('/orders/checkout/preflight', {
-          items: cartItems.map((item) => ({
-            business_inventory_id: item.inventoryItemId,
-            quantity: item.quantity,
-            ...(item.variantId && { item_variant_id: item.variantId }),
-          })),
+          items: cartItems.map((item) => {
+            const itemVariantId = toOrderItemVariantId(item.variantId);
+            return {
+              business_inventory_id: item.inventoryItemId,
+              quantity: item.quantity,
+              ...(itemVariantId && { item_variant_id: itemVariantId }),
+            };
+          }),
           ...(fulfillmentMethod === 'delivery' && deliveryAddressId
             ? { delivery_address_id: deliveryAddressId }
             : {}),
@@ -209,11 +213,14 @@ export const useCheckout = () => {
         const orders: OrderResult[] = [];
         for (const [, items] of itemsByBusiness) {
           const orderData: CreateOrderRequest = {
-            items: items.map((item) => ({
-              business_inventory_id: item.inventoryItemId,
-              quantity: item.quantity,
-              ...(item.variantId && { item_variant_id: item.variantId }),
-            })),
+            items: items.map((item) => {
+              const itemVariantId = toOrderItemVariantId(item.variantId);
+              return {
+                business_inventory_id: item.inventoryItemId,
+                quantity: item.quantity,
+                ...(itemVariantId && { item_variant_id: itemVariantId }),
+              };
+            }),
             ...(fulfillmentMethod === 'delivery' && deliveryAddressId
               ? { delivery_address_id: deliveryAddressId }
               : {}),
@@ -294,12 +301,15 @@ export const useCheckout = () => {
       setError(null);
 
       try {
+        const resolvedVariantId = toOrderItemVariantId(itemVariantId);
         const orderData: CreateOrderRequest = {
           items: [
             {
               business_inventory_id: inventoryItemId,
               quantity: quantity,
-              ...(itemVariantId && { item_variant_id: itemVariantId }),
+              ...(resolvedVariantId && {
+                item_variant_id: resolvedVariantId,
+              }),
             },
           ],
           delivery_address_id: deliveryAddressId,

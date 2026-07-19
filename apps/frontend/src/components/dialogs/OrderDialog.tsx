@@ -1,14 +1,12 @@
 import { ShoppingCart } from '@mui/icons-material';
 import { Button } from '@mui/material';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from 'notistack';
+import type { CartItem } from '../../contexts/CartContext';
 import { InventoryItem } from '../../hooks/useInventoryItems';
-import {
-  catalogRequiresVariantSelection,
-  defaultCatalogVariantId,
-} from '../../utils/catalogVariantCart';
+import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { catalogRequiresVariantSelection } from '../../utils/catalogVariantCart';
+import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 
 interface OrderDialogProps {
   selectedItem: InventoryItem | null;
@@ -25,25 +23,23 @@ interface OrderDialogProps {
  */
 const OrderDialog: React.FC<OrderDialogProps> = ({ selectedItem, onClose }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
+
+  const onCartBuilt = useCallback((_cartItem: CartItem, _item: InventoryItem) => {
+    // OrderDialog only places orders; cart path is unused.
+  }, []);
+
+  const variantFlow = useCatalogVariantFlow({ onCartBuilt });
+
+  const formatCurrency = (amount: number, currency = 'USD') =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(
+      amount
+    );
 
   const handlePlaceOrder = () => {
     if (!selectedItem) return;
-    if (catalogRequiresVariantSelection(selectedItem)) {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${selectedItem.id}`);
-      onClose?.();
-      return;
-    }
-    const variantId = defaultCatalogVariantId(selectedItem);
-    const qs = variantId
-      ? `?variantId=${encodeURIComponent(variantId)}`
-      : '';
-    navigate(`/items/${selectedItem.id}/place_order${qs}`);
-    onClose?.();
+    const needsPicker = catalogRequiresVariantSelection(selectedItem);
+    variantFlow.requestOrder(selectedItem);
+    if (!needsPicker) onClose?.();
   };
 
   if (!selectedItem) {
@@ -51,14 +47,27 @@ const OrderDialog: React.FC<OrderDialogProps> = ({ selectedItem, onClose }) => {
   }
 
   return (
-    <Button
-      onClick={handlePlaceOrder}
-      variant="contained"
-      startIcon={<ShoppingCart />}
-      size="large"
-    >
-      {t('orders.placeOrder', 'Place Order')}
-    </Button>
+    <>
+      <Button
+        onClick={handlePlaceOrder}
+        variant="contained"
+        startIcon={<ShoppingCart />}
+        size="large"
+      >
+        {t('orders.placeOrder', 'Place Order')}
+      </Button>
+      <CatalogVariantPickerDialog
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={(selectionId) => {
+          variantFlow.onPickerConfirm(selectionId);
+          onClose?.();
+        }}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
+      />
+    </>
   );
 };
 

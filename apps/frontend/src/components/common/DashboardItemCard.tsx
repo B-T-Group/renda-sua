@@ -48,7 +48,7 @@ import {
   itemImageDisplayUrl,
   orderedItemImages,
 } from '../../utils/orderedItemImages';
-import { activeCatalogVariants, defaultCatalogVariantId } from '../../utils/catalogVariantCart';
+import { shopperVariantOptionCount } from '../../utils/catalogVariantCart';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
@@ -126,7 +126,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   );
 
   const variantOptionCount = useMemo(
-    () => activeCatalogVariants(inventory).length,
+    () => shopperVariantOptionCount(inventory),
     [inventory]
   );
 
@@ -1106,7 +1106,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventory.id}
-        variantId={defaultCatalogVariantId(inventory)}
+        variantId={undefined}
         item={{
           title: inventory.item.name,
           imageUrl: displayImageUrl,

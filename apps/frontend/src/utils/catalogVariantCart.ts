@@ -7,37 +7,46 @@ import {
   unitPriceWithListingDeal,
 } from '../types/itemVariant';
 import { orderedItemImages } from './orderedItemImages';
+import {
+  CART_BASE_VARIANT_KEY,
+  activeCatalogVariants as activeVariantsFromList,
+  catalogRequiresVariantSelection as requiresSelectionFromVariants,
+  isShopperBaseVariantId,
+  shopperVariantOptionCount as optionCountFromVariants,
+  toCartVariantId,
+  toOrderItemVariantId,
+} from './shopperVariantSelection';
+
+export {
+  toCartVariantId,
+  toOrderItemVariantId,
+  isShopperBaseVariantId,
+  CART_BASE_VARIANT_KEY,
+};
 
 export function activeCatalogVariants(
   item: InventoryItem | null | undefined
 ): ItemVariant[] {
-  const raw = item?.item?.item_variants ?? [];
-  return [...raw]
-    .filter((v) => v.is_active !== false)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  return activeVariantsFromList(item?.item?.item_variants);
 }
 
-/** True when the shopper must open detail to pick an option before cart/order. */
 export function catalogRequiresVariantSelection(
   item: InventoryItem | null | undefined
 ): boolean {
-  return activeCatalogVariants(item).length > 1;
+  return requiresSelectionFromVariants(item?.item?.item_variants);
 }
 
-/** Auto-select when there is exactly one active variant; otherwise null. */
-export function defaultCatalogVariantId(
+export function shopperVariantOptionCount(
   item: InventoryItem | null | undefined
-): string | null {
-  const variants = activeCatalogVariants(item);
-  if (variants.length === 1) return variants[0].id;
-  return null;
+): number {
+  return optionCountFromVariants(item?.item?.item_variants);
 }
 
 export function catalogVariantById(
   item: InventoryItem,
   variantId: string | null | undefined
 ): ItemVariant | null {
-  if (!variantId) return null;
+  if (!variantId || isShopperBaseVariantId(variantId)) return null;
   return activeCatalogVariants(item).find((v) => v.id === variantId) ?? null;
 }
 
@@ -66,33 +75,42 @@ export function catalogUnitPriceForVariant(
 
 /**
  * Builds a cart line from a list/card inventory row.
- * Returns `needs_variant` when multiple options exist and none was chosen.
+ * Returns `needs_variant` when options exist and none was chosen.
+ * Pass `__base__` or `base` for the parent-item option.
  */
 export function buildCartItemFromInventory(
   item: InventoryItem,
   quantity = 1,
-  variantIdOverride?: string | null
+  variantIdOverride?: string | null,
+  baseVariantLabel = 'Default'
 ): CartItem | 'needs_variant' {
   const variants = activeCatalogVariants(item);
-  const variantId =
+  const selection =
     variantIdOverride !== undefined && variantIdOverride !== null
       ? variantIdOverride
-      : defaultCatalogVariantId(item);
+      : null;
 
-  if (variants.length > 1 && !variantId) {
+  if (variants.length >= 1 && !selection) {
     return 'needs_variant';
   }
 
-  const variant = catalogVariantById(item, variantId);
-  const pricing = catalogUnitPriceForVariant(item, variantId);
+  const cartVariantId = toCartVariantId(selection);
+  const variant = catalogVariantById(item, selection);
+  const pricing = catalogUnitPriceForVariant(item, selection);
   const parentImage = orderedItemImages(item.item.item_images)[0]?.image_url;
   const variantImage = primaryVariantImageUrl(variant) || undefined;
+  const isBase = isShopperBaseVariantId(selection);
 
   return {
     inventoryItemId: item.id,
     quantity,
-    ...(variantId
-      ? { variantId, variantName: variant?.name?.trim() || undefined }
+    ...(cartVariantId
+      ? {
+          variantId: cartVariantId,
+          variantName: isBase
+            ? baseVariantLabel
+            : variant?.name?.trim() || undefined,
+        }
       : {}),
     businessId: item.business_location.business_id,
     businessLocationId: item.business_location_id,

@@ -8,10 +8,10 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
+import type { CartItem } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   useBackendOrders,
@@ -23,17 +23,13 @@ import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
-import {
-  buildCartItemFromInventory,
-  catalogRequiresVariantSelection,
-  defaultCatalogVariantId,
-} from '../../utils/catalogVariantCart';
-import { useSnackbar } from 'notistack';
 import AddressAlert from '../common/AddressAlert';
+import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
 import OrderActionCard from '../common/OrderActionCard';
@@ -45,8 +41,6 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
-  const { enqueueSnackbar } = useSnackbar();
-  const navigate = useNavigate();
   const {
     inventoryItems,
     loading: inventoryLoading,
@@ -137,55 +131,45 @@ const Dashboard: React.FC = () => {
     };
   };
 
+  const onCartBuilt = useCallback(
+    (cartItem: CartItem, item: InventoryItem) => {
+      const unitPrice = cartItem.itemData.price;
+      const contentCategory = metaPixelContentCategoryFromItem(item.item);
+      const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
+
+      trackAddToCart({
+        content_type: 'product',
+        content_ids: [item.id],
+        contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
+        value: unitPrice,
+        currency: item.item.currency || 'USD',
+        content_name: item.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
+      });
+
+      addToCart({
+        ...cartItem,
+        itemData: {
+          ...cartItem.itemData,
+          ...(contentCategory && { contentCategory }),
+          ...(googleCategory && { googleProductCategory: googleCategory }),
+        },
+      });
+    },
+    [addToCart, trackAddToCart]
+  );
+
+  const variantFlow = useCatalogVariantFlow({ onCartBuilt });
+
   const handleOrderClick = (item: InventoryItem) => {
     trackView(item.id);
-    if (catalogRequiresVariantSelection(item)) {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    const variantId = defaultCatalogVariantId(item);
-    const qs = variantId
-      ? `?variantId=${encodeURIComponent(variantId)}`
-      : '';
-    navigate(`/items/${item.id}/place_order${qs}`);
+    variantFlow.requestOrder(item);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
     trackView(item.id);
-    const cartItem = buildCartItemFromInventory(item);
-    if (cartItem === 'needs_variant') {
-      enqueueSnackbar(t('cart.chooseOption', 'Choose an option'), {
-        variant: 'info',
-      });
-      navigate(`/items/${item.id}`);
-      return;
-    }
-    const unitPrice = cartItem.itemData.price;
-    const contentCategory = metaPixelContentCategoryFromItem(item.item);
-    const googleCategory = metaPixelGoogleProductCategoryFromItem(item.item);
-
-    trackAddToCart({
-      content_type: 'product',
-      content_ids: [item.id],
-      contents: [{ id: item.id, quantity: 1, item_price: unitPrice }],
-      value: unitPrice,
-      currency: item.item.currency || 'USD',
-      content_name: item.item.name,
-      ...(contentCategory && { content_category: contentCategory }),
-      ...(googleCategory && { google_product_category: googleCategory }),
-    });
-
-    addToCart({
-      ...cartItem,
-      itemData: {
-        ...cartItem.itemData,
-        ...(contentCategory && { contentCategory }),
-        ...(googleCategory && { googleProductCategory: googleCategory }),
-      },
-    });
+    variantFlow.requestAddToCart(item);
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -409,6 +393,14 @@ const Dashboard: React.FC = () => {
         open={confirmationModalOpen}
         onClose={() => setConfirmationModalOpen(false)}
         orderNumber={undefined}
+      />
+      <CatalogVariantPickerDialog
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={variantFlow.onPickerConfirm}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
       />
     </Container>
   );

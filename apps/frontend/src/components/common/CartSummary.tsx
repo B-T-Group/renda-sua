@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
+import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import {
   CheckoutTaxSummaryLines,
   checkoutTotalLabelDefault,
@@ -47,11 +48,14 @@ const CartSummary: React.FC<CartSummaryProps> = ({
   const checkoutPreflightRequest = useMemo(() => {
     if (cartItems.length === 0) return null;
     return {
-      items: cartItems.map((item) => ({
-        business_inventory_id: item.inventoryItemId,
-        quantity: item.quantity,
-        ...(item.variantId ? { item_variant_id: item.variantId } : {}),
-      })),
+      items: cartItems.map((item) => {
+        const itemVariantId = toOrderItemVariantId(item.variantId);
+        return {
+          business_inventory_id: item.inventoryItemId,
+          quantity: item.quantity,
+          ...(itemVariantId ? { item_variant_id: itemVariantId } : {}),
+        };
+      }),
       payment_timing: 'pay_now' as const,
     };
   }, [cartItems]);

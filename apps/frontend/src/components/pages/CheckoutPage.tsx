@@ -36,6 +36,7 @@ import { useCheckout } from '../../hooks/useCheckout';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
+import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import {
   SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
   SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP,
@@ -598,11 +599,14 @@ const CheckoutPage: React.FC = () => {
   const checkoutPreflightRequest = useMemo(() => {
     if (cartItems.length === 0) return null;
     return {
-      items: cartItems.map((item) => ({
-        business_inventory_id: item.inventoryItemId,
-        quantity: item.quantity,
-        ...(item.variantId ? { item_variant_id: item.variantId } : {}),
-      })),
+      items: cartItems.map((item) => {
+        const itemVariantId = toOrderItemVariantId(item.variantId);
+        return {
+          business_inventory_id: item.inventoryItemId,
+          quantity: item.quantity,
+          ...(itemVariantId ? { item_variant_id: itemVariantId } : {}),
+        };
+      }),
       fulfillment_method: fulfillment,
       ...(fulfillment === 'delivery' && selectedAddressId
         ? { delivery_address_id: selectedAddressId }

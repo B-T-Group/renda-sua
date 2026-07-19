@@ -43,6 +43,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
+import { toCartVariantId } from '../../utils/shopperVariantSelection';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
 import {
   metaPixelContentCategoryFromItem,
@@ -413,7 +414,11 @@ export default function ItemDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
-  const variantSel = useListingVariantSelection(inventoryItem);
+  const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
+  const variantSel = useListingVariantSelection(
+    inventoryItem,
+    defaultVariantLabel
+  );
   const { stats: orderStats, loading: orderStatsLoading } = useItemOrderStats(
     inventoryItem?.id ?? null
   );
@@ -544,16 +549,13 @@ export default function ItemDetailPage() {
     if (!id) return '';
     const variantId = variantSel.selectedVariantId;
     const params = new URLSearchParams();
-    if (variantId) params.set('variantId', variantId);
+    if (variantId) params.set('variantId', toCartVariantId(variantId));
     const qs = params.toString();
     return `/items/${id}/place_order${qs ? `?${qs}` : ''}`;
   }, [id, variantSel.selectedVariantId]);
 
   const handleOrderClick = () => {
-    if (
-      variantSel.activeVariants.length > 1 &&
-      !variantSel.selectedVariantId
-    ) {
+    if (!variantSel.selectionComplete) {
       return;
     }
     if (id) {
@@ -572,10 +574,7 @@ export default function ItemDetailPage() {
   };
 
   const handleAddToCart = (item: InventoryItem) => {
-    if (
-      variantSel.activeVariants.length > 1 &&
-      !variantSel.selectedVariantId
-    ) {
+    if (!variantSel.selectionComplete) {
       return;
     }
     trackView(item.id);
@@ -596,11 +595,19 @@ export default function ItemDetailPage() {
       ...(googleCategory && { google_product_category: googleCategory }),
     });
 
+    const cartVariantId = toCartVariantId(variantSel.selectedVariantId);
+    const isBase = variantSel.isBaseSelected;
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
-      variantId: variantSel.selectedVariant?.id,
-      variantName: variantSel.selectedVariant?.name,
+      ...(cartVariantId
+        ? {
+            variantId: cartVariantId,
+            variantName: isBase
+              ? defaultVariantLabel
+              : variantSel.selectedVariant?.name,
+          }
+        : {}),
       businessId: item.business_location.business_id,
       businessLocationId: item.business_location_id,
       itemData: {
@@ -778,10 +785,10 @@ export default function ItemDetailPage() {
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
   const hasStock =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
-  const variantSelectionReady =
-    variantSel.activeVariants.length <= 1 || !!variantSel.selectedVariantId;
-  const inCartQuantity = variantSel.selectedVariantId
-    ? getLineQuantityInCart(inventoryItem.id, variantSel.selectedVariantId)
+  const variantSelectionReady = variantSel.selectionComplete;
+  const cartLineVariantId = toCartVariantId(variantSel.selectedVariantId);
+  const inCartQuantity = cartLineVariantId
+    ? getLineQuantityInCart(inventoryItem.id, cartLineVariantId)
     : getListingQuantityInCart(inventoryItem.id);
   const inCart = inCartQuantity > 0;
   const inCartLabel =
@@ -803,7 +810,7 @@ export default function ItemDetailPage() {
     !merchantCanAcceptOrders ||
     isClientUser ||
     !isMobile ||
-    variantSel.activeVariants.length > 1;
+    variantSel.requiresSelection;
 
   const ratingCount = ratings.length;
   const ratingAvg =
@@ -1698,7 +1705,7 @@ export default function ItemDetailPage() {
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
-        variantId={variantSel.selectedVariantId}
+        variantId={toCartVariantId(variantSel.selectedVariantId)}
         item={{
           title: item.name,
           imageUrl: primaryImage,
