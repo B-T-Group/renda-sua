@@ -127,8 +127,14 @@ function CatalogSection({
   items: InventoryItem[];
   loading: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
-  onOrderClick: (item: InventoryItem) => void;
-  onAddToCart: (item: InventoryItem) => void;
+  onOrderClick: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
+  onAddToCart: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
   isPublicView: boolean;
   canOrder: boolean;
   showCartButtons: boolean;
@@ -519,14 +525,20 @@ const ItemsPage: React.FC = () => {
     },
   });
 
-  const handleOrderClick = (item: InventoryItem) => {
+  const handleOrderClick = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
     trackView(item.id);
-    variantFlow.requestOrder(item);
+    variantFlow.requestOrder(item, selectionId);
   };
 
-  const handleAddToCart = (item: InventoryItem) => {
+  const handleAddToCart = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
     trackView(item.id);
-    variantFlow.requestAddToCart(item);
+    variantFlow.requestAddToCart(item, selectionId);
   };
 
   // Format currency helper

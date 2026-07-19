@@ -1,11 +1,9 @@
 import {
-  Build,
   Business,
   Category,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  Palette,
   Scale,
   ShoppingCart,
   Store,
@@ -45,11 +43,21 @@ import {
 } from '../../hooks/useTrackSiteEvent';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import {
-  catalogGalleryImages,
+  catalogGalleryForSelection,
+  catalogSpecsForSelection,
   itemImageDisplayUrl,
 } from '../../utils/orderedItemImages';
-import { shopperVariantOptionCount } from '../../utils/catalogVariantCart';
+import {
+  catalogUnitPriceForVariant,
+  shopperVariantOptionCount,
+  toCartVariantId,
+} from '../../utils/catalogVariantCart';
+import {
+  SHOPPER_BASE_VARIANT_ID,
+  shopperVariantOptions,
+} from '../../utils/shopperVariantSelection';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
+import { CatalogOptionChips } from './CatalogOptionChips';
 import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
 /** Strip HTML and collapse whitespace for card preview text. */
@@ -61,8 +69,14 @@ function plainTextSummary(text: string | null | undefined): string {
 interface DashboardItemCardProps {
   item: InventoryItem;
   formatCurrency: (amount: number, currency?: string) => string;
-  onOrderClick: (item: InventoryItem) => void;
-  onAddToCart?: (item: InventoryItem) => void;
+  onOrderClick: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
+  onAddToCart?: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
   estimatedDistance?: string | null;
   estimatedDuration?: string | null;
   distanceLoading?: boolean;
@@ -108,6 +122,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     inCartQuantity > 1
       ? t('cart.inCartCount', 'In cart ({{count}})', { count: inCartQuantity })
       : t('cart.inCart', 'In cart');
+  const defaultOptionLabel = t('orders.variant.defaultOption', 'Default');
 
   const business = inventory.business_location.business;
   const merchantCanAcceptOrders =
@@ -120,38 +135,82 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   );
   const openingSoonLabel = t('business.lifecycle.openingSoonBadge', 'Opening Soon');
 
-  const galleryImages = useMemo(
-    () => catalogGalleryImages(inventory.item),
-    [inventory.item]
-  );
-
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(inventory),
     [inventory]
   );
+  const hasVariantOptions = variantOptionCount > 1;
+
+  const parentImageUrl = useMemo(() => {
+    const imgs = inventory.item.item_images ?? [];
+    const sorted = [...imgs].sort(
+      (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
+    return itemImageDisplayUrl(sorted[0]);
+  }, [inventory.item.item_images]);
+
+  const optionList = useMemo(
+    () =>
+      shopperVariantOptions({
+        itemName: inventory.item.name,
+        defaultLabel: defaultOptionLabel,
+        variants: inventory.item.item_variants,
+        parentImageUrl,
+      }),
+    [
+      defaultOptionLabel,
+      inventory.item.item_variants,
+      inventory.item.name,
+      parentImageUrl,
+    ]
+  );
+
+  const [selectionId, setSelectionId] = useState<string | null>(() =>
+    hasVariantOptions ? SHOPPER_BASE_VARIANT_ID : null
+  );
+
+  useEffect(() => {
+    setSelectionId(hasVariantOptions ? SHOPPER_BASE_VARIANT_ID : null);
+    setActiveImageIndex(0);
+  }, [inventory.id, hasVariantOptions]);
+
+  const galleryImages = useMemo(
+    () => catalogGalleryForSelection(inventory.item, selectionId),
+    [inventory.item, selectionId]
+  );
+
+  const specs = useMemo(
+    () => catalogSpecsForSelection(inventory.item, selectionId),
+    [inventory.item, selectionId]
+  );
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectionId]);
 
   const descriptionPreview = useMemo(
     () => plainTextSummary(inventory.item.description),
     [inventory.item.description]
   );
 
-  useEffect(() => {
-    setActiveImageIndex(0);
-  }, [inventory.id]);
+  const pricing = useMemo(
+    () => catalogUnitPriceForVariant(inventory, selectionId),
+    [inventory, selectionId]
+  );
 
   const hasDealPrices =
-    inventory.hasActiveDeal &&
-    typeof inventory.original_price === 'number' &&
-    typeof inventory.discounted_price === 'number' &&
-    inventory.original_price > 0;
+    pricing.hasDeal &&
+    typeof pricing.strikeOriginal === 'number' &&
+    pricing.strikeOriginal > pricing.unit;
 
   const discountPercent = hasDealPrices
     ? Math.round(
-        ((inventory.original_price! - inventory.discounted_price!) /
-          inventory.original_price!) *
+        ((pricing.strikeOriginal! - pricing.unit) / pricing.strikeOriginal!) *
           100
       )
     : null;
+
+  const cartVariantId = toCartVariantId(selectionId);
 
   const displayIdx =
     galleryImages.length === 0
@@ -231,12 +290,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     ? t('cart.addMore', 'Add more')
     : resolvedAddToCartButtonText;
 
-  const checkoutPriceText = hasDealPrices
-    ? formatCurrency(
-        inventory.discounted_price ?? inventory.selling_price,
-        inventory.item.currency
-      )
-    : formatCurrency(inventory.selling_price, inventory.item.currency);
+  const checkoutPriceText = formatCurrency(
+    pricing.unit,
+    inventory.item.currency
+  );
 
   const goToDetails = () => navigate(`/items/${inventory.id}`);
 
@@ -389,10 +446,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 <CardMedia
                   component="img"
                   image={displayImageUrl}
-                  alt={
-                    displayImage?.alt_text ||
-                    inventory.item.name
-                  }
+                  alt={inventory.item.name}
                   sx={{
                     objectFit: 'cover',
                     width: '100%',
@@ -448,15 +502,12 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                       sx={{ textDecoration: 'line-through' }}
                     >
                       {formatCurrency(
-                        inventory.original_price ?? inventory.selling_price,
+                        pricing.strikeOriginal!,
                         inventory.item.currency
                       )}
                     </Typography>
                     <Typography variant="h6" color="primary" fontWeight="bold">
-                      {formatCurrency(
-                        inventory.discounted_price ?? inventory.selling_price,
-                        inventory.item.currency
-                      )}
+                      {formatCurrency(pricing.unit, inventory.item.currency)}
                     </Typography>
                   </Box>
                   {discountPercent && discountPercent > 0 && (
@@ -470,10 +521,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 </>
               ) : (
                 <Typography variant="h6" color="primary" fontWeight="bold">
-                  {formatCurrency(
-                    inventory.selling_price,
-                    inventory.item.currency
-                  )}
+                  {formatCurrency(pricing.unit, inventory.item.currency)}
                 </Typography>
               )}
             </Box>
@@ -683,17 +731,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 flexWrap: 'wrap',
               }}
             >
-              {variantOptionCount > 1 ? (
-                <Chip
-                  label={t('items.itemCard.optionsCount', '{{count}} options', {
-                    count: variantOptionCount,
-                  })}
-                  color="primary"
-                  variant="outlined"
-                  size="small"
-                  sx={{ fontSize: '0.7rem' }}
-                />
-              ) : null}
               <Chip
                 label={t('items.itemCard.availableCount', '{{count}} available', {
                   count: inventory.computed_available_quantity,
@@ -707,6 +744,67 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 sx={{ fontSize: '0.7rem' }}
               />
             </Box>
+            {hasVariantOptions ? (
+              <CatalogOptionChips
+                options={optionList}
+                value={selectionId}
+                onChange={setSelectionId}
+                disabled={isUnavailable}
+              />
+            ) : null}
+            {specs.weightLabel || specs.dimensionsLabel ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                  mt: 0.75,
+                  alignItems: 'center',
+                }}
+              >
+                {specs.weightLabel ? (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Scale sx={{ fontSize: 14, color: 'text.secondary' }} />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.7rem' }}
+                      noWrap
+                    >
+                      {t('items.itemCard.weight', 'Weight')}: {specs.weightLabel}
+                    </Typography>
+                  </Box>
+                ) : null}
+                {specs.dimensionsLabel ? (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Straighten sx={{ fontSize: 14, color: 'text.secondary' }} />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.7rem' }}
+                      noWrap
+                    >
+                      {t('items.itemCard.dimensions', 'Size')}:{' '}
+                      {specs.dimensionsLabel}
+                    </Typography>
+                  </Box>
+                ) : null}
+              </Box>
+            ) : null}
           </Box>
 
           {/* Business + store location */}
@@ -1001,10 +1099,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
                   subjectId: inventory.id,
                 });
-                if (variantOptionCount > 1) {
-                  goToDetails();
-                  return;
-                }
                 setAnonBuyNowOpen(true);
               }}
               size="small"
@@ -1035,7 +1129,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 variant={inCart ? 'contained' : 'outlined'}
                 color="primary"
                 startIcon={<ShoppingCart />}
-                onClick={() => onAddToCart(inventory)}
+                onClick={() => onAddToCart(inventory, selectionId)}
                 size="small"
                 fullWidth
                 aria-label={
@@ -1067,7 +1161,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                     subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
                     subjectId: inventory.id,
                   });
-                  onOrderClick(inventory);
+                  onOrderClick(inventory, selectionId);
                 }}
                 size="small"
                 fullWidth
@@ -1092,7 +1186,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
                   subjectId: inventory.id,
                 });
-                onOrderClick(inventory);
+                onOrderClick(inventory, selectionId);
               }}
               size="small"
               sx={{ width: '75%' }}
@@ -1106,7 +1200,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventory.id}
-        variantId={undefined}
+        variantId={cartVariantId}
         item={{
           title: inventory.item.name,
           imageUrl: displayImageUrl,
@@ -1202,9 +1296,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 <Box
                   component="img"
                   src={lightboxImageUrl ?? displayImageUrl}
-                  alt={
-                    displayImage?.alt_text || inventory.item.name
-                  }
+                  alt={inventory.item.name}
                   sx={{
                     maxWidth: '100%',
                     maxHeight: '90vh',

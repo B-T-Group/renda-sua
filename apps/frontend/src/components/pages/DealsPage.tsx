@@ -109,14 +109,20 @@ const DealsPage: React.FC = () => {
     },
   });
 
-  const handleOrderClick = (item: InventoryItem) => {
+  const handleOrderClick = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
     trackView(item.id);
-    variantFlow.requestOrder(item);
+    variantFlow.requestOrder(item, selectionId);
   };
 
-  const handleAddToCart = (item: InventoryItem) => {
+  const handleAddToCart = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
     trackView(item.id);
-    variantFlow.requestAddToCart(item);
+    variantFlow.requestAddToCart(item, selectionId);
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {

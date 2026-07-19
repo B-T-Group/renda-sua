@@ -26,8 +26,14 @@ export interface CatalogProductCarouselProps {
   items: InventoryItem[];
   loading: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
-  onOrderClick: (item: InventoryItem) => void;
-  onAddToCart: (item: InventoryItem) => void;
+  onOrderClick: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
+  onAddToCart: (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => void;
   isPublicView: boolean;
   canOrder: boolean;
   showCartButtons: boolean;

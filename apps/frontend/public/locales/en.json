@@ -4286,6 +4286,8 @@
       "availableCount": "{{count}} available",
       "optionsCount": "{{count}} options",
       "chooseOption": "Choose an option",
+      "weight": "Weight",
+      "dimensions": "Size",
       "specialHandling": "Special",
       "fragile": "Fragile",
       "perishable": "Perishable"

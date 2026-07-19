@@ -4023,6 +4023,8 @@
       "availableCount": "{{count}} disponibles",
       "optionsCount": "{{count}} options",
       "chooseOption": "Choisissez une option",
+      "weight": "Poids",
+      "dimensions": "Taille",
       "specialHandling": "Spécial",
       "fragile": "Fragile",
       "perishable": "Périssable"

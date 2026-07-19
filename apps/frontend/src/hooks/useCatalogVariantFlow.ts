@@ -12,7 +12,8 @@ import { toCartVariantId } from '../utils/shopperVariantSelection';
 type PendingAction = 'cart' | 'order';
 
 /**
- * Catalog add/buy flow: opens a variant picker when the listing has options.
+ * Catalog add/buy flow: opens a variant picker when the listing has options
+ * and no selection was already made on the card.
  */
 export function useCatalogVariantFlow(params: {
   onCartBuilt: (cartItem: CartItem, item: InventoryItem) => void;
@@ -59,22 +60,30 @@ export function useCatalogVariantFlow(params: {
   );
 
   const requestOrder = useCallback(
-    (item: InventoryItem) => {
+    (item: InventoryItem, selectionId?: string | null) => {
       if (requireAuthRef.current && !requireAuthRef.current()) return;
       if (catalogRequiresVariantSelection(item)) {
+        if (selectionId) {
+          completeWithSelection(item, selectionId, 'order');
+          return;
+        }
         setPendingAction('order');
         setPickerItem(item);
         return;
       }
       navigate(`/items/${item.id}/place_order`);
     },
-    [navigate]
+    [completeWithSelection, navigate]
   );
 
   const requestAddToCart = useCallback(
-    (item: InventoryItem) => {
+    (item: InventoryItem, selectionId?: string | null) => {
       if (requireAuthRef.current && !requireAuthRef.current()) return;
       if (catalogRequiresVariantSelection(item)) {
+        if (selectionId) {
+          completeWithSelection(item, selectionId, 'cart');
+          return;
+        }
         setPendingAction('cart');
         setPickerItem(item);
         return;
@@ -87,7 +96,7 @@ export function useCatalogVariantFlow(params: {
       }
       onCartBuiltRef.current(cartItem, item);
     },
-    [baseLabel]
+    [baseLabel, completeWithSelection]
   );
 
   const onPickerConfirm = useCallback(
