@@ -2523,7 +2523,11 @@ export class InventoryItemsService {
   ): Promise<
     Record<
       string,
-      { discount_type: string; discount_value: number; end_at: string }
+      {
+        discount_type: 'percentage' | 'fixed';
+        discount_value: number;
+        end_at: string;
+      }
     >
   > {
     if (!inventoryItemIds.length) {
@@ -2559,14 +2563,18 @@ export class InventoryItemsService {
       const deals =
         (response.item_deals as Array<{
           inventory_item_id: string;
-          discount_type: string;
+          discount_type: 'percentage' | 'fixed';
           discount_value: number;
           end_at: string;
         }>) ?? [];
 
       const result: Record<
         string,
-        { discount_type: string; discount_value: number; end_at: string }
+        {
+          discount_type: 'percentage' | 'fixed';
+          discount_value: number;
+          end_at: string;
+        }
       > = {};
 
       deals.forEach((deal) => {
