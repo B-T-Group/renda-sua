@@ -63,6 +63,8 @@ export interface InventoryItem {
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
+  deal_discount_type?: 'percentage' | 'fixed';
+  deal_discount_value?: number;
   deal_end_at?: string;
   distance_text?: string;
   duration_text?: string;
@@ -1438,6 +1440,8 @@ export class InventoryItemsService {
           hasActiveDeal: true,
           original_price: originalPrice,
           discounted_price: discounted,
+          deal_discount_type: deal.discount_type,
+          deal_discount_value: deal.discount_value,
           deal_end_at: deal.end_at,
         };
       });
@@ -2142,6 +2146,8 @@ export class InventoryItemsService {
         hasActiveDeal: true,
         original_price: originalPrice,
         discounted_price: discounted,
+        deal_discount_type: deal.discount_type,
+        deal_discount_value: deal.discount_value,
         deal_end_at: deal.end_at,
       };
     } catch (error) {
@@ -2408,6 +2414,8 @@ export class InventoryItemsService {
           hasActiveDeal: true,
           original_price: originalPrice,
           discounted_price: discounted,
+          deal_discount_type: deal.discount_type,
+          deal_discount_value: deal.discount_value,
           deal_end_at: deal.end_at,
         };
       });

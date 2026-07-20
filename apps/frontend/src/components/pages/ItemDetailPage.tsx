@@ -1213,6 +1213,8 @@ export default function ItemDetailPage() {
               hasActiveDeal={inventoryItem.hasActiveDeal}
               originalPrice={inventoryItem.original_price}
               discountedPrice={inventoryItem.discounted_price}
+              discountType={inventoryItem.deal_discount_type}
+              discountValue={inventoryItem.deal_discount_value}
               currency={item.currency}
               disabled={false}
               formatCurrency={formatCurrency}
@@ -1722,6 +1724,8 @@ export default function ItemDetailPage() {
             hasActiveDeal={inventoryItem.hasActiveDeal}
             originalPrice={inventoryItem.original_price}
             discountedPrice={inventoryItem.discounted_price}
+            discountType={inventoryItem.deal_discount_type}
+            discountValue={inventoryItem.deal_discount_value}
             currency={item.currency}
             disabled={false}
             formatCurrency={formatCurrency}

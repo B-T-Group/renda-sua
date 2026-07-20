@@ -69,7 +69,9 @@ export function catalogUnitPriceForVariant(
     item.selling_price,
     item.hasActiveDeal,
     item.original_price,
-    item.discounted_price
+    item.discounted_price,
+    item.deal_discount_type,
+    item.deal_discount_value
   );
 }
 
