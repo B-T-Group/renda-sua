@@ -625,7 +625,9 @@ export class AiService {
       }
 
       const suggestion: ImageItemSuggestionResult = {
-        name: typeof parsed.name === 'string' ? parsed.name : undefined,
+        name: this.sanitizeSuggestedProductName(
+          typeof parsed.name === 'string' ? parsed.name : undefined
+        ),
         categoryName:
           typeof parsed.categoryName === 'string' ? parsed.categoryName : undefined,
         subCategoryName:
@@ -671,7 +673,8 @@ export class AiService {
 
       return {
         ...suggestion,
-        name: lookup.name || suggestion.name,
+        name:
+          this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
         brandName: lookup.brandName || suggestion.brandName,
         categoryName: lookup.categoryName || suggestion.categoryName,
         subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
@@ -754,6 +757,7 @@ Rules:
 - Suggestions for categoryName and subCategoryName should be short and concise and one word related to the product and shoud not take into account the existing categoryName and subCategoryName.
 - Tags MUST be provided in BOTH languages: English and French and should be short and concise and one word related to the product, at most 5 tags per language.
 - Prefer small, justified improvements; keep names truthful to what is visible.
+- For "name": use only a real product name visible on the image or in the current fields. Never invent placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", or "Product name". If no real name can be determined, set "name" to null (leave blank).
 - If a field should stay as-is, repeat the current value or omit if unchanged.
 - Only specify dimensions/weight/weightUnit if they are visible on the image.
 
@@ -825,14 +829,18 @@ Do not include any text outside the JSON.`;
   private buildImageItemVisionSystemPrompt(): string {
     return (
       'You are an AI assistant that reads product photos (OCR, labels, price tags, barcodes) ' +
-      'and returns a single JSON object. Do not invent fields you cannot read clearly; use null when uncertain.'
+      'and returns a single JSON object. Do not invent fields you cannot read clearly; use null when uncertain. ' +
+      'Never use placeholder or demo product names (e.g. "Test product", "Test product API"); ' +
+      'if the real product name is not clearly readable, set name to null.'
     );
   }
 
   private buildImageItemTextOnlySystemPrompt(): string {
     return (
       'You help extract structured e-commerce fields from text. ' +
-      'Do not invent names, prices, barcodes, or categories. Use only caption/alt text; use null for unknown fields.'
+      'Do not invent names, prices, barcodes, or categories. Use only caption/alt text; use null for unknown fields. ' +
+      'Never use placeholder or demo product names (e.g. "Test product", "Test product API"); ' +
+      'if no real product name is present in the text, set name to null.'
     );
   }
 
@@ -846,7 +854,7 @@ Analyze the attached product images in order (first image is primary). Merge inf
 
 First, decode any visible barcode(s). If decoded, use it as the strongest signal for identifying the product.
 Then extract from the images:
-- Product name
+- Product name (only if clearly readable on packaging/labels; otherwise null — never invent a name)
 - Category name
 - Subcategory name
 - Brand name
@@ -857,6 +865,11 @@ Then extract from the images:
 - Product weight as a number (if visible)
 - Weight unit (e.g. g, kg, ml, l)
 - Product dimensions string (e.g. 20x10x5 cm) if visible.
+
+Name rules:
+- Use the real commercial product name from the image text when readable.
+- Do NOT use placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", "Product name", or similar demo/API test strings.
+- If you cannot determine a real name, set "name" to null (leave blank). Prefer null over guessing.
 
 Additional text context from the image record (may be empty):
 ${textContext || 'N/A'}
@@ -890,10 +903,14 @@ The "description" field MUST be written in ${languageLabel}.`;
 This request has no image pixels—only URLs and optional captions. Do NOT fabricate OCR, barcodes, or prices; use null unless stated in the text context.
 
 Extract when possible from captions/alt text only:
-- Product name, category, subcategory, brand
+- Product name (only if stated in the text; otherwise null — never invent a name), category, subcategory, brand
 - Description in ${languageLabel}
 - Price, currency (default "${defaultCurrency}" if unknown)
 - Barcodes, weight, dimensions
+
+Name rules:
+- Do NOT use placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", or "Product name".
+- If no real product name appears in the text context, set "name" to null (leave blank).
 
 Additional text context:
 ${textContext || 'N/A'}
@@ -1096,7 +1113,9 @@ The "description" field MUST be written in ${languageLabel}.`;
       return out.length ? Array.from(new Set(out)) : [];
     };
     return {
-      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      name: this.sanitizeSuggestedProductName(
+        typeof parsed.name === 'string' ? parsed.name : undefined
+      ),
       categoryName:
         typeof parsed.categoryName === 'string'
           ? parsed.categoryName
@@ -1145,7 +1164,8 @@ The "description" field MUST be written in ${languageLabel}.`;
     }
     return {
       ...suggestion,
-      name: lookup.name || suggestion.name,
+      name:
+        this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
       brandName: lookup.brandName || suggestion.brandName,
       categoryName: lookup.categoryName || suggestion.categoryName,
       subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
@@ -1153,6 +1173,40 @@ The "description" field MUST be written in ${languageLabel}.`;
       weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
       dimensions: lookup.dimensions ?? suggestion.dimensions,
     };
+  }
+
+  /** Drop empty or demo/placeholder product names (e.g. Open Food Facts "Test product API"). */
+  private sanitizeSuggestedProductName(
+    name: string | null | undefined
+  ): string | undefined {
+    if (typeof name !== 'string') return undefined;
+    const trimmed = name.trim();
+    if (!trimmed || this.isPlaceholderProductName(trimmed)) return undefined;
+    return trimmed;
+  }
+
+  private isPlaceholderProductName(name: string): boolean {
+    const normalized = name.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!normalized) return true;
+    const exact = new Set([
+      'test product',
+      'test product api',
+      'sample product',
+      'dummy product',
+      'fake product',
+      'demo product',
+      'product name',
+      'untitled',
+      'n/a',
+      'na',
+      'none',
+      'unknown',
+      'unknown product',
+    ]);
+    if (exact.has(normalized)) return true;
+    return /^(test|sample|dummy|fake|demo)\s+product(\s+api)?(\s+v?\d+)?$/i.test(
+      normalized
+    );
   }
 
   async generateRentalImageSuggestions(input: {
@@ -1223,7 +1277,7 @@ Return ONLY a JSON object with this exact shape:
   "currency": string | null
 }
 
-- name: short title for the rental item (not a full sentence), e.g. "Cordless electric drill".
+- name: short title for the rental item (not a full sentence), e.g. "Cordless electric drill". Never use placeholders like "Test product" or "Test product API"; if unclear, set name to null.
 - description: 2–4 sentences for renters (condition, typical use, what is included if visible) in ${languageLabel}.
 - rentalCategoryName: the best-matching category label in plain English (e.g. "Power tools", "Vehicles", "Event equipment") — a human name, not an id.
 - suggestedTags: a few lowercase keywords for search (e.g. ["drill", "cordless", "electric", "power-tool"]).
@@ -1330,7 +1384,9 @@ Image URL (reference only): ${imageUrl}`;
     }
     const tags = parsed.suggestedTags;
     return {
-      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      name: this.sanitizeSuggestedProductName(
+        typeof parsed.name === 'string' ? parsed.name : undefined
+      ),
       description:
         typeof parsed.description === 'string' ? parsed.description : undefined,
       rentalCategoryName:
