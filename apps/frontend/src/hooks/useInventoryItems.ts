@@ -28,6 +28,8 @@ export interface InventoryItem {
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
+  deal_discount_type?: 'percentage' | 'fixed';
+  deal_discount_value?: number;
   deal_end_at?: string;
   distance_text?: string;
   duration_text?: string;

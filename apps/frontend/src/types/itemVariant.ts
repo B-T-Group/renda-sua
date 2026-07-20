@@ -33,6 +33,41 @@ export interface VariantPriceOverride {
   selling_price: number | string | null;
 }
 
+export type ListingDealType = 'percentage' | 'fixed';
+
+function hasValidListingDeal(
+  active: boolean | undefined,
+  listingPrice: number,
+  original?: number,
+  discounted?: number
+): boolean {
+  return (
+    !!active &&
+    typeof original === 'number' &&
+    typeof discounted === 'number' &&
+    original > 0 &&
+    listingPrice > 0
+  );
+}
+
+function exactDealUnitPrice(
+  base: number,
+  type?: ListingDealType,
+  value?: number
+): number | null {
+  if (
+    type == null ||
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return null;
+  }
+  const discounted =
+    type === 'percentage' ? base - (base * value) / 100 : base - value;
+  return Math.max(0, discounted);
+}
+
 /** Parent item fields used to seed a new variant. */
 export interface VariantParentDefaults {
   name: string;
@@ -90,29 +125,33 @@ export function effectiveVariantUnitPrice(
   return sellingPrice;
 }
 
-/** Scale listing deal prices onto an arbitrary base unit (e.g. variant-priced SKU). */
+/** Apply a listing deal to an arbitrary base unit (e.g. variant-priced SKU). */
 export function unitPriceWithListingDeal(
   baseUnit: number,
   listingSellingPrice: number,
   hasActiveDeal: boolean | undefined,
   originalPrice?: number,
-  discountedPrice?: number
+  discountedPrice?: number,
+  discountType?: ListingDealType,
+  discountValue?: number
 ): { unit: number; strikeOriginal?: number; hasDeal: boolean } {
-  const hasDeal =
-    !!hasActiveDeal &&
-    typeof originalPrice === 'number' &&
-    typeof discountedPrice === 'number' &&
-    originalPrice > 0 &&
-    listingSellingPrice > 0;
-
-  if (!hasDeal) {
+  if (
+    !hasValidListingDeal(
+      hasActiveDeal,
+      listingSellingPrice,
+      originalPrice,
+      discountedPrice
+    )
+  ) {
     return { unit: baseUnit, hasDeal: false };
   }
-
   const original = originalPrice as number;
   const discounted = discountedPrice as number;
+  const unit =
+    exactDealUnitPrice(baseUnit, discountType, discountValue) ??
+    baseUnit * (discounted / listingSellingPrice);
   return {
-    unit: baseUnit * (discounted / listingSellingPrice),
+    unit,
     strikeOriginal: baseUnit * (original / listingSellingPrice),
     hasDeal: true,
   };
