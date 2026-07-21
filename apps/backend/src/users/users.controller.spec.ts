@@ -351,7 +351,7 @@ describe('UsersController', () => {
         email_verified: false,
       };
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      hasuraUserService.executeMutation.mockResolvedValue({
+      hasuraSystemService.executeMutation.mockResolvedValue({
         update_users_by_pk: updatedUser,
       });
 
@@ -362,7 +362,7 @@ describe('UsersController', () => {
         expect.stringContaining('EmailTakenExclude'),
         { email: 'new@example.com', excludeId: currentUser.id }
       );
-      expect(hasuraUserService.executeMutation).toHaveBeenCalledWith(
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('email_verified: false'),
         { id: currentUser.id, email: 'new@example.com' }
       );

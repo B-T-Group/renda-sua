@@ -1291,7 +1291,7 @@ export class UsersController {
   }
 
   private async persistUserEmail(userId: string, email: string) {
-    const result = await this.hasuraUserService.executeMutation<{
+    const result = await this.hasuraSystemService.executeMutation<{
       update_users_by_pk: Record<string, unknown>;
     }>(GQL_UPDATE_USER_EMAIL, { id: userId, email });
     return { success: true, user: result.update_users_by_pk };
