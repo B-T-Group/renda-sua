@@ -575,11 +575,13 @@
       "topAgents": {
         "deliveriesTitle": "Top agents by deliveries",
         "referralsTitle": "Top agents by business referrals",
-        "referralsHelp": "Items / referral = sale catalog items across referred businesses ÷ referrals. Target: ≥{{n}}.",
+        "referralsHelp": "Score = sum of (items + 1) per referred business. Ranked by score. Items / referral target: ≥{{n}}.",
         "agent": "Agent",
         "code": "Code",
         "deliveriesCount": "Deliveries",
         "referralsCount": "Referrals",
+        "score": "Score",
+        "scoreTooltip": "Sum of (items + 1) across referred businesses",
         "itemsCount": "Items",
         "itemsTooltip": "Active sale items on businesses this agent referred",
         "itemsPerReferral": "Items / referral",
@@ -588,7 +590,11 @@
         "stockedTooltip": "Referred businesses with ≥{{n}} sale items",
         "goldenFilterActive": "≥{{n}} items / referral",
         "goldenEmpty": "No agents meet the ≥{{n}} items / referral target for this period",
-        "empty": "No data for this period"
+        "empty": "No data for this period",
+        "toggleBusinesses": "Show referred businesses",
+        "referredBusinesses": "Referred businesses",
+        "noBusinesses": "No referred businesses",
+        "businessName": "Business"
       }
     },
     "businesses": {

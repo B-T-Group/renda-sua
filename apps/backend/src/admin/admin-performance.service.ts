@@ -29,6 +29,15 @@ export interface PerformanceSummary {
   rentalItemsAdded: number;
 }
 
+export interface ReferredBusinessSummary {
+  businessId: string;
+  businessName: string;
+  itemCount: number;
+  /** itemCount + 1 */
+  score: number;
+  createdAt: string;
+}
+
 export interface TopAgentEntry {
   agentId: string;
   agentCode: string | null;
@@ -42,6 +51,9 @@ export interface TopAgentEntry {
   /** Referred businesses that currently have ≥ golden items. */
   stockedReferralCount?: number;
   meetsGoldenRatio?: boolean;
+  /** sum(itemCount + 1) over referred businesses. */
+  score?: number;
+  referredBusinesses?: ReferredBusinessSummary[];
 }
 
 interface AggregateCount {
@@ -76,6 +88,9 @@ interface DeliveryAgentsQueryResult {
 }
 
 interface ReferredBusinessRow {
+  id: string;
+  name: string;
+  created_at: string;
   referred_by_agent_id: string;
   items_aggregate: AggregateCount;
 }
@@ -88,6 +103,8 @@ interface ReferralAgg {
   referrals: number;
   inventoryItems: number;
   stockedReferrals: number;
+  score: number;
+  businesses: ReferredBusinessSummary[];
 }
 
 const PAGE_SIZE = 1000;
@@ -187,9 +204,7 @@ export class AdminPerformanceService {
         this.rawItemsPerReferral(e) >= minItemsPerReferral
       );
     }
-    entries.sort((a, b) =>
-      this.compareReferralEntries(a, b, goldenFilter)
-    );
+    entries.sort((a, b) => this.compareReferralEntries(a, b));
     const ranked = entries.slice(0, limit);
     if (ranked.length === 0) return [];
     const agents = await this.fetchAgentsByIds(ranked.map((e) => e.agentId));
@@ -205,18 +220,11 @@ export class AdminPerformanceService {
 
   private compareReferralEntries(
     a: TopAgentEntry,
-    b: TopAgentEntry,
-    preferItemsPerReferral: boolean
+    b: TopAgentEntry
   ): number {
-    if (preferItemsPerReferral) {
-      const byItems =
-        this.rawItemsPerReferral(b) - this.rawItemsPerReferral(a);
-      if (byItems !== 0) return byItems;
-      return b.count - a.count;
-    }
-    const byCount = b.count - a.count;
-    if (byCount !== 0) return byCount;
-    return this.rawItemsPerReferral(b) - this.rawItemsPerReferral(a);
+    const byScore = (b.score ?? 0) - (a.score ?? 0);
+    if (byScore !== 0) return byScore;
+    return b.count - a.count;
   }
 
   private toReferralEntry(agentId: string, agg: ReferralAgg): TopAgentEntry {
@@ -233,6 +241,10 @@ export class AdminPerformanceService {
       itemsPerReferral,
       stockedReferralCount: agg.stockedReferrals,
       meetsGoldenRatio: rawRatio >= GOLDEN_ITEMS_PER_REFERRAL,
+      score: agg.score,
+      referredBusinesses: [...agg.businesses].sort(
+        (x, y) => y.itemCount - x.itemCount
+      ),
     };
   }
 
@@ -284,9 +296,19 @@ export class AdminPerformanceService {
       referrals: 0,
       inventoryItems: 0,
       stockedReferrals: 0,
+      score: 0,
+      businesses: [],
     };
     current.referrals += 1;
     current.inventoryItems += itemCount;
+    current.score += itemCount + 1;
+    current.businesses.push({
+      businessId: row.id,
+      businessName: row.name,
+      itemCount,
+      score: itemCount + 1,
+      createdAt: row.created_at,
+    });
     if (itemCount >= GOLDEN_ITEMS_PER_REFERRAL) {
       current.stockedReferrals += 1;
     }

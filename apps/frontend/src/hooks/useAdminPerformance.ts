@@ -42,6 +42,15 @@ export interface PerformanceSummary {
   rentalItemsAdded: number;
 }
 
+export interface ReferredBusinessSummary {
+  businessId: string;
+  businessName: string;
+  itemCount: number;
+  /** itemCount + 1 */
+  score: number;
+  createdAt: string;
+}
+
 export interface TopAgentEntry {
   agentId: string;
   agentCode: string | null;
@@ -52,6 +61,9 @@ export interface TopAgentEntry {
   itemsPerReferral?: number;
   stockedReferralCount?: number;
   meetsGoldenRatio?: boolean;
+  /** sum(itemCount + 1) over referred businesses. */
+  score?: number;
+  referredBusinesses?: ReferredBusinessSummary[];
 }
 
 /** Target average sale items per referred business. */

@@ -115,6 +115,9 @@ export function buildReferredBusinessesQuery(hasCountry: boolean): string {
         limit: $limit
         offset: $offset
       ) {
+        id
+        name
+        created_at
         referred_by_agent_id
         items_aggregate(
           where: {

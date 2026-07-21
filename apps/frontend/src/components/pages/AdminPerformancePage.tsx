@@ -1,4 +1,4 @@
-import { CheckCircle, Insights } from '@mui/icons-material';
+import { CheckCircle, ExpandLess, ExpandMore, Insights } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -6,10 +6,12 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
   Container,
   FormControl,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -141,6 +143,121 @@ interface ReferralsTableProps {
   goldenOnly: boolean;
 }
 
+interface ReferralAgentRowProps {
+  agent: TopAgentEntry;
+  rank: number;
+}
+
+const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const businesses = agent.referredBusinesses ?? [];
+  const hasBusinesses = businesses.length > 0;
+
+  return (
+    <>
+      <TableRow hover>
+        <TableCell padding="checkbox">
+          <IconButton
+            size="small"
+            disabled={!hasBusinesses}
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label={t(
+              'admin.performance.topAgents.toggleBusinesses',
+              'Show referred businesses'
+            )}
+          >
+            {open ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        </TableCell>
+        <TableCell>{rank}</TableCell>
+        <TableCell>{agentDisplayName(agent)}</TableCell>
+        <TableCell>{agent.agentCode ?? '—'}</TableCell>
+        <TableCell align="right">
+          <Typography component="span" fontWeight={700}>
+            {agent.score ?? 0}
+          </Typography>
+        </TableCell>
+        <TableCell align="right">{agent.count}</TableCell>
+        <TableCell align="right">
+          {agent.inventoryItemsCount ?? 0}
+        </TableCell>
+        <TableCell align="right">
+          <Chip
+            size="small"
+            color={agent.meetsGoldenRatio ? 'success' : 'default'}
+            variant={agent.meetsGoldenRatio ? 'filled' : 'outlined'}
+            label={agent.itemsPerReferral ?? 0}
+          />
+        </TableCell>
+        <TableCell align="right">
+          {agent.stockedReferralCount ?? 0}
+          <Typography
+            component="span"
+            variant="caption"
+            color="text.secondary"
+          >
+            {` / ${agent.count}`}
+          </Typography>
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell
+          colSpan={9}
+          sx={{ py: 0, borderBottom: open ? undefined : 'none' }}
+        >
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ py: 1.5, pl: 4, pr: 1 }}>
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                {t(
+                  'admin.performance.topAgents.referredBusinesses',
+                  'Referred businesses'
+                )}
+              </Typography>
+              {businesses.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'admin.performance.topAgents.noBusinesses',
+                    'No referred businesses'
+                  )}
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>
+                        {t(
+                          'admin.performance.topAgents.businessName',
+                          'Business'
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        {t('admin.performance.topAgents.itemsCount', 'Items')}
+                      </TableCell>
+                      <TableCell align="right">
+                        {t('admin.performance.topAgents.score', 'Score')}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {businesses.map((biz) => (
+                      <TableRow key={biz.businessId}>
+                        <TableCell>{biz.businessName || biz.businessId}</TableCell>
+                        <TableCell align="right">{biz.itemCount}</TableCell>
+                        <TableCell align="right">{biz.score}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
+
 const ReferralsTable: React.FC<ReferralsTableProps> = ({
   agents,
   emptyLabel,
@@ -179,7 +296,7 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
           {t(
             'admin.performance.topAgents.referralsHelp',
-            'Items / referral = sale catalog items across referred businesses ÷ referrals. Target: ≥{{n}}.',
+            'Score = sum of (items + 1) per referred business. Ranked by score. Items / referral target: ≥{{n}}.',
             { n: GOLDEN_ITEMS_PER_REFERRAL }
           )}
         </Typography>
@@ -192,12 +309,25 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox" />
                   <TableCell>#</TableCell>
                   <TableCell>
                     {t('admin.performance.topAgents.agent', 'Agent')}
                   </TableCell>
                   <TableCell>
                     {t('admin.performance.topAgents.code', 'Code')}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip
+                      title={t(
+                        'admin.performance.topAgents.scoreTooltip',
+                        'Sum of (items + 1) across referred businesses'
+                      )}
+                    >
+                      <span>
+                        {t('admin.performance.topAgents.score', 'Score')}
+                      </span>
+                    </Tooltip>
                   </TableCell>
                   <TableCell align="right">
                     {t(
@@ -253,33 +383,11 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
               </TableHead>
               <TableBody>
                 {agents.map((agent, index) => (
-                  <TableRow key={agent.agentId} hover>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>{agentDisplayName(agent)}</TableCell>
-                    <TableCell>{agent.agentCode ?? '—'}</TableCell>
-                    <TableCell align="right">{agent.count}</TableCell>
-                    <TableCell align="right">
-                      {agent.inventoryItemsCount ?? 0}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Chip
-                        size="small"
-                        color={agent.meetsGoldenRatio ? 'success' : 'default'}
-                        variant={agent.meetsGoldenRatio ? 'filled' : 'outlined'}
-                        label={agent.itemsPerReferral ?? 0}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      {agent.stockedReferralCount ?? 0}
-                      <Typography
-                        component="span"
-                        variant="caption"
-                        color="text.secondary"
-                      >
-                        {` / ${agent.count}`}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
+                  <ReferralAgentRow
+                    key={agent.agentId}
+                    agent={agent}
+                    rank={index + 1}
+                  />
                 ))}
               </TableBody>
             </Table>

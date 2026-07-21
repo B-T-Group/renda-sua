@@ -333,11 +333,13 @@
       "topAgents": {
         "deliveriesTitle": "Meilleurs agents par livraisons",
         "referralsTitle": "Meilleurs agents par parrainages d’entreprises",
-        "referralsHelp": "Articles / parrainage = articles en vente des entreprises parrainées ÷ parrainages. Objectif : ≥{{n}}.",
+        "referralsHelp": "Score = somme de (articles + 1) par entreprise parrainée. Classés par score. Objectif articles / parrainage : ≥{{n}}.",
         "agent": "Agent",
         "code": "Code",
         "deliveriesCount": "Livraisons",
         "referralsCount": "Parrainages",
+        "score": "Score",
+        "scoreTooltip": "Somme de (articles + 1) sur les entreprises parrainées",
         "itemsCount": "Articles",
         "itemsTooltip": "Articles en vente actifs des entreprises parrainées par cet agent",
         "itemsPerReferral": "Articles / parrainage",
@@ -346,7 +348,11 @@
         "stockedTooltip": "Entreprises parrainées avec ≥{{n}} articles en vente",
         "goldenFilterActive": "≥{{n}} articles / parrainage",
         "goldenEmpty": "Aucun agent n’atteint l’objectif de ≥{{n}} articles / parrainage pour cette période",
-        "empty": "Aucune donnée pour cette période"
+        "empty": "Aucune donnée pour cette période",
+        "toggleBusinesses": "Afficher les entreprises parrainées",
+        "referredBusinesses": "Entreprises parrainées",
+        "noBusinesses": "Aucune entreprise parrainée",
+        "businessName": "Entreprise"
       }
     },
     "businesses": {
