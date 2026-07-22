@@ -30,26 +30,7 @@ export class ItemAiReviewModelService {
       this.configService.get<string>('itemAiReview.model')?.trim() || 'gpt-4.1';
     const started = Date.now();
     const content = await this.buildMultimodalContent(item);
-    const { data } = await axios.post(
-      ItemAiReviewModelService.OPENAI_URL,
-      {
-        model,
-        messages: [
-          { role: 'system', content: buildAiReviewSystemPrompt() },
-          { role: 'user', content },
-        ],
-        max_tokens: 1200,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 90000,
-      }
-    );
+    const data = await this.callWithRetry(apiKey, model, content);
     const raw = data?.choices?.[0]?.message?.content;
     if (!raw) throw new Error('Empty model response');
     const parsed = this.parseResult(JSON.parse(raw));
@@ -63,6 +44,57 @@ export class ItemAiReviewModelService {
         usage: data?.usage ?? null,
       },
     };
+  }
+
+  private async callWithRetry(
+    apiKey: string,
+    model: string,
+    content: Array<{ type: string; text?: string; image_url?: object }>,
+    maxAttempts = 4
+  ): Promise<any> {
+    let attempt = 0;
+    while (true) {
+      try {
+        const { data } = await axios.post(
+          ItemAiReviewModelService.OPENAI_URL,
+          {
+            model,
+            messages: [
+              { role: 'system', content: buildAiReviewSystemPrompt() },
+              { role: 'user', content },
+            ],
+            max_tokens: 1200,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 90000,
+          }
+        );
+        return data;
+      } catch (error: any) {
+        attempt++;
+        const status = error?.response?.status;
+        const isRateLimit = status === 429;
+        const isServerError = status != null && status >= 500;
+        if ((isRateLimit || isServerError) && attempt < maxAttempts) {
+          const retryAfterSec = parseInt(
+            error?.response?.headers?.['retry-after'] ?? '0',
+            10
+          );
+          const backoffMs = retryAfterSec > 0
+            ? retryAfterSec * 1000
+            : Math.min(2000 * 2 ** (attempt - 1), 30000);
+          await new Promise((r) => setTimeout(r, backoffMs));
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   private async buildMultimodalContent(item: ItemForAiReview) {

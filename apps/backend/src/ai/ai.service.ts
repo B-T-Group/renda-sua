@@ -830,8 +830,8 @@ Do not include any text outside the JSON.`;
     return (
       'You are an AI assistant that reads product photos (OCR, labels, price tags, barcodes) ' +
       'and returns a single JSON object. Do not invent fields you cannot read clearly; use null when uncertain. ' +
-      'Never use placeholder or demo product names (e.g. "Test product", "Test product API"); ' +
-      'if the real product name is not clearly readable, set name to null.'
+      'CRITICAL: Never use placeholder or demo product names (e.g. "Test product", "Test product API", "Sample product", "Dummy product"). ' +
+      'If the real product name is not clearly readable on the image, set name to null (leave blank). Prefer null over guessing.'
     );
   }
 
