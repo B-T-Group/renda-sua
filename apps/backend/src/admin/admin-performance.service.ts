@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ConfigurationsService } from './configurations.service';
 import {
   AGENTS_BY_IDS_QUERY,
   MARKETS_QUERY,
@@ -54,6 +55,9 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
+  /** Projected next payout: stockedReferralCount × per-referral payout (qualifying businesses not yet paid). */
+  projectedPayoutAmount?: number;
+  projectedPayoutCurrency?: string;
 }
 
 interface AggregateCount {
@@ -71,7 +75,11 @@ interface SummaryQueryResult {
 interface AgentRow {
   id: string;
   agent_code: string | null;
-  user: { first_name: string | null; last_name: string | null } | null;
+  user: {
+    first_name: string | null;
+    last_name: string | null;
+    addresses?: Array<{ country: string | null }>;
+  } | null;
 }
 
 interface MarketRow {
@@ -114,7 +122,10 @@ const MAX_PAGES = 20;
 export class AdminPerformanceService {
   private readonly logger = new Logger(AdminPerformanceService.name);
 
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly configurationsService: ConfigurationsService
+  ) {}
 
   async getSummary(
     params: PerformanceWindowParams
@@ -208,9 +219,67 @@ export class AdminPerformanceService {
     const ranked = entries.slice(0, limit);
     if (ranked.length === 0) return [];
     const agents = await this.fetchAgentsByIds(ranked.map((e) => e.agentId));
-    return ranked.map((entry) =>
+    const withNames = ranked.map((entry) =>
       this.withAgentNames(entry, agents.get(entry.agentId))
     );
+    return this.attachProjectedPayouts(withNames, agents);
+  }
+
+  private async attachProjectedPayouts(
+    entries: TopAgentEntry[],
+    agents: Map<string, AgentRow>
+  ): Promise<TopAgentEntry[]> {
+    const payoutByCountry = new Map<string, { amount: number; currency: string }>();
+    const results: TopAgentEntry[] = [];
+    for (const entry of entries) {
+      const countryCode = this.agentCountryCode(agents.get(entry.agentId));
+      if (!countryCode || (entry.stockedReferralCount ?? 0) === 0) {
+        results.push(entry);
+        continue;
+      }
+      if (!payoutByCountry.has(countryCode)) {
+        payoutByCountry.set(
+          countryCode,
+          await this.fetchPayoutConfig(countryCode)
+        );
+      }
+      const payout = payoutByCountry.get(countryCode)!;
+      results.push({
+        ...entry,
+        projectedPayoutAmount:
+          payout.amount > 0
+            ? (entry.stockedReferralCount ?? 0) * payout.amount
+            : undefined,
+        projectedPayoutCurrency: payout.amount > 0 ? payout.currency : undefined,
+      });
+    }
+    return results;
+  }
+
+  private agentCountryCode(agent?: AgentRow): string | null {
+    const country = agent?.user?.addresses?.[0]?.country;
+    return country?.trim().toUpperCase() || null;
+  }
+
+  private async fetchPayoutConfig(
+    countryCode: string
+  ): Promise<{ amount: number; currency: string }> {
+    try {
+      const config = await this.configurationsService.getConfigurationByKey(
+        'business_referral_payout_amount',
+        countryCode
+      );
+      const amount = Number(config?.number_value ?? 0);
+      const currency = this.currencyForCountry(countryCode);
+      return { amount, currency };
+    } catch {
+      return { amount: 0, currency: this.currencyForCountry(countryCode) };
+    }
+  }
+
+  private currencyForCountry(countryCode: string): string {
+    const map: Record<string, string> = { CA: 'CAD', US: 'USD', GA: 'XAF', CM: 'XAF' };
+    return map[countryCode.toUpperCase()] ?? 'XAF';
   }
 
   private rawItemsPerReferral(entry: TopAgentEntry): number {

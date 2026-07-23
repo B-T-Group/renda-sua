@@ -141,6 +141,13 @@ export const AGENTS_BY_IDS_QUERY = `
       user {
         first_name
         last_name
+        addresses(
+          where: { status: { _eq: active } }
+          order_by: { is_primary: desc }
+          limit: 1
+        ) {
+          country
+        }
       }
     }
   }
