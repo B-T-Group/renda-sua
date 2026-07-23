@@ -45,7 +45,8 @@ export class RentalListingAiReviewService {
     if (!enqueued) {
       await this.failToPendingIfAiReviewing(
         listingId,
-        'SQS enqueue failed after claim'
+        'SQS enqueue failed after claim',
+        ''
       );
     }
   }
@@ -69,9 +70,11 @@ export class RentalListingAiReviewService {
         `AI review failed for ${listingId}: ${error?.message ?? error}`,
         error?.stack
       );
+      const listingName: string = error?.__listingName ?? '';
       await this.failToPendingIfAiReviewing(
         listingId,
-        error?.message ?? 'AI review failed'
+        error?.message ?? 'AI review failed',
+        listingName
       );
       return { success: false, error: error?.message ?? String(error) };
     }
@@ -106,19 +109,27 @@ export class RentalListingAiReviewService {
     expectedVersion?: number
   ): Promise<void> {
     const listing = await this.loadListing(listingId);
-    this.assertReviewable(listing, expectedVersion);
-    if (this.hasBlockingImageErrors(listing)) {
-      await this.applyRejectDecision(
-        listing,
-        await this.createRunningReview(listing),
-        this.hardBlockResult(listing),
-        { provider: 'prefilter', model: 'validation_errors' }
-      );
-      return;
+    try {
+      this.assertReviewable(listing, expectedVersion);
+      if (this.hasBlockingImageErrors(listing)) {
+        await this.applyRejectDecision(
+          listing,
+          await this.createRunningReview(listing),
+          this.hardBlockResult(listing),
+          { provider: 'prefilter', model: 'validation_errors' }
+        );
+        return;
+      }
+      const reviewId = await this.createRunningReview(listing);
+      const { result, modelMeta } = await this.model.reviewListing(listing);
+      await this.applyDecision(listing, reviewId, result, modelMeta);
+    } catch (err: any) {
+      // Attach listing name so callers can include it in failure notifications
+      if (err && typeof err === 'object') {
+        err.__listingName = listing.rental_item?.name ?? '';
+      }
+      throw err;
     }
-    const reviewId = await this.createRunningReview(listing);
-    const { result, modelMeta } = await this.model.reviewListing(listing);
-    await this.applyDecision(listing, reviewId, result, modelMeta);
   }
 
   private assertReviewable(
@@ -347,7 +358,8 @@ export class RentalListingAiReviewService {
 
   private async failToPendingIfAiReviewing(
     listingId: string,
-    reason: string
+    reason: string,
+    listingName: string
   ): Promise<void> {
     try {
       const result = await this.hasura.executeMutation<{
@@ -358,6 +370,11 @@ export class RentalListingAiReviewService {
         this.logger.warn(
           `AI review failed; listing ${listingId} back to pending: ${reason}`
         );
+        await this.notifications.notifySuperusersListingAiReviewFailed({
+          listingId,
+          listingName: listingName || listingId,
+          reason,
+        });
       } else {
         this.logger.warn(
           `AI review failed for ${listingId} but status was no longer ai_reviewing; left unchanged (${reason})`

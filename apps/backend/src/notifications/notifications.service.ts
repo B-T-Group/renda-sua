@@ -2608,6 +2608,76 @@ export class NotificationsService {
     }
   }
 
+  async notifySuperusersItemAiReviewFailed(params: {
+    itemId: string;
+    itemName: string;
+    reason: string;
+  }): Promise<void> {
+    try {
+      const recipients = await this.listSuperuserRecipients();
+      const safeName = escapeHtmlForEmail(params.itemName || params.itemId);
+      const safeReason = escapeHtmlForEmail(params.reason || 'Unknown error');
+      const subject = `AI review failed — ${params.itemName || params.itemId}`;
+      const html = `
+        <p>The AI moderation pipeline failed for sale item <strong>${safeName}</strong> (<code>${escapeHtmlForEmail(params.itemId)}</code>).</p>
+        <p>The item has been reset to <strong>pending</strong> and requires manual review.</p>
+        <p>Reason: ${safeReason}</p>
+        <p>Review it in the <a href="/admin/items/moderation">admin items moderation queue</a>.</p>
+      `;
+      const title = 'AI review failed — manual audit needed';
+      const body = `Sale item "${params.itemName || params.itemId}" needs manual review after AI pipeline error.`;
+      for (const recipient of recipients) {
+        if (recipient.email) {
+          await this.sendSimpleLifecycleEmail({ to: recipient.email, subject, html });
+        }
+        await this.sendPushNotificationByUserId(recipient.userId, title, body, {
+          type: 'admin_ai_review_failed',
+          itemId: params.itemId,
+          url: '/admin/items/moderation',
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperusersItemAiReviewFailed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async notifySuperusersListingAiReviewFailed(params: {
+    listingId: string;
+    listingName: string;
+    reason: string;
+  }): Promise<void> {
+    try {
+      const recipients = await this.listSuperuserRecipients();
+      const safeName = escapeHtmlForEmail(params.listingName || params.listingId);
+      const safeReason = escapeHtmlForEmail(params.reason || 'Unknown error');
+      const subject = `AI review failed — ${params.listingName || params.listingId}`;
+      const html = `
+        <p>The AI moderation pipeline failed for rental listing <strong>${safeName}</strong> (<code>${escapeHtmlForEmail(params.listingId)}</code>).</p>
+        <p>The listing has been reset to <strong>pending</strong> and requires manual review.</p>
+        <p>Reason: ${safeReason}</p>
+        <p>Review it in the <a href="/admin/rentals/moderation">admin rentals moderation queue</a>.</p>
+      `;
+      const title = 'AI review failed — manual audit needed';
+      const body = `Rental listing "${params.listingName || params.listingId}" needs manual review after AI pipeline error.`;
+      for (const recipient of recipients) {
+        if (recipient.email) {
+          await this.sendSimpleLifecycleEmail({ to: recipient.email, subject, html });
+        }
+        await this.sendPushNotificationByUserId(recipient.userId, title, body, {
+          type: 'admin_ai_review_failed',
+          listingId: params.listingId,
+          url: '/admin/rentals/moderation',
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperusersListingAiReviewFailed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   async sendBusinessIdDocumentApprovedEmail(params: {
     businessUserId: string;
     documentType: string;

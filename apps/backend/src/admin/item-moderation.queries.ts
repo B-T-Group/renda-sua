@@ -19,6 +19,11 @@ export const ITEMS_MODERATION_LIST = `
         name
         user_id
       }
+      item_images(order_by: { display_order: asc }, limit: 5) {
+        id
+        image_url
+        display_order
+      }
     }
     items_aggregate(where: $where) {
       aggregate {

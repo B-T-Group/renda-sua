@@ -19,6 +19,7 @@ export interface ListingModerationRow {
     id: string;
     name: string;
     business: { name: string; user_id: string };
+    rental_item_images?: Array<{ id: string; image_url: string; display_order: number }>;
   };
   business_location: { id: string; name: string };
 }

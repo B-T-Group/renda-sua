@@ -17,6 +17,11 @@ export const RENTAL_LISTINGS_MODERATION_LIST = `
           name
           user_id
         }
+        rental_item_images(order_by: { display_order: asc }, limit: 5) {
+          id
+          image_url
+          display_order
+        }
       }
       business_location {
         id

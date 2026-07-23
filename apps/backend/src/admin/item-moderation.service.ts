@@ -22,6 +22,7 @@ export interface ItemModerationRow {
   currency: string | null;
   is_active: boolean;
   business: { id: string; name: string; user_id: string };
+  item_images?: Array<{ id: string; image_url: string; display_order: number }>;
 }
 
 type ItemForModerationRow = {

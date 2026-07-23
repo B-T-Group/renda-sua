@@ -46,7 +46,8 @@ export class ItemAiReviewService {
     if (!enqueued) {
       await this.failToPendingIfAiReviewing(
         itemId,
-        'SQS enqueue failed after claim'
+        'SQS enqueue failed after claim',
+        ''
       );
     }
   }
@@ -91,9 +92,11 @@ export class ItemAiReviewService {
         `AI review failed for ${itemId}: ${error?.message ?? error}`,
         error?.stack
       );
+      const itemName: string = error?.__itemName ?? '';
       await this.failToPendingIfAiReviewing(
         itemId,
-        error?.message ?? 'AI review failed'
+        error?.message ?? 'AI review failed',
+        itemName
       );
       return { success: false, error: error?.message ?? String(error) };
     }
@@ -128,19 +131,27 @@ export class ItemAiReviewService {
     expectedVersion?: number
   ): Promise<void> {
     const item = await this.loadItem(itemId);
-    this.assertReviewable(item, expectedVersion);
-    if (this.hasBlockingImageErrors(item)) {
-      await this.applyRejectDecision(
-        item,
-        await this.createRunningReview(item),
-        this.hardBlockResult(item),
-        { provider: 'prefilter', model: 'validation_errors' }
-      );
-      return;
+    try {
+      this.assertReviewable(item, expectedVersion);
+      if (this.hasBlockingImageErrors(item)) {
+        await this.applyRejectDecision(
+          item,
+          await this.createRunningReview(item),
+          this.hardBlockResult(item),
+          { provider: 'prefilter', model: 'validation_errors' }
+        );
+        return;
+      }
+      const reviewId = await this.createRunningReview(item);
+      const { result, modelMeta } = await this.model.reviewItem(item);
+      await this.applyDecision(item, reviewId, result, modelMeta);
+    } catch (err: any) {
+      // Attach item name so callers can include it in failure notifications
+      if (err && typeof err === 'object') {
+        err.__itemName = item.name;
+      }
+      throw err;
     }
-    const reviewId = await this.createRunningReview(item);
-    const { result, modelMeta } = await this.model.reviewItem(item);
-    await this.applyDecision(item, reviewId, result, modelMeta);
   }
 
   private assertReviewable(
@@ -369,7 +380,8 @@ export class ItemAiReviewService {
 
   private async failToPendingIfAiReviewing(
     itemId: string,
-    reason: string
+    reason: string,
+    itemName: string
   ): Promise<void> {
     try {
       const result = await this.hasura.executeMutation<{
@@ -380,6 +392,11 @@ export class ItemAiReviewService {
         this.logger.warn(
           `AI review failed; item ${itemId} back to pending: ${reason}`
         );
+        await this.notifications.notifySuperusersItemAiReviewFailed({
+          itemId,
+          itemName: itemName || itemId,
+          reason,
+        });
       } else {
         this.logger.warn(
           `AI review failed for ${itemId} but status was no longer ai_reviewing; left unchanged (${reason})`
