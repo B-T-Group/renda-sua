@@ -1089,15 +1089,16 @@ export class InventoryItemsService {
 
   /** Primary (or first active) location for a business — owner preview / legacy URLs. */
   private async resolvePrimaryLocationIdForBusiness(
-    businessId: string
+    businessId: string,
+    ownerPreview = false
   ): Promise<string | null> {
+    const where = ownerPreview
+      ? `{ business_id: { _eq: $businessId } }`
+      : `{ business_id: { _eq: $businessId }, is_active: { _eq: true } }`;
     const query = `
       query PrimaryStoreLocation($businessId: uuid!) {
         business_locations(
-          where: {
-            business_id: { _eq: $businessId }
-            is_active: { _eq: true }
-          }
+          where: ${where}
           order_by: [{ is_primary: desc }, { created_at: asc }]
           limit: 1
         ) {
@@ -1237,11 +1238,23 @@ export class InventoryItemsService {
     const id = idParam.trim();
     if (!id) return null;
 
+    // Speculatively resolve owner status using the raw id (may be a business id
+    // or a location id). This lets us bypass the is_active guard for owners whose
+    // location is inactive.
+    const ownerPreviewRequested = query.owner_preview === true;
+    const speculativeOwnerPreview = await this.resolveOwnerPreview(
+      id,
+      ownerPreviewRequested
+    );
+
     let locationId = id;
     let byId = await this.fetchStoreLocationDetailsByIds([locationId]);
     let loc = byId.get(locationId);
     if (!loc) {
-      const primaryId = await this.resolvePrimaryLocationIdForBusiness(id);
+      const primaryId = await this.resolvePrimaryLocationIdForBusiness(
+        id,
+        speculativeOwnerPreview
+      );
       if (!primaryId) return null;
       locationId = primaryId;
       byId = await this.fetchStoreLocationDetailsByIds([locationId]);
@@ -1249,10 +1262,10 @@ export class InventoryItemsService {
     }
     if (!loc) return null;
 
-    const ownerPreview = await this.resolveOwnerPreview(
-      loc.business_id,
-      query.owner_preview === true
-    );
+    // Re-confirm with the resolved business_id (handles location-id input).
+    const ownerPreview = speculativeOwnerPreview
+      ? await this.resolveOwnerPreview(loc.business_id, ownerPreviewRequested)
+      : false;
     if (!ownerPreview && !loc.is_storefront_visible) return null;
 
     const { country_code, state } = await this.resolveInventoryListGeo(query);
