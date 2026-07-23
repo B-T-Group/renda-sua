@@ -1238,22 +1238,21 @@ export class InventoryItemsService {
     const id = idParam.trim();
     if (!id) return null;
 
-    // Speculatively resolve owner status using the raw id (may be a business id
-    // or a location id). This lets us bypass the is_active guard for owners whose
-    // location is inactive.
     const ownerPreviewRequested = query.owner_preview === true;
-    const speculativeOwnerPreview = await this.resolveOwnerPreview(
-      id,
-      ownerPreviewRequested
-    );
 
+    // Resolve id as a location id first; fall back to primary location for a business id.
+    // When owner_preview is requested, bypass the is_active filter so owners can view
+    // their store even when the location or storefront is not yet active/visible.
     let locationId = id;
     let byId = await this.fetchStoreLocationDetailsByIds([locationId]);
     let loc = byId.get(locationId);
     if (!loc) {
+      // id was not a location id — try treating it as a business id.
+      // Always bypass is_active here when owner_preview is requested; ownership
+      // is validated below via resolveOwnerPreview(loc.business_id).
       const primaryId = await this.resolvePrimaryLocationIdForBusiness(
         id,
-        speculativeOwnerPreview
+        ownerPreviewRequested
       );
       if (!primaryId) return null;
       locationId = primaryId;
@@ -1262,10 +1261,11 @@ export class InventoryItemsService {
     }
     if (!loc) return null;
 
-    // Re-confirm with the resolved business_id (handles location-id input).
-    const ownerPreview = speculativeOwnerPreview
-      ? await this.resolveOwnerPreview(loc.business_id, ownerPreviewRequested)
-      : false;
+    // Confirm ownership using the definitively resolved business_id.
+    const ownerPreview = await this.resolveOwnerPreview(
+      loc.business_id,
+      ownerPreviewRequested
+    );
     if (!ownerPreview && !loc.is_storefront_visible) return null;
 
     const { country_code, state } = await this.resolveInventoryListGeo(query);
