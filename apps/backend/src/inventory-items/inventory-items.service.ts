@@ -1268,14 +1268,15 @@ export class InventoryItemsService {
     );
     if (!ownerPreview && !loc.is_storefront_visible) return null;
 
-    const { country_code, state } = await this.resolveInventoryListGeo(query);
-    // Only owners get unavailable stock; ignore client include_unavailable otherwise.
+    // Do NOT apply the caller's geo (country_code/state) when counting items for a
+    // specific store — this endpoint resolves a store by ID, so inventory counts must
+    // not be filtered by the requesting user's country (a Canadian user would otherwise
+    // see zero items for a Cameroonian store, causing a false 404).
+    // Only owners get unavailable stock; public viewers see available stock only.
     const includeUnavailable = ownerPreview;
     const built = await this.buildInventoryCatalogWhere({
       is_active: query.is_active !== undefined ? query.is_active : true,
       include_unavailable: includeUnavailable,
-      country_code,
-      state,
       business_location_id: locationId,
       ownerPreview,
     });
