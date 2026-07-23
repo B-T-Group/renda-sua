@@ -2,12 +2,12 @@ table:
   name: item_ai_reviews
   schema: public
 object_relationships:
-  - name: item
-    using:
-      foreign_key_constraint_on: item_id
   - name: admin_feedback_by_user
     using:
       foreign_key_constraint_on: admin_feedback_by_user_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
 array_relationships:
   - name: proposed_images
     using:

@@ -5,12 +5,12 @@ object_relationships:
   - name: order_details
     using:
       foreign_key_constraint_on: order_id
-  - name: rental_booking
-    using:
-      foreign_key_constraint_on: rental_booking_id
   - name: rater_user_details
     using:
       foreign_key_constraint_on: rater_user_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
 insert_permissions:
   - role: authenticated
     permission:

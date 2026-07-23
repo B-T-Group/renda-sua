@@ -2,9 +2,9 @@ table:
   name: agent_referrals
   schema: public
 object_relationships:
-  - name: referring_agent
-    using:
-      foreign_key_constraint_on: referring_agent_id
   - name: referred_agent
     using:
       foreign_key_constraint_on: referred_agent_id
+  - name: referring_agent
+    using:
+      foreign_key_constraint_on: referring_agent_id

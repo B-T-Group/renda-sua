@@ -67,6 +67,7 @@ import { SupportModule } from '../support/support.module';
 import { TwilioVerifyModule } from '../twilio-verify/twilio-verify.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
+import { ThreadsModule } from '../threads/threads.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -169,6 +170,7 @@ import { AppService } from './app.service';
     DeliveryModule,
     SupportModule,
     TwilioVerifyModule,
+    ThreadsModule,
   ],
   controllers: [
     AppController,

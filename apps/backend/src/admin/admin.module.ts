@@ -26,6 +26,7 @@ import { ImageValidationModule } from '../image-validation/image-validation.modu
 import { WithdrawalPinService } from './withdrawal-pin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { AdminAuthModule } from './admin-auth.module';
+import { ThreadsModule } from '../threads/threads.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AdminAuthModule } from './admin-auth.module';
     RentalListingAiReviewModule,
     ItemAiReviewModule,
     ImageValidationModule,
+    ThreadsModule,
   ],
   controllers: [
     AdminController,

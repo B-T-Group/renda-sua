@@ -11,13 +11,20 @@ object_relationships:
   - name: item_sub_category
     using:
       foreign_key_constraint_on: item_sub_category_id
-  - name: stripe_tax_code
-    using:
-      foreign_key_constraint_on: stripe_tax_code_id
   - name: moderated_by_user
     using:
       foreign_key_constraint_on: moderated_by_user_id
+  - name: stripe_tax_code
+    using:
+      foreign_key_constraint_on: stripe_tax_code_id
 array_relationships:
+  - name: ai_reviews
+    using:
+      foreign_key_constraint_on:
+        column: item_id
+        table:
+          name: item_ai_reviews
+          schema: public
   - name: business_inventories
     using:
       manual_configuration:
@@ -27,6 +34,15 @@ array_relationships:
         remote_table:
           name: business_inventory
           schema: public
+  - name: item_collections
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_id
+        insertion_order: null
+        remote_table:
+          name: item_collections
+          schema: public
   - name: item_images
     using:
       manual_configuration:
@@ -35,6 +51,24 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: item_images
+          schema: public
+  - name: item_tags
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_id
+        insertion_order: null
+        remote_table:
+          name: item_tags
+          schema: public
+  - name: item_variants
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_id
+        insertion_order: null
+        remote_table:
+          name: item_variants
           schema: public
   - name: order_items
     using:
@@ -53,40 +87,6 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: ratings
-          schema: public
-  - name: item_tags
-    using:
-      manual_configuration:
-        column_mapping:
-          id: item_id
-        insertion_order: null
-        remote_table:
-          name: item_tags
-          schema: public
-  - name: item_collections
-    using:
-      manual_configuration:
-        column_mapping:
-          id: item_id
-        insertion_order: null
-        remote_table:
-          name: item_collections
-          schema: public
-  - name: item_variants
-    using:
-      manual_configuration:
-        column_mapping:
-          id: item_id
-        insertion_order: null
-        remote_table:
-          name: item_variants
-          schema: public
-  - name: ai_reviews
-    using:
-      foreign_key_constraint_on:
-        column: item_id
-        table:
-          name: item_ai_reviews
           schema: public
 insert_permissions:
   - role: business

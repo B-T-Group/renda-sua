@@ -33,6 +33,15 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: ratings_received
+    using:
+      manual_configuration:
+        column_mapping:
+          id: rated_entity_id
+        insertion_order: null
+        remote_table:
+          name: ratings
+          schema: public
   - name: rental_bookings
     using:
       manual_configuration:
@@ -50,15 +59,6 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: rental_requests
-          schema: public
-  - name: ratings_received
-    using:
-      manual_configuration:
-        column_mapping:
-          id: rated_entity_id
-        insertion_order: null
-        remote_table:
-          name: ratings
           schema: public
 insert_permissions:
   - role: agent

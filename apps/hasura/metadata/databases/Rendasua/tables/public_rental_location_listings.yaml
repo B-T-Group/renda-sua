@@ -19,13 +19,6 @@ array_relationships:
         table:
           name: rental_listing_ai_reviews
           schema: public
-  - name: weekly_availability
-    using:
-      foreign_key_constraint_on:
-        column: listing_id
-        table:
-          name: rental_listing_weekly_availability
-          schema: public
   - name: rental_bookings
     using:
       foreign_key_constraint_on:
@@ -39,6 +32,13 @@ array_relationships:
         column: rental_location_listing_id
         table:
           name: rental_requests
+          schema: public
+  - name: weekly_availability
+    using:
+      foreign_key_constraint_on:
+        column: listing_id
+        table:
+          name: rental_listing_weekly_availability
           schema: public
 insert_permissions:
   - role: business

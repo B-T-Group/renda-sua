@@ -20,15 +20,6 @@ insert_permissions:
       columns:
         - item_id
         - tag_id
-delete_permissions:
-  - role: business
-    permission:
-      filter:
-        item:
-          business:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
 select_permissions:
   - role: agent
     permission:
@@ -65,3 +56,12 @@ select_permissions:
         - tag_id
         - created_at
       filter: {}
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

@@ -12,15 +12,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: item_variant_id
 array_relationships:
-  - name: order_items
-    using:
-      manual_configuration:
-        column_mapping:
-          id: business_inventory_id
-        insertion_order: null
-        remote_table:
-          name: order_items
-          schema: public
   - name: item_deals
     using:
       manual_configuration:
@@ -29,6 +20,15 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: item_deals
+          schema: public
+  - name: order_items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_inventory_id
+        insertion_order: null
+        remote_table:
+          name: order_items
           schema: public
   - name: variant_price_overrides
     using:

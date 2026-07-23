@@ -1,0 +1,18 @@
+table:
+  name: message_threads
+  schema: public
+object_relationships:
+  - name: creator
+    using:
+      foreign_key_constraint_on: created_by_user_id
+  - name: recipient
+    using:
+      foreign_key_constraint_on: recipient_user_id
+array_relationships:
+  - name: messages
+    using:
+      foreign_key_constraint_on:
+        column: thread_id
+        table:
+          name: thread_messages
+          schema: public

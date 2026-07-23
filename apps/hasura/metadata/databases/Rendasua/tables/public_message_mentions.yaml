@@ -2,9 +2,9 @@ table:
   name: message_mentions
   schema: public
 object_relationships:
-  - name: message
-    using:
-      foreign_key_constraint_on: message_id
   - name: mentioned_user
     using:
       foreign_key_constraint_on: mentioned_user_id
+  - name: message
+    using:
+      foreign_key_constraint_on: message_id

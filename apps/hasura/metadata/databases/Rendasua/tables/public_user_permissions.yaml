@@ -2,12 +2,12 @@ table:
   name: user_permissions
   schema: public
 object_relationships:
-  - name: user
-    using:
-      foreign_key_constraint_on: user_id
-  - name: permission
-    using:
-      foreign_key_constraint_on: permission_id
   - name: granted_by_user
     using:
       foreign_key_constraint_on: granted_by
+  - name: permission
+    using:
+      foreign_key_constraint_on: permission_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id

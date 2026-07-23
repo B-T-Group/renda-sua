@@ -1,0 +1,10 @@
+table:
+  name: thread_messages
+  schema: public
+object_relationships:
+  - name: sender
+    using:
+      foreign_key_constraint_on: sender_user_id
+  - name: thread
+    using:
+      foreign_key_constraint_on: thread_id

@@ -1,7 +1,6 @@
 table:
   name: permissions
   schema: public
-object_relationships: []
 array_relationships:
   - name: role_permissions
     using:

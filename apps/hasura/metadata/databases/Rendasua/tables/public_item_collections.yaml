@@ -2,12 +2,12 @@ table:
   name: item_collections
   schema: public
 object_relationships:
-  - name: item
-    using:
-      foreign_key_constraint_on: item_id
   - name: collection
     using:
       foreign_key_constraint_on: collection_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
 insert_permissions:
   - role: business
     permission:
@@ -20,15 +20,6 @@ insert_permissions:
       columns:
         - item_id
         - collection_id
-delete_permissions:
-  - role: business
-    permission:
-      filter:
-        item:
-          business:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
 select_permissions:
   - role: agent
     permission:
@@ -65,3 +56,12 @@ select_permissions:
         - collection_id
         - created_at
       filter: {}
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

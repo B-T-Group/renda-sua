@@ -395,6 +395,46 @@ export class NotificationsService {
     }
   }
 
+  async sendUserThreadMessagePush(params: {
+    recipientUserId: string;
+    senderUserId: string;
+    threadId: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const [recipient, senderRow] = await Promise.all([
+      this.getUserRowForEmail(recipientUserId),
+      this.hasuraSystemService.executeQuery<{
+        users_by_pk: { first_name?: string; last_name?: string } | null;
+      }>(`query U($id: uuid!) { users_by_pk(id: $id) { first_name last_name } }`, {
+        id: params.senderUserId,
+      }),
+    ]);
+    const senderData = senderRow?.users_by_pk;
+    const senderName = senderData
+      ? `${senderData.first_name ?? ''} ${senderData.last_name ?? ''}`.trim() || 'Rendasua'
+      : 'Rendasua';
+    const lang = recipient?.preferred_language;
+    const title = lang === 'fr' ? 'Nouveau message' : 'New message';
+    const body = lang === 'fr' ? `Message de ${senderName}` : `Message from ${senderName}`;
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: '/messages',
+        threadId: params.threadId,
+        type: 'user_thread_message',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendUserThreadMessagePush failed for thread ${params.threadId}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
   async sendRentalStartPinSharedPush(params: {
     recipientUserId: string;
     bookingId: string;

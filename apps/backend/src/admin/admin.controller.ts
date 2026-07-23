@@ -32,6 +32,7 @@ import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
 import { RejectSaleItemDto } from './dto/item-moderation.dto';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
+import { ThreadsService } from '../threads/threads.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
 import { ItemModerationService } from './item-moderation.service';
@@ -76,7 +77,8 @@ export class AdminController {
     private readonly itemAiReviewAdminService: ItemAiReviewAdminService,
     private readonly applicationSetupService: ApplicationSetupService,
     private readonly countryOnboardingService: CountryOnboardingService,
-    private readonly transferService: BusinessLocationTransferService
+    private readonly transferService: BusinessLocationTransferService,
+    private readonly threadsService: ThreadsService
   ) {}
 
   @Post('message')
@@ -1324,6 +1326,38 @@ export class AdminController {
         },
         error?.status || HttpStatus.BAD_REQUEST
       );
+    }
+  }
+
+  @Post('threads')
+  @RequirePermissions(PlatformPermissions.OPS_USER_MESSAGES)
+  @ApiOperation({ summary: 'Create a superuser-to-user conversation thread' })
+  @ApiBody({
+    schema: {
+      properties: {
+        recipientUserId: { type: 'string' },
+        subject: { type: 'string' },
+        body: { type: 'string' },
+      },
+      required: ['recipientUserId', 'body'],
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Thread created' })
+  async createThread(
+    @Body() dto: { recipientUserId: string; subject?: string; body: string },
+    @Req() request: RequestWithUser
+  ) {
+    try {
+      const senderUserId = request.user?.id || request.user?.user_id;
+      const result = await this.threadsService.createThread({
+        senderUserId,
+        recipientUserId: dto.recipientUserId,
+        body: dto.body,
+        subject: dto.subject,
+      });
+      return { success: true, data: result };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to create thread' };
     }
   }
 

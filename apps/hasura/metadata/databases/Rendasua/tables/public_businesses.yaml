@@ -9,6 +9,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: user_id
 array_relationships:
+  - name: ai_token_usage
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_ai_token_usage
+          schema: public
   - name: business_addresses
     using:
       manual_configuration:
@@ -17,6 +24,13 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: business_addresses
+          schema: public
+  - name: business_contracts
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_contracts
           schema: public
   - name: business_locations
     using:
@@ -36,6 +50,20 @@ array_relationships:
         remote_table:
           name: items
           schema: public
+  - name: lifecycle_status_history
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_lifecycle_status_history
+          schema: public
+  - name: merchant_agreement_acceptances
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_merchant_agreement_acceptances
+          schema: public
   - name: orders
     using:
       manual_configuration:
@@ -44,6 +72,13 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: orders
+          schema: public
+  - name: payment_accounts
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_payment_accounts
           schema: public
   - name: rental_bookings
     using:
@@ -54,15 +89,6 @@ array_relationships:
         remote_table:
           name: rental_bookings
           schema: public
-  - name: rental_items
-    using:
-      manual_configuration:
-        column_mapping:
-          id: business_id
-        insertion_order: null
-        remote_table:
-          name: rental_items
-          schema: public
   - name: rental_item_images
     using:
       manual_configuration:
@@ -72,40 +98,14 @@ array_relationships:
         remote_table:
           name: rental_item_images
           schema: public
-  - name: merchant_agreement_acceptances
+  - name: rental_items
     using:
-      foreign_key_constraint_on:
-        column: business_id
-        table:
-          name: business_merchant_agreement_acceptances
-          schema: public
-  - name: business_contracts
-    using:
-      foreign_key_constraint_on:
-        column: business_id
-        table:
-          name: business_contracts
-          schema: public
-  - name: payment_accounts
-    using:
-      foreign_key_constraint_on:
-        column: business_id
-        table:
-          name: business_payment_accounts
-          schema: public
-  - name: lifecycle_status_history
-    using:
-      foreign_key_constraint_on:
-        column: business_id
-        table:
-          name: business_lifecycle_status_history
-          schema: public
-  - name: ai_token_usage
-    using:
-      foreign_key_constraint_on:
-        column: business_id
-        table:
-          name: business_ai_token_usage
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: rental_items
           schema: public
 insert_permissions:
   - role: agent

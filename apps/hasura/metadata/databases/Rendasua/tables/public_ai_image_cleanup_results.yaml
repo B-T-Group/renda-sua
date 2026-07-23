@@ -2,15 +2,15 @@ table:
   name: ai_image_cleanup_results
   schema: public
 object_relationships:
-  - name: job
-    using:
-      foreign_key_constraint_on: job_id
   - name: business_image
     using:
       foreign_key_constraint_on: business_image_id
   - name: item_variant_image
     using:
       foreign_key_constraint_on: item_variant_image_id
+  - name: job
+    using:
+      foreign_key_constraint_on: job_id
   - name: retry_of_result
     using:
       foreign_key_constraint_on: retry_of_result_id
