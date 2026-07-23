@@ -1,0 +1,13 @@
+table:
+  name: business_referral_payouts
+  schema: public
+object_relationships:
+  - name: account
+    using:
+      foreign_key_constraint_on: account_id
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id

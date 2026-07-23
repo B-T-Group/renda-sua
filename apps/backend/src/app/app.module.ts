@@ -68,6 +68,7 @@ import { TwilioVerifyModule } from '../twilio-verify/twilio-verify.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
 import { ThreadsModule } from '../threads/threads.module';
+import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -171,6 +172,7 @@ import { AppService } from './app.service';
     SupportModule,
     TwilioVerifyModule,
     ThreadsModule,
+    BusinessReferralPayoutsModule,
   ],
   controllers: [
     AppController,

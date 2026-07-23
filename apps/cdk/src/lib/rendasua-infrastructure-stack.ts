@@ -680,5 +680,37 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         }
       );
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Business-referral payouts — weekly Saturday cron
+    // ─────────────────────────────────────────────────────────────────────────
+    const businessReferralPayoutsFunction = new lambda.Function(
+      this,
+      `BusinessReferralPayouts-${environment}`,
+      {
+        functionName: `business-referral-payouts-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/business-referral-payouts'),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    // EventBridge rule: every Saturday at 02:00 UTC
+    new events.Rule(this, `BusinessReferralPayoutsRule-${environment}`, {
+      ruleName: `business-referral-payouts-rule-${environment}`,
+      description:
+        'Triggers weekly business-referral commission payouts every Saturday at 02:00 UTC',
+      schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '2', minute: '0' }),
+      targets: [new targets.LambdaFunction(businessReferralPayoutsFunction)],
+    });
   }
 }
