@@ -78,8 +78,8 @@ interface AgentRow {
   user: {
     first_name: string | null;
     last_name: string | null;
-    addresses?: Array<{ country: string | null }>;
   } | null;
+  agent_addresses?: Array<{ address: { country: string | null } }>;
 }
 
 interface MarketRow {
@@ -257,7 +257,7 @@ export class AdminPerformanceService {
   }
 
   private agentCountryCode(agent?: AgentRow): string | null {
-    const country = agent?.user?.addresses?.[0]?.country;
+    const country = agent?.agent_addresses?.[0]?.address?.country;
     return country?.trim().toUpperCase() || null;
   }
 
