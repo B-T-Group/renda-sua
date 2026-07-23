@@ -8,6 +8,7 @@ import {
 } from '../embeddings/item-embedding.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { RbacService } from '../rbac/rbac.service';
 import {
   buildInventoryItemNotFoundShareHtml,
   buildInventoryItemShareHtml,
@@ -469,7 +470,8 @@ export class InventoryItemsService {
     private readonly addressesService: AddressesService,
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly configService: ConfigService,
-    private readonly itemEmbeddingService: ItemEmbeddingService
+    private readonly itemEmbeddingService: ItemEmbeddingService,
+    private readonly rbacService: RbacService
   ) {}
 
   private async resolveInventoryListGeo(
@@ -939,8 +941,8 @@ export class InventoryItemsService {
   }
 
   /**
-   * Owner preview only when explicitly requested and the Bearer token was
-   * verified (AuthGuard optional auth on public routes) and maps to this business.
+   * Owner preview when: the caller is the verified business owner, OR a superuser.
+   * Only active when explicitly requested and a valid Bearer token is present.
    */
   private async resolveOwnerPreview(
     businessId: string | undefined,
@@ -949,7 +951,9 @@ export class InventoryItemsService {
     if (!ownerPreviewRequested || !businessId?.trim()) return false;
     try {
       const user = await this.hasuraUserService.getUser();
-      return user?.business?.id === businessId.trim();
+      if (user?.business?.id === businessId.trim()) return true;
+      const access = await this.rbacService.getEffectiveAccess(user.id);
+      return access.isSuperuser;
     } catch {
       return false;
     }
