@@ -50,7 +50,7 @@ describe('BusinessReferralPayoutsService', () => {
     const getUserCountryCode = jest.fn(async () => countryCode);
     const sendInternalPushByUserId = jest.fn(async () => undefined);
     const getConfigurationByKey = jest.fn(
-      async (key: string, _country?: string) => {
+      async (key: string) => {
         if (key === 'business_referral_payout_enabled') {
           if (enabled === null) throw new Error('config unavailable');
           return { boolean_value: enabled, status: 'active' };

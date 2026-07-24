@@ -9,13 +9,21 @@ describe('BusinessAccountTypeService', () => {
       }
       return { businesses: business ? [business] : [] };
     });
-    const executeMutation = jest.fn(async (_mutation: string, vars: any) => ({
-      update_businesses_by_pk: {
-        account_type: vars.accountType,
-        account_type_locked_until: vars.lockedUntil,
-      },
-      insert_business_account_type_history_one: { id: 'hist-1' },
-    }));
+    const executeMutation = jest.fn(
+      async (
+        _mutation: string,
+        vars: {
+          accountType: string;
+          lockedUntil: string | null;
+        }
+      ) => ({
+        update_businesses_by_pk: {
+          account_type: vars.accountType,
+          account_type_locked_until: vars.lockedUntil,
+        },
+        insert_business_account_type_history_one: { id: 'hist-1' },
+      })
+    );
 
     const service = new BusinessAccountTypeService({
       executeQuery,
@@ -36,9 +44,9 @@ describe('BusinessAccountTypeService', () => {
     try {
       await service.selfServeChange('user-1', 'PREMIUM');
       fail('Expected plan lock conflict');
-    } catch (error: any) {
+    } catch (error: unknown) {
       expect(error).toBeInstanceOf(ConflictException);
-      expect(error.getResponse()).toEqual(
+      expect((error as ConflictException).getResponse()).toEqual(
         expect.objectContaining({ lockedUntil })
       );
     }
