@@ -24,6 +24,7 @@ export const PlatformPermissions = {
   DASHBOARD_PLATFORM_STATS: 'platform.dashboard.platform_stats',
   MANAGE_CONTRACTS: 'platform.manage.contracts',
   RBAC_MANAGE: 'platform.rbac.manage',
+  RECHARGE_ACCOUNT: 'platform.financial.recharge_account',
 } as const;
 
 export type PlatformPermission =

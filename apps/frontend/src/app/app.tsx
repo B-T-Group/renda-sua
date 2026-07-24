@@ -482,6 +482,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/account-recharge"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminAccountRechargePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/refunds"
               element={
                 <ProtectedRoute>

@@ -961,4 +961,48 @@ export class MobilePaymentsDatabaseService {
       // Don't throw error as this is just logging
     }
   }
+
+  async getTransactionsByAccountAndEntity(
+    accountId: string,
+    paymentEntity: string,
+    limit = 20,
+    offset = 0
+  ): Promise<MobilePaymentTransaction[]> {
+    const query = `
+      query GetTransactionsByAccountAndEntity($accountId: uuid!, $paymentEntity: String!, $limit: Int!, $offset: Int!) {
+        mobile_payment_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            payment_entity: { _eq: $paymentEntity }
+          }
+          order_by: { created_at: desc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          reference
+          amount
+          currency
+          description
+          provider
+          payment_method
+          status
+          transaction_id
+          account_id
+          transaction_type
+          payment_entity
+          customer_phone
+          customer_email
+          error_message
+          error_code
+          created_at
+          updated_at
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: MobilePaymentTransaction[];
+    }>(query, { accountId, paymentEntity, limit, offset });
+    return response.mobile_payment_transactions ?? [];
+  }
 }

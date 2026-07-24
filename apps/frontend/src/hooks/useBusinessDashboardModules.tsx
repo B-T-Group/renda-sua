@@ -23,6 +23,7 @@ import {
   MoneyOff as RefundsIcon,
   AccountBalanceWallet as CashReconciliationIcon,
   MoreHoriz as MoreIcon,
+  AddCard as RechargeIcon,
 } from '@mui/icons-material';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -454,6 +455,18 @@ export function useBusinessDashboardModules({
         color: '#5e35b1',
         requiredPermission: PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS,
         path: '/admin/pending-mobile-payments',
+      },
+      {
+        title: t('business.dashboard.accountRechargeModule', 'HQ account recharge'),
+        description: t(
+          'business.dashboard.accountRechargeModuleDescription',
+          'Initiate a mobile-money collection to top up the Rendasua HQ account'
+        ),
+        icon: <RechargeIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#1565c0',
+        requiredPermission: PlatformPermissions.RECHARGE_ACCOUNT,
+        path: '/admin/account-recharge',
       },
       {
         title: t('business.dashboard.siteEventsModule', 'Site events'),
