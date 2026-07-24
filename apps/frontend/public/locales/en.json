@@ -3090,6 +3090,7 @@
     "catalogTitle": "Products",
     "catalogEmpty": "No products available at this location right now.",
     "viewStore": "View store",
+    "openStoreA11y": "Open store {{name}}",
     "share": "Share store",
     "manageItems": "Manage items",
     "shareMessage": "Check out {{name}} on Rendasua: {{url}}",

@@ -544,19 +544,30 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ flexGrow: 1, p: 1.5, pb: 1 }}>
           {inventory.business_location.logo_url ? (
-            <Box
-              component="img"
-              src={inventory.business_location.logo_url}
-              alt={inventory.business_location.name || ''}
-              sx={{
-                maxHeight: 40,
-                width: 'auto',
-                objectFit: 'contain',
-                display: 'block',
-                mb: 1,
-                alignSelf: 'flex-start',
+            <ButtonBase
+              component="div"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                navigate(`/store/${inventory.business_location.id}`);
               }}
-            />
+              aria-label={t('stores.openStoreA11y', 'Open store {{name}}', {
+                name: inventory.business_location.business.name,
+              })}
+              sx={{ display: 'block', mb: 1, borderRadius: 1, '&:hover': { opacity: 0.8 } }}
+            >
+              <Box
+                component="img"
+                src={inventory.business_location.logo_url}
+                alt={inventory.business_location.name || ''}
+                sx={{
+                  maxHeight: 40,
+                  width: 'auto',
+                  objectFit: 'contain',
+                  display: 'block',
+                  alignSelf: 'flex-start',
+                }}
+              />
+            </ButtonBase>
           ) : null}
           {/* Header with Brand and Availability */}
           <Box sx={{ mb: 1 }}>
@@ -766,6 +777,23 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
           {/* Business + store location */}
           <Box sx={{ mb: 1 }}>
+            <ButtonBase
+              component="div"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                navigate(`/store/${inventory.business_location.id}`);
+              }}
+              aria-label={t('stores.openStoreA11y', 'Open store {{name}}', {
+                name: inventory.business_location.business.name,
+              })}
+              sx={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                borderRadius: 1,
+                '&:hover': { opacity: 0.8 },
+              }}
+            >
             <Box
               sx={{
                 display: 'flex',
@@ -779,7 +807,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               <Typography
                 variant="caption"
                 fontWeight="medium"
-                sx={{ fontSize: '0.7rem' }}
+                sx={{ fontSize: '0.7rem', color: 'primary.main' }}
               >
                 {inventory.business_location.business.name}
               </Typography>
@@ -817,7 +845,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 <Typography
                   variant="caption"
                   fontWeight={600}
-                  color="text.primary"
+                  color="primary"
                   sx={{ fontSize: '0.7rem' }}
                 >
                   {inventory.business_location.name.trim()}
@@ -831,6 +859,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 </Typography>
               </Box>
             )}
+            </ButtonBase>
           </Box>
 
           {/* Key Details - Horizontal Layout */}

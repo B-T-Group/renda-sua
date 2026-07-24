@@ -1229,7 +1229,18 @@ export default function ItemDetailPage() {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                   <BusinessIcon fontSize="small" color="action" />
-                  <Typography variant="body2" color="text.primary" fontWeight={500}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    component={location.id ? RouterLink : 'span'}
+                    to={location.id ? `/store/${location.id}` : undefined}
+                    aria-label={t('stores.openStoreA11y', 'Open store {{name}}', { name: business.name })}
+                    sx={location.id ? {
+                      color: 'primary.main',
+                      textDecoration: 'none',
+                      '&:hover': { textDecoration: 'underline' },
+                    } : { color: 'text.primary' }}
+                  >
                     {business.name}
                     {business.is_verified ? (
                       <Tooltip title={t('items.detail.verifiedSellerTooltip', 'Verified seller')}>

@@ -2832,6 +2832,7 @@
     "catalogTitle": "Produits",
     "catalogEmpty": "Aucun produit disponible à cet emplacement pour le moment.",
     "viewStore": "Voir le magasin",
+    "openStoreA11y": "Ouvrir le magasin {{name}}",
     "share": "Partager le magasin",
     "manageItems": "Gérer les articles",
     "shareMessage": "Découvrez {{name}} sur Rendasua : {{url}}",
