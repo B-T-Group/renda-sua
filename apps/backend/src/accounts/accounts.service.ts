@@ -490,4 +490,30 @@ export class AccountsService {
     const account = await this.getAccountById(accountId);
     return account?.user_id === userId && account.is_active === true;
   }
+
+  /**
+   * Find an existing deposit by account + reference (idempotency helper).
+   */
+  async findDepositByReference(
+    accountId: string,
+    referenceId: string
+  ): Promise<{ id: string } | null> {
+    const query = `
+      query FindDepositByReference($accountId: uuid!, $referenceId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $referenceId }
+            transaction_type: { _eq: "deposit" }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      accountId,
+      referenceId,
+    });
+    return result.account_transactions?.[0] ?? null;
+  }
 }
