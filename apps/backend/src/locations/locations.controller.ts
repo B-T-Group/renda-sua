@@ -507,6 +507,110 @@ export class LocationsController {
     }
   }
 
+  @Get('market-states')
+  @Public()
+  @ApiOperation({
+    summary: 'Get active states/regions for a country (Public)',
+    description:
+      'Returns distinct states that have at least one active inventory item for the given country, with item counts. Used by the market picker to show only markets with available inventory.',
+  })
+  @ApiQuery({ name: 'countryCode', required: true, description: 'ISO-2 country code (e.g. CM, CA)' })
+  @ApiResponse({
+    status: 200,
+    description: 'States retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        states: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              state: { type: 'string', example: 'Littoral' },
+              itemCount: { type: 'number', example: 12 },
+            },
+          },
+        },
+        totalItemCount: { type: 'number', example: 45 },
+      },
+    },
+  })
+  async getMarketStates(
+    @Query('countryCode') countryCode: string
+  ): Promise<{
+    success: boolean;
+    states: Array<{ state: string; itemCount: number }>;
+    totalItemCount: number;
+  }> {
+    if (!countryCode) {
+      throw new HttpException(
+        { success: false, error: 'countryCode query param is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    try {
+      const query = `
+        query GetMarketStateItemCounts($countryCode: String!) {
+          business_inventory_aggregate(
+            where: {
+              is_active: { _eq: true }
+              business_location: {
+                is_active: { _eq: true }
+                address: { country: { _eq: $countryCode } }
+              }
+            }
+          ) {
+            aggregate { count }
+          }
+          business_inventory(
+            where: {
+              is_active: { _eq: true }
+              business_location: {
+                is_active: { _eq: true }
+                address: { country: { _eq: $countryCode } }
+              }
+            }
+            distinct_on: []
+          ) {
+            business_location {
+              address {
+                state
+              }
+            }
+          }
+        }
+      `;
+
+      const response = await this.hasuraService.executeQuery(query, { countryCode });
+      const rows: Array<{ business_location: { address: { state: string } } }> =
+        response.business_inventory || [];
+      const totalItemCount: number =
+        response.business_inventory_aggregate?.aggregate?.count ?? 0;
+
+      const stateCounts = new Map<string, number>();
+      for (const row of rows) {
+        const state = row.business_location?.address?.state;
+        if (state) {
+          stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
+        }
+      }
+
+      const states = Array.from(stateCounts.entries())
+        .map(([state, itemCount]) => ({ state, itemCount }))
+        .sort((a, b) => b.itemCount - a.itemCount);
+
+      return { success: true, states, totalItemCount };
+    } catch (error: any) {
+      this.logger.error('Failed to fetch market states', error);
+      throw new HttpException(
+        { success: false, error: 'Failed to fetch market states' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   private async getActivePaymentMethodsByCountry(): Promise<
     Map<string, string[]>
   > {

@@ -491,7 +491,9 @@ export class InventoryItemsService {
       if (addresses?.length) {
         const primary =
           addresses.find((a) => a.is_primary === true) ?? addresses[0];
-        if (primary?.country) {
+        // Only fall back to the account address when the caller did not
+        // explicitly pass a country_code (e.g. market selection takes priority).
+        if (!country_code && primary?.country) {
           country_code = primary.country;
           state = primary.state ?? state;
         }
