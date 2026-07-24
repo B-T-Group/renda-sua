@@ -3,10 +3,12 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Param,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MessagesService } from './messages.service';
@@ -54,6 +56,55 @@ export class MessagesController {
           success: false,
           error: error.message || 'Failed to fetch messages',
         },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Get unread message count for the current user' })
+  @ApiResponse({ status: 200, description: 'Unread message count' })
+  async getUnreadCount(@ReqContext() ctx: RequestContext) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      const count = await this.messagesService.getUnreadCount(user.id);
+      return { success: true, count };
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to fetch unread count' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post(':id/read')
+  @ApiOperation({ summary: 'Mark a single message as read' })
+  @ApiParam({ name: 'id', description: 'Message UUID' })
+  @ApiResponse({ status: 200, description: 'Message marked as read' })
+  async markRead(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      await this.messagesService.markRead(user.id, id);
+      return { success: true };
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to mark message as read' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post('read-all')
+  @ApiOperation({ summary: 'Mark all messages as read for the current user' })
+  @ApiResponse({ status: 200, description: 'All messages marked as read' })
+  async markAllRead(@ReqContext() ctx: RequestContext) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      const result = await this.messagesService.markAllRead(user.id);
+      return { success: true, count: result.count };
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to mark all messages as read' },
         HttpStatus.BAD_REQUEST
       );
     }

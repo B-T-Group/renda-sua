@@ -72,6 +72,10 @@ import {
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
 } from './rental-push.messages';
+import {
+  buildItemAiProposalPushMessage,
+  buildRentalListingAiProposalPushMessage,
+} from './ai-proposal-push.messages';
 import type { RatingType } from '../ratings/dto/create-rating.dto';
 
 export type {
@@ -2001,6 +2005,44 @@ export class NotificationsService {
         sound: 'default',
         channelId: 'default',
       }
+    );
+  }
+
+  async sendSaleItemAiProposalPush(params: {
+    userId: string;
+    itemId: string;
+    itemName: string;
+  }): Promise<void> {
+    const u = await this.getUserRowForEmail(params.userId);
+    const { title, body } = buildItemAiProposalPushMessage({
+      itemName: params.itemName,
+      preferredLanguage: u?.preferred_language,
+    });
+    await this.sendPushNotificationByUserId(
+      params.userId,
+      title,
+      body,
+      { type: 'ai_item_proposal', itemId: params.itemId },
+      { priority: 'high', sound: 'default', channelId: 'default' }
+    );
+  }
+
+  async sendRentalListingAiProposalPush(params: {
+    userId: string;
+    listingId: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    const u = await this.getUserRowForEmail(params.userId);
+    const { title, body } = buildRentalListingAiProposalPushMessage({
+      rentalItemName: params.rentalItemName,
+      preferredLanguage: u?.preferred_language,
+    });
+    await this.sendPushNotificationByUserId(
+      params.userId,
+      title,
+      body,
+      { type: 'ai_rental_proposal', listingId: params.listingId },
+      { priority: 'high', sound: 'default', channelId: 'default' }
     );
   }
 

@@ -441,11 +441,18 @@ export class ItemAiReviewService {
       item.id,
       `AI suggested improvements for your product. ${summary || result.reason}`
     );
-    await this.notifications.sendSaleItemAiProposalEmail({
-      itemId: item.id,
-      itemName: item.name,
-      businessUserId: item.business.user_id,
-      proposalSummary: summary || result.reason,
-    });
+    await Promise.all([
+      this.notifications.sendSaleItemAiProposalEmail({
+        itemId: item.id,
+        itemName: item.name,
+        businessUserId: item.business.user_id,
+        proposalSummary: summary || result.reason,
+      }),
+      this.notifications.sendSaleItemAiProposalPush({
+        userId: item.business.user_id,
+        itemId: item.id,
+        itemName: item.name,
+      }),
+    ]);
   }
 }

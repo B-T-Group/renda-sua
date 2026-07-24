@@ -34,6 +34,22 @@ export interface ClientCitiesDto {
   totalClientsWithCity: number;
 }
 
+export type ActionPriority = 'critical' | 'high' | 'normal';
+
+export interface ActionItemDto {
+  id: string;
+  kind: string;
+  priority: ActionPriority;
+  count: number;
+  primaryId?: string;
+  primaryLabel?: string;
+}
+
+export interface ActionsNeededDto {
+  actions: ActionItemDto[];
+  totalCount: number;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(
@@ -109,6 +125,215 @@ export class DashboardService {
       PlatformPermissions.MANAGE_CLIENTS,
       PlatformPermissions.MANAGE_BUSINESSES,
     ]);
+  }
+
+  async getActionsNeeded(): Promise<ActionsNeededDto> {
+    const user = await this.hasuraUserService.getUser();
+    const persona = user.user_type_id;
+    if (persona === 'business' && user.business?.id) {
+      return this.getBusinessActions(user.business.id);
+    }
+    if (persona === 'agent' && user.agent?.id) {
+      return this.getAgentActions(user.id);
+    }
+    if (persona === 'client' && user.client?.id) {
+      return this.getClientActions(user.client.id);
+    }
+    return { actions: [], totalCount: 0 };
+  }
+
+  private async getBusinessActions(businessId: string): Promise<ActionsNeededDto> {
+    const [
+      itemProposals,
+      itemRejected,
+      rentalProposals,
+      rentalRejected,
+      ordersPending,
+      cashCount,
+      failedCount,
+    ] = await Promise.all([
+      this.countItemsByModeration(businessId, 'proposal_pending'),
+      this.countItemsByModeration(businessId, 'rejected'),
+      this.countRentalsByModeration(businessId, 'proposal_pending'),
+      this.countRentalsByModeration(businessId, 'rejected'),
+      this.countOrdersByStatus(businessId, 'pending'),
+      this.getPendingCashReconciliationCount(businessId),
+      this.getPendingFailedDeliveriesCount(businessId),
+    ]);
+    const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
+      { id: 'item_rejected', kind: 'item_rejected', priority: 'critical', count: itemRejected },
+      { id: 'rental_rejected', kind: 'rental_rejected', priority: 'critical', count: rentalRejected },
+      { id: 'item_proposal_pending', kind: 'item_proposal_pending', priority: 'high', count: itemProposals },
+      { id: 'rental_proposal_pending', kind: 'rental_proposal_pending', priority: 'high', count: rentalProposals },
+      { id: 'orders_pending', kind: 'orders_pending', priority: 'high', count: ordersPending },
+      { id: 'failed_deliveries', kind: 'failed_deliveries', priority: 'high', count: failedCount },
+      { id: 'cash_reconciliation', kind: 'cash_reconciliation', priority: 'normal', count: cashCount },
+    ];
+    return this.buildDto(raw);
+  }
+
+  private async getAgentActions(userId: string): Promise<ActionsNeededDto> {
+    const [openOrders, activeOrders, idStatus] = await Promise.all([
+      this.countAgentOpenOrders(userId),
+      this.countAgentActiveOrders(userId),
+      this.getAgentIdDocumentStatus(userId),
+    ]);
+    const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
+      { id: 'id_verification', kind: 'id_verification', priority: 'critical', count: idStatus.needsAction ? 1 : 0 },
+      { id: 'open_deliveries', kind: 'open_deliveries', priority: 'high', count: openOrders },
+      { id: 'active_orders', kind: 'active_orders', priority: 'normal', count: activeOrders },
+    ];
+    return this.buildDto(raw);
+  }
+
+  private async getClientActions(clientId: string): Promise<ActionsNeededDto> {
+    const [pendingOrders, actionRequired] = await Promise.all([
+      this.countClientOrdersByStatus(clientId, ['pending', 'pending_payment']),
+      this.countClientActiveDeliveries(clientId),
+    ]);
+    const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
+      { id: 'orders_pending_payment', kind: 'orders_pending_payment', priority: 'high', count: pendingOrders },
+      { id: 'active_delivery', kind: 'active_delivery', priority: 'normal', count: actionRequired },
+    ];
+    return this.buildDto(raw);
+  }
+
+  private buildDto(
+    raw: Array<Omit<ActionItemDto, 'count'> & { count: number }>
+  ): ActionsNeededDto {
+    const actions = raw
+      .filter((a) => a.count > 0)
+      .sort((a, b) => {
+        const order = { critical: 0, high: 1, normal: 2 };
+        return order[a.priority] - order[b.priority];
+      });
+    return { actions, totalCount: actions.reduce((s, a) => s + a.count, 0) };
+  }
+
+  private async countItemsByModeration(businessId: string, status: string): Promise<number> {
+    const q = `
+      query ItemsByModeration($businessId: uuid!, $status: item_moderation_status!) {
+        items_aggregate(where: { business_id: { _eq: $businessId }, moderation_status: { _eq: $status } }) {
+          aggregate { count }
+        }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { businessId, status });
+    return r?.items_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countRentalsByModeration(businessId: string, status: string): Promise<number> {
+    const q = `
+      query RentalsByModeration($businessId: uuid!, $status: rental_listing_moderation_status!) {
+        rental_location_listings_aggregate(
+          where: { rental_item: { business_id: { _eq: $businessId } }, moderation_status: { _eq: $status } }
+        ) { aggregate { count } }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { businessId, status });
+    return r?.rental_location_listings_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countOrdersByStatus(businessId: string, status: string): Promise<number> {
+    const q = `
+      query OrdersByStatus($businessId: uuid!, $status: String!) {
+        orders_aggregate(where: { business_id: { _eq: $businessId }, current_status: { _eq: $status } }) {
+          aggregate { count }
+        }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { businessId, status });
+    return r?.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countAgentOpenOrders(userId: string): Promise<number> {
+    const q = `
+      query AgentOpenOrdersByCountry($userId: uuid!) {
+        agents(where: { user_id: { _eq: $userId } }) {
+          user {
+            addresses(where: { is_primary: { _eq: true } }, limit: 1) {
+              country
+            }
+          }
+        }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { userId });
+    const country: string | null = r?.agents?.[0]?.user?.addresses?.[0]?.country ?? null;
+    if (!country) return 0;
+    const countQ = `
+      query AgentOpenOrdersCount($country: String!) {
+        orders_aggregate(
+          where: {
+            current_status: { _eq: "pending" }
+            assigned_agent_id: { _is_null: true }
+            business: { locations: { address: { country: { _eq: $country } } } }
+          }
+        ) { aggregate { count } }
+      }
+    `;
+    const countR = await this.hasuraSystemService.executeQuery(countQ, { country });
+    return countR?.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countAgentActiveOrders(userId: string): Promise<number> {
+    const q = `
+      query AgentActiveOrders($userId: uuid!) {
+        agents(where: { user_id: { _eq: $userId } }) {
+          orders_aggregate(
+            where: { current_status: { _in: ["confirmed","preparing","ready_for_pickup","assigned_to_agent","picked_up","in_transit","out_for_delivery"] } }
+          ) { aggregate { count } }
+        }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { userId });
+    return r?.agents?.[0]?.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async getAgentIdDocumentStatus(
+    userId: string
+  ): Promise<{ needsAction: boolean; status: string }> {
+    const q = `
+      query AgentIdDoc($userId: uuid!) {
+        user_uploads(where: { user_id: { _eq: $userId }, upload_type: { _eq: "id_document" } }, limit: 1, order_by: { created_at: desc }) {
+          id status
+        }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { userId });
+    const upload = r?.user_uploads?.[0];
+    if (!upload) return { needsAction: true, status: 'missing' };
+    const needsAction = upload.status === 'rejected' || upload.status === 'missing';
+    return { needsAction, status: upload.status };
+  }
+
+  private async countClientOrdersByStatus(clientId: string, statuses: string[]): Promise<number> {
+    const q = `
+      query ClientPendingOrders($clientId: uuid!, $statuses: [String!]!) {
+        orders_aggregate(
+          where: { client_id: { _eq: $clientId }, current_status: { _in: $statuses } }
+        ) { aggregate { count } }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { clientId, statuses });
+    return r?.orders_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countClientActiveDeliveries(clientId: string): Promise<number> {
+    const activeStatuses = ['picked_up', 'in_transit', 'out_for_delivery'];
+    const q = `
+      query ClientActiveDeliveries($clientId: uuid!, $statuses: [String!]!) {
+        orders_aggregate(
+          where: {
+            client_id: { _eq: $clientId }
+            current_status: { _in: $statuses }
+            assigned_agent_id: { _is_null: false }
+          }
+        ) { aggregate { count } }
+      }
+    `;
+    const r = await this.hasuraSystemService.executeQuery(q, { clientId, statuses: activeStatuses });
+    return r?.orders_aggregate?.aggregate?.count ?? 0;
   }
 
   async getClientCities(): Promise<ClientCitiesDto> {

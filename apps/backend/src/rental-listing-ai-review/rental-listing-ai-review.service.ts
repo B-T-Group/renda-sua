@@ -419,12 +419,19 @@ export class RentalListingAiReviewService {
       listing.id,
       `AI suggested improvements for your listing. ${summary || result.reason}`
     );
-    await this.notifications.sendRentalListingAiProposalEmail({
-      listingId: listing.id,
-      businessUserId: listing.rental_item.business.user_id,
-      rentalItemName: listing.rental_item.name,
-      proposalSummary: summary || result.reason,
-    });
+    await Promise.all([
+      this.notifications.sendRentalListingAiProposalEmail({
+        listingId: listing.id,
+        businessUserId: listing.rental_item.business.user_id,
+        rentalItemName: listing.rental_item.name,
+        proposalSummary: summary || result.reason,
+      }),
+      this.notifications.sendRentalListingAiProposalPush({
+        userId: listing.rental_item.business.user_id,
+        listingId: listing.id,
+        rentalItemName: listing.rental_item.name,
+      }),
+    ]);
   }
 
 }
