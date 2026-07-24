@@ -23,6 +23,12 @@ class SignupStartAddressDto {
 
   @ApiProperty()
   state!: string;
+
+  @ApiPropertyOptional({ description: 'GPS latitude from device auto-detect' })
+  latitude?: number;
+
+  @ApiPropertyOptional({ description: 'GPS longitude from device auto-detect' })
+  longitude?: number;
 }
 
 export class SignupStartDto {

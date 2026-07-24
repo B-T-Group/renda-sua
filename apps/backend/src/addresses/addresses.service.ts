@@ -325,9 +325,23 @@ export class AddressesService {
       let coordinates: { latitude: number; longitude: number } | null = null;
       let warning = '';
 
-      try {
-        coordinates = await this.geocodeAddress(addressData);
-        if (!coordinates) {
+      // Prefer client-supplied GPS coords (more accurate); fall back to server geocode.
+      if (addressData.latitude != null && addressData.longitude != null) {
+        coordinates = { latitude: addressData.latitude, longitude: addressData.longitude };
+      } else {
+        try {
+          coordinates = await this.geocodeAddress(addressData);
+          if (!coordinates) {
+            if (persona === 'agent' || persona === 'business') {
+              warning =
+                "This address doesn't seem valid. Please verify the address details.";
+            } else {
+              warning =
+                'Unable to calculate location coordinates for this address.';
+            }
+          }
+        } catch (error: any) {
+          this.logger.error(`Geocoding error: ${error.message}`);
           if (persona === 'agent' || persona === 'business') {
             warning =
               "This address doesn't seem valid. Please verify the address details.";
@@ -335,15 +349,6 @@ export class AddressesService {
             warning =
               'Unable to calculate location coordinates for this address.';
           }
-        }
-      } catch (error: any) {
-        this.logger.error(`Geocoding error: ${error.message}`);
-        if (persona === 'agent' || persona === 'business') {
-          warning =
-            "This address doesn't seem valid. Please verify the address details.";
-        } else {
-          warning =
-            'Unable to calculate location coordinates for this address.';
         }
       }
 
@@ -409,8 +414,8 @@ export class AddressesService {
           country: addressData.country,
           isPrimary: addressData.is_primary || false,
           addressType: addressData.address_type || 'home',
-          latitude: coordinates?.latitude || addressData.latitude,
-          longitude: coordinates?.longitude || addressData.longitude,
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
           instructions: addressData.instructions ?? null,
         }
       );
@@ -583,10 +588,23 @@ export class AddressesService {
       country: string;
       city: string;
       state: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<AddressResponse> {
     const addressCountBefore =
       await this.hasuraSystemService.countLinkedAddressesForUser(userId);
+
+    let coords: { latitude: number; longitude: number } | null = null;
+    if (addressData.latitude != null && addressData.longitude != null) {
+      coords = { latitude: addressData.latitude, longitude: addressData.longitude };
+    } else {
+      try {
+        coords = await this.geocodeAddress(addressData);
+      } catch {
+        // Non-fatal for signup
+      }
+    }
 
     const createAddressMutation = `
       mutation CreateAddressForSignup(
@@ -594,7 +612,9 @@ export class AddressesService {
         $city: String!,
         $state: String!,
         $postalCode: String!,
-        $country: String!
+        $country: String!,
+        $latitude: numeric,
+        $longitude: numeric
       ) {
         insert_addresses_one(object: {
           address_line_1: $addressLine1,
@@ -602,7 +622,9 @@ export class AddressesService {
           state: $state,
           postal_code: $postalCode,
           country: $country,
-          address_type: "home"
+          address_type: "home",
+          latitude: $latitude,
+          longitude: $longitude
         }) {
           id
           address_line_1
@@ -630,6 +652,8 @@ export class AddressesService {
         state: addressData.state,
         postalCode: '',
         country: addressData.country,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
       }
     );
 
@@ -1012,11 +1036,13 @@ export class AddressesService {
           ? true
           : false;
 
-      // Geocode if address fields changed
+      // Geocode if address fields changed, unless client supplied GPS coords.
       let coordinates: { latitude: number; longitude: number } | null = null;
       let warning = '';
 
-      if (addressFieldsChanged) {
+      if (addressData.latitude != null && addressData.longitude != null) {
+        coordinates = { latitude: addressData.latitude, longitude: addressData.longitude };
+      } else if (addressFieldsChanged) {
         try {
           const addressForGeocoding = {
             address_line_1:

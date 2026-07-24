@@ -127,6 +127,14 @@ export class GoogleDistanceController {
   }
 
   @Get('geocode')
+  @Public()
+  @Throttle({ short: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Reverse geocode lat/lng to a structured address' })
+  @ApiQuery({ name: 'lat', description: 'Latitude (-90 to 90)' })
+  @ApiQuery({ name: 'lng', description: 'Longitude (-180 to 180)' })
+  @ApiResponse({ status: 200, description: 'Structured address for the coordinates' })
+  @ApiResponse({ status: 400, description: 'Invalid lat/lng' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async reverseGeocode(@Query('lat') lat: string, @Query('lng') lng: string) {
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lng);
