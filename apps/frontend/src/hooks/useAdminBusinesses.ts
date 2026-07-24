@@ -148,6 +148,22 @@ export const useAdminBusinesses = () => {
     [apiClient, callWithLoading, ensureClient, fetchBusinesses]
   );
 
+  const changeBusinessAccountType = useCallback(
+    async (businessId: string, accountType: string, reason?: string) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () =>
+          client.patch(`/admin/businesses/${businessId}/account-type`, {
+            accountType,
+            reason,
+          }),
+        'admin.loading.changeAccountType'
+      );
+      await fetchBusinesses();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchBusinesses]
+  );
+
   const setWithdrawalPin = useCallback(
     async (id: string, pin: string) => {
       const client = ensureClient(apiClient);
@@ -230,6 +246,7 @@ export const useAdminBusinesses = () => {
       error,
       fetchBusinesses,
       updateBusiness,
+      changeBusinessAccountType,
       setWithdrawalPin,
       clearWithdrawalPin,
     }),
@@ -251,6 +268,7 @@ export const useAdminBusinesses = () => {
       error,
       fetchBusinesses,
       updateBusiness,
+      changeBusinessAccountType,
       setWithdrawalPin,
       clearWithdrawalPin,
     ]

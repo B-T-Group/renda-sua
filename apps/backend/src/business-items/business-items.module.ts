@@ -14,6 +14,7 @@ import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycl
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BusinessAccountTypeService } from './business-account-type.service';
 
 @Module({
   imports: [
@@ -34,12 +35,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
     BusinessItemsAccessService,
     BusinessLocationTransferService,
     ItemDealsService,
+    BusinessAccountTypeService,
   ],
   exports: [
     BusinessItemsService,
     BusinessItemsAccessService,
     BusinessLocationTransferService,
     ItemDealsService,
+    BusinessAccountTypeService,
   ],
 })
 export class BusinessItemsModule {}

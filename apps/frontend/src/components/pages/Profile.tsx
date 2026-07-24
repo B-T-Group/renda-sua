@@ -50,6 +50,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
+import { BusinessAccountCard } from '../business/BusinessAccountCard';
 import AddressManager from '../common/AddressManager';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import MissingEmailBanner from '../common/MissingEmailBanner';
@@ -1035,6 +1036,25 @@ const Profile: React.FC = () => {
             compactView={false}
             emptyStateMessage={t('profile.noAccountsMessage')}
           />
+        </Box>
+      )}
+
+      {/* Business Account & Plan section */}
+      {profile?.business && (
+        <Box sx={{ mt: 4 }}>
+          <Typography
+            variant="subtitle2"
+            color="text.secondary"
+            sx={{
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              mb: 2,
+              display: 'block',
+            }}
+          >
+            {t('business.accountType.sectionTitle', 'Account & Plan')}
+          </Typography>
+          <BusinessAccountCard />
         </Box>
       )}
 

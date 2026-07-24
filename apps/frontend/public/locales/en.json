@@ -635,6 +635,9 @@
       }
     },
     "businesses": {
+      "accountTypeSection": "Business Account Type",
+      "accountTypeLabel": "Account Type",
+      "saveAccountType": "Save Plan",
       "aiTokens": "AI tokens",
       "aiTokensHelp": "Remaining AI credits for image cleanup. Super users are granted at least 1000.",
       "withdrawalPinEnabled": "Require withdrawal PIN",
@@ -1494,6 +1497,52 @@
     "successMessage": "Your profile was created successfully. Redirecting to your dashboard…"
   },
   "business": {
+    "accountType": {
+      "sectionTitle": "Account & Plan",
+      "pageTitle": "Account & Plan",
+      "pageDescription": "Choose the right plan for your business on Rendasua.",
+      "pageHeading": "Choose Your Business Plan",
+      "pageSubheading": "Every business starts on Standard for free and can upgrade anytime as it grows. A higher tier means more visibility and benefits — and a higher commission rate.",
+      "commissionLabel": "{{percent}}% Commission",
+      "commissionSuffix": "commission",
+      "cardDescription": "Your current plan — commission applies to every order.",
+      "currentPlan": "Current Plan",
+      "changePlan": "Upgrade / Change Plan",
+      "viewPlan": "View Plan",
+      "selectPlan": "Select {{plan}}",
+      "lockInNote": "After changing your plan, a 30-day commitment period begins. You can change again after that period ends.",
+      "lockedMessage": "Your plan is committed until {{date}}. Plans are locked for 30 days after each change.",
+      "lockedUntil": "Plan locked until {{date}}",
+      "planLocked": "Locked",
+      "confirmTitle": "Change to {{plan}}?",
+      "confirmMessage": "You are switching from {{from}} ({{fromPct}}% commission) to {{to}} ({{toPct}}% commission). This plan will be locked for 30 days after confirming.",
+      "confirmChangeBtn": "Confirm Change",
+      "changeFailed": "Failed to change plan",
+      "plans": {
+        "standard": {
+          "label": "Standard",
+          "benefit1": "Customer support",
+          "benefit2": "Product & listing management",
+          "benefit3": "Secure payments",
+          "benefit4": "Seller dashboard",
+          "benefit5": "Basic analytics"
+        },
+        "premium": {
+          "label": "Premium",
+          "benefit1": "Better listing visibility",
+          "benefit2": "Platform promotion",
+          "benefit3": "Advanced analytics",
+          "benefit4": "Priority support"
+        },
+        "elite": {
+          "label": "Elite",
+          "benefit1": "Homepage placement",
+          "benefit2": "Dedicated marketing campaigns",
+          "benefit3": "Personalized account management",
+          "benefit4": "Dedicated account manager"
+        }
+      }
+    },
     "tokens": {
       "seoTitle": "AI tokens",
       "seoDescription": "Buy AI tokens for image cleanup",
@@ -2847,10 +2896,11 @@
       "statusUpdateError": "Failed to update location status",
       "title": "Locations",
       "totalLocations": "Total Locations",
+      "commissionManagedBy": "Commission — Managed by your Business Account",
       "commissionLabel": "RendaSua commission",
       "commissionDefault": "5% (default)",
       "commissionHelper": "Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).",
-      "commissionAdminOnly": "Commission is managed by RendaSua admin.",
+      "commissionAdminOnly": "Commission is managed by Business Account Type.",
       "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addAddressFirst": "Add a business address first before adding locations.",

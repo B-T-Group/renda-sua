@@ -394,6 +394,9 @@
       }
     },
     "businesses": {
+      "accountTypeSection": "Type de compte de l'entreprise",
+      "accountTypeLabel": "Type de compte",
+      "saveAccountType": "Enregistrer le forfait",
       "aiTokens": "Jetons IA",
       "aiTokensHelp": "Crédits IA restants pour le nettoyage d'images. Les super-utilisateurs reçoivent au moins 1000.",
       "withdrawalPinEnabled": "Exiger un code PIN de retrait",
@@ -1237,6 +1240,52 @@
     "successMessage": "Votre profil a été créé avec succès. Redirection vers votre tableau de bord…"
   },
   "business": {
+    "accountType": {
+      "sectionTitle": "Compte & Forfait",
+      "pageTitle": "Compte & Forfait",
+      "pageDescription": "Choisissez le bon forfait pour votre entreprise sur Rendasua.",
+      "pageHeading": "Choisissez votre forfait",
+      "pageSubheading": "Chaque entreprise commence sur Standard gratuitement et peut évoluer à tout moment. Un niveau supérieur signifie plus de visibilité et d'avantages — et un taux de commission plus élevé.",
+      "commissionLabel": "Commission {{percent}}%",
+      "commissionSuffix": "de commission",
+      "cardDescription": "Votre forfait actuel — la commission s'applique à chaque commande.",
+      "currentPlan": "Forfait actuel",
+      "changePlan": "Changer / Mettre à niveau",
+      "viewPlan": "Voir le forfait",
+      "selectPlan": "Choisir {{plan}}",
+      "lockInNote": "Après avoir changé de forfait, une période d'engagement de 30 jours commence. Vous pourrez changer à nouveau après cette période.",
+      "lockedMessage": "Votre forfait est bloqué jusqu'au {{date}}. Les forfaits sont verrouillés 30 jours après chaque changement.",
+      "lockedUntil": "Forfait bloqué jusqu'au {{date}}",
+      "planLocked": "Bloqué",
+      "confirmTitle": "Passer à {{plan}} ?",
+      "confirmMessage": "Vous passez de {{from}} ({{fromPct}}% de commission) à {{to}} ({{toPct}}% de commission). Ce forfait sera verrouillé 30 jours après confirmation.",
+      "confirmChangeBtn": "Confirmer le changement",
+      "changeFailed": "Échec du changement de forfait",
+      "plans": {
+        "standard": {
+          "label": "Standard",
+          "benefit1": "Support client",
+          "benefit2": "Gestion des produits et annonces",
+          "benefit3": "Paiements sécurisés",
+          "benefit4": "Tableau de bord vendeur",
+          "benefit5": "Analytique de base"
+        },
+        "premium": {
+          "label": "Premium",
+          "benefit1": "Meilleure visibilité des annonces",
+          "benefit2": "Promotion sur la plateforme",
+          "benefit3": "Analytique avancée",
+          "benefit4": "Support prioritaire"
+        },
+        "elite": {
+          "label": "Élite",
+          "benefit1": "Placement en page d'accueil",
+          "benefit2": "Campagnes marketing dédiées",
+          "benefit3": "Gestion de compte personnalisée",
+          "benefit4": "Gestionnaire de compte dédié"
+        }
+      }
+    },
     "tokens": {
       "seoTitle": "Jetons IA",
       "seoDescription": "Acheter des jetons IA pour le nettoyage d'images",
@@ -2561,10 +2610,11 @@
       "statusUpdateError": "Échec de la mise à jour du statut de l'emplacement",
       "title": "Emplacements",
       "totalLocations": "Total des Emplacements",
+      "commissionManagedBy": "Commission — Gérée par votre compte entreprise",
       "commissionLabel": "Commission RendaSua",
       "commissionDefault": "5 % (par défaut)",
       "commissionHelper": "Pourcentage des ventes d'articles reversé à RendaSua. Laisser vide pour utiliser la valeur par défaut de la plateforme (5 %).",
-      "commissionAdminOnly": "La commission est gérée par l'administrateur RendaSua.",
+      "commissionAdminOnly": "La commission est gérée par le type de compte entreprise.",
       "locationAccount": "Compte de l'emplacement",
       "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
       "addAddressFirst": "Ajoutez d'abord une adresse professionnelle avant d'ajouter des emplacements.",

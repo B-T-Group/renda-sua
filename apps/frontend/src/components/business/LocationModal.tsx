@@ -24,10 +24,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useAws } from '../../hooks/useAws';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
-import { usePermission } from '../../hooks/usePermissions';
 import {
   AddBusinessLocationData,
   BusinessLocation,
@@ -85,7 +83,6 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
-  const isAdmin = usePermission(PlatformPermissions.LOCATIONS_COMMISSION);
   const isEditing = !!location;
   const effectiveCountry = isEditing
     ? location?.address?.country
@@ -107,7 +104,6 @@ const LocationModal: React.FC<LocationModalProps> = ({
     email: '',
     location_type: 'store',
     is_primary: false,
-    rendasua_item_commission_percentage: null,
     auto_withdraw_commissions: true,
     logo_url: '',
   });
@@ -135,8 +131,6 @@ const LocationModal: React.FC<LocationModalProps> = ({
         email: location.email || '',
         location_type: location.location_type,
         is_primary: location.is_primary,
-        rendasua_item_commission_percentage:
-          location.rendasua_item_commission_percentage ?? null,
         auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
         logo_url: location.logo_url ?? '',
       });
@@ -166,7 +160,6 @@ const LocationModal: React.FC<LocationModalProps> = ({
         email: '',
         location_type: 'store',
         is_primary: false,
-        rendasua_item_commission_percentage: null,
         auto_withdraw_commissions: true,
         logo_url: '',
       });
@@ -229,10 +222,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const handleSave = async () => {
     if (!formData.name.trim()) return;
 
-    const commission = isAdmin ? formData.rendasua_item_commission_percentage : null;
     const payload = {
       ...formData,
-      rendasua_item_commission_percentage: commission,
       logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
     };
     if (isStripeRail) {
@@ -532,32 +523,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
               </>
             )}
 
-            <TextField
-              label={t('business.locations.commissionLabel', 'RendaSua commission')}
-              type="number"
-              value={formData.rendasua_item_commission_percentage ?? ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                const num = v === '' ? null : parseFloat(v);
-                setFormData((prev) => ({
-                  ...prev,
-                  rendasua_item_commission_percentage:
-                    num != null && !Number.isNaN(num) ? num : null,
-                }));
-              }}
-              inputProps={{ min: 0, max: 100, step: 0.01, readOnly: !isAdmin }}
-              disabled={!isAdmin}
-              helperText={
-                !isAdmin
-                  ? t('business.locations.commissionAdminOnly', 'Commission is managed by RendaSua admin.')
-                  : t(
-                      'business.locations.commissionHelper',
-                      'Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).'
-                    )
-              }
-              fullWidth
-              sx={{ maxWidth: 240 }}
-            />
+            {/* Commission is now managed by Business Account Type — not editable per-location */}
 
             <Box>
               <Typography variant="h6" gutterBottom>

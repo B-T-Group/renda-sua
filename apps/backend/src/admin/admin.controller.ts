@@ -46,6 +46,8 @@ import {
   AiReviewFeedbackDto as ItemAiReviewFeedbackDto,
   AiReviewOverrideDto as ItemAiReviewOverrideDto,
 } from '../item-ai-review/dto/item-ai-review.dto';
+import { BusinessAccountTypeService } from '../business-items/business-account-type.service';
+import { AdminChangeAccountTypeDto } from '../business-items/dto/change-account-type.dto';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -78,7 +80,8 @@ export class AdminController {
     private readonly applicationSetupService: ApplicationSetupService,
     private readonly countryOnboardingService: CountryOnboardingService,
     private readonly transferService: BusinessLocationTransferService,
-    private readonly threadsService: ThreadsService
+    private readonly threadsService: ThreadsService,
+    private readonly businessAccountTypeService: BusinessAccountTypeService
   ) {}
 
   @Post('message')
@@ -1358,6 +1361,35 @@ export class AdminController {
       return { success: true, data: result };
     } catch (error: any) {
       return { success: false, error: error.message || 'Failed to create thread' };
+    }
+  }
+
+  @Patch('businesses/:id/account-type')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
+  @ApiOperation({ summary: 'Change the account type for any business (admin; bypasses 30-day lock-in)' })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiResponse({ status: 200, description: 'Account type updated successfully' })
+  @ApiResponse({ status: 404, description: 'Business not found' })
+  async adminChangeAccountType(
+    @Param('id') businessId: string,
+    @Body() body: AdminChangeAccountTypeDto,
+    @Req() request: RequestWithUser
+  ) {
+    try {
+      const adminUserId = request.user?.id || request.user?.user_id;
+      const result = await this.businessAccountTypeService.adminChange(
+        businessId,
+        body.accountType,
+        adminUserId,
+        body.reason
+      );
+      return { success: true, data: result };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to update account type' },
+        HttpStatus.BAD_REQUEST
+      );
     }
   }
 

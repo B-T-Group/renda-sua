@@ -2,6 +2,9 @@ table:
   name: businesses
   schema: public
 object_relationships:
+  - name: account_type_info
+    using:
+      foreign_key_constraint_on: account_type
   - name: referring_agent
     using:
       foreign_key_constraint_on: referred_by_agent_id
@@ -9,6 +12,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: user_id
 array_relationships:
+  - name: account_type_history
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_account_type_history
+          schema: public
   - name: ai_token_usage
     using:
       foreign_key_constraint_on:
@@ -164,6 +174,8 @@ select_permissions:
         - is_storefront_visible
         - can_accept_orders
         - ai_tokens
+        - account_type
+        - account_type_locked_until
       filter: {}
   - role: anonymous
     permission:
@@ -179,6 +191,7 @@ select_permissions:
         - can_accept_orders
         - merchant_agreement_version
         - merchant_agreement_accepted_at
+        - account_type
       filter: {}
   - role: business
     permission:
@@ -199,6 +212,8 @@ select_permissions:
         - merchant_agreement_accepted_at
         - referred_by_agent_id
         - referral_code_used
+        - account_type
+        - account_type_locked_until
       filter:
         user:
           id:
@@ -217,6 +232,7 @@ select_permissions:
         - lifecycle_status
         - is_storefront_visible
         - can_accept_orders
+        - account_type
       filter: {}
 update_permissions:
   - role: business

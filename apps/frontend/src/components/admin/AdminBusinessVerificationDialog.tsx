@@ -17,8 +17,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Toolbar,
@@ -55,6 +59,8 @@ export interface BusinessVerificationDetails {
     lifecycle_status?: string;
     is_storefront_visible?: boolean;
     can_accept_orders?: boolean;
+    account_type?: 'STANDARD' | 'PREMIUM' | 'ELITE';
+    account_type_locked_until?: string | null;
     user: { first_name: string; last_name: string; email: string };
   };
   latestAcceptance: {
@@ -163,6 +169,9 @@ export const AdminBusinessVerificationDialog: React.FC<
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const previewRequestedRef = React.useRef<Set<string>>(new Set());
   const [contractActionLoading, setContractActionLoading] = useState(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
+  const [accountTypeLoading, setAccountTypeLoading] = useState(false);
+  const [accountTypeError, setAccountTypeError] = useState<string | null>(null);
   const [contractActionError, setContractActionError] = useState<string | null>(
     null
   );
@@ -200,6 +209,7 @@ export const AdminBusinessVerificationDialog: React.FC<
           return;
         }
         setDetails(data.data);
+        setSelectedAccountType(data.data.business.account_type ?? 'STANDARD');
       } catch (error: any) {
         setDetails(null);
         setLoadError(
@@ -915,6 +925,69 @@ export const AdminBusinessVerificationDialog: React.FC<
               </Paper>
             </Box>
           ) : null}
+
+          {/* Admin Account Type Control */}
+          {details && (
+            <Box sx={{ mt: 2 }}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {t('admin.businesses.accountTypeSection', 'Business Account Type')}
+                </Typography>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                    <InputLabel>{t('admin.businesses.accountTypeLabel', 'Account Type')}</InputLabel>
+                    <Select
+                      value={selectedAccountType}
+                      label={t('admin.businesses.accountTypeLabel', 'Account Type')}
+                      onChange={(e) => setSelectedAccountType(e.target.value)}
+                    >
+                      <MenuItem value="STANDARD">Standard (12%)</MenuItem>
+                      <MenuItem value="PREMIUM">Premium (15%)</MenuItem>
+                      <MenuItem value="ELITE">Elite (20%)</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={
+                      accountTypeLoading ||
+                      selectedAccountType === (details.business.account_type ?? 'STANDARD')
+                    }
+                    onClick={async () => {
+                      if (!apiClient || !businessId) return;
+                      setAccountTypeLoading(true);
+                      setAccountTypeError(null);
+                      try {
+                        await apiClient.patch(
+                          `/admin/businesses/${businessId}/account-type`,
+                          { accountType: selectedAccountType }
+                        );
+                        await fetchDetails(businessId);
+                        await onUpdated();
+                      } catch (err: any) {
+                        setAccountTypeError(
+                          err?.response?.data?.error || err?.message || 'Failed to update account type'
+                        );
+                      } finally {
+                        setAccountTypeLoading(false);
+                      }
+                    }}
+                  >
+                    {accountTypeLoading ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      t('admin.businesses.saveAccountType', 'Save Plan')
+                    )}
+                  </Button>
+                </Stack>
+                {accountTypeError && (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    {accountTypeError}
+                  </Alert>
+                )}
+              </Paper>
+            </Box>
+          )}
         </DialogContent>
 
         <AppBar

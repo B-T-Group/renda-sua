@@ -24,7 +24,10 @@ export interface BusinessLocation {
   location_type: 'store' | 'warehouse' | 'office' | 'pickup_point';
   created_at: string;
   updated_at: string;
-  /** Overrides application default. Null = use platform default (e.g. 5%). */
+  /**
+   * @deprecated Commission is now derived from Business.accountType.
+   * TODO: remove this field after the business_locations.rendasua_item_commission_percentage column is dropped.
+   */
   rendasua_item_commission_percentage?: number | null;
   /** When true, order payouts are auto-sent to this location's phone when set. */
   auto_withdraw_commissions?: boolean;
@@ -40,8 +43,6 @@ export interface AddBusinessLocationData {
   operating_hours?: any;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_primary?: boolean;
-  /** Optional. Leave empty to use platform default (e.g. 5%). */
-  rendasua_item_commission_percentage?: number | null;
   /** Defaults to true when omitted (server default). */
   auto_withdraw_commissions?: boolean;
   logo_url?: string | null;
@@ -65,7 +66,6 @@ export interface UpdateBusinessLocationData {
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_active?: boolean;
   is_primary?: boolean;
-  rendasua_item_commission_percentage?: number | null;
   auto_withdraw_commissions?: boolean;
   logo_url?: string | null;
   address?: {
@@ -167,8 +167,6 @@ export const useBusinessLocations = (
           email: data.email,
           location_type: data.location_type ?? 'store',
           is_primary: data.is_primary ?? false,
-          rendasua_item_commission_percentage:
-            data.rendasua_item_commission_percentage ?? null,
           ...(data.auto_withdraw_commissions !== undefined && {
             auto_withdraw_commissions: data.auto_withdraw_commissions,
           }),
@@ -231,7 +229,7 @@ export const useBusinessLocations = (
         // Extract address data if present
         const { address, ...locationData } = data;
 
-        // Update location fields via backend PATCH (name, phone, email, commission, etc.)
+        // Update location fields via backend PATCH (name, phone, email, etc.)
         const locationFields = {
           ...(locationData.name !== undefined && { name: locationData.name }),
           ...(locationData.phone !== undefined && { phone: locationData.phone }),
@@ -244,10 +242,6 @@ export const useBusinessLocations = (
           }),
           ...(locationData.is_primary !== undefined && {
             is_primary: locationData.is_primary,
-          }),
-          ...(locationData.rendasua_item_commission_percentage !== undefined && {
-            rendasua_item_commission_percentage:
-              locationData.rendasua_item_commission_percentage,
           }),
           ...(locationData.auto_withdraw_commissions !== undefined && {
             auto_withdraw_commissions: locationData.auto_withdraw_commissions,

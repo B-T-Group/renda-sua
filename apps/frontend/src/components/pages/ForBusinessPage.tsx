@@ -1,11 +1,12 @@
-import { ArrowForward, AutoAwesome, BarChart, Inventory, LocalShipping, People, Store } from '@mui/icons-material';
-import { Box, Button, Card, CardContent, Container, Grid, Stack, Typography, alpha } from '@mui/material';
+import { ArrowForward, AutoAwesome, BarChart, CheckCircle, Inventory, LocalShipping, People, Star, Store } from '@mui/icons-material';
+import { Box, Button, Card, CardContent, Chip, Container, Divider, Grid, List, ListItem, ListItemIcon, ListItemText, Stack, Typography, alpha } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { SEOHead } from '../seo';
 import { useSEO } from '../../hooks/useSEO';
+import { BUSINESS_ACCOUNT_TYPE_PLANS } from '../../constants/businessAccountTypes';
 
 interface FeatureItem {
   icon: React.ReactNode;
@@ -167,6 +168,117 @@ const ForBusinessPage: React.FC = () => {
               </Grid>
             ))}
           </Grid>
+        </Container>
+      </Box>
+
+      {/* Final CTA */}
+      {/* Business Account Plans Pricing Section */}
+      <Box component="section" sx={{ py: { xs: 8, md: 14 }, bgcolor: 'background.paper' }}>
+        <Container maxWidth="md">
+          <Box sx={{ textAlign: 'center', mb: 6 }}>
+            <Typography component="h2" sx={{ fontSize: { xs: '1.875rem', md: '2.5rem' }, fontWeight: 800, letterSpacing: '-0.025em', mb: 2 }}>
+              {t('forBusiness.plans.title', 'Simple, transparent pricing')}
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 560, mx: 'auto' }}>
+              {t(
+                'forBusiness.plans.subtitle',
+                'Every business starts on Standard for free and can upgrade anytime as it grows. No subscriptions — you only pay a commission when you make a sale.'
+              )}
+            </Typography>
+          </Box>
+
+          <Grid container spacing={3}>
+            {BUSINESS_ACCOUNT_TYPE_PLANS.map((plan, i) => (
+              <Grid key={plan.id} size={{ xs: 12, md: 4 }}>
+                <motion.div
+                  initial={{ opacity: 0, y: shouldReduce ? 0 : 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
+                  style={{ height: '100%' }}
+                >
+                  <Card
+                    elevation={plan.id === 'PREMIUM' ? 6 : 2}
+                    sx={{
+                      height: '100%',
+                      borderRadius: 3,
+                      borderTop: `4px solid ${plan.color}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <CardContent sx={{ flex: 1, p: 3 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        {Array.from({ length: plan.stars }).map((_, si) => (
+                          <Star key={si} sx={{ color: plan.color, fontSize: 18 }} />
+                        ))}
+                        {plan.id === 'PREMIUM' && (
+                          <Chip label={t('forBusiness.plans.popular', 'Popular')} size="small" sx={{ bgcolor: plan.color, color: '#fff', fontWeight: 700, fontSize: 10 }} />
+                        )}
+                      </Box>
+
+                      <Typography variant="h6" fontWeight={800} sx={{ color: plan.color }}>
+                        {t(plan.labelKey, plan.defaultLabel)}
+                      </Typography>
+
+                      <Box display="flex" alignItems="baseline" gap={0.5} mt={1} mb={2}>
+                        <Typography variant="h3" fontWeight={900}>
+                          {plan.commissionPercent}%
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('forBusiness.plans.commission', 'commission per sale')}
+                        </Typography>
+                      </Box>
+
+                      <Divider sx={{ mb: 2 }} />
+
+                      <List dense disablePadding>
+                        {plan.defaultBenefits.slice(0, 6).map((benefit, bi) => (
+                          <ListItem key={bi} disableGutters sx={{ py: 0.3 }}>
+                            <ListItemIcon sx={{ minWidth: 28 }}>
+                              <CheckCircle sx={{ color: plan.color, fontSize: 16 }} />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={
+                                <Typography variant="body2">
+                                  {t(plan.benefitKeys[bi] ?? benefit, benefit)}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+
+                    <Box px={3} pb={3}>
+                      <Button
+                        component={RouterLink}
+                        to="/signup?intent=business_sell"
+                        variant={plan.id === 'PREMIUM' ? 'contained' : 'outlined'}
+                        fullWidth
+                        sx={{
+                          borderColor: plan.color,
+                          color: plan.id === 'PREMIUM' ? '#fff' : plan.color,
+                          bgcolor: plan.id === 'PREMIUM' ? plan.color : 'transparent',
+                          fontWeight: 700,
+                          '&:hover': { bgcolor: alpha(plan.color, 0.08) },
+                        }}
+                      >
+                        {t('forBusiness.plans.getStarted', 'Get Started Free')}
+                      </Button>
+                    </Box>
+                  </Card>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="body2" color="text.secondary" textAlign="center" mt={4}>
+            {t(
+              'forBusiness.plans.note',
+              'All plans start free. Commission is only charged when you make a sale. You can change your plan anytime from your dashboard.'
+            )}
+          </Typography>
         </Container>
       </Box>
 

@@ -1,0 +1,45 @@
+table:
+  name: business_account_types
+  schema: public
+is_enum: true
+array_relationships:
+  - name: businesses
+    using:
+      manual_configuration:
+        column_mapping:
+          id: account_type
+        insertion_order: null
+        remote_table:
+          name: businesses
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}

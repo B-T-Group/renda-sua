@@ -11,8 +11,6 @@ import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
-import { PermissionService } from '../auth/permission.service';
-import { PlatformPermissions } from '../rbac/platform-permissions';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
@@ -744,7 +742,6 @@ export class BusinessItemsService {
     private readonly itemsService: ItemsService,
     private readonly itemAiReviewService: ItemAiReviewService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly permissionService: PermissionService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly stripeTaxCodesService: StripeTaxCodesService,
     private readonly imageThumbnailsService: ImageThumbnailsService
@@ -835,7 +832,6 @@ export class BusinessItemsService {
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_primary?: boolean;
-      rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
     }
@@ -924,7 +920,7 @@ export class BusinessItemsService {
         ? String(data.logo_url).trim()
         : null;
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric, $autoWithdraw: Boolean!, $logoUrl: String) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -933,7 +929,6 @@ export class BusinessItemsService {
           is_primary: $isPrimary,
           phone: $phone,
           email: $email,
-          rendasua_item_commission_percentage: $commission,
           auto_withdraw_commissions: $autoWithdraw,
           logo_url: $logoUrl,
           is_active: true
@@ -945,7 +940,6 @@ export class BusinessItemsService {
           location_type
           is_primary
           is_active
-          rendasua_item_commission_percentage
           auto_withdraw_commissions
           logo_url
           address { id address_line_1 address_line_2 city state postal_code country }
@@ -960,7 +954,6 @@ export class BusinessItemsService {
       isPrimary: data.is_primary ?? false,
       phone: data.phone ?? null,
       email: data.email ?? null,
-      commission: data.rendasua_item_commission_percentage ?? null,
       autoWithdraw: data.auto_withdraw_commissions ?? true,
       logoUrl,
     });
@@ -976,8 +969,9 @@ export class BusinessItemsService {
   }
 
   /**
-   * Update business location fields (e.g. rendasua_item_commission_percentage).
-   * Only updates location row; address updates go through addresses API.
+   * Update business location fields.
+   * Note: commission is controlled by Business.accountType and cannot be set here.
+   * Address updates go through the addresses API.
    */
   async updateBusinessLocation(
     businessId: string,
@@ -989,7 +983,6 @@ export class BusinessItemsService {
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_active?: boolean;
       is_primary?: boolean;
-      rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
     }
@@ -1016,16 +1009,9 @@ export class BusinessItemsService {
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
     }
+    // Commission is now derived from Business.accountType — block any attempt to set it
+    delete setInput.rendasua_item_commission_percentage;
 
-    // Strip commission percentage for non-admin users
-    const userId = this.hasuraUserService.getUserId();
-    const isAdmin = await this.permissionService.hasPlatformPermission(
-      userId,
-      PlatformPermissions.LOCATIONS_COMMISSION
-    );
-    if (!isAdmin && 'rendasua_item_commission_percentage' in setInput) {
-      delete setInput.rendasua_item_commission_percentage;
-    }
     const updateMutation = `
       mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
         update_business_locations_by_pk(pk_columns: { id: $id }, _set: $data) {
@@ -1033,7 +1019,6 @@ export class BusinessItemsService {
           name
           phone
           email
-          rendasua_item_commission_percentage
           auto_withdraw_commissions
           logo_url
           location_type

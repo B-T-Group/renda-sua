@@ -16,6 +16,9 @@ from rendasua_core_packages.commission_handler.types import (
     CommissionOrder as CommissionOrderType,
     AssignedAgent,
 )
+from rendasua_core_packages.commission_handler.business_account_type import (
+    get_commission_for_business_account_type,
+)
 
 
 def get_commission_configs(
@@ -23,22 +26,24 @@ def get_commission_configs(
     business_location_id: Optional[str] = None,
 ) -> CommissionConfig:
     """
-    Fetch commission configurations from application_configurations table.
-    When business_location_id is provided, uses business_locations.rendasua_item_commission_percentage if set.
+    Fetch commission configurations.
+
+    Item commission is derived from businesses.account_type via the centralized helper.
+    Delivery-fee commissions continue to come from application_configurations.
 
     Args:
         client: HasuraClient instance
-        business_location_id: Optional business location ID for item commission override
+        business_location_id: Optional business location ID — used to join to the
+            owning business and read its account_type.
 
     Returns:
         CommissionConfig with values from database or defaults
     """
     query = """
-    query GetCommissionConfigs {
+    query GetDeliveryCommissionConfigs {
       application_configurations(
-        where: { 
+        where: {
           config_key: { _in: [
-            "rendasua_item_commission_percentage",
             "unverified_agent_base_delivery_commission",
             "verified_agent_base_delivery_commission",
             "unverified_agent_per_km_delivery_commission",
@@ -62,21 +67,28 @@ def get_commission_configs(
         for config in configs_data:
             config_map[config["config_key"]] = config["number_value"]
 
-        rendasua_item_commission_percentage = config_map.get(
-            "rendasua_item_commission_percentage", 5.0
-        )
+        # Resolve item commission from business account type (single source of truth)
+        rendasua_item_commission_percentage = get_commission_for_business_account_type()
+
         if business_location_id:
             loc_query = """
-            query GetBusinessLocationCommission($id: uuid!) {
+            query GetBusinessLocationAccountType($id: uuid!) {
               business_locations_by_pk(id: $id) {
-                rendasua_item_commission_percentage
+                business {
+                  account_type
+                }
               }
             }
             """
             loc_data = client.execute(loc_query, {"id": business_location_id})
-            pct = loc_data.get("business_locations_by_pk", {}).get("rendasua_item_commission_percentage")
-            if pct is not None:
-                rendasua_item_commission_percentage = float(pct)
+            account_type = (
+                loc_data.get("business_locations_by_pk", {})
+                .get("business", {})
+                .get("account_type")
+            )
+            rendasua_item_commission_percentage = (
+                get_commission_for_business_account_type(account_type)
+            )
 
         return CommissionConfig(
             rendasua_item_commission_percentage=rendasua_item_commission_percentage,
@@ -97,7 +109,7 @@ def get_commission_configs(
     except Exception as e:
         log_error("Error fetching commission configs", error=e)
         return CommissionConfig(
-            rendasua_item_commission_percentage=5.0,
+            rendasua_item_commission_percentage=get_commission_for_business_account_type(),
             unverified_agent_base_delivery_commission=50.0,
             verified_agent_base_delivery_commission=0.0,
             unverified_agent_per_km_delivery_commission=80.0,

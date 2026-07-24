@@ -44,6 +44,8 @@ import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
 import { CreateLocationTransferRequestDto } from './dto/create-location-transfer-request.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { BusinessAccountTypeService } from './business-account-type.service';
+import { ChangeAccountTypeDto } from './dto/change-account-type.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -57,8 +59,27 @@ export class BusinessItemsController {
     private readonly businessItemsService: BusinessItemsService,
     private readonly itemDealsService: ItemDealsService,
     private readonly accessService: BusinessItemsAccessService,
-    private readonly transferService: BusinessLocationTransferService
+    private readonly transferService: BusinessLocationTransferService,
+    private readonly businessAccountTypeService: BusinessAccountTypeService
   ) {}
+
+  @Patch('business/account-type')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change the account type for the calling merchant (self-serve, 30-day lock-in)' })
+  @ApiResponse({ status: 200, description: 'Account type updated successfully' })
+  @ApiResponse({ status: 409, description: 'Plan change locked — current plan was changed less than 30 days ago' })
+  @ApiResponse({ status: 404, description: 'Business not found' })
+  async changeAccountType(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: ChangeAccountTypeDto
+  ) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    const result = await this.businessAccountTypeService.selfServeChange(
+      userId,
+      body.accountType
+    );
+    return { success: true, data: result };
+  }
 
   @Get('page-data')
   @ApiOperation({
@@ -89,7 +110,7 @@ export class BusinessItemsController {
 
   @Patch('locations/:locationId')
   @ApiOperation({
-    summary: 'Update a business location (e.g. commission percentage)',
+    summary: 'Update a business location',
   })
   @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Location updated successfully' })
@@ -108,7 +129,6 @@ export class BusinessItemsController {
         },
         is_active: { type: 'boolean' },
         is_primary: { type: 'boolean' },
-        rendasua_item_commission_percentage: { type: 'number', nullable: true },
         auto_withdraw_commissions: {
           type: 'boolean',
           description:
@@ -133,7 +153,6 @@ export class BusinessItemsController {
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_active?: boolean;
       is_primary?: boolean;
-      rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
     }
@@ -423,7 +442,6 @@ export class BusinessItemsController {
           enum: ['store', 'warehouse', 'office', 'pickup_point'],
         },
         is_primary: { type: 'boolean' },
-        rendasua_item_commission_percentage: { type: 'number', nullable: true },
         auto_withdraw_commissions: {
           type: 'boolean',
           description: 'Defaults to true when omitted.',
@@ -453,7 +471,6 @@ export class BusinessItemsController {
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_primary?: boolean;
-      rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
     }

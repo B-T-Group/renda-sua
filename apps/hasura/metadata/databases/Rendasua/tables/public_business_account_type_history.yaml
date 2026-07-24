@@ -1,0 +1,24 @@
+table:
+  name: business_account_type_history
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - from_account_type
+        - to_account_type
+        - changed_by_user_id
+        - change_source
+        - reason
+        - created_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

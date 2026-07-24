@@ -50,6 +50,8 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         ai_tokens
         merchant_agreement_version
         merchant_agreement_accepted_at
+        account_type
+        account_type_locked_until
         created_at
         updated_at
       }

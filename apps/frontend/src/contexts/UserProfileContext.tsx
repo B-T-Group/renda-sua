@@ -96,6 +96,8 @@ export interface UserProfile {
     is_admin?: boolean;
     is_verified: boolean;
     ai_tokens?: number;
+    account_type?: 'STANDARD' | 'PREMIUM' | 'ELITE';
+    account_type_locked_until?: string | null;
     created_at: string;
     updated_at: string;
   };

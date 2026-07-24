@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Container,
+  Grid,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -31,6 +32,7 @@ import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
+import { BusinessAccountCard } from '../business/BusinessAccountCard';
 
 const DASHBOARD_ACCOUNT_PREVIEW_LIMIT = 2;
 
@@ -190,35 +192,42 @@ const BusinessDashboard: React.FC = () => {
 
       <BusinessPreviewStoreCta businessId={profile.business.id} />
 
-      {accounts.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-            {t('accounts.accountInformation')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {previewAccounts.map((account) => (
-              <UserAccount
-                key={account.id}
-                accountId={account.id}
-                compactView={true}
-                showTransactions={false}
-              />
-            ))}
-          </Box>
-          {hasMoreAccounts && (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => navigate('/business/accounts')}
-              sx={{ mt: 1.5 }}
-            >
-              {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
-                count: accounts.length,
-              })}
-            </Button>
-          )}
-        </Box>
-      )}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {accounts.length > 0 && (
+          <Grid item xs={12} md={accounts.length > 0 ? 8 : 12}>
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                {t('accounts.accountInformation')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {previewAccounts.map((account) => (
+                  <UserAccount
+                    key={account.id}
+                    accountId={account.id}
+                    compactView={true}
+                    showTransactions={false}
+                  />
+                ))}
+              </Box>
+              {hasMoreAccounts && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => navigate('/business/accounts')}
+                  sx={{ mt: 1.5 }}
+                >
+                  {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
+                    count: accounts.length,
+                  })}
+                </Button>
+              )}
+            </Box>
+          </Grid>
+        )}
+        <Grid item xs={12} md={accounts.length > 0 ? 4 : 12}>
+          <BusinessAccountCard />
+        </Grid>
+      </Grid>
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         {t(

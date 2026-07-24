@@ -25,6 +25,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BusinessLocation } from '../../hooks/useBusinessLocations';
+import { useBusinessAccountType } from '../../hooks/useBusinessAccountType';
 
 /** Minimal account info for display on the card */
 export interface LocationAccountInfo {
@@ -56,6 +57,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const { plan } = useBusinessAccountType();
 
   const formatAddress = (address: BusinessLocation['address']) => {
     if (!address) return '';
@@ -174,13 +176,14 @@ const LocationCard: React.FC<LocationCardProps> = ({
             </Stack>
           </Box>
 
-          {/* Commission */}
+          {/* Commission — managed by Business Account Type */}
           <Box>
             <Typography variant="body2" color="text.secondary">
-              {t('business.locations.commissionLabel', 'RendaSua commission')}:{' '}
-              {location.rendasua_item_commission_percentage != null
-                ? `${location.rendasua_item_commission_percentage}%`
-                : t('business.locations.commissionDefault', '5% (default)')}
+              {t('business.locations.commissionManagedBy', 'Commission — Managed by your Business Account')}:{' '}
+              <strong>{plan.commissionPercent}%</strong>{' '}
+              <Typography component="span" variant="caption" color="text.secondary">
+                ({t(plan.labelKey, plan.defaultLabel)})
+              </Typography>
             </Typography>
           </Box>
 

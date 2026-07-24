@@ -11,6 +11,7 @@ import {
 import { StripePayoutService } from '../stripe-payments/stripe-payout.service';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
+import { getCommissionForBusinessAccountType } from './business-account-type';
 
 @Injectable()
 export class CommissionsService {
@@ -317,15 +318,15 @@ export class CommissionsService {
 
   /**
    * Get commission configurations.
-   * When businessLocationId is provided, uses business_locations.rendasua_item_commission_percentage if set; else application default.
+   * Item commission is derived from businesses.account_type via the centralized helper.
+   * Delivery-fee commissions continue to come from application_configurations.
    */
   async getCommissionConfigs(businessLocationId?: string | null): Promise<CommissionConfig> {
-    const query = `
-      query GetCommissionConfigs {
+    const deliveryQuery = `
+      query GetDeliveryCommissionConfigs {
         application_configurations(
-          where: { 
+          where: {
             config_key: { _in: [
-              "rendasua_item_commission_percentage",
               "unverified_agent_base_delivery_commission",
               "verified_agent_base_delivery_commission",
               "unverified_agent_per_km_delivery_commission",
@@ -339,7 +340,7 @@ export class CommissionsService {
       }
     `;
 
-    const response = await this.hasuraSystemService.executeQuery(query);
+    const response = await this.hasuraSystemService.executeQuery(deliveryQuery);
     const configs = response.application_configurations || [];
 
     const configMap = configs.reduce((acc: any, config: any) => {
@@ -347,24 +348,26 @@ export class CommissionsService {
       return acc;
     }, {});
 
-    let rendasuaItemCommissionPercentage =
-      configMap.rendasua_item_commission_percentage || 5.0;
+    // Resolve item commission from the business account type (single source of truth)
+    let rendasuaItemCommissionPercentage = getCommissionForBusinessAccountType();
 
     if (businessLocationId) {
       const locQuery = `
-        query GetBusinessLocationCommission($id: uuid!) {
+        query GetBusinessLocationAccountType($id: uuid!) {
           business_locations_by_pk(id: $id) {
-            rendasua_item_commission_percentage
+            business {
+              account_type
+            }
           }
         }
       `;
       const locResponse = await this.hasuraSystemService.executeQuery(locQuery, {
         id: businessLocationId,
       });
-      const pct = locResponse.business_locations_by_pk?.rendasua_item_commission_percentage;
-      if (pct != null && typeof pct === 'number') {
-        rendasuaItemCommissionPercentage = pct;
-      }
+      const accountType =
+        locResponse.business_locations_by_pk?.business?.account_type;
+      rendasuaItemCommissionPercentage =
+        getCommissionForBusinessAccountType(accountType);
     }
 
     return {

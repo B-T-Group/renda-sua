@@ -673,6 +673,14 @@ function App() {
               }
             />
             <Route
+              path="/business/account-type"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessAccountTypePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/locations"
               element={
                 <ProtectedRoute>
