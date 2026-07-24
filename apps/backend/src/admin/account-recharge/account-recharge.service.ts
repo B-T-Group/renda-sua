@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { AccountsService } from '../../accounts/accounts.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../../mobile-payments/mobile-payments.service';
@@ -7,6 +8,15 @@ import type { InitiateAccountRechargeDto } from './account-recharge.dto';
 const XAF = 'XAF';
 const MIN_AMOUNT = 150;
 const ALLOWED_COUNTRY_CODES = new Set(['237', '241']);
+const DEPOSIT_MEMO_PREFIX = 'Mobile payment deposit';
+
+export interface AccountTopUpRecord {
+  id: string;
+  amount: number;
+  memo: string;
+  created_at: string;
+  reference_id: string | null;
+}
 
 @Injectable()
 export class AccountRechargeService {
@@ -15,7 +25,8 @@ export class AccountRechargeService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService
+    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
+    private readonly accountsService: AccountsService
   ) {}
 
   async initiateRecharge(dto: InitiateAccountRechargeDto): Promise<{
@@ -83,15 +94,15 @@ export class AccountRechargeService {
     return tx;
   }
 
-  async listRecentRecharges(limit = 20, offset = 0) {
+  async listRecentRecharges(limit = 20, offset = 0): Promise<AccountTopUpRecord[]> {
     const hqUser = await this.hasuraSystemService.getRendasuaHQUser();
     if (!hqUser) {
       throw new BadRequestException('HQ user not found');
     }
     const hqAccount = await this.hasuraSystemService.getAccount(hqUser.id, XAF);
-    return this.mobilePaymentsDatabaseService.getTransactionsByAccountAndEntity(
+    return this.accountsService.getDepositsByMemoPrefix(
       hqAccount.id,
-      'account',
+      DEPOSIT_MEMO_PREFIX,
       limit,
       offset
     );

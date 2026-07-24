@@ -17,6 +17,14 @@ export interface RechargeTransaction {
   updated_at: string;
 }
 
+export interface AccountTopUpRecord {
+  id: string;
+  amount: number;
+  memo: string;
+  created_at: string;
+  reference_id: string | null;
+}
+
 export interface InitiateRechargeParams {
   countryCode: string;
   phoneNumber: string;
@@ -27,7 +35,7 @@ export function useAccountRecharge() {
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [recentTransactions, setRecentTransactions] = useState<RechargeTransaction[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<AccountTopUpRecord[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   const initiateRecharge = useCallback(

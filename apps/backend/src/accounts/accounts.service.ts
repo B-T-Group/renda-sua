@@ -421,9 +421,52 @@ export class AccountsService {
     return result.account_transactions || [];
   }
 
-  /**
-   * Get account balance summary
-   */
+  async getDepositsByMemoPrefix(
+    accountId: string,
+    memoPrefix: string,
+    limit = 20,
+    offset = 0
+  ): Promise<Array<{
+    id: string;
+    amount: number;
+    memo: string;
+    transaction_type: string;
+    reference_id: string | null;
+    created_at: string;
+  }>> {
+    const query = `
+      query GetDepositsByMemo($accountId: uuid!, $memoPrefix: String!, $limit: Int!, $offset: Int!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            memo: { _ilike: $memoPrefix }
+            transaction_type: { _eq: "deposit" }
+          }
+          order_by: { created_at: desc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          amount
+          memo
+          transaction_type
+          reference_id
+          created_at
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      account_transactions: Array<{
+        id: string;
+        amount: number;
+        memo: string;
+        transaction_type: string;
+        reference_id: string | null;
+        created_at: string;
+      }>;
+    }>(query, { accountId, memoPrefix: `${memoPrefix}%`, limit, offset });
+    return result.account_transactions ?? [];
+  }
   async getAccountBalance(accountId: string): Promise<any> {
     const account = await this.getAccountById(accountId);
     if (!account) {
