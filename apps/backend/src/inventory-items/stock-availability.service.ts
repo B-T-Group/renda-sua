@@ -35,7 +35,10 @@ type InventoryRow = {
   item: {
     id: string;
     name: string;
-    item_images?: Array<{ image_url?: string | null; is_primary?: boolean | null }>;
+    item_images?: Array<{
+      image_url?: string | null;
+      image_type?: string | null;
+    }>;
   };
 };
 
@@ -257,8 +260,9 @@ export class StockAvailabilityService {
           }
           item {
             id name
-            item_images(limit: 5, order_by: [{ is_primary: desc }, { display_order: asc }]) {
-              image_url is_primary
+            item_images(limit: 5, order_by: { display_order: asc }) {
+              image_url
+              image_type
             }
           }
         }
@@ -460,7 +464,8 @@ export class StockAvailabilityService {
     clientUser?: { first_name?: string | null; last_name?: string | null } | null
   ): StockAvailabilityCheckDto {
     const images = inv.item.item_images ?? [];
-    const primary = images.find((i) => i.is_primary) ?? images[0];
+    const primary =
+      images.find((i) => i.image_type === 'main') ?? images[0];
     return {
       messageId,
       status: payload.status,
