@@ -35,6 +35,32 @@ export interface ApplicationConfiguration {
   updated_by?: string;
 }
 
+const CONFIGURATION_FIELDS = `
+  id
+  config_key
+  config_name
+  description
+  data_type
+  string_value
+  number_value
+  boolean_value
+  json_value
+  array_value
+  date_value
+  country_code
+  status
+  version
+  tags
+  validation_rules
+  min_value
+  max_value
+  allowed_values
+  created_at
+  updated_at
+  created_by
+  updated_by
+`;
+
 @Injectable()
 export class ConfigurationsService {
   private readonly logger = new Logger(ConfigurationsService.name);
@@ -128,46 +154,42 @@ export class ConfigurationsService {
     countryCode?: string
   ): Promise<ApplicationConfiguration | null> {
     try {
-      const query = `
-        query GetConfigurationByKey($config_key: String!, $country_code: String) {
+      const trimmedCountry = countryCode?.trim() || undefined;
+      const query = trimmedCountry
+        ? `
+        query GetConfigurationByKey($config_key: String!, $country_code: String!) {
           application_configurations(
-            where: { 
+            where: {
               config_key: { _eq: $config_key },
               country_code: { _eq: $country_code },
               status: { _eq: "active" }
             }
           ) {
-            id
-            config_key
-            config_name
-            description
-            data_type
-            string_value
-            number_value
-            boolean_value
-            json_value
-            array_value
-            date_value
-            country_code
-            status
-            version
-            tags
-            validation_rules
-            min_value
-            max_value
-            allowed_values
-            created_at
-            updated_at
-            created_by
-            updated_by
+            ${CONFIGURATION_FIELDS}
+          }
+        }
+      `
+        : `
+        query GetConfigurationByKey($config_key: String!) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $config_key },
+              status: { _eq: "active" }
+            }
+          ) {
+            ${CONFIGURATION_FIELDS}
           }
         }
       `;
 
-      const response = await this.hasuraService.executeQuery(query, {
+      const variables: { config_key: string; country_code?: string } = {
         config_key: configKey,
-        country_code: countryCode,
-      });
+      };
+      if (trimmedCountry) {
+        variables.country_code = trimmedCountry;
+      }
+
+      const response = await this.hasuraService.executeQuery(query, variables);
       return response.application_configurations[0] || null;
     } catch (error) {
       this.logger.error(

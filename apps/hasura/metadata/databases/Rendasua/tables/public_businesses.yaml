@@ -42,6 +42,13 @@ array_relationships:
         table:
           name: business_contracts
           schema: public
+  - name: business_referral_payouts
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_referral_payouts
+          schema: public
   - name: business_locations
     using:
       manual_configuration:
