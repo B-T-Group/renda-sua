@@ -189,7 +189,12 @@ export class BusinessReferralPayoutsService {
     const query = `
       query GetAgentAccount($userId: uuid!, $currency: currency_enum!) {
         accounts(
-          where: { user_id: { _eq: $userId }, is_active: { _eq: true }, currency: { _eq: $currency } }
+          where: {
+            user_id: { _eq: $userId }
+            is_active: { _eq: true }
+            currency: { _eq: $currency }
+            business_location_id: { _is_null: true }
+          }
           limit: 1
         ) { id }
       }
