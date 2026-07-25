@@ -49,50 +49,14 @@ export class MobilePaymentCallbackProcessor {
       callbackData.merchantReferenceId
     );
     if (tx?.status !== 'pending') {
-      if (!tx) {
-        await this.databaseService.logCallback(
-          callbackData.transactionId,
-          callbackData
-        );
-        this.logger.warn(
-          `Transaction not found for reference: ${callbackData.merchantReferenceId}`
-        );
-        return {
-          responseCode: callbackData.code,
-          transactionId: callbackData.transactionId,
-        };
-      }
-      this.logger.log(
-        `MyPVit callback skipped (already ${tx.status}): ${tx.id}`
-      );
-      return {
-        responseCode: callbackData.code,
-        transactionId: callbackData.transactionId,
-        skipped: true,
-      };
+      return this.handleNonPendingMypvit(tx, callbackData);
     }
 
     await this.databaseService.logCallback(
       callbackData.transactionId,
       callbackData
     );
-
-    const isCashRecSuccess =
-      callbackData.status === 'SUCCESS' &&
-      tx.payment_entity === 'order_cash_reconciliation';
-
-    if (isCashRecSuccess) {
-      await this.settleCashReconciliation(tx, callbackData.transactionId);
-    } else if (
-      callbackData.status === 'SUCCESS' &&
-      tx.payment_entity === 'token'
-    ) {
-      await this.finalizeTokenPaymentSuccess(tx, callbackData.transactionId);
-    } else {
-      await this.applyMypvitStatusUpdate(tx, callbackData);
-      await this.applyMypvitSuccessCredit(tx, callbackData);
-    }
-    await this.applyMypvitFailureSideEffects(tx, callbackData);
+    await this.processPendingMypvit(tx, callbackData);
 
     return {
       responseCode: callbackData.code,
@@ -109,42 +73,161 @@ export class MobilePaymentCallbackProcessor {
     );
 
     if (tx?.status !== 'pending') {
-      if (tx) {
-        this.logger.log(
-          `Freemopay callback skipped (already ${tx.status}): ${tx.id}`
-        );
-      } else {
-        this.logger.warn(
-          `Transaction not found for provider reference: ${callbackData.reference}`
-        );
-      }
-      return {
-        received: true,
-        reference: callbackData.reference,
-        skipped: !!tx,
-      };
+      return this.handleNonPendingFreemopay(tx, callbackData);
     }
 
     await this.databaseService.logCallback(tx.id, callbackData);
-
-    const isCashRecSuccess =
-      callbackData.status === 'SUCCESS' &&
-      tx.payment_entity === 'order_cash_reconciliation';
-
-    if (isCashRecSuccess) {
-      await this.settleCashReconciliation(tx, callbackData.reference);
-    } else if (
-      callbackData.status === 'SUCCESS' &&
-      tx.payment_entity === 'token'
-    ) {
-      await this.finalizeTokenPaymentSuccess(tx, callbackData.reference);
-    } else {
-      await this.applyFreemopayStatusUpdate(tx, callbackData);
-      await this.applyFreemopaySuccessCredit(tx, callbackData);
-    }
-    await this.applyFreemopayFailureSideEffects(tx, callbackData);
+    await this.processPendingFreemopay(tx, callbackData);
 
     return { received: true, reference: callbackData.reference };
+  }
+
+  private async handleNonPendingMypvit(
+    tx: MobilePaymentTransaction | null | undefined,
+    callbackData: MyPVitCallbackDto
+  ): Promise<MypvitCallbackProcessResult> {
+    if (!tx) {
+      await this.databaseService.logCallback(
+        callbackData.transactionId,
+        callbackData
+      );
+      this.logger.warn(
+        `Transaction not found for reference: ${callbackData.merchantReferenceId}`
+      );
+      return {
+        responseCode: callbackData.code,
+        transactionId: callbackData.transactionId,
+      };
+    }
+    if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
+      await this.retrySuccessSideEffects(tx);
+    }
+    this.logger.log(`MyPVit callback skipped (already ${tx.status}): ${tx.id}`);
+    return {
+      responseCode: callbackData.code,
+      transactionId: callbackData.transactionId,
+      skipped: true,
+    };
+  }
+
+  private async handleNonPendingFreemopay(
+    tx: MobilePaymentTransaction | null | undefined,
+    callbackData: FreemopayCallbackDto
+  ): Promise<FreemopayCallbackProcessResult> {
+    if (!tx) {
+      this.logger.warn(
+        `Transaction not found for provider reference: ${callbackData.reference}`
+      );
+      return { received: true, reference: callbackData.reference };
+    }
+    if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
+      await this.retrySuccessSideEffects(tx);
+    }
+    this.logger.log(
+      `Freemopay callback skipped (already ${tx.status}): ${tx.id}`
+    );
+    return {
+      received: true,
+      reference: callbackData.reference,
+      skipped: true,
+    };
+  }
+
+  private async processPendingMypvit(
+    tx: MobilePaymentTransaction,
+    callbackData: MyPVitCallbackDto
+  ): Promise<void> {
+    if (
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'order_cash_reconciliation'
+    ) {
+      await this.settleCashReconciliation(tx, callbackData.transactionId);
+      return;
+    }
+    if (callbackData.status === 'SUCCESS' && tx.payment_entity === 'token') {
+      await this.finalizeTokenPaymentSuccess(tx, callbackData.transactionId);
+      return;
+    }
+    if (callbackData.status === 'SUCCESS') {
+      await this.finalizePaymentSuccess(tx, callbackData.transactionId);
+      return;
+    }
+    await this.applyFailedStatus(tx, callbackData.transactionId, 'Payment failed');
+    await this.applyMypvitFailureSideEffects(tx, callbackData);
+  }
+
+  private async processPendingFreemopay(
+    tx: MobilePaymentTransaction,
+    callbackData: FreemopayCallbackDto
+  ): Promise<void> {
+    if (
+      callbackData.status === 'SUCCESS' &&
+      tx.payment_entity === 'order_cash_reconciliation'
+    ) {
+      await this.settleCashReconciliation(tx, callbackData.reference);
+      return;
+    }
+    if (callbackData.status === 'SUCCESS' && tx.payment_entity === 'token') {
+      await this.finalizeTokenPaymentSuccess(tx, callbackData.reference);
+      return;
+    }
+    if (callbackData.status === 'SUCCESS') {
+      await this.finalizePaymentSuccess(tx, callbackData.reference);
+      return;
+    }
+    const failureMessage =
+      callbackData.reason || callbackData.message || 'Payment failed';
+    await this.applyFailedStatus(tx, callbackData.reference, failureMessage);
+    await this.applyFreemopayFailureSideEffects(tx, callbackData);
+  }
+
+  private async finalizePaymentSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const credited = await this.creditWalletIfNeeded(transaction);
+    if (!credited) {
+      throw new Error(
+        `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
+      );
+    }
+    await this.runHandlerSuccess(transaction);
+    await this.databaseService.updateTransaction(transaction.id, {
+      status: 'success',
+      transaction_id: providerTransactionId,
+    });
+    this.logger.log(
+      `Updated transaction ${transaction.id} with status: success`
+    );
+  }
+
+  private async retrySuccessSideEffects(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (transaction.transaction_type !== 'PAYMENT') return;
+    const credited = await this.creditWalletIfNeeded(transaction);
+    if (!credited) {
+      this.logger.error(
+        `Retry credit still failing for success mobile tx ${transaction.id}`
+      );
+      return;
+    }
+    await this.runHandlerSuccess(transaction);
+  }
+
+  private async applyFailedStatus(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string,
+    errorMessage: string
+  ): Promise<void> {
+    await this.databaseService.updateTransaction(transaction.id, {
+      status: 'failed',
+      transaction_id: providerTransactionId,
+      error_message: errorMessage,
+    });
+    this.logger.log(
+      `Updated transaction ${transaction.id} with status: failed`
+    );
   }
 
   private async finalizeTokenPaymentSuccess(
@@ -200,44 +283,24 @@ export class MobilePaymentCallbackProcessor {
     }
   }
 
-  private async applyMypvitStatusUpdate(
-    transaction: MobilePaymentTransaction,
-    callbackData: MyPVitCallbackDto
-  ): Promise<void> {
-    const status = callbackData.status === 'SUCCESS' ? 'success' : 'failed';
-    await this.databaseService.updateTransaction(transaction.id, {
-      status,
-      transaction_id: callbackData.transactionId,
-      error_message:
-        callbackData.status === 'FAILED' ? 'Payment failed' : undefined,
-    });
-    this.logger.log(`Updated transaction ${transaction.id} with status: ${status}`);
-  }
-
-  private async applyMypvitSuccessCredit(
-    transaction: MobilePaymentTransaction,
-    callbackData: MyPVitCallbackDto
-  ): Promise<void> {
-    if (
-      callbackData.status !== 'SUCCESS' ||
-      transaction.transaction_type !== 'PAYMENT'
-    ) {
-      return;
-    }
-
-    await this.creditWalletIfNeeded(transaction);
-    await this.runHandlerSuccess(transaction);
-  }
-
   private async creditWalletIfNeeded(
     transaction: MobilePaymentTransaction
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (
       !transaction.account_id ||
-      transaction.payment_entity === 'token'
+      transaction.payment_entity === 'token' ||
+      transaction.transaction_type !== 'PAYMENT'
     ) {
-      return;
+      return true;
     }
+
+    const alreadyCredited =
+      await this.accountsService.hasTransactionForReference({
+        accountId: transaction.account_id,
+        transactionType: 'deposit',
+        referenceId: transaction.id,
+      });
+    if (alreadyCredited) return true;
 
     const creditResult = await this.accountsService.registerTransaction({
       accountId: transaction.account_id,
@@ -251,12 +314,13 @@ export class MobilePaymentCallbackProcessor {
       this.logger.error(
         `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
       );
-      return;
+      return false;
     }
 
     this.logger.log(
       `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
     );
+    return true;
   }
 
   private async runHandlerSuccess(
@@ -295,39 +359,6 @@ export class MobilePaymentCallbackProcessor {
     if (handler) {
       await handler.onPaymentFailure(transaction, 'Payment failed');
     }
-  }
-
-  private async applyFreemopayStatusUpdate(
-    transaction: MobilePaymentTransaction,
-    callbackData: FreemopayCallbackDto
-  ): Promise<void> {
-    const status = callbackData.status === 'SUCCESS' ? 'success' : 'failed';
-    await this.databaseService.updateTransaction(transaction.id, {
-      status,
-      transaction_id: callbackData.reference,
-      error_message:
-        callbackData.status === 'FAILED'
-          ? callbackData.reason ||
-            callbackData.message ||
-            'Payment failed'
-          : undefined,
-    });
-    this.logger.log(`Updated transaction ${transaction.id} with status: ${status}`);
-  }
-
-  private async applyFreemopaySuccessCredit(
-    transaction: MobilePaymentTransaction,
-    callbackData: FreemopayCallbackDto
-  ): Promise<void> {
-    if (
-      callbackData.status !== 'SUCCESS' ||
-      transaction.transaction_type !== 'PAYMENT'
-    ) {
-      return;
-    }
-
-    await this.creditWalletIfNeeded(transaction);
-    await this.runHandlerSuccess(transaction);
   }
 
   private async applyFreemopayFailureSideEffects(
