@@ -146,10 +146,11 @@ describe('StockAvailabilityService', () => {
     status: HttpStatus,
     messageFragment?: string
   ) {
-    await expect(promise).rejects.toBeInstanceOf(HttpException);
     try {
       await promise;
+      throw new Error('expected HttpException');
     } catch (error: any) {
+      expect(error).toBeInstanceOf(HttpException);
       expect(error.getStatus()).toBe(status);
       if (messageFragment) {
         expect(error.message).toContain(messageFragment);
