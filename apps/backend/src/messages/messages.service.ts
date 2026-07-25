@@ -15,6 +15,7 @@ export interface UserMessageRow {
   entity_type: string;
   entity_id: string;
   message: string;
+  message_type?: string;
   read_at: string | null;
   created_at: string;
   updated_at: string;
@@ -68,6 +69,7 @@ export class MessagesService {
           entity_type
           entity_id
           message
+          message_type
           read_at
           created_at
           updated_at

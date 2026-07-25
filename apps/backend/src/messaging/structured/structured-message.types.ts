@@ -5,6 +5,7 @@ export const MESSAGE_TYPES = [
   'TEXT',
   'DELIVERY_PIN',
   'RENTAL_START_PIN',
+  'STOCK_AVAILABILITY',
   'SYSTEM',
   'PAYMENT',
   'LOCATION',
@@ -12,6 +13,26 @@ export const MESSAGE_TYPES = [
 ] as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[number];
+
+export type StockAvailabilityStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'adjusted'
+  | 'unavailable';
+
+export interface StockAvailabilityPayloadV1 {
+  version: 1;
+  status: StockAvailabilityStatus;
+  inventoryId: string;
+  itemId: string;
+  businessId: string;
+  clientUserId: string;
+  quantityAtRequest: number;
+  quantityAfterResponse?: number;
+  respondedAt?: string;
+  respondedByUserId?: string;
+  [key: string]: unknown;
+}
 
 export type DeliveryPinPayloadStatus = 'active' | 'superseded' | 'revoked';
 

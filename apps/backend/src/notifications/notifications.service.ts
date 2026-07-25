@@ -54,6 +54,8 @@ import {
   buildNewRentalBookingMessagePushMessage,
   buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
+  buildStockAvailabilityCheckPushMessage,
+  buildStockAvailabilityResultPushMessage,
   buildWalletCreditPushMessage,
   type WalletCreditCommissionType,
 } from './wallet-credit-push.messages';
@@ -542,6 +544,80 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendDeliveryPinSharedPush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendStockAvailabilityCheckPush(params: {
+    recipientUserId: string;
+    inventoryId: string;
+    itemId: string;
+    messageId: string;
+    itemName: string;
+    clientName: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildStockAvailabilityCheckPushMessage({
+      itemName: params.itemName,
+      clientName: params.clientName,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/stock-availability/${params.messageId}`,
+        inventoryId: params.inventoryId,
+        itemId: params.itemId,
+        messageId: params.messageId,
+        type: 'stock_availability_check',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendStockAvailabilityCheckPush failed for inventory ${params.inventoryId}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendStockAvailabilityResultPush(params: {
+    recipientUserId: string;
+    inventoryId: string;
+    messageId: string;
+    itemName: string;
+    status: 'confirmed' | 'adjusted' | 'unavailable';
+    quantity?: number;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildStockAvailabilityResultPushMessage({
+      itemName: params.itemName,
+      status: params.status,
+      quantity: params.quantity,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/inventory-items/${params.inventoryId}`,
+        inventoryId: params.inventoryId,
+        messageId: params.messageId,
+        status: params.status,
+        quantity: params.quantity != null ? String(params.quantity) : undefined,
+        type: 'stock_availability_result',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendStockAvailabilityResultPush failed for inventory ${params.inventoryId}: ${
           error?.message ?? String(error)
         }`
       );

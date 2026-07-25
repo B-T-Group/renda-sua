@@ -198,3 +198,68 @@ export function buildDeliveryPinSharedPushMessage(params: {
         body: `${sender} shared the delivery PIN for order ${params.orderNumber}`,
       };
 }
+
+export function buildStockAvailabilityCheckPushMessage(params: {
+  itemName: string;
+  clientName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const item = params.itemName?.trim() || (locale === 'fr' ? 'un article' : 'an item');
+  const client =
+    params.clientName?.trim() || (locale === 'fr' ? 'Un client' : 'A shopper');
+  if (locale === 'fr') {
+    return {
+      title: 'Vérifier la disponibilité',
+      body: `${client} demande si « ${item} » est encore disponible`,
+    };
+  }
+  return {
+    title: 'Check stock availability',
+    body: `${client} wants to know if “${item}” is still available`,
+  };
+}
+
+export function buildStockAvailabilityResultPushMessage(params: {
+  itemName: string;
+  status: 'confirmed' | 'adjusted' | 'unavailable';
+  quantity?: number;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const item = params.itemName?.trim() || (locale === 'fr' ? 'cet article' : 'this item');
+  if (locale === 'fr') {
+    if (params.status === 'unavailable') {
+      return {
+        title: 'Indisponible',
+        body: `Le magasin a indiqué que « ${item} » n’est plus disponible`,
+      };
+    }
+    if (params.status === 'adjusted' && params.quantity != null) {
+      return {
+        title: 'Stock mis à jour',
+        body: `« ${item} » est disponible — ${params.quantity} en stock`,
+      };
+    }
+    return {
+      title: 'Toujours disponible',
+      body: `Le magasin a confirmé que « ${item} » est encore disponible`,
+    };
+  }
+  if (params.status === 'unavailable') {
+    return {
+      title: 'Not available',
+      body: `The store said “${item}” is no longer available`,
+    };
+  }
+  if (params.status === 'adjusted' && params.quantity != null) {
+    return {
+      title: 'Stock updated',
+      body: `“${item}” is available — ${params.quantity} in stock`,
+    };
+  }
+  return {
+    title: 'Still available',
+    body: `The store confirmed “${item}” is still available`,
+  };
+}
