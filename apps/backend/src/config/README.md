@@ -66,6 +66,18 @@ The configuration is organized into logical sections:
 - `stripeSecretKey` - Stripe secret key (optional)
 - `stripePublishableKey` - Stripe publishable key (optional)
 
+### Meta Conversions API (CAPI)
+
+Env vars (also loadable via AWS Secrets Manager in `main.ts`):
+
+- `META_CAPI_ENABLED` - `true` to send events (default off)
+- `META_PIXEL_ID` - Pixel / dataset id (default `2008683340063278`)
+- `META_CAPI_ACCESS_TOKEN` - Conversions API access token
+- `META_CAPI_API_VERSION` - Graph API version (default `v21.0`)
+- `META_CAPI_TEST_EVENT_CODE` - optional Events Manager test code
+
+When enabled, Nest fires ViewContent / AddToCart / InitiateCheckout / Purchase to Meta. Web Pixel remains for browser events; shared `event_id` / `eventID` dedupes Purchase and funnel events.
+
 ## Usage
 
 ### In Services

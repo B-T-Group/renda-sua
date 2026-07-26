@@ -7,7 +7,12 @@ type FbqStandardEvent =
   | 'InitiateCheckout'
   | 'Purchase';
 
-type FbqFn = (command: 'track' | 'init', eventOrId: string, params?: unknown) => void;
+type FbqFn = (
+  command: 'track' | 'init',
+  eventOrId: string,
+  params?: unknown,
+  options?: { eventID?: string }
+) => void;
 
 function fbq(): FbqFn | null {
   if (typeof window === 'undefined') return null;
@@ -28,32 +33,49 @@ export type MetaPixelProductEventParams = {
   google_product_category?: string;
 };
 
+export type MetaPixelTrackOptions = {
+  eventID?: string;
+};
+
 export function useMetaPixel() {
-  const track = useCallback((event: FbqStandardEvent, params?: unknown) => {
-    const f = fbq();
-    if (!f) return;
-    try {
-      f('track', event, params);
-    } catch {
-      // Intentionally ignore pixel failures to avoid breaking UX.
-    }
-  }, []);
+  const track = useCallback(
+    (
+      event: FbqStandardEvent,
+      params?: unknown,
+      options?: MetaPixelTrackOptions
+    ) => {
+      const f = fbq();
+      if (!f) return;
+      try {
+        if (options?.eventID) {
+          f('track', event, params, { eventID: options.eventID });
+        } else {
+          f('track', event, params);
+        }
+      } catch {
+        // Intentionally ignore pixel failures to avoid breaking UX.
+      }
+    },
+    []
+  );
 
   const trackViewContent = useCallback(
-    (params: MetaPixelProductEventParams) => track('ViewContent', params),
+    (params: MetaPixelProductEventParams, options?: MetaPixelTrackOptions) =>
+      track('ViewContent', params, options),
     [track]
   );
 
   const trackAddToCart = useCallback(
-    (params: MetaPixelProductEventParams) => track('AddToCart', params),
+    (params: MetaPixelProductEventParams, options?: MetaPixelTrackOptions) =>
+      track('AddToCart', params, options),
     [track]
   );
 
   const trackPurchase = useCallback(
-    (params: MetaPixelProductEventParams) => track('Purchase', params),
+    (params: MetaPixelProductEventParams, options?: MetaPixelTrackOptions) =>
+      track('Purchase', params, options),
     [track]
   );
 
   return { track, trackViewContent, trackAddToCart, trackPurchase };
 }
-

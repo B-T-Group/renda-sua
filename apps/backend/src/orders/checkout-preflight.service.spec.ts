@@ -19,6 +19,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
@@ -153,6 +154,12 @@ describe('CheckoutPreflightService', () => {
               reason: null,
               ruleId: null,
             }),
+          },
+        },
+        {
+          provide: MetaConversionsService,
+          useValue: {
+            trackInitiateCheckoutSafe: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

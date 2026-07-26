@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../contexts/CartContext';
 import { toOrderItemVariantId } from '../utils/shopperVariantSelection';
 import { useApiClient } from './useApiClient';
+import { metaPurchaseEventId } from '../utils/metaEventIds';
 import { useMetaPixel } from './useMetaPixel';
 
 interface CreateOrderRequest {
@@ -37,6 +38,8 @@ interface OrderResult {
   payment_rail?: 'stripe' | 'mobile_money';
   checkout_url?: string;
   payment_reference?: string;
+  payment_status?: string;
+  payment_timing?: string;
 }
 
 function buildMetaPixelPurchaseFromCart(
@@ -211,7 +214,8 @@ export const useCheckout = () => {
 
         // Sequential creation so only the first order receives the first-delivery promo
         const orders: OrderResult[] = [];
-        for (const [, items] of itemsByBusiness) {
+        const businessGroups = [...itemsByBusiness.entries()];
+        for (const [, items] of businessGroups) {
           const orderData: CreateOrderRequest = {
             items: items.map((item) => {
               const itemVariantId = toOrderItemVariantId(item.variantId);
@@ -247,7 +251,16 @@ export const useCheckout = () => {
           orders.push(response.data.order);
         }
 
-        trackPurchase(buildMetaPixelPurchaseFromCart(cartItems, orders));
+        // Pixel Purchase only when already paid (wallet / immediate pay_now).
+        // Deferred and Stripe unpaid flows rely on CAPI order.paid alone.
+        businessGroups.forEach(([, items], index) => {
+          const order = orders[index];
+          if (!order?.id || order.checkout_url) return;
+          if (order.payment_status !== 'paid') return;
+          trackPurchase(buildMetaPixelPurchaseFromCart(items, [order]), {
+            eventID: metaPurchaseEventId(order.id),
+          });
+        });
 
         // Clear cart after successful order creation
         clearCart();

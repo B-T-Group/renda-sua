@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpStatus,
   Post,
@@ -11,7 +12,9 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
 import { Public } from '../auth/public.decorator';
+import { resolveMetaActionSource } from '../meta-conversions/resolve-meta-action-source.util';
 import { resolveTrackViewerFromRequest } from '../tracking/resolve-track-viewer';
 import { TrackItemViewDto } from './dto/track-item-view.dto';
 import { ItemViewsService } from './item-views.service';
@@ -48,16 +51,20 @@ export class ItemViewsController {
   })
   async trackView(
     @Body() body: TrackItemViewDto,
-    @Request() req: any
+    @Request() req: any,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ) {
-    const itemId = body.itemId;
     const { viewerType, viewerId } = resolveTrackViewerFromRequest(req);
-
-    await this.itemViewsService.trackView(itemId, viewerType, viewerId);
-
-    return {
-      success: true,
-    };
+    const ua = req.headers?.['user-agent'];
+    await this.itemViewsService.trackView(body.itemId, viewerType, viewerId, {
+      eventId: body.eventId,
+      value: body.value,
+      currency: body.currency,
+      contentName: body.contentName,
+      actionSource: resolveMetaActionSource(platform),
+      clientIpAddress: req.ip,
+      clientUserAgent: typeof ua === 'string' ? ua : undefined,
+    });
+    return { success: true };
   }
 }
-

@@ -94,6 +94,13 @@ export class CheckoutPreflightDto {
   requires_fast_delivery?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Shared with Pixel eventID for Meta CAPI InitiateCheckout dedupe',
+  })
+  @IsOptional()
+  @IsString()
+  eventId?: string;
+
+  @ApiPropertyOptional({
     default: false,
     description:
       'Set when the order will require a verified (internal) delivery agent, so availability is evaluated against the same agent pool as order creation.',

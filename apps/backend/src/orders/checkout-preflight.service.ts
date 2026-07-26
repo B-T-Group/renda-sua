@@ -10,11 +10,13 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { toPublicDeliveryAvailability } from '../delivery-availability/delivery-availability.types';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { StripeConfig, Configuration } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -107,7 +109,8 @@ export class CheckoutPreflightService {
     private readonly loyaltyService: LoyaltyService,
     private readonly configService: ConfigService,
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
-    private readonly deliveryAvailabilityService: DeliveryAvailabilityService
+    private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
+    private readonly metaConversionsService: MetaConversionsService
   ) {}
 
   async resolve(
@@ -600,6 +603,10 @@ export class CheckoutPreflightService {
         ? ('calculated_at_checkout' as const)
         : null;
 
+    if (canProceed) {
+      this.scheduleInitiateCheckout(dto, groups);
+    }
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -623,6 +630,49 @@ export class CheckoutPreflightService {
           ? this.aggregateDeliveryAvailability(groups)
           : null,
     };
+  }
+
+  private scheduleInitiateCheckout(
+    dto: CheckoutPreflightDto,
+    groups: CheckoutGroupDto[]
+  ): void {
+    // Skip early/catalog preflights; require address, phone, or explicit eventId.
+    const intentional =
+      !!dto.eventId?.trim() ||
+      !!dto.delivery_address_id ||
+      !!dto.phone_number?.trim();
+    if (!intentional) return;
+
+    const contentIds = dto.items.map((i) => i.business_inventory_id);
+    const value = groups.reduce((s, g) => s + (g.total || 0), 0);
+    const currency = groups[0]?.currency;
+    const numItems = dto.items.reduce((s, i) => s + (i.quantity || 0), 0);
+    void this.metaConversionsService.trackInitiateCheckoutSafe({
+      eventId: this.resolveCheckoutEventId(dto),
+      actionSource: 'website',
+      contentIds,
+      contents: dto.items.map((i) => ({
+        id: i.business_inventory_id,
+        quantity: i.quantity,
+      })),
+      value: value > 0 ? value : undefined,
+      currency,
+      numItems,
+    });
+  }
+
+  /** Stable id so repeated preflights for the same cart dedupe in Meta. */
+  private resolveCheckoutEventId(dto: CheckoutPreflightDto): string {
+    if (dto.eventId?.trim()) return dto.eventId.trim();
+    const key = dto.items
+      .map(
+        (i) =>
+          `${i.business_inventory_id}:${i.quantity}:${i.item_variant_id ?? ''}`
+      )
+      .sort()
+      .join('|');
+    const digest = createHash('sha256').update(key, 'utf8').digest('hex');
+    return `checkout-${digest.slice(0, 32)}`;
   }
 
   // ---------------------------------------------------------------------------

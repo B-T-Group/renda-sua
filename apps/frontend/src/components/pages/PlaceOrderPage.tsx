@@ -78,6 +78,7 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
+import { metaPurchaseEventId } from '../../utils/metaEventIds';
 import type { ImageType } from '../../types/image';
 import {
   effectiveVariantUnitPrice,
@@ -1348,30 +1349,37 @@ const PlaceOrderPage: React.FC = () => {
       }
 
       const order = response.data.order;
-      const unitPrice = listingUnitPricing.unit;
-      const contentCategory = metaPixelContentCategoryFromItem(
-        selectedItem.item
-      );
-      const googleCategory = metaPixelGoogleProductCategoryFromItem(
-        selectedItem.item
-      );
-      trackPurchase({
-        content_type: 'product',
-        content_ids: [selectedItem.id],
-        contents: [
-          { id: selectedItem.id, quantity, item_price: unitPrice },
-        ],
-        value: order.total_amount,
-        currency: order.currency || selectedItem.item.currency || 'USD',
-        content_name: selectedItem.item.name,
-        ...(contentCategory && { content_category: contentCategory }),
-        ...(googleCategory && { google_product_category: googleCategory }),
-      });
 
-      // Stripe-rail orders must be paid via hosted Checkout before confirmation.
+      // Stripe-rail: wait for hosted Checkout; CAPI Purchase fires on payment.
       if (order.checkout_url) {
         window.location.href = order.checkout_url;
         return;
+      }
+
+      // Pixel Purchase only when already paid; deferred/Stripe unpaid → CAPI only.
+      if (order.payment_status === 'paid') {
+        const unitPrice = listingUnitPricing.unit;
+        const contentCategory = metaPixelContentCategoryFromItem(
+          selectedItem.item
+        );
+        const googleCategory = metaPixelGoogleProductCategoryFromItem(
+          selectedItem.item
+        );
+        trackPurchase(
+          {
+            content_type: 'product',
+            content_ids: [selectedItem.id],
+            contents: [
+              { id: selectedItem.id, quantity, item_price: unitPrice },
+            ],
+            value: order.total_amount,
+            currency: order.currency || selectedItem.item.currency || 'USD',
+            content_name: selectedItem.item.name,
+            ...(contentCategory && { content_category: contentCategory }),
+            ...(googleCategory && { google_product_category: googleCategory }),
+          },
+          { eventID: metaPurchaseEventId(order.id) }
+        );
       }
 
       // Navigate to order confirmation page

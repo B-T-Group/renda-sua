@@ -13,7 +13,7 @@ import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from '../../contexts/CartContext';
 import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
-import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
   metaPixelContentCategoryFromItem,
@@ -63,7 +63,7 @@ const DealsPage: React.FC = () => {
   );
 
   const { trackView } = useTrackItemView(null);
-  const { trackAddToCart } = useMetaPixel();
+  const trackAddToCart = useMetaAddToCartTrack();
 
   const handleLogin = () => {
     openLoginDialog();

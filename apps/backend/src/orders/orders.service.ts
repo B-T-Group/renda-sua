@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
 import { AccountsService } from '../accounts/accounts.service';
@@ -65,6 +66,7 @@ import {
   resolveAgentPreviewCountry,
 } from '../common/agent-proximity.util';
 import { LocationsService } from '../locations/locations.service';
+import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 import {
   resolveShopperVariant,
@@ -388,9 +390,14 @@ export class OrdersService {
     private readonly orderSystemJobsService: OrderSystemJobsService,
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
+    private readonly eventEmitter: EventEmitter2,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook
   ) {}
+
+  private emitOrderPaid(orderId: string): void {
+    this.eventEmitter.emit(ORDER_PAID_EVENT, { orderId });
+  }
 
   private async canAccessAnyOrder(userId: string): Promise<boolean> {
     return this.rbacService.hasPermission(
@@ -6192,6 +6199,7 @@ export class OrdersService {
     `,
       { orderId, businessId, at }
     );
+    this.emitOrderPaid(orderId);
     const actor = (snapshot as any).business_location?.business?.user?.id as
       | string
       | undefined;
@@ -6233,7 +6241,11 @@ export class OrdersService {
     });
 
     // Mark order as paid and complete it (settlement is idempotent)
+    const alreadyPaid = (order as any).payment_status === 'paid';
     await this.updateOrderPaymentStatusOnly(order.id, 'paid');
+    if (!alreadyPaid) {
+      this.emitOrderPaid(order.id);
+    }
 
     await this.processOrderPayment(order.id);
     await this.processOrderDeliveryPayment(order.id);
@@ -6438,6 +6450,7 @@ export class OrdersService {
       order.id,
       order.current_status
     );
+    this.emitOrderPaid(order.id);
 
     const capturedAt = new Date().toISOString();
     await this.hasuraSystemService.executeMutation(

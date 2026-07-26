@@ -22,7 +22,7 @@ import {
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
-import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
   metaPixelContentCategoryFromItem,
@@ -55,7 +55,7 @@ const Dashboard: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
 
   const { trackView } = useTrackItemView(null);
-  const { trackAddToCart } = useMetaPixel();
+  const trackAddToCart = useMetaAddToCartTrack();
 
   // Aggregate unique destination address IDs from inventoryItems
   const destinationAddressIds = React.useMemo(() => {

@@ -3,19 +3,31 @@ import { useCallback, useRef } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
 import { useApiClient } from './useApiClient';
 
+export type TrackItemViewOptions = {
+  eventId?: string;
+  value?: number;
+  currency?: string;
+  contentName?: string;
+};
+
 export const useTrackItemView = (inventoryItemId: string | null) => {
   const apiClient = useApiClient();
   const { isAuthenticated, user } = useAuth0();
   const hasTrackedRef = useRef<Record<string, boolean>>({});
+  const metaViewTrackedRef = useRef<Record<string, boolean>>({});
 
   const trackView = useCallback(
-    async (overrideItemId?: string) => {
+    async (overrideItemId?: string, options?: TrackItemViewOptions) => {
       const itemId = overrideItemId ?? inventoryItemId;
       if (!itemId || !apiClient) {
         return;
       }
 
-      if (hasTrackedRef.current[itemId]) {
+      const wantsMeta = !!options?.eventId?.trim();
+      if (wantsMeta) {
+        if (metaViewTrackedRef.current[itemId]) return;
+        metaViewTrackedRef.current[itemId] = true;
+      } else if (hasTrackedRef.current[itemId]) {
         return;
       }
       hasTrackedRef.current[itemId] = true;
@@ -31,11 +43,18 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
       try {
         await apiClient.post(
           '/track-view',
-          { itemId },
+          {
+            itemId,
+            ...(options?.eventId && { eventId: options.eventId }),
+            ...(options?.value != null && { value: options.value }),
+            ...(options?.currency && { currency: options.currency }),
+            ...(options?.contentName && { contentName: options.contentName }),
+          },
           { headers }
         );
       } catch (error) {
-        // Swallow tracking errors to avoid impacting UX
+        hasTrackedRef.current[itemId] = false;
+        if (wantsMeta) metaViewTrackedRef.current[itemId] = false;
         // eslint-disable-next-line no-console
         console.error('Failed to track item view', error);
       }
@@ -52,4 +71,3 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
     trackView,
   };
 };
-

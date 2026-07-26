@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
@@ -245,6 +246,10 @@ describe('OrdersService', () => {
               ruleId: null,
             }),
           },
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
         },
       ],
     }).compile();

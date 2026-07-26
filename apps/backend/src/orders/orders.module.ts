@@ -10,6 +10,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { GoogleModule } from '../google/google.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { MessagingModule } from '../messaging/messaging.module';
+import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -50,6 +51,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     GoogleModule,
     RbacModule,
     CommerceIntegrationsModule,
+    MetaConversionsModule,
   ],
   controllers: [
     OrdersController,

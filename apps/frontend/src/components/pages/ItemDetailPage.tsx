@@ -45,10 +45,12 @@ import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
 import { toCartVariantId } from '../../utils/shopperVariantSelection';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
+import { metaFunnelEventId } from '../../utils/metaEventIds';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
@@ -408,7 +410,8 @@ export default function ItemDetailPage() {
   const { isAuthenticated } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
-  const { trackViewContent, trackAddToCart } = useMetaPixel();
+  const { trackViewContent } = useMetaPixel();
+  const trackAddToCart = useMetaAddToCartTrack();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
@@ -452,18 +455,12 @@ export default function ItemDetailPage() {
     inventoryItem?.item?.id ?? null
   );
 
-  const { trackOnMount, trackView } = useTrackItemView(id || null);
+  const { trackView } = useTrackItemView(id || null);
   const { trackSiteEvent } = useTrackSiteEvent();
 
   React.useLayoutEffect(() => {
     window.scrollTo(0, 0);
   }, [id]);
-
-  React.useEffect(() => {
-    if (id) {
-      trackOnMount();
-    }
-  }, [id, trackOnMount]);
 
   React.useEffect(() => {
     if (!inventoryItem?.id) return;
@@ -482,6 +479,7 @@ export default function ItemDetailPage() {
     lastPixelViewContentIdRef.current = inventoryItem.id;
 
     const unitPrice = variantSel.listingUnitPricing.unit;
+    const eventId = metaFunnelEventId();
 
     const contentCategory = metaPixelContentCategoryFromItem(
       inventoryItem.item
@@ -489,17 +487,26 @@ export default function ItemDetailPage() {
     const googleCategory = metaPixelGoogleProductCategoryFromItem(
       inventoryItem.item
     );
-    trackViewContent({
-      content_type: 'product',
-      content_ids: [inventoryItem.id],
-      contents: [{ id: inventoryItem.id, quantity: 1, item_price: unitPrice }],
+    trackViewContent(
+      {
+        content_type: 'product',
+        content_ids: [inventoryItem.id],
+        contents: [{ id: inventoryItem.id, quantity: 1, item_price: unitPrice }],
+        value: unitPrice,
+        currency: inventoryItem.item.currency || 'USD',
+        content_name: inventoryItem.item.name,
+        ...(contentCategory && { content_category: contentCategory }),
+        ...(googleCategory && { google_product_category: googleCategory }),
+      },
+      { eventID: eventId }
+    );
+    void trackView(inventoryItem.id, {
+      eventId,
       value: unitPrice,
       currency: inventoryItem.item.currency || 'USD',
-      content_name: inventoryItem.item.name,
-      ...(contentCategory && { content_category: contentCategory }),
-      ...(googleCategory && { google_product_category: googleCategory }),
+      contentName: inventoryItem.item.name,
     });
-  }, [inventoryItem, trackViewContent, variantSel.listingUnitPricing.unit]);
+  }, [inventoryItem, trackViewContent, trackView, variantSel.listingUnitPricing.unit]);
 
   const goPrevGalleryImage = React.useCallback(() => {
     if (galleryImageCount <= 1) return;

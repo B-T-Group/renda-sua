@@ -363,6 +363,16 @@ export interface CommerceIntegrationsConfig {
   shopify: ShopifyCommerceConfig;
 }
 
+export interface MetaConversionsConfig {
+  /** When false, CAPI calls are no-ops. */
+  enabled: boolean;
+  pixelId: string;
+  accessToken: string;
+  apiVersion: string;
+  /** When set, events go to Events Manager Test Events stream. */
+  testEventCode: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -409,6 +419,7 @@ export interface Configuration {
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
+  metaConversions: MetaConversionsConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -820,6 +831,13 @@ export default (): Configuration => {
         apiVersion: process.env.SHOPIFY_API_VERSION || '2025-10',
         appUrl: process.env.SHOPIFY_APP_URL || '',
       },
+    },
+    metaConversions: {
+      enabled: process.env.META_CAPI_ENABLED === 'true',
+      pixelId: process.env.META_PIXEL_ID || '2008683340063278',
+      accessToken: process.env.META_CAPI_ACCESS_TOKEN || '',
+      apiVersion: process.env.META_CAPI_API_VERSION || 'v21.0',
+      testEventCode: process.env.META_CAPI_TEST_EVENT_CODE || '',
     },
   };
 };

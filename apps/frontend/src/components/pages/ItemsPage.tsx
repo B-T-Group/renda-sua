@@ -38,7 +38,7 @@ import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import { useNearbyAgents } from '../../hooks/useNearbyAgents';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
-import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
   useTrackSiteEvent,
@@ -482,7 +482,7 @@ const ItemsPage: React.FC = () => {
     profile?.client !== undefined;
 
   const { trackView } = useTrackItemView(null);
-  const { trackAddToCart } = useMetaPixel();
+  const trackAddToCart = useMetaAddToCartTrack();
   const { trackSiteEvent } = useTrackSiteEvent();
 
   const onCartBuilt = useCallback(

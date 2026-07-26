@@ -24,7 +24,7 @@ import {
 import { useCatalogStore } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
-import { useMetaPixel } from '../../hooks/useMetaPixel';
+import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useLoginMethodDialog } from '../../hooks/useLoginMethodDialog';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import {
@@ -97,7 +97,7 @@ const StorePage: React.FC = () => {
   });
 
   const { trackView } = useTrackItemView(null);
-  const { trackAddToCart } = useMetaPixel();
+  const trackAddToCart = useMetaAddToCartTrack();
 
   const formatCurrency = (amount: number, currency = 'USD') =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(

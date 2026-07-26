@@ -1,3 +1,5 @@
+import { extractHasuraUserIdFromToken } from '../auth/request-context.util';
+
 export interface TrackViewerIdentity {
   viewerType: string;
   viewerId: string;
@@ -18,10 +20,26 @@ function headerString(
   return v;
 }
 
+/**
+ * Prefer Hasura DB user id from the Bearer JWT so Meta `external_id` matches
+ * Purchase events (`client.user_id`). Fall back to X-User-Id / anon / ip|ua.
+ */
 export function resolveTrackViewerFromRequest(
   req: TrackRequestLike
 ): TrackViewerIdentity {
   const { headers } = req;
+  const auth = headerString(headers, 'authorization');
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const hasuraUserId = extractHasuraUserIdFromToken(auth.slice(7));
+      if (hasuraUserId?.trim()) {
+        return { viewerType: 'user', viewerId: hasuraUserId.trim() };
+      }
+    } catch {
+      // invalid/missing claims — fall through
+    }
+  }
+
   const userIdHeader = headerString(headers, 'x-user-id');
   const anonIdHeader = headerString(headers, 'x-anonymous-id');
   const userSub = req.user?.sub;

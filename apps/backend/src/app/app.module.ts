@@ -59,6 +59,7 @@ import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.modu
 import { RentalsModule } from '../rentals/rentals.module';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
+import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
 import { ServicesModule } from '../services/services.module';
 import { SmsModule } from '../sms/sms.module';
@@ -145,6 +146,7 @@ import { AppService } from './app.service';
     RentalItemImagesModule,
     ItemVariantsModule,
     ItemViewsModule,
+    MetaConversionsModule,
     SiteEventsModule,
     AgentsModule,
     ClientsModule,
