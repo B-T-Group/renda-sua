@@ -108,7 +108,10 @@ export class StockAvailabilityService {
     if (payload.businessId !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
-    const inv = await this.loadInventory(payload.inventoryId);
+    const inv = await this.loadInventoryOwnedByBusiness(
+      payload.inventoryId,
+      user.business.id
+    );
     const clientUser = await this.loadUserName(payload.clientUserId);
     return this.toDto(msg.id, payload, inv, clientUser);
   }
@@ -129,6 +132,9 @@ export class StockAvailabilityService {
     if (payload.status !== 'pending') {
       throw new HttpException('This check was already answered', HttpStatus.CONFLICT);
     }
+    // Re-check live inventory ownership: location transfer keeps inventory row ids
+    // but moves business_location_id, so payload.businessId alone is stale.
+    await this.loadInventoryOwnedByBusiness(payload.inventoryId, user.business.id);
     const next = await this.applyResponse(payload, user.id, body);
     await this.updatePayloadIfPending(messageId, next);
     const inv = await this.loadInventory(payload.inventoryId);
@@ -273,6 +279,18 @@ export class StockAvailabilityService {
       throw new HttpException('Inventory not found', HttpStatus.NOT_FOUND);
     }
     return r.business_inventory_by_pk;
+  }
+
+  /** Reject when inventory no longer belongs to the responding business (e.g. after transfer). */
+  private async loadInventoryOwnedByBusiness(
+    inventoryId: string,
+    businessId: string
+  ): Promise<InventoryRow> {
+    const inv = await this.loadInventory(inventoryId);
+    if (inv.business_location.business_id !== businessId) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+    return inv;
   }
 
   private async loadUserName(
