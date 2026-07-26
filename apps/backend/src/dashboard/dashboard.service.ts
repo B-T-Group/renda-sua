@@ -211,9 +211,16 @@ export class DashboardService {
   }
 
   private async countItemsByModeration(businessId: string, status: string): Promise<number> {
+    // Match catalog list visibility: soft-deleted items (status != active) must not surface as actions.
     const q = `
       query ItemsByModeration($businessId: uuid!, $status: item_moderation_status!) {
-        items_aggregate(where: { business_id: { _eq: $businessId }, moderation_status: { _eq: $status } }) {
+        items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            status: { _eq: active }
+            moderation_status: { _eq: $status }
+          }
+        ) {
           aggregate { count }
         }
       }
@@ -226,7 +233,11 @@ export class DashboardService {
     const q = `
       query RentalsByModeration($businessId: uuid!, $status: rental_listing_moderation_status!) {
         rental_location_listings_aggregate(
-          where: { rental_item: { business_id: { _eq: $businessId } }, moderation_status: { _eq: $status } }
+          where: {
+            rental_item: { business_id: { _eq: $businessId }, deleted_at: { _is_null: true } }
+            deleted_at: { _is_null: true }
+            moderation_status: { _eq: $status }
+          }
         ) { aggregate { count } }
       }
     `;
