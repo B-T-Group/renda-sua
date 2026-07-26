@@ -236,7 +236,7 @@ export class DashboardService {
 
   private async countOrdersByStatus(businessId: string, status: string): Promise<number> {
     const q = `
-      query OrdersByStatus($businessId: uuid!, $status: String!) {
+      query OrdersByStatus($businessId: uuid!, $status: order_status!) {
         orders_aggregate(where: { business_id: { _eq: $businessId }, current_status: { _eq: $status } }) {
           aggregate { count }
         }
@@ -309,7 +309,7 @@ export class DashboardService {
 
   private async countClientOrdersByStatus(clientId: string, statuses: string[]): Promise<number> {
     const q = `
-      query ClientPendingOrders($clientId: uuid!, $statuses: [String!]!) {
+      query ClientPendingOrders($clientId: uuid!, $statuses: [order_status!]!) {
         orders_aggregate(
           where: { client_id: { _eq: $clientId }, current_status: { _in: $statuses } }
         ) { aggregate { count } }
@@ -322,7 +322,7 @@ export class DashboardService {
   private async countClientActiveDeliveries(clientId: string): Promise<number> {
     const activeStatuses = ['picked_up', 'in_transit', 'out_for_delivery'];
     const q = `
-      query ClientActiveDeliveries($clientId: uuid!, $statuses: [String!]!) {
+      query ClientActiveDeliveries($clientId: uuid!, $statuses: [order_status!]!) {
         orders_aggregate(
           where: {
             client_id: { _eq: $clientId }
