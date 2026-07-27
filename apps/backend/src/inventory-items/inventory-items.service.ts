@@ -64,6 +64,8 @@ export interface InventoryItem {
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
+  deal_discount_type?: 'percentage' | 'fixed';
+  deal_discount_value?: number;
   deal_end_at?: string;
   distance_text?: string;
   duration_text?: string;
@@ -1458,6 +1460,8 @@ export class InventoryItemsService {
           hasActiveDeal: true,
           original_price: originalPrice,
           discounted_price: discounted,
+          deal_discount_type: deal.discount_type,
+          deal_discount_value: deal.discount_value,
           deal_end_at: deal.end_at,
         };
       });
@@ -2162,6 +2166,8 @@ export class InventoryItemsService {
         hasActiveDeal: true,
         original_price: originalPrice,
         discounted_price: discounted,
+        deal_discount_type: deal.discount_type,
+        deal_discount_value: deal.discount_value,
         deal_end_at: deal.end_at,
       };
     } catch (error) {
@@ -2428,6 +2434,8 @@ export class InventoryItemsService {
           hasActiveDeal: true,
           original_price: originalPrice,
           discounted_price: discounted,
+          deal_discount_type: deal.discount_type,
+          deal_discount_value: deal.discount_value,
           deal_end_at: deal.end_at,
         };
       });
@@ -2535,7 +2543,11 @@ export class InventoryItemsService {
   ): Promise<
     Record<
       string,
-      { discount_type: string; discount_value: number; end_at: string }
+      {
+        discount_type: 'percentage' | 'fixed';
+        discount_value: number;
+        end_at: string;
+      }
     >
   > {
     if (!inventoryItemIds.length) {
@@ -2571,14 +2583,18 @@ export class InventoryItemsService {
       const deals =
         (response.item_deals as Array<{
           inventory_item_id: string;
-          discount_type: string;
+          discount_type: 'percentage' | 'fixed';
           discount_value: number;
           end_at: string;
         }>) ?? [];
 
       const result: Record<
         string,
-        { discount_type: string; discount_value: number; end_at: string }
+        {
+          discount_type: 'percentage' | 'fixed';
+          discount_value: number;
+          end_at: string;
+        }
       > = {};
 
       deals.forEach((deal) => {

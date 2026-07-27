@@ -88,7 +88,9 @@ export function useListingVariantSelection(
       inventoryItem.selling_price,
       inventoryItem.hasActiveDeal,
       inventoryItem.original_price,
-      inventoryItem.discounted_price
+      inventoryItem.discounted_price,
+      inventoryItem.deal_discount_type,
+      inventoryItem.deal_discount_value
     );
   }, [inventoryItem, selectedVariant]);
 

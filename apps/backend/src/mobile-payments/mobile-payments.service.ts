@@ -277,6 +277,62 @@ export class MobilePaymentsService {
     throw new Error('UNSUPPORTED_INTEGRATION_PROVIDER');
   }
 
+  /**
+   * Public callbacks are unauthenticated; confirm the provider's live status
+   * matches the claimed terminal outcome before applying side effects.
+   */
+  async assertProviderConfirmsCallback(
+    tx: {
+      id: string;
+      transaction_id?: string | null;
+      customer_phone?: string | null;
+      provider: string;
+    },
+    claimed: 'SUCCESS' | 'FAILED'
+  ): Promise<void> {
+    const providerTxId = tx.transaction_id?.trim();
+    if (!providerTxId) {
+      throw new Error(
+        `Cannot verify callback for ${tx.id}: missing provider transaction_id`
+      );
+    }
+    const provider = this.resolveAdminIntegrationProvider(
+      tx.customer_phone,
+      tx.provider
+    );
+    const live = await this.checkTransactionStatus(
+      providerTxId,
+      provider,
+      tx.customer_phone ?? undefined
+    );
+    this.assertLiveMatchesClaim(tx.id, claimed, live.status);
+  }
+
+  private assertLiveMatchesClaim(
+    txId: string,
+    claimed: 'SUCCESS' | 'FAILED',
+    liveStatus: MobileTransactionStatus['status']
+  ): void {
+    if (claimed === 'SUCCESS') {
+      if (liveStatus !== 'success') {
+        throw new Error(
+          `Rejecting SUCCESS callback for ${txId}: provider status is ${liveStatus}`
+        );
+      }
+      return;
+    }
+    if (liveStatus === 'success') {
+      throw new Error(
+        `Rejecting FAILED callback for ${txId}: provider reports success`
+      );
+    }
+    if (liveStatus === 'pending' || liveStatus === 'ambiguous') {
+      throw new Error(
+        `Rejecting FAILED callback for ${txId}: provider still ${liveStatus}`
+      );
+    }
+  }
+
   /** Account withdrawals (GIVE_CHANGE): only valid CM or GA MSISDN. */
   isWithdrawalDestinationCmOrGa(customerPhone?: string): boolean {
     if (!customerPhone?.trim()) {
@@ -482,11 +538,13 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Check transaction status
+   * Check transaction status.
+   * Optional phoneNumber selects the MyPVit operator secret (Airtel vs MOOV).
    */
   async checkTransactionStatus(
     transactionId: string,
-    provider?: string
+    provider?: string,
+    phoneNumber?: string
   ): Promise<MobileTransactionStatus> {
     try {
       this.logger.log(`Checking transaction status for: ${transactionId}`);
@@ -504,7 +562,8 @@ export class MobilePaymentsService {
       switch (paymentProvider) {
         case 'mypvit': {
           const mypvitStatus = await this.myPVitService.checkTransactionStatus(
-            transactionId
+            transactionId,
+            phoneNumber
           );
           status = {
             transactionId: mypvitStatus.transactionId,

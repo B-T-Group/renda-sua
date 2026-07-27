@@ -77,6 +77,8 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
           hasActiveDeal={item.hasActiveDeal}
           originalPrice={item.original_price}
           discountedPrice={item.discounted_price}
+          discountType={item.deal_discount_type}
+          discountValue={item.deal_discount_value}
           currency={item.item.currency}
           formatCurrency={formatCurrency}
         />

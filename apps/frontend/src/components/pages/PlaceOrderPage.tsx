@@ -937,7 +937,9 @@ const PlaceOrderPage: React.FC = () => {
       selectedItem.selling_price,
       selectedItem.hasActiveDeal,
       selectedItem.original_price,
-      selectedItem.discounted_price
+      selectedItem.discounted_price,
+      selectedItem.deal_discount_type,
+      selectedItem.deal_discount_value
     );
   }, [selectedItem, selectedVariant]);
 
@@ -2330,6 +2332,8 @@ const PlaceOrderPage: React.FC = () => {
                     hasActiveDeal={selectedItem.hasActiveDeal}
                     originalPrice={selectedItem.original_price}
                     discountedPrice={selectedItem.discounted_price}
+                    discountType={selectedItem.deal_discount_type}
+                    discountValue={selectedItem.deal_discount_value}
                     currency={selectedItem.item.currency}
                     disabled={loading}
                     formatCurrency={formatCurrency}
@@ -3323,6 +3327,8 @@ const PlaceOrderPage: React.FC = () => {
                         hasActiveDeal={selectedItem.hasActiveDeal}
                         originalPrice={selectedItem.original_price}
                         discountedPrice={selectedItem.discounted_price}
+                        discountType={selectedItem.deal_discount_type}
+                        discountValue={selectedItem.deal_discount_value}
                         currency={selectedItem.item.currency}
                         disabled={loading}
                         formatCurrency={formatCurrency}

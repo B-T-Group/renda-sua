@@ -108,7 +108,12 @@ export class StockAvailabilityService {
     if (payload.businessId !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
-    const inv = await this.loadInventory(payload.inventoryId);
+    // Re-check live inventory ownership: location transfer keeps inventory row ids
+    // but moves business_location_id, so payload.businessId alone is stale.
+    const inv = await this.loadInventoryOwnedByBusiness(
+      payload.inventoryId,
+      user.business.id
+    );
     const clientUser = await this.loadUserName(payload.clientUserId);
     return this.toDto(msg.id, payload, inv, clientUser);
   }
@@ -117,6 +122,20 @@ export class StockAvailabilityService {
     messageId: string,
     body: { action: RespondAction; quantity?: number }
   ): Promise<StockAvailabilityCheckDto> {
+    const { payload, responderId } = await this.assertBusinessCanRespond(messageId);
+    const prepared = await this.prepareResponse(payload, responderId, body);
+    // Claim pending before inventory writes so concurrent responds cannot both mutate stock.
+    await this.updatePayloadIfPending(messageId, prepared.next);
+    if (prepared.onHandQuantity != null) {
+      await this.setInventoryQuantity(payload.inventoryId, prepared.onHandQuantity);
+    }
+    return this.buildRespondResult(messageId, prepared.next, payload);
+  }
+
+  private async assertBusinessCanRespond(messageId: string): Promise<{
+    payload: StockAvailabilityPayloadV1;
+    responderId: string;
+  }> {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Business only', HttpStatus.FORBIDDEN);
@@ -129,60 +148,82 @@ export class StockAvailabilityService {
     if (payload.status !== 'pending') {
       throw new HttpException('This check was already answered', HttpStatus.CONFLICT);
     }
-    const next = await this.applyResponse(payload, user.id, body);
-    await this.updatePayloadIfPending(messageId, next);
+    // Re-check live inventory ownership: location transfer keeps inventory row ids
+    // but moves business_location_id, so payload.businessId alone is stale.
+    await this.loadInventoryOwnedByBusiness(payload.inventoryId, user.business.id);
+    return { payload, responderId: user.id };
+  }
+
+  private async buildRespondResult(
+    messageId: string,
+    next: StockAvailabilityPayloadV1,
+    payload: StockAvailabilityPayloadV1
+  ): Promise<StockAvailabilityCheckDto> {
     const inv = await this.loadInventory(payload.inventoryId);
     await this.notifyClient(next, inv.item.name, messageId);
     const clientUser = await this.loadUserName(payload.clientUserId);
     return this.toDto(messageId, next, inv, clientUser);
   }
 
-  private async applyResponse(
+  private async prepareResponse(
     payload: StockAvailabilityPayloadV1,
     responderId: string,
     body: { action: RespondAction; quantity?: number }
-  ): Promise<StockAvailabilityPayloadV1> {
+  ): Promise<{ next: StockAvailabilityPayloadV1; onHandQuantity: number | null }> {
     const respondedAt = new Date().toISOString();
     if (body.action === 'unavailable') {
-      return {
-        ...payload,
-        status: 'unavailable',
-        respondedAt,
-        respondedByUserId: responderId,
-      };
+      return { next: this.statusPayload(payload, 'unavailable', responderId, respondedAt), onHandQuantity: null };
     }
     if (body.action === 'adjust') {
-      return this.applyAdjust(payload, responderId, body.quantity, respondedAt);
+      return this.prepareAdjust(payload, responderId, body.quantity, respondedAt);
     }
     if (body.action === 'confirm') {
       return {
-        ...payload,
-        status: 'confirmed',
-        quantityAfterResponse: payload.quantityAtRequest,
-        respondedAt,
-        respondedByUserId: responderId,
+        next: this.statusPayload(payload, 'confirmed', responderId, respondedAt, payload.quantityAtRequest),
+        onHandQuantity: null,
       };
     }
     throw new HttpException('Invalid action', HttpStatus.BAD_REQUEST);
   }
 
-  private async applyAdjust(
+  private statusPayload(
+    payload: StockAvailabilityPayloadV1,
+    status: StockAvailabilityPayloadV1['status'],
+    responderId: string,
+    respondedAt: string,
+    quantityAfterResponse?: number
+  ): StockAvailabilityPayloadV1 {
+    return {
+      ...payload,
+      status,
+      respondedAt,
+      respondedByUserId: responderId,
+      ...(quantityAfterResponse != null ? { quantityAfterResponse } : {}),
+    };
+  }
+
+  private async prepareAdjust(
     payload: StockAvailabilityPayloadV1,
     responderId: string,
     quantity: number | undefined,
     respondedAt: string
-  ): Promise<StockAvailabilityPayloadV1> {
+  ): Promise<{ next: StockAvailabilityPayloadV1; onHandQuantity: number }> {
     if (quantity == null || !Number.isFinite(quantity) || quantity < 0) {
       throw new HttpException('quantity is required for adjust', HttpStatus.BAD_REQUEST);
     }
-    await this.setInventoryQuantity(payload.inventoryId, Math.floor(quantity));
+    const available = Math.floor(quantity);
     const inv = await this.loadInventory(payload.inventoryId);
+    const reserved = inv.reserved_quantity ?? 0;
+    // Merchants enter available units; persist on-hand = available + reserved.
     return {
-      ...payload,
-      status: 'adjusted',
-      quantityAfterResponse: this.availableQty(inv),
-      respondedAt,
-      respondedByUserId: responderId,
+      next: {
+        ...payload,
+        status: 'adjusted',
+        quantityAfterResponse: available,
+        respondedAt,
+        respondedByUserId: responderId,
+      },
+      onHandQuantity: available + reserved,
     };
   }
 
@@ -273,6 +314,18 @@ export class StockAvailabilityService {
       throw new HttpException('Inventory not found', HttpStatus.NOT_FOUND);
     }
     return r.business_inventory_by_pk;
+  }
+
+  /** Reject when inventory no longer belongs to the responding business (e.g. after transfer). */
+  private async loadInventoryOwnedByBusiness(
+    inventoryId: string,
+    businessId: string
+  ): Promise<InventoryRow> {
+    const inv = await this.loadInventory(inventoryId);
+    if (inv.business_location.business_id !== businessId) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+    return inv;
   }
 
   private async loadUserName(

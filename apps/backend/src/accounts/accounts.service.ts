@@ -165,6 +165,37 @@ export class AccountsService {
     }
   }
 
+  async hasTransactionForReference(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'transactionType' | 'referenceId'
+    >
+  ): Promise<boolean> {
+    if (!request.referenceId) return false;
+    const query = `
+      query HasAccountTransaction(
+        $accountId: uuid!
+        $transactionType: transaction_type_enum!
+        $referenceId: uuid!
+      ) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            transaction_type: { _eq: $transactionType }
+            reference_id: { _eq: $referenceId }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      accountId: request.accountId,
+      transactionType: request.transactionType,
+      referenceId: request.referenceId,
+    });
+    return (result.account_transactions?.length ?? 0) > 0;
+  }
+
   /**
    * Determine if transaction is credit/debit and calculate balance updates
    */
@@ -489,5 +520,31 @@ export class AccountsService {
   ): Promise<boolean> {
     const account = await this.getAccountById(accountId);
     return account?.user_id === userId && account.is_active === true;
+  }
+
+  /**
+   * Find an existing deposit by account + reference (idempotency helper).
+   */
+  async findDepositByReference(
+    accountId: string,
+    referenceId: string
+  ): Promise<{ id: string } | null> {
+    const query = `
+      query FindDepositByReference($accountId: uuid!, $referenceId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $referenceId }
+            transaction_type: { _eq: "deposit" }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      accountId,
+      referenceId,
+    });
+    return result.account_transactions?.[0] ?? null;
   }
 }
