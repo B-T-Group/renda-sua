@@ -1,9 +1,4 @@
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -12,6 +7,33 @@ import { UpdateItemDto } from '../business-items/dto/update-item.dto';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
 export type ItemsInsertInput = Record<string, unknown>;
+
+const MUTABLE_ITEM_FIELDS = [
+  'name',
+  'description',
+  'item_sub_category_id',
+  'weight',
+  'weight_unit',
+  'dimensions',
+  'price',
+  'currency',
+  'sku',
+  'brand_id',
+  'model',
+  'color',
+  'is_fragile',
+  'is_perishable',
+  'requires_special_handling',
+  'max_delivery_distance',
+  'estimated_delivery_time',
+  'min_order_quantity',
+  'max_order_quantity',
+  'is_active',
+  'pay_on_delivery_enabled',
+  'pay_at_pickup_enabled',
+  'status',
+  'stripe_tax_code_id',
+] as const;
 
 const GET_ITEM_BY_ID = `
   query GetItemById($itemId: uuid!) {
@@ -114,7 +136,7 @@ export class ItemsService {
     input: ItemsInsertInput
   ): Promise<Record<string, unknown>> {
     const itemData = {
-      ...input,
+      ...this.pickMutableFields(input),
       business_id: businessId,
       // Never allow clients to activate on create; moderation must approve first
       is_active: false,
@@ -168,7 +190,7 @@ export class ItemsService {
     const nextDesc =
       typeof updates.description === 'string'
         ? updates.description
-        : (item.description ?? '');
+        : item.description ?? '';
     await this.syncEmbeddings(itemId, nextName, nextDesc, {
       previousName: item.name,
       previousDescription: item.description ?? '',
@@ -206,13 +228,25 @@ export class ItemsService {
   private normalizeUpdatePayload(
     updates: UpdateItemDto | Record<string, unknown>
   ): Record<string, unknown> {
+    const itemData = this.pickMutableFields(updates);
     return {
-      ...updates,
-      ...(Object.prototype.hasOwnProperty.call(updates, 'description') &&
-      (updates.description === undefined || updates.description === null)
+      ...itemData,
+      ...(Object.prototype.hasOwnProperty.call(itemData, 'description') &&
+      (itemData.description === undefined || itemData.description === null)
         ? { description: '' }
         : {}),
     };
+  }
+
+  private pickMutableFields(
+    input: Record<string, unknown> | UpdateItemDto
+  ): Record<string, unknown> {
+    const source = input as Record<string, unknown>;
+    return Object.fromEntries(
+      MUTABLE_ITEM_FIELDS.filter((field) =>
+        Object.prototype.hasOwnProperty.call(source, field)
+      ).map((field) => [field, source[field]])
+    );
   }
 
   private async syncEmbeddings(
