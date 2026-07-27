@@ -32,7 +32,8 @@ describe('BusinessImagesService mutations', () => {
     service = new BusinessImagesService(
       hasuraUserService as never,
       hasuraSystemService as never,
-      { resubmitIfRejected: jest.fn() } as never
+      { resubmitIfRejected: jest.fn() } as never,
+      { enqueueMany: jest.fn() } as never
     );
   });
 
@@ -151,7 +152,8 @@ describe('BusinessImagesService privileged field filtering', () => {
     const service = new BusinessImagesService(
       {} as never,
       hasuraSystem as never,
-      {} as never
+      {} as never,
+      { enqueueMany: jest.fn() } as never
     );
 
     await service.updateBusinessImage('business-1', 'image-1', {

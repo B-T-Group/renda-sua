@@ -101,7 +101,7 @@ describe('MobilePaymentCallbackProcessor provider confirmation', () => {
     );
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
     expect(
-      paymentCallbackRegistry.getHandlers().[0].onPaymentSuccess
+      paymentCallbackRegistry.getHandlers()[0].onPaymentSuccess
     ).not.toHaveBeenCalled();
   });
 
