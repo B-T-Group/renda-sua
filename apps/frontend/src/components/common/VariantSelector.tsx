@@ -20,6 +20,8 @@ export interface VariantSelectorProps {
   hasActiveDeal?: boolean;
   originalPrice?: number;
   discountedPrice?: number;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
   currency: string;
   disabled?: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
@@ -34,6 +36,8 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
   hasActiveDeal,
   originalPrice,
   discountedPrice,
+  discountType,
+  discountValue,
   currency,
   disabled,
   formatCurrency,
@@ -76,7 +80,9 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
             listingSellingPrice,
             hasActiveDeal,
             originalPrice,
-            discountedPrice
+            discountedPrice,
+            discountType,
+            discountValue
           );
           const thumb = primaryVariantImageUrl(v);
           const priceLabel = formatCurrency(p.unit, currency);
