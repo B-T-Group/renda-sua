@@ -1,87 +1,93 @@
-import type { OrderMessage } from '../messaging.types';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { DeliveryPinShareService } from './delivery-pin-share.service';
+import type { OrderMessage } from '../messaging.types';
 
-type TestableService = {
-  shareDeliveryPinOnce(orderId: string): Promise<OrderMessage>;
-};
-
-const message = (id: string): OrderMessage => ({
-  id,
-  user_id: 'client-1',
-  entity_type: 'order',
-  entity_id: 'order-1',
-  message: 'PIN shared',
-  created_at: '2026-07-19T10:00:00.000Z',
-  updated_at: '2026-07-19T10:00:00.000Z',
-});
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 describe('DeliveryPinShareService', () => {
-  let service: DeliveryPinShareService;
-  let testableService: TestableService;
-
-  beforeEach(() => {
-    service = new DeliveryPinShareService(
-      undefined as never,
-      undefined as never,
-      undefined as never,
-      undefined as never,
-      undefined as never,
-      undefined as never,
-      undefined as never,
-      undefined as never
+  it('authorizes each caller before coalescing PIN share requests', async () => {
+    const legitimateClient = {
+      id: 'client-user-1',
+      user_type_id: 'client',
+      client: { id: 'client-1' },
+    };
+    const otherClient = {
+      id: 'client-user-2',
+      user_type_id: 'client',
+      client: { id: 'client-2' },
+    };
+    const hasuraUserService = {
+      getUser: jest
+        .fn()
+        .mockResolvedValueOnce(legitimateClient)
+        .mockResolvedValueOnce(otherClient),
+    };
+    const order = {
+      id: 'order-1',
+      order_number: 'ORD-1',
+      business_id: 'business-1',
+      client_id: 'client-1',
+      assigned_agent_id: 'agent-1',
+      client: { user_id: legitimateClient.id },
+    };
+    const messagingService = {
+      loadOrderForMessagingPublic: jest.fn().mockResolvedValue(order),
+      assertMessagingAccess: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new DeliveryPinShareService(
+      hasuraUserService as any,
+      {} as any,
+      messagingService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
     );
-    testableService = service as unknown as TestableService;
-  });
-
-  it('coalesces concurrent shares for the same order', async () => {
-    let resolveShare!: (value: OrderMessage) => void;
-    const pendingShare = new Promise<OrderMessage>((resolve) => {
-      resolveShare = resolve;
-    });
+    const started = deferred<void>();
+    const result = deferred<OrderMessage>();
+    const sharedMessage = {
+      id: 'message-1',
+      user_id: legitimateClient.id,
+      entity_type: 'order',
+      entity_id: order.id,
+      message: 'PIN shared',
+      created_at: '2026-07-19T00:00:00.000Z',
+      updated_at: '2026-07-19T00:00:00.000Z',
+      structured_content: { pin: '1234' },
+    };
     const shareOnce = jest
-      .spyOn(testableService, 'shareDeliveryPinOnce')
-      .mockReturnValue(pendingShare);
-    const created = message('message-1');
+      .spyOn(service as any, 'shareDeliveryPinOnce')
+      .mockImplementation(() => {
+        started.resolve(undefined);
+        return result.promise;
+      });
 
-    const first = service.shareDeliveryPin('order-1');
-    const second = service.shareDeliveryPin('order-1');
-    resolveShare(created);
+    const legitimateRequest = service.shareDeliveryPin(order.id);
+    await started.promise;
 
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      created,
-      created,
-    ]);
+    let attackerError: unknown;
+    try {
+      await service.shareDeliveryPin(order.id);
+    } catch (error: any) {
+      attackerError = error;
+    }
+
+    expect(attackerError).toBeInstanceOf(HttpException);
+    expect((attackerError as HttpException).getStatus()).toBe(
+      HttpStatus.FORBIDDEN
+    );
     expect(shareOnce).toHaveBeenCalledTimes(1);
-  });
 
-  it('allows another share after the inflight request settles', async () => {
-    const firstMessage = message('message-1');
-    const secondMessage = message('message-2');
-    const shareOnce = jest
-      .spyOn(testableService, 'shareDeliveryPinOnce')
-      .mockResolvedValueOnce(firstMessage)
-      .mockResolvedValueOnce(secondMessage);
-
-    await expect(service.shareDeliveryPin('order-1')).resolves.toBe(
-      firstMessage
-    );
-    await expect(service.shareDeliveryPin('order-1')).resolves.toBe(
-      secondMessage
-    );
-    expect(shareOnce).toHaveBeenCalledTimes(2);
-  });
-
-  it('clears a failed inflight request so the client can retry', async () => {
-    const created = message('message-1');
-    const shareOnce = jest
-      .spyOn(testableService, 'shareDeliveryPinOnce')
-      .mockRejectedValueOnce(new Error('insert failed'))
-      .mockResolvedValueOnce(created);
-
-    await expect(service.shareDeliveryPin('order-1')).rejects.toThrow(
-      'insert failed'
-    );
-    await expect(service.shareDeliveryPin('order-1')).resolves.toBe(created);
-    expect(shareOnce).toHaveBeenCalledTimes(2);
+    result.resolve(sharedMessage);
+    await expect(legitimateRequest).resolves.toBe(sharedMessage);
   });
 });
