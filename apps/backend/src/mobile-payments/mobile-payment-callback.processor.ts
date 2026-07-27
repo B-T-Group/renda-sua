@@ -9,6 +9,7 @@ import {
   MobilePaymentTransaction,
   MobilePaymentsDatabaseService,
 } from './mobile-payments-database.service';
+import { MobilePaymentsService } from './mobile-payments.service';
 import {
   findPaymentCallbackHandler,
   type PaymentCallbackHandler,
@@ -34,7 +35,8 @@ export class MobilePaymentCallbackProcessor {
   constructor(
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
-    private readonly paymentCallbackRegistry: PaymentCallbackRegistryService
+    private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
+    private readonly mobilePaymentsService: MobilePaymentsService
   ) {}
 
   private resolveHandlers(): PaymentCallbackHandler[] {
@@ -75,6 +77,12 @@ export class MobilePaymentCallbackProcessor {
     await this.databaseService.logCallback(
       callbackData.transactionId,
       callbackData
+    );
+
+    // Callbacks are public and unsigned — confirm provider live status first.
+    await this.mobilePaymentsService.assertProviderConfirmsCallback(
+      tx,
+      callbackData.status
     );
 
     const isCashRecSuccess =
@@ -126,6 +134,14 @@ export class MobilePaymentCallbackProcessor {
     }
 
     await this.databaseService.logCallback(tx.id, callbackData);
+
+    if (callbackData.status === 'SUCCESS' || callbackData.status === 'FAILED') {
+      // Callbacks are public and unsigned — confirm provider live status first.
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        tx,
+        callbackData.status
+      );
+    }
 
     const isCashRecSuccess =
       callbackData.status === 'SUCCESS' &&
