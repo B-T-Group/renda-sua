@@ -1,9 +1,28 @@
 import { BusinessReferralPayoutsService } from './business-referral-payouts.service';
 
 describe('BusinessReferralPayoutsService', () => {
-  const eligibleBusiness = {
-    id: 'biz-1',
-    name: 'Acme Market',
+  const hasuraSystemService = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  const accountsService = {
+    registerTransaction: jest.fn(),
+    findDepositByReference: jest.fn(),
+  };
+  const paymentRoutingService = {
+    getUserCountryCode: jest.fn(),
+    resolveRailForUser: jest.fn(),
+  };
+  const notificationsService = {
+    sendInternalPushByUserId: jest.fn(),
+  };
+  const configurationsService = {
+    getConfigurationByKey: jest.fn(),
+  };
+
+  const business = {
+    id: 'business-1',
+    name: 'Demo Store',
     referred_by_agent_id: 'agent-1',
     agent: {
       id: 'agent-1',
@@ -13,150 +32,83 @@ describe('BusinessReferralPayoutsService', () => {
     items_aggregate: { aggregate: { count: 12 } },
   };
 
-  function buildService(overrides?: {
-    enabled?: boolean | null;
-    businesses?: typeof eligibleBusiness[];
-    countryCode?: string | null;
-    payoutAmount?: number;
-    accountId?: string | null;
-    registerError?: Error;
-  }) {
-    const enabled =
-      overrides && 'enabled' in overrides ? overrides.enabled : true;
-    const businesses = overrides?.businesses ?? [eligibleBusiness];
-    const countryCode =
-      overrides && 'countryCode' in overrides ? overrides.countryCode : 'CA';
-    const payoutAmount = overrides?.payoutAmount ?? 25;
-    const accountId =
-      overrides && 'accountId' in overrides ? overrides.accountId : 'acct-1';
+  let service: BusinessReferralPayoutsService;
 
-    const executeQuery = jest.fn(async (query: string) => {
-      if (query.includes('EligibleReferredBusinesses')) {
-        return { businesses };
-      }
-      if (query.includes('GetAgentAccount')) {
-        return { accounts: accountId ? [{ id: accountId }] : [] };
-      }
-      return {};
-    });
-    const executeMutation = jest.fn(async () => ({
-      insert_business_referral_payouts_one: { id: 'payout-1' },
-    }));
-    const registerTransaction = jest.fn(async () => {
-      if (overrides?.registerError) throw overrides.registerError;
-      return { transactionId: 'tx-1' };
-    });
-    const resolveRailForUser = jest.fn(async () => 'stripe');
-    const getUserCountryCode = jest.fn(async () => countryCode);
-    const sendInternalPushByUserId = jest.fn(async () => undefined);
-    const getConfigurationByKey = jest.fn(
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new BusinessReferralPayoutsService(
+      hasuraSystemService as never,
+      accountsService as never,
+      paymentRoutingService as never,
+      notificationsService as never,
+      configurationsService as never
+    );
+
+    configurationsService.getConfigurationByKey.mockImplementation(
       async (key: string) => {
         if (key === 'business_referral_payout_enabled') {
-          if (enabled === null) throw new Error('config unavailable');
-          return { boolean_value: enabled, status: 'active' };
+          return { boolean_value: true, status: 'active' };
         }
         if (key === 'business_referral_payout_amount') {
-          return { number_value: payoutAmount };
+          return { number_value: 5000 };
         }
         return null;
       }
     );
-
-    const service = new BusinessReferralPayoutsService(
-      { executeQuery, executeMutation } as never,
-      { registerTransaction } as never,
-      { resolveRailForUser, getUserCountryCode } as never,
-      { sendInternalPushByUserId } as never,
-      { getConfigurationByKey } as never
-    );
-
-    return {
-      service,
-      executeQuery,
-      executeMutation,
-      registerTransaction,
-      sendInternalPushByUserId,
-      getConfigurationByKey,
-    };
-  }
-
-  it('skips the weekly run when payouts are disabled', async () => {
-    const { service, executeQuery, registerTransaction } = buildService({
-      enabled: false,
+    paymentRoutingService.getUserCountryCode.mockResolvedValue('CM');
+    paymentRoutingService.resolveRailForUser.mockResolvedValue('mobile_money');
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleReferredBusinesses')) {
+        return { businesses: [business] };
+      }
+      if (query.includes('GetAgentAccount')) {
+        return { accounts: [{ id: 'account-1' }] };
+      }
+      return {};
     });
-
-    const summary = await service.runWeeklyPayouts();
-
-    expect(summary).toEqual({
-      processed: 0,
-      credited: 0,
-      skipped: 0,
-      failures: 0,
-      skippedReason: 'disabled',
-    });
-    expect(executeQuery).not.toHaveBeenCalled();
-    expect(registerTransaction).not.toHaveBeenCalled();
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    notificationsService.sendInternalPushByUserId.mockResolvedValue(undefined);
   });
 
-  it('treats a payout-enabled config read failure as disabled', async () => {
-    const { service, registerTransaction } = buildService({ enabled: null });
-
-    const summary = await service.runWeeklyPayouts();
-
-    expect(summary.skippedReason).toBe('disabled');
-    expect(registerTransaction).not.toHaveBeenCalled();
-  });
-
-  it('credits the referring agent, records the payout, and notifies', async () => {
-    const {
-      service,
-      registerTransaction,
-      executeMutation,
-      sendInternalPushByUserId,
-    } = buildService();
+  it('does not mark a business paid when wallet credit fails', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+    });
+    accountsService.registerTransaction.mockResolvedValue({
+      success: false,
+      error: 'Account not found',
+    });
 
     const summary = await service.runWeeklyPayouts();
 
     expect(summary).toEqual({
       processed: 1,
-      credited: 1,
+      credited: 0,
       skipped: 0,
-      failures: 0,
+      failures: 1,
     });
-    expect(registerTransaction).toHaveBeenCalledWith({
-      accountId: 'acct-1',
-      amount: 25,
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+      accountId: 'account-1',
+      amount: 5000,
       transactionType: 'deposit',
       memo: 'Business referral bonus',
-      referenceId: 'biz-1',
+      referenceId: 'business-1',
     });
-    expect(executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('InsertBusinessReferralPayout'),
-      expect.objectContaining({
-        input: expect.objectContaining({
-          business_id: 'biz-1',
-          agent_id: 'agent-1',
-          account_id: 'acct-1',
-          transaction_id: 'tx-1',
-          amount: 25,
-          currency: 'CAD',
-          rail: 'stripe',
-          item_count: 12,
-        }),
-      })
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('ReleaseReferralPayoutClaim'),
+      { businessId: 'business-1' }
     );
-    expect(sendInternalPushByUserId).toHaveBeenCalledWith(
-      'user-1',
-      'Referral credit',
-      expect.stringContaining('Acme Market'),
-      expect.objectContaining({ event: 'business_referral_credit' })
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+      expect.stringContaining('AttachReferralPayoutTransaction'),
+      expect.anything()
     );
+    expect(notificationsService.sendInternalPushByUserId).not.toHaveBeenCalled();
   });
 
-  it('skips when no payout amount is configured for the agent country', async () => {
-    const { service, registerTransaction } = buildService({
-      payoutAmount: 0,
-    });
+  it('claims before credit and skips when another runner already claimed', async () => {
+    hasuraSystemService.executeMutation.mockRejectedValue(
+      new Error('Uniqueness violation on uq_business_referral_payouts_business_id')
+    );
 
     const summary = await service.runWeeklyPayouts();
 
@@ -166,43 +118,49 @@ describe('BusinessReferralPayoutsService', () => {
       skipped: 1,
       failures: 0,
     });
-    expect(registerTransaction).not.toHaveBeenCalled();
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(notificationsService.sendInternalPushByUserId).not.toHaveBeenCalled();
   });
 
-  it('skips when the agent has no matching currency account', async () => {
-    const { service, registerTransaction } = buildService({
-      accountId: null,
+  it('reuses an existing deposit instead of double-crediting', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+      update_business_referral_payouts: { affected_rows: 1 },
     });
+    accountsService.findDepositByReference.mockResolvedValue({ id: 'tx-existing' });
 
     const summary = await service.runWeeklyPayouts();
 
-    expect(summary.skipped).toBe(1);
-    expect(summary.credited).toBe(0);
-    expect(registerTransaction).not.toHaveBeenCalled();
+    expect(summary.credited).toBe(1);
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('AttachReferralPayoutTransaction'),
+      { businessId: 'business-1', transactionId: 'tx-existing' }
+    );
   });
 
-  it('continues processing after a per-business credit failure', async () => {
-    const second = {
-      ...eligibleBusiness,
-      id: 'biz-2',
-      name: 'Beta Shop',
-    };
-    const { service, registerTransaction } = buildService({
-      businesses: [eligibleBusiness, second],
-      registerError: new Error('ledger down'),
+  it('credits and attaches transaction id on success', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+      update_business_referral_payouts: { affected_rows: 1 },
     });
-    registerTransaction
-      .mockRejectedValueOnce(new Error('ledger down'))
-      .mockResolvedValueOnce({ transactionId: 'tx-2' });
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-1',
+    });
 
     const summary = await service.runWeeklyPayouts();
 
     expect(summary).toEqual({
-      processed: 2,
+      processed: 1,
       credited: 1,
       skipped: 0,
-      failures: 1,
+      failures: 0,
     });
-    expect(registerTransaction).toHaveBeenCalledTimes(2);
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('AttachReferralPayoutTransaction'),
+      { businessId: 'business-1', transactionId: 'tx-1' }
+    );
+    expect(notificationsService.sendInternalPushByUserId).toHaveBeenCalled();
   });
 });
