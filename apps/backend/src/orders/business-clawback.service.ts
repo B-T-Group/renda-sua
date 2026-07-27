@@ -12,7 +12,11 @@ export class BusinessClawbackService {
     private readonly accountsService: AccountsService
   ) {}
 
-  async clawbackItemSubtotal(order: RefundOrderContext, amount: number): Promise<void> {
+  async clawbackItemSubtotal(
+    order: RefundOrderContext,
+    amount: number,
+    referenceId: string
+  ): Promise<void> {
     if (amount <= 0) {
       return;
     }
@@ -34,7 +38,7 @@ export class BusinessClawbackService {
       amount,
       transactionType: 'withdrawal',
       memo: `Refund clawback for order ${order.order_number}`,
-      referenceId: `clawback:${order.id}`,
+      referenceId,
     });
     if (!result.success) {
       this.logger.warn(

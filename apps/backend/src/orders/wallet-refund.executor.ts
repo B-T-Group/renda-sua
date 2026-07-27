@@ -15,11 +15,10 @@ export class WalletRefundExecutor {
   async execute(params: {
     order: RefundOrderContext;
     amount: number;
-    refundRequestId: string;
     paymentId: string;
     memoSuffix?: string;
   }): Promise<RefundPaymentResult> {
-    const { order, amount, refundRequestId, paymentId, memoSuffix } = params;
+    const { order, amount, paymentId, memoSuffix } = params;
     if (amount <= 0) {
       return {
         success: true,
@@ -46,7 +45,7 @@ export class WalletRefundExecutor {
       amount,
       transactionType: 'refund',
       memo,
-      referenceId: `${order.id}:${refundRequestId}:${paymentId}`,
+      referenceId: paymentId,
     });
     if (!result.success) {
       await this.markPaymentFailed(paymentId, result.error || 'Wallet credit failed');
