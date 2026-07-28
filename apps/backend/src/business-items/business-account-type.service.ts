@@ -56,11 +56,11 @@ export class BusinessAccountTypeService {
     const mutation = `
       mutation UpdateBusinessAccountType(
         $id: uuid!
-        $accountType: String!
+        $accountType: business_account_types_enum!
         $lockedUntil: timestamptz
         $businessId: uuid!
-        $fromType: String
-        $toType: String!
+        $fromType: business_account_types_enum
+        $toType: business_account_types_enum!
         $changedBy: uuid
         $source: String!
         $reason: String
