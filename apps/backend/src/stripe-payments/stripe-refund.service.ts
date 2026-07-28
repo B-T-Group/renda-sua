@@ -41,6 +41,7 @@ export class StripeRefundService {
     refundId?: string;
     stripeRefundDbId?: string;
     immediateSuccess?: boolean;
+    amount?: number;
     message: string;
   }> {
     const result = await this.executeStripeRefund({
@@ -59,6 +60,7 @@ export class StripeRefundService {
       refundId: result.refundId,
       stripeRefundDbId: result.stripeRefundDbId,
       immediateSuccess: result.immediateSuccess,
+      amount: result.amount,
       message: result.message,
     };
   }
@@ -78,6 +80,7 @@ export class StripeRefundService {
     refundId?: string;
     stripeRefundDbId?: string;
     immediateSuccess?: boolean;
+    amount?: number;
     message: string;
   }> {
     try {
@@ -156,9 +159,15 @@ export class StripeRefundService {
 
       if (refundAmount <= 0) {
         return {
-          success: true,
+          success: false,
           message: 'No refund needed (amount is zero or already fully refunded)',
         };
+      }
+
+      if (refundAmount < requestedAmount) {
+        this.logger.warn(
+          `Clamping Stripe refund for order ${params.orderNumber} from ${requestedAmount} to ${refundAmount} ${transaction.currency}`
+        );
       }
 
       const refundAmountMinor = this.toMinorUnits(refundAmount, transaction.currency);
@@ -210,6 +219,7 @@ export class StripeRefundService {
         refundId: stripeRefund.id,
         stripeRefundDbId: refundRecord.id,
         immediateSuccess: stripeRefund.status === 'succeeded',
+        amount: refundAmount,
         message: `Refund initiated: ${refundAmount} ${transaction.currency}`,
       };
     } catch (error: any) {

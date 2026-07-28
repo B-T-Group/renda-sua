@@ -28,6 +28,7 @@ describe('BusinessClawbackService', () => {
       executeMutation: jest.fn(),
     };
     const accountsService = {
+      hasTransactionForReference: jest.fn().mockResolvedValue(false),
       registerTransaction: jest.fn().mockResolvedValue({ success: true }),
     };
     const service = new BusinessClawbackService(
@@ -37,8 +38,33 @@ describe('BusinessClawbackService', () => {
 
     await service.clawbackItemSubtotal(order, 25, paymentId);
 
+    expect(accountsService.hasTransactionForReference).toHaveBeenCalledWith({
+      accountId: 'business-account-1',
+      transactionType: 'withdrawal',
+      referenceId: paymentId,
+    });
     expect(accountsService.registerTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ referenceId: paymentId })
     );
+  });
+
+  it('skips duplicate clawback when withdrawal already exists for reference', async () => {
+    const hasuraSystem = {
+      getAccount: jest.fn().mockResolvedValue({ id: 'business-account-1' }),
+      executeQuery: jest.fn(),
+      executeMutation: jest.fn(),
+    };
+    const accountsService = {
+      hasTransactionForReference: jest.fn().mockResolvedValue(true),
+      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+    };
+    const service = new BusinessClawbackService(
+      hasuraSystem as never,
+      accountsService as never
+    );
+
+    await service.clawbackItemSubtotal(order, 25, paymentId);
+
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
   });
 });

@@ -103,9 +103,16 @@ export class RefundPaymentService {
     const order = await this.fetchOrder(payment.order_id);
     if (order) {
       if (!alreadySucceeded) {
+        const clawbackAmount = await this.resolveClawbackAmount(
+          stripeRefundDbId,
+          payment.amount
+        );
+        if (clawbackAmount !== Number(payment.amount)) {
+          await this.updatePayment(payment.id, { amount: clawbackAmount });
+        }
         await this.clawbackService.clawbackItemSubtotal(
           order,
-          Number(payment.amount),
+          clawbackAmount,
           payment.id
         );
       }
@@ -114,6 +121,22 @@ export class RefundPaymentService {
         payment.refund_request_id
       );
     }
+  }
+
+  private async resolveClawbackAmount(
+    stripeRefundDbId: string,
+    fallbackAmount: number
+  ): Promise<number> {
+    const query = `
+      query StripeRefundAmount($id: uuid!) {
+        stripe_refunds_by_pk(id: $id) { amount }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      stripe_refunds_by_pk: { amount: number } | null;
+    }>(query, { id: stripeRefundDbId });
+    const amount = res.stripe_refunds_by_pk?.amount;
+    return amount != null ? Number(amount) : Number(fallbackAmount);
   }
 
   private async processStripePayment(
@@ -159,13 +182,17 @@ export class RefundPaymentService {
       await this.updatePayment(paymentId, {
         stripe_refund_id: stripeResult.stripeRefundDbId,
         provider_ref: stripeResult.refundId ?? null,
+        ...(stripeResult.amount != null
+          ? { amount: stripeResult.amount }
+          : {}),
       });
     }
+    const clawbackAmount = stripeResult.amount ?? params.amount;
     if (stripeResult.immediateSuccess) {
       await this.updatePayment(paymentId, { status: 'succeeded' });
       await this.clawbackService.clawbackItemSubtotal(
         params.order,
-        params.amount,
+        clawbackAmount,
         paymentId
       );
       await this.maybeFinalizeIfAllPaymentsComplete(

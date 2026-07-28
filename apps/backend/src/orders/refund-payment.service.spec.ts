@@ -23,7 +23,12 @@ describe('RefundPaymentService', () => {
     business: { user_id: 'business-user-3' },
   };
 
-  const buildService = (paymentStatus: string) => {
+  const buildService = (
+    paymentStatus: string,
+    opts: { paymentAmount?: number; stripeRefundAmount?: number } = {}
+  ) => {
+    const paymentAmount = opts.paymentAmount ?? 25;
+    const stripeRefundAmount = opts.stripeRefundAmount ?? paymentAmount;
     const hasuraSystem = {
       executeMutation: jest.fn().mockResolvedValue({}),
       executeQuery: jest.fn((query: string) => {
@@ -34,10 +39,15 @@ describe('RefundPaymentService', () => {
                 id: paymentId,
                 order_id: order.id,
                 refund_request_id: refundRequestId,
-                amount: 25,
+                amount: paymentAmount,
                 status: paymentStatus,
               },
             ],
+          });
+        }
+        if (query.includes('stripe_refunds_by_pk')) {
+          return Promise.resolve({
+            stripe_refunds_by_pk: { amount: stripeRefundAmount },
           });
         }
         if (query.includes('orders_by_pk')) {
@@ -45,7 +55,9 @@ describe('RefundPaymentService', () => {
         }
         if (query.includes('RefundPayments')) {
           return Promise.resolve({
-            order_refund_payments: [{ amount: 25, status: 'processing' }],
+            order_refund_payments: [
+              { amount: paymentAmount, status: 'processing' },
+            ],
           });
         }
         return Promise.resolve({});
@@ -60,7 +72,7 @@ describe('RefundPaymentService', () => {
       clawbackService as never
     );
 
-    return { clawbackService, service };
+    return { clawbackService, hasuraSystem, service };
   };
 
   it('does not claw back again when Stripe completion repeats', async () => {
@@ -79,6 +91,28 @@ describe('RefundPaymentService', () => {
     expect(clawbackService.clawbackItemSubtotal).toHaveBeenCalledWith(
       order,
       25,
+      paymentId
+    );
+  });
+
+  it('claws back the Stripe refund amount when payment requested more', async () => {
+    const { clawbackService, hasuraSystem, service } = buildService(
+      'processing',
+      { paymentAmount: 150, stripeRefundAmount: 100 }
+    );
+
+    await service.completeStripePayment(stripeRefundDbId, true);
+
+    expect(hasuraSystem.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('Upd'),
+      expect.objectContaining({
+        id: paymentId,
+        set: expect.objectContaining({ amount: 100 }),
+      })
+    );
+    expect(clawbackService.clawbackItemSubtotal).toHaveBeenCalledWith(
+      order,
+      100,
       paymentId
     );
   });

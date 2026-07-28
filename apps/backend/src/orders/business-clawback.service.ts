@@ -33,6 +33,18 @@ export class BusinessClawbackService {
       );
       return;
     }
+    const alreadyClawedBack =
+      await this.accountsService.hasTransactionForReference({
+        accountId: account.id,
+        transactionType: 'withdrawal',
+        referenceId,
+      });
+    if (alreadyClawedBack) {
+      this.logger.log(
+        `Clawback skipped: withdrawal already recorded for refund payment ${referenceId}`
+      );
+      return;
+    }
     const result = await this.accountsService.registerTransaction({
       accountId: account.id,
       amount,
