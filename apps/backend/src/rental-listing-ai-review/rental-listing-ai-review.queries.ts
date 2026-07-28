@@ -384,6 +384,7 @@ export const INSERT_OWNER_MESSAGE = `
         entity_type: rental_listing
         entity_id: $listingId
         message: $message
+        message_type: AI_RENTAL_PROPOSAL
       }
     ) {
       id

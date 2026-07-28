@@ -102,6 +102,7 @@ export const INSERT_ITEM_REJECTION_MESSAGE = `
         entity_type: sale_item
         entity_id: $itemId
         message: $message
+        message_type: ITEM_REJECTED
       }
     ) {
       id

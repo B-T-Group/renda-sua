@@ -392,6 +392,7 @@ export const INSERT_OWNER_MESSAGE = `
         entity_type: sale_item
         entity_id: $itemId
         message: $message
+        message_type: AI_ITEM_PROPOSAL
       }
     ) {
       id

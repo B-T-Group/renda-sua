@@ -104,6 +104,7 @@ export const INSERT_RENTAL_LISTING_REJECTION_MESSAGE = `
         entity_type: rental_listing
         entity_id: $listingId
         message: $message
+        message_type: RENTAL_REJECTED
       }
     ) {
       id

@@ -1,5 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.service';
 import { PermissionService } from '../auth/permission.service';
+import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
@@ -56,7 +58,9 @@ export class DashboardService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly permissionService: PermissionService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly businessLocationTransferService: BusinessLocationTransferService,
+    private readonly aiImageCleanupService: AiImageCleanupService
   ) {}
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
@@ -152,24 +156,92 @@ export class DashboardService {
       cashCount,
       failedCount,
     ] = await Promise.all([
-      this.countItemsByModeration(businessId, 'proposal_pending'),
-      this.countItemsByModeration(businessId, 'rejected'),
-      this.countRentalsByModeration(businessId, 'proposal_pending'),
-      this.countRentalsByModeration(businessId, 'rejected'),
+      this.listItemsByModeration(businessId, 'proposal_pending'),
+      this.listItemsByModeration(businessId, 'rejected'),
+      this.listRentalsByModeration(businessId, 'proposal_pending'),
+      this.listRentalsByModeration(businessId, 'rejected'),
       this.countOrdersByStatus(businessId, 'pending'),
       this.getPendingCashReconciliationCount(businessId),
       this.getPendingFailedDeliveriesCount(businessId),
     ]);
+    const [transferPending, cleanupPending] = await Promise.all([
+      this.loadTransferPendingSafe(businessId),
+      this.loadCleanupPendingSafe(),
+    ]);
     const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
-      { id: 'item_rejected', kind: 'item_rejected', priority: 'critical', count: itemRejected },
-      { id: 'rental_rejected', kind: 'rental_rejected', priority: 'critical', count: rentalRejected },
-      { id: 'item_proposal_pending', kind: 'item_proposal_pending', priority: 'high', count: itemProposals },
-      { id: 'rental_proposal_pending', kind: 'rental_proposal_pending', priority: 'high', count: rentalProposals },
+      {
+        id: 'item_rejected',
+        kind: 'item_rejected',
+        priority: 'critical',
+        count: itemRejected.count,
+        primaryId: itemRejected.firstId,
+      },
+      {
+        id: 'rental_rejected',
+        kind: 'rental_rejected',
+        priority: 'critical',
+        count: rentalRejected.count,
+        primaryId: rentalRejected.firstId,
+      },
+      {
+        id: 'item_proposal_pending',
+        kind: 'item_proposal_pending',
+        priority: 'high',
+        count: itemProposals.count,
+        primaryId: itemProposals.firstId,
+      },
+      {
+        id: 'rental_proposal_pending',
+        kind: 'rental_proposal_pending',
+        priority: 'high',
+        count: rentalProposals.count,
+        primaryId: rentalProposals.firstId,
+      },
       { id: 'orders_pending', kind: 'orders_pending', priority: 'high', count: ordersPending },
       { id: 'failed_deliveries', kind: 'failed_deliveries', priority: 'high', count: failedCount },
       { id: 'cash_reconciliation', kind: 'cash_reconciliation', priority: 'normal', count: cashCount },
+      {
+        id: 'location_transfer_pending',
+        kind: 'location_transfer_pending',
+        priority: 'high',
+        count: transferPending.incoming.length,
+        primaryId: transferPending.incoming[0]?.id,
+        primaryLabel: transferPending.incoming[0]?.from_business?.name,
+      },
+      {
+        id: 'ai_image_cleanup_ready',
+        kind: 'ai_image_cleanup_ready',
+        priority: 'normal',
+        count: cleanupPending.pendingResultCount,
+        primaryId: cleanupPending.jobs[0]?.id,
+        primaryLabel:
+          cleanupPending.jobs[0]?.item_variant?.name ??
+          cleanupPending.jobs[0]?.item?.name,
+      },
     ];
     return this.buildDto(raw);
+  }
+
+  private async loadTransferPendingSafe(businessId: string): Promise<{
+    incoming: Array<{ id: string; from_business?: { name?: string } }>;
+    outgoing: unknown[];
+  }> {
+    try {
+      return await this.businessLocationTransferService.listPendingForBusiness(businessId);
+    } catch {
+      return { incoming: [], outgoing: [] };
+    }
+  }
+
+  private async loadCleanupPendingSafe(): Promise<{
+    jobs: Array<{ id: string; item_variant?: { name?: string }; item?: { name?: string } }>;
+    pendingResultCount: number;
+  }> {
+    try {
+      return await this.aiImageCleanupService.listPending();
+    } catch {
+      return { jobs: [], pendingResultCount: 0 };
+    }
   }
 
   private async getAgentActions(userId: string): Promise<ActionsNeededDto> {
@@ -210,10 +282,21 @@ export class DashboardService {
     return { actions, totalCount: actions.reduce((s, a) => s + a.count, 0) };
   }
 
-  private async countItemsByModeration(businessId: string, status: string): Promise<number> {
-    // Match catalog list visibility: soft-deleted items (status != active) must not surface as actions.
+  private async listItemsByModeration(
+    businessId: string,
+    status: string
+  ): Promise<{ count: number; firstId?: string }> {
     const q = `
       query ItemsByModeration($businessId: uuid!, $status: item_moderation_status!) {
+        items(
+          where: {
+            business_id: { _eq: $businessId }
+            status: { _eq: active }
+            moderation_status: { _eq: $status }
+          }
+          order_by: { updated_at: desc }
+          limit: 1
+        ) { id }
         items_aggregate(
           where: {
             business_id: { _eq: $businessId }
@@ -226,12 +309,26 @@ export class DashboardService {
       }
     `;
     const r = await this.hasuraSystemService.executeQuery(q, { businessId, status });
-    return r?.items_aggregate?.aggregate?.count ?? 0;
+    const count = r?.items_aggregate?.aggregate?.count ?? 0;
+    const firstId = r?.items?.[0]?.id as string | undefined;
+    return { count, firstId: count > 0 ? firstId : undefined };
   }
 
-  private async countRentalsByModeration(businessId: string, status: string): Promise<number> {
+  private async listRentalsByModeration(
+    businessId: string,
+    status: string
+  ): Promise<{ count: number; firstId?: string }> {
     const q = `
       query RentalsByModeration($businessId: uuid!, $status: rental_listing_moderation_status!) {
+        rental_location_listings(
+          where: {
+            rental_item: { business_id: { _eq: $businessId }, deleted_at: { _is_null: true } }
+            deleted_at: { _is_null: true }
+            moderation_status: { _eq: $status }
+          }
+          order_by: { updated_at: desc }
+          limit: 1
+        ) { id }
         rental_location_listings_aggregate(
           where: {
             rental_item: { business_id: { _eq: $businessId }, deleted_at: { _is_null: true } }
@@ -242,7 +339,9 @@ export class DashboardService {
       }
     `;
     const r = await this.hasuraSystemService.executeQuery(q, { businessId, status });
-    return r?.rental_location_listings_aggregate?.aggregate?.count ?? 0;
+    const count = r?.rental_location_listings_aggregate?.aggregate?.count ?? 0;
+    const firstId = r?.rental_location_listings?.[0]?.id as string | undefined;
+    return { count, firstId: count > 0 ? firstId : undefined };
   }
 
   private async countOrdersByStatus(businessId: string, status: string): Promise<number> {

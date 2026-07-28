@@ -1,0 +1,7 @@
+DELETE FROM public.message_types
+WHERE id IN (
+  'AI_ITEM_PROPOSAL',
+  'AI_RENTAL_PROPOSAL',
+  'ITEM_REJECTED',
+  'RENTAL_REJECTED'
+);
