@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.service';
+import type { AiImageCleanupJobRow } from '../ai-image-cleanup/ai-image-cleanup.types';
 import { PermissionService } from '../auth/permission.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -234,7 +235,7 @@ export class DashboardService {
   }
 
   private async loadCleanupPendingSafe(): Promise<{
-    jobs: Array<{ id: string; item_variant?: { name?: string }; item?: { name?: string } }>;
+    jobs: AiImageCleanupJobRow[];
     pendingResultCount: number;
   }> {
     try {
