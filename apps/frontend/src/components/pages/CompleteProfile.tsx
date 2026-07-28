@@ -1116,7 +1116,7 @@ const CompleteProfile: React.FC = () => {
               <input
                 ref={idDocumentInputRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files?.[0];

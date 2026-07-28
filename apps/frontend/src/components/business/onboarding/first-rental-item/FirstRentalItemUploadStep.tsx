@@ -12,6 +12,10 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../../../constants/supportedImageFormats';
 import ImageGuidelinesPanel from '../../../common/ImageGuidelinesPanel';
 import ImageValidationFeedback from '../../../common/ImageValidationFeedback';
 import { useAws } from '../../../../hooks/useAws';
@@ -64,7 +68,18 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
   const pickFiles = () => inputRef.current?.click();
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const next = Array.from(e.target.files || []);
+    const next = Array.from(e.target.files || []).filter((file) => {
+      if (isSupportedImageFile(file)) return true;
+      enqueueSnackbar(
+        t(
+          'business.images.upload.unsupportedFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: file.name }
+        ),
+        { variant: 'error' }
+      );
+      return false;
+    });
     if (next.length) setFiles((prev) => [...prev, ...next]);
     e.target.value = '';
   };
@@ -177,7 +192,7 @@ const FirstRentalItemUploadStep: React.FC<FirstRentalItemUploadStepProps> = ({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_ACCEPT}
         multiple
         hidden
         onChange={onFileChange}

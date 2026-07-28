@@ -14,8 +14,8 @@ export function fileToBase64(file: File): Promise<string> {
 export function fileMimeType(file: File): string {
   if (file.type) return file.type;
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext === 'heic' || ext === 'heif') return 'image/heic';
   if (ext === 'png') return 'image/png';
   if (ext === 'webp') return 'image/webp';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
   return 'image/jpeg';
 }

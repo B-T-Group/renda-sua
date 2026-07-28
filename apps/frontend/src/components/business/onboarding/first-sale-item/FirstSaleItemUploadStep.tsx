@@ -27,6 +27,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../../../constants/supportedImageFormats';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useAws } from '../../../../hooks/useAws';
 import { useImageValidation } from '../../../../hooks/useImageValidation';
@@ -95,8 +99,21 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
 
   const addFiles = useCallback((next: File[]) => {
     if (!next.length) return;
-    setFiles((prev) => [...prev, ...next]);
-  }, []);
+    const valid = next.filter((file) => {
+      if (isSupportedImageFile(file)) return true;
+      enqueueSnackbar(
+        t(
+          'business.images.upload.unsupportedFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: file.name }
+        ),
+        { variant: 'error' }
+      );
+      return false;
+    });
+    if (!valid.length) return;
+    setFiles((prev) => [...prev, ...valid]);
+  }, [enqueueSnackbar, t]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     addFiles(Array.from(e.target.files || []));
@@ -360,7 +377,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_ACCEPT}
         multiple
         hidden
         onChange={onFileChange}

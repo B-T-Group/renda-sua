@@ -17,7 +17,7 @@ export class ValidateImageInputDto {
 
   @ApiProperty({
     example: 'image/jpeg',
-    description: 'MIME type: image/jpeg, image/png, image/webp, image/heic',
+    description: 'MIME type: image/jpeg, image/png, or image/webp',
   })
   @IsString()
   mimeType!: string;

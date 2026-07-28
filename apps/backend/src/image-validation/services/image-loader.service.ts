@@ -1,21 +1,16 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import sharp from 'sharp';
+import {
+  isSupportedImageMimeType,
+  normalizeImageMime,
+  UNSUPPORTED_IMAGE_FORMAT_MESSAGE,
+} from '../../common/supported-image-formats';
 import type { ValidatedImage } from '../types/image-validation.types';
-
-const ALLOWED_MIMES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-]);
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
 @Injectable()
 export class ImageLoaderService {
-  private readonly logger = new Logger(ImageLoaderService.name);
-
   async loadFromBase64(
     data: string,
     mimeType: string,
@@ -39,20 +34,15 @@ export class ImageLoaderService {
     clientIndex: number
   ): Promise<ValidatedImage> {
     const detectedMime = await this.detectMime(buffer);
-    const mime = detectedMime ?? declaredMime.toLowerCase();
-    if (!ALLOWED_MIMES.has(mime)) {
+    const mime = normalizeImageMime(detectedMime ?? declaredMime);
+    if (!isSupportedImageMimeType(mime)) {
       throw new HttpException(
-        `Unsupported image format: ${mime}`,
+        `${UNSUPPORTED_IMAGE_FORMAT_MESSAGE} Received: ${mime}`,
         HttpStatus.BAD_REQUEST
       );
     }
 
-    let input = buffer;
-    if (mime === 'image/heic' || mime === 'image/heif') {
-      input = await this.convertHeic(buffer);
-    }
-
-    const pipeline = sharp(input).rotate();
+    const pipeline = sharp(buffer).rotate();
     const meta = await pipeline.metadata();
     const width = meta.width ?? 0;
     const height = meta.height ?? 0;
@@ -73,20 +63,5 @@ export class ImageLoaderService {
     const { fileTypeFromBuffer } = await import('file-type');
     const detected = await fileTypeFromBuffer(buffer);
     return detected?.mime;
-  }
-
-  private async convertHeic(buffer: Buffer): Promise<Buffer> {
-    try {
-      const convert = (await import('heic-convert')).default;
-      const out = await convert({
-        buffer,
-        format: 'JPEG',
-        quality: 0.9,
-      });
-      return Buffer.from(out);
-    } catch (error: any) {
-      this.logger.warn(`HEIC convert failed, trying sharp: ${error.message}`);
-      return sharp(buffer).jpeg().toBuffer();
-    }
   }
 }

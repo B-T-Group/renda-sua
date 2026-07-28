@@ -26,6 +26,10 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../constants/supportedImageFormats';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { ItemImage, useItemImages } from '../../hooks/useItemImages';
 import { useImageValidation } from '../../hooks/useImageValidation';
@@ -42,12 +46,6 @@ interface ImageUploadDialogProps {
 
 const MAX_IMAGES = 5;
 const MIN_PHOTOS = 2;
-const ACCEPTED_FILE_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const hasOwnKey = (o: object, k: string) =>
@@ -133,9 +131,13 @@ export default function ImageUploadDialog({
 
     // Validate file types and sizes
     const validFiles = files.filter((file) => {
-      if (!ACCEPTED_FILE_TYPES.includes(file.type)) {
+      if (!isSupportedImageFile(file)) {
         enqueueSnackbar(
-          t('business.inventory.invalidFileType', { file: file.name }),
+          t(
+            'business.inventory.invalidFileType',
+            'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+            { file: file.name }
+          ),
           { variant: 'error' }
         );
         return false;
@@ -528,7 +530,7 @@ export default function ImageUploadDialog({
                   type="file"
                   hidden
                   multiple
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  accept={SUPPORTED_IMAGE_ACCEPT}
                   onChange={handleFileSelect}
                 />
               </Button>

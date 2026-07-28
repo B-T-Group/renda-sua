@@ -8,6 +8,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  isSupportedImageFileName,
+  isSupportedImageMimeType,
+  UNSUPPORTED_IMAGE_FORMAT_MESSAGE,
+} from '../common/supported-image-formats';
 import { AwsService } from './aws.service';
 
 export interface GeneratePresignedUrlRequest {
@@ -179,6 +184,19 @@ export class AwsController {
           {
             success: false,
             error: 'Bucket name is required',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (
+        !isSupportedImageMimeType(contentType) ||
+        !isSupportedImageFileName(originalFileName)
+      ) {
+        throw new HttpException(
+          {
+            success: false,
+            error: UNSUPPORTED_IMAGE_FORMAT_MESSAGE,
           },
           HttpStatus.BAD_REQUEST
         );

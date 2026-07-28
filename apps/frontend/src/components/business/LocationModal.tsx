@@ -22,6 +22,10 @@ import { Store as StoreIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../constants/supportedImageFormats';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAws } from '../../hooks/useAws';
@@ -195,6 +199,17 @@ const LocationModal: React.FC<LocationModalProps> = ({
           { variant: 'warning' }
         );
       }
+      return;
+    }
+    if (!isSupportedImageFile(file)) {
+      enqueueSnackbar(
+        t(
+          'business.images.upload.unsupportedFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: file.name }
+        ),
+        { variant: 'error' }
+      );
       return;
     }
     setUploadingLogo(true);
@@ -403,7 +418,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
                     <input
                       ref={logoFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={SUPPORTED_IMAGE_ACCEPT}
                       hidden
                       onChange={handleLogoFileSelected}
                     />

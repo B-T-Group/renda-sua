@@ -41,6 +41,10 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../constants/supportedImageFormats';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import {
@@ -462,15 +466,29 @@ const RentalItemImagesPage: React.FC = () => {
                 {t('business.rentalImages.upload.chooseFiles', 'Choose files')}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={SUPPORTED_IMAGE_ACCEPT}
                   multiple
                   hidden
-                  onChange={(e) =>
-                    setSelectedFiles((p) => [
-                      ...p,
-                      ...Array.from(e.target.files || []),
-                    ])
-                  }
+                  onChange={(e) => {
+                    const next = Array.from(e.target.files || []).filter(
+                      (file) => {
+                        if (isSupportedImageFile(file)) return true;
+                        enqueueSnackbar(
+                          t(
+                            'business.rentalImages.upload.unsupportedFormat',
+                            'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+                            { file: file.name }
+                          ),
+                          { variant: 'error' }
+                        );
+                        return false;
+                      }
+                    );
+                    if (next.length) {
+                      setSelectedFiles((p) => [...p, ...next]);
+                    }
+                    e.target.value = '';
+                  }}
                 />
               </Button>
               <TextField

@@ -7,6 +7,11 @@ import {
 import { Box, Button, IconButton, Paper, Stack, Typography } from '@mui/material';
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from 'notistack';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../../constants/supportedImageFormats';
 
 export type StagedExistingImage = {
   kind: 'existing';
@@ -42,6 +47,7 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
   onChange,
 }) => {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
   const inputRef = useRef<HTMLInputElement>(null);
   const captureRef = useRef<HTMLInputElement>(null);
   const visible = visibleImages(images);
@@ -51,15 +57,25 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
 
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const next: StagedNewImage[] = Array.from(files)
-      .filter((f) => f.type.startsWith('image/'))
-      .map((file) => ({
-        kind: 'new' as const,
-        localId: `${Date.now()}-${file.name}-${Math.random()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-        is_primary: false,
-      }));
+    const accepted = Array.from(files).filter((f) => {
+      if (isSupportedImageFile(f)) return true;
+      enqueueSnackbar(
+        t(
+          'business.variants.unsupportedImageFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: f.name }
+        ),
+        { variant: 'error' }
+      );
+      return false;
+    });
+    const next: StagedNewImage[] = accepted.map((file) => ({
+      kind: 'new' as const,
+      localId: `${Date.now()}-${file.name}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      is_primary: false,
+    }));
     if (!next.length) return;
     const merged = [...images, ...next];
     if (!visibleImages(merged).some((i) => i.is_primary) && next[0]) {
@@ -206,7 +222,7 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_ACCEPT}
         multiple
         hidden
         onChange={(e) => {
@@ -217,7 +233,7 @@ const VariantImagesStep: React.FC<VariantImagesStepProps> = ({
       <input
         ref={captureRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_ACCEPT}
         capture="environment"
         hidden
         onChange={(e) => {

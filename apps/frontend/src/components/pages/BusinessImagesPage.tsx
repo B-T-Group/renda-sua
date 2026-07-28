@@ -45,6 +45,10 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../constants/supportedImageFormats';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { CreateItemFromImageDialog } from '../dialogs/CreateItemFromImageDialog';
@@ -431,7 +435,22 @@ const BusinessImagesPage: React.FC = () => {
     if (!files.length) {
       return;
     }
-    setSelectedFiles((prev) => [...prev, ...files]);
+    const valid = files.filter((file) => {
+      if (isSupportedImageFile(file)) return true;
+      enqueueSnackbar(
+        t(
+          'business.images.upload.unsupportedFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: file.name }
+        ),
+        { variant: 'error' }
+      );
+      return false;
+    });
+    if (valid.length) {
+      setSelectedFiles((prev) => [...prev, ...valid]);
+    }
+    event.target.value = '';
   };
 
   const handleAddUrl = () => {
@@ -657,6 +676,18 @@ const BusinessImagesPage: React.FC = () => {
   ) => {
     const file = event.target.files?.[0];
     if (!file) {
+      return;
+    }
+    if (!isSupportedImageFile(file)) {
+      enqueueSnackbar(
+        t(
+          'business.images.upload.unsupportedFormat',
+          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
+          { file: file.name }
+        ),
+        { variant: 'error' }
+      );
+      event.target.value = '';
       return;
     }
     try {
@@ -1155,7 +1186,7 @@ const BusinessImagesPage: React.FC = () => {
                   type="file"
                   hidden
                   multiple
-                  accept="image/*"
+                  accept={SUPPORTED_IMAGE_ACCEPT}
                   onChange={handleFileSelect}
                 />
               </Button>
@@ -1707,7 +1738,7 @@ const BusinessImagesPage: React.FC = () => {
                             <input
                               type="file"
                               hidden
-                              accept="image/*"
+                              accept={SUPPORTED_IMAGE_ACCEPT}
                               onChange={(e) => handleReplaceImageFile(img, e)}
                             />
                           </Button>

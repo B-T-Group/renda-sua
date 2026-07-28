@@ -36,7 +36,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   onUploadError,
   maxFileSize = 10 * 1024 * 1024, // 10MB default
   allowedFileTypes = [
-    'image/*',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
