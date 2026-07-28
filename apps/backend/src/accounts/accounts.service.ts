@@ -122,8 +122,7 @@ export class AccountsService {
         };
       }
 
-      // Determine if this is a credit or debit transaction
-      const { isCredit, balanceUpdate } = this.determineTransactionType(
+      const { balanceUpdate } = this.determineTransactionType(
         request.transactionType,
         request.amount
       );
@@ -131,9 +130,9 @@ export class AccountsService {
       // Calculate new balances
       const newBalances = this.calculateNewBalances(account, balanceUpdate);
 
-      // Validate sufficient funds for debit transactions
+      // Validate funds for debits and releases (release is a credit to available
+      // but still requires sufficient withheld balance).
       if (
-        !isCredit &&
         !this.hasSufficientFunds(
           account,
           balanceUpdate,
