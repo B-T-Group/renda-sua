@@ -4,7 +4,7 @@ import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { resolveActivePersona } from '../users/persona.util';
+import { getActivePersonaOrThrow } from '../users/persona.util';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 
 export interface UploadData {
@@ -244,10 +244,7 @@ export class UploadService {
     } else {
       requestUser = await this.hasuraUserService.getUser();
       ownerId = requestUser.id;
-      persona = resolveActivePersona(
-        requestUser,
-        this.hasuraUserService.getActivePersonaHeader()
-      );
+      persona = getActivePersonaOrThrow(requestUser);
     }
 
     // Validate required fields

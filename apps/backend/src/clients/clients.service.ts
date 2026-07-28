@@ -56,7 +56,7 @@ export class ClientsService {
     const user = await this.hasuraUserService.getUser();
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     if (active !== 'client') {
       throw new HttpException(

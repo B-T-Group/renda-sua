@@ -28,11 +28,12 @@ const { HasuraUserService } = require('../hasura/hasura-user.service');
 describe('OrderRefundsService', () => {
   let service: OrderRefundsService;
   let hasuraSystem: jest.Mocked<Pick<HasuraSystemService, 'executeQuery' | 'executeMutation' | 'getAccount'>>;
-  let hasuraUser: jest.Mocked<Pick<HasuraUserService, 'getUser' | 'getActivePersonaHeader'>>;
+  let hasuraUser: jest.Mocked<Pick<HasuraUserService, 'getUser' | 'sessionPersonaContext'>>;
 
   const businessUser = {
     id: 'biz-user',
     user_type_id: 'business',
+    active_persona: 'business',
     business: { id: 'b1', user_id: 'biz-user' },
     client: null,
     agent: null,
@@ -41,6 +42,7 @@ describe('OrderRefundsService', () => {
   const clientUser = {
     id: 'cli-user',
     user_type_id: 'client',
+    active_persona: 'client',
     client: { id: 'c1', user_id: 'cli-user' },
     business: null,
     agent: null,
@@ -72,7 +74,10 @@ describe('OrderRefundsService', () => {
     };
     const mockHasuraUser = {
       getUser: jest.fn(),
-      getActivePersonaHeader: jest.fn().mockReturnValue('business'),
+      sessionPersonaContext: jest.fn().mockReturnValue({
+        jwtDefaultRole: 'business',
+        jwtAllowedRoles: ['business'],
+      }),
     };
     const mockAccounts = {
       registerTransaction: jest.fn().mockResolvedValue({ success: true }),
@@ -143,7 +148,10 @@ describe('OrderRefundsService', () => {
 
   it('rejectRefundRequest requires business persona', async () => {
     hasuraUser.getUser.mockResolvedValue(clientUser as never);
-    hasuraUser.getActivePersonaHeader.mockReturnValue('client');
+    hasuraUser.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+    });
 
     await expect(
       service.rejectRefundRequest('o1', { rejectionReason: 'x' })

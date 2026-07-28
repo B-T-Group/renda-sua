@@ -28,7 +28,7 @@ describe('DashboardService moderation soft-delete filters', () => {
   it('excludes soft-deleted catalog items from moderation action counts', async () => {
     hasuraUserService.getUser.mockResolvedValue({
       id: 'u1',
-      user_type_id: 'business',
+      user_type_id: 'business', active_persona: 'business',
       business: { id: 'biz-1' },
     });
     hasuraSystemService.executeQuery.mockImplementation(
@@ -65,7 +65,7 @@ describe('DashboardService moderation soft-delete filters', () => {
   it('excludes soft-deleted rental items and listings from moderation counts', async () => {
     hasuraUserService.getUser.mockResolvedValue({
       id: 'u1',
-      user_type_id: 'business',
+      user_type_id: 'business', active_persona: 'business',
       business: { id: 'biz-1' },
     });
     hasuraSystemService.executeQuery.mockImplementation(

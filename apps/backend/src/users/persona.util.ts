@@ -1,10 +1,13 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import type { SessionPersonaContext } from '../auth/request-context';
 import { isPersonaId, PersonaId } from './persona.types';
 
 export interface UserPersonaShape {
-  client?: { id: string } | null;
-  agent?: { id: string } | null;
-  business?: { id: string } | null;
+  client?: { id?: string } | null;
+  agent?: { id?: string } | null;
+  business?: { id?: string } | null;
+  /** Set on `/users/me` and other flows after JWT session persona is resolved. */
+  active_persona?: PersonaId | null;
 }
 
 /** Which profile rows exist (single place that reads client/agent/business relations). */
@@ -19,8 +22,7 @@ export function personasFromProfileRelations(user: UserPersonaShape): PersonaId[
 /**
  * Whether the user has a given profile row (client / agent / business). Use for onboarding and
  * “can this account enable persona X?” — not for request authorization.
- * For “who is acting in this session?” use {@link isActivePersona} / {@link getActivePersonaOrThrow}
- * (`users.user_type_id`).
+ * For “who is acting in this session?” use {@link isActivePersona} / {@link resolveSessionPersona}.
  */
 export function userHasPersona(
   user: UserPersonaShape & { personas?: PersonaId[] },
@@ -31,28 +33,66 @@ export function userHasPersona(
 }
 
 /**
- * True when the session’s active persona is `p` (DB `users.user_type_id`).
- * Use for authorization and API behavior when the user may have multiple profiles.
+ * Active persona from JWT `x-hasura-default-role`, validated against allowed roles and profile rows.
+ */
+export function resolveSessionPersona(
+  user: UserPersonaShape & { personas?: PersonaId[] },
+  ctx: SessionPersonaContext
+): PersonaId {
+  const personas = derivePersonas(user);
+  if (personas.length === 0) {
+    throw new HttpException(
+      'No persona profiles found for this user',
+      HttpStatus.FORBIDDEN
+    );
+  }
+  const role = ctx.jwtDefaultRole;
+  if (!role || !isPersonaId(role)) {
+    throw new HttpException(
+      'Missing or invalid x-hasura-default-role in JWT',
+      HttpStatus.UNAUTHORIZED
+    );
+  }
+  const allowed = ctx.jwtAllowedRoles ?? [];
+  if (allowed.length > 0 && !allowed.includes(role)) {
+    throw new HttpException(
+      'JWT default role is not in allowed roles',
+      HttpStatus.FORBIDDEN
+    );
+  }
+  if (!userHasPersona(user, role)) {
+    throw new HttpException(
+      'Active persona does not match an enabled profile for this account',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+  return role;
+}
+
+/**
+ * True when the session’s active persona is `p` (from JWT via `user.active_persona`).
  */
 export function isActivePersona(
-  user: { user_type_id?: string | null },
+  user: UserPersonaShape & { active_persona?: PersonaId | null },
   p: PersonaId
 ): boolean {
-  const id = user.user_type_id;
+  const id = user.active_persona;
   return typeof id === 'string' && isPersonaId(id) && id === p;
 }
 
 /**
- * Active persona from `users.user_type_id`, validated against enabled profiles.
- * Throws if missing, invalid, or not backed by a profile row.
+ * Active persona from `user.active_persona`, validated against enabled profiles.
  */
 export function getActivePersonaOrThrow(
-  user: UserPersonaShape & { user_type_id?: string | null; personas?: PersonaId[] }
+  user: UserPersonaShape & {
+    active_persona?: PersonaId | null;
+    personas?: PersonaId[];
+  }
 ): PersonaId {
-  const id = user.user_type_id;
+  const id = user.active_persona;
   if (!id || !isPersonaId(id)) {
     throw new HttpException(
-      'Active persona (user_type_id) is missing or invalid',
+      'Active persona is missing or invalid',
       HttpStatus.BAD_REQUEST
     );
   }
@@ -81,113 +121,30 @@ export function derivePersonas(
   return personasFromProfileRelations(user);
 }
 
-function normalizeHeader(raw: string | undefined): PersonaId | undefined {
-  if (!raw || typeof raw !== 'string') return undefined;
-  const v = raw.trim().toLowerCase();
-  return isPersonaId(v) ? v : undefined;
-}
-
-/**
- * Resolves active persona from profile rows and optional X-Active-Persona header.
- * Multiple personas require a valid header matching an existing profile.
- */
+/** Resolves active persona from JWT claims (strict). */
 export function resolveActivePersona(
-  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
-  headerRaw: string | undefined
+  user: UserPersonaShape & { personas?: PersonaId[] },
+  ctx: SessionPersonaContext
 ): PersonaId {
-  const personas = derivePersonas(user);
-  if (personas.length === 0) {
-    throw new HttpException(
-      'No persona profiles found for this user',
-      HttpStatus.FORBIDDEN
-    );
-  }
-  const header = normalizeHeader(headerRaw);
-  if (personas.length === 1) {
-    const only = personas[0];
-    if (!header) return only;
-    if (header !== only) {
-      throw new HttpException(
-        `X-Active-Persona must be "${only}" for this account`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    return only;
-  }
-  if (!header) {
-    throw new HttpException(
-      'X-Active-Persona header is required when the user has multiple personas',
-      HttpStatus.BAD_REQUEST
-    );
-  }
-  if (!personas.includes(header)) {
-    throw new HttpException(
-      `X-Active-Persona "${header}" is not enabled for this account`,
-      HttpStatus.BAD_REQUEST
-    );
-  }
-  return header;
+  return resolveSessionPersona(user, ctx);
 }
 
-/**
- * Like {@link resolveActivePersona}, but if the user has multiple personas and
- * the header is absent, uses {@link legacyUserTypeIdForPersonas} so JWT-only
- * calls (e.g. right after signup, before the app sends X-Active-Persona) still work.
- * If a header is present it must match an enabled persona (same as strict mode).
- */
+/** Alias for {@link resolveSessionPersona}. */
 export function resolveActivePersonaWithDefault(
-  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
-  headerRaw: string | undefined
+  user: UserPersonaShape & { personas?: PersonaId[] },
+  ctx: SessionPersonaContext
 ): PersonaId {
-  const personas = derivePersonas(user);
-  if (personas.length === 0) {
-    throw new HttpException(
-      'No persona profiles found for this user',
-      HttpStatus.FORBIDDEN
-    );
-  }
-  const header = normalizeHeader(headerRaw);
-  if (personas.length === 1) {
-    const only = personas[0];
-    if (!header) return only;
-    if (header !== only) {
-      throw new HttpException(
-        `X-Active-Persona must be "${only}" for this account`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    return only;
-  }
-  if (header) {
-    if (!personas.includes(header)) {
-      throw new HttpException(
-        `X-Active-Persona "${header}" is not enabled for this account`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    return header;
-  }
-  const fromType =
-    user.user_type_id &&
-    isPersonaId(user.user_type_id) &&
-    personas.includes(user.user_type_id)
-      ? user.user_type_id
-      : undefined;
-  return fromType ?? legacyUserTypeIdForPersonas(personas);
+  return resolveSessionPersona(user, ctx);
 }
 
-/**
- * Same as resolveActivePersona but returns null when the header is missing
- * for multi-persona users (no 400). For optional UX endpoints only.
- */
+/** Returns null when JWT persona cannot be resolved (optional UX endpoints only). */
 export function resolveActivePersonaLenient(
-  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
-  headerRaw: string | undefined
+  user: UserPersonaShape & { personas?: PersonaId[] },
+  ctx: SessionPersonaContext
 ): PersonaId | null {
-  const personas = derivePersonas(user);
-  if (personas.length === 0) return null;
-  if (personas.length === 1) return personas[0];
-  const header = normalizeHeader(headerRaw);
-  if (!header || !personas.includes(header)) return null;
-  return header;
+  try {
+    return resolveSessionPersona(user, ctx);
+  } catch {
+    return null;
+  }
 }

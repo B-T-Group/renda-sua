@@ -22,7 +22,7 @@ import {
 } from '../generated/graphql';
 import {
   personasFromProfileRelations,
-  resolveActivePersonaWithDefault,
+  resolveSessionPersona,
 } from '../users/persona.util';
 import type { PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
@@ -571,9 +571,30 @@ export class HasuraUserService {
     return this.resolveContext(ctx).userId;
   }
 
-  /** Raw `X-Active-Persona` header for multi-persona REST flows. */
+  /** @deprecated Session persona comes from JWT; use {@link getSessionPersona}. */
   getActivePersonaHeader(ctx?: RequestContext): string | undefined {
     return this.resolveContext(ctx).activePersona;
+  }
+
+  /** Session persona from JWT `x-hasura-default-role`, validated against profile rows. */
+  getSessionPersona(
+    user: {
+      client?: { id: string } | null;
+      agent?: { id: string } | null;
+      business?: { id: string } | null;
+      personas?: PersonaId[];
+    },
+    ctx?: RequestContext
+  ): PersonaId {
+    return resolveSessionPersona(user, this.sessionPersonaContext(ctx));
+  }
+
+  sessionPersonaContext(ctx?: RequestContext) {
+    const resolved = this.resolveContext(ctx);
+    return {
+      jwtDefaultRole: resolved.jwtDefaultRole,
+      jwtAllowedRoles: resolved.jwtAllowedRoles,
+    };
   }
 
   /**
@@ -715,6 +736,7 @@ export class HasuraUserService {
       business?: Businesses;
       addresses?: Addresses[];
       personas?: PersonaId[];
+      active_persona?: PersonaId;
     }
   > {
     const resolved = this.resolveContext(ctx);
@@ -746,31 +768,33 @@ export class HasuraUserService {
       });
 
       // Build the user object with client/agent/business data
+      const activePersona = resolveSessionPersona(
+        {
+          client: userData.client || undefined,
+          agent: userData.agent || undefined,
+          business: userData.business || undefined,
+          personas,
+        },
+        this.sessionPersonaContext(resolved)
+      );
+
       const user: Users & {
         client?: Clients;
         agent?: MeAgent;
         business?: Businesses;
         addresses?: Addresses[];
         personas?: PersonaId[];
+        active_persona?: PersonaId;
       } = {
         ...userData,
         client: userData.client || undefined,
         agent: await this.resolveMeAgent(userData.id, userData.agent),
         business: userData.business || undefined,
         personas,
+        active_persona: activePersona,
       };
 
       // Addresses for the active persona only (client → client_addresses, etc.).
-      const activePersona = resolveActivePersonaWithDefault(
-        {
-          client: user.client,
-          agent: user.agent,
-          business: user.business,
-          user_type_id: user.user_type_id,
-          personas: user.personas,
-        },
-        this.getActivePersonaHeader(resolved)
-      );
       const addresses = await this.hasuraSystemService.getAllUserAddresses(
         user.id,
         activePersona
@@ -784,6 +808,10 @@ export class HasuraUserService {
         error: error.message,
         stack: error.stack,
       });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
 
       if (error.message?.includes('User not found')) {
         throw error;

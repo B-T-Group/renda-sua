@@ -52,6 +52,7 @@ describe('OrdersService', () => {
     first_name: 'John',
     last_name: 'Doe',
     user_type_id: 'business',
+    active_persona: 'business',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     business: { id: 'business-123', user_id: 'user-123' },
@@ -64,6 +65,7 @@ describe('OrdersService', () => {
     first_name: 'Jane',
     last_name: 'Smith',
     user_type_id: 'agent',
+    active_persona: 'agent',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     business: null,
@@ -76,6 +78,7 @@ describe('OrdersService', () => {
     first_name: 'Client',
     last_name: 'User',
     user_type_id: 'client',
+    active_persona: 'client',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     business: null,
@@ -110,7 +113,10 @@ describe('OrdersService', () => {
   beforeEach(async () => {
     const mockHasuraUserService = {
       getUser: jest.fn(),
-      getActivePersonaHeader: jest.fn().mockReturnValue(undefined),
+      sessionPersonaContext: jest.fn().mockReturnValue({
+        jwtDefaultRole: undefined,
+        jwtAllowedRoles: [],
+      }),
       updateOrderStatus: jest.fn(),
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
@@ -1485,7 +1491,10 @@ describe('OrdersService', () => {
     };
 
     beforeEach(() => {
-      hasuraUserService.getActivePersonaHeader.mockReturnValue('agent');
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      });
       hasuraSystemService.getAllUserAddresses = jest
         .fn()
         .mockResolvedValue([
@@ -1564,7 +1573,10 @@ describe('OrdersService', () => {
         ...mockAgentUser,
         agent: { id: 'agent-123', user_id: 'agent-123', is_verified: false },
       });
-      hasuraUserService.getActivePersonaHeader.mockReturnValue('agent');
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      });
 
       await expect(
         service.claimOrder({ orderId: 'order-123' })

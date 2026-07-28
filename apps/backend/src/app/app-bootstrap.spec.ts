@@ -27,6 +27,7 @@ const hasuraSystemMock = {
 
 const hasuraUserMock = {
   getActivePersonaHeader: jest.fn(),
+  sessionPersonaContext: jest.fn().mockReturnValue({}),
   executeQuery: jest.fn().mockResolvedValue({}),
   getUser: jest.fn(),
   getUserId: jest.fn().mockReturnValue('anonymous'),

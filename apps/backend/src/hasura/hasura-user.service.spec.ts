@@ -35,18 +35,23 @@ describe('HasuraUserService (singleton + CLS)', () => {
       emptyRequestContext({
         userId: 'cls-user',
         authToken: 'cls-token',
-        activePersona: 'client',
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
       })
     );
 
     const ctx = emptyRequestContext({
       userId: 'explicit-user',
       authToken: 'explicit-token',
-      activePersona: 'agent',
+      jwtDefaultRole: 'agent',
+      jwtAllowedRoles: ['agent', 'client'],
     });
 
     expect(service.getUserId(ctx)).toBe('explicit-user');
-    expect(service.getActivePersonaHeader(ctx)).toBe('agent');
+    expect(service.sessionPersonaContext(ctx)).toEqual({
+      jwtDefaultRole: 'agent',
+      jwtAllowedRoles: ['agent', 'client'],
+    });
     expect(service.isConfigured(ctx)).toBe(true);
   });
 
@@ -57,12 +62,16 @@ describe('HasuraUserService (singleton + CLS)', () => {
       emptyRequestContext({
         userId: 'cls-user',
         authToken: 'cls-token',
-        activePersona: 'business',
+        jwtDefaultRole: 'business',
+        jwtAllowedRoles: ['business'],
       })
     );
 
     expect(service.getUserId()).toBe('cls-user');
-    expect(service.getActivePersonaHeader()).toBe('business');
+    expect(service.sessionPersonaContext()).toEqual({
+      jwtDefaultRole: 'business',
+      jwtAllowedRoles: ['business'],
+    });
     expect(service.user_id).toBe('cls-user');
     expect(service.isConfigured()).toBe(true);
   });
@@ -71,6 +80,23 @@ describe('HasuraUserService (singleton + CLS)', () => {
     const { service } = makeService();
     expect(service.getUserId()).toBe('anonymous');
     expect(service.isConfigured()).toBe(false);
-    expect(service.getActivePersonaHeader()).toBeUndefined();
+    expect(service.sessionPersonaContext()).toEqual({
+      jwtDefaultRole: undefined,
+      jwtAllowedRoles: undefined,
+    });
+  });
+
+  it('getSessionPersona validates JWT role against user profiles', () => {
+    const { service } = makeService();
+    const ctx = emptyRequestContext({
+      jwtDefaultRole: 'agent',
+      jwtAllowedRoles: ['agent', 'client'],
+    });
+    expect(
+      service.getSessionPersona(
+        { agent: { id: 'a1' }, client: { id: 'c1' } },
+        ctx
+      )
+    ).toBe('agent');
   });
 });

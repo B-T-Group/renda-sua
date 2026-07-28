@@ -138,6 +138,7 @@ export class StripePayoutService {
     destinationAccountId: string,
     options: { throwOnFailure: boolean }
   ): Promise<StripePayoutResult> {
+    let transferId: string | undefined;
     try {
       const transfer = await this.stripeService.createTransfer({
         amount: params.amount,
@@ -146,36 +147,7 @@ export class StripePayoutService {
         reference,
         description: params.description,
       });
-      await this.databaseService.updateTransaction(txId, {
-        status: 'success',
-        stripe_payment_intent_id: transfer.id,
-      });
-      const memoPrefix = params.withdrawalMemoPrefix || 'Stripe payout';
-      const withdrawal = await this.accountsService.registerTransaction({
-        accountId: params.accountId,
-        amount: params.amount,
-        transactionType: 'withdrawal',
-        memo: `${memoPrefix} - ${reference}`,
-        referenceId: txId,
-      });
-      if (!withdrawal.success) {
-        await this.databaseService.updateTransaction(txId, {
-          status: 'failed',
-          error_message: `Withdrawal ledger debit failed: ${withdrawal.error}`,
-          error_code: 'WITHDRAWAL_FAILED',
-        });
-        return this.handleFailure(
-          {
-            status: HttpStatus.INTERNAL_SERVER_ERROR,
-            body: { success: false, error: 'WITHDRAWAL_FAILED' },
-          },
-          options
-        );
-      }
-      return {
-        success: true,
-        data: { transactionId: txId, transferId: transfer.id },
-      };
+      transferId = transfer.id;
     } catch (error: any) {
       await this.databaseService.updateTransaction(txId, {
         status: 'failed',
@@ -193,6 +165,85 @@ export class StripePayoutService {
         },
         options
       );
+    }
+
+    const memoPrefix = params.withdrawalMemoPrefix || 'Stripe payout';
+    const withdrawal = await this.accountsService.registerWithdrawalIfNotExists(
+      {
+        accountId: params.accountId,
+        amount: params.amount,
+        memo: `${memoPrefix} - ${reference}`,
+        referenceId: txId,
+      }
+    );
+    if (!withdrawal.success) {
+      const reversalFailure = await this.reverseTransferAfterWithdrawalFailure(
+        transferId,
+        txId,
+        withdrawal.error
+      );
+      const errorMessage = reversalFailure
+        ? `Withdrawal ledger debit failed: ${withdrawal.error}; Stripe transfer reversal also failed: ${reversalFailure}`
+        : `Withdrawal ledger debit failed: ${withdrawal.error}`;
+      await this.databaseService.updateTransaction(txId, {
+        status: 'failed',
+        stripe_payment_intent_id: transferId,
+        error_message: errorMessage,
+        error_code: reversalFailure
+          ? 'WITHDRAWAL_AND_REVERSAL_FAILED'
+          : 'WITHDRAWAL_FAILED',
+      });
+      return this.handleFailure(
+        {
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          body: {
+            success: false,
+            error: reversalFailure
+              ? 'WITHDRAWAL_AND_REVERSAL_FAILED'
+              : 'WITHDRAWAL_FAILED',
+          },
+        },
+        options
+      );
+    }
+
+    try {
+      await this.databaseService.updateTransaction(txId, {
+        status: 'success',
+        stripe_payment_intent_id: transferId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Stripe payout ${txId} succeeded (transfer ${transferId}) but status update failed: ${error?.message || error}`
+      );
+    }
+
+    return {
+      success: true,
+      data: { transactionId: txId, transferId },
+    };
+  }
+
+  private async reverseTransferAfterWithdrawalFailure(
+    transferId: string,
+    txId: string,
+    withdrawalError?: string
+  ): Promise<string | null> {
+    try {
+      await this.stripeService.createTransferReversal(
+        transferId,
+        `reversal_payout_${txId}`
+      );
+      this.logger.warn(
+        `Reversed Stripe transfer ${transferId} after ledger debit failed for payout ${txId}`
+      );
+      return null;
+    } catch (error: any) {
+      const message = String(error?.message || error);
+      this.logger.error(
+        `Failed to reverse Stripe transfer ${transferId} after withdrawal failure (${withdrawalError}): ${message}`
+      );
+      return message;
     }
   }
 

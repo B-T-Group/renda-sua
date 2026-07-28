@@ -166,6 +166,8 @@ export class MobilePaymentCallbackProcessor {
       await this.finalizePaymentSuccess(tx, callbackData.transactionId);
       return;
     }
+    await this.releaseGiveChangeHoldIfNeeded(tx);
+    await this.reverseWalletIfDebitedLegacy(tx);
     await this.applyFailedStatus(tx, callbackData.transactionId, 'Payment failed');
     await this.applyMypvitFailureSideEffects(tx, callbackData);
   }
@@ -191,6 +193,8 @@ export class MobilePaymentCallbackProcessor {
     }
     const failureMessage =
       callbackData.reason || callbackData.message || 'Payment failed';
+    await this.releaseGiveChangeHoldIfNeeded(tx);
+    await this.reverseWalletIfDebitedLegacy(tx);
     await this.applyFailedStatus(tx, callbackData.reference, failureMessage);
     await this.applyFreemopayFailureSideEffects(tx, callbackData);
   }
@@ -199,6 +203,31 @@ export class MobilePaymentCallbackProcessor {
     transaction: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
+    if (transaction.transaction_type === 'GIVE_CHANGE') {
+      const debited = await this.debitWalletIfNeeded(transaction);
+      if (!debited) {
+        await this.databaseService.updateTransaction(transaction.id, {
+          status: 'success',
+          transaction_id: providerTransactionId,
+          error_message:
+            'Provider payout succeeded but wallet debit failed; manual reconciliation required',
+          error_code: 'WITHDRAWAL_FAILED',
+        });
+        this.logger.error(
+          `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure`
+        );
+        return;
+      }
+      await this.databaseService.updateTransaction(transaction.id, {
+        status: 'success',
+        transaction_id: providerTransactionId,
+      });
+      this.logger.log(
+        `GIVE_CHANGE ${transaction.id} finalized with wallet debit`
+      );
+      return;
+    }
+
     const credited = await this.creditWalletIfNeeded(transaction);
     if (!credited) {
       throw new Error(
@@ -218,6 +247,15 @@ export class MobilePaymentCallbackProcessor {
   private async retrySuccessSideEffects(
     transaction: MobilePaymentTransaction
   ): Promise<void> {
+    if (transaction.transaction_type === 'GIVE_CHANGE') {
+      const debited = await this.debitWalletIfNeeded(transaction);
+      if (!debited) {
+        this.logger.error(
+          `Retry debit still failing for success GIVE_CHANGE tx ${transaction.id}`
+        );
+      }
+      return;
+    }
     if (transaction.transaction_type !== 'PAYMENT') return;
     const credited = await this.creditWalletIfNeeded(transaction);
     if (!credited) {
@@ -295,6 +333,121 @@ export class MobilePaymentCallbackProcessor {
       );
       throw error;
     }
+  }
+
+  private async debitWalletIfNeeded(
+    transaction: MobilePaymentTransaction
+  ): Promise<boolean> {
+    if (
+      !transaction.account_id ||
+      transaction.transaction_type !== 'GIVE_CHANGE'
+    ) {
+      return true;
+    }
+
+    const released = await this.accountsService.registerReleaseIfNotExists({
+      accountId: transaction.account_id,
+      amount: transaction.amount,
+      referenceId: transaction.id,
+      memo: `GIVE_CHANGE release - ${transaction.reference}`,
+    });
+    if (!released.success) {
+      this.logger.error(
+        `Failed to release GIVE_CHANGE hold for ${transaction.id}: ${released.error}`
+      );
+      return false;
+    }
+
+    const withdrawalResult =
+      await this.accountsService.registerWithdrawalIfNotExists({
+        accountId: transaction.account_id,
+        amount: transaction.amount,
+        referenceId: transaction.id,
+        memo: `Mobile payment give change - ${transaction.reference}`,
+      });
+
+    if (!withdrawalResult.success) {
+      this.logger.error(
+        `Failed to debit account ${transaction.account_id}: ${withdrawalResult.error}`
+      );
+      return false;
+    }
+
+    if (!withdrawalResult.alreadyExists) {
+      this.logger.log(
+        `Withdrew ${transaction.amount} ${transaction.currency} from ${transaction.account_id} (GIVE_CHANGE ${transaction.reference})`
+      );
+    }
+    return true;
+  }
+
+  private async releaseGiveChangeHoldIfNeeded(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (
+      !transaction.account_id ||
+      transaction.transaction_type !== 'GIVE_CHANGE'
+    ) {
+      return;
+    }
+    const released = await this.accountsService.registerReleaseIfNotExists({
+      accountId: transaction.account_id,
+      amount: transaction.amount,
+      referenceId: transaction.id,
+      memo: `GIVE_CHANGE release - ${transaction.reference}`,
+    });
+    if (!released.success) {
+      this.logger.error(
+        `Failed to release GIVE_CHANGE hold for ${transaction.id}: ${released.error}`
+      );
+    }
+  }
+
+  private async reverseWalletIfDebitedLegacy(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (
+      !transaction.account_id ||
+      transaction.transaction_type !== 'GIVE_CHANGE'
+    ) {
+      return;
+    }
+
+    const wasDebited = await this.accountsService.hasTransactionForReference({
+      accountId: transaction.account_id,
+      transactionType: 'withdrawal',
+      referenceId: transaction.id,
+    });
+    if (!wasDebited) {
+      return;
+    }
+
+    const alreadyReversed =
+      await this.accountsService.hasTransactionForReference({
+        accountId: transaction.account_id,
+        transactionType: 'deposit',
+        referenceId: transaction.id,
+      });
+    if (alreadyReversed) {
+      return;
+    }
+
+    const reversal = await this.accountsService.registerTransaction({
+      accountId: transaction.account_id,
+      amount: transaction.amount,
+      transactionType: 'deposit',
+      memo: `GIVE_CHANGE reversal - ${transaction.reference}`,
+      referenceId: transaction.id,
+    });
+    if (!reversal.success) {
+      this.logger.error(
+        `Failed to reverse legacy GIVE_CHANGE debit for ${transaction.id}: ${reversal.error}`
+      );
+      return;
+    }
+    this.logger.log(
+      `Reversed legacy GIVE_CHANGE wallet debit for ${transaction.id}`
+    );
   }
 
   private async creditWalletIfNeeded(

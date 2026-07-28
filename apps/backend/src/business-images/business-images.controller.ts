@@ -18,6 +18,7 @@ import { AiService } from '../ai/ai.service';
 import { BusinessTokensService } from '../business-tokens/business-tokens.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService, CreateBusinessImageInput } from './business-images.service';
+import { isActivePersona } from '../users/persona.util';
 import type { UpdateBusinessImageInput } from './business-images.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -343,7 +344,7 @@ export class BusinessImagesController {
   async cleanupImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
-    if (user.user_type_id !== 'business' || !businessId) {
+    if (!isActivePersona(user, 'business') || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN

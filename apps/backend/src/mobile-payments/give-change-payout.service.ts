@@ -169,6 +169,31 @@ export class GiveChangePayoutService {
       transaction_type: 'GIVE_CHANGE',
     });
 
+    const holdResult = await this.accountsService.registerHoldIfNotExists({
+      accountId: params.accountId,
+      amount: params.amount,
+      referenceId: transaction.id,
+      memo: `GIVE_CHANGE hold - ${reference}`,
+    });
+    if (!holdResult.success) {
+      await this.databaseService.updateTransaction(transaction.id, {
+        status: 'failed',
+        error_message: holdResult.error || 'Failed to reserve payout funds',
+        error_code: 'HOLD_FAILED',
+      });
+      return this.handlePrecheckError(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          body: {
+            success: false,
+            message: 'Failed to reserve funds for withdrawal',
+            error: 'HOLD_FAILED',
+          },
+        },
+        options
+      );
+    }
+
     const mtnUserId = options.initiatorUserId ?? params.mtnUserId;
     const paymentMethod =
       (params.paymentMethod as 'mobile_money' | 'card' | 'bank_transfer' | undefined) ||
@@ -198,6 +223,25 @@ export class GiveChangePayoutService {
     );
   }
 
+  private async releaseGiveChangeHold(
+    accountId: string,
+    amount: number,
+    mobileTxId: string,
+    reference: string
+  ): Promise<void> {
+    const released = await this.accountsService.registerReleaseIfNotExists({
+      accountId,
+      amount,
+      referenceId: mobileTxId,
+      memo: `GIVE_CHANGE release - ${reference}`,
+    });
+    if (!released.success) {
+      this.logger.error(
+        `Failed to release GIVE_CHANGE hold for ${mobileTxId}: ${released.error}`
+      );
+    }
+  }
+
   private handlePrecheckError(
     err: HttpErr,
     options: { throwOnWithdrawalFailure: boolean }
@@ -214,7 +258,7 @@ export class GiveChangePayoutService {
     reference: string,
     params: GiveChangePayoutParams,
     paymentResponse: MobilePaymentResponse,
-    throwOnWithdrawalFailure: boolean
+    _throwOnWithdrawalFailure: boolean
   ): Promise<GiveChangePayoutResult> {
     const data = {
       transactionId: mobileTxId,
@@ -225,6 +269,12 @@ export class GiveChangePayoutService {
     };
 
     if (!paymentResponse.success || !paymentResponse.transactionId) {
+      await this.releaseGiveChangeHold(
+        params.accountId,
+        params.amount,
+        mobileTxId,
+        reference
+      );
       await this.databaseService.updateTransaction(mobileTxId, {
         status: 'failed',
         error_message: paymentResponse.message,
@@ -237,92 +287,9 @@ export class GiveChangePayoutService {
       transaction_id: paymentResponse.transactionId,
     });
 
-    const prefix =
-      params.withdrawalMemoPrefix || 'Mobile payment give change';
-    return this.postProviderWithdraw(
-      mobileTxId,
-      reference,
-      params,
-      data,
-      prefix,
-      throwOnWithdrawalFailure
+    this.logger.log(
+      `GIVE_CHANGE ${mobileTxId} initiated (${reference}); funds held until provider confirms`
     );
-  }
-
-  private async postProviderWithdraw(
-    mobileTxId: string,
-    reference: string,
-    params: GiveChangePayoutParams,
-    data: GiveChangePayoutResult['data'],
-    memoPrefix: string,
-    throwOnWithdrawalFailure: boolean
-  ): Promise<GiveChangePayoutResult> {
-    try {
-      const withdrawalResult = await this.accountsService.registerTransaction({
-        accountId: params.accountId,
-        amount: params.amount,
-        transactionType: 'withdrawal',
-        memo: `${memoPrefix} - ${reference}`,
-        referenceId: mobileTxId,
-      });
-
-      if (withdrawalResult.success) {
-        this.logger.log(
-          `Withdrew ${params.amount} ${params.currency} from ${params.accountId} (${memoPrefix})`
-        );
-        return { success: true, data };
-      }
-
-      await this.databaseService.updateTransaction(mobileTxId, {
-        status: 'failed',
-        error_message: `Withdrawal failed: ${withdrawalResult.error}`,
-        error_code: 'WITHDRAWAL_FAILED',
-      });
-      return this.onWithdrawFail(
-        throwOnWithdrawalFailure,
-        {
-          success: false,
-          message: 'Failed to process withdrawal',
-          error: 'WITHDRAWAL_FAILED',
-          data: {
-            accountId: params.accountId,
-            amount: params.amount,
-            error: withdrawalResult.error,
-          },
-        },
-        `Withdrawal failed for ${params.accountId}: ${withdrawalResult.error}`,
-        data
-      );
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      await this.databaseService.updateTransaction(mobileTxId, {
-        status: 'failed',
-        error_message: 'Withdrawal processing error',
-        error_code: 'WITHDRAWAL_ERROR',
-      });
-      return this.onWithdrawFail(
-        throwOnWithdrawalFailure,
-        {
-          success: false,
-          message: 'Failed to process withdrawal',
-          error: 'WITHDRAWAL_ERROR',
-        },
-        String(error?.message || error),
-        data
-      );
-    }
-  }
-
-  private onWithdrawFail(
-    throwOnWithdrawalFailure: boolean,
-    body: Record<string, unknown>,
-    logMsg: string,
-    data: GiveChangePayoutResult['data']
-  ): GiveChangePayoutResult {
-    if (throwOnWithdrawalFailure) {
-      throw new HttpException(body, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-    this.logger.error(`Give-change: ${logMsg}`);
-    return { success: false, data };
+    return { success: true, data };
   }
 }

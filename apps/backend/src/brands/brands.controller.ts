@@ -26,6 +26,7 @@ import { Public } from '../auth/public.decorator';
 import { BrandsService } from './brands.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { isActivePersona } from '../users/persona.util';
 
 export interface CreateBrandDto {
   name: string;
@@ -138,7 +139,7 @@ export class BrandsController {
     try {
       const user = await this.hasuraUserService.getUser(ctx);
 
-      if (user.user_type_id !== 'business' || !user.business) {
+      if (!isActivePersona(user, 'business') || !user.business) {
         throw new HttpException(
           {
             success: false,

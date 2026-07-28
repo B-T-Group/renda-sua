@@ -61,7 +61,7 @@ export class UploadsController {
     const user = await this.hasuraUserService.getUser(ctx);
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader(ctx)
+      this.hasuraUserService.sessionPersonaContext(ctx)
     );
     if ((active !== 'agent' && active !== 'business') || !user.id) {
       return { hasIdDocument: false, idDocumentStatus: 'missing' };

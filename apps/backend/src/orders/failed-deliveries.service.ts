@@ -4,6 +4,7 @@ import { DeliveryConfigService } from '../delivery-configs/delivery-configs.serv
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from './orders.service';
+import { isActivePersona } from '../users/persona.util';
 
 export interface ResolutionRequest {
   resolution_type: 'agent_fault' | 'client_fault' | 'item_fault';
@@ -69,7 +70,7 @@ export class FailedDeliveriesService {
   ) {
     const user = await this.hasuraUserService.getUser();
     if (
-      user.user_type_id !== 'business' ||
+      !isActivePersona(user, 'business') ||
       !user.business ||
       user.business.id !== businessId
     ) {
@@ -243,7 +244,7 @@ export class FailedDeliveriesService {
     // Verify business ownership
     const user = await this.hasuraUserService.getUser();
     if (
-      user.user_type_id !== 'business' ||
+      !isActivePersona(user, 'business') ||
       !user.business ||
       failedDelivery.order.business_id !== user.business.id
     ) {
@@ -261,7 +262,7 @@ export class FailedDeliveriesService {
    */
   async resolveFailedDelivery(orderId: string, resolution: ResolutionRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (user.user_type_id !== 'business' || !user.business) {
+    if (!isActivePersona(user, 'business') || !user.business) {
       throw new HttpException(
         'Only business users can resolve failed deliveries',
         HttpStatus.FORBIDDEN

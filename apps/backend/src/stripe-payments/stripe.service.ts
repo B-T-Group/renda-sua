@@ -527,6 +527,19 @@ export class StripeService {
     );
   }
 
+  async createTransferReversal(
+    transferId: string,
+    idempotencyKey?: string
+  ): Promise<Stripe.TransferReversal> {
+    return this.getClient().transfers.createReversal(
+      transferId,
+      {},
+      {
+        idempotencyKey: idempotencyKey ?? `reversal_${transferId}`,
+      }
+    );
+  }
+
   async createRefund(params: {
     paymentIntentId: string;
     amount?: number;

@@ -943,7 +943,7 @@ export class OrderRefundsService {
     const isClient = order.client.user_id === user.id;
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     const isBusiness = active === 'business' && order.business.user_id === user.id;
     if (!isClient && !isBusiness) {
@@ -975,7 +975,7 @@ export class OrderRefundsService {
   private requireActivePersona(user: any, persona: PersonaId, message: string) {
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     if (active !== persona) {
       throw new HttpException(message, HttpStatus.FORBIDDEN);

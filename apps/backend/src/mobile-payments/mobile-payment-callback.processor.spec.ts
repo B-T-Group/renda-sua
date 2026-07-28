@@ -140,6 +140,8 @@ describe('MobilePaymentCallbackProcessor', () => {
   const accountsService = {
     hasTransactionForReference: jest.fn(),
     registerTransaction: jest.fn(),
+    registerWithdrawalIfNotExists: jest.fn(),
+    registerReleaseIfNotExists: jest.fn(),
   };
   const paymentCallbackRegistry = {
     getHandlers: jest.fn().mockReturnValue([]),
@@ -262,5 +264,169 @@ describe('MobilePaymentCallbackProcessor', () => {
       referenceId: baseTx.id,
     });
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
+  const databaseService = {
+    getTransactionByReference: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+  };
+  const accountsService = {
+    hasTransactionForReference: jest.fn(),
+    registerTransaction: jest.fn(),
+    registerWithdrawalIfNotExists: jest.fn(),
+    registerReleaseIfNotExists: jest.fn(),
+  };
+  const paymentCallbackRegistry = {
+    getHandlers: jest.fn().mockReturnValue([]),
+  };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+
+  let processor: MobilePaymentCallbackProcessor;
+
+  const giveChangeTx: MobilePaymentTransaction = {
+    id: '33333333-3333-3333-3333-333333333333',
+    reference: 'P12345678abcd',
+    amount: 5000,
+    currency: 'XAF',
+    status: 'pending',
+    account_id: '22222222-2222-2222-2222-222222222222',
+    transaction_type: 'GIVE_CHANGE',
+    transaction_id: 'provider-withdraw-1',
+    provider: 'freemopay',
+    payment_method: 'mobile_money',
+    created_at: '2026-07-27T00:00:00.000Z',
+    updated_at: '2026-07-27T00:00:00.000Z',
+  } as MobilePaymentTransaction;
+
+  const successCallback = {
+    transactionId: 'provider-withdraw-1',
+    merchantReferenceId: 'P12345678abcd',
+    status: 'SUCCESS' as const,
+    amount: 5000,
+    customerID: '+237600000000',
+    fees: 0,
+    chargeOwner: 'MERCHANT',
+    transactionOperation: 'PAYMENT',
+    operator: 'MTN',
+    code: 200,
+  };
+
+  const failedCallback = {
+    ...successCallback,
+    status: 'FAILED' as const,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      paymentCallbackRegistry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.getTransactionByReference.mockResolvedValue(giveChangeTx);
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransaction.mockResolvedValue(undefined);
+    accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
+      success: true,
+      transactionId: 'withdrawal-1',
+    });
+    accountsService.registerReleaseIfNotExists.mockResolvedValue({
+      success: true,
+      transactionId: 'release-1',
+    });
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'reversal-1',
+    });
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+  });
+
+  it('debits wallet on SUCCESS callback before marking GIVE_CHANGE success', async () => {
+    const callOrder: string[] = [];
+    accountsService.registerReleaseIfNotExists.mockImplementation(async () => {
+      callOrder.push('release');
+      return { success: true, transactionId: 'release-1' };
+    });
+    accountsService.registerWithdrawalIfNotExists.mockImplementation(async () => {
+      callOrder.push('debit');
+      return { success: true, transactionId: 'withdrawal-1' };
+    });
+    databaseService.updateTransaction.mockImplementation(async () => {
+      callOrder.push('status');
+    });
+
+    await processor.processMypvitCallback(successCallback);
+
+    expect(callOrder).toEqual(['release', 'debit', 'status']);
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
+      accountId: giveChangeTx.account_id,
+      amount: giveChangeTx.amount,
+      referenceId: giveChangeTx.id,
+      memo: `GIVE_CHANGE release - ${giveChangeTx.reference}`,
+    });
+    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith({
+      accountId: giveChangeTx.account_id,
+      amount: giveChangeTx.amount,
+      referenceId: giveChangeTx.id,
+      memo: `Mobile payment give change - ${giveChangeTx.reference}`,
+    });
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('marks provider success when ledger debit fails after payout', async () => {
+    accountsService.registerReleaseIfNotExists.mockResolvedValue({
+      success: true,
+      transactionId: 'release-1',
+    });
+    accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
+      success: false,
+      error: 'Insufficient funds for this transaction',
+    });
+
+    await processor.processMypvitCallback(successCallback);
+
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      expect.objectContaining({
+        status: 'success',
+        error_code: 'WITHDRAWAL_FAILED',
+      })
+    );
+  });
+
+  it('does not debit wallet on FAILED callback when no legacy withdrawal exists', async () => {
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+
+    await processor.processMypvitCallback(failedCallback);
+
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
+    expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      expect.objectContaining({ status: 'failed' })
+    );
+  });
+
+  it('reverses legacy wallet debit on FAILED callback', async () => {
+    accountsService.hasTransactionForReference
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await processor.processMypvitCallback(failedCallback);
+
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+      accountId: giveChangeTx.account_id,
+      amount: giveChangeTx.amount,
+      transactionType: 'deposit',
+      memo: `GIVE_CHANGE reversal - ${giveChangeTx.reference}`,
+      referenceId: giveChangeTx.id,
+    });
   });
 });

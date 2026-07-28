@@ -21,7 +21,7 @@ describe('RentalsService.createRentalRequest', () => {
     ) as RentalsServiceHarness;
     service.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
-        user_type_id: 'client',
+        user_type_id: 'client', active_persona: 'client',
         client: { id: 'client-1' },
       }),
     };

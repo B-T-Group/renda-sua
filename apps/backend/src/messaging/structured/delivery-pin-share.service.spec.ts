@@ -16,12 +16,12 @@ describe('DeliveryPinShareService', () => {
   it('authorizes each caller before coalescing PIN share requests', async () => {
     const legitimateClient = {
       id: 'client-user-1',
-      user_type_id: 'client',
+      user_type_id: 'client', active_persona: 'client',
       client: { id: 'client-1' },
     };
     const otherClient = {
       id: 'client-user-2',
-      user_type_id: 'client',
+      user_type_id: 'client', active_persona: 'client',
       client: { id: 'client-2' },
     };
     const hasuraUserService = {

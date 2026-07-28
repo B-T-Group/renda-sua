@@ -445,7 +445,7 @@ export class MessagingService {
       id: string;
       business?: { id?: string } | null;
       agent?: { id?: string } | null;
-      user_type_id?: string | null;
+      active_persona?: PersonaId | null;
     },
     order: MessagingOrder
   ): Promise<void> {
@@ -485,7 +485,7 @@ export class MessagingService {
   }
 
   private resolvePersona(
-    user: { id: string; user_type_id?: string | null },
+    user: { id: string; active_persona?: PersonaId | null },
     order: MessagingOrder
   ): PersonaId {
     if (isActivePersona(user, 'client') && order.client?.user_id === user.id) {
@@ -503,7 +503,7 @@ export class MessagingService {
     ) {
       return 'agent';
     }
-    const active = (user.user_type_id ?? '') as PersonaId;
+    const active = user.active_persona ?? 'client';
     return (['client', 'business', 'agent'] as PersonaId[]).includes(active)
       ? active
       : 'client';

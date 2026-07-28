@@ -176,6 +176,7 @@ export class UsersController {
 
       return {
         success: true,
+        active_persona: user.active_persona,
         user: {
           ...user,
           personas: derivePersonas(user),
@@ -277,17 +278,6 @@ export class UsersController {
     try {
       const user = await this.hasuraUserService.getUser(ctx);
       this.assertUserHasPersona(user, p);
-      await this.hasuraSystemService.executeMutation(
-        `
-        mutation MirrorUserType($id: uuid!, $t: user_types_enum!) {
-          update_users_by_pk(pk_columns: { id: $id }, _set: { user_type_id: $t }) {
-            id
-            user_type_id
-          }
-        }
-      `,
-        { id: user.id, t: p }
-      );
       return { success: true, persona: p };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;

@@ -30,7 +30,7 @@ describe('DashboardService', () => {
     it('returns empty actions when persona has no profile', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
-        user_type_id: 'client',
+        user_type_id: 'client', active_persona: 'client',
       });
 
       await expect(service.getActionsNeeded()).resolves.toEqual({
@@ -43,7 +43,7 @@ describe('DashboardService', () => {
     it('counts business pending orders with order_status variable type', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
-        user_type_id: 'business',
+        user_type_id: 'business', active_persona: 'business',
         business: { id: 'biz-1' },
       });
       hasuraSystemService.executeQuery.mockImplementation(
@@ -92,7 +92,7 @@ describe('DashboardService', () => {
     it('counts client pending and active deliveries with order_status lists', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
-        user_type_id: 'client',
+        user_type_id: 'client', active_persona: 'client',
         client: { id: 'client-1' },
       });
       hasuraSystemService.executeQuery.mockImplementation(
@@ -141,7 +141,7 @@ describe('DashboardService', () => {
     it('omits zero-count actions and sorts critical before high', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
-        user_type_id: 'business',
+        user_type_id: 'business', active_persona: 'business',
         business: { id: 'biz-1' },
       });
       hasuraSystemService.executeQuery.mockImplementation(
@@ -181,7 +181,7 @@ describe('DashboardService', () => {
     it('rejects non-business users', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
-        user_type_id: 'client',
+        user_type_id: 'client', active_persona: 'client',
         client: { id: 'c1' },
       });
 

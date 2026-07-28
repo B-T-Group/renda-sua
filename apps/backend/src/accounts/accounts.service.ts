@@ -30,6 +30,12 @@ export interface TransactionResult {
   error?: string;
 }
 
+export interface WithdrawalRegistrationResult extends TransactionResult {
+  alreadyExists?: boolean;
+}
+
+export type IdempotentTransactionResult = WithdrawalRegistrationResult;
+
 @Injectable()
 export class AccountsService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
@@ -194,6 +200,75 @@ export class AccountsService {
       referenceId: request.referenceId,
     });
     return (result.account_transactions?.length ?? 0) > 0;
+  }
+
+  /**
+   * Idempotent withdrawal: skips registerTransaction when a withdrawal already
+   * exists for the same account + referenceId.
+   */
+  async registerWithdrawalIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >
+  ): Promise<WithdrawalRegistrationResult> {
+    return this.registerLedgerEntryIfNotExists(request, 'withdrawal');
+  }
+
+  async registerHoldIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >
+  ): Promise<IdempotentTransactionResult> {
+    return this.registerLedgerEntryIfNotExists(request, 'hold');
+  }
+
+  async registerReleaseIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >
+  ): Promise<IdempotentTransactionResult> {
+    return this.registerLedgerEntryIfNotExists(request, 'release');
+  }
+
+  private async registerLedgerEntryIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >,
+    transactionType: 'withdrawal' | 'hold' | 'release'
+  ): Promise<IdempotentTransactionResult> {
+    if (!request.referenceId) {
+      return { success: false, error: 'referenceId is required' };
+    }
+    const alreadyExists = await this.hasTransactionForReference({
+      accountId: request.accountId,
+      transactionType,
+      referenceId: request.referenceId,
+    });
+    if (alreadyExists) {
+      return { success: true, alreadyExists: true };
+    }
+    const result = await this.registerTransaction({
+      accountId: request.accountId,
+      amount: request.amount,
+      transactionType,
+      memo: request.memo,
+      referenceId: request.referenceId,
+    });
+    if (!result.success) {
+      const raced = await this.hasTransactionForReference({
+        accountId: request.accountId,
+        transactionType,
+        referenceId: request.referenceId,
+      });
+      if (raced) {
+        return { success: true, alreadyExists: true };
+      }
+    }
+    return { ...result, alreadyExists: false };
   }
 
   /**

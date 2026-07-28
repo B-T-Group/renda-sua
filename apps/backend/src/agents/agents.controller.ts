@@ -133,7 +133,7 @@ export class AgentsController {
   private requireAgentActor(user: any, ctx: RequestContext): string {
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader(ctx)
+      this.hasuraUserService.sessionPersonaContext(ctx)
     );
     if (active !== 'agent' || !user.agent?.id) {
       throw new HttpException(

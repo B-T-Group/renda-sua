@@ -751,7 +751,7 @@ export class AddressesService {
   ): Promise<AddressResponse | null> {
     const sourcePersona = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     const addresses = await this.hasuraSystemService.getAllUserAddresses(
       userId,
@@ -1247,7 +1247,7 @@ export class AddressesService {
       const user = await this.hasuraUserService.getUser();
       const persona = resolveActivePersonaWithDefault(
         user,
-        this.hasuraUserService.getActivePersonaHeader()
+        this.hasuraUserService.sessionPersonaContext()
       );
       const isAgentPersona = persona === 'agent';
 

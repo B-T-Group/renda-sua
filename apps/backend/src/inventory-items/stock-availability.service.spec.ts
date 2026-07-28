@@ -51,7 +51,7 @@ describe('StockAvailabilityService', () => {
 
   const clientUser = {
     id: clientUserId,
-    user_type_id: 'client',
+    user_type_id: 'client', active_persona: 'client',
     first_name: 'Sam',
     last_name: 'Shopper',
     client: { id: 'client-1' },
@@ -59,7 +59,7 @@ describe('StockAvailabilityService', () => {
 
   const businessUser = {
     id: businessUserId,
-    user_type_id: 'business',
+    user_type_id: 'business', active_persona: 'business',
     first_name: 'Biz',
     last_name: 'Owner',
     business: { id: businessId },
@@ -452,7 +452,7 @@ describe('StockAvailabilityService adjust claim ordering', () => {
     );
     hasuraUserService.getUser.mockResolvedValue({
       id: 'biz-user-1',
-      user_type_id: 'business',
+      user_type_id: 'business', active_persona: 'business',
       business: { id: 'biz-1', status: 'active' },
     });
     notificationsService.sendStockAvailabilityResultPush.mockResolvedValue(undefined);
@@ -594,7 +594,7 @@ describe('StockAvailabilityService ownership revalidation', () => {
     );
     hasuraUserService.getUser.mockResolvedValue({
       id: 'biz-user-1',
-      user_type_id: 'business',
+      user_type_id: 'business', active_persona: 'business',
       business: { id: 'biz-1', status: 'active' },
     });
     notificationsService.sendStockAvailabilityResultPush.mockResolvedValue(

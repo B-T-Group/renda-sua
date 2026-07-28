@@ -386,7 +386,7 @@ export class DeliveryPinShareService {
 
   private requireClient(user: {
     client?: { id?: string } | null;
-    user_type_id?: string | null;
+    active_persona?: PersonaId | null;
   }): void {
     if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Client only', HttpStatus.FORBIDDEN);

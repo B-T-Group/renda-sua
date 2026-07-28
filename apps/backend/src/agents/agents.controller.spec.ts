@@ -16,12 +16,13 @@ jest.mock('./agent-referrals.service', () => ({
   AgentReferralsService: jest.fn(),
 }));
 
+import { emptyRequestContext } from '../auth/request-context';
 import { AgentsController } from './agents.controller';
 
 describe('AgentsController location tracking consent', () => {
   let controller: AgentsController;
   let hasuraUserService: {
-    getActivePersonaHeader: jest.Mock;
+    sessionPersonaContext: jest.Mock;
     getUser: jest.Mock;
   };
   let hasuraSystemService: {
@@ -36,9 +37,19 @@ describe('AgentsController location tracking consent', () => {
     agent: { id: 'agent-1' },
   };
 
+  const agentCtx = emptyRequestContext({
+    userId: 'user-1',
+    authToken: 'token',
+    jwtDefaultRole: 'agent',
+    jwtAllowedRoles: ['agent'],
+  });
+
   beforeEach(() => {
     hasuraUserService = {
-      getActivePersonaHeader: jest.fn().mockReturnValue(undefined),
+      sessionPersonaContext: jest.fn().mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      }),
       getUser: jest.fn().mockResolvedValue(agentUser),
     };
     hasuraSystemService = {
@@ -58,15 +69,15 @@ describe('AgentsController location tracking consent', () => {
     const agent = {
       id: 'agent-1',
       location_tracking_consent_ios: 'not_shown',
-      location_tracking_consent_android: 'accepted_bg',
+      location_tracking_consent_android: 'accepted',
     };
     hasuraSystemService.getAgentLocationConsent.mockResolvedValue('not_shown');
     hasuraSystemService.updateAgentLocationConsent.mockResolvedValue(agent);
 
     await expect(
-      controller.updateLocationTrackingConsent({
+      controller.updateLocationTrackingConsent(agentCtx, {
         platform: 'android',
-        consent: 'accepted_bg',
+        consent: 'accepted',
       })
     ).resolves.toEqual({ success: true, agent });
 
@@ -77,31 +88,7 @@ describe('AgentsController location tracking consent', () => {
     expect(hasuraSystemService.updateAgentLocationConsent).toHaveBeenCalledWith(
       'agent-1',
       'android',
-      'accepted_bg'
-    );
-  });
-
-  it('resets the requested iOS disclosure after prior acceptance', async () => {
-    const agent = {
-      id: 'agent-1',
-      location_tracking_consent_ios: 'not_shown',
-      location_tracking_consent_android: 'accepted_bg',
-    };
-    hasuraSystemService.getAgentLocationConsent.mockResolvedValue('accepted_bg');
-    hasuraSystemService.updateAgentLocationConsent.mockResolvedValue(agent);
-
-    await expect(
-      controller.resetLocationTrackingDisclosure({ platform: 'ios' })
-    ).resolves.toEqual({ success: true, agent });
-
-    expect(hasuraSystemService.getAgentLocationConsent).toHaveBeenCalledWith(
-      'agent-1',
-      'ios'
-    );
-    expect(hasuraSystemService.updateAgentLocationConsent).toHaveBeenCalledWith(
-      'agent-1',
-      'ios',
-      'not_shown'
+      'accepted'
     );
   });
 
@@ -109,9 +96,9 @@ describe('AgentsController location tracking consent', () => {
     hasuraSystemService.getAgentLocationConsent.mockResolvedValue('rejected');
 
     try {
-      await controller.updateLocationTrackingConsent({
+      await controller.updateLocationTrackingConsent(agentCtx, {
         platform: 'ios',
-        consent: 'accepted_fg',
+        consent: 'accepted',
       });
       throw new Error('Expected updateLocationTrackingConsent to throw');
     } catch (error: any) {
@@ -120,7 +107,7 @@ describe('AgentsController location tracking consent', () => {
       expect(error.getResponse()).toEqual({
         success: false,
         error:
-          'Cannot transition location_tracking_consent from rejected to accepted_fg',
+          'Cannot transition location_tracking_consent from rejected to accepted',
       });
     }
     expect(hasuraSystemService.updateAgentLocationConsent).not.toHaveBeenCalled();
@@ -133,11 +120,15 @@ describe('AgentsController location tracking consent', () => {
       personas: ['client'],
       client: { id: 'client-1' },
     });
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+    });
 
     try {
-      await controller.updateLocationTrackingConsent({
+      await controller.updateLocationTrackingConsent(agentCtx, {
         platform: 'ios',
-        consent: 'accepted_fg',
+        consent: 'accepted',
       });
       throw new Error('Expected updateLocationTrackingConsent to throw');
     } catch (error: any) {

@@ -33,6 +33,7 @@ import type {
 } from './rental-item-images.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { isActivePersona } from '../users/persona.util';
 
 interface BulkCreateBody {
   rental_category_id?: string | null;
@@ -299,7 +300,7 @@ export class RentalItemImagesController {
   async cleanup(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
-    if (user.user_type_id !== 'business' || !businessId) {
+    if (!isActivePersona(user, 'business') || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN
@@ -333,7 +334,7 @@ export class RentalItemImagesController {
   private async requireBusinessId(ctx: RequestContext): Promise<string> {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
-    if (user.user_type_id !== 'business' || !businessId) {
+    if (!isActivePersona(user, 'business') || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN

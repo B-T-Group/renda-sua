@@ -7,6 +7,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
+import { isActivePersona } from '../users/persona.util';
 
 export interface DashboardAggregatesDto {
   ordersTotal: number;
@@ -66,7 +67,7 @@ export class DashboardService {
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
     const user = await this.hasuraUserService.getUser();
-    if (user.user_type_id !== 'business' || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException(
         'Dashboard aggregates require a business user',
         HttpStatus.FORBIDDEN
@@ -134,7 +135,7 @@ export class DashboardService {
 
   async getActionsNeeded(): Promise<ActionsNeededDto> {
     const user = await this.hasuraUserService.getUser();
-    const persona = user.user_type_id;
+    const persona = user.active_persona;
     if (persona === 'business' && user.business?.id) {
       return this.getBusinessActions(user.business.id);
     }
@@ -456,7 +457,7 @@ export class DashboardService {
 
   private async requireBusinessId(): Promise<string> {
     const user = await this.hasuraUserService.getUser();
-    if (user.user_type_id !== 'business' || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException(
         'Client cities require a business user',
         HttpStatus.FORBIDDEN

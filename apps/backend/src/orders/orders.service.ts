@@ -51,6 +51,7 @@ import {
   isActivePersona,
   resolveActivePersona,
   resolveActivePersonaWithDefault,
+  userHasPersona,
 } from '../users/persona.util';
 import {
   DEFAULT_USER_TIMEZONE,
@@ -413,7 +414,7 @@ export class OrdersService {
   ): void {
     const active = resolveActivePersonaWithDefault(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     if (active !== persona) {
       throw new HttpException(message, HttpStatus.FORBIDDEN);
@@ -4153,7 +4154,7 @@ export class OrdersService {
     const user = await this.hasuraUserService.getUser();
     const persona = resolveActivePersona(
       user,
-      this.hasuraUserService.getActivePersonaHeader()
+      this.hasuraUserService.sessionPersonaContext()
     );
     let personaFilter: any = {};
     const pendingClaimTransactionsByOrderNumber = new Map<
@@ -6718,7 +6719,7 @@ export class OrdersService {
 
       const user = await this.hasuraSystemService.getUserById(account.user_id);
 
-      if (!user || user.user_type_id !== 'agent' || !user.agent) {
+      if (!user || !userHasPersona(user, 'agent') || !user.agent) {
         throw new HttpException(
           'User or agent not found',
           HttpStatus.NOT_FOUND

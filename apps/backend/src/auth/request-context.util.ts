@@ -1,8 +1,15 @@
 import { randomUUID } from 'crypto';
 import type { RequestContext } from './request-context';
 import { emptyRequestContext } from './request-context';
+import { isPersonaId, type PersonaId } from '../users/persona.types';
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
+
+export interface HasuraJwtClaims {
+  userId: string;
+  defaultRole?: PersonaId;
+  allowedRoles: PersonaId[];
+}
 
 function headerValue(
   headers: Record<string, unknown> | undefined,
@@ -23,6 +30,42 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(json) as Record<string, unknown>;
 }
 
+function readHasuraClaimsBlock(
+  payload: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  return payload[HASURA_JWT_CLAIMS_NAMESPACE] as
+    | Record<string, unknown>
+    | undefined;
+}
+
+function normalizePersonaRole(raw: unknown): PersonaId | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const v = String(raw).trim().toLowerCase();
+  return isPersonaId(v) ? v : undefined;
+}
+
+function parseAllowedRoles(raw: unknown): PersonaId[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((entry) => normalizePersonaRole(entry))
+      .filter((entry): entry is PersonaId => !!entry);
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        return parseAllowedRoles(JSON.parse(trimmed));
+      } catch {
+        return [];
+      }
+    }
+    const role = normalizePersonaRole(trimmed);
+    return role ? [role] : [];
+  }
+  return [];
+}
+
 export function extractBearerToken(
   headers: Record<string, unknown> | undefined
 ): string | null {
@@ -33,18 +76,31 @@ export function extractBearerToken(
   return authHeader.substring(7);
 }
 
-export function extractHasuraUserIdFromToken(token: string): string {
+export function extractHasuraClaimsFromToken(token: string): HasuraJwtClaims {
   const payload = decodeJwtPayload(token);
-  const claims = payload[HASURA_JWT_CLAIMS_NAMESPACE] as
-    | Record<string, unknown>
-    | undefined;
+  const claims = readHasuraClaimsBlock(payload);
   const id = claims?.['x-hasura-user-id'] ?? claims?.['X-Hasura-User-Id'];
   if (id === undefined || id === null || String(id).trim() === '') {
     throw new Error('Missing x-hasura-user-id in Hasura JWT claims');
   }
-  return String(id);
+  const defaultRole = normalizePersonaRole(
+    claims?.['x-hasura-default-role'] ?? claims?.['X-Hasura-Default-Role']
+  );
+  const allowedRoles = parseAllowedRoles(
+    claims?.['x-hasura-allowed-roles'] ?? claims?.['X-Hasura-Allowed-Roles']
+  );
+  return {
+    userId: String(id),
+    defaultRole,
+    allowedRoles,
+  };
 }
 
+export function extractHasuraUserIdFromToken(token: string): string {
+  return extractHasuraClaimsFromToken(token).userId;
+}
+
+/** @deprecated Session persona is resolved from JWT, not this header. */
 export function extractActivePersonaHeader(
   headers: Record<string, unknown> | undefined
 ): string | undefined {
@@ -58,9 +114,14 @@ export function buildRequestContextFromHeaders(
 ): RequestContext {
   const authToken = extractBearerToken(headers);
   let userId = 'anonymous';
+  let jwtDefaultRole: PersonaId | undefined;
+  let jwtAllowedRoles: PersonaId[] | undefined;
   if (authToken) {
     try {
-      userId = extractHasuraUserIdFromToken(authToken);
+      const claims = extractHasuraClaimsFromToken(authToken);
+      userId = claims.userId;
+      jwtDefaultRole = claims.defaultRole;
+      jwtAllowedRoles = claims.allowedRoles;
     } catch {
       userId = 'anonymous';
     }
@@ -69,6 +130,8 @@ export function buildRequestContextFromHeaders(
     userId,
     authToken,
     activePersona: extractActivePersonaHeader(headers),
+    jwtDefaultRole,
+    jwtAllowedRoles,
     requestId: requestId || headerValue(headers, 'x-request-id') || randomUUID(),
   });
 }

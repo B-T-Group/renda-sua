@@ -65,11 +65,15 @@ export class HasuraDiagnosticsController {
       if (user?.agent) availablePersonas.push('agent');
       if (user?.business) availablePersonas.push('business');
 
+      const personaCtx = this.hasuraUserService.sessionPersonaContext(ctx);
+
       return {
         success: true,
         data: {
           hasura_user_id: userId,
           auth0_sub: authSub,
+          jwt_default_role: personaCtx.jwtDefaultRole ?? null,
+          jwt_allowed_roles: personaCtx.jwtAllowedRoles ?? [],
           user: user
             ? {
                 id: user.id,
@@ -90,7 +94,7 @@ export class HasuraDiagnosticsController {
                 }
               : null,
           },
-          note: 'Check if your JWT x-hasura-allowed-roles matches the available_personas array. If business operations are failing, ensure has_business is true.',
+          note: 'Session persona is resolved from jwt_default_role (x-hasura-default-role). Check that it matches available_personas and the UI active mode.',
         },
       };
     } catch (error: any) {

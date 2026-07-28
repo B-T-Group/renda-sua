@@ -25,6 +25,7 @@ import type { OrderStatusChangeRequest } from './orders.service';
 import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { isActivePersona } from '../users/persona.util';
 
 @ApiTags('Failed Deliveries')
 @Controller('failed-deliveries')
@@ -182,7 +183,7 @@ export class FailedDeliveriesController {
       // Get business ID from authenticated user
       const user = await this.hasuraUserService.getUser(ctx);
 
-      if (user.user_type_id !== 'business' || !user.business) {
+      if (!isActivePersona(user, 'business') || !user.business) {
         throw new HttpException(
           'Only business users can access failed deliveries',
           HttpStatus.FORBIDDEN
