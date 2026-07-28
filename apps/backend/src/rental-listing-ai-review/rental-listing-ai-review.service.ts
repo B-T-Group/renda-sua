@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RentalListingAiReviewModelService } from './rental-listing-ai-review-model.service';
 import { RentalListingAiReviewQueueService } from './rental-listing-ai-review-queue.service';
@@ -21,7 +22,8 @@ export class RentalListingAiReviewService {
     private readonly queue: RentalListingAiReviewQueueService,
     private readonly model: RentalListingAiReviewModelService,
     private readonly notifications: NotificationsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   isEnabled(): boolean {
@@ -257,6 +259,10 @@ export class RentalListingAiReviewService {
       businessUserId: listing.rental_item.business.user_id,
       rentalItemName: listing.rental_item.name,
     });
+    await this.merchantLifecycleService.recompute(
+      listing.rental_item.business_id,
+      'rental_listing_approved'
+    );
   }
 
   private async applyProposeDecision(

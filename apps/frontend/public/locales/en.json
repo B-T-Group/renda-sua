@@ -679,7 +679,7 @@
       "confirmMobileMoneyHelp": "Confirm that this merchant’s mobile money account can receive payouts. This is the last payment step for non-Stripe businesses.",
       "stripePaymentHelp": "Stripe Connect status updates automatically. No mobile money confirmation is needed.",
       "paymentNotStarted": "not started",
-      "paymentConfirmedStillDraft": "Payment confirmed. Approve a product to leave Draft.",
+      "paymentConfirmedStillDraft": "Payment confirmed. Approve a product or rental to leave Draft.",
       "draftNextStep": "Still Draft — next step: {{step}}",
       "railStripe": "Stripe",
       "railMobileMoney": "Mobile money",
@@ -693,7 +693,10 @@
       "catalogHasApprovedProduct": "Approved product: yes",
       "catalogMissingApprovedProduct": "Approved product: no",
       "catalogPendingProduct": "item pending moderation",
-      "catalogDraftHelp": "Business stays Draft until a product is approved at an active location (and the contract is signed).",
+      "catalogHasApprovedRental": "Approved rental: yes",
+      "catalogMissingApprovedRental": "Approved rental: no",
+      "catalogPendingRental": "rental pending moderation",
+      "catalogDraftHelp": "Business stays Draft until a product or rental is approved at an active location (and the contract is signed).",
       "pageSubtitle": "Triage merchant lifecycle, ID review, and payment readiness.",
       "empty": "No businesses found.",
       "emptyFiltered": "No businesses match these filters.",
@@ -737,7 +740,7 @@
       "blockers": {
         "missingSignedContract": "Missing: signed contract",
         "missingActiveLocation": "Missing: active location",
-        "missingApprovedProduct": "Missing: approved product",
+        "missingApprovedProduct": "Missing: approved product or rental",
         "missingPaymentVerification": "Missing: payment verification"
       },
       "suspend": "Suspend",
@@ -1647,7 +1650,7 @@
       "storeLiveNotice": "Customers can discover your products. Complete payment setup to start accepting orders.",
       "paymentReviewPending": "Payment details submitted. We will notify you when you can accept orders.",
       "setupTitle": "Finish setting up your store",
-      "setupNotice": "Complete your profile, sign the merchant agreement, and publish at least one product to go live."
+      "setupNotice": "Complete your profile, sign the merchant agreement, and publish at least one product or rental to go live."
     },
     "dashboard": {
       "welcome": "Welcome to your business dashboard",

@@ -324,6 +324,7 @@ export const AI_REVIEW_BY_PK = `
           id
           name
           description
+          business_id
           business { name user_id }
           rental_item_images(order_by: { display_order: asc }) {
             id

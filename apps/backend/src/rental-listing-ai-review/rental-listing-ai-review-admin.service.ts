@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RentalListingAiReviewService } from './rental-listing-ai-review.service';
 import * as Q from './rental-listing-ai-review.queries';
@@ -13,7 +14,8 @@ export class RentalListingAiReviewAdminService {
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly reviewService: RentalListingAiReviewService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async listReviews(params: {
@@ -142,6 +144,13 @@ export class RentalListingAiReviewAdminService {
         businessUserId: item.business.user_id,
         rentalItemName: item.name,
       });
+    }
+    const businessId = item?.business_id as string | undefined;
+    if (businessId) {
+      await this.merchantLifecycleService.recompute(
+        businessId,
+        'rental_listing_approved'
+      );
     }
   }
 

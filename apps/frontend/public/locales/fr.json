@@ -438,7 +438,7 @@
       "confirmMobileMoneyHelp": "Confirmez que le compte mobile money de ce marchand peut recevoir des paiements. C’est la dernière étape de paiement pour les entreprises hors Stripe.",
       "stripePaymentHelp": "Le statut Stripe Connect se met à jour automatiquement. Aucune confirmation mobile money n’est nécessaire.",
       "paymentNotStarted": "non démarré",
-      "paymentConfirmedStillDraft": "Paiement confirmé. Approuvez un produit pour quitter le statut Brouillon.",
+      "paymentConfirmedStillDraft": "Paiement confirmé. Approuvez un produit ou une location pour quitter le statut Brouillon.",
       "draftNextStep": "Toujours en brouillon — prochaine étape : {{step}}",
       "railStripe": "Stripe",
       "railMobileMoney": "Mobile money",
@@ -452,7 +452,10 @@
       "catalogHasApprovedProduct": "Produit approuvé : oui",
       "catalogMissingApprovedProduct": "Produit approuvé : non",
       "catalogPendingProduct": "article en attente de modération",
-      "catalogDraftHelp": "L’entreprise reste en brouillon jusqu’à ce qu’un produit soit approuvé à un emplacement actif (et que le contrat soit signé).",
+      "catalogHasApprovedRental": "Location approuvée : oui",
+      "catalogMissingApprovedRental": "Location approuvée : non",
+      "catalogPendingRental": "location en attente de modération",
+      "catalogDraftHelp": "L’entreprise reste en brouillon jusqu’à ce qu’un produit ou une location soit approuvé(e) à un emplacement actif (et que le contrat soit signé).",
       "pageSubtitle": "Trier le cycle de vie marchand, la revue d’identité et la préparation au paiement.",
       "empty": "Aucune entreprise trouvée.",
       "emptyFiltered": "Aucune entreprise ne correspond à ces filtres.",
@@ -496,7 +499,7 @@
       "blockers": {
         "missingSignedContract": "Manquant : contrat signé",
         "missingActiveLocation": "Manquant : emplacement actif",
-        "missingApprovedProduct": "Manquant : produit approuvé",
+        "missingApprovedProduct": "Manquant : produit ou location approuvé(e)",
         "missingPaymentVerification": "Manquant : vérification du paiement"
       },
       "suspend": "Suspendre",
@@ -1390,7 +1393,7 @@
       "storeLiveNotice": "Les clients peuvent découvrir vos produits. Terminez la configuration des paiements pour accepter les commandes.",
       "paymentReviewPending": "Les informations de paiement ont été soumises. Nous vous informerons lorsque vous pourrez accepter des commandes.",
       "setupTitle": "Terminez la configuration de votre boutique",
-      "setupNotice": "Complétez votre profil, signez le contrat marchand et publiez au moins un produit pour être visible."
+      "setupNotice": "Complétez votre profil, signez le contrat marchand et publiez au moins un produit ou une location pour être visible."
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",

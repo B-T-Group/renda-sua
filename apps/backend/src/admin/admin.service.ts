@@ -595,6 +595,8 @@ export class AdminService {
       hasLocation: boolean;
       hasApprovedItem: boolean;
       hasPendingItem: boolean;
+      hasApprovedRental: boolean;
+      hasPendingRental: boolean;
     };
   }> {
     const [catalog, rail, accounts] = await Promise.all([
@@ -605,7 +607,9 @@ export class AdminService {
     const blockers: AdminVerificationBlocker[] = [];
     if (!contractComplete) blockers.push('missing_signed_contract');
     if (!catalog.hasLocation) blockers.push('missing_active_location');
-    if (!catalog.hasApprovedItem) blockers.push('missing_approved_product');
+    if (!catalog.hasApprovedItem && !catalog.hasApprovedRental) {
+      blockers.push('missing_approved_product');
+    }
     const provider = paymentProviderForRail(rail);
     const paymentCapability = aggregatePaymentCapabilityForProvider(
       accounts.map(

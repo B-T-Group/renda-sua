@@ -209,27 +209,36 @@ export class MerchantLifecycleService {
   }
 
   /**
-   * Product catalog readiness (approved inventory at an active location).
-   * Agreement signing is checked separately by isCatalogReady / verification.
+   * Catalog readiness: active location plus approved sale inventory and/or
+   * approved rental listing. Agreement signing is checked separately.
    */
   async getCatalogStep(businessId: string): Promise<{
     complete: boolean;
     hasLocation: boolean;
     hasApprovedItem: boolean;
     hasPendingItem: boolean;
+    hasApprovedRental: boolean;
+    hasPendingRental: boolean;
   }> {
     const inventory = await this.queryCatalogInventory(businessId);
+    const hasCatalogContent =
+      inventory.hasApprovedItem || inventory.hasApprovedRental;
     return {
-      complete: inventory.hasLocation && inventory.hasApprovedItem,
+      complete: inventory.hasLocation && hasCatalogContent,
       hasLocation: inventory.hasLocation,
       hasApprovedItem: inventory.hasApprovedItem,
       hasPendingItem: inventory.hasPendingItem,
+      hasApprovedRental: inventory.hasApprovedRental,
+      hasPendingRental: inventory.hasPendingRental,
     };
   }
+
   private async queryCatalogInventory(businessId: string): Promise<{
     hasLocation: boolean;
     hasApprovedItem: boolean;
     hasPendingItem: boolean;
+    hasApprovedRental: boolean;
+    hasPendingRental: boolean;
   }> {
     const query = `
       query CatalogInventory($businessId: uuid!) {
@@ -257,6 +266,33 @@ export class MerchantLifecycleService {
             }
           }
         ) { aggregate { count } }
+        approved_rentals: rental_location_listings_aggregate(
+          where: {
+            is_active: { _eq: true }
+            deleted_at: { _is_null: true }
+            moderation_status: { _eq: approved }
+            business_location: {
+              business_id: { _eq: $businessId }
+              is_active: { _eq: true }
+            }
+            rental_item: {
+              is_active: { _eq: true }
+              deleted_at: { _is_null: true }
+            }
+          }
+        ) { aggregate { count } }
+        pending_rentals: rental_location_listings_aggregate(
+          where: {
+            is_active: { _eq: true }
+            deleted_at: { _is_null: true }
+            moderation_status: { _in: [pending, ai_reviewing, proposal_pending] }
+            business_location: {
+              business_id: { _eq: $businessId }
+              is_active: { _eq: true }
+            }
+            rental_item: { deleted_at: { _is_null: true } }
+          }
+        ) { aggregate { count } }
       }
     `;
     const res = await this.hasuraSystemService.executeQuery(query, { businessId });
@@ -264,6 +300,8 @@ export class MerchantLifecycleService {
       hasLocation: (res.business_locations_aggregate?.aggregate?.count ?? 0) > 0,
       hasApprovedItem: (res.approved?.aggregate?.count ?? 0) > 0,
       hasPendingItem: (res.pending?.aggregate?.count ?? 0) > 0,
+      hasApprovedRental: (res.approved_rentals?.aggregate?.count ?? 0) > 0,
+      hasPendingRental: (res.pending_rentals?.aggregate?.count ?? 0) > 0,
     };
   }
 

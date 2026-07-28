@@ -92,6 +92,8 @@ export interface BusinessVerificationDetails {
     hasLocation: boolean;
     hasApprovedItem: boolean;
     hasPendingItem: boolean;
+    hasApprovedRental?: boolean;
+    hasPendingRental?: boolean;
   };
 }
 
@@ -135,7 +137,7 @@ function blockerLabel(
     case 'missing_approved_product':
       return t(
         'admin.businesses.blockers.missingApprovedProduct',
-        'Missing: approved product'
+        'Missing: approved product or rental'
       );
     case 'missing_payment_verification':
       return t(
@@ -913,12 +915,29 @@ export const AdminBusinessVerificationDialog: React.FC<
                         )})`
                       : ''}
                   </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {catalog?.hasApprovedRental
+                      ? t(
+                          'admin.businesses.catalogHasApprovedRental',
+                          'Approved rental: yes'
+                        )
+                      : t(
+                          'admin.businesses.catalogMissingApprovedRental',
+                          'Approved rental: no'
+                        )}
+                    {catalog?.hasPendingRental && !catalog?.hasApprovedRental
+                      ? ` (${t(
+                          'admin.businesses.catalogPendingRental',
+                          'rental pending moderation'
+                        )})`
+                      : ''}
+                  </Typography>
                 </Stack>
                 {!catalog?.complete ? (
                   <Alert severity="warning" sx={{ mt: 1 }}>
                     {t(
                       'admin.businesses.catalogDraftHelp',
-                      'Business stays Draft until a product is approved at an active location (and the contract is signed).'
+                      'Business stays Draft until a product or rental is approved at an active location (and the contract is signed).'
                     )}
                   </Alert>
                 ) : null}

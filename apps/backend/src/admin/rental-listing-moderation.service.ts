@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './rental-listing-moderation.queries';
 
@@ -28,7 +29,11 @@ type ListingForModerationRow = {
   id: string;
   moderation_status: string;
   deleted_at: string | null;
-  rental_item: { name: string; business: { user_id: string } };
+  rental_item: {
+    name: string;
+    business_id: string;
+    business: { id: string; user_id: string };
+  };
 };
 
 const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
@@ -37,7 +42,8 @@ const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
 export class RentalListingModerationService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   async listModerationQueue(params: {
@@ -86,6 +92,12 @@ export class RentalListingModerationService {
       businessUserId: listing.rental_item.business.user_id,
       rentalItemName: listing.rental_item.name,
     });
+    const businessId =
+      listing.rental_item.business_id || listing.rental_item.business.id;
+    await this.merchantLifecycleService.recompute(
+      businessId,
+      'rental_listing_approved'
+    );
   }
 
   async rejectListing(

@@ -66,6 +66,8 @@ export interface BusinessVerificationStatus {
       hasLocation?: boolean;
       hasApprovedItem?: boolean;
       hasPendingItem?: boolean;
+      hasApprovedRental?: boolean;
+      hasPendingRental?: boolean;
     };
   };
 }

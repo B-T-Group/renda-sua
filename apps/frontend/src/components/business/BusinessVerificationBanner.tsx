@@ -134,7 +134,7 @@ export const BusinessVerificationBanner: React.FC = () => {
       <Typography variant="body2" sx={{ mb: 2 }}>
         {t(
           'business.lifecycle.setupNotice',
-          'Complete your profile, sign the merchant agreement, and publish at least one product to go live.'
+          'Complete your profile, sign the merchant agreement, and publish at least one product or rental to go live.'
         )}
       </Typography>
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>

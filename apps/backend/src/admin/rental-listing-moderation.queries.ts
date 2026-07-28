@@ -44,7 +44,9 @@ export const LISTING_FOR_MODERATION_BY_PK = `
       deleted_at
       rental_item {
         name
+        business_id
         business {
+          id
           user_id
         }
       }
