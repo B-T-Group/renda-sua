@@ -100,6 +100,23 @@ export class RentalsController {
     enum: ['business_operated', 'take_home'],
     description: 'Filter by rental operation mode',
   })
+  @ApiQuery({
+    name: 'origin_lat',
+    required: false,
+    type: Number,
+    description: 'Browser/device latitude for proximity sort and distance',
+  })
+  @ApiQuery({
+    name: 'origin_lng',
+    required: false,
+    type: Number,
+    description: 'Browser/device longitude for proximity sort and distance',
+  })
+  @ApiQuery({
+    name: 'business_location_id',
+    required: false,
+    description: 'Filter listings to a single business location',
+  })
   @ApiResponse({ status: 200, description: 'Listings returned' })
   async listPublicListings(
     @Query('country_code') country_code?: string,
@@ -111,8 +128,15 @@ export class RentalsController {
     @Query('category_id') category_id?: string,
     @Query('min_price') min_price?: string,
     @Query('max_price') max_price?: string,
-    @Query('operation_mode') operation_mode?: string
+    @Query('operation_mode') operation_mode?: string,
+    @Query('origin_lat') origin_lat?: string,
+    @Query('origin_lng') origin_lng?: string,
+    @Query('business_location_id') business_location_id?: string
   ) {
+    const oLat =
+      origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
+    const oLng =
+      origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
     const result = await this.rentalsService.listPublicRentalListings({
       country_code,
       state,
@@ -124,6 +148,9 @@ export class RentalsController {
       min_price: min_price != null ? Number(min_price) : undefined,
       max_price: max_price != null ? Number(max_price) : undefined,
       operation_mode,
+      ...(Number.isFinite(oLat) && { origin_lat: oLat }),
+      ...(Number.isFinite(oLng) && { origin_lng: oLng }),
+      business_location_id,
     });
     return {
       success: true,
@@ -135,6 +162,42 @@ export class RentalsController {
         limit: result.limit,
       },
     };
+  }
+
+  @Public()
+  @Get('top-locations')
+  @ApiOperation({
+    summary:
+      'Nearest rental locations when origin is known; otherwise top by listing count',
+  })
+  @ApiQuery({ name: 'country_code', required: false })
+  @ApiQuery({ name: 'state', required: false })
+  @ApiQuery({ name: 'origin_lat', required: false, type: Number })
+  @ApiQuery({ name: 'origin_lng', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Top rental locations returned' })
+  async listTopLocations(
+    @Query('country_code') country_code?: string,
+    @Query('state') state?: string,
+    @Query('origin_lat') origin_lat?: string,
+    @Query('origin_lng') origin_lng?: string,
+    @Query('limit') limit?: string
+  ) {
+    const oLat =
+      origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
+    const oLng =
+      origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
+    const take = limit ? Number.parseInt(limit, 10) : 5;
+    const locations = await this.rentalsService.getTopRentalLocations(
+      Number.isFinite(take) ? take : 5,
+      {
+        country_code,
+        state,
+        ...(Number.isFinite(oLat) && { origin_lat: oLat }),
+        ...(Number.isFinite(oLng) && { origin_lng: oLng }),
+      }
+    );
+    return { success: true, data: { locations } };
   }
 
   @Public()

@@ -116,4 +116,42 @@ describe('LocationsController', () => {
       );
     });
   });
+
+  describe('getMarketStates', () => {
+    it('returns inventory state counts by default', async () => {
+      hasuraService.executeQuery.mockResolvedValueOnce({
+        business_inventory_aggregate: { aggregate: { count: 3 } },
+        business_inventory: [
+          { business_location: { address: { state: 'Littoral' } } },
+          { business_location: { address: { state: 'Littoral' } } },
+          { business_location: { address: { state: 'Centre' } } },
+        ],
+      });
+
+      const result = await controller.getMarketStates('CM');
+
+      expect(result.success).toBe(true);
+      expect(result.totalItemCount).toBe(3);
+      expect(result.states).toEqual([
+        { state: 'Littoral', itemCount: 2 },
+        { state: 'Centre', itemCount: 1 },
+      ]);
+    });
+
+    it('returns rental state counts when catalog=rentals', async () => {
+      hasuraService.executeQuery.mockResolvedValueOnce({
+        rental_location_listings_aggregate: { aggregate: { count: 2 } },
+        rental_location_listings: [
+          { business_location: { address: { state: 'Littoral' } } },
+          { business_location: { address: { state: 'Littoral' } } },
+        ],
+      });
+
+      const result = await controller.getMarketStates('CM', 'rentals');
+
+      expect(result.success).toBe(true);
+      expect(result.totalItemCount).toBe(2);
+      expect(result.states).toEqual([{ state: 'Littoral', itemCount: 2 }]);
+    });
+  });
 });

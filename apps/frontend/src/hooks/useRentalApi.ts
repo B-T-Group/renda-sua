@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useApiClient } from './useApiClient';
 import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
 import type { RentalListingRow } from './useRentalListings';
@@ -342,7 +342,14 @@ export interface RentalBookingDetail {
 
 export function useRentalApi() {
   const api = useApiClient();
-  const rentalCatalogGeo = useRentalCatalogGeoParams();
+  const geoParams = useRentalCatalogGeoParams();
+  const rentalCatalogGeo = useMemo(
+    () => ({
+      ...(geoParams.country_code ? { country_code: geoParams.country_code } : {}),
+      ...(geoParams.state ? { state: geoParams.state } : {}),
+    }),
+    [geoParams.country_code, geoParams.state]
+  );
 
   const fetchBusinessRentalItems = useCallback(async () => {
     const { data } = await api.get<{

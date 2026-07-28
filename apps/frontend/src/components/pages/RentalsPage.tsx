@@ -1,7 +1,9 @@
 import { Search as SearchIcon } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
+  Chip,
   Container,
   FormControl,
   Grid,
@@ -15,92 +17,177 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { MarketSelector } from '../market/MarketSelector';
 import {
-  useRentalListings,
-  type RentalListingsSortMode,
-} from '../../hooks/useRentalListings';
-import LoadingPage from '../common/LoadingPage';
+  RentalCardSkeleton,
+  RentalLocationsStrip,
+} from '../rentals/RentalLocationsStrip';
 import { RentalItemCard } from '../rentals/RentalItemCard';
 import { RENTAL_REQUEST_SECTION_ID } from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
+import { useMarket } from '../../hooks/useMarket';
+import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
+import { useRentalCategories } from '../../hooks/useRentalCategories';
+import {
+  useRentalListings,
+  useRentalTopLocations,
+  type RentalListingsSortMode,
+} from '../../hooks/useRentalListings';
 
-/** Prevents MUI Select labels from collapsing to a single character in flex/grid layouts. */
+const SORT_MODES: RentalListingsSortMode[] = [
+  'relevance',
+  'newest',
+  'fastest',
+  'cheapest',
+  'expensive',
+];
+
 const rentalFilterFormControlSx = {
   width: '100%',
   minWidth: { xs: 0, sm: 240, md: 220 },
   maxWidth: '100%',
 } as const;
 
-function norm(s: string): string {
-  return s.trim().toLowerCase();
-}
-
 const RentalsPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
-  const [sort, setSort] = useState<RentalListingsSortMode>('relevance');
-  const { listings, loading, error } = useRentalListings({ sort });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedMarket, hydrated: marketHydrated } = useMarket();
 
-  const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [sort, setSort] = useState<RentalListingsSortMode>(
+    () => (searchParams.get('sort') as RentalListingsSortMode) || 'relevance'
+  );
+  const [searchDraft, setSearchDraft] = useState(
+    () => searchParams.get('q') ?? ''
+  );
+  const [debouncedSearch, setDebouncedSearch] = useState(searchDraft);
+  const [categoryId, setCategoryId] = useState(
+    () => searchParams.get('category') ?? ''
+  );
+  const [operationMode, setOperationMode] = useState<
+    '' | 'business_operated' | 'take_home'
+  >(
+    () =>
+      (searchParams.get('mode') as '' | 'business_operated' | 'take_home') ?? ''
+  );
+  const [locationFilterId, setLocationFilterId] = useState(
+    () => searchParams.get('location') ?? ''
+  );
+  const prevMarketIdRef = useRef<string | null>(null);
 
-  const categoryOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    listings.forEach((r) => {
-      const c = r.rental_item.rental_category;
-      map.set(c.id, c.name);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(searchDraft.trim()), 450);
+    return () => window.clearTimeout(id);
+  }, [searchDraft]);
+
+  useEffect(() => {
+    const marketId = selectedMarket?.id ?? null;
+    if (prevMarketIdRef.current && prevMarketIdRef.current !== marketId) {
+      setLocationFilterId('');
+    }
+    prevMarketIdRef.current = marketId;
+  }, [selectedMarket?.id]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set('q', debouncedSearch);
+    if (categoryId) next.set('category', categoryId);
+    if (sort !== 'relevance') next.set('sort', sort);
+    if (operationMode) next.set('mode', operationMode);
+    if (locationFilterId) next.set('location', locationFilterId);
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, categoryId, sort, operationMode, locationFilterId, setSearchParams]);
+
+  const wantsBrowserGeo =
+    marketHydrated &&
+    (sort === 'fastest' ||
+      (!debouncedSearch && !categoryId && !operationMode));
+  const browserGeo = usePublicBrowserGeo(wantsBrowserGeo);
+
+  const { categories } = useRentalCategories();
+  const {
+    listings,
+    loading,
+    loadingMore,
+    error,
+    total,
+    loadMore,
+    refetch,
+    catalogReady,
+  } = useRentalListings({
+    sort,
+    q: debouncedSearch,
+    category_id: categoryId || undefined,
+    operation_mode: operationMode || undefined,
+    origin_lat: browserGeo?.lat,
+    origin_lng: browserGeo?.lng,
+    business_location_id: locationFilterId || undefined,
+    enabled: marketHydrated,
+  });
+
+  const showLocationsStrip =
+    catalogReady &&
+    !debouncedSearch &&
+    !categoryId &&
+    !operationMode;
+
+  const { locations: topLocations, loading: topLocationsLoading } =
+    useRentalTopLocations({
+      enabled: showLocationsStrip,
+      origin_lat: browserGeo?.lat,
+      origin_lng: browserGeo?.lng,
     });
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [listings]);
 
-  const filtered = useMemo(() => {
-    const q = norm(search);
-    return listings.filter((r) => {
-      if (categoryId && r.rental_item.rental_category.id !== categoryId) {
-        return false;
-      }
-      if (!q) return true;
-      const a = r.business_location.address ?? {};
-      const blob = [
-        r.rental_item.name,
-        r.rental_item.description,
-        r.rental_item.business.name,
-        r.business_location.name,
-        a.city,
-        a.state,
-        a.country,
-        r.rental_item.rental_category.name,
-        ...(r.rental_item.tags ?? []),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return blob.includes(q);
-    });
-  }, [listings, search, categoryId]);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const canLoadMore = !loading && !loadingMore && listings.length > 0 && listings.length < total;
 
-  const hasActiveFilters = Boolean(search.trim() || categoryId);
-
-  const clearFilters = () => {
-    setSearch('');
-    setCategoryId('');
-  };
-
-  if (loading) {
-    return (
-      <LoadingPage
-        message={t('rentals.loading', 'Loading rentals')}
-        subtitle={t('rentals.loadingSubtitle', 'Please wait')}
-        showProgress
-      />
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !canLoadMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: '200px' }
     );
-  }
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canLoadMore, loadMore]);
+
+  const marketLabel = useMemo(() => {
+    if (!selectedMarket) return '';
+    const statePart = selectedMarket.stateCode
+      ? selectedMarket.stateName ?? selectedMarket.stateCode
+      : t('market.selector.allStates', 'All');
+    return `${selectedMarket.name} · ${statePart}`;
+  }, [selectedMarket, t]);
+
+  const hasActiveFilters = Boolean(
+    debouncedSearch || categoryId || operationMode || locationFilterId
+  );
+
+  const clearFilters = useCallback(() => {
+    setSearchDraft('');
+    setDebouncedSearch('');
+    setCategoryId('');
+    setOperationMode('');
+    setLocationFilterId('');
+  }, []);
+
+  const sortLabel = (mode: RentalListingsSortMode) => {
+    const map: Record<RentalListingsSortMode, string> = {
+      relevance: t('rentals.catalog.sortRelevance', 'Relevance'),
+      newest: t('rentals.catalog.sortNewest', 'Recently updated'),
+      fastest: t('rentals.catalog.sortFastest', 'Closest to you'),
+      cheapest: t('rentals.catalog.sortCheapest', 'Lowest price / day'),
+      expensive: t('rentals.catalog.sortExpensive', 'Highest price / day'),
+    };
+    return map[mode];
+  };
 
   return (
     <>
@@ -153,11 +240,18 @@ const RentalsPage: React.FC = () => {
               color="text.secondary"
               sx={{ mt: 1.5, maxWidth: 640, lineHeight: 1.65, fontSize: { xs: '0.95rem', sm: '1rem' } }}
             >
-              {t(
-                'rentals.catalog.subtitle',
-                'Browse verified business-operated rentals. Filter by category and location, then request dates on the listing page.'
-              )}
+              {selectedMarket
+                ? t('rentals.catalog.subtitleMarket', 'Showing rentals in {{market}}', {
+                    market: marketLabel,
+                  })
+                : t(
+                    'rentals.catalog.subtitle',
+                    'Browse verified business-operated rentals. Filter by category and location, then request dates on the listing page.'
+                  )}
             </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+              <MarketSelector catalogContext="rentals" />
+            </Stack>
             <CatalogNotice />
           </Container>
         </Box>
@@ -171,13 +265,17 @@ const RentalsPage: React.FC = () => {
               borderRadius: 3,
               border: 1,
               borderColor: 'divider',
+              position: 'sticky',
+              top: { xs: 0, md: 8 },
+              zIndex: 2,
+              bgcolor: 'background.paper',
             }}
           >
             <Stack spacing={2}>
               <TextField
                 fullWidth
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
                 placeholder={t(
                   'rentals.catalog.searchPlaceholder',
                   'Search by name, business, location, or tags…'
@@ -191,14 +289,27 @@ const RentalsPage: React.FC = () => {
                 }}
                 inputProps={{ 'aria-label': t('rentals.catalog.searchAria', 'Search rentals') }}
               />
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {SORT_MODES.map((mode) => (
+                  <Chip
+                    key={mode}
+                    label={sortLabel(mode)}
+                    color={sort === mode ? 'primary' : 'default'}
+                    variant={sort === mode ? 'filled' : 'outlined'}
+                    onClick={() => setSort(mode)}
+                  />
+                ))}
+              </Stack>
+              {sort === 'fastest' && !browserGeo ? (
+                <Alert severity="info" sx={{ py: 0.5 }}>
+                  {t(
+                    'rentals.catalog.locationHint',
+                    'Allow location access to sort rentals closest to you.'
+                  )}
+                </Alert>
+              ) : null}
               <Grid container spacing={2} alignItems="flex-end">
-                <Grid
-                  item
-                  xs={12}
-                  sm={6}
-                  md={4}
-                  sx={{ minWidth: { xs: 0, sm: 240, md: 220 }, maxWidth: '100%' }}
-                >
+                <Grid item xs={12} sm={6} md={4} sx={{ minWidth: { xs: 0, sm: 240, md: 220 }, maxWidth: '100%' }}>
                   <FormControl fullWidth size="small" sx={rentalFilterFormControlSx}>
                     <InputLabel id="rental-filter-category">
                       {t('rentals.catalog.filterCategory', 'Category')}
@@ -207,12 +318,12 @@ const RentalsPage: React.FC = () => {
                       labelId="rental-filter-category"
                       label={t('rentals.catalog.filterCategory', 'Category')}
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value as string)}
+                      onChange={(e) => setCategoryId(e.target.value)}
                     >
                       <MenuItem value="">
                         <em>{t('rentals.catalog.all', 'All')}</em>
                       </MenuItem>
-                      {categoryOptions.map((c) => (
+                      {categories.map((c) => (
                         <MenuItem key={c.id} value={c.id}>
                           {c.name}
                         </MenuItem>
@@ -220,39 +331,27 @@ const RentalsPage: React.FC = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid
-                  item
-                  xs={12}
-                  sm={6}
-                  md={4}
-                  sx={{ minWidth: { xs: 0, sm: 240, md: 220 }, maxWidth: '100%' }}
-                >
+                <Grid item xs={12} sm={6} md={4} sx={{ minWidth: { xs: 0, sm: 240, md: 220 }, maxWidth: '100%' }}>
                   <FormControl fullWidth size="small" sx={rentalFilterFormControlSx}>
-                    <InputLabel id="rental-filter-sort">
-                      {t('rentals.catalog.filterSort', 'Sort by')}
+                    <InputLabel id="rental-filter-mode">
+                      {t('rentals.catalog.filterMode', 'Mode')}
                     </InputLabel>
                     <Select
-                      labelId="rental-filter-sort"
-                      label={t('rentals.catalog.filterSort', 'Sort by')}
-                      value={sort}
+                      labelId="rental-filter-mode"
+                      label={t('rentals.catalog.filterMode', 'Mode')}
+                      value={operationMode}
                       onChange={(e) =>
-                        setSort(e.target.value as RentalListingsSortMode)
+                        setOperationMode(
+                          e.target.value as '' | 'business_operated' | 'take_home'
+                        )
                       }
                     >
-                      <MenuItem value="relevance">
-                        {t('rentals.catalog.sortRelevance', 'Relevance')}
+                      <MenuItem value="">{t('rentals.catalog.modeAll', 'All modes')}</MenuItem>
+                      <MenuItem value="business_operated">
+                        {t('rentals.catalog.modeOperated', 'Operated')}
                       </MenuItem>
-                      <MenuItem value="newest">
-                        {t('rentals.catalog.sortNewest', 'Recently updated')}
-                      </MenuItem>
-                      <MenuItem value="fastest">
-                        {t('rentals.catalog.sortFastest', 'Closest to you')}
-                      </MenuItem>
-                      <MenuItem value="cheapest">
-                        {t('rentals.catalog.sortCheapest', 'Lowest price / day')}
-                      </MenuItem>
-                      <MenuItem value="expensive">
-                        {t('rentals.catalog.sortExpensive', 'Highest price / day')}
+                      <MenuItem value="take_home">
+                        {t('rentals.catalog.modeTakeHome', 'Take-home')}
                       </MenuItem>
                     </Select>
                   </FormControl>
@@ -272,32 +371,44 @@ const RentalsPage: React.FC = () => {
             </Stack>
           </Paper>
 
-          {error && (
-            <Typography color="error" sx={{ mb: 2 }}>
-              {error}
-            </Typography>
-          )}
+          {showLocationsStrip ? (
+            <RentalLocationsStrip
+              locations={topLocations}
+              loading={topLocationsLoading}
+              selectedLocationId={locationFilterId || undefined}
+              onSelectLocation={(id) =>
+                setLocationFilterId((prev) => (prev === id ? '' : id))
+              }
+            />
+          ) : null}
 
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            justifyContent="space-between"
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            spacing={1}
-            sx={{ mb: 2 }}
-          >
-            <Typography variant="subtitle1" fontWeight={700} color="text.secondary">
-              {t('rentals.catalog.results', {
-                defaultValue: '{{count}} listings',
-                count: filtered.length,
-              })}
-            </Typography>
-          </Stack>
+          {error ? (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <Typography color="error">{error}</Typography>
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry', 'Retry')}
+              </Button>
+            </Stack>
+          ) : null}
 
-          {!listings.length && !error ? (
-            <Typography sx={{ py: 4 }} color="text.secondary">
-              {t('rentals.empty', 'No rentals available yet.')}
-            </Typography>
-          ) : filtered.length === 0 ? (
+          <Typography variant="subtitle1" fontWeight={700} color="text.secondary" sx={{ mb: 2 }}>
+            {loading && listings.length === 0
+              ? t('rentals.loading', 'Loading rentals')
+              : t('rentals.catalog.resultsInMarket', '{{count}} rentals in {{market}}', {
+                  count: total,
+                  market: marketLabel || t('rentals.catalog.yourMarket', 'your market'),
+                })}
+          </Typography>
+
+          {loading && listings.length === 0 ? (
+            <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <Grid item xs={12} sm={6} md={4} key={i}>
+                  <RentalCardSkeleton />
+                </Grid>
+              ))}
+            </Grid>
+          ) : listings.length === 0 && !error ? (
             <Paper
               variant="outlined"
               sx={{
@@ -309,34 +420,44 @@ const RentalsPage: React.FC = () => {
               }}
             >
               <Typography variant="h6" gutterBottom fontWeight={700}>
-                {t('rentals.catalog.noResults', 'No listings match your filters')}
+                {hasActiveFilters
+                  ? t('rentals.catalog.noResults', 'No listings match your filters')
+                  : t('rentals.catalog.emptyTitle', 'No rentals here yet')}
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
                 {t(
                   'rentals.catalog.noResultsHint',
-                  'Try different keywords or clear filters to see all rentals.'
+                  'Try different keywords, change your market, or clear filters.'
                 )}
               </Typography>
-              {hasActiveFilters && (
+              {hasActiveFilters ? (
                 <Button variant="contained" onClick={clearFilters}>
                   {t('rentals.catalog.clearFilters', 'Clear filters')}
                 </Button>
-              )}
+              ) : null}
             </Paper>
           ) : (
-            <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
-              {filtered.map((row) => (
-                <Grid item xs={12} sm={6} md={4} key={row.id}>
-                  <RentalItemCard
-                    listing={row}
-                    onViewDetails={() => navigate(`/rentals/${row.id}`)}
-                    onRequestRental={() =>
-                      navigate(`/rentals/${row.id}#${RENTAL_REQUEST_SECTION_ID}`)
-                    }
-                  />
-                </Grid>
-              ))}
-            </Grid>
+            <>
+              <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+                {listings.map((row) => (
+                  <Grid item xs={12} sm={6} md={4} key={row.id}>
+                    <RentalItemCard
+                      listing={row}
+                      onViewDetails={() => navigate(`/rentals/${row.id}`)}
+                      onRequestRental={() =>
+                        navigate(`/rentals/${row.id}#${RENTAL_REQUEST_SECTION_ID}`)
+                      }
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+              <Box ref={loadMoreRef} sx={{ height: 8, width: '100%' }} />
+              {loadingMore ? (
+                <Typography color="text.secondary" align="center" sx={{ py: 2 }}>
+                  {t('common.loading', 'Loading…')}
+                </Typography>
+              ) : null}
+            </>
           )}
         </Container>
       </Box>

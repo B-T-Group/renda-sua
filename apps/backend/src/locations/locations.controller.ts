@@ -515,6 +515,13 @@ export class LocationsController {
       'Returns distinct states that have at least one active inventory item for the given country, with item counts. Used by the market picker to show only markets with available inventory.',
   })
   @ApiQuery({ name: 'countryCode', required: true, description: 'ISO-2 country code (e.g. CM, CA)' })
+  @ApiQuery({
+    name: 'catalog',
+    required: false,
+    enum: ['inventory', 'rentals', 'all'],
+    description:
+      'Which catalog to count: inventory (default), rentals, or all (returns inventoryCount + rentalCount per state)',
+  })
   @ApiResponse({
     status: 200,
     description: 'States retrieved successfully',
@@ -537,11 +544,18 @@ export class LocationsController {
     },
   })
   async getMarketStates(
-    @Query('countryCode') countryCode: string
+    @Query('countryCode') countryCode: string,
+    @Query('catalog') catalog?: string
   ): Promise<{
     success: boolean;
-    states: Array<{ state: string; itemCount: number }>;
+    states: Array<{
+      state: string;
+      itemCount?: number;
+      rentalCount?: number;
+      inventoryCount?: number;
+    }>;
     totalItemCount: number;
+    totalRentalCount?: number;
   }> {
     if (!countryCode) {
       throw new HttpException(
@@ -550,58 +564,17 @@ export class LocationsController {
       );
     }
 
+    const mode =
+      catalog === 'rentals' || catalog === 'all' ? catalog : 'inventory';
+
     try {
-      const query = `
-        query GetMarketStateItemCounts($countryCode: String!) {
-          business_inventory_aggregate(
-            where: {
-              is_active: { _eq: true }
-              business_location: {
-                is_active: { _eq: true }
-                address: { country: { _eq: $countryCode } }
-              }
-            }
-          ) {
-            aggregate { count }
-          }
-          business_inventory(
-            where: {
-              is_active: { _eq: true }
-              business_location: {
-                is_active: { _eq: true }
-                address: { country: { _eq: $countryCode } }
-              }
-            }
-            distinct_on: []
-          ) {
-            business_location {
-              address {
-                state
-              }
-            }
-          }
-        }
-      `;
-
-      const response = await this.hasuraService.executeQuery(query, { countryCode });
-      const rows: Array<{ business_location: { address: { state: string } } }> =
-        response.business_inventory || [];
-      const totalItemCount: number =
-        response.business_inventory_aggregate?.aggregate?.count ?? 0;
-
-      const stateCounts = new Map<string, number>();
-      for (const row of rows) {
-        const state = row.business_location?.address?.state;
-        if (state) {
-          stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
-        }
+      if (mode === 'inventory') {
+        return await this.fetchInventoryMarketStates(countryCode);
       }
-
-      const states = Array.from(stateCounts.entries())
-        .map(([state, itemCount]) => ({ state, itemCount }))
-        .sort((a, b) => b.itemCount - a.itemCount);
-
-      return { success: true, states, totalItemCount };
+      if (mode === 'rentals') {
+        return await this.fetchRentalMarketStates(countryCode);
+      }
+      return await this.fetchCombinedMarketStates(countryCode);
     } catch (error: any) {
       this.logger.error('Failed to fetch market states', error);
       throw new HttpException(
@@ -609,6 +582,186 @@ export class LocationsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private async fetchInventoryMarketStates(countryCode: string): Promise<{
+    success: boolean;
+    states: Array<{ state: string; itemCount: number }>;
+    totalItemCount: number;
+  }> {
+    const query = `
+      query GetMarketStateItemCounts($countryCode: String!) {
+        business_inventory_aggregate(
+          where: {
+            is_active: { _eq: true }
+            business_location: {
+              is_active: { _eq: true }
+              address: { country: { _eq: $countryCode } }
+            }
+          }
+        ) {
+          aggregate { count }
+        }
+        business_inventory(
+          where: {
+            is_active: { _eq: true }
+            business_location: {
+              is_active: { _eq: true }
+              address: { country: { _eq: $countryCode } }
+            }
+          }
+          distinct_on: []
+        ) {
+          business_location {
+            address {
+              state
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await this.hasuraService.executeQuery(query, { countryCode });
+    const rows: Array<{ business_location: { address: { state: string } } }> =
+      response.business_inventory || [];
+    const totalItemCount: number =
+      response.business_inventory_aggregate?.aggregate?.count ?? 0;
+
+    const stateCounts = new Map<string, number>();
+    for (const row of rows) {
+      const state = row.business_location?.address?.state;
+      if (state) {
+        stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
+      }
+    }
+
+    const states = Array.from(stateCounts.entries())
+      .map(([state, itemCount]) => ({ state, itemCount }))
+      .sort((a, b) => b.itemCount - a.itemCount);
+
+    return { success: true, states, totalItemCount };
+  }
+
+  private async fetchRentalMarketStates(countryCode: string): Promise<{
+    success: boolean;
+    states: Array<{ state: string; itemCount: number }>;
+    totalItemCount: number;
+    totalRentalCount: number;
+  }> {
+    const query = `
+      query GetMarketStateRentalCounts($countryCode: String!) {
+        rental_location_listings_aggregate(
+          where: {
+            moderation_status: { _eq: "approved" }
+            deleted_at: { _is_null: true }
+            rental_item: {
+              deleted_at: { _is_null: true }
+              business: { is_storefront_visible: { _eq: true } }
+            }
+            business_location: {
+              address: { country: { _eq: $countryCode } }
+            }
+          }
+        ) {
+          aggregate { count }
+        }
+        rental_location_listings(
+          where: {
+            moderation_status: { _eq: "approved" }
+            deleted_at: { _is_null: true }
+            rental_item: {
+              deleted_at: { _is_null: true }
+              business: { is_storefront_visible: { _eq: true } }
+            }
+            business_location: {
+              address: { country: { _eq: $countryCode } }
+            }
+          }
+          limit: 5000
+        ) {
+          business_location {
+            address {
+              state
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await this.hasuraService.executeQuery(query, { countryCode });
+    const rows: Array<{ business_location: { address: { state: string } } }> =
+      response.rental_location_listings || [];
+    const totalRentalCount: number =
+      response.rental_location_listings_aggregate?.aggregate?.count ?? 0;
+
+    const stateCounts = new Map<string, number>();
+    for (const row of rows) {
+      const state = row.business_location?.address?.state;
+      if (state) {
+        stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
+      }
+    }
+
+    const states = Array.from(stateCounts.entries())
+      .map(([state, itemCount]) => ({ state, itemCount }))
+      .sort((a, b) => b.itemCount - a.itemCount);
+
+    return {
+      success: true,
+      states,
+      totalItemCount: totalRentalCount,
+      totalRentalCount,
+    };
+  }
+
+  private async fetchCombinedMarketStates(countryCode: string): Promise<{
+    success: boolean;
+    states: Array<{
+      state: string;
+      inventoryCount: number;
+      rentalCount: number;
+    }>;
+    totalItemCount: number;
+    totalRentalCount: number;
+  }> {
+    const [inventory, rentals] = await Promise.all([
+      this.fetchInventoryMarketStates(countryCode),
+      this.fetchRentalMarketStates(countryCode),
+    ]);
+    const merged = new Map<
+      string,
+      { inventoryCount: number; rentalCount: number }
+    >();
+    for (const row of inventory.states) {
+      merged.set(row.state, {
+        inventoryCount: row.itemCount,
+        rentalCount: 0,
+      });
+    }
+    for (const row of rentals.states) {
+      const prev = merged.get(row.state) ?? {
+        inventoryCount: 0,
+        rentalCount: 0,
+      };
+      merged.set(row.state, {
+        ...prev,
+        rentalCount: row.itemCount,
+      });
+    }
+    const states = Array.from(merged.entries())
+      .map(([state, counts]) => ({ state, ...counts }))
+      .sort(
+        (a, b) =>
+          b.inventoryCount +
+          b.rentalCount -
+          (a.inventoryCount + a.rentalCount)
+      );
+    return {
+      success: true,
+      states,
+      totalItemCount: inventory.totalItemCount,
+      totalRentalCount: rentals.totalRentalCount,
+    };
   }
 
   private async getActivePaymentMethodsByCountry(): Promise<

@@ -4543,6 +4543,18 @@
     "use6": "To prevent fraud and ensure platform security",
     "yourRights": "Your Rights"
   },
+  "market": {
+    "selector": {
+      "label": "Selected market: {{name}}",
+      "allStates": "All"
+    },
+    "picker": {
+      "title": "Select marketplace",
+      "allStates": "All of {{name}}",
+      "itemsShort": "items",
+      "rentalsShort": "rentals"
+    }
+  },
   "rentals": {
     "title": "Rentals",
     "loading": "Loading rentals",
@@ -4720,6 +4732,17 @@
     "catalog": {
       "heroEyebrow": "Rentals",
       "subtitle": "Browse verified business-operated rentals in your region. Filter by category, sort by relevance or distance, then request dates on the listing page.",
+      "subtitleMarket": "Showing rentals in {{market}}",
+      "nearYouTitle": "Rentals near you",
+      "locationListingCount": "{{count}} listings",
+      "locationHint": "Allow location access to sort rentals closest to you.",
+      "resultsInMarket": "{{count}} rentals in {{market}}",
+      "yourMarket": "your market",
+      "emptyTitle": "No rentals here yet",
+      "filterMode": "Mode",
+      "modeAll": "All modes",
+      "modeOperated": "Operated",
+      "modeTakeHome": "Take-home",
       "searchPlaceholder": "Search by name, business, location, or tags…",
       "searchAria": "Search rentals",
       "filterCategory": "Category",

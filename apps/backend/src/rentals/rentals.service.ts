@@ -47,6 +47,11 @@ import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payment
 import { StripeService } from '../stripe-payments/stripe.service';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
+import {
+  formatDistanceMeters,
+  haversineMeters,
+  parseOptionalLatLng,
+} from '../common/geo.utils';
 import { resolveRentalListingRejectionReasons } from '../common/moderation-rejection-reason';
 import * as Q from './rentals-queries';
 
@@ -92,6 +97,9 @@ export type RentalListingsSort =
 export interface ListPublicRentalListingsQuery {
   country_code?: string;
   state?: string;
+  origin_lat?: number;
+  origin_lng?: number;
+  business_location_id?: string;
   sort?: string;
   page?: number;
   limit?: number;
@@ -100,6 +108,16 @@ export interface ListPublicRentalListingsQuery {
   min_price?: number;
   max_price?: number;
   operation_mode?: string;
+}
+
+export interface TopRentalLocationRow {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  listing_count: number;
+  distance_meters: number | null;
+  city?: string | null;
+  state?: string | null;
 }
 
 export interface ListBusinessRentalRequestsQuery {
@@ -362,12 +380,175 @@ export class RentalsService {
       order_by: [{ updated_at: 'desc' }],
     });
     let rows = r.rental_location_listings ?? [];
-    rows = await this.enrichRentalListingsWithDistance(rows);
+    rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
     rows = this.filterListingsByPrice(rows, query.min_price, query.max_price);
     const total = rows.length;
     const start = (page - 1) * limit;
     return { items: rows.slice(start, start + limit), total, page, limit };
+  }
+
+  async getTopRentalLocations(
+    limit = 5,
+    query: Pick<
+      ListPublicRentalListingsQuery,
+      'country_code' | 'state' | 'origin_lat' | 'origin_lng'
+    > = {}
+  ): Promise<TopRentalLocationRow[]> {
+    const take = Math.min(Math.max(limit, 1), 20);
+    const geo = await this.resolveRentalCatalogGeo(query.country_code, query.state);
+    if (geo.filterMode === 'specific' && (geo.country || geo.state)) {
+      const ok = await this.inventoryItemsService.isCatalogLocationSupported(
+        geo.country,
+        geo.state
+      );
+      if (!ok) return [];
+    }
+    const baseWhere = await this.buildRentalListingWhere(
+      geo.filterMode,
+      geo.country,
+      geo.state
+    );
+    const where = this.whereExcludingActiveProposedContracts(baseWhere);
+    const scanQuery = `
+      query ScanRentalLocIds($where: rental_location_listings_bool_exp!, $lim: Int!) {
+        rental_location_listings(where: $where, limit: $lim) {
+          business_location_id
+        }
+      }
+    `;
+    const scanResult = await this.hasuraSystemService.executeQuery(scanQuery, {
+      where,
+      lim: 5000,
+    });
+    const scanRows: { business_location_id: string }[] =
+      scanResult.rental_location_listings ?? [];
+    const counts = new Map<string, number>();
+    for (const r of scanRows) {
+      const id = r.business_location_id;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    if (counts.size === 0) return [];
+    const origin = await this.resolveRentalListOrigin(query);
+    const byId = await this.fetchTopRentalStripLocationsByIds([...counts.keys()]);
+    return this.rankTopRentalLocationsByOrigin(counts, byId, origin, take);
+  }
+
+  private async fetchTopRentalStripLocationsByIds(ids: string[]): Promise<
+    Map<
+      string,
+      {
+        id: string;
+        name: string;
+        logo_url: string | null;
+        address?: {
+          city?: string | null;
+          state?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
+      }
+    >
+  > {
+    const locQuery = `
+      query TopRentalLocDetails($ids: [uuid!]!) {
+        business_locations(
+          where: {
+            id: { _in: $ids }
+            address: { status: { _eq: active } }
+          }
+        ) {
+          id
+          name
+          logo_url
+          address {
+            city
+            state
+            latitude
+            longitude
+          }
+        }
+      }
+    `;
+    const locRes = await this.hasuraSystemService.executeQuery(locQuery, { ids });
+    const locRows: Array<{
+      id: string;
+      name: string;
+      logo_url?: string | null;
+      address?: {
+        city?: string | null;
+        state?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      } | null;
+    }> = locRes.business_locations ?? [];
+    return new Map(
+      locRows.map((l) => [l.id, { ...l, logo_url: l.logo_url ?? null }])
+    );
+  }
+
+  private rankTopRentalLocationsByOrigin(
+    counts: Map<string, number>,
+    byId: Map<
+      string,
+      {
+        name: string;
+        logo_url: string | null;
+        address?: {
+          city?: string | null;
+          state?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
+      }
+    >,
+    origin: { lat: number; lng: number } | null,
+    take: number
+  ): TopRentalLocationRow[] {
+    const scored = [...counts.keys()].map((id) => {
+      const loc = byId.get(id);
+      let distance_meters: number | null = null;
+      if (origin && loc?.address) {
+        const lat = loc.address.latitude;
+        const lng = loc.address.longitude;
+        if (lat != null && lng != null) {
+          distance_meters = haversineMeters(
+            origin.lat,
+            origin.lng,
+            Number(lat),
+            Number(lng)
+          );
+        }
+      }
+      return {
+        id,
+        listing_count: counts.get(id) ?? 0,
+        distance_meters,
+      };
+    });
+    if (origin) {
+      scored.sort((a, b) => {
+        const da = a.distance_meters ?? Infinity;
+        const db = b.distance_meters ?? Infinity;
+        if (da !== db) return da - db;
+        return b.listing_count - a.listing_count;
+      });
+    } else {
+      scored.sort((a, b) => b.listing_count - a.listing_count);
+    }
+    return scored.slice(0, take).map(({ id, listing_count, distance_meters }) => {
+      const loc = byId.get(id);
+      return {
+        id,
+        name: loc?.name ?? '',
+        logo_url: loc?.logo_url ?? null,
+        listing_count,
+        distance_meters:
+          origin && distance_meters != null ? distance_meters : null,
+        city: loc?.address?.city ?? null,
+        state: loc?.address?.state ?? null,
+      };
+    });
   }
 
   async listRentalCategories(): Promise<
@@ -492,6 +673,10 @@ export class RentalsService {
         },
       });
     }
+    const locId = query.business_location_id?.trim();
+    if (locId) {
+      parts.push({ business_location_id: { _eq: locId } });
+    }
     return parts.length === 1 ? parts[0]! : { _and: parts };
   }
 
@@ -555,7 +740,7 @@ export class RentalsService {
     ) {
       return null;
     }
-    const enriched = await this.enrichRentalListingsWithDistance([row]);
+    const enriched = await this.enrichRentalListingsWithDistance([row], query);
     return enriched[0] ?? row;
   }
 
@@ -3719,7 +3904,8 @@ export class RentalsService {
       if (addresses?.length) {
         const primary =
           addresses.find((a) => a.is_primary === true) ?? addresses[0];
-        if (primary?.country) {
+        // Only fall back to account address when caller did not pass country_code.
+        if (!country && primary?.country) {
           country = primary.country;
           state = primary.state ?? state;
         }
@@ -3729,6 +3915,38 @@ export class RentalsService {
     }
     const filterMode = country || state ? 'specific' : 'supported_only';
     return { country, state, filterMode };
+  }
+
+  private async resolveRentalListOrigin(
+    query: Pick<ListPublicRentalListingsQuery, 'origin_lat' | 'origin_lng'>
+  ): Promise<{ lat: number; lng: number } | null> {
+    const queryOrigin = parseOptionalLatLng(query.origin_lat, query.origin_lng);
+    // Client-supplied coordinates (browser/device) take priority for proximity UX.
+    if (queryOrigin) {
+      return queryOrigin;
+    }
+    try {
+      const addr = await this.addressesService.getCurrentUserPrimaryAddress();
+      if (!addr) {
+        return null;
+      }
+      if (addr.latitude != null && addr.longitude != null) {
+        return parseOptionalLatLng(
+          Number(addr.latitude),
+          Number(addr.longitude)
+        );
+      }
+      const line = this.formatRentalAddressForGoogle(
+        this.normalizeAddressForDistanceFmt(addr)
+      );
+      const geo = await this.googleDistanceService.geocode(line);
+      return geo ? { lat: geo.latitude, lng: geo.longitude } : null;
+    } catch (error: any) {
+      this.logger.debug(
+        `Rental list origin skipped: ${error?.message ?? error}`
+      );
+      return null;
+    }
   }
 
   private async buildRentalListingWhere(
@@ -3931,12 +4149,54 @@ export class RentalsService {
     };
   }
 
+  private applyHaversineToRentalRows(
+    rows: PublicRentalListingRow[],
+    origin: { lat: number; lng: number } | null
+  ): PublicRentalListingRow[] {
+    if (!origin) return rows;
+    return rows.map((row) => {
+      const lat = row.business_location?.address?.latitude;
+      const lng = row.business_location?.address?.longitude;
+      if (
+        lat == null ||
+        lng == null ||
+        !Number.isFinite(Number(lat)) ||
+        !Number.isFinite(Number(lng))
+      ) {
+        return row;
+      }
+      const m = haversineMeters(
+        origin.lat,
+        origin.lng,
+        Number(lat),
+        Number(lng)
+      );
+      return {
+        ...row,
+        distance_value: m,
+        distance_text: row.distance_text ?? formatDistanceMeters(m),
+      };
+    });
+  }
+
   private async enrichRentalListingsWithDistance(
-    rows: PublicRentalListingRow[]
+    rows: PublicRentalListingRow[],
+    query: ListPublicRentalListingsQuery = {}
   ): Promise<PublicRentalListingRow[]> {
     if (rows.length === 0) return rows;
     try {
-      return await this.applyDistanceToRentalRows(rows);
+      const origin = await this.resolveRentalListOrigin(query);
+      const clientOrigin = parseOptionalLatLng(
+        query.origin_lat,
+        query.origin_lng
+      );
+      let enriched = this.applyHaversineToRentalRows(rows, origin);
+      enriched = await this.applyGoogleDistanceToRentalRows(
+        enriched,
+        origin,
+        !!clientOrigin
+      );
+      return enriched;
     } catch (error: any) {
       this.logger.warn(
         `Rental distance enrichment skipped: ${error?.message ?? String(error)}`
@@ -3945,11 +4205,33 @@ export class RentalsService {
     }
   }
 
-  private async applyDistanceToRentalRows(
-    rows: PublicRentalListingRow[]
+  private async applyGoogleDistanceToRentalRows(
+    rows: PublicRentalListingRow[],
+    origin: { lat: number; lng: number } | null,
+    useResolvedOrigin = false
   ): Promise<PublicRentalListingRow[]> {
-    const origin = await this.addressesService.getCurrentUserPrimaryAddress();
-    if (!origin) return rows;
+    if (rows.length === 0) return rows;
+    const primary = await this.addressesService.getCurrentUserPrimaryAddress();
+    let originId: string;
+    let originFormatted: string;
+
+    if (useResolvedOrigin && origin) {
+      const { lat, lng } = origin;
+      originId = `anon:${lat.toFixed(5)}:${lng.toFixed(5)}`;
+      originFormatted = `${lat},${lng}`;
+    } else if (primary) {
+      originId = primary.id;
+      originFormatted = this.formatRentalAddressForGoogle(
+        this.normalizeAddressForDistanceFmt(primary)
+      );
+    } else if (origin) {
+      const { lat, lng } = origin;
+      originId = `anon:${lat.toFixed(5)}:${lng.toFixed(5)}`;
+      originFormatted = `${lat},${lng}`;
+    } else {
+      return rows;
+    }
+
     const destIds = this.collectRentalListingAddressIds(rows);
     if (destIds.length === 0) return rows;
     const destAddresses = await this.addressesService.getAddressesByIds(destIds);
@@ -3960,10 +4242,8 @@ export class RentalsService {
       ),
     }));
     const matrix = await this.googleDistanceService.getDistanceMatrixWithCaching(
-      origin.id,
-      this.formatRentalAddressForGoogle(
-        this.normalizeAddressForDistanceFmt(origin)
-      ),
+      originId,
+      originFormatted,
       destFormatted,
       { ttlSeconds: this.rentalDistanceCacheTtlSeconds() }
     );

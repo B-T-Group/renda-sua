@@ -1,28 +1,22 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { useMemo } from 'react';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
+import { useMarket } from './useMarket';
 
-/** Same anonymous country hint as inventory; logged-in users rely on server primary address. */
+/** Market-driven geo params for rental catalog API calls. */
 export function useRentalCatalogGeoParams(): {
   country_code?: string;
   state?: string;
+  ready: boolean;
 } {
-  const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const { selectedMarket, hydrated } = useMarket();
 
   return useMemo(() => {
-    if (isAuthenticated) {
-      return {};
+    if (!hydrated || !selectedMarket) {
+      return { ready: false };
     }
-    const detected =
-      typeof window !== 'undefined'
-        ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-        : null;
-    const code = detected?.toUpperCase();
-    if (code && supportedIsos.includes(code)) {
-      return { country_code: code };
-    }
-    return {};
-  }, [isAuthenticated, supportedIsos]);
+    return {
+      ready: true,
+      country_code: selectedMarket.countryCode,
+      ...(selectedMarket.stateCode ? { state: selectedMarket.stateCode } : {}),
+    };
+  }, [hydrated, selectedMarket?.countryCode, selectedMarket?.stateCode]);
 }

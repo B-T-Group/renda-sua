@@ -4281,6 +4281,18 @@
     "use6": "Pour prévenir la fraude et assurer la sécurité de la plateforme",
     "yourRights": "Vos Droits"
   },
+  "market": {
+    "selector": {
+      "label": "Marché sélectionné : {{name}}",
+      "allStates": "Tout"
+    },
+    "picker": {
+      "title": "Choisir un marché",
+      "allStates": "Tout {{name}}",
+      "itemsShort": "articles",
+      "rentalsShort": "locations"
+    }
+  },
   "rentals": {
     "title": "Locations",
     "loading": "Chargement des locations",
@@ -4458,6 +4470,17 @@
     "catalog": {
       "heroEyebrow": "Locations",
       "subtitle": "Parcourez des locations vérifiées dans votre région. Filtrez par catégorie, triez par pertinence ou distance, puis demandez vos dates sur la fiche.",
+      "subtitleMarket": "Locations affichées pour {{market}}",
+      "nearYouTitle": "Locations près de chez vous",
+      "locationListingCount": "{{count}} annonces",
+      "locationHint": "Autorisez la localisation pour trier par proximité.",
+      "resultsInMarket": "{{count}} locations dans {{market}}",
+      "yourMarket": "votre marché",
+      "emptyTitle": "Aucune location ici pour le moment",
+      "filterMode": "Mode",
+      "modeAll": "Tous les modes",
+      "modeOperated": "Opéré",
+      "modeTakeHome": "À emporter",
       "searchPlaceholder": "Rechercher par nom, entreprise, lieu ou étiquettes…",
       "searchAria": "Rechercher des locations",
       "filterCategory": "Catégorie",
