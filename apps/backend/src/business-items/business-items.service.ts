@@ -1181,50 +1181,52 @@ export class BusinessItemsService {
     businessId: string
   ): Promise<number> {
     const result = await this.hasuraUserService.executeQuery<{
-      business_locations_aggregate: { aggregate: { count: number } | null };
+      business_locations: Array<{ id: string }>;
     }>(
       `
-      query CountActiveLocations($businessId: uuid!) {
-        business_locations_aggregate(
+      query ListActiveLocations($businessId: uuid!) {
+        business_locations(
           where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
-        ) { aggregate { count } }
+        ) { id }
       }
     `,
       { businessId }
     );
-    return result.business_locations_aggregate?.aggregate?.count ?? 0;
+    return result.business_locations?.length ?? 0;
   }
 
   private async countLocationInventory(locationId: string): Promise<number> {
     const result = await this.hasuraUserService.executeQuery<{
-      business_inventory_aggregate: { aggregate: { count: number } | null };
+      business_inventory: Array<{ id: string }>;
     }>(
       `
-      query CountLocationInventory($locationId: uuid!) {
-        business_inventory_aggregate(
+      query ListLocationInventory($locationId: uuid!) {
+        business_inventory(
           where: { business_location_id: { _eq: $locationId } }
-        ) { aggregate { count } }
+          limit: 1
+        ) { id }
       }
     `,
       { locationId }
     );
-    return result.business_inventory_aggregate?.aggregate?.count ?? 0;
+    return result.business_inventory?.length ?? 0;
   }
 
   private async countLocationOrders(locationId: string): Promise<number> {
     const result = await this.hasuraUserService.executeQuery<{
-      orders_aggregate: { aggregate: { count: number } | null };
+      orders: Array<{ id: string }>;
     }>(
       `
-      query CountLocationOrders($locationId: uuid!) {
-        orders_aggregate(
+      query ListLocationOrders($locationId: uuid!) {
+        orders(
           where: { business_location_id: { _eq: $locationId } }
-        ) { aggregate { count } }
+          limit: 1
+        ) { id }
       }
     `,
       { locationId }
     );
-    return result.orders_aggregate?.aggregate?.count ?? 0;
+    return result.orders?.length ?? 0;
   }
 
   async getSingleItem(businessId: string, itemId: string) {
@@ -1490,7 +1492,7 @@ export class BusinessItemsService {
         id: string;
         reserved_quantity: number;
         business_location: { business_id: string };
-        order_items_aggregate: { aggregate: { count: number } | null };
+        order_items: Array<{ id: string }>;
       } | null;
     }>(
       `
@@ -1499,7 +1501,7 @@ export class BusinessItemsService {
           id
           reserved_quantity
           business_location { business_id }
-          order_items_aggregate { aggregate { count } }
+          order_items(limit: 1) { id }
         }
       }
     `,
@@ -1517,7 +1519,7 @@ export class BusinessItemsService {
 
   private assertInventoryDeletable(inv: {
     reserved_quantity: number;
-    order_items_aggregate: { aggregate: { count: number } | null };
+    order_items: Array<{ id: string }>;
   }): void {
     if ((inv.reserved_quantity ?? 0) > 0) {
       throw new HttpException(
@@ -1529,8 +1531,7 @@ export class BusinessItemsService {
         HttpStatus.CONFLICT
       );
     }
-    const orderCount = inv.order_items_aggregate?.aggregate?.count ?? 0;
-    if (orderCount > 0) {
+    if ((inv.order_items?.length ?? 0) > 0) {
       throw new HttpException(
         {
           success: false,
