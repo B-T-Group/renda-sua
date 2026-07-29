@@ -593,6 +593,32 @@ export class BusinessItemsController {
     return { success: true, data: { inventory } };
   }
 
+  @Delete('inventory/:inventoryId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Remove an item from a business location (delete inventory row)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiParam({ name: 'inventoryId', description: 'Business inventory UUID' })
+  @ApiResponse({ status: 200, description: 'Inventory removed successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Inventory not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Inventory has reserved stock or is linked to orders',
+  })
+  async deleteInventory(
+    @Param('inventoryId') inventoryId: string,
+    @Query('businessId') businessId: string | undefined
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    await this.businessItemsService.deleteInventoryItem(
+      ctx.targetBusinessId,
+      inventoryId
+    );
+    return { success: true };
+  }
+
   @Put('inventory/:inventoryId/variant-price-overrides')
   @ApiOperation({
     summary:

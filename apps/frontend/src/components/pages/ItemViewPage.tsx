@@ -623,10 +623,14 @@ export default function ItemViewPage() {
       {activeTab === 1 && (
         <ItemInventoryTab
           item={item}
+          businessId={effectiveBusinessId}
           canSuperUserActions={canSuperUserActions}
           onUpdateInventory={handleUpdateInventory}
           onAddLocation={() => handleUpdateInventory()}
           onManageDeals={(inventory) => setManageDealsInventory(inventory)}
+          onInventoryChanged={() => {
+            void fetchItemDetails();
+          }}
         />
       )}
 

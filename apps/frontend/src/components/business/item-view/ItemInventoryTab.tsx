@@ -1,5 +1,6 @@
 import {
   Add as AddIcon,
+  DeleteOutline as DeleteOutlineIcon,
   Inventory as InventoryIcon,
 } from '@mui/icons-material';
 import {
@@ -14,9 +15,13 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from 'notistack';
 import { Item } from '../../../hooks/useItems';
+import { useApiClient } from '../../../hooks/useApiClient';
+import { businessItemsApiParams } from '../../../utils/businessItemsApiParams';
+import ConfirmationModal from '../../common/ConfirmationModal';
 import {
   AnyInventory,
   formatItemCurrency,
@@ -26,10 +31,12 @@ import {
 
 interface ItemInventoryTabProps {
   item: Item;
+  businessId?: string;
   canSuperUserActions: boolean;
   onUpdateInventory: (inventory?: AnyInventory) => void;
   onAddLocation: () => void;
   onManageDeals: (inventory: AnyInventory) => void;
+  onInventoryChanged: () => void;
 }
 
 interface LocationCardProps {
@@ -38,6 +45,7 @@ interface LocationCardProps {
   canSuperUserActions: boolean;
   onUpdateInventory: (inventory: AnyInventory) => void;
   onManageDeals: (inventory: AnyInventory) => void;
+  onRemove: (inventory: ItemBusinessInventory) => void;
 }
 
 const LocationCard: React.FC<LocationCardProps> = ({
@@ -46,6 +54,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
   canSuperUserActions,
   onUpdateInventory,
   onManageDeals,
+  onRemove,
 }) => {
   const { t } = useTranslation();
   const stockStatus = getStockStatus(inventory);
@@ -141,25 +150,39 @@ const LocationCard: React.FC<LocationCardProps> = ({
           </Box>
         </Stack>
 
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-          <Button
-            variant="contained"
-            size="small"
-            onClick={() => onUpdateInventory(inventory)}
-            startIcon={<InventoryIcon />}
-            sx={{ flex: 1 }}
-          >
-            {t('business.inventory.updateStock', 'Update Stock')}
-          </Button>
-          {canSuperUserActions && (
+        <Stack spacing={1} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={1}>
             <Button
-              variant="outlined"
+              variant="contained"
               size="small"
-              onClick={() => onManageDeals(inventory)}
+              onClick={() => onUpdateInventory(inventory)}
+              startIcon={<InventoryIcon />}
+              sx={{ flex: 1 }}
             >
-              {t('business.items.deals.manage', 'Manage deals')}
+              {t('business.inventory.updateStock', 'Update Stock')}
             </Button>
-          )}
+            {canSuperUserActions && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => onManageDeals(inventory)}
+              >
+                {t('business.items.deals.manage', 'Manage deals')}
+              </Button>
+            )}
+          </Stack>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={() => onRemove(inventory)}
+          >
+            {t(
+              'business.inventory.removeFromLocation',
+              'Remove from location'
+            )}
+          </Button>
         </Stack>
       </CardContent>
     </Card>
@@ -168,13 +191,51 @@ const LocationCard: React.FC<LocationCardProps> = ({
 
 const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
   item,
+  businessId,
   canSuperUserActions,
   onUpdateInventory,
   onAddLocation,
   onManageDeals,
+  onInventoryChanged,
 }) => {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
+  const apiClient = useApiClient();
   const inventories = item.business_inventories ?? [];
+  const [toRemove, setToRemove] = useState<ItemBusinessInventory | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const removeErrorMessage = (error: any) =>
+    error?.response?.data?.error ||
+    error?.message ||
+    t(
+      'business.inventory.removeFromLocationFailed',
+      'Failed to remove from location'
+    );
+
+  const handleConfirmRemove = async () => {
+    if (!toRemove) return;
+    setRemoving(true);
+    try {
+      await apiClient.delete(
+        `/business-items/inventory/${toRemove.id}`,
+        businessItemsApiParams(businessId)
+      );
+      enqueueSnackbar(
+        t(
+          'business.inventory.removeFromLocationSuccess',
+          'Item removed from location'
+        ),
+        { variant: 'success' }
+      );
+      setToRemove(null);
+      onInventoryChanged();
+    } catch (error: any) {
+      enqueueSnackbar(removeErrorMessage(error), { variant: 'error' });
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     <Card>
@@ -219,6 +280,7 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
                   canSuperUserActions={canSuperUserActions}
                   onUpdateInventory={onUpdateInventory}
                   onManageDeals={onManageDeals}
+                  onRemove={setToRemove}
                 />
               </Grid>
             ))}
@@ -254,6 +316,33 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
           </Box>
         )}
       </Box>
+
+      <ConfirmationModal
+        open={Boolean(toRemove)}
+        title={t(
+          'business.inventory.removeFromLocationTitle',
+          'Remove from location?'
+        )}
+        message={t(
+          'business.inventory.removeFromLocationConfirm',
+          'This product will no longer be stocked at {{location}}. You can add it again later.',
+          {
+            location:
+              toRemove?.business_location?.name ||
+              t('business.inventory.location', 'Location'),
+          }
+        )}
+        confirmText={t(
+          'business.inventory.removeFromLocation',
+          'Remove from location'
+        )}
+        confirmColor="error"
+        loading={removing}
+        onConfirm={() => void handleConfirmRemove()}
+        onCancel={() => {
+          if (!removing) setToRemove(null);
+        }}
+      />
     </Card>
   );
 };

@@ -684,6 +684,14 @@ const DELETE_BUSINESS_INVENTORY_BY_ITEM = `
   }
 `;
 
+const DELETE_BUSINESS_INVENTORY_BY_PK = `
+  mutation DeleteBusinessInventoryByPk($id: uuid!) {
+    delete_business_inventory_by_pk(id: $id) {
+      id
+    }
+  }
+`;
+
 const UPDATE_ITEM_STATUS = `
   mutation UpdateItemStatus($itemId: uuid!, $status: item_status_enum!) {
     update_items_by_pk(pk_columns: { id: $itemId }, _set: { status: $status }) {
@@ -1386,6 +1394,80 @@ export class BusinessItemsService {
     `,
       { inventoryId, variantId }
     );
+  }
+
+  /**
+   * Unassign an item from a business location by deleting the inventory row.
+   * Blocked when reserved stock or order history references the row.
+   */
+  async deleteInventoryItem(
+    businessId: string,
+    inventoryId: string
+  ): Promise<void> {
+    const inv = await this.getInventoryForDelete(businessId, inventoryId);
+    this.assertInventoryDeletable(inv);
+    await this.hasuraUserService.executeMutation(DELETE_BUSINESS_INVENTORY_BY_PK, {
+      id: inventoryId,
+    });
+    this.triggerLifecycleRecompute(businessId);
+  }
+
+  private async getInventoryForDelete(businessId: string, inventoryId: string) {
+    const invResult = await this.hasuraUserService.executeQuery<{
+      business_inventory_by_pk: {
+        id: string;
+        reserved_quantity: number;
+        business_location: { business_id: string };
+        order_items_aggregate: { aggregate: { count: number } | null };
+      } | null;
+    }>(
+      `
+      query GetInventoryForDelete($id: uuid!) {
+        business_inventory_by_pk(id: $id) {
+          id
+          reserved_quantity
+          business_location { business_id }
+          order_items_aggregate { aggregate { count } }
+        }
+      }
+    `,
+      { id: inventoryId }
+    );
+    const inv = invResult.business_inventory_by_pk;
+    if (!inv || inv.business_location.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Inventory not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return inv;
+  }
+
+  private assertInventoryDeletable(inv: {
+    reserved_quantity: number;
+    order_items_aggregate: { aggregate: { count: number } | null };
+  }): void {
+    if ((inv.reserved_quantity ?? 0) > 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'Cannot remove inventory with reserved stock. Complete or cancel reserved orders first.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    const orderCount = inv.order_items_aggregate?.aggregate?.count ?? 0;
+    if (orderCount > 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'Cannot remove inventory linked to past orders. Deactivate it instead.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
   }
 
   async updateInventoryItem(

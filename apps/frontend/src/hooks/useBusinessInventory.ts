@@ -208,26 +208,14 @@ export const useBusinessInventory = (
     { loadingMessage: 'common.savingData' }
   );
 
-  const deleteInventoryMutation = `
-    mutation DeleteInventoryItem($itemId: uuid!) {
-      delete_business_inventory_by_pk(id: $itemId) {
-        id
-      }
-    }
-  `;
-  const { execute: executeDeleteMutation } = useGraphQLRequest(
-    deleteInventoryMutation,
-    { loadingMessage: 'common.deletingData' }
-  );
-
   const restockItemMutation = `
     mutation RestockItem($itemId: uuid!, $quantity: Int!) {
       update_business_inventory_by_pk(
         pk_columns: { id: $itemId }
-        _inc: { 
+        _inc: {
           quantity: $quantity
         }
-        _set: { 
+        _set: {
           last_restocked_at: "now()",
           updated_at: "now()"
         }
@@ -363,19 +351,22 @@ export const useBusinessInventory = (
   );
 
   const deleteInventoryItem = useCallback(
-    async (itemId: string) => {
+    async (itemId: string): Promise<boolean> => {
       try {
-        await executeDeleteMutation({ itemId });
-
-        // Refresh inventory after deleting item
+        await apiClient.delete(
+          `/business-items/inventory/${itemId}`,
+          businessItemsApiParams(businessId)
+        );
         await fetchInventory();
+        return true;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to delete inventory item'
         );
+        return false;
       }
     },
-    [executeDeleteMutation, fetchInventory]
+    [apiClient, fetchInventory, businessId]
   );
 
   const restockItem = useCallback(

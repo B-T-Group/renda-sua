@@ -88,7 +88,13 @@ const BusinessInventoryPage: React.FC = () => {
 
     setDeleteLoading(true);
     try {
-      await deleteInventoryItem(inventoryToDelete.id);
+      const deleted = await deleteInventoryItem(inventoryToDelete.id);
+      if (!deleted) {
+        enqueueSnackbar(t('business.inventory.deleteError'), {
+          variant: 'error',
+        });
+        return;
+      }
       enqueueSnackbar(t('business.inventory.itemDeleted'), {
         variant: 'success',
       });
