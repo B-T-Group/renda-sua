@@ -42,7 +42,7 @@ export function BusinessClientsHero({
         'Clients so far. Open city word cloud.'
       )}
       sx={{
-        mb: 3,
+        mb: 0,
         p: 2.5,
         borderRadius: 2,
         border: 1,

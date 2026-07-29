@@ -1,3 +1,7 @@
 table:
   name: item_view_events
   schema: public
+object_relationships:
+  - name: business_inventory
+    using:
+      foreign_key_constraint_on: inventory_item_id

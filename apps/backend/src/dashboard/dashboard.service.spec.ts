@@ -193,5 +193,84 @@ describe('DashboardService', () => {
         expect(error.getStatus()).toBe(HttpStatus.FORBIDDEN);
       }
     });
+
+    it('returns product view stats and top viewed products', async () => {
+      service = new DashboardService(
+        hasuraUserService as any,
+        hasuraSystemService as any,
+        {
+          isBusinessAdmin: jest.fn().mockResolvedValue(false),
+        } as any,
+        { hasAnyPermission: jest.fn().mockResolvedValue(false) } as any,
+        {} as any,
+        {} as any
+      );
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'business',
+        active_persona: 'business',
+        business: { id: 'biz-1' },
+      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('DashboardProductViewStats')) {
+            return {
+              total: { aggregate: { count: 12 } },
+              last7d: { aggregate: { count: 3 } },
+            };
+          }
+          if (query.includes('DashboardTopViewedProducts')) {
+            return {
+              business_inventory: [
+                {
+                  id: 'inv-1',
+                  item_id: 'item-1',
+                  item: {
+                    id: 'item-1',
+                    name: 'Coffee',
+                    item_images: [{ image_url: 'https://img/coffee.jpg' }],
+                  },
+                  item_view_events_aggregate: { aggregate: { count: 8 } },
+                },
+                {
+                  id: 'inv-2',
+                  item_id: 'item-2',
+                  item: { id: 'item-2', name: 'Tea', item_images: [] },
+                  item_view_events_aggregate: { aggregate: { count: 0 } },
+                },
+              ],
+            };
+          }
+          if (query.includes('DashboardUniqueClientCount')) {
+            return { clients_aggregate: { aggregate: { count: 2 } } };
+          }
+          return {
+            orders: [],
+            orders_aggregate: { nodes: [], aggregate: { count: 0 } },
+            items_aggregate: { aggregate: { count: 0 } },
+            rental_items_aggregate: { aggregate: { count: 0 } },
+            business_locations_aggregate: { aggregate: { count: 0 } },
+            business_inventory_aggregate: { aggregate: { count: 0 } },
+            failed_deliveries_aggregate: { aggregate: { count: 0 } },
+            clients_aggregate: { aggregate: { count: 0 } },
+          };
+        }
+      );
+
+      const result = await service.getAggregates();
+
+      expect(result.totalProductViews).toBe(12);
+      expect(result.productViewsLast7d).toBe(3);
+      expect(result.topViewedProducts).toEqual([
+        {
+          inventoryItemId: 'inv-1',
+          itemId: 'item-1',
+          itemName: 'Coffee',
+          imageUrl: 'https://img/coffee.jpg',
+          viewsCount: 8,
+        },
+      ]);
+      expect(result.uniqueClientCount).toBe(2);
+    });
   });
 });

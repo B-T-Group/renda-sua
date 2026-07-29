@@ -21,6 +21,13 @@ array_relationships:
         remote_table:
           name: item_deals
           schema: public
+  - name: item_view_events
+    using:
+      foreign_key_constraint_on:
+        column: inventory_item_id
+        table:
+          name: item_view_events
+          schema: public
   - name: order_items
     using:
       manual_configuration:

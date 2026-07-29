@@ -20,6 +20,8 @@ import LocationTransferPendingCard from '../business/LocationTransferPendingCard
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessClientsHero } from '../business/BusinessClientsHero';
+import { BusinessViewsHero } from '../business/BusinessViewsHero';
+import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
 import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
@@ -150,12 +152,36 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       </Box>
 
-      <BusinessClientsHero
-        count={
-          aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
-        }
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <BusinessClientsHero
+            count={
+              aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
+            }
+            loading={isLoading}
+            onClick={() => navigate('/business/client-cities')}
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <BusinessViewsHero
+            count={
+              aggregatesError ? null : (aggregates?.totalProductViews ?? null)
+            }
+            viewsLast7d={
+              aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
+            }
+            loading={isLoading}
+          />
+        </Grid>
+      </Grid>
+
+      <BusinessTopViewedProducts
+        products={aggregatesError ? [] : (aggregates?.topViewedProducts ?? [])}
         loading={isLoading}
-        onClick={() => navigate('/business/client-cities')}
+        onProductClick={(product) => {
+          if (!product.itemId) return;
+          navigate(`/business/items/${product.itemId}`);
+        }}
       />
 
       <BusinessVerificationBanner />

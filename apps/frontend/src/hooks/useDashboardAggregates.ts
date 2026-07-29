@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
+export interface TopViewedProduct {
+  inventoryItemId: string;
+  itemId: string;
+  itemName: string;
+  imageUrl: string | null;
+  viewsCount: number;
+}
+
 export interface DashboardAggregates {
   ordersTotal: number;
   ordersByStatus: Record<string, number>;
@@ -12,6 +20,9 @@ export interface DashboardAggregates {
   pendingFailedDeliveriesCount: number;
   /** Distinct clients who ordered or rented from this business. */
   uniqueClientCount: number;
+  totalProductViews: number;
+  productViewsLast7d: number;
+  topViewedProducts: TopViewedProduct[];
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;

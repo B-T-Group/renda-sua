@@ -9,6 +9,14 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { isActivePersona } from '../users/persona.util';
 
+export interface TopViewedProductDto {
+  inventoryItemId: string;
+  itemId: string;
+  itemName: string;
+  imageUrl: string | null;
+  viewsCount: number;
+}
+
 export interface DashboardAggregatesDto {
   ordersTotal: number;
   ordersByStatus: Record<string, number>;
@@ -21,6 +29,11 @@ export interface DashboardAggregatesDto {
   pendingFailedDeliveriesCount: number;
   /** Distinct clients who ordered or rented from this business. */
   uniqueClientCount: number;
+  /** Unique product viewers (item × viewer rows) across active inventory. */
+  totalProductViews: number;
+  /** Product view events with last_viewed_at in the last 7 days. */
+  productViewsLast7d: number;
+  topViewedProducts: TopViewedProductDto[];
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;
@@ -85,6 +98,8 @@ export class DashboardService {
       inventoryCount,
       pendingFailedDeliveriesCount,
       uniqueClientCount,
+      productViewStats,
+      topViewedProducts,
       adminAggregates,
     ] = await Promise.all([
       this.getOrdersByStatus(businessId),
@@ -95,6 +110,8 @@ export class DashboardService {
       this.getInventoryCount(businessId),
       this.getPendingFailedDeliveriesCount(businessId),
       this.getUniqueClientCount(businessId),
+      this.getProductViewStats(businessId),
+      this.getTopViewedProducts(businessId),
       includePlatformStats
         ? this.getAdminAggregates()
         : Promise.resolve(null),
@@ -112,6 +129,9 @@ export class DashboardService {
       inventoryCount,
       pendingFailedDeliveriesCount,
       uniqueClientCount,
+      totalProductViews: productViewStats.totalProductViews,
+      productViewsLast7d: productViewStats.productViewsLast7d,
+      topViewedProducts,
     };
     if (adminAggregates) {
       result.clientCount = adminAggregates.clientCount;
@@ -618,6 +638,117 @@ export class DashboardService {
     return result?.clients_aggregate?.aggregate?.count ?? 0;
   }
 
+  private async getProductViewStats(
+    businessId: string
+  ): Promise<{ totalProductViews: number; productViewsLast7d: number }> {
+    const since7 = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const query = `
+      query DashboardProductViewStats($businessId: uuid!, $since7: timestamptz!) {
+        total: item_view_events_aggregate(
+          where: {
+            business_inventory: {
+              is_active: { _eq: true }
+              business_location: { business_id: { _eq: $businessId } }
+            }
+          }
+        ) {
+          aggregate { count }
+        }
+        last7d: item_view_events_aggregate(
+          where: {
+            last_viewed_at: { _gte: $since7 }
+            business_inventory: {
+              is_active: { _eq: true }
+              business_location: { business_id: { _eq: $businessId } }
+            }
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+      since7,
+    });
+    return {
+      totalProductViews: Number(result?.total?.aggregate?.count ?? 0),
+      productViewsLast7d: Number(result?.last7d?.aggregate?.count ?? 0),
+    };
+  }
+
+  private async getTopViewedProducts(
+    businessId: string,
+    limit = 5
+  ): Promise<TopViewedProductDto[]> {
+    const rows = await this.fetchInventoryViewRows(businessId);
+    const byItem = this.mergeTopViewedByItem(rows);
+    return byItem
+      .sort((a, b) => b.viewsCount - a.viewsCount)
+      .slice(0, limit);
+  }
+
+  private mergeTopViewedByItem(rows: InventoryViewRow[]): TopViewedProductDto[] {
+    const byItem = new Map<string, TopViewedProductDto>();
+    for (const row of rows) {
+      const product = this.toTopViewedProduct(row);
+      if (!product.itemId || product.viewsCount <= 0) continue;
+      const existing = byItem.get(product.itemId);
+      if (!existing) {
+        byItem.set(product.itemId, product);
+        continue;
+      }
+      existing.viewsCount += product.viewsCount;
+    }
+    return Array.from(byItem.values());
+  }
+
+  private async fetchInventoryViewRows(
+    businessId: string
+  ): Promise<InventoryViewRow[]> {
+    const query = `
+      query DashboardTopViewedProducts($businessId: uuid!) {
+        business_inventory(
+          where: {
+            is_active: { _eq: true }
+            business_location: { business_id: { _eq: $businessId } }
+          }
+        ) {
+          id
+          item_id
+          item {
+            id
+            name
+            item_images(limit: 1, order_by: { display_order: asc }) {
+              display_url
+              image_url
+            }
+          }
+          item_view_events_aggregate {
+            aggregate { count }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_inventory: InventoryViewRow[];
+    }>(query, { businessId });
+    return result?.business_inventory ?? [];
+  }
+
+  private toTopViewedProduct(row: InventoryViewRow): TopViewedProductDto {
+    const img = row.item?.item_images?.[0];
+    return {
+      inventoryItemId: row.id,
+      itemId: row.item?.id ?? row.item_id ?? '',
+      itemName: row.item?.name?.trim() || 'Unknown',
+      imageUrl: img?.display_url ?? img?.image_url ?? null,
+      viewsCount: Number(row.item_view_events_aggregate?.aggregate?.count ?? 0),
+    };
+  }
+
   private async getAdminAggregates(): Promise<{
     clientCount: number;
     agentsVerified: number;
@@ -789,4 +920,20 @@ interface BusinessClientCityRow {
     address?: { city?: string | null; is_primary?: boolean | null } | null;
   }[];
   orders: { delivery_address?: { city?: string | null } | null }[];
+}
+
+interface InventoryViewRow {
+  id: string;
+  item_id?: string | null;
+  item?: {
+    id?: string | null;
+    name?: string | null;
+    item_images?: Array<{
+      display_url?: string | null;
+      image_url?: string | null;
+    }> | null;
+  } | null;
+  item_view_events_aggregate?: {
+    aggregate?: { count?: number | null } | null;
+  } | null;
 }
