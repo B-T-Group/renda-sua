@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AiGenerationModule } from '../ai/ai-generation.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { HasuraModule } from '../hasura/hasura.module';
@@ -27,6 +28,11 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { AdminAuthModule } from './admin-auth.module';
 import { ThreadsModule } from '../threads/threads.module';
+import { AdminBroadcastController } from './admin-broadcast.controller';
+import { AdminBroadcastInternalController } from './admin-broadcast-internal.controller';
+import { AdminBroadcastService } from './admin-broadcast.service';
+import { AdminBroadcastAudienceService } from './admin-broadcast-audience.service';
+import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
 
 @Module({
   imports: [
@@ -35,6 +41,7 @@ import { ThreadsModule } from '../threads/threads.module';
     RbacModule,
     HasuraModule,
     NotificationsModule,
+    AiGenerationModule,
     SiteEventsModule,
     MerchantLifecycleModule,
     StripePaymentsModule,
@@ -51,6 +58,8 @@ import { ThreadsModule } from '../threads/threads.module';
     AdminSiteEventsController,
     AdminPerformanceController,
     RbacAdminController,
+    AdminBroadcastController,
+    AdminBroadcastInternalController,
   ],
   providers: [
     AdminPerformanceService,
@@ -62,6 +71,9 @@ import { ThreadsModule } from '../threads/threads.module';
     ApplicationSetupService,
     CountryOnboardingService,
     WithdrawalPinService,
+    AdminBroadcastService,
+    AdminBroadcastAudienceService,
+    AdminBroadcastQueueService,
   ],
   exports: [
     AdminAuthModule,
@@ -74,6 +86,7 @@ import { ThreadsModule } from '../threads/threads.module';
     ApplicationSetupService,
     CountryOnboardingService,
     WithdrawalPinService,
+    AdminBroadcastService,
   ],
 })
 export class AdminModule {}

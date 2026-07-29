@@ -36,6 +36,13 @@ array_relationships:
         remote_table:
           name: accounts
           schema: public
+  - name: mobile_push_tokens
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: mobile_push_tokens
+          schema: public
   - name: airtel_money_payments
     using:
       manual_configuration:

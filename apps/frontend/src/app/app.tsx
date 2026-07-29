@@ -506,6 +506,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/broadcasts"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminBroadcastsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/performance"
               element={
                 <ProtectedRoute>

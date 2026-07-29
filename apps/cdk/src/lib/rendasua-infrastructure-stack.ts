@@ -271,6 +271,52 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `ItemAiReviewQueueUrl-${environment}`,
     });
 
+    // FIFO SQS + Lambda for admin global broadcast fan-out
+    const adminBroadcastQueue = new sqs.Queue(
+      this,
+      `AdminBroadcastQueue-${environment}`,
+      {
+        queueName: `admin-broadcast-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(16),
+      }
+    );
+
+    const adminBroadcastHandler = new lambda.Function(
+      this,
+      `AdminBroadcastHandler-${environment}`,
+      {
+        functionName: `admin-broadcast-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/admin-broadcast-handler'),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    adminBroadcastHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(adminBroadcastQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    new cdk.CfnOutput(this, `AdminBroadcastQueueUrl-${environment}`, {
+      value: adminBroadcastQueue.queueUrl,
+      description: 'SQS Queue URL for admin broadcast campaigns',
+      exportName: `AdminBroadcastQueueUrl-${environment}`,
+    });
+
     // FIFO SQS + Lambda for async AI image cleanup (merchant opt-in)
     const aiImageCleanupQueue = new sqs.Queue(
       this,

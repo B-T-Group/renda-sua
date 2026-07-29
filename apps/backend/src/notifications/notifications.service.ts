@@ -2084,6 +2084,43 @@ export class NotificationsService {
     );
   }
 
+  /**
+   * Expo + web push for an admin global broadcast campaign.
+   */
+  async sendAdminBroadcastPush(params: {
+    userId: string;
+    title: string;
+    body: string;
+    campaignId: string;
+    actionType: string;
+    messageId: string;
+  }): Promise<{ webSent: number; expoSent: number }> {
+    const userId = params.userId?.trim();
+    if (!userId) return { webSent: 0, expoSent: 0 };
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) {
+      return { webSent: 0, expoSent: 0 };
+    }
+    return this.sendPushNotificationByUserId(
+      userId,
+      params.title,
+      params.body,
+      {
+        type: 'admin_broadcast',
+        campaignId: params.campaignId,
+        actionType: params.actionType,
+        messageId: params.messageId,
+        title: params.title,
+        body: params.body,
+        url: '/notifications',
+      },
+      {
+        priority: 'high',
+        sound: 'default',
+        channelId: 'default',
+      }
+    );
+  }
+
   async sendSaleItemAiProposalPush(params: {
     userId: string;
     itemId: string;

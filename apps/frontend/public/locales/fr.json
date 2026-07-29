@@ -248,6 +248,49 @@
         "cancelled": "Annulé"
       }
     },
+    "broadcasts": {
+      "pageTitle": "Messagerie globale",
+      "pageDescription": "Envoyez des notifications ciblées aux utilisateurs Rendasua",
+      "unauthorized": "Vous n’avez pas la permission d’envoyer des messages admin.",
+      "title": "Messagerie globale",
+      "subtitle": "Ciblez les utilisateurs par persona et filtres, prévisualisez l’audience, puis envoyez une notification bilingue.",
+      "compose": "Rédiger",
+      "audience": "Audience",
+      "audienceTypes": {
+        "everyone": "Tout le monde",
+        "business": "Commerce",
+        "agent": "Agent",
+        "client": "Client"
+      },
+      "lifecycleStatus": "Statut de cycle de vie",
+      "storefrontVisible": "Vitrine visible uniquement",
+      "canAcceptOrders": "Peut accepter des commandes uniquement",
+      "availableAgentsOnly": "Agents disponibles uniquement",
+      "countries": "Pays d’adresse principale (séparés par des virgules)",
+      "template": "Modèle",
+      "templates": {
+        "custom": "Personnalisé",
+        "appUpgrade": "Mise à jour de l’app",
+        "accountSetup": "Configuration du compte commerce",
+        "appUpgradeTitle": "Mettez à jour Rendasua",
+        "accountSetupTitle": "Terminez la configuration des paiements"
+      },
+      "messageTitle": "Titre",
+      "messageBody": "Message",
+      "audiencePreview": "Aperçu de l’audience",
+      "previewSummary": "{{total}} utilisateurs · {{push}} avec push · {{skip}} ignorés (règle 7 jours) · {{eligible}} éligibles",
+      "send": "Envoyer",
+      "sendSuccess": "Diffusion mise en file d’attente",
+      "sendError": "Échec de l’envoi",
+      "history": "Historique des campagnes",
+      "createdAt": "Créé",
+      "status": "Statut",
+      "counts": "Envoyés / ignorés / échecs",
+      "message": "Message",
+      "emptyHistory": "Aucune diffusion pour le moment",
+      "confirmTitle": "Envoyer la diffusion ?",
+      "confirmMessage": "Envoyer à {{eligible}} utilisateurs éligibles ({{total}} correspondants, {{skip}} ignorés par la règle de 7 jours) ?"
+    },
     "pendingMobilePayments": {
       "pageTitle": "Paiements mobiles en attente",
       "pageDescription": "Consultez les transactions MyPVit et Freemopay bloquées. Affichez le statut chez le prestataire ou finalisez lorsque le statut est définitif.",
@@ -1443,6 +1486,17 @@
         "unavailableHint": "Nombre de clients indisponible pour le moment",
         "a11y": "Clients jusqu'ici. Ouvrir le nuage de villes."
       },
+      "productViews": {
+        "label": "Vues des produits",
+        "hint": "Personnes qui ont consulté vos produits",
+        "emptyHint": "Partagez votre boutique pour que les gens découvrent vos produits.",
+        "unavailableHint": "Vues indisponibles pour le moment",
+        "weekDelta": "+{{count}} cette semaine"
+      },
+      "topViewed": {
+        "title": "Produits les plus vus",
+        "views": "{{count}} vues"
+      },
       "subtitleRentalFocused": "Votre tableau de bord met les locations en avant — catalogue, réservations et photothèque location en tête.",
       "backToDashboard": "Retour au tableau de bord",
       "moreHubDescription": "Remboursements, traitement par lot, locations, analyses et plus.",
@@ -1493,6 +1547,8 @@
       "accountRechargeModuleDescription": "Initier une collecte mobile pour recharger le compte HQ Rendasua",
       "siteEventsModule": "Événements site",
       "siteEventsModuleDescription": "Rapports et export CSV des événements d’analytique client",
+      "broadcastsModule": "Messagerie globale",
+      "broadcastsModuleDescription": "Envoyez des notifications push ciblées par persona et filtres",
       "performanceModule": "Performance de la plateforme",
       "performanceModuleDescription": "Croissance des inscriptions et du catalogue par marché, plus les meilleurs agents",
       "firstItem": {

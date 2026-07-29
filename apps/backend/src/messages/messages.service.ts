@@ -70,6 +70,7 @@ export class MessagesService {
           entity_id
           message
           message_type
+          message_payload
           read_at
           created_at
           updated_at

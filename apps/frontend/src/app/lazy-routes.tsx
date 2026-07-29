@@ -22,6 +22,9 @@ export const AdminPerformancePage = lazy(() =>
 export const AdminSiteEventsPage = lazy(() =>
   import('../components/pages/AdminSiteEventsPage')
 );
+export const AdminBroadcastsPage = lazy(() =>
+  import('../components/pages/AdminBroadcastsPage')
+);
 export const AdminManageAgents = lazy(() =>
   import('../components/pages/AdminManageAgents')
 );

@@ -1,6 +1,8 @@
 - "!include public_account_transactions.yaml"
 - "!include public_accounts.yaml"
 - "!include public_addresses.yaml"
+- "!include public_admin_broadcast_campaigns.yaml"
+- "!include public_admin_broadcast_retargets.yaml"
 - "!include public_agent_addresses.yaml"
 - "!include public_agent_locations.yaml"
 - "!include public_agent_referrals.yaml"

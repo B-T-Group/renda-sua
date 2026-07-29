@@ -24,6 +24,7 @@ import {
   AccountBalanceWallet as CashReconciliationIcon,
   MoreHoriz as MoreIcon,
   AddCard as RechargeIcon,
+  Campaign as CampaignIcon,
 } from '@mui/icons-material';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -479,6 +480,21 @@ export function useBusinessDashboardModules({
         color: '#455a64',
         requiredPermission: PlatformPermissions.OPS_SITE_EVENTS,
         path: '/admin/site-events',
+      },
+      {
+        title: t(
+          'business.dashboard.broadcastsModule',
+          'Global messaging'
+        ),
+        description: t(
+          'business.dashboard.broadcastsModuleDescription',
+          'Send targeted push notifications to users by persona and filters'
+        ),
+        icon: <CampaignIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#6a1b9a',
+        requiredPermission: PlatformPermissions.OPS_USER_MESSAGES,
+        path: '/admin/broadcasts',
       },
       {
         title: t(

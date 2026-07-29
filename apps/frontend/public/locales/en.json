@@ -490,6 +490,49 @@
         "cancelled": "Cancelled"
       }
     },
+    "broadcasts": {
+      "pageTitle": "Global messaging",
+      "pageDescription": "Send targeted notifications to Rendasua users",
+      "unauthorized": "You do not have permission to send admin broadcasts.",
+      "title": "Global messaging",
+      "subtitle": "Target users by persona and filters, preview the audience, then send a bilingual push notification.",
+      "compose": "Compose",
+      "audience": "Audience",
+      "audienceTypes": {
+        "everyone": "Everyone",
+        "business": "Business",
+        "agent": "Agent",
+        "client": "Client"
+      },
+      "lifecycleStatus": "Lifecycle status",
+      "storefrontVisible": "Storefront visible only",
+      "canAcceptOrders": "Can accept orders only",
+      "availableAgentsOnly": "Available agents only",
+      "countries": "Primary address countries (comma-separated)",
+      "template": "Template",
+      "templates": {
+        "custom": "Custom",
+        "appUpgrade": "App upgrade",
+        "accountSetup": "Business account setup",
+        "appUpgradeTitle": "Update Rendasua",
+        "accountSetupTitle": "Finish payment setup"
+      },
+      "messageTitle": "Title",
+      "messageBody": "Message",
+      "audiencePreview": "Audience preview",
+      "previewSummary": "{{total}} users · {{push}} with push · {{skip}} skipped by 7-day rule · {{eligible}} eligible",
+      "send": "Send broadcast",
+      "sendSuccess": "Broadcast queued successfully",
+      "sendError": "Failed to send broadcast",
+      "history": "Campaign history",
+      "createdAt": "Created",
+      "status": "Status",
+      "counts": "Sent / skipped / failed",
+      "message": "Message",
+      "emptyHistory": "No broadcasts sent yet",
+      "confirmTitle": "Send broadcast?",
+      "confirmMessage": "Send to {{eligible}} eligible users ({{total}} matched, {{skip}} will be skipped by the 7-day rule)?"
+    },
     "pendingMobilePayments": {
       "pageDescription": "Review stuck MyPVit and Freemopay transactions. View live provider status or resolve when the provider reports success or failure.",
       "pageKeywords": "admin, mobile money, payments, reconciliation",
@@ -1700,6 +1743,17 @@
         "unavailableHint": "Client count unavailable right now",
         "a11y": "Clients so far. Open city word cloud."
       },
+      "productViews": {
+        "label": "Product views",
+        "hint": "People who viewed your products",
+        "emptyHint": "Share your store so people can discover your products.",
+        "unavailableHint": "Views unavailable right now",
+        "weekDelta": "+{{count}} this week"
+      },
+      "topViewed": {
+        "title": "Top viewed products",
+        "views": "{{count}} views"
+      },
       "subtitleRentalFocused": "Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.",
       "backToDashboard": "Back to dashboard",
       "moreHubDescription": "Refund requests, batch orders, rentals, analytics, and more.",
@@ -1750,6 +1804,8 @@
       "accountRechargeModuleDescription": "Initiate a mobile-money collection to top up the Rendasua HQ account",
       "siteEventsModule": "Site events",
       "siteEventsModuleDescription": "Reporting and CSV export for client analytics events",
+      "broadcastsModule": "Global messaging",
+      "broadcastsModuleDescription": "Send targeted push notifications to users by persona and filters",
       "performanceModule": "Platform performance",
       "performanceModuleDescription": "Enrollment and catalog growth by market, plus top performing agents",
       "firstItem": {
