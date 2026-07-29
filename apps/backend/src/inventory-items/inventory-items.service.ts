@@ -701,7 +701,14 @@ export class InventoryItemsService {
       });
     }
 
-    if (!ownerPreview && (country_code || state)) {
+    // When the caller scopes to an explicit store location, geo is implied by that
+    // location. Applying the viewer's market/address country here would return zero
+    // rows for a Cameroonian store viewed by a Canadian shopper (and false empties
+    // on store detail pages). Same skip as ownerPreview / getInventoryStoreById.
+    const skipCallerGeo =
+      ownerPreview || Boolean(business_location_id?.trim());
+
+    if (!skipCallerGeo && (country_code || state)) {
       const ok = await this.validateLocationSupport(country_code, state);
       if (!ok) {
         return { unsupported: true };
@@ -709,7 +716,7 @@ export class InventoryItemsService {
     }
 
     let supportedLocationFilter: any = {};
-    if (ownerPreview) {
+    if (skipCallerGeo) {
       supportedLocationFilter = {};
     } else if (country_code || state) {
       const locationConditions: any[] = [];
