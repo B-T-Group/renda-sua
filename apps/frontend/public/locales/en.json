@@ -502,8 +502,13 @@
         "everyone": "Everyone",
         "business": "Business",
         "agent": "Agent",
-        "client": "Client"
+        "client": "Client",
+        "user": "Specific user"
       },
+      "searchUserEmail": "Search user by email",
+      "searchUserEmailPlaceholder": "Type an email address…",
+      "searchUserEmailHelp": "Find and select one or more users to message directly.",
+      "selectUserRequired": "Select at least one user by email before sending.",
       "lifecycleStatus": "Lifecycle status",
       "storefrontVisible": "Storefront visible only",
       "canAcceptOrders": "Can accept orders only",

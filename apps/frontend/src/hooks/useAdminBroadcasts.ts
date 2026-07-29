@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
-export type BroadcastAudienceType = 'everyone' | 'business' | 'agent' | 'client';
+export type BroadcastAudienceType =
+  | 'everyone'
+  | 'business'
+  | 'agent'
+  | 'client'
+  | 'user';
 export type BroadcastTemplateKey =
   | 'custom'
   | 'app_upgrade'
@@ -13,6 +18,15 @@ export interface BroadcastFilters {
   canAcceptOrders?: boolean;
   isAvailable?: boolean;
   countries?: string[];
+  userIds?: string[];
+  emails?: string[];
+}
+
+export interface BroadcastUserOption {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 export interface BroadcastPreviewResult {
@@ -125,6 +139,22 @@ export function useAdminBroadcasts() {
     [apiClient]
   );
 
+  const searchUsers = useCallback(
+    async (query: string): Promise<BroadcastUserOption[]> => {
+      if (!apiClient || query.trim().length < 2) return [];
+      try {
+        const { data } = await apiClient.get<{
+          success: boolean;
+          users: BroadcastUserOption[];
+        }>('/admin/broadcasts/users/search', { params: { q: query.trim() } });
+        return data.users ?? [];
+      } catch {
+        return [];
+      }
+    },
+    [apiClient]
+  );
+
   const list = useCallback(
     async (page = 1, limit = 20) => {
       if (!apiClient) {
@@ -171,5 +201,5 @@ export function useAdminBroadcasts() {
     [apiClient]
   );
 
-  return { preview, create, list, loading, error };
+  return { preview, create, list, searchUsers, loading, error };
 }

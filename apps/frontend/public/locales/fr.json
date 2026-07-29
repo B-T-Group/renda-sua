@@ -260,8 +260,13 @@
         "everyone": "Tout le monde",
         "business": "Commerce",
         "agent": "Agent",
-        "client": "Client"
+        "client": "Client",
+        "user": "Utilisateur précis"
       },
+      "searchUserEmail": "Rechercher un utilisateur par e-mail",
+      "searchUserEmailPlaceholder": "Saisissez une adresse e-mail…",
+      "searchUserEmailHelp": "Trouvez et sélectionnez un ou plusieurs utilisateurs à contacter directement.",
+      "selectUserRequired": "Sélectionnez au moins un utilisateur par e-mail avant d’envoyer.",
       "lifecycleStatus": "Statut de cycle de vie",
       "storefrontVisible": "Vitrine visible uniquement",
       "canAcceptOrders": "Peut accepter des commandes uniquement",

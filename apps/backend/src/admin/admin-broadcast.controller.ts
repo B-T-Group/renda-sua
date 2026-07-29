@@ -14,6 +14,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -84,6 +85,15 @@ export class AdminBroadcastController {
       Number(query.limit) || 20
     );
     return { success: true, ...data };
+  }
+
+  @Get('users/search')
+  @ApiOperation({ summary: 'Search users by email for single-user broadcasts' })
+  @ApiQuery({ name: 'q', required: true, description: 'Email search query' })
+  @ApiResponse({ status: 200, description: 'Matching users' })
+  async searchUsers(@Query('q') q?: string) {
+    const users = await this.broadcastService.searchUsers(q ?? '');
+    return { success: true, users };
   }
 
   @Get(':id')

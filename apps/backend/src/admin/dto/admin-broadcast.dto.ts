@@ -17,6 +17,7 @@ export const BROADCAST_AUDIENCE_TYPES = [
   'business',
   'agent',
   'client',
+  'user',
 ] as const;
 export type BroadcastAudienceType = (typeof BROADCAST_AUDIENCE_TYPES)[number];
 
@@ -70,6 +71,24 @@ export class BroadcastAudienceFiltersDto {
   @IsArray()
   @IsString({ each: true })
   countries?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Specific user IDs when audienceType is user',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  userIds?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Emails stored for audit when targeting specific users',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  emails?: string[];
 }
 
 export class BroadcastPreviewDto {

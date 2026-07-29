@@ -1,0 +1,2 @@
+-- Note: PostgreSQL does not support removing enum values directly.
+-- If rollback is needed, recreate admin_broadcast_audience_type without 'user'.

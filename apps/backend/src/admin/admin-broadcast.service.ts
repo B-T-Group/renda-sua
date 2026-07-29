@@ -71,6 +71,10 @@ export class AdminBroadcastService {
     private readonly notifications: NotificationsService
   ) {}
 
+  async searchUsers(query: string) {
+    return this.audience.searchUsersByEmail(query);
+  }
+
   async preview(input: {
     audienceType: CreateBroadcastDto['audienceType'];
     filters?: BroadcastAudienceFiltersDto;
@@ -79,6 +83,17 @@ export class AdminBroadcastService {
     title?: string;
     body?: string;
   }) {
+    if (
+      input.audienceType === 'user' &&
+      !(input.filters?.userIds?.filter(Boolean).length)
+    ) {
+      return {
+        total: 0,
+        withPushToken: 0,
+        wouldSkipDedupe: 0,
+        eligible: 0,
+      };
+    }
     const users = await this.audience.listAudienceUsers(
       input.audienceType,
       input.filters
@@ -108,6 +123,7 @@ export class AdminBroadcastService {
   async createCampaign(adminUserId: string, dto: CreateBroadcastDto) {
     const body = dto.body.trim();
     if (!body) throw new BadRequestException('Message body is required');
+    this.assertAudienceFilters(dto);
     const sourceLanguage = dto.sourceLanguage ?? 'en';
     const title = dto.title?.trim() || undefined;
     const copy = await this.resolveCopy(dto.templateKey, title, body, sourceLanguage);
@@ -408,6 +424,23 @@ export class AdminBroadcastService {
       { id: campaignId, startedAt, staleBefore }
     );
     return result.update_admin_broadcast_campaigns?.returning?.[0] ?? null;
+  }
+
+  private assertAudienceFilters(dto: CreateBroadcastDto): void {
+    if (dto.audienceType === 'user') {
+      this.assertUserAudienceFilters(dto.filters);
+    }
+  }
+
+  private assertUserAudienceFilters(
+    filters?: BroadcastAudienceFiltersDto
+  ): void {
+    const ids = filters?.userIds?.filter(Boolean) ?? [];
+    if (ids.length === 0) {
+      throw new BadRequestException(
+        'Select at least one user when audience type is user'
+      );
+    }
   }
 
   private resolvePreviewMessageHash(

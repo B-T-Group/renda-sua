@@ -30,7 +30,9 @@ export class AdminBroadcastAudienceService {
     filters?: BroadcastAudienceFiltersDto
   ): Promise<BroadcastAudienceUser[]> {
     let users: BroadcastAudienceUser[];
-    if (audienceType === 'business') {
+    if (audienceType === 'user') {
+      users = await this.queryUsersByIds(filters?.userIds ?? []);
+    } else if (audienceType === 'business') {
       users = await this.queryBusinessUsers(filters);
     } else if (audienceType === 'agent') {
       users = await this.queryAgentUsers(filters);
@@ -40,6 +42,71 @@ export class AdminBroadcastAudienceService {
       users = await this.queryEveryoneUsers(filters);
     }
     return users.sort((a, b) => a.userId.localeCompare(b.userId));
+  }
+
+  async searchUsersByEmail(query: string): Promise<
+    Array<{
+      id: string;
+      email: string;
+      firstName?: string | null;
+      lastName?: string | null;
+    }>
+  > {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const pattern = `%${q.replace(/[%_]/g, '\\$&')}%`;
+    const result = await this.hasura.executeQuery<{
+      users: Array<{
+        id: string;
+        email: string;
+        first_name?: string | null;
+        last_name?: string | null;
+      }>;
+    }>(
+      `query SearchUsers($pattern: String!) {
+        users(
+          where: { email: { _ilike: $pattern } }
+          order_by: { email: asc }
+          limit: 20
+        ) {
+          id
+          email
+          first_name
+          last_name
+        }
+      }`,
+      { pattern }
+    );
+    return (result.users ?? []).map((u) => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.first_name,
+      lastName: u.last_name,
+    }));
+  }
+
+  private async queryUsersByIds(
+    userIds: string[]
+  ): Promise<BroadcastAudienceUser[]> {
+    const ids = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) return [];
+    const result = await this.hasura.executeQuery<{
+      users: Array<{
+        id: string;
+        preferred_language?: string | null;
+        mobile_push_tokens: Array<{ id: string }>;
+      }>;
+    }>(
+      `query UsersByIds($ids: [uuid!]!) {
+        users(where: { id: { _in: $ids } }, order_by: { id: asc }) {
+          id
+          preferred_language
+          mobile_push_tokens(limit: 1) { id }
+        }
+      }`,
+      { ids }
+    );
+    return this.mapUsers(result.users ?? []);
   }
 
   async countDedupeSkips(

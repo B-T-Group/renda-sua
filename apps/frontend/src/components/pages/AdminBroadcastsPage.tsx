@@ -1,6 +1,7 @@
 import CampaignIcon from '@mui/icons-material/Campaign';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -39,6 +40,7 @@ import {
   type BroadcastFilters,
   type BroadcastPreviewResult,
   type BroadcastTemplateKey,
+  type BroadcastUserOption,
   useAdminBroadcasts,
 } from '../../hooks/useAdminBroadcasts';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -75,7 +77,8 @@ const AdminBroadcastsPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile, loading: profileLoading } = useUserProfileContext();
   const canAccess = usePermission(PlatformPermissions.OPS_USER_MESSAGES);
-  const { preview, create, list, loading, error } = useAdminBroadcasts();
+  const { preview, create, list, searchUsers, loading, error } =
+    useAdminBroadcasts();
 
   const [audienceType, setAudienceType] =
     useState<BroadcastAudienceType>('everyone');
@@ -92,6 +95,10 @@ const AdminBroadcastsPage: React.FC = () => {
   const [canAcceptOrders, setCanAcceptOrders] = useState<boolean | null>(null);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [countries, setCountries] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<BroadcastUserOption[]>([]);
+  const [userSearchInput, setUserSearchInput] = useState('');
+  const [userOptions, setUserOptions] = useState<BroadcastUserOption[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [previewResult, setPreviewResult] =
     useState<BroadcastPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -103,6 +110,11 @@ const AdminBroadcastsPage: React.FC = () => {
 
   const filters: BroadcastFilters = useMemo(() => {
     const f: BroadcastFilters = {};
+    if (audienceType === 'user') {
+      f.userIds = selectedUsers.map((u) => u.id);
+      f.emails = selectedUsers.map((u) => u.email);
+      return f;
+    }
     if (audienceType === 'business') {
       if (lifecycleStatuses.length) f.lifecycleStatuses = lifecycleStatuses;
       if (isStorefrontVisible !== null) {
@@ -126,6 +138,7 @@ const AdminBroadcastsPage: React.FC = () => {
     canAcceptOrders,
     isAvailable,
     countries,
+    selectedUsers,
   ]);
 
   const applyTemplateDefaults = useCallback(
@@ -172,7 +185,28 @@ const AdminBroadcastsPage: React.FC = () => {
       setTemplateKey('custom');
       applyTemplateDefaults(value, 'custom');
     }
+    if (value !== 'user') {
+      setSelectedUsers([]);
+      setUserSearchInput('');
+      setUserOptions([]);
+    }
   };
+
+  useEffect(() => {
+    if (audienceType !== 'user') return;
+    const q = userSearchInput.trim();
+    if (q.length < 2) {
+      setUserOptions([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setUserSearchLoading(true);
+      void searchUsers(q)
+        .then(setUserOptions)
+        .finally(() => setUserSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [audienceType, userSearchInput, searchUsers]);
 
   const refreshPreview = useCallback(async () => {
     setPreviewLoading(true);
@@ -210,6 +244,17 @@ const AdminBroadcastsPage: React.FC = () => {
   }, [refreshHistory]);
 
   const handleSend = async () => {
+    if (audienceType === 'user' && selectedUsers.length === 0) {
+      enqueueSnackbar(
+        t(
+          'admin.broadcasts.selectUserRequired',
+          'Select at least one user by email before sending.'
+        ),
+        { variant: 'warning' }
+      );
+      setConfirmOpen(false);
+      return;
+    }
     try {
       await create({
         audienceType,
@@ -295,6 +340,7 @@ const AdminBroadcastsPage: React.FC = () => {
                 ['business', 'Business'],
                 ['agent', 'Agent'],
                 ['client', 'Client'],
+                ['user', 'Specific user'],
               ] as const
             ).map(([value, label]) => (
               <ToggleButton key={value} value={value}>
@@ -302,6 +348,46 @@ const AdminBroadcastsPage: React.FC = () => {
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
+
+          {audienceType === 'user' ? (
+            <Autocomplete
+              multiple
+              sx={{ mb: 2 }}
+              options={userOptions}
+              value={selectedUsers}
+              loading={userSearchLoading}
+              filterOptions={(x) => x}
+              getOptionLabel={(option) =>
+                [option.email, option.firstName, option.lastName]
+                  .filter(Boolean)
+                  .join(' · ')
+              }
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onChange={(_, value) => setSelectedUsers(value)}
+              inputValue={userSearchInput}
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'reset') setUserSearchInput(value);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t(
+                    'admin.broadcasts.searchUserEmail',
+                    'Search user by email'
+                  )}
+                  placeholder={t(
+                    'admin.broadcasts.searchUserEmailPlaceholder',
+                    'Type an email address…'
+                  )}
+                  helperText={t(
+                    'admin.broadcasts.searchUserEmailHelp',
+                    'Find and select one or more users to message directly.'
+                  )}
+                />
+              )}
+            />
+          ) : null}
 
           {audienceType === 'business' ? (
             <Stack spacing={2} sx={{ mb: 2 }}>
@@ -382,18 +468,20 @@ const AdminBroadcastsPage: React.FC = () => {
             />
           ) : null}
 
-          <TextField
-            size="small"
-            fullWidth
-            sx={{ mb: 2 }}
-            label={t(
-              'admin.broadcasts.countries',
-              'Primary address countries (comma-separated)'
-            )}
-            value={countries}
-            onChange={(e) => setCountries(e.target.value)}
-            placeholder="CM, GA, CA"
-          />
+          {audienceType !== 'user' ? (
+            <TextField
+              size="small"
+              fullWidth
+              sx={{ mb: 2 }}
+              label={t(
+                'admin.broadcasts.countries',
+                'Primary address countries (comma-separated)'
+              )}
+              value={countries}
+              onChange={(e) => setCountries(e.target.value)}
+              placeholder="CM, GA, CA"
+            />
+          ) : null}
 
           <FormControl size="small" fullWidth sx={{ mb: 2 }}>
             <InputLabel>
@@ -519,7 +607,15 @@ const AdminBroadcastsPage: React.FC = () => {
                     <TableCell>
                       {new Date(row.created_at).toLocaleString()}
                     </TableCell>
-                    <TableCell>{row.audience_type}</TableCell>
+                    <TableCell>
+                      {row.audience_type === 'user' &&
+                      row.filters?.emails?.length
+                        ? `${t(
+                            'admin.broadcasts.audienceTypes.user',
+                            'Specific user'
+                          )}: ${row.filters.emails.join(', ')}`
+                        : row.audience_type}
+                    </TableCell>
                     <TableCell>{row.template_key}</TableCell>
                     <TableCell>
                       <Chip
