@@ -160,6 +160,27 @@ export class StripePaymentsController {
     }
   }
 
+  @Get('config')
+  @Public()
+  @ApiOperation({
+    summary: 'Public Stripe client config',
+    description:
+      'Returns the publishable key for the active API environment so mobile/web PaymentSheet matches server-created PaymentIntents.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Publishable key for Stripe.js / PaymentSheet',
+  })
+  getClientConfig() {
+    const publishableKey =
+      this.configService.get<Configuration['stripe']>('stripe')?.publishableKey ??
+      '';
+    return {
+      success: true,
+      data: { publishableKey },
+    };
+  }
+
   @Get('transactions/:id/status')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a Stripe transaction status (live sync)' })
