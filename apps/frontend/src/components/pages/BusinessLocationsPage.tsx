@@ -227,6 +227,33 @@ const BusinessLocationsPage: React.FC = () => {
     setShowDeleteConfirm(true);
   };
 
+  const deleteLocationErrorMessage = (error: unknown) => {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: string }).code)
+        : undefined;
+    if (code === 'LOCATION_HAS_INVENTORY') {
+      return t(
+        'business.locations.cannotDeleteHasInventory',
+        'Cannot delete a location that still has items. Remove items from this location first.'
+      );
+    }
+    if (code === 'ADDRESS_PRIMARY_DELETE_FORBIDDEN') {
+      return t(
+        'business.locations.cannotDeletePrimary',
+        'Cannot delete primary location'
+      );
+    }
+    if (code === 'ADDRESS_MINIMUM_REQUIRED') {
+      return t(
+        'business.locations.cannotDeleteOnlyLocation',
+        'Cannot delete the only location. Each business must have at least one location.'
+      );
+    }
+    if (error instanceof Error && error.message) return error.message;
+    return t('business.locations.deleteError', 'Failed to delete location');
+  };
+
   const handleConfirmDelete = async () => {
     if (!locationToDelete) return;
 
@@ -243,14 +270,12 @@ const BusinessLocationsPage: React.FC = () => {
       );
       setShowDeleteConfirm(false);
       setLocationToDelete(null);
+      void fetchLocations();
     } catch (error: unknown) {
       console.error('Error deleting location:', error);
-      enqueueSnackbar(
-        t('business.locations.deleteError', 'Failed to delete location'),
-        {
-          variant: 'error',
-        }
-      );
+      enqueueSnackbar(deleteLocationErrorMessage(error), {
+        variant: 'error',
+      });
     }
   };
 

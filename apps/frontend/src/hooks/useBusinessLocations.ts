@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useGraphQLRequest } from './useGraphQLRequest';
 import { useApiClient } from './useApiClient';
 import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 
@@ -79,14 +78,6 @@ export interface UpdateBusinessLocationData {
   };
 }
 
-const DELETE_BUSINESS_LOCATION = `
-  mutation DeleteBusinessLocation($id: uuid!) {
-    delete_business_locations_by_pk(id: $id) {
-      id
-    }
-  }
-`;
-
 export const useBusinessLocations = (
   businessId?: string,
   userId?: string,
@@ -98,10 +89,6 @@ export const useBusinessLocations = (
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const apiClient = useApiClient();
-
-  const { execute: executeDeleteMutation } = useGraphQLRequest(
-    DELETE_BUSINESS_LOCATION
-  );
 
   const fetchLocations = useCallback(async () => {
     setLoading(true);
@@ -344,23 +331,31 @@ export const useBusinessLocations = (
       setLoading(true);
       setError(null);
       try {
-        const result = await executeDeleteMutation({ id });
-        if (result.delete_business_locations_by_pk) {
-          setLocations((prev) => prev.filter((location) => location.id !== id));
-          return result.delete_business_locations_by_pk;
+        if (!apiClient) {
+          throw new Error('API client not available');
         }
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to delete business location'
+        await apiClient.delete(
+          `/business-items/locations/${id}`,
+          businessItemsApiParams(businessId)
         );
-        throw err;
+        setLocations((prev) => prev.filter((location) => location.id !== id));
+        return { id };
+      } catch (err: any) {
+        const message =
+          err?.response?.data?.error ||
+          (err instanceof Error
+            ? err.message
+            : 'Failed to delete business location');
+        setError(message);
+        const code = err?.response?.data?.code as string | undefined;
+        const wrapped = new Error(message) as Error & { code?: string };
+        wrapped.code = code;
+        throw wrapped;
       } finally {
         setLoading(false);
       }
     },
-    [executeDeleteMutation]
+    [apiClient, businessId]
   );
 
   useEffect(() => {

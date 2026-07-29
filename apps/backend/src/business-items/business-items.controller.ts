@@ -168,7 +168,8 @@ export class BusinessItemsController {
 
   @Delete('locations/:locationId')
   @ApiOperation({
-    summary: 'Delete a business location with safeguards (only/primary location rejected)',
+    summary:
+      'Delete a business location with no inventory (rejected if only/primary or has items)',
   })
   @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 200, description: 'Location deleted successfully' })
@@ -187,9 +188,10 @@ export class BusinessItemsController {
           enum: [
             'ADDRESS_MINIMUM_REQUIRED',
             'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
+            'LOCATION_HAS_INVENTORY',
           ],
           description:
-            'ADDRESS_MINIMUM_REQUIRED: Cannot delete the only location. ADDRESS_PRIMARY_DELETE_FORBIDDEN: Cannot delete the primary location.',
+            'ADDRESS_MINIMUM_REQUIRED: only location. ADDRESS_PRIMARY_DELETE_FORBIDDEN: primary location. LOCATION_HAS_INVENTORY: still has items assigned.',
         },
       },
     },
