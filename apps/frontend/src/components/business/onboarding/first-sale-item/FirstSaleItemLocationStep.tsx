@@ -27,12 +27,14 @@ import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 interface FirstSaleItemLocationStepProps {
   item: CreatedSaleItemSummary;
   imagePreviewUrl?: string | null;
+  initialLocationId?: string;
   onComplete: (savedAsDraft: boolean, locationName?: string) => void;
 }
 
 const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
   item,
   imagePreviewUrl,
+  initialLocationId,
   onComplete,
 }) => {
   const { t } = useTranslation();
@@ -70,10 +72,13 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
 
   useEffect(() => {
     const list = businessLocations.length ? businessLocations : locations;
-    if (!locationId && list.length) {
-      setLocationId(list[0].id);
+    if (locationId || !list.length) return;
+    if (initialLocationId && list.some((l) => l.id === initialLocationId)) {
+      setLocationId(initialLocationId);
+      return;
     }
-  }, [businessLocations, locations, locationId]);
+    setLocationId(list[0].id);
+  }, [businessLocations, locations, locationId, initialLocationId]);
 
   const list = businessLocations.length ? businessLocations : locations;
   const price = item.price ?? 0;

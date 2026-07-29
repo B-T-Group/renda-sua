@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountManager } from '../../hooks/useAccountManager';
+import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import {
   AddBusinessLocationData,
   BusinessLocation,
@@ -66,6 +67,7 @@ const BusinessLocationsPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { profile, refetch: refetchProfile, addAddress } =
     useUserProfileContext();
+  const { businessQueryParams } = useBusinessCatalogScope();
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [businessAddressDialogOpen, setBusinessAddressDialogOpen] =
     useState(false);
@@ -209,6 +211,15 @@ const BusinessLocationsPage: React.FC = () => {
   const handleEditLocation = (location: BusinessLocation) => {
     setEditingLocation(location);
     setShowLocationModal(true);
+  };
+
+  const handleViewItems = (location: BusinessLocation) => {
+    const params = new URLSearchParams();
+    if (businessQueryParams?.businessId) {
+      params.set('businessId', businessQueryParams.businessId);
+    }
+    params.set('location', location.id);
+    navigate(`/business/items?${params.toString()}`);
   };
 
   const handleDeleteLocation = (location: BusinessLocation) => {
@@ -597,6 +608,7 @@ const BusinessLocationsPage: React.FC = () => {
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}
+                      onViewItems={handleViewItems}
                     />
                   </Grid>
                 ))}
@@ -644,6 +656,7 @@ const BusinessLocationsPage: React.FC = () => {
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}
+                      onViewItems={handleViewItems}
                     />
                   </Grid>
                 ))}

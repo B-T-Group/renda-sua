@@ -11,6 +11,7 @@ interface FirstSaleItemSuccessStepProps {
   intent?: SaleItemFromImageIntent;
   locationName?: string;
   savedAsDraft?: boolean;
+  initialLocationId?: string;
 }
 
 const scaleIn = {
@@ -25,10 +26,17 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
   intent = 'first',
   locationName,
   savedAsDraft = false,
+  initialLocationId,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isFirst = intent === 'first';
+  const itemsPath = initialLocationId
+    ? `/business/items?location=${encodeURIComponent(initialLocationId)}`
+    : '/business/items';
+  const addAnotherPath = initialLocationId
+    ? `/business/items/add-from-image?location=${encodeURIComponent(initialLocationId)}`
+    : '/business/items/add-from-image';
 
   const title = savedAsDraft
     ? t('business.onboarding.firstSale.success.draftTitle', 'Draft saved')
@@ -109,7 +117,7 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
           <Button
             variant="contained"
             component={RouterLink}
-            to={isFirst ? '/dashboard' : '/business/items'}
+            to={isFirst ? '/dashboard' : itemsPath}
             fullWidth
             size="large"
             sx={{ minHeight: 48 }}
@@ -132,7 +140,7 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
             savedAsDraft
               ? isFirst
                 ? '/dashboard'
-                : '/business/items'
+                : itemsPath
               : `/business/items/${item.id}`
           }
           fullWidth
@@ -154,7 +162,7 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
         {!isFirst && !savedAsDraft && (
           <Button
             variant="text"
-            onClick={() => navigate('/business/items/add-from-image')}
+            onClick={() => navigate(addAnotherPath)}
             fullWidth
             size="large"
             sx={{ minHeight: 48 }}

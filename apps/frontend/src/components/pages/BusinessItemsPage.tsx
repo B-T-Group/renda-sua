@@ -27,7 +27,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
@@ -205,7 +205,10 @@ const BusinessItemsPage: React.FC = () => {
     setSelectedBusinessId,
     ownBusinessId,
     businessQuerySuffix,
+    businessQueryParams,
   } = useBusinessCatalogScope();
+  const [searchParams] = useSearchParams();
+  const locationFilterId = searchParams.get('location') || undefined;
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -287,6 +290,28 @@ const BusinessItemsPage: React.FC = () => {
   }, [effectiveBusinessId, fetchBrands, fetchItemSubCategories]);
 
   const itemPathSuffix = businessQuerySuffix;
+
+  const locationFilterName = useMemo(() => {
+    if (!locationFilterId) return null;
+    const match = businessLocations?.find(
+      (loc: { id: string; name?: string }) => loc.id === locationFilterId
+    );
+    return match?.name ?? null;
+  }, [businessLocations, locationFilterId]);
+
+  const addFromImagePath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (businessQueryParams?.businessId) {
+      params.set('businessId', businessQueryParams.businessId);
+    }
+    if (locationFilterId) {
+      params.set('location', locationFilterId);
+    }
+    const qs = params.toString();
+    return qs
+      ? `/business/items/add-from-image?${qs}`
+      : '/business/items/add-from-image';
+  }, [businessQueryParams?.businessId, locationFilterId]);
 
   const handleEditItem = (item: any) => {
     navigate(`/business/items/edit/${item.id}${itemPathSuffix}`);
@@ -576,6 +601,14 @@ const BusinessItemsPage: React.FC = () => {
   // Filter items based on search and filters
   const filteredItems =
     items?.filter((item) => {
+      const matchesLocation =
+        !locationFilterId ||
+        (item.business_inventories ?? []).some(
+          (inv) =>
+            inv.business_location_id === locationFilterId ||
+            inv.business_location?.id === locationFilterId
+        );
+
       const matchesSearch =
         filters.searchText === '' ||
         itemMatchesSearchText(item, filters.searchText);
@@ -615,6 +648,7 @@ const BusinessItemsPage: React.FC = () => {
         (filters.favoritesFilter === 'not_favorites' && !fav);
 
       return (
+        matchesLocation &&
         matchesSearch &&
         matchesStatus &&
         matchesCategory &&
@@ -746,10 +780,14 @@ const BusinessItemsPage: React.FC = () => {
             </Box>
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {t('business.items.subtitle', {
-              count: totalItemCount,
-              categories: categoryCount,
-            })}
+            {locationFilterName
+              ? t('business.items.locationFilter', 'Items at {{name}}', {
+                  name: locationFilterName,
+                })
+              : t('business.items.subtitle', {
+                  count: totalItemCount,
+                  categories: categoryCount,
+                })}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
@@ -757,7 +795,7 @@ const BusinessItemsPage: React.FC = () => {
             variant="outlined"
             color="error"
             startIcon={<AddPhotoAlternateIcon />}
-            onClick={() => navigate('/business/items/add-from-image')}
+            onClick={() => navigate(addFromImagePath)}
             size="small"
             sx={{ borderRadius: 0 }}
           >

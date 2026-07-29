@@ -6,13 +6,23 @@ import {
   Button,
   Chip,
   Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Pagination,
   Paper,
+  Select,
+  type SelectChangeEvent,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
+import {
+  Link as RouterLink,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from '../../contexts/CartContext';
@@ -21,6 +31,7 @@ import {
   InventoryItem,
   useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useCatalogStore } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
@@ -45,6 +56,7 @@ const StorePage: React.FC = () => {
     businessId: string;
   }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const previewMode = useMemo(
     () => new URLSearchParams(location.search).get('preview') === '1',
     [location.search]
@@ -72,6 +84,19 @@ const StorePage: React.FC = () => {
     wantsOwnerPreview &&
     Boolean(store?.business_id) &&
     profile?.business?.id === store?.business_id;
+
+  const { locations: previewLocations } = useBusinessLocations(
+    wantsOwnerPreview ? profile?.business?.id : undefined
+  );
+
+  const handlePreviewLocationChange = (event: SelectChangeEvent<string>) => {
+    const nextLocationId = event.target.value;
+    if (!nextLocationId || nextLocationId === store?.business_location_id) {
+      return;
+    }
+    setCurrentPage(1);
+    navigate(`/store/${nextLocationId}?preview=1`);
+  };
 
   const storeMatchesRoute =
     Boolean(store) &&
@@ -202,10 +227,34 @@ const StorePage: React.FC = () => {
           icon={<VisibilityOutlinedIcon />}
           sx={{ mb: 2 }}
         >
-          {t(
-            'stores.previewBanner',
-            'This is how customers see your store.'
-          )}
+          <Typography variant="body2" sx={{ mb: previewLocations.length > 1 ? 1.5 : 0 }}>
+            {t(
+              'stores.previewBanner',
+              'This is how customers see your store.'
+            )}
+          </Typography>
+          {previewLocations.length > 1 ? (
+            <FormControl size="small" fullWidth sx={{ maxWidth: 360, mt: 0.5 }}>
+              <InputLabel id="store-preview-location-label">
+                {t('stores.previewLocation', 'Preview location')}
+              </InputLabel>
+              <Select
+                labelId="store-preview-location-label"
+                label={t('stores.previewLocation', 'Preview location')}
+                value={store?.business_location_id ?? ''}
+                onChange={handlePreviewLocationChange}
+              >
+                {previewLocations.map((loc) => (
+                  <MenuItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                    {loc.is_primary
+                      ? ` (${t('business.locations.primary', 'Primary')})`
+                      : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
         </Alert>
       ) : null}
 
@@ -354,7 +403,11 @@ const StorePage: React.FC = () => {
                       size="small"
                       variant="outlined"
                       component={RouterLink}
-                      to="/business/items"
+                      to={
+                        store?.business_location_id
+                          ? `/business/items?location=${encodeURIComponent(store.business_location_id)}`
+                          : '/business/items'
+                      }
                     >
                       {t('stores.manageItems', 'Manage items')}
                     </Button>
@@ -376,7 +429,11 @@ const StorePage: React.FC = () => {
               </Typography>
               <Button
                 component={RouterLink}
-                to="/business/items/add-from-image"
+                to={
+                  store?.business_location_id
+                    ? `/business/items/add-from-image?location=${encodeURIComponent(store.business_location_id)}`
+                    : '/business/items/add-from-image'
+                }
                 variant="contained"
                 size="small"
               >

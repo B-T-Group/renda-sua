@@ -2327,6 +2327,7 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Ajouter un article",
       "addFromImage": "Créer un nouvel article",
+      "locationFilter": "Articles à {{name}}",
       "businessSelector": {
         "label": "Entreprise",
         "title": "Périmètre du catalogue",
@@ -2918,6 +2919,8 @@
     "verified": "Vérifié",
     "notVisibleYet": "Pas encore visible pour les clients",
     "previewBanner": "Voici comment les clients voient votre magasin.",
+    "previewLocation": "Emplacement à prévisualiser",
+    "previewLocationHint": "Changez d’emplacement pour prévisualiser chaque vitrine.",
     "previewEmptyTitle": "Votre magasin semble vide",
     "previewEmptyBody": "Ajoutez des produits avec photos et stock pour que les clients aient quelque chose à parcourir.",
     "addProducts": "Ajouter des produits",

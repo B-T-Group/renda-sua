@@ -32,10 +32,13 @@ export type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 export interface FirstSaleItemFlowProps {
   intent?: SaleItemFromImageIntent;
+  /** Prefer this location on the stock step when present in the list. */
+  initialLocationId?: string;
 }
 
 const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   intent = 'first',
+  initialLocationId,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -43,7 +46,10 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const isFirst = intent === 'first';
-  const exitPath = isFirst ? '/dashboard' : '/business/items';
+  const itemsPath = initialLocationId
+    ? `/business/items?location=${encodeURIComponent(initialLocationId)}`
+    : '/business/items';
+  const exitPath = isFirst ? '/dashboard' : itemsPath;
   const [step, setStep] = useState(0);
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
@@ -210,6 +216,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           <FirstSaleItemLocationStep
             item={item}
             imagePreviewUrl={imagePreviewUrls[0]}
+            initialLocationId={initialLocationId}
             onComplete={(asDraft, locName) => {
               setSavedAsDraft(asDraft);
               setLocationName(locName);
@@ -223,6 +230,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             intent={intent}
             locationName={locationName}
             savedAsDraft={savedAsDraft}
+            initialLocationId={initialLocationId}
           />
         )}
       </Paper>

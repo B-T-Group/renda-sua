@@ -2613,6 +2613,7 @@
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Add Item",
       "addFromImage": "Create new item",
+      "locationFilter": "Items at {{name}}",
       "businessSelector": {
         "label": "Business",
         "title": "Catalog scope",
@@ -3176,6 +3177,8 @@
     "verified": "Verified",
     "notVisibleYet": "Not visible to customers yet",
     "previewBanner": "This is how customers see your store.",
+    "previewLocation": "Preview location",
+    "previewLocationHint": "Switch locations to preview each storefront.",
     "previewEmptyTitle": "Your store looks empty",
     "previewEmptyBody": "Add products with photos and stock so customers have something to browse.",
     "addProducts": "Add products",

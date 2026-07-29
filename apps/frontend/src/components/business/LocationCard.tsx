@@ -3,6 +3,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Email as EmailIcon,
+  Inventory2 as InventoryIcon,
   LocationOn as LocationIcon,
   Phone as PhoneIcon,
   Store as StoreIcon,
@@ -44,6 +45,7 @@ interface LocationCardProps {
   onDelete: (location: BusinessLocation) => void;
   onToggleStatus: (location: BusinessLocation) => void;
   onTransfer?: (location: BusinessLocation) => void;
+  onViewItems?: (location: BusinessLocation) => void;
 }
 
 const LocationCard: React.FC<LocationCardProps> = ({
@@ -54,6 +56,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
   onDelete,
   onToggleStatus,
   onTransfer,
+  onViewItems,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -345,15 +348,36 @@ const LocationCard: React.FC<LocationCardProps> = ({
       </CardContent>
 
       {/* Actions */}
-      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2, pt: 0, flexWrap: 'wrap', gap: 1 }}>
-        <Button
-          size="small"
-          startIcon={<EditIcon />}
-          onClick={() => onEdit(location)}
-          sx={{ textTransform: 'none' }}
-        >
-          {t('business.locations.edit', 'Edit')}
-        </Button>
+      <CardActions
+        sx={{
+          justifyContent: 'space-between',
+          px: 2,
+          pb: 2,
+          pt: 0,
+          flexWrap: 'wrap',
+          gap: 1,
+        }}
+      >
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button
+            size="small"
+            startIcon={<EditIcon />}
+            onClick={() => onEdit(location)}
+            sx={{ textTransform: 'none' }}
+          >
+            {t('business.locations.edit', 'Edit')}
+          </Button>
+          {onViewItems ? (
+            <Button
+              size="small"
+              startIcon={<InventoryIcon />}
+              onClick={() => onViewItems(location)}
+              sx={{ textTransform: 'none' }}
+            >
+              {t('stores.manageItems', 'Manage items')}
+            </Button>
+          ) : null}
+        </Stack>
         <Stack direction="row" spacing={1}>
           {onTransfer && !location.is_primary && !transferPending && (
             <Button

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import FirstSaleItemFlow, {
   type SaleItemFromImageIntent,
 } from '../business/onboarding/first-sale-item/FirstSaleItemFlow';
@@ -17,6 +18,8 @@ const SaleItemFromImageOnboardingPage: React.FC<
   SaleItemFromImageOnboardingPageProps
 > = ({ intent }) => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const initialLocationId = searchParams.get('location') || undefined;
   const isFirst = intent === 'first';
 
   return (
@@ -42,7 +45,10 @@ const SaleItemFromImageOnboardingPage: React.FC<
             : 'seo.business-items.keywords'
         )}
       />
-      <FirstSaleItemFlow intent={intent} />
+      <FirstSaleItemFlow
+        intent={intent}
+        initialLocationId={initialLocationId}
+      />
     </>
   );
 };
