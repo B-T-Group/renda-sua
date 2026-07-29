@@ -2658,6 +2658,7 @@
       "cannotDeletePrimary": "Impossible de supprimer l'emplacement principal",
       "cannotDeleteOnlyLocation": "Impossible de supprimer le seul emplacement. Chaque entreprise doit en avoir au moins un.",
       "cannotDeleteHasInventory": "Impossible de supprimer un emplacement qui a encore des articles. Retirez d'abord les articles de cet emplacement.",
+      "cannotDeleteHasBalance": "Impossible de supprimer un emplacement qui a encore un solde. Retirez ou transférez les fonds d'abord.",
       "deactivate": "Désactiver",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cet emplacement ? Il ne peut être supprimé que s'il n'a aucun article assigné.",
       "deleteError": "Échec de la suppression de l'emplacement",

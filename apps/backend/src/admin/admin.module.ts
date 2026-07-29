@@ -11,6 +11,8 @@ import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module'
 import { AdminSiteEventsController } from './admin-site-events.controller';
 import { AdminPerformanceController } from './admin-performance.controller';
 import { AdminPerformanceService } from './admin-performance.service';
+import { BusinessReferralReviewController } from './business-referral-review.controller';
+import { BusinessReferralReviewService } from './business-referral-review.service';
 import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -57,12 +59,14 @@ import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
     ConfigurationsController,
     AdminSiteEventsController,
     AdminPerformanceController,
+    BusinessReferralReviewController,
     RbacAdminController,
     AdminBroadcastController,
     AdminBroadcastInternalController,
   ],
   providers: [
     AdminPerformanceService,
+    BusinessReferralReviewService,
     AdminMessageService,
     AdminService,
     ConfigurationsService,
@@ -81,6 +85,7 @@ import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
     AdminMessageService,
     AdminService,
     ConfigurationsService,
+    BusinessReferralReviewService,
     RentalListingModerationService,
     ItemModerationService,
     ApplicationSetupService,

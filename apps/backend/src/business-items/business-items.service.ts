@@ -1068,6 +1068,7 @@ export class BusinessItemsService {
     if (orderCount > 0) {
       await this.softDeleteBusinessLocation(locationId);
     } else {
+      await this.prepareLocationAccountsForHardDelete(locationId);
       await this.hardDeleteBusinessLocation(locationId);
     }
     return {
@@ -1087,6 +1088,71 @@ export class BusinessItemsService {
       }
     `,
       { locationId }
+    );
+  }
+
+  /**
+   * Location accounts use ON DELETE SET NULL, which collides with the legacy
+   * unique (user_id, currency) index when a null-location account already exists.
+   * Remove empty location accounts first; block if any still have balance.
+   */
+  private async prepareLocationAccountsForHardDelete(
+    locationId: string
+  ): Promise<void> {
+    const accounts = await this.getLocationAccounts(locationId);
+    if (accounts.some((a) => this.accountHasBalance(a))) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'Cannot delete a location that still has account balance. Withdraw or transfer funds first.',
+          code: 'LOCATION_HAS_BALANCE',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    if (!accounts.length) return;
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation DeleteLocationAccounts($locationId: uuid!) {
+        delete_accounts(where: { business_location_id: { _eq: $locationId } }) {
+          affected_rows
+        }
+      }
+    `,
+      { locationId }
+    );
+  }
+
+  private async getLocationAccounts(locationId: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      accounts: Array<{
+        id: string;
+        available_balance: number | string;
+        withheld_balance: number | string;
+      }>;
+    }>(
+      `
+      query LocationAccounts($locationId: uuid!) {
+        accounts(where: { business_location_id: { _eq: $locationId } }) {
+          id
+          available_balance
+          withheld_balance
+        }
+      }
+    `,
+      { locationId }
+    );
+    return result.accounts ?? [];
+  }
+
+  private accountHasBalance(account: {
+    available_balance: number | string;
+    withheld_balance: number | string;
+  }): boolean {
+    return (
+      Number(account.available_balance) !== 0 ||
+      Number(account.withheld_balance) !== 0
     );
   }
 

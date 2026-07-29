@@ -189,9 +189,10 @@ export class BusinessItemsController {
             'ADDRESS_MINIMUM_REQUIRED',
             'ADDRESS_PRIMARY_DELETE_FORBIDDEN',
             'LOCATION_HAS_INVENTORY',
+            'LOCATION_HAS_BALANCE',
           ],
           description:
-            'ADDRESS_MINIMUM_REQUIRED: only location. ADDRESS_PRIMARY_DELETE_FORBIDDEN: primary location. LOCATION_HAS_INVENTORY: still has items assigned.',
+            'ADDRESS_MINIMUM_REQUIRED: only location. ADDRESS_PRIMARY_DELETE_FORBIDDEN: primary location. LOCATION_HAS_INVENTORY: still has items. LOCATION_HAS_BALANCE: location account still has funds.',
         },
       },
     },

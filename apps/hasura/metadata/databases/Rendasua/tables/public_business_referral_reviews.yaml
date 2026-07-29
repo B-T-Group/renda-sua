@@ -1,0 +1,21 @@
+table:
+  name: business_referral_reviews
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: reviewed_by_user
+    using:
+      foreign_key_constraint_on: reviewed_by_user_id
+array_relationships:
+  - name: item_marks
+    using:
+      foreign_key_constraint_on:
+        column: review_id
+        table:
+          name: business_referral_review_item_marks
+          schema: public

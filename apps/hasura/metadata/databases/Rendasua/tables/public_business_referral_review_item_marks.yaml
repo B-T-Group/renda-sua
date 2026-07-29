@@ -1,0 +1,10 @@
+table:
+  name: business_referral_review_item_marks
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: review
+    using:
+      foreign_key_constraint_on: review_id

@@ -89,7 +89,17 @@ export class BusinessReferralPayoutsService {
           where: {
             referred_by_agent_id: { _is_null: false }
             created_at: { _gte: $cutoff }
-            items_aggregate: { count: { predicate: { _gte: $minItems } } }
+            items_aggregate: {
+              count: {
+                predicate: { _gte: $minItems }
+                filter: {
+                  status: { _eq: active }
+                  is_active: { _eq: true }
+                  moderation_status: { _eq: approved }
+                }
+              }
+            }
+            business_referral_reviews: { status: { _eq: "approved" } }
             _not: { business_referral_payouts: {} }
           }
         ) {
@@ -101,7 +111,13 @@ export class BusinessReferralPayoutsService {
             user_id
             user { id preferred_language }
           }
-          items_aggregate { aggregate { count } }
+          items_aggregate(
+            where: {
+              status: { _eq: active }
+              is_active: { _eq: true }
+              moderation_status: { _eq: approved }
+            }
+          ) { aggregate { count } }
         }
       }
     `;

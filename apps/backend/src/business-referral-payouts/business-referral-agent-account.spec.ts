@@ -25,14 +25,17 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
     });
     const executeMutation = jest.fn(async () => ({
       insert_business_referral_payouts_one: { id: 'payout-1' },
+      update_business_referral_payouts: { affected_rows: 1 },
     }));
     const registerTransaction = jest.fn(async () => ({
+      success: true,
       transactionId: 'tx-1',
     }));
+    const findDepositByReference = jest.fn(async () => null);
 
     const service = new BusinessReferralPayoutsService(
       { executeQuery, executeMutation } as never,
-      { registerTransaction } as never,
+      { registerTransaction, findDepositByReference } as never,
       {
         resolveRailForUser: jest.fn(async () => 'stripe'),
         getUserCountryCode: jest.fn(async () => 'CA'),

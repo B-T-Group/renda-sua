@@ -238,6 +238,12 @@ const BusinessLocationsPage: React.FC = () => {
         'Cannot delete a location that still has items. Remove items from this location first.'
       );
     }
+    if (code === 'LOCATION_HAS_BALANCE') {
+      return t(
+        'business.locations.cannotDeleteHasBalance',
+        'Cannot delete a location that still has account balance. Withdraw or transfer funds first.'
+      );
+    }
     if (code === 'ADDRESS_PRIMARY_DELETE_FORBIDDEN') {
       return t(
         'business.locations.cannotDeletePrimary',

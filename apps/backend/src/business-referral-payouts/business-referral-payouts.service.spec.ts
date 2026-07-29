@@ -163,4 +163,19 @@ describe('BusinessReferralPayoutsService', () => {
     );
     expect(notificationsService.sendInternalPushByUserId).toHaveBeenCalled();
   });
+
+  it('eligibility query requires approved review and approved active items', async () => {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleReferredBusinesses')) {
+        expect(query).toContain('business_referral_reviews');
+        expect(query).toContain('moderation_status: { _eq: approved }');
+        expect(query).toContain('status: { _eq: "approved" }');
+        return { businesses: [] };
+      }
+      return {};
+    });
+
+    const summary = await service.runWeeklyPayouts();
+    expect(summary.processed).toBe(0);
+  });
 });

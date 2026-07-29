@@ -8,6 +8,7 @@ import {
   buildReferredBusinessesQuery,
   buildSummaryQuery,
 } from './admin-performance.queries';
+import { BusinessReferralReviewService } from './business-referral-review.service';
 import type { TopAgentMetric } from './dto/admin-performance-query.dto';
 
 /** Target catalog depth: average sale items per referred business. */
@@ -37,6 +38,9 @@ export interface ReferredBusinessSummary {
   /** itemCount + 1 */
   score: number;
   createdAt: string;
+  payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
+  payoutReviewRejectionReason?: string | null;
+  isPaid?: boolean;
 }
 
 export interface TopAgentEntry {
@@ -124,7 +128,8 @@ export class AdminPerformanceService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly configurationsService: ConfigurationsService,
+    private readonly referralReviewService: BusinessReferralReviewService
   ) {}
 
   async getSummary(
@@ -218,11 +223,50 @@ export class AdminPerformanceService {
     entries.sort((a, b) => this.compareReferralEntries(a, b));
     const ranked = entries.slice(0, limit);
     if (ranked.length === 0) return [];
-    const agents = await this.fetchAgentsByIds(ranked.map((e) => e.agentId));
-    const withNames = ranked.map((entry) =>
+    const withReviews = await this.attachReferralReviewStatuses(ranked);
+    const agents = await this.fetchAgentsByIds(
+      withReviews.map((e) => e.agentId)
+    );
+    const withNames = withReviews.map((entry) =>
       this.withAgentNames(entry, agents.get(entry.agentId))
     );
     return this.attachProjectedPayouts(withNames, agents);
+  }
+
+  private async attachReferralReviewStatuses(
+    entries: TopAgentEntry[]
+  ): Promise<TopAgentEntry[]> {
+    const businessIds = entries.flatMap((e) =>
+      (e.referredBusinesses ?? []).map((b) => b.businessId)
+    );
+    const statuses =
+      await this.referralReviewService.getReviewStatusesForBusinessIds(
+        businessIds
+      );
+    return entries.map((entry) => this.withReviewStatuses(entry, statuses));
+  }
+
+  private withReviewStatuses(
+    entry: TopAgentEntry,
+    statuses: Map<
+      string,
+      {
+        payoutReviewStatus: 'pending' | 'approved' | 'rejected';
+        rejectionReason: string | null;
+        isPaid: boolean;
+      }
+    >
+  ): TopAgentEntry {
+    const businesses = (entry.referredBusinesses ?? []).map((biz) => {
+      const st = statuses.get(biz.businessId);
+      return {
+        ...biz,
+        payoutReviewStatus: st?.payoutReviewStatus ?? 'pending',
+        payoutReviewRejectionReason: st?.rejectionReason ?? null,
+        isPaid: st?.isPaid ?? false,
+      };
+    });
+    return { ...entry, referredBusinesses: businesses };
   }
 
   private async attachProjectedPayouts(
@@ -232,8 +276,9 @@ export class AdminPerformanceService {
     const payoutByCountry = new Map<string, { amount: number; currency: string }>();
     const results: TopAgentEntry[] = [];
     for (const entry of entries) {
+      const payableCount = this.approvedUnpaidStockedCount(entry);
       const countryCode = this.agentCountryCode(agents.get(entry.agentId));
-      if (!countryCode || (entry.stockedReferralCount ?? 0) === 0) {
+      if (!countryCode || payableCount === 0) {
         results.push(entry);
         continue;
       }
@@ -247,13 +292,20 @@ export class AdminPerformanceService {
       results.push({
         ...entry,
         projectedPayoutAmount:
-          payout.amount > 0
-            ? (entry.stockedReferralCount ?? 0) * payout.amount
-            : undefined,
+          payout.amount > 0 ? payableCount * payout.amount : undefined,
         projectedPayoutCurrency: payout.amount > 0 ? payout.currency : undefined,
       });
     }
     return results;
+  }
+
+  private approvedUnpaidStockedCount(entry: TopAgentEntry): number {
+    return (entry.referredBusinesses ?? []).filter(
+      (b) =>
+        b.itemCount >= GOLDEN_ITEMS_PER_REFERRAL &&
+        b.payoutReviewStatus === 'approved' &&
+        !b.isPaid
+    ).length;
   }
 
   private agentCountryCode(agent?: AgentRow): string | null {
