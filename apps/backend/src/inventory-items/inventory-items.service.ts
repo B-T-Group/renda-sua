@@ -160,6 +160,7 @@ export interface InventoryItem {
     name: string;
     location_type: string;
     is_primary: boolean;
+    is_active?: boolean;
     logo_url?: string | null;
     business: {
       id: string;
@@ -615,14 +616,16 @@ export class InventoryItemsService {
     if (business_id?.trim()) {
       businessFilter.id = { _eq: business_id.trim() };
     }
-    whereConditions.push({
-      business_location: {
-        business:
-          Object.keys(businessFilter).length > 0
-            ? businessFilter
-            : {},
-      },
-    });
+    const locationFilter: Record<string, unknown> = {};
+    if (!ownerPreview) {
+      locationFilter.is_active = { _eq: true };
+    }
+    if (Object.keys(businessFilter).length > 0) {
+      locationFilter.business = businessFilter;
+    }
+    if (Object.keys(locationFilter).length > 0) {
+      whereConditions.push({ business_location: locationFilter });
+    }
     if (!include_unavailable) {
       whereConditions.push({ computed_available_quantity: { _gt: 0 } });
     }
@@ -1031,6 +1034,7 @@ export class InventoryItemsService {
         city: string | null;
         is_verified: boolean;
         can_accept_orders: boolean;
+        is_active: boolean;
         is_storefront_visible: boolean;
         logo_url: string | null;
         latitude?: number | null;
@@ -1045,6 +1049,7 @@ export class InventoryItemsService {
           id
           business_id
           name
+          is_active
           logo_url
           business {
             is_verified
@@ -1064,6 +1069,7 @@ export class InventoryItemsService {
       id: string;
       business_id: string;
       name: string;
+      is_active?: boolean;
       logo_url?: string | null;
       business?: {
         is_verified?: boolean;
@@ -1084,6 +1090,7 @@ export class InventoryItemsService {
           business_id: loc.business_id,
           name: loc.name,
           city: loc.address?.city?.trim() || null,
+          is_active: loc.is_active === true,
           is_verified: loc.business?.is_verified === true,
           can_accept_orders: loc.business?.can_accept_orders === true,
           is_storefront_visible: loc.business?.is_storefront_visible === true,
@@ -1274,7 +1281,9 @@ export class InventoryItemsService {
       loc.business_id,
       ownerPreviewRequested
     );
-    if (!ownerPreview && !loc.is_storefront_visible) return null;
+    if (!ownerPreview && (!loc.is_active || !loc.is_storefront_visible)) {
+      return null;
+    }
 
     // Do NOT apply the caller's geo (country_code/state) when counting items for a
     // specific store — this endpoint resolves a store by ID, so inventory counts must
@@ -2087,6 +2096,7 @@ export class InventoryItemsService {
             name
             location_type
             is_primary
+            is_active
             logo_url
             business {
               id
@@ -2117,6 +2127,20 @@ export class InventoryItemsService {
       let item: InventoryItem | null = result.business_inventory_by_pk;
 
       if (!item) {
+        throw new HttpException(
+          'Inventory item not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      if (item.is_active !== true) {
+        throw new HttpException(
+          'Inventory item not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      if (item.business_location?.is_active !== true) {
         throw new HttpException(
           'Inventory item not found',
           HttpStatus.NOT_FOUND
@@ -2385,6 +2409,7 @@ export class InventoryItemsService {
           { computed_available_quantity: { _gt: 0 } },
           {
             business_location: {
+              is_active: { _eq: true },
               business: { is_storefront_visible: { _eq: true } },
             },
           },

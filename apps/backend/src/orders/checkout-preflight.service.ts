@@ -53,6 +53,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
       }
       business_location {
         business_id
+        is_active
         business {
           id
           name
@@ -169,6 +170,11 @@ export class CheckoutPreflightService {
           message: `Item ${line.business_inventory_id} was not found or is unavailable.`,
         });
       } else if (!inv.is_active) {
+        blockers.push({
+          code: 'ITEM_UNAVAILABLE',
+          message: `${inv.item?.name ?? 'An item'} is not currently available.`,
+        });
+      } else if (inv.business_location?.is_active !== true) {
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,

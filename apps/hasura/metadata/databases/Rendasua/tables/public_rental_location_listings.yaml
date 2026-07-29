@@ -94,6 +94,9 @@ select_permissions:
               _eq: true
           - deleted_at:
               _is_null: true
+          - business_location:
+              is_active:
+                _eq: true
           - rental_item:
               _and:
                 - is_active:
@@ -159,6 +162,9 @@ select_permissions:
               _eq: true
           - deleted_at:
               _is_null: true
+          - business_location:
+              is_active:
+                _eq: true
           - rental_item:
               _and:
                 - is_active:

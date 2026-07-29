@@ -93,6 +93,9 @@ select_permissions:
         item:
           moderation_status:
             _eq: approved
+        business_location:
+          is_active:
+            _eq: true
   - role: business
     permission:
       columns:
@@ -141,6 +144,9 @@ select_permissions:
         item:
           moderation_status:
             _eq: approved
+        business_location:
+          is_active:
+            _eq: true
 update_permissions:
   - role: business
     permission:

@@ -27,7 +27,7 @@ export const GET_LISTING_FOR_REQUEST = `
         business { id user_id is_verified is_storefront_visible can_accept_orders }
       }
       business_location_id
-      business_location { name }
+      business_location { name is_active }
     }
   }
 `;
@@ -131,6 +131,7 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
       business_location {
         id
         name
+        is_active
         address {
           id
           address_line_1
@@ -151,6 +152,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
   query GetPublicRentalListingByPk($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
       id
+      is_active
       deleted_at
       moderation_status
       base_price_per_hour
@@ -199,6 +201,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
       business_location {
         id
         name
+        is_active
         address {
           id
           address_line_1

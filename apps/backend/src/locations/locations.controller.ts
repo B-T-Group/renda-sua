@@ -652,6 +652,7 @@ export class LocationsController {
       query GetMarketStateRentalCounts($countryCode: String!) {
         rental_location_listings_aggregate(
           where: {
+            is_active: { _eq: true }
             moderation_status: { _eq: "approved" }
             deleted_at: { _is_null: true }
             rental_item: {
@@ -659,6 +660,7 @@ export class LocationsController {
               business: { is_storefront_visible: { _eq: true } }
             }
             business_location: {
+              is_active: { _eq: true }
               address: { country: { _eq: $countryCode } }
             }
           }
@@ -667,6 +669,7 @@ export class LocationsController {
         }
         rental_location_listings(
           where: {
+            is_active: { _eq: true }
             moderation_status: { _eq: "approved" }
             deleted_at: { _is_null: true }
             rental_item: {
@@ -674,6 +677,7 @@ export class LocationsController {
               business: { is_storefront_visible: { _eq: true } }
             }
             business_location: {
+              is_active: { _eq: true }
               address: { country: { _eq: $countryCode } }
             }
           }

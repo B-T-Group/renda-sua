@@ -221,6 +221,7 @@ interface RentalRequestRowForClientNotification {
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
 export interface PublicRentalListingRow {
   id: string;
+  is_active?: boolean;
   deleted_at?: string | null;
   moderation_status?: string;
   base_price_per_hour: number;
@@ -260,6 +261,7 @@ export interface PublicRentalListingRow {
   business_location: {
     id: string;
     name: string;
+    is_active?: boolean;
     address: {
       id?: string;
       address_line_1?: string;
@@ -726,7 +728,16 @@ export class RentalsService {
     if (row.moderation_status !== 'approved') {
       return null;
     }
+    if (row.is_active !== true) {
+      return null;
+    }
     if (row.deleted_at || row.rental_item?.deleted_at) {
+      return null;
+    }
+    if (row.business_location?.is_active !== true) {
+      return null;
+    }
+    if (row.rental_item?.business?.is_storefront_visible !== true) {
       return null;
     }
     if (
@@ -3166,6 +3177,9 @@ export class RentalsService {
     if (listing.moderation_status !== 'approved') {
       throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
     }
+    if (listing.business_location?.is_active === false) {
+      throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
+    }
     if (!listing.rental_item?.business?.can_accept_orders) {
       throw new HttpException(
         'This merchant is not yet accepting orders',
@@ -3984,12 +3998,16 @@ export class RentalsService {
       _and: [
         base,
         { moderation_status: { _eq: 'approved' } },
+        { is_active: { _eq: true } },
         { deleted_at: { _is_null: true } },
         { rental_item: { deleted_at: { _is_null: true } } },
         {
           rental_item: {
             business: { is_storefront_visible: { _eq: true } },
           },
+        },
+        {
+          business_location: { is_active: { _eq: true } },
         },
       ],
     };

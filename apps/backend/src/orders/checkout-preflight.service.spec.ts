@@ -53,6 +53,7 @@ function makeInventoryRow(overrides: {
     is_active: true,
     business_location: {
       business_id: overrides.businessId ?? 'biz-1',
+      is_active: true,
       business: {
         id: overrides.businessId ?? 'biz-1',
         name: overrides.businessName ?? 'Test Business',
