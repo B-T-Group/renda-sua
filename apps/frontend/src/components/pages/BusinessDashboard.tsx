@@ -22,6 +22,7 @@ import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessClientsHero } from '../business/BusinessClientsHero';
 import { BusinessViewsHero } from '../business/BusinessViewsHero';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
+import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
 import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
@@ -34,7 +35,6 @@ import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
-import { BusinessAccountCard } from '../business/BusinessAccountCard';
 
 const DASHBOARD_ACCOUNT_PREVIEW_LIMIT = 2;
 
@@ -136,7 +136,7 @@ const BusinessDashboard: React.FC = () => {
         keywords={t('seo.business-dashboard.keywords')}
       />
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
         <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
           {t('business.dashboard.welcome', { name: profile.business.name })}
         </Typography>
@@ -151,6 +151,8 @@ const BusinessDashboard: React.FC = () => {
           )}
         </Box>
       </Box>
+
+      <BusinessAccountTypeLink />
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} md={6}>
@@ -216,44 +218,35 @@ const BusinessDashboard: React.FC = () => {
         businessId={profile.business.id}
       />
 
-      <BusinessPreviewStoreCta businessId={profile.business.id} />
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {accounts.length > 0 && (
-          <Grid item xs={12} md={accounts.length > 0 ? 8 : 12}>
-            <Box>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                {t('accounts.accountInformation')}
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {previewAccounts.map((account) => (
-                  <UserAccount
-                    key={account.id}
-                    accountId={account.id}
-                    compactView={true}
-                    showTransactions={false}
-                  />
-                ))}
-              </Box>
-              {hasMoreAccounts && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => navigate('/business/accounts')}
-                  sx={{ mt: 1.5 }}
-                >
-                  {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
-                    count: accounts.length,
-                  })}
-                </Button>
-              )}
-            </Box>
-          </Grid>
-        )}
-        <Grid item xs={12} md={accounts.length > 0 ? 4 : 12}>
-          <BusinessAccountCard />
-        </Grid>
-      </Grid>
+      {accounts.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            {t('accounts.accountInformation')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {previewAccounts.map((account) => (
+              <UserAccount
+                key={account.id}
+                accountId={account.id}
+                compactView={true}
+                showTransactions={false}
+              />
+            ))}
+          </Box>
+          {hasMoreAccounts && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => navigate('/business/accounts')}
+              sx={{ mt: 1.5 }}
+            >
+              {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
+                count: accounts.length,
+              })}
+            </Button>
+          )}
+        </Box>
+      )}
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         {t(
@@ -299,6 +292,7 @@ const BusinessDashboard: React.FC = () => {
         )}
       >
         {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
+        <BusinessPreviewStoreCta businessId={profile.business.id} />
       </BusinessDashboardSection>
 
       {hasAdminAccess && (

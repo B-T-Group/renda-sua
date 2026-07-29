@@ -51,6 +51,7 @@ export function BusinessClientsHero({
         display: 'flex',
         alignItems: 'center',
         gap: 2,
+        height: '100%',
         cursor: onClick ? 'pointer' : 'default',
         backgroundImage: (theme) =>
           `linear-gradient(135deg, ${theme.palette.primary.main}12 0%, transparent 55%)`,

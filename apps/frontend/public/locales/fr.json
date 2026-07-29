@@ -1295,6 +1295,11 @@
       "commissionLabel": "Commission {{percent}}%",
       "commissionSuffix": "de commission",
       "cardDescription": "Votre forfait actuel — la commission s'applique à chaque commande.",
+      "dashboardLink": "Type de compte : {{type}}",
+      "dashboardLinkPrefix": "Type de compte :",
+      "dashboardLinkA11y": "Type de compte : {{type}}. Ouvrir les forfaits.",
+      "everythingIn": "Tout ce qui est inclus dans {{plan}}, plus :",
+      "planLocked": "Verrouillé",
       "currentPlan": "Forfait actuel",
       "changePlan": "Changer / Mettre à niveau",
       "viewPlan": "Voir le forfait",
@@ -1302,7 +1307,6 @@
       "lockInNote": "Après avoir changé de forfait, une période d'engagement de 30 jours commence. Vous pourrez changer à nouveau après cette période.",
       "lockedMessage": "Votre forfait est bloqué jusqu'au {{date}}. Les forfaits sont verrouillés 30 jours après chaque changement.",
       "lockedUntil": "Forfait bloqué jusqu'au {{date}}",
-      "planLocked": "Bloqué",
       "confirmTitle": "Passer à {{plan}} ?",
       "confirmMessage": "Vous passez de {{from}} ({{fromPct}}% de commission) à {{to}} ({{toPct}}% de commission). Ce forfait sera verrouillé 30 jours après confirmation.",
       "confirmChangeBtn": "Confirmer le changement",
@@ -1310,6 +1314,7 @@
       "plans": {
         "standard": {
           "label": "Standard",
+          "tagline": "Idéal pour démarrer",
           "benefit1": "Support client",
           "benefit2": "Gestion des produits et annonces",
           "benefit3": "Paiements sécurisés",
@@ -1318,6 +1323,7 @@
         },
         "premium": {
           "label": "Premium",
+          "tagline": "Développez votre portée",
           "benefit1": "Meilleure visibilité des annonces",
           "benefit2": "Promotion sur la plateforme",
           "benefit3": "Analytique avancée",
@@ -1325,6 +1331,7 @@
         },
         "elite": {
           "label": "Élite",
+          "tagline": "Visibilité maximale",
           "benefit1": "Placement en page d'accueil",
           "benefit2": "Campagnes marketing dédiées",
           "benefit3": "Gestion de compte personnalisée",

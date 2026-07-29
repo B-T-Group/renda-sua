@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { SEOHead } from '../seo';
 import { useSEO } from '../../hooks/useSEO';
-import { BUSINESS_ACCOUNT_TYPE_PLANS } from '../../constants/businessAccountTypes';
+import { BUSINESS_ACCOUNT_TYPE_PLANS, getPlanById } from '../../constants/businessAccountTypes';
 
 interface FeatureItem {
   icon: React.ReactNode;
@@ -203,6 +203,7 @@ const ForBusinessPage: React.FC = () => {
                       height: '100%',
                       borderRadius: 3,
                       borderTop: `4px solid ${plan.color}`,
+                      bgcolor: plan.softColor,
                       display: 'flex',
                       flexDirection: 'column',
                     }}
@@ -232,8 +233,27 @@ const ForBusinessPage: React.FC = () => {
 
                       <Divider sx={{ mb: 2 }} />
 
+                      {plan.includesFromId ? (
+                        <Typography
+                          variant="subtitle2"
+                          fontWeight={700}
+                          sx={{ color: plan.color, mb: 1 }}
+                        >
+                          {t(
+                            'business.accountType.everythingIn',
+                            'Everything in {{plan}}, plus:',
+                            {
+                              plan: t(
+                                getPlanById(plan.includesFromId).labelKey,
+                                getPlanById(plan.includesFromId).defaultLabel
+                              ),
+                            }
+                          )}
+                        </Typography>
+                      ) : null}
+
                       <List dense disablePadding>
-                        {plan.defaultBenefits.slice(0, 6).map((benefit, bi) => (
+                        {plan.defaultBenefits.map((benefit, bi) => (
                           <ListItem key={bi} disableGutters sx={{ py: 0.3 }}>
                             <ListItemIcon sx={{ minWidth: 28 }}>
                               <CheckCircle sx={{ color: plan.color, fontSize: 16 }} />

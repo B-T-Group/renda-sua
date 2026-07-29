@@ -1552,6 +1552,11 @@
       "commissionLabel": "{{percent}}% Commission",
       "commissionSuffix": "commission",
       "cardDescription": "Your current plan — commission applies to every order.",
+      "dashboardLink": "Account type: {{type}}",
+      "dashboardLinkPrefix": "Account type:",
+      "dashboardLinkA11y": "Account type: {{type}}. Open plans.",
+      "everythingIn": "Everything in {{plan}}, plus:",
+      "planLocked": "Locked",
       "currentPlan": "Current Plan",
       "changePlan": "Upgrade / Change Plan",
       "viewPlan": "View Plan",
@@ -1559,7 +1564,6 @@
       "lockInNote": "After changing your plan, a 30-day commitment period begins. You can change again after that period ends.",
       "lockedMessage": "Your plan is committed until {{date}}. Plans are locked for 30 days after each change.",
       "lockedUntil": "Plan locked until {{date}}",
-      "planLocked": "Locked",
       "confirmTitle": "Change to {{plan}}?",
       "confirmMessage": "You are switching from {{from}} ({{fromPct}}% commission) to {{to}} ({{toPct}}% commission). This plan will be locked for 30 days after confirming.",
       "confirmChangeBtn": "Confirm Change",
@@ -1567,6 +1571,7 @@
       "plans": {
         "standard": {
           "label": "Standard",
+          "tagline": "Best for getting started",
           "benefit1": "Customer support",
           "benefit2": "Product & listing management",
           "benefit3": "Secure payments",
@@ -1575,6 +1580,7 @@
         },
         "premium": {
           "label": "Premium",
+          "tagline": "Grow your reach",
           "benefit1": "Better listing visibility",
           "benefit2": "Platform promotion",
           "benefit3": "Advanced analytics",
@@ -1582,6 +1588,7 @@
         },
         "elite": {
           "label": "Elite",
+          "tagline": "Maximum visibility",
           "benefit1": "Homepage placement",
           "benefit2": "Dedicated marketing campaigns",
           "benefit3": "Personalized account management",
