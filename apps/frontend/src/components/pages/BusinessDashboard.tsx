@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Container,
-  Grid,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -19,8 +18,7 @@ import AiImageCleanupPendingCard from '../business/AiImageCleanupPendingCard';
 import LocationTransferPendingCard from '../business/LocationTransferPendingCard';
 import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
-import { BusinessClientsHero } from '../business/BusinessClientsHero';
-import { BusinessViewsHero } from '../business/BusinessViewsHero';
+import { BusinessExcitementStats } from '../business/BusinessExcitementStats';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
 import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
 import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
@@ -154,28 +152,19 @@ const BusinessDashboard: React.FC = () => {
 
       <BusinessAccountTypeLink />
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={6}>
-          <BusinessClientsHero
-            count={
-              aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
-            }
-            loading={isLoading}
-            onClick={() => navigate('/business/client-cities')}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <BusinessViewsHero
-            count={
-              aggregatesError ? null : (aggregates?.totalProductViews ?? null)
-            }
-            viewsLast7d={
-              aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
-            }
-            loading={isLoading}
-          />
-        </Grid>
-      </Grid>
+      <BusinessExcitementStats
+        clientCount={
+          aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
+        }
+        productViews={
+          aggregatesError ? null : (aggregates?.totalProductViews ?? null)
+        }
+        productViewsLast7d={
+          aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
+        }
+        loading={isLoading}
+        onClientsClick={() => navigate('/business/client-cities')}
+      />
 
       <BusinessTopViewedProducts
         products={aggregatesError ? [] : (aggregates?.topViewedProducts ?? [])}

@@ -1743,17 +1743,20 @@
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "subtitleSimplified": "Manage orders, reconcile cash payments, and resolve delivery issues. Use catalog tools for your products and locations.",
       "clientsSoFar": {
-        "label": "Clients so far",
+        "label": "Clients",
         "hint": "Unique people who have ordered or rented from you.",
         "hintClick": "Tap to see where your clients are coming from",
+        "hintClickShort": "Tap for cities",
         "emptyHint": "Customers who order or rent will show up here.",
         "unavailableHint": "Client count unavailable right now",
-        "a11y": "Clients so far. Open city word cloud."
+        "a11y": "Clients. Open city word cloud."
       },
       "productViews": {
-        "label": "Product views",
+        "label": "Views",
         "hint": "People who viewed your products",
+        "hintShort": "Unique product viewers",
         "emptyHint": "Share your store so people can discover your products.",
+        "emptyHintShort": "Share to get views",
         "unavailableHint": "Views unavailable right now",
         "weekDelta": "+{{count}} this week"
       },
