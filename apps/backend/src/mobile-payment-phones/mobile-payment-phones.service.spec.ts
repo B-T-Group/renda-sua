@@ -84,26 +84,20 @@ describe('MobilePaymentPhonesService', () => {
   });
 
   describe('deleteForUser', () => {
-    it('returns 409 when phone is still referenced', async () => {
+    it('unlinks locations and agent then deletes', async () => {
       jest.spyOn(service, 'getByIdForUser').mockResolvedValue(phoneRow);
-      jest.spyOn(service as any, 'countReferences').mockResolvedValue(1);
-
-      await expect(service.deleteForUser('user-1', 'phone-1')).rejects.toBeInstanceOf(
-        ConflictException
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('deletes when no references remain', async () => {
-      jest.spyOn(service, 'getByIdForUser').mockResolvedValue(phoneRow);
-      jest.spyOn(service as any, 'countReferences').mockResolvedValue(0);
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        delete_user_mobile_payment_phones_by_pk: { id: 'phone-1' },
-      });
+      jest.spyOn(service as any, 'maybeUnverifyAgent').mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
 
       await service.deleteForUser('user-1', 'phone-1');
 
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalled();
+      const mutations = hasuraSystemService.executeMutation.mock.calls.map(
+        (c) => c[0] as string
+      );
+      expect(mutations.some((q) => q.includes('UnlinkLocPhones'))).toBe(true);
+      expect(mutations.some((q) => q.includes('UnlinkAgentPhone'))).toBe(true);
+      expect(mutations.some((q) => q.includes('DeletePhone'))).toBe(true);
+      expect(service['maybeUnverifyAgent']).toHaveBeenCalledWith('user-1');
     });
   });
 

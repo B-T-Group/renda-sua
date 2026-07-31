@@ -48,11 +48,29 @@ export class MobilePaymentPhonesService {
         ) {
           id user_id phone_e164 is_verified verified_at
           last_verification_transaction_id created_at updated_at
+          business_locations_aggregate {
+            aggregate { count }
+          }
+          agents_aggregate {
+            aggregate { count }
+          }
         }
       }`,
       { userId }
     );
-    return res.user_mobile_payment_phones ?? [];
+    const rows = res.user_mobile_payment_phones ?? [];
+    return rows.map((row: any) => ({
+      id: row.id,
+      user_id: row.user_id,
+      phone_e164: row.phone_e164,
+      is_verified: row.is_verified,
+      verified_at: row.verified_at,
+      last_verification_transaction_id: row.last_verification_transaction_id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      locationCount: row.business_locations_aggregate?.aggregate?.count ?? 0,
+      linkedToAgent: (row.agents_aggregate?.aggregate?.count ?? 0) > 0,
+    }));
   }
 
   async getByIdForUser(
@@ -121,20 +139,47 @@ export class MobilePaymentPhonesService {
     return res.update_user_mobile_payment_phones_by_pk;
   }
 
+  /**
+   * Unlink this phone from all locations and the agent profile, then delete.
+   * Management-screen delete only — location UI should unlink via location PATCH.
+   */
   async deleteForUser(userId: string, phoneId: string): Promise<void> {
     await this.getByIdForUser(userId, phoneId);
-    const refs = await this.countReferences(phoneId);
-    if (refs > 0) {
-      throw new ConflictException(
-        'Unlink this number from all locations and your agent profile before deleting'
-      );
-    }
+    await this.unlinkPhoneEverywhere(userId, phoneId);
     await this.hasuraSystemService.executeMutation(
       `mutation DeletePhone($id: uuid!) {
         delete_user_mobile_payment_phones_by_pk(id: $id) { id }
       }`,
       { id: phoneId }
     );
+  }
+
+  private async unlinkPhoneEverywhere(
+    userId: string,
+    phoneId: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation UnlinkLocPhones($phoneId: uuid!) {
+        update_business_locations(
+          where: { mobile_payment_phone_id: { _eq: $phoneId } }
+          _set: { mobile_payment_phone_id: null, phone: null }
+        ) { affected_rows }
+      }`,
+      { phoneId }
+    );
+    await this.hasuraSystemService.executeMutation(
+      `mutation UnlinkAgentPhone($userId: uuid!, $phoneId: uuid!) {
+        update_agents(
+          where: {
+            user_id: { _eq: $userId }
+            mobile_payment_phone_id: { _eq: $phoneId }
+          }
+          _set: { mobile_payment_phone_id: null }
+        ) { affected_rows }
+      }`,
+      { userId, phoneId }
+    );
+    await this.maybeUnverifyAgent(userId);
   }
 
   async initiateVerification(
@@ -612,23 +657,6 @@ export class MobilePaymentPhonesService {
       { userId, names: ID_DOC_NAMES }
     );
     return (res.user_uploads?.length ?? 0) > 0;
-  }
-
-  private async countReferences(phoneId: string): Promise<number> {
-    const res = await this.hasuraSystemService.executeQuery(
-      `query Refs($phoneId: uuid!) {
-        business_locations_aggregate(
-          where: { mobile_payment_phone_id: { _eq: $phoneId } }
-        ) { aggregate { count } }
-        agents_aggregate(
-          where: { mobile_payment_phone_id: { _eq: $phoneId } }
-        ) { aggregate { count } }
-      }`,
-      { phoneId }
-    );
-    const loc = res.business_locations_aggregate?.aggregate?.count ?? 0;
-    const ag = res.agents_aggregate?.aggregate?.count ?? 0;
-    return loc + ag;
   }
 
   private async fetchPhoneForUser(

@@ -111,9 +111,13 @@ export class MobilePaymentPhonesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete mobile payment phone when not referenced' })
+  @ApiOperation({
+    summary:
+      'Unlink phone from locations and agent profile, then delete the registry row',
+  })
   @ApiParam({ name: 'id', type: String })
-  @ApiResponse({ status: 409, description: 'Still linked to location or agent' })
+  @ApiResponse({ status: 200, description: 'Phone unlinked and deleted' })
+  @ApiResponse({ status: 404, description: 'Phone not found' })
   async remove(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
     const userId = this.hasuraUserService.getUserId(ctx);
     await this.mobilePaymentPhonesService.deleteForUser(userId, id);

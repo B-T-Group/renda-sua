@@ -7,6 +7,9 @@ export interface UserMobilePaymentPhoneRow {
   last_verification_transaction_id: string | null;
   created_at: string;
   updated_at: string;
+  /** Present on list responses when usage aggregates are loaded. */
+  locationCount?: number;
+  linkedToAgent?: boolean;
 }
 
 export interface MobilePaymentPhoneVerificationStatus {
