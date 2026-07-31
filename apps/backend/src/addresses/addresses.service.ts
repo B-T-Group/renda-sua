@@ -49,6 +49,10 @@ export interface AddressResponse {
   status?: 'active' | 'deleted' | null;
 }
 
+export type SignupAddressResult = AddressResponse & {
+  businessLocationId?: string;
+};
+
 export interface UpdateAddressDto {
   address_line_1?: string;
   address_line_2?: string;
@@ -578,6 +582,7 @@ export class AddressesService {
    * Create address at signup and link to client, agent, or business.
    * For business: inserts both business_addresses and the primary business_locations row.
    * No geocoding; postal_code defaults to empty string.
+   * Returns `businessLocationId` when a primary business location was created.
    */
   async createAddressForSignup(
     userId: string,
@@ -591,7 +596,7 @@ export class AddressesService {
       latitude?: number;
       longitude?: number;
     }
-  ): Promise<AddressResponse> {
+  ): Promise<SignupAddressResult> {
     const addressCountBefore =
       await this.hasuraSystemService.countLinkedAddressesForUser(userId);
 
@@ -665,6 +670,8 @@ export class AddressesService {
       );
     }
 
+    let businessLocationId: string | undefined;
+
     if (entityType === 'client') {
       await this.hasuraSystemService.executeMutation(
         `mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
@@ -723,6 +730,7 @@ export class AddressesService {
       const locationId = locationResult.insert_business_locations_one?.id;
       if (locationId) {
         await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
+        businessLocationId = locationId;
       }
     }
 
@@ -736,7 +744,10 @@ export class AddressesService {
     const currency = await this.getCurrencyFromCountry(addressData.country);
     await this.ensurePersonalAccount(userId, currency);
 
-    return address as AddressResponse;
+    return {
+      ...(address as AddressResponse),
+      ...(businessLocationId ? { businessLocationId } : {}),
+    };
   }
 
   /**
@@ -767,6 +778,7 @@ export class AddressesService {
   /**
    * Clone an address onto a newly created persona (add-persona flow).
    * For business: also creates primary business_locations row.
+   * Returns the new business location id when created.
    */
   async seedDefaultAddressForNewPersona(
     userId: string,
@@ -774,7 +786,7 @@ export class AddressesService {
     entityType: PersonaId,
     source: AddressResponse,
     businessName?: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     const addressCountBefore =
       await this.hasuraSystemService.countLinkedAddressesForUser(userId);
 
@@ -836,6 +848,8 @@ export class AddressesService {
       );
     }
 
+    let businessLocationId: string | null = null;
+
     if (entityType === 'client') {
       await this.hasuraSystemService.executeMutation(
         `mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
@@ -893,6 +907,7 @@ export class AddressesService {
       const locationId = locationResult.insert_business_locations_one?.id;
       if (locationId) {
         await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
+        businessLocationId = locationId;
       }
     }
 
@@ -905,6 +920,7 @@ export class AddressesService {
 
     const currency = await this.getCurrencyFromCountry(source.country);
     await this.ensurePersonalAccount(userId, currency);
+    return businessLocationId;
   }
 
   /**

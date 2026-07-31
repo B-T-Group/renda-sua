@@ -4,6 +4,7 @@ import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { BusinessReferralsService, ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { Auth0Service } from './auth0.service';
@@ -75,7 +76,8 @@ export class SignupService {
     private readonly addressesService: AddressesService,
     private readonly businessReferralsService: BusinessReferralsService,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly businessContractsService: BusinessContractsService
+    private readonly businessContractsService: BusinessContractsService,
+    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -203,16 +205,31 @@ export class SignupService {
     if (payload.address && entities.length > 0) {
       const uid = user.id;
       for (const entity of entities) {
-        await this.addressesService.createAddressForSignup(
+        const seeded = await this.addressesService.createAddressForSignup(
           uid,
           entity.id,
           entity.type,
           payload.address
         );
+        if (entity.type === 'business' && seeded.businessLocationId) {
+          await this.mobilePaymentPhoneSeedService.ensureAndLinkContactPhoneToLocation(
+            uid,
+            seeded.businessLocationId,
+            payload.address.country,
+            phoneNumber || payload.phone_number
+          );
+        }
       }
     }
 
     const businessEntity = entities.find((e) => e.type === 'business');
+    if (businessEntity && !payload.address) {
+      await this.mobilePaymentPhoneSeedService.ensureFromContactPhone(
+        user.id,
+        undefined,
+        phoneNumber || payload.phone_number
+      );
+    }
     if (businessEntity && businessReferral) {
       const businessName =
         payload.profile?.name?.trim() ||

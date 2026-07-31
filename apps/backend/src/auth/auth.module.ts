@@ -6,6 +6,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-payment-phone-seed.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
@@ -24,6 +25,7 @@ import { SignupService } from './signup.service';
     AgentsModule,
     BusinessReferralsModule,
     BusinessContractsModule,
+    MobilePaymentPhoneSeedModule,
   ],
   controllers: [SignupController, LoginController],
   providers: [

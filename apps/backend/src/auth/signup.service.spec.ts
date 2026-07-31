@@ -2,8 +2,10 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddressesService } from '../addresses/addresses.service';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { BusinessReferralsService } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import { Auth0Service } from './auth0.service';
 import { SignupService } from './signup.service';
 
@@ -32,7 +34,7 @@ describe('SignupService', () => {
         {
           provide: HasuraSystemService,
           useValue: {
-            executeQuery: jest.fn(),
+            executeQuery: jest.fn().mockResolvedValue({ users_by_pk: null }),
             executeMutation: jest.fn(),
             insertUserWithPersonas: jest.fn(),
           },
@@ -67,6 +69,21 @@ describe('SignupService', () => {
           provide: AgentReferralsService,
           useValue: {
             creditAgentReferralIfPresent: jest.fn(),
+          },
+        },
+        {
+          provide: BusinessContractsService,
+          useValue: {
+            ensureContractForBusiness: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: MobilePaymentPhoneSeedService,
+          useValue: {
+            ensureFromContactPhone: jest.fn().mockResolvedValue(null),
+            ensureAndLinkContactPhoneToLocation: jest
+              .fn()
+              .mockResolvedValue(undefined),
           },
         },
       ],

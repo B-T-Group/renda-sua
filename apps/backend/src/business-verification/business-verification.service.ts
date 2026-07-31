@@ -191,7 +191,8 @@ export class BusinessVerificationService {
     const nextAction = this.resolveNextAction(
       adminVerified,
       agreement,
-      identity
+      identity,
+      mobilePaymentPhone
     );
     return {
       is_verified: adminVerified,
@@ -313,11 +314,13 @@ export class BusinessVerificationService {
   private resolveNextAction(
     isVerified: boolean,
     agreement: { complete: boolean },
-    identity: { complete: boolean; status: string }
+    identity: { complete: boolean; status: string },
+    mobilePaymentPhone: { complete: boolean }
   ): VerificationNextAction {
     if (isVerified) return 'complete';
     if (!agreement.complete) return 'sign_agreement';
     if (!identity.complete) return 'upload_id';
+    if (!mobilePaymentPhone.complete) return 'verify_mobile_payment_phone';
     if (identity.status === 'pending') return 'pending_review';
     return 'pending_review';
   }

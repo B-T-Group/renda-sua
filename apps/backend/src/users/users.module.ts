@@ -6,6 +6,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-payment-phone-seed.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AccountDeletionService } from './account-deletion.service';
@@ -21,6 +22,7 @@ import { UsersController } from './users.controller';
     BusinessReferralsModule,
     BusinessContractsModule,
     StripePaymentsModule,
+    MobilePaymentPhoneSeedModule,
   ],
   controllers: [UsersController],
   providers: [Auth0Service, AccountDeletionService],

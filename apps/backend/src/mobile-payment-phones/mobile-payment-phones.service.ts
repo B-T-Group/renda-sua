@@ -20,6 +20,7 @@ import type {
   MobilePaymentPhoneVerificationStatus,
   UserMobilePaymentPhoneRow,
 } from './mobile-payment-phones.types';
+import { MobilePaymentPhoneSeedService } from './mobile-payment-phone-seed.service';
 
 const XAF = 'XAF';
 const VERIFICATION_AMOUNT = 150;
@@ -36,7 +37,8 @@ export class MobilePaymentPhonesService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly giveChangePayoutService: GiveChangePayoutService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
   ) {}
 
   async listForUser(userId: string): Promise<UserMobilePaymentPhoneRow[]> {
@@ -102,6 +104,42 @@ export class MobilePaymentPhonesService {
       { row: { user_id: userId, phone_e164: phoneE164, is_verified: false } }
     );
     return res.insert_user_mobile_payment_phones_one;
+  }
+
+  ensureFromContactPhone(
+    userId: string,
+    countryCode: string | undefined | null,
+    phoneRaw: string | undefined | null
+  ): Promise<UserMobilePaymentPhoneRow | null> {
+    return this.mobilePaymentPhoneSeedService.ensureFromContactPhone(
+      userId,
+      countryCode,
+      phoneRaw
+    );
+  }
+
+  linkPhoneToLocation(
+    locationId: string,
+    phone: UserMobilePaymentPhoneRow
+  ): Promise<void> {
+    return this.mobilePaymentPhoneSeedService.linkPhoneToLocation(
+      locationId,
+      phone
+    );
+  }
+
+  ensureAndLinkContactPhoneToLocation(
+    userId: string,
+    locationId: string,
+    countryCode: string | undefined | null,
+    phoneRaw?: string | null
+  ): Promise<void> {
+    return this.mobilePaymentPhoneSeedService.ensureAndLinkContactPhoneToLocation(
+      userId,
+      locationId,
+      countryCode,
+      phoneRaw
+    );
   }
 
   async updateForUser(
@@ -365,7 +403,8 @@ export class MobilePaymentPhonesService {
       (l: any) => !l.mobile_payment_phone?.is_verified
     ).length;
     return {
-      complete: locations.length > 0 && verifiedCount > 0,
+      // All active locations must have a verified linked phone.
+      complete: locations.length > 0 && needing === 0,
       hasVerifiedPhone: verifiedCount > 0,
       locationCountNeedingPhone: needing,
       totalActiveLocations: locations.length,

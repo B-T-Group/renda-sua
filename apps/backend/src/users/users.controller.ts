@@ -31,6 +31,7 @@ import {
   ResolvedBusinessReferral,
 } from '../business-referrals/business-referrals.service';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
+import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -141,7 +142,8 @@ export class UsersController {
     private readonly accountDeletionService: AccountDeletionService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly businessContractsService: BusinessContractsService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
   ) {}
 
   private scheduleEnsureContract(businessId: string): void {
@@ -939,12 +941,20 @@ export class UsersController {
             );
           }
           if (inserted.business?.id) {
-            await this.addressesService.createAddressForSignup(
+            const seeded = await this.addressesService.createAddressForSignup(
               uid,
               inserted.business.id,
               'business',
               addressData
             );
+            if (seeded.businessLocationId) {
+              await this.mobilePaymentPhoneSeedService.ensureAndLinkContactPhoneToLocation(
+                uid,
+                seeded.businessLocationId,
+                addressData.country,
+                userData.phone_number
+              );
+            }
           }
         }
         if (inserted.agent?.id) {
@@ -1196,12 +1206,26 @@ export class UsersController {
           : { userId: uid, name, mi }
       );
       if (source) {
-        await this.seedAddressOrRollbackPersona(
+        const locationId = await this.seedAddressOrRollbackPersona(
           uid,
           r.insert_businesses_one.id,
           'business',
           source,
           name
+        );
+        if (locationId) {
+          await this.mobilePaymentPhoneSeedService.ensureAndLinkContactPhoneToLocation(
+            uid,
+            locationId,
+            source.country,
+            user.phone_number
+          );
+        }
+      } else {
+        await this.ensureBusinessContactPaymentPhone(
+          uid,
+          user.phone_number,
+          await this.resolveUserCountry(user)
         );
       }
       const countryCode = await this.resolveUserCountry(user);
@@ -1229,16 +1253,36 @@ export class UsersController {
     persona: PersonaId,
     source: AddressResponse,
     businessName?: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     try {
       const args: [string, string, PersonaId, AddressResponse, string?] =
         businessName === undefined
           ? [userId, entityId, persona, source]
           : [userId, entityId, persona, source, businessName];
-      await this.addressesService.seedDefaultAddressForNewPersona(...args);
+      return await this.addressesService.seedDefaultAddressForNewPersona(
+        ...args
+      );
     } catch (error: any) {
       await this.rollbackNewPersona(persona, entityId);
       throw error;
+    }
+  }
+
+  private async ensureBusinessContactPaymentPhone(
+    userId: string,
+    phoneRaw: string | null | undefined,
+    countryCode: string | null | undefined
+  ): Promise<void> {
+    try {
+      await this.mobilePaymentPhoneSeedService.ensureFromContactPhone(
+        userId,
+        countryCode,
+        phoneRaw
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `ensureBusinessContactPaymentPhone failed for ${userId}: ${error?.message || error}`
+      );
     }
   }
 

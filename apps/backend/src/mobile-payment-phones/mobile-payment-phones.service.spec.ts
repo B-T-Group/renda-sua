@@ -24,6 +24,12 @@ describe('MobilePaymentPhonesService', () => {
   };
   const paymentRoutingService = {
     resolveRailForUser: jest.fn(),
+    resolveRailForCountry: jest.fn(),
+  };
+  const mobilePaymentPhoneSeedService = {
+    ensureFromContactPhone: jest.fn(),
+    linkPhoneToLocation: jest.fn(),
+    ensureAndLinkContactPhoneToLocation: jest.fn(),
   };
 
   let service: MobilePaymentPhonesService;
@@ -47,9 +53,48 @@ describe('MobilePaymentPhonesService', () => {
       mobilePaymentsService as never,
       giveChangePayoutService as never,
       merchantLifecycleService as never,
-      paymentRoutingService as never
+      paymentRoutingService as never,
+      mobilePaymentPhoneSeedService as never
     );
     paymentRoutingService.resolveRailForUser.mockResolvedValue('mobile_money');
+    mobilePaymentsService.getProvider.mockReturnValue({});
+  });
+
+  describe('getBusinessPhoneVerificationStep', () => {
+    it('is incomplete when only some locations have a verified phone', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_locations: [
+          { id: 'loc-1', mobile_payment_phone: { is_verified: true } },
+          { id: 'loc-2', mobile_payment_phone: { is_verified: false } },
+        ],
+      });
+
+      const step = await service.getBusinessPhoneVerificationStep(
+        'user-1',
+        'biz-1'
+      );
+
+      expect(step.complete).toBe(false);
+      expect(step.hasVerifiedPhone).toBe(true);
+      expect(step.locationCountNeedingPhone).toBe(1);
+    });
+
+    it('is complete only when every active location is verified', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_locations: [
+          { id: 'loc-1', mobile_payment_phone: { is_verified: true } },
+          { id: 'loc-2', mobile_payment_phone: { is_verified: true } },
+        ],
+      });
+
+      const step = await service.getBusinessPhoneVerificationStep(
+        'user-1',
+        'biz-1'
+      );
+
+      expect(step.complete).toBe(true);
+      expect(step.locationCountNeedingPhone).toBe(0);
+    });
   });
 
   describe('updateForUser', () => {

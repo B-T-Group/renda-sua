@@ -87,7 +87,14 @@ describe('UsersController', () => {
         getUserCountryCode: jest.fn().mockResolvedValue(null),
         resolveRailForCountry: jest.fn(),
       } as any,
-      businessContractsService as any
+      businessContractsService as any,
+      {} as any,
+      {
+        ensureFromContactPhone: jest.fn().mockResolvedValue(null),
+        ensureAndLinkContactPhoneToLocation: jest
+          .fn()
+          .mockResolvedValue(undefined),
+      } as any
     );
   });
 

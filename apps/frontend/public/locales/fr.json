@@ -1389,6 +1389,7 @@
       "notice": "Votre compte entreprise doit être vérifié avant que vos articles soient visibles par les clients. Complétez les étapes ci-dessous.",
       "stepAgreement": "Contrat",
       "stepIdentity": "Pièce d'identité",
+      "stepMobileMoney": "Mobile Money",
       "stepReview": "Examen",
       "stepPayouts": "Versements",
       "stepActive": "Actif",
@@ -5858,5 +5859,10 @@
       "subtitle": "Téléchargez l'appli et commencez à gagner aujourd'hui.",
       "webSignup": "S'inscrire sur le web"
     }
+  },
+  "mobilePaymentPhone": {
+    "verifyCta": "Vérifier le numéro Mobile Money",
+    "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
+    "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements."
   }
 }

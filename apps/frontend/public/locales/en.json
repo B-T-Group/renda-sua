@@ -1646,6 +1646,7 @@
       "notice": "Your business account must be verified before your items are visible to customers. Complete the steps below.",
       "stepAgreement": "Agreement",
       "stepIdentity": "ID document",
+      "stepMobileMoney": "Mobile money",
       "stepReview": "Review",
       "stepPayouts": "Payouts",
       "stepActive": "Active",
@@ -5775,5 +5776,10 @@
         "cancelled": "Cancelled"
       }
     }
+  },
+  "mobilePaymentPhone": {
+    "verifyCta": "Verify mobile money number",
+    "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
+    "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts."
   }
 }
