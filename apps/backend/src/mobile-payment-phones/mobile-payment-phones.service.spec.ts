@@ -23,7 +23,7 @@ describe('MobilePaymentPhonesService', () => {
     upsertPaymentAccount: jest.fn(),
   };
   const paymentRoutingService = {
-    resolvePaymentRailForUser: jest.fn(),
+    resolveRailForUser: jest.fn(),
   };
 
   let service: MobilePaymentPhonesService;
@@ -49,7 +49,7 @@ describe('MobilePaymentPhonesService', () => {
       merchantLifecycleService as never,
       paymentRoutingService as never
     );
-    paymentRoutingService.resolvePaymentRailForUser.mockResolvedValue('mobile_money');
+    paymentRoutingService.resolveRailForUser.mockResolvedValue('mobile_money');
   });
 
   describe('updateForUser', () => {
@@ -114,7 +114,7 @@ describe('MobilePaymentPhonesService', () => {
       customer_phone: '+237600000001',
     };
 
-    it('is idempotent when phone is already verified', async () => {
+    it('replays refund and activation when phone is already verified', async () => {
       jest.spyOn(service as any, 'fetchPhoneById').mockResolvedValue({
         ...phoneRow,
         is_verified: true,
@@ -128,7 +128,40 @@ describe('MobilePaymentPhonesService', () => {
       await service.completeVerificationFromTransaction('phone-1', 'tx-1');
 
       expect(service['markVerified']).not.toHaveBeenCalled();
-      expect(service['activateAfterVerification']).not.toHaveBeenCalled();
+      expect(service['refundVerificationIfNeeded']).toHaveBeenCalled();
+      expect(service['activateAfterVerification']).toHaveBeenCalledWith('user-1');
+    });
+
+    it('activates even when the refund fails, and surfaces the failure', async () => {
+      jest.spyOn(service as any, 'fetchPhoneById').mockResolvedValue(phoneRow);
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue(paymentTx);
+      jest.spyOn(service as any, 'markVerified').mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'refundVerificationIfNeeded')
+        .mockRejectedValue(new Error('payout unavailable'));
+      jest.spyOn(service as any, 'activateAfterVerification').mockResolvedValue(undefined);
+
+      await expect(
+        service.completeVerificationFromTransaction('phone-1', 'tx-1')
+      ).rejects.toThrow(/refund: payout unavailable/);
+
+      expect(service['markVerified']).toHaveBeenCalledWith('phone-1', 'tx-1');
+      expect(service['activateAfterVerification']).toHaveBeenCalledWith('user-1');
+    });
+
+    it('refunds even when activation fails, and surfaces the failure', async () => {
+      jest.spyOn(service as any, 'fetchPhoneById').mockResolvedValue(phoneRow);
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue(paymentTx);
+      jest.spyOn(service as any, 'markVerified').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'refundVerificationIfNeeded').mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'activateAfterVerification')
+        .mockRejectedValue(new Error('agent lookup failed'));
+
+      await expect(
+        service.completeVerificationFromTransaction('phone-1', 'tx-1')
+      ).rejects.toThrow(/activation: agent lookup failed/);
+
       expect(service['refundVerificationIfNeeded']).toHaveBeenCalled();
     });
 
@@ -187,6 +220,29 @@ describe('MobilePaymentPhonesService', () => {
         '+237600000001',
         'tx-1'
       );
+    });
+  });
+
+  describe('findRefundForVerification', () => {
+    it('types entity_id and status as text, not enums', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        mobile_payment_transactions: [],
+      });
+
+      await (service as any).findRefundForVerification(
+        'tx-1',
+        '+237600000001'
+      );
+
+      const [query, variables] =
+        hasuraSystemService.executeQuery.mock.calls[0];
+      expect(query).toContain('$entityId: String!');
+      expect(query).not.toContain('uuid!');
+      expect(query).toContain('_in: ["success", "pending"]');
+      expect(variables).toEqual({
+        entityId: 'tx-1',
+        desc: 'Phone verification refund +237600000001',
+      });
     });
   });
 });

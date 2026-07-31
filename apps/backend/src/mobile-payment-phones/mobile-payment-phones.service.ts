@@ -368,16 +368,38 @@ export class MobilePaymentPhonesService {
       );
       return;
     }
-    if (phone.is_verified) {
-      await this.refundVerificationIfNeeded(phone);
-      return;
+    if (!phone.is_verified) {
+      await this.markVerified(phoneId, phone.last_verification_transaction_id);
     }
-    await this.markVerified(phoneId, phone.last_verification_transaction_id);
-    await this.refundVerificationIfNeeded({
-      ...phone,
-      is_verified: true,
-    });
-    await this.activateAfterVerification(phone.user_id);
+    await this.settleVerifiedPhone({ ...phone, is_verified: true });
+  }
+
+  /**
+   * Refund the verification charge and activate the account, attempting both
+   * even when one fails: a refund error must not leave the account
+   * unactivated, and an activation error must not strand the customer's
+   * verification charge. Both steps are idempotent, so a callback replay
+   * recovers whichever half did not succeed.
+   */
+  private async settleVerifiedPhone(
+    phone: UserMobilePaymentPhoneRow
+  ): Promise<void> {
+    const failures: string[] = [];
+    try {
+      await this.refundVerificationIfNeeded(phone);
+    } catch (error: any) {
+      failures.push(`refund: ${error?.message || error}`);
+    }
+    try {
+      await this.activateAfterVerification(phone.user_id);
+    } catch (error: any) {
+      failures.push(`activation: ${error?.message || error}`);
+    }
+    if (failures.length > 0) {
+      throw new Error(
+        `Phone ${phone.id} verified but follow-up failed — ${failures.join('; ')}`
+      );
+    }
   }
 
   private async activateAfterVerification(userId: string): Promise<void> {
@@ -501,13 +523,15 @@ export class MobilePaymentPhonesService {
     phoneE164: string
   ): Promise<boolean> {
     const res = await this.hasuraSystemService.executeQuery(
-      `query RefundTx($entityId: uuid!, $desc: String!) {
+      // entity_id and status are text columns on mobile_payment_transactions;
+      // only transaction_type is a Postgres enum.
+      `query RefundTx($entityId: String!, $desc: String!) {
         mobile_payment_transactions(
           where: {
             transaction_type: { _eq: GIVE_CHANGE }
             entity_id: { _eq: $entityId }
             description: { _eq: $desc }
-            status: { _in: [success, pending] }
+            status: { _in: ["success", "pending"] }
           }
           limit: 1
         ) { id }
