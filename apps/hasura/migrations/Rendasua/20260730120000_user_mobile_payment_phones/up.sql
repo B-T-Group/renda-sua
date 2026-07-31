@@ -125,7 +125,7 @@ agent_rows AS (
     AND trim(u.phone_number) <> ''
     AND normalized.phone_e164 IS NOT NULL
     AND sc.country_code IS NULL
-  ORDER BY a.user_id, aa.is_primary DESC NULLS LAST, aa.created_at ASC NULLS LAST
+  ORDER BY a.user_id, addr.is_primary DESC NULLS LAST, aa.created_at ASC NULLS LAST
 ),
 inserted_agent_phones AS (
   INSERT INTO public.user_mobile_payment_phones (user_id, phone_e164, is_verified)
