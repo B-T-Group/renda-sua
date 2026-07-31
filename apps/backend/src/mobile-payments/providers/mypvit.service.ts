@@ -19,6 +19,23 @@ export interface MyPVitPaymentRequest {
   free_info?: string;
 }
 
+/**
+ * MyPVit maps `free_info` to `additionalInfo`, which it rejects
+ * (CONSTRAINT_VIOLATION 8000) unless it contains only letters, digits, dashes
+ * and spaces, and is at most 15 characters. Phone numbers ("+241…") and
+ * punctuation from descriptions must therefore be stripped before sending.
+ */
+export function sanitizeFreeInfo(value?: string): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value
+    .replace(/[^a-zA-Z0-9- ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 15)
+    .trim();
+  return cleaned || undefined;
+}
+
 export interface MyPVitPaymentResponse {
   success: boolean;
   transactionId?: string;
@@ -180,7 +197,7 @@ export class MyPVitService {
         `Initiating payment for account: ${paymentRequest.customer_account_number}`
       );
 
-      const freeInfo = paymentRequest.free_info?.slice(0, 15);
+      const freeInfo = sanitizeFreeInfo(paymentRequest.free_info);
       const payload = {
         amount: paymentRequest.amount,
         reference: reference,
