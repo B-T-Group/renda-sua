@@ -15,6 +15,7 @@ import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeConnectService } from '../stripe-payments/stripe-connect.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { AcceptMerchantAgreementDto } from './dto/accept-merchant-agreement.dto';
 
 export type VerificationNextAction =
@@ -23,6 +24,7 @@ export type VerificationNextAction =
   | 'setup_stripe_connect'
   | 'publish_catalog'
   | 'pending_review'
+  | 'verify_mobile_payment_phone'
   | 'complete';
 
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
@@ -36,7 +38,8 @@ export class BusinessVerificationService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripeConnectService: StripeConnectService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly businessContractsService: BusinessContractsService
+    private readonly businessContractsService: BusinessContractsService,
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService
   ) {}
 
   async getStatus() {
@@ -180,11 +183,20 @@ export class BusinessVerificationService {
   ) {
     const adminVerified = user.business?.is_verified === true;
     const identity = await this.getIdentityStep(user.id);
-    const nextAction = this.resolveNextAction(adminVerified, agreement, identity);
+    const mobilePaymentPhone =
+      await this.mobilePaymentPhonesService.getBusinessPhoneVerificationStep(
+        user.id,
+        user.business!.id
+      );
+    const nextAction = this.resolveNextAction(
+      adminVerified,
+      agreement,
+      identity
+    );
     return {
       is_verified: adminVerified,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-      steps: { agreement, identity },
+      steps: { agreement, identity, mobilePaymentPhone },
       nextAction,
       paymentRail: 'mobile_money' as const,
     };

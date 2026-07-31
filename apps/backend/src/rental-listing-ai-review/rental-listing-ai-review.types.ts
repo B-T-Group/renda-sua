@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = 'rental-ai-review-v1';
+export const PROMPT_VERSION = 'rental-ai-review-v2';
 
 export type AiReviewDecision = 'approve' | 'propose' | 'reject';
 
@@ -33,7 +33,10 @@ export interface ListingImageForReview {
   id: string;
   image_url: string;
   display_order: number;
+  width?: number | null;
+  height?: number | null;
   validation_errors?: unknown;
+  validation_warnings?: unknown;
   quality_score?: number | null;
 }
 

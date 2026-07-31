@@ -73,7 +73,10 @@ export class RentalListingAiReviewModelService {
       description: listing.rental_item.description ?? '',
       images: images.map((img) => ({
         id: img.id,
+        width: img.width,
+        height: img.height,
         validationErrors: img.validation_errors,
+        validationWarnings: img.validation_warnings,
         qualityScore: img.quality_score,
       })),
     });
@@ -85,7 +88,7 @@ export class RentalListingAiReviewModelService {
       if (url) {
         content.push({
           type: 'image_url',
-          image_url: { url, detail: 'low' },
+          image_url: { url, detail: 'auto' },
         });
       }
     }

@@ -176,18 +176,25 @@ export const useCheckout = () => {
         });
 
         const preflight = preflightResponse.data;
+        const paymentsBlocker = preflight?.blocking_errors?.find(
+          (b: { code?: string }) => b.code === 'LOCATION_PAYMENTS_COMING_SOON'
+        );
         const merchantBlocker = preflight?.blocking_errors?.find(
           (b: { code?: string }) => b.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
         );
-        if (merchantBlocker || preflight?.can_proceed === false) {
+        if (paymentsBlocker || merchantBlocker || preflight?.can_proceed === false) {
           const message =
+            paymentsBlocker?.message ||
             merchantBlocker?.message ||
             preflight?.blocking_errors?.[0]?.message ||
             t('checkout.error', 'Checkout could not proceed');
           throw Object.assign(new Error(message), {
             response: {
               data: {
-                error: merchantBlocker?.code || 'CHECKOUT_BLOCKED',
+                error:
+                  paymentsBlocker?.code ||
+                  merchantBlocker?.code ||
+                  'CHECKOUT_BLOCKED',
                 message,
               },
             },

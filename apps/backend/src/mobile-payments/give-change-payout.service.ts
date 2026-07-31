@@ -1,6 +1,9 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
-import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
+import {
+  MobilePaymentsDatabaseService,
+  type CreateTransactionData,
+} from './mobile-payments-database.service';
 import {
   MobilePaymentResponse,
   MobilePaymentsService,
@@ -24,6 +27,9 @@ export interface GiveChangePayoutParams {
   callbackUrl?: string;
   mtnUserId?: string;
   withdrawalMemoPrefix?: string;
+  /** Links this payout back to another transaction (e.g. verification PAYMENT id). */
+  entityId?: string;
+  paymentEntity?: CreateTransactionData['payment_entity'];
 }
 
 export interface GiveChangePayoutResult {
@@ -167,6 +173,8 @@ export class GiveChangePayoutService {
       customer_phone: params.customerPhone,
       account_id: params.accountId,
       transaction_type: 'GIVE_CHANGE',
+      ...(params.entityId ? { entity_id: params.entityId } : {}),
+      ...(params.paymentEntity ? { payment_entity: params.paymentEntity } : {}),
     });
 
     const holdResult = await this.accountsService.registerHoldIfNotExists({

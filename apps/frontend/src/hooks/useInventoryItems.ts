@@ -31,6 +31,8 @@ export interface InventoryItem {
   deal_discount_type?: 'percentage' | 'fixed';
   deal_discount_value?: number;
   deal_end_at?: string;
+  /** False when MoMo location phone is missing or unverified. */
+  payments_enabled?: boolean;
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;

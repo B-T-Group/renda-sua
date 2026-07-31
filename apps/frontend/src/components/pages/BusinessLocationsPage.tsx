@@ -41,6 +41,12 @@ import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
 import LocationTransferInbox from '../business/LocationTransferInbox';
 import TransferLocationDialog from '../business/TransferLocationDialog';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import {
+  MobilePaymentPhone,
+  useMobilePaymentPhones,
+} from '../../hooks/useMobilePaymentPhones';
 import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import AddressDialog, {
   type AddressFormData,
@@ -68,6 +74,12 @@ const BusinessLocationsPage: React.FC = () => {
   const { profile, refetch: refetchProfile, addAddress } =
     useUserProfileContext();
   const { businessQueryParams } = useBusinessCatalogScope();
+  const { isStripeRail } = useIsStripeRail();
+  const { deletePhone, fetchPhones } = useMobilePaymentPhones();
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [phoneModalMode, setPhoneModalMode] = useState<'add' | 'edit' | 'verify'>('verify');
+  const [phoneModalTarget, setPhoneModalTarget] = useState<MobilePaymentPhone | null>(null);
+  const [phoneModalLocation, setPhoneModalLocation] = useState<BusinessLocation | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [businessAddressDialogOpen, setBusinessAddressDialogOpen] =
     useState(false);
@@ -221,6 +233,73 @@ const BusinessLocationsPage: React.FC = () => {
     params.set('location', location.id);
     navigate(`/business/items?${params.toString()}`);
   };
+
+  const openPhoneModal = (
+    location: BusinessLocation,
+    mode: 'add' | 'edit' | 'verify'
+  ) => {
+    setPhoneModalLocation(location);
+    setPhoneModalMode(mode);
+    setPhoneModalTarget(location.mobile_payment_phone ?? null);
+    setPhoneModalOpen(true);
+  };
+
+  const handlePhoneCompleted = async (phone: MobilePaymentPhone) => {
+    if (!phoneModalLocation) return;
+    await updateLocation(phoneModalLocation.id, {
+      mobile_payment_phone_id: phone.id,
+    });
+    await fetchLocations();
+    setPhoneModalOpen(false);
+    setPhoneModalLocation(null);
+  };
+
+  const handleRemoveLocationPhone = async (location: BusinessLocation) => {
+    const phoneId = location.mobile_payment_phone_id;
+    if (!phoneId) return;
+    try {
+      await updateLocation(location.id, { mobile_payment_phone_id: null });
+      await fetchLocations();
+      try {
+        await deletePhone(phoneId);
+        enqueueSnackbar(
+          t('mobilePaymentPhone.removed', 'Mobile payment number removed'),
+          { variant: 'success' }
+        );
+      } catch {
+        enqueueSnackbar(
+          t(
+            'mobilePaymentPhone.unlinked',
+            'Mobile payment number unlinked from this location'
+          ),
+          { variant: 'success' }
+        );
+      }
+    } catch (error: unknown) {
+      enqueueSnackbar(
+        error instanceof Error
+          ? error.message
+          : t('mobilePaymentPhone.removeFailed', 'Could not remove number'),
+        { variant: 'error' }
+      );
+    }
+  };
+
+  const locationCardProps = (location: BusinessLocation) => ({
+    location,
+    account: accounts.find((a) => a.business_location_id === location.id),
+    transferPending: pendingLocationIds.has(location.id),
+    isStripeRail,
+    onTransfer: setLocationToTransfer,
+    onEdit: handleEditLocation,
+    onDelete: handleDeleteLocation,
+    onToggleStatus: handleToggleLocationStatus,
+    onViewItems: handleViewItems,
+    onVerifyPhone: (loc: BusinessLocation) =>
+      openPhoneModal(loc, loc.mobile_payment_phone ? 'verify' : 'add'),
+    onEditPhone: (loc: BusinessLocation) => openPhoneModal(loc, 'edit'),
+    onRemovePhone: (loc: BusinessLocation) => void handleRemoveLocationPhone(loc),
+  });
 
   const handleDeleteLocation = (location: BusinessLocation) => {
     setLocationToDelete(location);
@@ -629,18 +708,7 @@ const BusinessLocationsPage: React.FC = () => {
               <Grid container spacing={2}>
                 {activeLocations.map((location) => (
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                    <LocationCard
-                      location={location}
-                      account={accounts.find(
-                        (a) => a.business_location_id === location.id
-                      )}
-                      transferPending={pendingLocationIds.has(location.id)}
-                      onTransfer={setLocationToTransfer}
-                      onEdit={handleEditLocation}
-                      onDelete={handleDeleteLocation}
-                      onToggleStatus={handleToggleLocationStatus}
-                      onViewItems={handleViewItems}
-                    />
+                    <LocationCard {...locationCardProps(location)} />
                   </Grid>
                 ))}
               </Grid>
@@ -677,18 +745,7 @@ const BusinessLocationsPage: React.FC = () => {
               <Grid container spacing={2}>
                 {inactiveLocations.map((location) => (
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                    <LocationCard
-                      location={location}
-                      account={accounts.find(
-                        (a) => a.business_location_id === location.id
-                      )}
-                      transferPending={pendingLocationIds.has(location.id)}
-                      onTransfer={setLocationToTransfer}
-                      onEdit={handleEditLocation}
-                      onDelete={handleDeleteLocation}
-                      onToggleStatus={handleToggleLocationStatus}
-                      onViewItems={handleViewItems}
-                    />
+                    <LocationCard {...locationCardProps(location)} />
                   </Grid>
                 ))}
               </Grid>
@@ -781,6 +838,17 @@ const BusinessLocationsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MobilePaymentPhoneVerifyModal
+        open={phoneModalOpen}
+        mode={phoneModalMode}
+        initialPhone={phoneModalTarget}
+        onClose={() => {
+          setPhoneModalOpen(false);
+          setPhoneModalLocation(null);
+        }}
+        onCompleted={(phone) => void handlePhoneCompleted(phone)}
+      />
     </Container>
   );
 };

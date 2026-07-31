@@ -1,14 +1,27 @@
 import { Assignment } from '@mui/icons-material';
-import { Box, Card, CardContent, Container, Grid, Skeleton, Typography } from '@mui/material';
-import React, { useMemo } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Grid,
+  Skeleton,
+  Typography,
+} from '@mui/material';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import OpenOrdersPage from './OpenOrdersPage';
 
 const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
@@ -38,6 +51,11 @@ const AgentDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const { isStripeRail } = useIsStripeRail();
+  const { hasVerifiedPhone, phones, fetchPhones } = useMobilePaymentPhones(
+    !isStripeRail && !!profile?.agent
+  );
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const agentCode = profile?.agent?.agent_code || '';
   const { summary, loading, error } = useAgentEarningsSummary(true);
   const { orders, loading: ordersLoading } = useAgentOrders();
@@ -60,6 +78,22 @@ const AgentDashboard: React.FC = () => {
   return (
     <>
       <Container maxWidth="lg" sx={{ py: 1.5, width: '100%' }}>
+        {!isStripeRail && profile?.agent && !hasVerifiedPhone ? (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => setPhoneModalOpen(true)}>
+                {t('mobilePaymentPhone.verifyCta', 'Verify mobile money number')}
+              </Button>
+            }
+          >
+            {t(
+              'mobilePaymentPhone.agentDashboardCta',
+              'Verify your mobile money number to receive commission payouts.'
+            )}
+          </Alert>
+        ) : null}
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentEarningsWidget summary={summary} loading={loading} error={error} />
@@ -122,6 +156,17 @@ const AgentDashboard: React.FC = () => {
           )}
         </Grid>
       </Container>
+      <MobilePaymentPhoneVerifyModal
+        open={phoneModalOpen}
+        mode={phones[0] ? 'verify' : 'add'}
+        initialPhone={phones[0] ?? null}
+        attachAgentOnSuccess
+        onClose={() => setPhoneModalOpen(false)}
+        onCompleted={() => {
+          void fetchPhones();
+          setPhoneModalOpen(false);
+        }}
+      />
       <OpenOrdersPage />
     </>
   );

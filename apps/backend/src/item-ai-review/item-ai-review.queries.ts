@@ -18,7 +18,10 @@ export const ITEM_FOR_AI_REVIEW = `
         id
         image_url
         display_order
+        width
+        height
         validation_errors
+        validation_warnings
         quality_score
       }
     }

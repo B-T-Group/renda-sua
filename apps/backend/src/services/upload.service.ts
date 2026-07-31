@@ -3,7 +3,9 @@ import { PermissionService } from '../auth/permission.service';
 import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { getActivePersonaOrThrow } from '../users/persona.util';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 
@@ -52,7 +54,9 @@ export class UploadService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly awsService: AwsService,
     private readonly permissionService: PermissionService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
 
   /**
@@ -594,27 +598,104 @@ export class UploadService {
       );
       const agent = (agentResult?.agents as { id: string }[] | undefined)?.[0];
       if (agent) {
-        const updateAgentMutation = `
-          mutation SetAgentVerified($agentId: uuid!) {
-            update_agents_by_pk(
-              pk_columns: { id: $agentId }
-              _set: { is_verified: true }
-            ) {
-              id
-              is_verified
+        const shouldVerify = await this.shouldMarkAgentVerifiedOnIdApproval(
+          upload.user_id
+        );
+        if (shouldVerify) {
+          const updateAgentMutation = `
+            mutation SetAgentVerified($agentId: uuid!) {
+              update_agents_by_pk(
+                pk_columns: { id: $agentId }
+                _set: { is_verified: true }
+              ) {
+                id
+                is_verified
+              }
             }
-          }
-        `;
-        await this.hasuraSystemService.executeMutation(updateAgentMutation, {
-          agentId: agent.id,
-        });
+          `;
+          await this.hasuraSystemService.executeMutation(updateAgentMutation, {
+            agentId: agent.id,
+          });
+        }
       }
 
       void this.notifyBusinessIdApprovedIfNeeded(
         upload.user_id,
         upload.document_type.name
       );
+      void this.syncMoMoBusinessPaymentAfterIdChange(upload.user_id);
     }
+  }
+
+  /** MoMo business payment capability follows approved ID status (not location phone). */
+  private async syncMoMoBusinessPaymentAfterIdChange(
+    userId: string
+  ): Promise<void> {
+    try {
+      const businessResult = await this.hasuraSystemService.executeQuery(
+        `query BusinessByUser($userId: uuid!) {
+          businesses(where: { user_id: { _eq: $userId } }, limit: 1) { id }
+        }`,
+        { userId }
+      );
+      const business = (
+        businessResult?.businesses as { id: string }[] | undefined
+      )?.[0];
+      if (!business) return;
+
+      const rail = await this.paymentRoutingService.resolveRailForBusiness(
+        business.id
+      );
+      if (rail !== 'mobile_money') return;
+
+      const hasApproved = await this.userHasApprovedIdDocument(userId);
+      await this.merchantLifecycleService.upsertPaymentAccount({
+        businessId: business.id,
+        provider: 'mobile_money',
+        capabilityStatus: hasApproved ? 'verified' : 'verification_pending',
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `syncMoMoBusinessPaymentAfterIdChange: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async userHasApprovedIdDocument(userId: string): Promise<boolean> {
+    const res = await this.hasuraSystemService.executeQuery(
+      `query IdApproved($userId: uuid!, $names: [String!]) {
+        user_uploads(
+          where: {
+            user_id: { _eq: $userId }
+            is_approved: { _eq: true }
+            document_type: { name: { _in: $names } }
+          }
+          limit: 1
+        ) { id }
+      }`,
+      { userId, names: ID_DOCUMENT_TYPE_NAMES }
+    );
+    return (res.user_uploads?.length ?? 0) > 0;
+  }
+
+  private async shouldMarkAgentVerifiedOnIdApproval(
+    userId: string
+  ): Promise<boolean> {
+    const query = `
+      query AgentVerifyGate($userId: uuid!) {
+        stripe_connect_accounts(where: { user_id: { _eq: $userId } }, limit: 1) {
+          charges_enabled
+          payouts_enabled
+        }
+        agents(where: { user_id: { _eq: $userId } }, limit: 1) {
+          mobile_payment_phone { is_verified }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, { userId });
+    const stripe = res.stripe_connect_accounts?.[0];
+    if (stripe?.charges_enabled && stripe?.payouts_enabled) return true;
+    return res.agents?.[0]?.mobile_payment_phone?.is_verified === true;
   }
 
   private async notifyBusinessIdApprovedIfNeeded(
@@ -707,6 +788,7 @@ export class UploadService {
         upload.document_type.name,
         message
       );
+      void this.syncMoMoBusinessPaymentAfterIdChange(upload.user_id);
     }
   }
 

@@ -37,6 +37,10 @@ import {
   resolveShopperVariant,
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
+import {
+  fetchStripeEnabledCountries,
+  isLocationPaymentsEnabled,
+} from '../inventory-items/inventory-catalog-eligibility.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -54,6 +58,9 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
       business_location {
         business_id
         is_active
+        mobile_payment_phone {
+          is_verified
+        }
         business {
           id
           name
@@ -161,6 +168,10 @@ export class CheckoutPreflightService {
       inventories.map((inv: any) => [inv.id, inv])
     );
 
+    const stripeCountries = await fetchStripeEnabledCountries(
+      this.hasuraSystemService
+    );
+
     // Check all requested items are found and active
     for (const line of dto.items) {
       const inv = inventoryById.get(line.business_inventory_id);
@@ -178,6 +189,13 @@ export class CheckoutPreflightService {
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,
+        });
+      } else if (
+        !isLocationPaymentsEnabled(inv.business_location, stripeCountries)
+      ) {
+        blockers.push({
+          code: 'LOCATION_PAYMENTS_COMING_SOON',
+          message: `${inv.item?.name ?? 'An item'} is not available for purchase yet. Payments at this location are coming soon.`,
         });
       }
     }

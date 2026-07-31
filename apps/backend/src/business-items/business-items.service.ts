@@ -200,6 +200,7 @@ const GET_BUSINESS_LOCATIONS = `
       id
       name
       phone
+      mobile_payment_phone_id
       email
       location_type
       is_active
@@ -209,6 +210,12 @@ const GET_BUSINESS_LOCATIONS = `
       logo_url
       created_at
       updated_at
+      mobile_payment_phone {
+        id
+        phone_e164
+        is_verified
+        verified_at
+      }
       address {
         id
         address_line_1
@@ -847,6 +854,7 @@ export class BusinessItemsService {
       };
       address_id?: string;
       phone?: string;
+      mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_primary?: boolean;
@@ -937,8 +945,13 @@ export class BusinessItemsService {
       data.logo_url != null && String(data.logo_url).trim() !== ''
         ? String(data.logo_url).trim()
         : null;
+    const phoneFields = await this.resolveLocationPhoneFields(
+      businessId,
+      data.mobile_payment_phone_id,
+      data.phone
+    );
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $mobilePaymentPhoneId: uuid, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -946,6 +959,7 @@ export class BusinessItemsService {
           location_type: $locationType,
           is_primary: $isPrimary,
           phone: $phone,
+          mobile_payment_phone_id: $mobilePaymentPhoneId,
           email: $email,
           auto_withdraw_commissions: $autoWithdraw,
           logo_url: $logoUrl,
@@ -954,12 +968,16 @@ export class BusinessItemsService {
           id
           name
           phone
+          mobile_payment_phone_id
           email
           location_type
           is_primary
           is_active
           auto_withdraw_commissions
           logo_url
+          mobile_payment_phone {
+            id phone_e164 is_verified verified_at
+          }
           address { id address_line_1 address_line_2 city state postal_code country }
         }
       }
@@ -970,7 +988,8 @@ export class BusinessItemsService {
       name: data.name,
       locationType: data.location_type ?? 'store',
       isPrimary: data.is_primary ?? false,
-      phone: data.phone ?? null,
+      phone: phoneFields.phone,
+      mobilePaymentPhoneId: phoneFields.mobilePaymentPhoneId,
       email: data.email ?? null,
       autoWithdraw: data.auto_withdraw_commissions ?? true,
       logoUrl,
@@ -997,6 +1016,7 @@ export class BusinessItemsService {
     data: {
       name?: string;
       phone?: string;
+      mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_active?: boolean;
@@ -1027,8 +1047,19 @@ export class BusinessItemsService {
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
     }
-    // Commission is now derived from Business.accountType — block any attempt to set it
     delete setInput.rendasua_item_commission_percentage;
+    if (
+      data.mobile_payment_phone_id !== undefined ||
+      data.phone !== undefined
+    ) {
+      const phoneFields = await this.resolveLocationPhoneFields(
+        businessId,
+        data.mobile_payment_phone_id,
+        data.phone
+      );
+      setInput.phone = phoneFields.phone;
+      setInput.mobile_payment_phone_id = phoneFields.mobilePaymentPhoneId;
+    }
 
     const updateMutation = `
       mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
@@ -1036,12 +1067,16 @@ export class BusinessItemsService {
           id
           name
           phone
+          mobile_payment_phone_id
           email
           auto_withdraw_commissions
           logo_url
           location_type
           is_active
           is_primary
+          mobile_payment_phone {
+            id phone_e164 is_verified verified_at
+          }
           address { id address_line_1 address_line_2 city state postal_code country }
         }
       }
@@ -1051,6 +1086,49 @@ export class BusinessItemsService {
       data: setInput,
     });
     return result?.update_business_locations_by_pk ?? null;
+  }
+
+  private async resolveLocationPhoneFields(
+    businessId: string,
+    mobilePaymentPhoneId?: string | null,
+    legacyPhone?: string
+  ): Promise<{ phone: string | null; mobilePaymentPhoneId: string | null }> {
+    if (mobilePaymentPhoneId) {
+      const bizUser = await this.hasuraSystemService.executeQuery(
+        `query BizUser($businessId: uuid!) {
+          businesses_by_pk(id: $businessId) { user_id }
+        }`,
+        { businessId }
+      );
+      const userId = bizUser.businesses_by_pk?.user_id;
+      const phoneRow = await this.hasuraSystemService.executeQuery(
+        `query RegPhone($id: uuid!, $userId: uuid!) {
+          user_mobile_payment_phones(
+            where: { id: { _eq: $id }, user_id: { _eq: $userId } }
+            limit: 1
+          ) { id phone_e164 }
+        }`,
+        { id: mobilePaymentPhoneId, userId }
+      );
+      const reg = phoneRow.user_mobile_payment_phones?.[0];
+      if (!reg) {
+        throw new HttpException(
+          { success: false, error: 'Invalid mobile payment phone for this business' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return {
+        phone: reg.phone_e164,
+        mobilePaymentPhoneId: reg.id,
+      };
+    }
+    if (legacyPhone !== undefined) {
+      return {
+        phone: legacyPhone?.trim() ? legacyPhone.trim() : null,
+        mobilePaymentPhoneId: null,
+      };
+    }
+    return { phone: null, mobilePaymentPhoneId: null };
   }
 
   /**

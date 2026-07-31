@@ -19,6 +19,11 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
             ),
           };
         }
+        if (query.includes('StripeCountries')) {
+          return {
+            supported_payment_systems: [{ country: 'CA' }],
+          };
+        }
         return {};
       }),
     };

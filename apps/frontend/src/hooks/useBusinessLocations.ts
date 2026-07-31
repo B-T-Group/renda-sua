@@ -16,6 +16,13 @@ export interface BusinessLocation {
     instructions?: string;
   };
   phone?: string;
+  mobile_payment_phone_id?: string | null;
+  mobile_payment_phone?: {
+    id: string;
+    phone_e164: string;
+    is_verified: boolean;
+    verified_at?: string | null;
+  } | null;
   email?: string;
   operating_hours?: any;
   is_active: boolean;
@@ -38,6 +45,7 @@ export interface AddBusinessLocationData {
   name: string;
   address_id?: string;
   phone?: string;
+  mobile_payment_phone_id?: string | null;
   email?: string;
   operating_hours?: any;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -60,6 +68,7 @@ export interface UpdateBusinessLocationData {
   name?: string;
   address_id?: string;
   phone?: string;
+  mobile_payment_phone_id?: string | null;
   email?: string;
   operating_hours?: any;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -150,7 +159,10 @@ export const useBusinessLocations = (
         }
         const basePayload = {
           name: data.name,
-          phone: data.phone,
+          ...(data.mobile_payment_phone_id !== undefined && {
+            mobile_payment_phone_id: data.mobile_payment_phone_id,
+          }),
+          ...(data.phone !== undefined && { phone: data.phone }),
           email: data.email,
           location_type: data.location_type ?? 'store',
           is_primary: data.is_primary ?? false,
@@ -219,7 +231,9 @@ export const useBusinessLocations = (
         // Update location fields via backend PATCH (name, phone, email, etc.)
         const locationFields = {
           ...(locationData.name !== undefined && { name: locationData.name }),
-          ...(locationData.phone !== undefined && { phone: locationData.phone }),
+          ...(locationData.mobile_payment_phone_id !== undefined && {
+            mobile_payment_phone_id: locationData.mobile_payment_phone_id,
+          }),
           ...(locationData.email !== undefined && { email: locationData.email }),
           ...(locationData.location_type !== undefined && {
             location_type: locationData.location_type,

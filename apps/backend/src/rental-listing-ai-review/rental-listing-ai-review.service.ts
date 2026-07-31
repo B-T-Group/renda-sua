@@ -1,6 +1,13 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
+import {
+  assessAiReviewImageQuality,
+  buildQualityProposeModelResult,
+  buildQualityRejectModelResult,
+  clampDecisionForImageQuality,
+  hasStoredValidationErrors,
+} from '../common/ai-review-image-quality.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -113,6 +120,17 @@ export class RentalListingAiReviewService {
     const listing = await this.loadListing(listingId);
     try {
       this.assertReviewable(listing, expectedVersion);
+      const images = listing.rental_item.rental_item_images ?? [];
+      const qualityAssessment = assessAiReviewImageQuality(images);
+      if (qualityAssessment.mustReject) {
+        await this.applyRejectDecision(
+          listing,
+          await this.createRunningReview(listing),
+          buildQualityRejectModelResult(images, qualityAssessment),
+          { provider: 'prefilter', model: 'image_quality' }
+        );
+        return;
+      }
       if (this.hasBlockingImageErrors(listing)) {
         await this.applyRejectDecision(
           listing,
@@ -124,7 +142,12 @@ export class RentalListingAiReviewService {
       }
       const reviewId = await this.createRunningReview(listing);
       const { result, modelMeta } = await this.model.reviewListing(listing);
-      await this.applyDecision(listing, reviewId, result, modelMeta);
+      const finalResult = this.applyImageQualityGuard(
+        result,
+        qualityAssessment,
+        images
+      );
+      await this.applyDecision(listing, reviewId, finalResult, modelMeta);
     } catch (err: any) {
       // Attach listing name so callers can include it in failure notifications
       if (err && typeof err === 'object') {
@@ -155,11 +178,32 @@ export class RentalListingAiReviewService {
     }
   }
 
+  private applyImageQualityGuard(
+    result: AiReviewModelResult,
+    assessment: ReturnType<typeof assessAiReviewImageQuality>,
+    images: ListingForAiReview['rental_item']['rental_item_images']
+  ): AiReviewModelResult {
+    const clamped = clampDecisionForImageQuality(result, assessment);
+    if (clamped.decision === result.decision) {
+      return result;
+    }
+    const qualityResult = assessment.mustReject
+      ? buildQualityRejectModelResult(images, assessment)
+      : buildQualityProposeModelResult(images, assessment);
+    return {
+      ...qualityResult,
+      ...clamped,
+      reason: qualityResult.reason,
+      issues: [...qualityResult.issues, ...result.issues],
+      proposedTitle: result.proposedTitle,
+      proposedDescription: result.proposedDescription,
+    };
+  }
+
   private hasBlockingImageErrors(listing: ListingForAiReview): boolean {
-    return (listing.rental_item.rental_item_images ?? []).some((img) => {
-      const errs = img.validation_errors;
-      return Array.isArray(errs) && errs.length > 0;
-    });
+    return hasStoredValidationErrors(
+      listing.rental_item.rental_item_images ?? []
+    );
   }
 
   private hardBlockResult(listing: ListingForAiReview): AiReviewModelResult {
@@ -202,7 +246,10 @@ export class RentalListingAiReviewService {
       images: (listing.rental_item.rental_item_images ?? []).map((i) => ({
         id: i.id,
         image_url: i.image_url,
+        width: i.width,
+        height: i.height,
         validation_errors: i.validation_errors,
+        validation_warnings: i.validation_warnings,
         quality_score: i.quality_score,
       })),
     };

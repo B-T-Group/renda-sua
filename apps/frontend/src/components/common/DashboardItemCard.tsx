@@ -120,11 +120,16 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const business = inventory.business_location.business;
   const merchantCanAcceptOrders =
     business.can_accept_orders ?? business.is_verified ?? false;
+  const paymentsEnabled = inventory.payments_enabled !== false;
   const isOpeningSoon =
     (business.is_storefront_visible ?? true) && !merchantCanAcceptOrders;
   const merchantNotAcceptingLabel = t(
     'checkout.merchantNotAcceptingOrders',
     'This merchant is currently completing account setup and is not yet accepting orders.'
+  );
+  const paymentsComingSoonLabel = t(
+    'catalog.paymentsComingSoon',
+    'Coming soon'
   );
   const openingSoonLabel = t('business.lifecycle.openingSoonBadge', 'Opening Soon');
 
@@ -1071,6 +1076,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {clientsOnlyLabel}
             </Button>
+          ) : !paymentsEnabled ? (
+            <Button variant="outlined" disabled size="small" sx={{ width: '75%' }}>
+              {paymentsComingSoonLabel}
+            </Button>
           ) : !merchantCanAcceptOrders ? (
             <Button variant="outlined" disabled size="small" sx={{ width: '75%' }}>
               {merchantNotAcceptingLabel}
@@ -1118,6 +1127,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 onClick={() => onAddToCart(inventory, selectionId)}
                 size="small"
                 fullWidth
+                disabled={!paymentsEnabled}
                 aria-label={
                   inCart
                     ? t('cart.inCartA11y', 'In cart, quantity {{count}}. Add more', {

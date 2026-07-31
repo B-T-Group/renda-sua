@@ -10,6 +10,7 @@ import {
   SwapHoriz as TransferIcon,
 } from '@mui/icons-material';
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -41,11 +42,15 @@ interface LocationCardProps {
   /** When present, shows this location's account balance on the card */
   account?: LocationAccountInfo | null;
   transferPending?: boolean;
+  isStripeRail?: boolean;
   onEdit: (location: BusinessLocation) => void;
   onDelete: (location: BusinessLocation) => void;
   onToggleStatus: (location: BusinessLocation) => void;
   onTransfer?: (location: BusinessLocation) => void;
   onViewItems?: (location: BusinessLocation) => void;
+  onVerifyPhone?: (location: BusinessLocation) => void;
+  onEditPhone?: (location: BusinessLocation) => void;
+  onRemovePhone?: (location: BusinessLocation) => void;
 }
 
 const LocationCard: React.FC<LocationCardProps> = ({
@@ -57,6 +62,10 @@ const LocationCard: React.FC<LocationCardProps> = ({
   onToggleStatus,
   onTransfer,
   onViewItems,
+  isStripeRail = false,
+  onVerifyPhone,
+  onEditPhone,
+  onRemovePhone,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -78,6 +87,26 @@ const LocationCard: React.FC<LocationCardProps> = ({
       style: 'currency',
       currency,
     }).format(amount);
+
+  const linkedPhone = location.mobile_payment_phone;
+  const phoneVerified = linkedPhone?.is_verified === true;
+  const displayPhone =
+    linkedPhone?.phone_e164 ?? location.phone?.trim() ?? '';
+  const needsPhoneVerify =
+    !isStripeRail &&
+    (!linkedPhone || !phoneVerified);
+  const phoneActionLabel = !linkedPhone
+    ? t('mobilePaymentPhone.addCta', 'Add mobile money number')
+    : t('mobilePaymentPhone.verifyCta', 'Verify mobile money number');
+  const locationPaymentMessage = !linkedPhone
+    ? t(
+        'mobilePaymentPhone.locationAddCta',
+        'Add and verify a mobile money number so customers can purchase from this location.'
+      )
+    : t(
+        'mobilePaymentPhone.locationVerifyCta',
+        'Verify your mobile money number so customers can purchase from this location.'
+      );
 
   return (
     <Card
@@ -221,7 +250,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
               />
             </Stack>
             {location.auto_withdraw_commissions !== false &&
-              !location.phone?.trim() && (
+              !displayPhone && (
                 <Typography
                   variant="caption"
                   color="warning.main"
@@ -235,6 +264,21 @@ const LocationCard: React.FC<LocationCardProps> = ({
                 </Typography>
               )}
           </Box>
+
+          {!isStripeRail && needsPhoneVerify ? (
+            <Alert severity="warning" sx={{ py: 0.5 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                {locationPaymentMessage}
+              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => onVerifyPhone?.(location)}
+              >
+                {phoneActionLabel}
+              </Button>
+            </Alert>
+          ) : null}
 
           {/* Location account balance */}
           {account && (
@@ -274,14 +318,40 @@ const LocationCard: React.FC<LocationCardProps> = ({
           )}
 
           {/* Contact - phone on its own line, note below */}
-          {location.phone && (
+          {displayPhone && (
             <Box>
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <PhoneIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 <Typography variant="body2" color="text.secondary">
-                  {location.phone}
+                  {displayPhone}
                 </Typography>
+                {!isStripeRail && linkedPhone ? (
+                  <Chip
+                    size="small"
+                    label={
+                      phoneVerified
+                        ? t('mobilePaymentPhone.verified', 'Verified')
+                        : t('mobilePaymentPhone.unverified', 'Unverified')
+                    }
+                    color={phoneVerified ? 'success' : 'warning'}
+                    sx={{ height: 22 }}
+                  />
+                ) : null}
               </Stack>
+              {!isStripeRail && linkedPhone ? (
+                <Stack direction="row" spacing={1} sx={{ mt: 0.5, ml: 3.5 }}>
+                  <Button size="small" onClick={() => onEditPhone?.(location)}>
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => onRemovePhone?.(location)}
+                  >
+                    {t('common.remove', 'Remove')}
+                  </Button>
+                </Stack>
+              ) : null}
               <Typography
                 variant="caption"
                 color="text.secondary"

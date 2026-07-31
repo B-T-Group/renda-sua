@@ -37,6 +37,8 @@ import {
 } from '../../hooks/useBusinessLocations';
 import { presignUploadLibraryImage } from './onboarding/onboardingPresignedUpload';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
+import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { getCountryStateCity } from '../../utils/countryStateCityLoader';
 
 async function profileAddressToFormData(addr: Address): Promise<AddressFormData> {
@@ -84,6 +86,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const { generateImageUploadUrl } = useAws();
   const { isStripeRail } = useIsStripeRail();
+  const { phones, fetchPhones } = useMobilePaymentPhones(!isStripeRail && open);
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
@@ -105,6 +109,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     name: '',
     address_id: '',
     phone: '',
+    mobile_payment_phone_id: null as string | null,
     email: '',
     location_type: 'store',
     is_primary: false,
@@ -132,6 +137,10 @@ const LocationModal: React.FC<LocationModalProps> = ({
         name: location.name,
         address_id: location.address.id,
         phone: location.phone || '',
+        mobile_payment_phone_id:
+          location.mobile_payment_phone_id ??
+          location.mobile_payment_phone?.id ??
+          null,
         email: location.email || '',
         location_type: location.location_type,
         is_primary: location.is_primary,
@@ -161,6 +170,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         name: '',
         address_id: '',
         phone: '',
+        mobile_payment_phone_id: null,
         email: '',
         location_type: 'store',
         is_primary: false,
@@ -490,14 +500,55 @@ const LocationModal: React.FC<LocationModalProps> = ({
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <TextField
-                label={t('business.locations.phone')}
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                }
-                sx={{ flex: 1, minWidth: 200 }}
-              />
+              {!isStripeRail ? (
+                <FormControl sx={{ flex: 1, minWidth: 200 }}>
+                  <InputLabel id="mobile-payment-phone-label">
+                    {t('business.locations.mobilePaymentPhone', 'Mobile money number')}
+                  </InputLabel>
+                  <Select
+                    labelId="mobile-payment-phone-label"
+                    label={t('business.locations.mobilePaymentPhone', 'Mobile money number')}
+                    value={formData.mobile_payment_phone_id ?? ''}
+                    onChange={(e) => {
+                      const id = e.target.value as string;
+                      const selected = phones.find((p) => p.id === id);
+                      setFormData((prev) => ({
+                        ...prev,
+                        mobile_payment_phone_id: id || null,
+                        phone: selected?.phone_e164 ?? prev.phone,
+                      }));
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>{t('common.none', 'None')}</em>
+                    </MenuItem>
+                    {phones.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.phone_e164}
+                        {p.is_verified
+                          ? ` (${t('mobilePaymentPhone.verified', 'Verified')})`
+                          : ` (${t('mobilePaymentPhone.unverified', 'Unverified')})`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <Button
+                    size="small"
+                    sx={{ mt: 1, alignSelf: 'flex-start' }}
+                    onClick={() => setPhoneModalOpen(true)}
+                  >
+                    {t('mobilePaymentPhone.addNew', 'Add new number…')}
+                  </Button>
+                </FormControl>
+              ) : (
+                <TextField
+                  label={t('business.locations.phone')}
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  sx={{ flex: 1, minWidth: 200 }}
+                />
+              )}
 
               <TextField
                 label={t('business.locations.email')}
@@ -685,6 +736,21 @@ const LocationModal: React.FC<LocationModalProps> = ({
         onClose={() => setAddressDialogOpen(false)}
         onSave={handleAddressSave}
         onAddressChange={setAddressData}
+      />
+
+      <MobilePaymentPhoneVerifyModal
+        open={phoneModalOpen}
+        mode="add"
+        onClose={() => setPhoneModalOpen(false)}
+        onCompleted={async (phone) => {
+          await fetchPhones();
+          setFormData((prev) => ({
+            ...prev,
+            mobile_payment_phone_id: phone.id,
+            phone: phone.phone_e164,
+          }));
+          setPhoneModalOpen(false);
+        }}
       />
     </>
   );

@@ -122,6 +122,7 @@
 - "!include public_tags.yaml"
 - "!include public_thread_messages.yaml"
 - "!include public_user_messages.yaml"
+- "!include public_user_mobile_payment_phones.yaml"
 - "!include public_user_permissions.yaml"
 - "!include public_user_roles.yaml"
 - "!include public_user_types.yaml"

@@ -8,6 +8,9 @@ object_relationships:
   - name: business
     using:
       foreign_key_constraint_on: business_id
+  - name: mobile_payment_phone
+    using:
+      foreign_key_constraint_on: mobile_payment_phone_id
 array_relationships:
   - name: business_inventory
     using:
@@ -54,6 +57,7 @@ insert_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
@@ -73,6 +77,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
@@ -92,6 +97,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
@@ -111,6 +117,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
@@ -134,6 +141,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
@@ -153,6 +161,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - logo_url
@@ -171,6 +180,7 @@ update_permissions:
         - is_active
         - email
         - phone
+        - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions

@@ -1017,25 +1017,6 @@ export const AdminBusinessVerificationDialog: React.FC<
         >
           <Toolbar sx={{ justifyContent: 'flex-end', gap: 1 }}>
             <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
-            {canConfirmMobileMoney ? (
-              <Button
-                variant="contained"
-                disabled={verifyLoading}
-                startIcon={
-                  verifyLoading ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <VerifiedUserIcon />
-                  )
-                }
-                onClick={() => void handleConfirmMobileMoney()}
-              >
-                {t(
-                  'admin.businesses.confirmMobileMoneyReady',
-                  'Confirm mobile money ready'
-                )}
-              </Button>
-            ) : null}
           </Toolbar>
         </AppBar>
       </Dialog>

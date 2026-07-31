@@ -870,13 +870,23 @@ export class CommissionsService {
         business_locations_by_pk(id: $id) {
           auto_withdraw_commissions
           phone
+          mobile_payment_phone { phone_e164 is_verified }
         }
       }
     `;
     const res = await this.hasuraSystemService.executeQuery(query, {
       id: locationId,
     });
-    return res.business_locations_by_pk ?? null;
+    const row = res.business_locations_by_pk;
+    if (!row) return null;
+    const registryPhone =
+      row.mobile_payment_phone?.is_verified === true
+        ? row.mobile_payment_phone.phone_e164
+        : null;
+    return {
+      auto_withdraw_commissions: row.auto_withdraw_commissions,
+      phone: registryPhone ?? row.phone,
+    };
   }
 
   private async getAgentAutoWithdraw(
@@ -886,6 +896,7 @@ export class CommissionsService {
       query AgentAutoWithdraw($uid: uuid!) {
         agents(where: { user_id: { _eq: $uid } }, limit: 1) {
           auto_withdraw_commissions
+          mobile_payment_phone { phone_e164 is_verified }
           user { phone_number }
         }
       }
@@ -895,9 +906,13 @@ export class CommissionsService {
     });
     const row = res.agents?.[0];
     if (!row) return null;
+    const registryPhone =
+      row.mobile_payment_phone?.is_verified === true
+        ? row.mobile_payment_phone.phone_e164
+        : null;
     return {
       auto_withdraw_commissions: Boolean(row.auto_withdraw_commissions),
-      phone: row.user?.phone_number,
+      phone: registryPhone ?? row.user?.phone_number,
     };
   }
 

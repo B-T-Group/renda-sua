@@ -7,6 +7,7 @@ export type VerificationNextAction =
   | 'setup_stripe_connect'
   | 'publish_catalog'
   | 'pending_review'
+  | 'verify_mobile_payment_phone'
   | 'complete';
 
 export type MerchantContractStatus = {
@@ -68,6 +69,12 @@ export interface BusinessVerificationStatus {
       hasPendingItem?: boolean;
       hasApprovedRental?: boolean;
       hasPendingRental?: boolean;
+    };
+    mobilePaymentPhone?: {
+      complete: boolean;
+      hasVerifiedPhone: boolean;
+      locationCountNeedingPhone: number;
+      totalActiveLocations?: number;
     };
   };
 }

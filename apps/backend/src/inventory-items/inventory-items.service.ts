@@ -10,6 +10,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RbacService } from '../rbac/rbac.service';
 import {
+  fetchStripeEnabledCountries,
+  isLocationPaymentsEnabled,
+} from './inventory-catalog-eligibility.util';
+import {
   buildInventoryItemNotFoundShareHtml,
   buildInventoryItemShareHtml,
 } from './inventory-item-share-page.util';
@@ -67,6 +71,8 @@ export interface InventoryItem {
   deal_discount_type?: 'percentage' | 'fixed';
   deal_discount_value?: number;
   deal_end_at?: string;
+  /** False when MoMo location phone is missing or unverified (Stripe-country locations exempt). */
+  payments_enabled?: boolean;
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
@@ -162,6 +168,9 @@ export interface InventoryItem {
     is_primary: boolean;
     is_active?: boolean;
     logo_url?: string | null;
+    mobile_payment_phone?: {
+      is_verified?: boolean;
+    } | null;
     business: {
       id: string;
       name: string;
@@ -402,6 +411,9 @@ const CATALOG_INVENTORY_LIST_GQL = `
         location_type
         is_primary
         logo_url
+        mobile_payment_phone {
+          is_verified
+        }
         business {
           id
           name
@@ -556,6 +568,30 @@ export class InventoryItemsService {
         HttpStatus.SERVICE_UNAVAILABLE
       );
     }
+  }
+
+  private async getStripeEnabledCountries(): Promise<string[]> {
+    return fetchStripeEnabledCountries(this.hasuraSystemService);
+  }
+
+  private attachPaymentsEnabledToItems(
+    items: InventoryItem[],
+    stripeCountries: string[]
+  ): InventoryItem[] {
+    return items.map((item) => ({
+      ...item,
+      payments_enabled: isLocationPaymentsEnabled(
+        item.business_location,
+        stripeCountries
+      ),
+    }));
+  }
+
+  private async attachPaymentsEnabledToItemsAsync(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    const stripeCountries = await this.getStripeEnabledCountries();
+    return this.attachPaymentsEnabledToItems(items, stripeCountries);
   }
 
   private async buildInventoryCatalogWhere(params: {
@@ -1448,10 +1484,13 @@ export class InventoryItemsService {
       const items: InventoryItem[] = rawItems.map((inv: any) =>
         this.mapItemTagsToTags(inv)
       );
-      const inventoryIds = items.map((i) => i.id);
+      const itemsWithPayments = await this.attachPaymentsEnabledToItemsAsync(
+        items
+      );
+      const inventoryIds = itemsWithPayments.map((i) => i.id);
       const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
       const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
-      const itemsWithViewsAndDeals = items.map((item) => {
+      const itemsWithViewsAndDeals = itemsWithPayments.map((item) => {
         const viewsCount = viewsMap[item.id] ?? 0;
         const deal = dealsMap[item.id];
         const originalPrice = item.selling_price;
@@ -1976,7 +2015,10 @@ export class InventoryItemsService {
   /**
    * Get a specific inventory item by ID
    */
-  async getInventoryItemById(id: string): Promise<InventoryItem> {
+  async getInventoryItemById(
+    id: string,
+    options: { owner_preview?: boolean } = {}
+  ): Promise<InventoryItem> {
     const queryString = `
       query GetInventoryItem($id: uuid!) {
         business_inventory_by_pk(id: $id) {
@@ -2105,6 +2147,10 @@ export class InventoryItemsService {
             is_primary
             is_active
             logo_url
+            mobile_payment_phone_id
+            mobile_payment_phone {
+              is_verified
+            }
             business {
               id
               name
@@ -2140,25 +2186,32 @@ export class InventoryItemsService {
         );
       }
 
-      if (item.is_active !== true) {
-        throw new HttpException(
-          'Inventory item not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
+      const ownerPreview = await this.resolveOwnerPreview(
+        item.business_location?.business_id,
+        options.owner_preview === true
+      );
 
-      if (item.business_location?.is_active !== true) {
-        throw new HttpException(
-          'Inventory item not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
+      if (!ownerPreview) {
+        if (item.is_active !== true) {
+          throw new HttpException(
+            'Inventory item not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
 
-      if (item.business_location?.business?.is_storefront_visible !== true) {
-        throw new HttpException(
-          'Inventory item not found',
-          HttpStatus.NOT_FOUND
-        );
+        if (item.business_location?.is_active !== true) {
+          throw new HttpException(
+            'Inventory item not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
+
+        if (item.business_location?.business?.is_storefront_visible !== true) {
+          throw new HttpException(
+            'Inventory item not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
       }
 
       if ((item as any).item?.moderation_status !== 'approved') {
@@ -2169,6 +2222,10 @@ export class InventoryItemsService {
       }
 
       item = this.mapItemTagsToTags(item);
+      const [itemWithPayments] = await this.attachPaymentsEnabledToItemsAsync([
+        item,
+      ]);
+      item = itemWithPayments;
 
       const viewsMap = await this.getViewCountsByInventoryIds([item.id]);
       const dealsMap = await this.getActiveDealsByInventoryIds([item.id]);
@@ -2394,6 +2451,7 @@ export class InventoryItemsService {
               location_type
               is_primary
               logo_url
+              mobile_payment_phone { is_verified }
               business { id name is_verified is_storefront_visible can_accept_orders }
               address {
                 id
@@ -2437,11 +2495,14 @@ export class InventoryItemsService {
       const items: InventoryItem[] = rawItems.map((inv: any) =>
         this.mapItemTagsToTags(inv)
       );
-      const ids = items.map((i) => i.id);
+      const itemsWithPayments = await this.attachPaymentsEnabledToItemsAsync(
+        items
+      );
+      const ids = itemsWithPayments.map((i) => i.id);
       const viewsMap = await this.getViewCountsByInventoryIds(ids);
       const dealsMap = await this.getActiveDealsByInventoryIds(ids);
 
-      return items.map((item) => {
+      return itemsWithPayments.map((item) => {
         const viewsCount = viewsMap[item.id] ?? 0;
         const deal = dealsMap[item.id];
         const originalPrice = item.selling_price;

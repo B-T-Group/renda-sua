@@ -807,13 +807,16 @@ export default function ItemDetailPage() {
     : t('cart.addToCart', 'Add to Cart');
   const merchantCanAcceptOrders =
     business?.can_accept_orders ?? business?.is_verified ?? false;
+  const paymentsEnabled = inventoryItem?.payments_enabled !== false;
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
-  const showMobileStickyOrderBar = isMobile && hasStock && merchantCanAcceptOrders;
+  const showMobileStickyOrderBar =
+    isMobile && hasStock && merchantCanAcceptOrders && paymentsEnabled;
   const showInlineOrderNow = !showMobileStickyOrderBar;
   const showOrderCtaStack =
     !hasStock ||
+    !paymentsEnabled ||
     !merchantCanAcceptOrders ||
     isClientUser ||
     !isMobile ||
@@ -1330,6 +1333,10 @@ export default function ItemDetailPage() {
                       ? t('items.outOfStock', 'Out of Stock')
                       : t('items.notAvailable', 'Not Available')}
                   </Button>
+                ) : !paymentsEnabled ? (
+                  <Button variant="outlined" disabled size="medium" fullWidth>
+                    {t('catalog.paymentsComingSoon', 'Coming soon')}
+                  </Button>
                 ) : (
                   <>
                     {isClientUser && (
@@ -1340,7 +1347,7 @@ export default function ItemDetailPage() {
                         onClick={() => handleAddToCart(inventoryItem)}
                         size="medium"
                         fullWidth
-                        disabled={!variantSelectionReady}
+                        disabled={!variantSelectionReady || !paymentsEnabled}
                         aria-label={
                           inCart
                             ? t(

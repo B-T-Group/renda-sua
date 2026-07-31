@@ -23,7 +23,8 @@ export interface MobilePaymentTransaction {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
-    | 'token';
+    | 'token'
+    | 'phone_verification';
   entity_id?: string;
   created_at: string;
   updated_at: string;
@@ -46,7 +47,8 @@ export interface CreateTransactionData {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
-    | 'token';
+    | 'token'
+    | 'phone_verification';
   entity_id?: string;
 }
 

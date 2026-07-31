@@ -67,6 +67,10 @@ import {
   resolveAgentPreviewCountry,
 } from '../common/agent-proximity.util';
 import { LocationsService } from '../locations/locations.service';
+import {
+  fetchStripeEnabledCountries,
+  isLocationPaymentsEnabled,
+} from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 import {
@@ -7289,6 +7293,10 @@ export class OrdersService {
           }
           business_location {
             business_id
+            is_active
+            mobile_payment_phone {
+              is_verified
+            }
             address {
               address_line_1
               address_line_2
@@ -7375,6 +7383,10 @@ export class OrdersService {
     const businessInventories =
       businessInventoryResult.business_inventory as any[];
 
+    const stripeCountries = await fetchStripeEnabledCountries(
+      this.hasuraSystemService
+    );
+
     const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
       orderData.payment_timing === 'pay_at_delivery'
         ? 'pay_at_delivery'
@@ -7453,6 +7465,18 @@ export class OrdersService {
       if (!businessInventory.is_active) {
         throw new Error(
           `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      if (
+        !isLocationPaymentsEnabled(
+          businessInventory.business_location,
+          stripeCountries
+        )
+      ) {
+        throw new HttpException(
+          `Item ${businessInventory.item.name} is not available for purchase yet. Payments at this location are coming soon.`,
+          HttpStatus.BAD_REQUEST
         );
       }
 

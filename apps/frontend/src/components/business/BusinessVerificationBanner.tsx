@@ -104,6 +104,7 @@ export const BusinessVerificationBanner: React.FC = () => {
   const payoutsDone = status.steps.stripeConnect?.complete === true;
   const catalogDone = status.steps.catalog?.complete === true;
   const identityDone = status.steps.identity?.complete === true;
+  const reviewDone = status.nextAction === 'complete' || status.is_verified === true;
 
   const activeStep = isStripe
     ? status.nextAction === 'sign_agreement'
@@ -150,10 +151,8 @@ export const BusinessVerificationBanner: React.FC = () => {
               : t('business.verification.stepIdentity', 'ID document')}
           </StepLabel>
         </Step>
-        <Step completed={isStripe ? catalogDone : status.nextAction === 'complete'}>
-          <StepLabel
-            icon={stepIcon(isStripe ? catalogDone : status.nextAction === 'complete')}
-          >
+        <Step completed={isStripe ? catalogDone : reviewDone}>
+          <StepLabel icon={stepIcon(isStripe ? catalogDone : reviewDone)}>
             {isStripe
               ? t('business.verification.stepCatalog', 'Product')
               : t('business.verification.stepReview', 'Review')}

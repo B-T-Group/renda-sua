@@ -1,6 +1,13 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
+import {
+  assessAiReviewImageQuality,
+  buildQualityProposeModelResult,
+  buildQualityRejectModelResult,
+  clampDecisionForImageQuality,
+  hasStoredValidationErrors,
+} from '../common/ai-review-image-quality.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -133,6 +140,16 @@ export class ItemAiReviewService {
     const item = await this.loadItem(itemId);
     try {
       this.assertReviewable(item, expectedVersion);
+      const qualityAssessment = assessAiReviewImageQuality(item.item_images ?? []);
+      if (qualityAssessment.mustReject) {
+        await this.applyRejectDecision(
+          item,
+          await this.createRunningReview(item),
+          buildQualityRejectModelResult(item.item_images ?? [], qualityAssessment),
+          { provider: 'prefilter', model: 'image_quality' }
+        );
+        return;
+      }
       if (this.hasBlockingImageErrors(item)) {
         await this.applyRejectDecision(
           item,
@@ -144,7 +161,12 @@ export class ItemAiReviewService {
       }
       const reviewId = await this.createRunningReview(item);
       const { result, modelMeta } = await this.model.reviewItem(item);
-      await this.applyDecision(item, reviewId, result, modelMeta);
+      const finalResult = this.applyImageQualityGuard(
+        result,
+        qualityAssessment,
+        item.item_images ?? []
+      );
+      await this.applyDecision(item, reviewId, finalResult, modelMeta);
     } catch (err: any) {
       // Attach item name so callers can include it in failure notifications
       if (err && typeof err === 'object') {
@@ -169,11 +191,30 @@ export class ItemAiReviewService {
     }
   }
 
+  private applyImageQualityGuard(
+    result: AiReviewModelResult,
+    assessment: ReturnType<typeof assessAiReviewImageQuality>,
+    images: ItemForAiReview['item_images']
+  ): AiReviewModelResult {
+    const clamped = clampDecisionForImageQuality(result, assessment);
+    if (clamped.decision === result.decision) {
+      return result;
+    }
+    const qualityResult = assessment.mustReject
+      ? buildQualityRejectModelResult(images, assessment)
+      : buildQualityProposeModelResult(images, assessment);
+    return {
+      ...qualityResult,
+      ...clamped,
+      reason: qualityResult.reason,
+      issues: [...qualityResult.issues, ...result.issues],
+      proposedTitle: result.proposedTitle,
+      proposedDescription: result.proposedDescription,
+    };
+  }
+
   private hasBlockingImageErrors(item: ItemForAiReview): boolean {
-    return (item.item_images ?? []).some((img) => {
-      const errs = img.validation_errors;
-      return Array.isArray(errs) && errs.length > 0;
-    });
+    return hasStoredValidationErrors(item.item_images ?? []);
   }
 
   private hardBlockResult(item: ItemForAiReview): AiReviewModelResult {
@@ -218,7 +259,10 @@ export class ItemAiReviewService {
       images: (item.item_images ?? []).map((i) => ({
         id: i.id,
         image_url: i.image_url,
+        width: i.width,
+        height: i.height,
         validation_errors: i.validation_errors,
+        validation_warnings: i.validation_warnings,
         quality_score: i.quality_score,
       })),
     };

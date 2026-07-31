@@ -837,13 +837,24 @@ export class InventoryItemsController {
       },
     },
   })
-  async getInventoryItemById(@Param('id') id: string): Promise<{
+  @ApiQuery({
+    name: 'owner_preview',
+    required: false,
+    description:
+      'When true and caller is the business owner, bypass public catalog visibility gates',
+  })
+  async getInventoryItemById(
+    @Param('id') id: string,
+    @Query('owner_preview') owner_preview?: string
+  ): Promise<{
     success: boolean;
     data: InventoryItem;
     message: string;
   }> {
     try {
-      const data = await this.inventoryItemsService.getInventoryItemById(id);
+      const data = await this.inventoryItemsService.getInventoryItemById(id, {
+        owner_preview: owner_preview === 'true',
+      });
 
       return {
         success: true,

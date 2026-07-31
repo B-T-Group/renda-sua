@@ -71,6 +71,7 @@ import { UsersModule } from '../users/users.module';
 import { ThreadsModule } from '../threads/threads.module';
 import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
 import { AccountRechargeModule } from '../admin/account-recharge/account-recharge.module';
+import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -177,6 +178,7 @@ import { AppService } from './app.service';
     ThreadsModule,
     BusinessReferralPayoutsModule,
     AccountRechargeModule,
+    MobilePaymentPhonesModule,
   ],
   controllers: [
     AppController,

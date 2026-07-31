@@ -45,7 +45,13 @@ function makeInventoryRow(overrides: {
   price?: number;
   itemName?: string;
   canAcceptOrders?: boolean;
+  phoneVerified?: boolean;
 } = {}) {
+  const sellerCountry = overrides.sellerCountry ?? 'CM';
+  const isStripeCountry = sellerCountry === 'CA';
+  const phoneVerified =
+    overrides.phoneVerified ?? !isStripeCountry;
+
   return {
     id: overrides.id ?? 'inv-1',
     selling_price: overrides.price ?? 1000,
@@ -60,7 +66,10 @@ function makeInventoryRow(overrides: {
         can_accept_orders: overrides.canAcceptOrders ?? true,
         user: { id: overrides.ownerUserId ?? 'owner-1' },
       },
-      address: { country: overrides.sellerCountry ?? 'CM' },
+      address: { country: sellerCountry },
+      mobile_payment_phone: isStripeCountry
+        ? null
+        : { is_verified: phoneVerified },
     },
     item: {
       id: 'item-1',
@@ -175,14 +184,28 @@ describe('CheckoutPreflightService', () => {
     deliveryAvailabilityService = module.get(DeliveryAvailabilityService);
   });
 
-  function mockInventory(rows: ReturnType<typeof makeInventoryRow>[]) {
+  function mockInventory(
+    rows: ReturnType<typeof makeInventoryRow>[],
+    options: { addressCountry?: string | null; stripeCountries?: string[] } = {}
+  ) {
     (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
       (query: string) => {
         if (query.includes('GetInventoryForPreflight')) {
           return Promise.resolve({ business_inventory: rows });
         }
         if (query.includes('GetAddressCountry')) {
-          return Promise.resolve({ addresses_by_pk: null });
+          return Promise.resolve({
+            addresses_by_pk: options.addressCountry
+              ? { country: options.addressCountry }
+              : null,
+          });
+        }
+        if (query.includes('StripeCountries')) {
+          return Promise.resolve({
+            supported_payment_systems: (options.stripeCountries ?? ['CA']).map(
+              (country) => ({ country })
+            ),
+          });
         }
         return Promise.resolve({});
       }
@@ -280,18 +303,9 @@ describe('CheckoutPreflightService', () => {
   // 5. Blocks delivery country mismatch
   // -------------------------------------------------------------------------
   it('blocks checkout when delivery address country does not match seller country', async () => {
-    mockInventory([makeInventoryRow({ sellerCountry: 'CM' })]);
-    (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
-      (query: string) => {
-        if (query.includes('GetInventoryForPreflight')) {
-          return Promise.resolve({ business_inventory: [makeInventoryRow({ sellerCountry: 'CM' })] });
-        }
-        if (query.includes('GetAddressCountry')) {
-          return Promise.resolve({ addresses_by_pk: { country: 'CA' } });
-        }
-        return Promise.resolve({});
-      }
-    );
+    mockInventory([makeInventoryRow({ sellerCountry: 'CM' })], {
+      addressCountry: 'CA',
+    });
 
     const dto: CheckoutPreflightDto = {
       items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
@@ -313,9 +327,7 @@ describe('CheckoutPreflightService', () => {
   it('blocks checkout for mixed-country carts', async () => {
     const row1 = makeInventoryRow({ id: 'inv-1', businessId: 'biz-1', sellerCountry: 'CM', ownerUserId: 'owner-1' });
     const row2 = makeInventoryRow({ id: 'inv-2', businessId: 'biz-2', sellerCountry: 'CA', ownerUserId: 'owner-2' });
-    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
-      business_inventory: [row1, row2],
-    });
+    mockInventory([row1, row2]);
 
     const dto: CheckoutPreflightDto = {
       items: [
@@ -377,9 +389,7 @@ describe('CheckoutPreflightService', () => {
       ownerUserId: 'owner-ca',
       payOnDelivery: true,
     });
-    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
-      business_inventory: [row],
-    });
+    mockInventory([row]);
     (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
     (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
 
@@ -404,9 +414,7 @@ describe('CheckoutPreflightService', () => {
       ownerUserId: 'owner-ca',
       payAtPickup: true,
     });
-    (hasuraSystemService.executeQuery as jest.Mock).mockResolvedValue({
-      business_inventory: [row],
-    });
+    mockInventory([row]);
     (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
     (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
 

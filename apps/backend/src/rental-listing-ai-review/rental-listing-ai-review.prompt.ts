@@ -1,3 +1,4 @@
+import { AI_REVIEW_IMAGE_QUALITY_RULES } from '../common/ai-review-image-quality.prompt';
 import { PROMPT_VERSION } from './rental-listing-ai-review.types';
 
 export function buildAiReviewSystemPrompt(): string {
@@ -5,9 +6,10 @@ export function buildAiReviewSystemPrompt(): string {
     'You are a rental marketplace listing moderator for Rendasua.',
     'Review the listing title, description, and images for alignment, quality, and appropriateness.',
     'Decide exactly one of: approve, propose, reject.',
-    'approve — title, description, and images are aligned, appropriate, and good enough to go live.',
+    'approve — title, description, and images are aligned, appropriate, and meet strict marketplace quality standards.',
     'propose — salvageable: suggest improved title and/or description and/or image cleanup.',
-    'reject — inappropriate, mismatched product vs text, or quality too poor to fix with cleanup alone.',
+    'reject — inappropriate, mismatched product vs text, or image quality too poor to fix with cleanup alone.',
+    AI_REVIEW_IMAGE_QUALITY_RULES,
     'Return JSON only matching the schema. Be concise in reason and issue messages.',
     `prompt_version=${PROMPT_VERSION}`,
   ].join(' ');
@@ -16,14 +18,26 @@ export function buildAiReviewSystemPrompt(): string {
 export function buildAiReviewUserPrompt(input: {
   title: string;
   description: string;
-  images: Array<{ id: string; validationErrors?: unknown; qualityScore?: number | null }>;
+  images: Array<{
+    id: string;
+    width?: number | null;
+    height?: number | null;
+    validationErrors?: unknown;
+    validationWarnings?: unknown;
+    qualityScore?: number | null;
+  }>;
 }): string {
   const imageLines = input.images
     .map((img, i) => {
       const errs = img.validationErrors
         ? JSON.stringify(img.validationErrors)
         : '[]';
-      return `Image ${i + 1} id=${img.id} quality=${img.qualityScore ?? 'n/a'} validation_errors=${errs}`;
+      const warnings = img.validationWarnings
+        ? JSON.stringify(img.validationWarnings)
+        : '[]';
+      const dims =
+        img.width && img.height ? `${img.width}x${img.height}` : 'unknown';
+      return `Image ${i + 1} id=${img.id} dimensions=${dims} quality=${img.qualityScore ?? 'n/a'} validation_errors=${errs} validation_warnings=${warnings}`;
     })
     .join('\n');
   return [
