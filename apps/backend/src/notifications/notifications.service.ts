@@ -56,6 +56,7 @@ import {
   buildOrderAcceptanceEscalationPushMessage,
   buildOrderAutoDeclinedPushMessage,
   buildOrderBusyPushMessage,
+  buildOrderNoAgentPushMessage,
   buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
   buildStockAvailabilityCheckPushMessage,
@@ -2337,6 +2338,39 @@ export class NotificationsService {
         channelId: 'order_offers',
       }
     );
+  }
+
+  /**
+   * Notify a client that dispatch escalation exhausted both search rounds
+   * without finding an available agent. Tapping opens a fallback modal
+   * (cancel or switch to pickup with the delivery fee waived).
+   */
+  async sendOrderNoAgentPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    canSwitchToPickup: boolean;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildOrderNoAgentPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        type: 'order_no_agent',
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        persona: 'client',
+        canSwitchToPickup: String(params.canSwitchToPickup),
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendOrderNoAgentPush failed: ${error?.message ?? String(error)}`);
+    }
   }
 
   /**

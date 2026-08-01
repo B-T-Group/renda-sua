@@ -54,6 +54,8 @@ export class StripeCaptureService {
   async captureOrderPaymentIntent(params: {
     orderId: string;
     orderNumber: string;
+    /** Capture a smaller amount than originally authorized (e.g. after a fee waiver). Omit for a full capture. */
+    captureAmount?: number;
   }): Promise<{ success: boolean; message?: string; captured?: boolean }> {
     const tx = await this.databaseService.getTransactionByEntityId(
       params.orderNumber
@@ -106,7 +108,10 @@ export class StripeCaptureService {
     try {
       const pi = await this.stripeService.capturePaymentIntent(
         tx.stripe_payment_intent_id,
-        `capture_${params.orderId}`
+        `capture_${params.orderId}`,
+        params.captureAmount != null
+          ? { amount: params.captureAmount, currency: tx.currency }
+          : undefined
       );
       if (pi.status === 'succeeded') {
         const capturedAt = new Date().toISOString();

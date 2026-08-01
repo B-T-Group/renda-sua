@@ -238,6 +238,23 @@ export function buildOrderBusyPushMessage(params: {
   };
 }
 
+export function buildOrderNoAgentPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Aucun livreur disponible',
+      body: `Nous n'avons pas encore trouvé de livreur pour la commande ${params.orderNumber}. Touchez pour voir vos options.`,
+    };
+  }
+  return {
+    title: 'No delivery agent found',
+    body: `We couldn't find an available delivery agent for order ${params.orderNumber} yet. Tap to see your options.`,
+  };
+}
+
 export function buildMerchantMissedOrderReminderPushMessage(params: {
   orderNumber: string;
   preferredLanguage?: string | null;

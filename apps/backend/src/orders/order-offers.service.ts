@@ -6,6 +6,10 @@ import type { Configuration } from '../config/configuration';
 import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+
+/** Final "round" value used to signal the exhaustion check rather than a real dispatch round. */
+const EXHAUSTION_CHECK_ROUND = 3;
 
 interface OfferOrderDetails {
   id: string;
@@ -15,6 +19,8 @@ interface OfferOrderDetails {
   fulfillment_method: string | null;
   currency: string;
   verified_agent_delivery: boolean;
+  dispatch_ready_at: string | null;
+  dispatch_round: number;
   business_location?: {
     name?: string | null;
     address?: {
@@ -93,7 +99,8 @@ export class OrderOffersService {
     private readonly commissionsService: CommissionsService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly eligibleAgentsQueryService: EligibleAgentsQueryService
+    private readonly eligibleAgentsQueryService: EligibleAgentsQueryService,
+    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService
   ) {}
 
   private get ttlSeconds(): number {
@@ -104,27 +111,61 @@ export class OrderOffersService {
     return this.configService.get('orderOffers')?.maxAgents ?? 5;
   }
 
+  private get round1RadiusKm(): number {
+    return this.configService.get('orderOffers')?.round1RadiusKm ?? 8;
+  }
+
+  private get round2RadiusKm(): number {
+    return this.configService.get('orderOffers')?.round2RadiusKm ?? 20;
+  }
+
+  private get roundGapSeconds(): number {
+    return (
+      this.configService.get('orderOffers')?.roundGapSeconds ??
+      this.ttlSeconds
+    );
+  }
+
   /**
-   * Fan out a one-round delivery offer to the closest eligible agents when an
-   * order becomes claimable. Idempotent: skips if offers already exist for the
-   * order. Errors are logged and swallowed so the caller (notification path)
-   * is never blocked.
+   * Entry point when an order becomes claimable (ready_for_pickup). If the
+   * dispatch gate (dispatch_ready_at) is still in the future, this is a
+   * no-op: `scheduleAgentDispatchGate` in OrdersService already scheduled
+   * the round 1 release via Step Functions. Otherwise dispatch round 1 now.
    */
   async dispatchOrderOffers(orderId: string): Promise<void> {
     try {
-      if (await this.hasExistingOffers(orderId)) {
+      const order = await this.getOrderForOffer(orderId);
+      if (!order || !this.isDispatchable(order)) return;
+
+      if (this.isDispatchGateOpen(order)) {
+        await this.runDispatchRound(orderId, 1);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to dispatch order offers for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
+   * Run a single dispatch round (1 = close radius, 2 = wide radius) or the
+   * final exhaustion check (round 3). Called directly when the dispatch gate
+   * opens immediately, and via the internal endpoint when Step Functions
+   * fires a scheduled round-release/exhaustion-check callback. Idempotent on
+   * `orders.dispatch_round` so duplicate callbacks are harmless.
+   */
+  async runDispatchRound(orderId: string, round: number): Promise<void> {
+    try {
+      const order = await this.getOrderForOffer(orderId);
+      if (!order || !this.isDispatchable(order)) return;
+      if (round === EXHAUSTION_CHECK_ROUND) {
+        await this.finalizeIfUnclaimed(order);
         return;
       }
-
-      const order = await this.getOrderForOffer(orderId);
-      if (!order) return;
-
-      if (
-        order.current_status !== 'ready_for_pickup' ||
-        order.assigned_agent_id ||
-        order.fulfillment_method === 'pickup'
-      ) {
-        return;
+      if (order.dispatch_round >= round) {
+        return; // already dispatched (or beyond) this round
       }
 
       const pickup = order.business_location?.address;
@@ -137,13 +178,22 @@ export class OrderOffersService {
         return;
       }
 
+      const maxDistanceKm =
+        round === 1 ? this.round1RadiusKm : this.round2RadiusKm;
       const candidates = await this.findClosestEligibleAgents(
         order,
         pickupLat,
-        pickupLon
+        pickupLon,
+        maxDistanceKm
       );
+
+      await this.markRoundDispatched(orderId, round);
+
       if (candidates.length === 0) {
-        this.logger.log(`No eligible agents for order offer ${orderId}`);
+        this.logger.log(
+          `No eligible agents within ${maxDistanceKm}km for order ${orderId} round ${round}`
+        );
+        await this.scheduleNextStep(orderId, round);
         return;
       }
 
@@ -154,17 +204,217 @@ export class OrderOffersService {
 
       await this.insertOffers(order, candidates, earnings, expiresAt);
       await this.sendOfferPushes(order, candidates, earnings, expiresAt);
+      await this.scheduleNextStep(orderId, round);
 
       this.logger.log(
-        `Dispatched ${candidates.length} offer(s) for order ${order.order_number}`
+        `Dispatched round ${round} (${candidates.length} offer(s), <=${maxDistanceKm}km) for order ${order.order_number}`
       );
     } catch (error) {
       this.logger.error(
-        `Failed to dispatch order offers for ${orderId}: ${
+        `Failed to run dispatch round ${round} for ${orderId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
     }
+  }
+
+  private isDispatchable(order: OfferOrderDetails): boolean {
+    return (
+      order.current_status === 'ready_for_pickup' &&
+      !order.assigned_agent_id &&
+      order.fulfillment_method !== 'pickup'
+    );
+  }
+
+  private isDispatchGateOpen(order: OfferOrderDetails): boolean {
+    if (!order.dispatch_ready_at) return true;
+    return new Date(order.dispatch_ready_at).getTime() <= Date.now();
+  }
+
+  /** After round 1 -> schedule round 2. After round 2 -> schedule the exhaustion check. */
+  private async scheduleNextStep(
+    orderId: string,
+    completedRound: number
+  ): Promise<void> {
+    const nextRound =
+      completedRound === 1 ? 2 : EXHAUSTION_CHECK_ROUND;
+    await this.waitAndExecuteScheduleService.scheduleDispatchRound(
+      orderId,
+      nextRound,
+      this.roundGapSeconds
+    );
+  }
+
+  private async markRoundDispatched(
+    orderId: string,
+    round: number
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation MarkDispatchRound($id: uuid!, $round: smallint!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { dispatch_round: $round, updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: orderId, round }
+    );
+  }
+
+  /**
+   * Called after both dispatch rounds have run. If the order is still
+   * unclaimed, mark it exhausted and notify the client with the cancel /
+   * switch-to-pickup fallback.
+   */
+  private async finalizeIfUnclaimed(order: OfferOrderDetails): Promise<void> {
+    if (order.dispatch_round < 2) {
+      // Round 2 never ran (e.g. round 1 found agents but they let the offer
+      // expire without a claim happening via this service); nothing to do
+      // beyond what round 2 scheduling already covers.
+      return;
+    }
+    await this.markDispatchExhausted(order);
+  }
+
+  private async markDispatchExhausted(order: OfferOrderDetails): Promise<void> {
+    const exhaustedAt = new Date().toISOString();
+    // Guard on dispatch_exhausted_at still being null so duplicate exhaustion
+    // callbacks (SFN retries, re-POSTs to the internal endpoint) can't send
+    // the client a second "no agent found" push/message for the same order.
+    const result = await this.hasuraSystemService
+      .executeMutation<{
+        update_orders: { affected_rows: number } | null;
+      }>(
+        `mutation MarkDispatchExhausted($id: uuid!, $at: timestamptz!) {
+          update_orders(
+            where: { id: { _eq: $id }, dispatch_exhausted_at: { _is_null: true } }
+            _set: { dispatch_exhausted_at: $at, updated_at: "now()" }
+          ) { affected_rows }
+        }`,
+        { id: order.id, at: exhaustedAt }
+      )
+      .catch(() => null);
+    if (!result?.update_orders?.affected_rows) return;
+    this.logger.warn(
+      `Dispatch exhausted for order ${order.order_number}; notifying client`
+    );
+    await this.notifyClientNoAgentFound(order).catch((error) =>
+      this.logger.warn(
+        `notifyClientNoAgentFound failed for ${order.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    );
+  }
+
+  private async notifyClientNoAgentFound(
+    order: OfferOrderDetails
+  ): Promise<void> {
+    const client = await this.getClientForNoAgentNotice(order.id);
+    if (!client?.userId) return;
+    const canSwitchToPickup = await this.businessSupportsPickup(order);
+    await this.insertNoAgentUserMessage(order, client.userId, canSwitchToPickup);
+    await this.notificationsService.sendOrderNoAgentPush({
+      clientUserId: client.userId,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      preferredLanguage: client.preferredLanguage,
+      canSwitchToPickup,
+    });
+  }
+
+  private async insertNoAgentUserMessage(
+    order: OfferOrderDetails,
+    clientUserId: string,
+    canSwitchToPickup: boolean
+  ): Promise<void> {
+    const message = JSON.stringify({
+      i18nKey: 'orders.noAgentFound.message',
+      params: { orderNumber: order.order_number },
+    });
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertNoAgentMessage(
+        $userId: uuid!
+        $entityId: uuid!
+        $message: String!
+        $payload: jsonb!
+      ) {
+        insert_user_messages_one(object: {
+          user_id: $userId
+          entity_type: order
+          entity_id: $entityId
+          message: $message
+          message_type: DELIVERY_NO_AGENT
+          message_payload: $payload
+          is_immutable: true
+        }) { id }
+      }`,
+      {
+        userId: clientUserId,
+        entityId: order.id,
+        message,
+        payload: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          canSwitchToPickup,
+        },
+      }
+    );
+  }
+
+  private async getClientForNoAgentNotice(orderId: string): Promise<{
+    userId: string | null;
+    preferredLanguage: string | null;
+  } | null> {
+    const query = `
+      query ClientForNoAgent($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          client {
+            user_id
+            user { preferred_language }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: {
+        client?: {
+          user_id?: string | null;
+          user?: { preferred_language?: string | null } | null;
+        } | null;
+      } | null;
+    }>(query, { orderId });
+    const client = result?.orders_by_pk?.client;
+    if (!client) return null;
+    return {
+      userId: client.user_id ?? null,
+      preferredLanguage: client.user?.preferred_language ?? null,
+    };
+  }
+
+  private async businessSupportsPickup(
+    order: OfferOrderDetails
+  ): Promise<boolean> {
+    const query = `
+      query OrderItemsPickupEligibility($orderId: uuid!) {
+        order_items(where: { order_id: { _eq: $orderId } }) {
+          business_inventory {
+            item { pay_at_pickup_enabled }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      order_items: Array<{
+        business_inventory?: {
+          item?: { pay_at_pickup_enabled?: boolean | null } | null;
+        } | null;
+      }>;
+    }>(query, { orderId: order.id });
+    const items = result?.order_items ?? [];
+    if (items.length === 0) return false;
+    return items.every(
+      (oi) => oi.business_inventory?.item?.pay_at_pickup_enabled === true
+    );
   }
 
   /**
@@ -471,20 +721,6 @@ export class OrderOffersService {
     });
   }
 
-  private async hasExistingOffers(orderId: string): Promise<boolean> {
-    const query = `
-      query ExistingOffers($orderId: uuid!) {
-        order_offers(where: { order_id: { _eq: $orderId } }, limit: 1) {
-          id
-        }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      orderId,
-    });
-    return (result?.order_offers?.length ?? 0) > 0;
-  }
-
   private async getOrderForOffer(
     orderId: string
   ): Promise<OfferOrderDetails | null> {
@@ -498,6 +734,8 @@ export class OrderOffersService {
           fulfillment_method
           currency
           verified_agent_delivery
+          dispatch_ready_at
+          dispatch_round
           business {
             name
           }
@@ -522,7 +760,8 @@ export class OrderOffersService {
   private async findClosestEligibleAgents(
     order: OfferOrderDetails,
     pickupLat: number,
-    pickupLon: number
+    pickupLon: number,
+    maxDistanceKm: number
   ): Promise<CandidateAgent[]> {
     const businessCountry = order.business_location?.address?.country;
     const businessState = order.business_location?.address?.state;
@@ -534,6 +773,7 @@ export class OrderOffersService {
         targetCountry: businessCountry ?? '',
         targetState: businessState ?? '',
         internalOnly: order.verified_agent_delivery,
+        maxDistanceKm,
       }
     );
 
@@ -610,13 +850,32 @@ export class OrderOffersService {
       expires_at: expiresAt,
     }));
     const mutation = `
-      mutation InsertOffers($objects: [order_offers_insert_input!]!) {
-        insert_order_offers(objects: $objects) {
+      mutation UpsertOffers($objects: [order_offers_insert_input!]!) {
+        insert_order_offers(
+          objects: $objects
+          on_conflict: {
+            constraint: order_offers_order_agent_unique
+            update_columns: [
+              status
+              distance_km
+              estimated_earnings
+              currency
+              expires_at
+              responded_at
+            ]
+          }
+        ) {
           affected_rows
         }
       }
     `;
-    await this.hasuraSystemService.executeMutation(mutation, { objects });
+    const objectsWithResetResponse = objects.map((o) => ({
+      ...o,
+      responded_at: null,
+    }));
+    await this.hasuraSystemService.executeMutation(mutation, {
+      objects: objectsWithResetResponse,
+    });
   }
 
   private async sendOfferPushes(
@@ -638,13 +897,29 @@ export class OrderOffersService {
           .sendOrderOfferPush({
             userId: c.userId,
             title: 'New delivery available',
-            body: `Pickup: ${businessName} (${distance} km away)${earningsText} - Tap to respond`,
+            body: `Pickup: ${businessName} (${distance} km away)${earningsText} - Only claim if you can head there now to pick up - Tap to respond`,
             orderId: order.id,
             expiresAt,
             ttlSeconds: this.ttlSeconds,
           })
           .catch(() => undefined);
       })
+    );
+  }
+
+  /**
+   * Cancel all outstanding offers for an order (e.g. when the client switches
+   * to pickup or cancels while dispatch is exhausted).
+   */
+  async cancelAllOffers(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation CancelAllOffers($orderId: uuid!) {
+        update_order_offers(
+          where: { order_id: { _eq: $orderId }, status: { _eq: "offered" } }
+          _set: { status: "cancelled", responded_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { orderId }
     );
   }
 

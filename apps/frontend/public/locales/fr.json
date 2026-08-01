@@ -3421,7 +3421,8 @@
     "cashExceptionWarning": "À utiliser uniquement si le client ne peut pas effectuer le paiement mobile à la livraison. L’entreprise devra le rapprocher manuellement.",
     "cashExceptionNotes": "Notes (facultatif)",
     "cashExceptionRecorded": "Exception espèces enregistrée. Rapprochement côté commerce requis.",
-    "cashExceptionFailed": "Impossible d’enregistrer l’exception espèces"
+    "cashExceptionFailed": "Impossible d’enregistrer l’exception espèces",
+    "switchToPickupFailed": "Impossible de passer au retrait en magasin."
   },
   "orderHistory": {
     "changedBy": "Modifié par",
@@ -3433,6 +3434,15 @@
     "cashReconciliationViewBanner": "Affichage des commandes en attente de rapprochement espèces. Ouvrez une commande pour encaisser le paiement mobile et déclencher les versements.",
     "cashReconciliationClearFilter": "Afficher toutes les commandes",
     "noCashReconciliationOrders": "Aucune commande n'est en attente de rapprochement espèces pour le moment.",
+    "noAgent": {
+      "title": "Aucun livreur n'a été trouvé à proximité",
+      "description": "La commande #{{orderNumber}} est prête, mais aucun livreur ne l'a encore récupérée. Vous pouvez passer au retrait en magasin (frais de livraison annulés) ou annuler la commande.",
+      "bannerTitle": "Aucun livreur n'a été trouvé à proximité",
+      "bannerBody": "Passez au retrait en magasin (frais annulés) ou annulez la commande.",
+      "switchToPickup": "Passer au retrait en magasin (frais annulés)",
+      "switchedSuccess": "Passé au retrait en magasin. Les frais de livraison ont été annulés.",
+      "messagePlain": "Aucun livreur n'a été trouvé à proximité pour la commande #{{orderNumber}}. Consultez votre commande pour voir les options."
+    },
     "trackYourOrder": {
       "cta": "Suivre ma commande",
       "goToOrder": "Voir la commande",

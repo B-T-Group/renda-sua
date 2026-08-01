@@ -24,6 +24,7 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
 import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
@@ -61,6 +62,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     FailedDeliveriesController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
+    OrderDispatchInternalController,
     BusinessAvailabilityController,
   ],
   providers: [

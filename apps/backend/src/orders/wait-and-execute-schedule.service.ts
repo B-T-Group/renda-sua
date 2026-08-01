@@ -10,6 +10,7 @@ import { Configuration } from '../config/configuration';
 export interface WaitExecutePayload {
   order_id: string;
   transaction_id?: string;
+  round?: number;
 }
 
 @Injectable()
@@ -64,6 +65,23 @@ export class WaitAndExecuteScheduleService {
     waitSeconds: number
   ): Promise<void> {
     await this.scheduleEvent(eventType, payload, Math.max(1, waitSeconds));
+  }
+
+  /**
+   * Schedule an agent-dispatch round: fired when the dispatch gate opens
+   * (round 1) or when a round's offer TTL elapses without a claim (round 2 /
+   * final exhaustion check).
+   */
+  async scheduleDispatchRound(
+    orderId: string,
+    round: number,
+    waitSeconds: number
+  ): Promise<void> {
+    await this.scheduleEvent(
+      'order.dispatch_round',
+      { order_id: orderId, round },
+      Math.max(1, waitSeconds)
+    );
   }
 
   private async scheduleEvent(

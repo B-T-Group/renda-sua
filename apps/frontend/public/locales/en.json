@@ -3673,6 +3673,7 @@
     "requestPayment": "Request payment",
     "requestPickupPayment": "Request pickup payment",
     "confirmClientPickup": "Confirm pickup",
+    "switchToPickupFailed": "Could not switch to store pickup.",
     "markPaidInCash": "Mark paid in cash",
     "payAtDeliveryPaymentInitiated": "Payment request sent to the client",
     "payAtDeliveryPaymentFailed": "Failed to initiate payment",
@@ -3692,6 +3693,15 @@
     "cashReconciliationViewBanner": "Showing only orders pending cash reconciliation. Open an order to collect mobile payment and settle payouts.",
     "cashReconciliationClearFilter": "Show all orders",
     "noCashReconciliationOrders": "No orders are waiting for cash reconciliation right now.",
+    "noAgent": {
+      "title": "We couldn't find a nearby courier",
+      "description": "Order #{{orderNumber}} is ready, but no delivery agent has picked it up yet. You can switch to store pickup with the delivery fee waived, or cancel the order.",
+      "bannerTitle": "We couldn't find a nearby courier",
+      "bannerBody": "Switch to store pickup (fee waived) or cancel the order.",
+      "switchToPickup": "Switch to store pickup (fee waived)",
+      "switchedSuccess": "Switched to store pickup. The delivery fee has been waived.",
+      "messagePlain": "We couldn't find a nearby courier for order #{{orderNumber}}. Check your order for options."
+    },
     "trackYourOrder": {
       "cta": "Track your order",
       "goToOrder": "Go to order",

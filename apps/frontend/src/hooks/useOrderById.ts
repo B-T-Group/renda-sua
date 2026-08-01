@@ -10,6 +10,10 @@ export interface OrderData {
   assigned_agent_id?: string;
   delivery_address_id?: string | null;
   fulfillment_method?: 'delivery' | 'pickup';
+  dispatch_ready_at?: string | null;
+  pickup_by?: string | null;
+  dispatch_round?: number | null;
+  dispatch_exhausted_at?: string | null;
   subtotal?: number; // Optional for agents
   base_delivery_fee?: number; // Optional for agents
   per_km_delivery_fee?: number; // Optional for agents

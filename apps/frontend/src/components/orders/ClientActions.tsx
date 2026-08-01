@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, Undo } from '@mui/icons-material';
+import { Cancel, CheckCircle, Storefront, Undo } from '@mui/icons-material';
 import { Box, Button } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,10 +31,11 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
-  const { completeOrder } = useBackendOrders();
+  const { completeOrder, switchToPickup } = useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [switchingToPickup, setSwitchingToPickup] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -69,6 +70,29 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       );
     } finally {
       setCompleting(false);
+    }
+  };
+
+  const handleSwitchToPickup = async () => {
+    setSwitchingToPickup(true);
+    try {
+      await switchToPickup(order.id);
+      onShowNotification?.(
+        t(
+          'orders.noAgent.switchedSuccess',
+          'Switched to store pickup. The delivery fee has been waived.'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('orderActions.switchToPickupFailed', 'Could not switch to store pickup.'),
+        'error'
+      );
+    } finally {
+      setSwitchingToPickup(false);
     }
   };
 
@@ -107,6 +131,25 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         action: handleCancelClick,
         color: 'error',
         icon: <Cancel />,
+      });
+    }
+
+    if (
+      order.current_status === 'ready_for_pickup' &&
+      !order.assigned_agent_id &&
+      order.fulfillment_method !== 'pickup' &&
+      !!order.dispatch_exhausted_at
+    ) {
+      actions.push({
+        label: t(
+          'orders.noAgent.switchToPickup',
+          'Switch to store pickup (fee waived)'
+        ),
+        action: () => void handleSwitchToPickup(),
+        color: 'success',
+        icon: <Storefront />,
+        variant: 'contained',
+        loading: switchingToPickup,
       });
     }
 

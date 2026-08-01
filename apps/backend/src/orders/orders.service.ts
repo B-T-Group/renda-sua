@@ -1341,6 +1341,12 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     await this.ensurePickupPinIfNeeded(order);
+    // Persist the dispatch gate BEFORE flipping the status: the status write
+    // below fires an async event that triggers dispatchOrderOffers, which
+    // reads dispatch_ready_at to decide whether to dispatch immediately. If
+    // that event were allowed to race ahead of this write, it could see a
+    // null dispatch_ready_at and dispatch agents too early.
+    const dispatchSchedule = await this.scheduleAgentDispatchGate(order);
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup'
@@ -1353,6 +1359,7 @@ export class OrdersService {
       user.id,
       request.notes
     );
+    await this.scheduleDispatchRelease(order.id, dispatchSchedule);
     return {
       success: true,
       order: updatedOrder,
@@ -1360,11 +1367,241 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Compute when agent dispatch/open-order visibility should open for a newly
+   * ready_for_pickup order (dispatch lead time before the scheduled delivery/
+   * pickup window) and persist it. Delivery orders only; pickup orders are
+   * never dispatched. Returns null for pickup orders or on failure.
+   */
+  private async scheduleAgentDispatchGate(
+    order: Orders
+  ): Promise<{ dispatchReadyAt: Date; pickupBy: Date | null } | null> {
+    if ((order as any).fulfillment_method === 'pickup') return null;
+    try {
+      const schedule = await this.computeDispatchSchedule(order);
+      await this.persistDispatchSchedule(
+        order.id,
+        schedule.dispatchReadyAt,
+        schedule.pickupBy
+      );
+      return schedule;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to schedule agent dispatch gate for order ${order.id}: ${error?.message}`
+      );
+      return null;
+    }
+  }
+
+  /** Schedules the round-1 Step Functions release when the dispatch gate is in the future. */
+  private async scheduleDispatchRelease(
+    orderId: string,
+    schedule: { dispatchReadyAt: Date; pickupBy: Date | null } | null
+  ): Promise<void> {
+    if (!schedule) return;
+    const waitSeconds = Math.round(
+      (schedule.dispatchReadyAt.getTime() - Date.now()) / 1000
+    );
+    if (waitSeconds <= 0) return;
+    try {
+      await this.waitAndExecuteScheduleService.scheduleDispatchRound(
+        orderId,
+        1,
+        waitSeconds
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to schedule dispatch release for order ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  /**
+   * Resolve the confirmed delivery window (if any) into UTC dispatch/pickup
+   * timestamps. Falls back to "dispatch now" when there is no future window.
+   */
+  private async computeDispatchSchedule(
+    order: Orders
+  ): Promise<{ dispatchReadyAt: Date; pickupBy: Date | null }> {
+    const now = new Date();
+    const window = (order as any).delivery_time_windows?.[0];
+    if (!window?.is_confirmed || !window.preferred_date || !window.time_slot_start) {
+      return { dispatchReadyAt: now, pickupBy: null };
+    }
+    const countryCode =
+      order.business_location?.address?.country ||
+      order.delivery_address?.country ||
+      'GA';
+    const timezone = await this.resolveOrderDeliveryTimezone(
+      order,
+      countryCode
+    );
+    const [startHours, startMinutes] = window.time_slot_start
+      .split(':')
+      .map(Number);
+    const windowStart = this.createDateTimeInTimezone(
+      window.preferred_date,
+      startHours,
+      startMinutes,
+      timezone
+    );
+    const leadMinutes =
+      this.configService.get<Configuration['orderOffers']>('orderOffers')
+        ?.dispatchLeadMinutes ?? 30;
+    const dispatchReadyAt = new Date(
+      windowStart.getTime() - leadMinutes * 60 * 1000
+    );
+    return {
+      dispatchReadyAt: dispatchReadyAt < now ? now : dispatchReadyAt,
+      pickupBy: windowStart,
+    };
+  }
+
+  private async persistDispatchSchedule(
+    orderId: string,
+    dispatchReadyAt: Date,
+    pickupBy: Date | null
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation SetDispatchSchedule(
+        $id: uuid!, $dispatchReadyAt: timestamptz!, $pickupBy: timestamptz
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            dispatch_ready_at: $dispatchReadyAt
+            pickup_by: $pickupBy
+            dispatch_round: 0
+            dispatch_exhausted_at: null
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      {
+        id: orderId,
+        dispatchReadyAt: dispatchReadyAt.toISOString(),
+        pickupBy: pickupBy ? pickupBy.toISOString() : null,
+      }
+    );
+  }
+
   async completePreparationBatch(
     request: BatchOrderStatusChangeRequest
   ): Promise<BatchOrderStatusChangeResult> {
     return this.processBatch(request, (orderId) =>
       this.completePreparation({ orderId, notes: request.notes })
+    );
+  }
+
+  /**
+   * Client fallback after dispatch escalation is exhausted (no agent found
+   * in either radius round): switch the order to store pickup and waive the
+   * delivery fee. Any outstanding agent offers are cancelled.
+   */
+  async switchToPickup(
+    orderId: string
+  ): Promise<{ success: boolean; order: Orders | null; message: string }> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'client',
+      'Only clients can switch an order to store pickup'
+    );
+    const order = await this.getOrderDetails(orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    this.assertSwitchToPickupAllowed(order, user.id);
+    if (!(await this.businessSupportsPickupForOrder(order))) {
+      throw new HttpException(
+        'Store pickup is not available for this order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.applySwitchToPickup(order);
+    await this.orderOffersService.cancelAllOffers(orderId);
+    const updatedOrder = await this.getOrderDetails(orderId);
+    if (updatedOrder) {
+      await this.ensurePickupPinIfNeeded(updatedOrder);
+    }
+    return {
+      success: true,
+      order: await this.getOrderDetails(orderId),
+      message: 'Order switched to store pickup; delivery fee waived',
+    };
+  }
+
+  private assertSwitchToPickupAllowed(order: Orders, userId: string): void {
+    if (order.client?.user_id !== userId) {
+      throw new HttpException(
+        'Unauthorized to modify this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if ((order as any).fulfillment_method === 'pickup') {
+      throw new HttpException(
+        'Order is already a store pickup order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'ready_for_pickup' || order.assigned_agent_id) {
+      throw new HttpException(
+        'Switching to pickup is only available while no agent is assigned',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!(order as any).dispatch_exhausted_at) {
+      throw new HttpException(
+        'Switching to pickup is only available after we could not find a delivery agent',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async businessSupportsPickupForOrder(order: Orders): Promise<boolean> {
+    const query = `
+      query OrderItemsPickupEligibility($orderId: uuid!) {
+        order_items(where: { order_id: { _eq: $orderId } }) {
+          business_inventory {
+            item { pay_at_pickup_enabled }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      order_items: Array<{
+        business_inventory?: {
+          item?: { pay_at_pickup_enabled?: boolean | null } | null;
+        } | null;
+      }>;
+    }>(query, { orderId: order.id });
+    const items = result?.order_items ?? [];
+    if (items.length === 0) return false;
+    return items.every(
+      (oi) => oi.business_inventory?.item?.pay_at_pickup_enabled === true
+    );
+  }
+
+  private async applySwitchToPickup(order: Orders): Promise<void> {
+    const baseFee = Number((order as any).base_delivery_fee ?? 0);
+    const perKmFee = Number((order as any).per_km_delivery_fee ?? 0);
+    const newTotal = Math.max(0, Number(order.total_amount) - baseFee - perKmFee);
+    await this.hasuraSystemService.executeMutation(
+      `mutation SwitchToPickup($id: uuid!, $total: numeric!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            fulfillment_method: pickup
+            base_delivery_fee: 0
+            per_km_delivery_fee: 0
+            total_amount: $total
+            dispatch_ready_at: null
+            dispatch_round: 0
+            dispatch_exhausted_at: null
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: order.id, total: newTotal }
     );
   }
 
@@ -4592,8 +4829,8 @@ export class OrdersService {
     // but all financial fields will be removed in transformation. Financial fields like total_amount,
     // order_holds, and order item prices are excluded.
     const query = `
-      query OpenOrders {
-        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_neq: pickup}}]}) {
+      query OpenOrders($now: timestamptz!) {
+        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_neq: pickup}}, {_or: [{dispatch_ready_at: {_is_null: true}}, {dispatch_ready_at: {_lte: $now}}]}]}) {
           id
           order_number
           subtotal
@@ -4662,7 +4899,9 @@ export class OrdersService {
       }
     `;
 
-    const result = await this.hasuraSystemService.executeQuery(query);
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      now: new Date().toISOString(),
+    });
 
     // Exclude orders with a pending claim_order mobile payment (another agent may be completing topup)
     const pendingClaimOrderNumbers =
@@ -5793,6 +6032,10 @@ export class OrdersService {
           client_id
           delivery_address_id
           fulfillment_method
+          dispatch_ready_at
+          pickup_by
+          dispatch_round
+          dispatch_exhausted_at
           client {
             user_id
             user {
@@ -6699,9 +6942,14 @@ export class OrdersService {
       return;
     }
 
+    const isPickup = (order as any).fulfillment_method === 'pickup';
     const result = await this.stripeCaptureService.captureOrderPaymentIntent({
       orderId: order.id,
       orderNumber: order.order_number,
+      // Pickup orders may have switched from delivery with a waived delivery
+      // fee after the Stripe authorization was placed; capture only the
+      // current (possibly lower) total so Stripe releases the difference.
+      ...(isPickup ? { captureAmount: Number(order.total_amount) } : {}),
     });
     if (!result.success) {
       throw new HttpException(

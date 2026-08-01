@@ -261,6 +261,14 @@ export interface OrderOffersConfig {
   ttlSeconds: number;
   /** Maximum number of closest agents that receive the offer per round. */
   maxAgents: number;
+  /** Minutes before the scheduled delivery/pickup window that agent dispatch opens. */
+  dispatchLeadMinutes: number;
+  /** Round 1 (closest agents) search radius in km. */
+  round1RadiusKm: number;
+  /** Round 2 (escalated) search radius in km. */
+  round2RadiusKm: number;
+  /** Seconds to wait after a round's offers expire before escalating/finalizing. */
+  roundGapSeconds: number;
 }
 
 /** Checkout-time delivery availability gate (rule-based). */
@@ -779,6 +787,18 @@ export default (): Configuration => {
     orderOffers: {
       ttlSeconds: parseInt(process.env.OFFER_TTL_SECONDS ?? '180', 10),
       maxAgents: parseInt(process.env.OFFER_MAX_AGENTS ?? '5', 10),
+      dispatchLeadMinutes: parseInt(
+        process.env.OFFER_DISPATCH_LEAD_MINUTES ?? '30',
+        10
+      ),
+      round1RadiusKm: parseFloat(process.env.OFFER_ROUND1_RADIUS_KM ?? '8'),
+      round2RadiusKm: parseFloat(process.env.OFFER_ROUND2_RADIUS_KM ?? '20'),
+      roundGapSeconds: parseInt(
+        process.env.OFFER_ROUND_GAP_SECONDS ??
+          process.env.OFFER_TTL_SECONDS ??
+          '180',
+        10
+      ),
     },
     deliveryAvailability: {
       enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',

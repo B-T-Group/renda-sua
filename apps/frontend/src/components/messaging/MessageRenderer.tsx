@@ -35,6 +35,13 @@ function parseDisplayMessage(
         { businessName: parsed.params.businessName }
       );
     }
+    if (parsed.i18nKey === 'orders.noAgentFound.message' && parsed.params?.orderNumber) {
+      return t(
+        'orders.noAgent.messagePlain',
+        "We couldn't find a nearby courier for order #{{orderNumber}}. Check your order for options.",
+        { orderNumber: parsed.params.orderNumber }
+      );
+    }
   } catch {
     // plain text
   }

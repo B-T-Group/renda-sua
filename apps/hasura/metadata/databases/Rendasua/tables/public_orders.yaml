@@ -203,6 +203,10 @@ select_permissions:
         - cancelled_by
         - cancellation_reason_id
         - cancellation_notes
+        - dispatch_ready_at
+        - pickup_by
+        - dispatch_round
+        - dispatch_exhausted_at
       filter:
         assigned_agent:
           user:
@@ -267,6 +271,10 @@ select_permissions:
         - accepted_at
         - busy_extra_prep_minutes
         - estimated_prep_minutes
+        - dispatch_ready_at
+        - pickup_by
+        - dispatch_round
+        - dispatch_exhausted_at
       filter:
         business:
           user:
@@ -330,6 +338,10 @@ select_permissions:
         - accepted_at
         - busy_extra_prep_minutes
         - estimated_prep_minutes
+        - dispatch_ready_at
+        - pickup_by
+        - dispatch_round
+        - dispatch_exhausted_at
       filter:
         client:
           user:

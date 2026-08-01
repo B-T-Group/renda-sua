@@ -734,6 +734,44 @@ export const useBackendOrders = () => {
     }, 'orders.completing');
   };
 
+  /**
+   * Client fallback after agent dispatch escalation is exhausted: switch the
+   * order to store pickup and waive the delivery fee.
+   */
+  const switchToPickup = async (
+    orderId: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          '/orders/switch-to-pickup',
+          { orderId }
+        );
+
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to switch order to store pickup'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to switch order to store pickup';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.switchingToPickup');
+  };
+
   const completeDelivery = async (
     request: CompleteDeliveryRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -1051,6 +1089,7 @@ export const useBackendOrders = () => {
 
     // Client methods
     completeOrder,
+    switchToPickup,
 
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,

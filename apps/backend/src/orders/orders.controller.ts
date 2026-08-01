@@ -848,6 +848,29 @@ export class OrdersController {
     return this.ordersService.cancelOrder(request);
   }
 
+  @Post('switch-to-pickup')
+  @ApiOperation({
+    summary: 'Switch an order to store pickup (delivery fee waived)',
+    description:
+      'Client-only fallback after dispatch escalation could not find a delivery agent (orders.dispatch_exhausted_at set). Switches fulfillment_method to pickup and waives the delivery fee.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Order switched to store pickup' })
+  @ApiResponse({ status: 400, description: 'Order not eligible to switch to pickup' })
+  @ApiResponse({ status: 403, description: 'Unauthorized to modify this order' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async switchToPickup(@Body() body: { orderId: string }) {
+    return this.ordersService.switchToPickup(body.orderId);
+  }
+
   @Post('refund')
   async refundOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.refundOrder(request);
