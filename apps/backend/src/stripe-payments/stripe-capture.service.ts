@@ -230,9 +230,31 @@ export class StripeCaptureService {
       return { success: true, skipped: true, message: 'No Stripe transaction' };
     }
     if (tx.status === 'success') {
-      return { success: false, message: 'Payment already captured; use refund' };
-    }
-    if (
+      // Status drift: DB says captured but Stripe may still be requires_capture.
+      try {
+        const pi = await this.stripeService.retrievePaymentIntent(
+          tx.stripe_payment_intent_id
+        );
+        if (pi.status === 'requires_capture') {
+          this.logger.warn(
+            `Cancel PI: tx ${tx.id} marked success but PI requires_capture; cancelling auth`
+          );
+        } else if (pi.status === 'canceled') {
+          await this.databaseService.updateTransaction(tx.id, {
+            status: 'cancelled',
+            error_message: 'PaymentIntent already canceled on Stripe',
+          });
+          return { success: true, skipped: true, message: 'Already canceled' };
+        } else {
+          return { success: false, message: 'Payment already captured; use refund' };
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          message: error?.message || 'Payment already captured; use refund',
+        };
+      }
+    } else if (
       tx.status !== 'authorized' &&
       tx.status !== 'capture_pending' &&
       tx.status !== 'pending'

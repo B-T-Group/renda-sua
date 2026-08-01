@@ -99,33 +99,60 @@ export class StripeRefundService {
         };
       }
 
-      if (transaction.status === 'authorized' || transaction.status === 'capture_pending') {
-        if (!transaction.stripe_payment_intent_id) {
-          return {
-            success: false,
-            message: 'No payment intent ID found for authorized transaction',
-          };
-        }
-        if (params.refundType === 'cancellation') {
-          this.logger.log(
-            `Stripe payment for order ${params.orderNumber} is authorized; cancelling authorization instead of refund`
-          );
-          await this.stripeService.cancelPaymentIntent(
-            transaction.stripe_payment_intent_id,
-            `cancel_refund_${params.orderId}`
-          );
-          await this.databaseService.updateTransaction(transaction.id, {
-            status: 'cancelled',
-            error_message: 'Authorization cancelled on order cancellation',
-          });
-          return {
-            success: true,
-            message: 'Payment authorization released (no charge was made)',
-          };
-        }
+      if (!transaction.stripe_payment_intent_id) {
         return {
           success: false,
-          message: 'Cannot post-delivery refund an uncaptured authorization',
+          message: 'No payment intent ID found for this transaction',
+        };
+      }
+
+      const localUncaptured =
+        transaction.status === 'authorized' ||
+        transaction.status === 'capture_pending';
+      if (localUncaptured) {
+        if (params.refundType !== 'cancellation') {
+          return {
+            success: false,
+            message: 'Cannot post-delivery refund an uncaptured authorization',
+          };
+        }
+        return this.cancelUncapturedAuthorization(
+          transaction.id,
+          transaction.stripe_payment_intent_id,
+          params.orderId,
+          params.orderNumber
+        );
+      }
+
+      // DB may say success while Stripe still holds an uncaptured PI (status drift).
+      const pi = await this.stripeService.retrievePaymentIntent(
+        transaction.stripe_payment_intent_id
+      );
+      if (pi.status === 'requires_capture') {
+        if (params.refundType !== 'cancellation') {
+          return {
+            success: false,
+            message: 'Cannot post-delivery refund an uncaptured authorization',
+          };
+        }
+        this.logger.warn(
+          `Order ${params.orderNumber} tx=${transaction.status} but PI requires_capture; cancelling authorization`
+        );
+        return this.cancelUncapturedAuthorization(
+          transaction.id,
+          transaction.stripe_payment_intent_id,
+          params.orderId,
+          params.orderNumber
+        );
+      }
+      if (pi.status === 'canceled') {
+        await this.databaseService.updateTransaction(transaction.id, {
+          status: 'cancelled',
+          error_message: 'PaymentIntent already canceled on Stripe',
+        });
+        return {
+          success: true,
+          message: 'Payment authorization already released',
         };
       }
 
@@ -136,13 +163,6 @@ export class StripeRefundService {
         return {
           success: false,
           message: `Cannot refund order with payment status: ${transaction.status}`,
-        };
-      }
-
-      if (!transaction.stripe_payment_intent_id) {
-        return {
-          success: false,
-          message: 'No payment intent ID found for this transaction',
         };
       }
 
@@ -182,36 +202,54 @@ export class StripeRefundService {
         },
       });
 
-      const stripeRefund = await this.stripeService.createRefund({
-        paymentIntentId: transaction.stripe_payment_intent_id,
-        amount: refundAmountMinor,
-        reason: 'requested_by_customer',
-        metadata: {
-          orderId: params.orderId,
-          orderNumber: params.orderNumber,
-          refundType: params.refundType,
-          refundPaymentId: params.refundPaymentId ?? '',
-        },
-        idempotencyKey: params.idempotencyKey,
-      });
+      try {
+        const stripeRefund = await this.stripeService.createRefund({
+          paymentIntentId: transaction.stripe_payment_intent_id,
+          amount: refundAmountMinor,
+          reason: 'requested_by_customer',
+          metadata: {
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            refundType: params.refundType,
+            refundPaymentId: params.refundPaymentId ?? '',
+          },
+          idempotencyKey: params.idempotencyKey,
+        });
 
-      await this.databaseService.linkStripeRefundRecord(
-        refundRecord.id,
-        stripeRefund.id,
-        stripeRefund.status === 'succeeded' ? 'succeeded' : 'pending'
-      );
+        await this.databaseService.linkStripeRefundRecord(
+          refundRecord.id,
+          stripeRefund.id,
+          stripeRefund.status === 'succeeded' ? 'succeeded' : 'pending'
+        );
 
-      this.logger.log(
-        `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
-      );
+        this.logger.log(
+          `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
+        );
 
-      return {
-        success: true,
-        refundId: stripeRefund.id,
-        stripeRefundDbId: refundRecord.id,
-        immediateSuccess: stripeRefund.status === 'succeeded',
-        message: `Refund initiated: ${refundAmount} ${transaction.currency}`,
-      };
+        return {
+          success: true,
+          refundId: stripeRefund.id,
+          stripeRefundDbId: refundRecord.id,
+          immediateSuccess: stripeRefund.status === 'succeeded',
+          message: `Refund initiated: ${refundAmount} ${transaction.currency}`,
+        };
+      } catch (refundError: any) {
+        if (
+          params.refundType === 'cancellation' &&
+          this.isUncapturedChargeRefundError(refundError)
+        ) {
+          this.logger.warn(
+            `Refund rejected for uncaptured PI on order ${params.orderNumber}; cancelling authorization`
+          );
+          return this.cancelUncapturedAuthorization(
+            transaction.id,
+            transaction.stripe_payment_intent_id,
+            params.orderId,
+            params.orderNumber
+          );
+        }
+        throw refundError;
+      }
     } catch (error: any) {
       this.logger.error(
         `Failed to initiate Stripe refund for order ${params.orderNumber}: ${error.message}`,
@@ -222,6 +260,39 @@ export class StripeRefundService {
         message: `Failed to initiate refund: ${error.message}`,
       };
     }
+  }
+
+  private async cancelUncapturedAuthorization(
+    transactionId: string,
+    paymentIntentId: string,
+    orderId: string,
+    orderNumber: string
+  ): Promise<{ success: boolean; message: string }> {
+    this.logger.log(
+      `Cancelling uncaptured PaymentIntent for order ${orderNumber} (${paymentIntentId})`
+    );
+    await this.stripeService.cancelPaymentIntent(
+      paymentIntentId,
+      `cancel_refund_${orderId}`
+    );
+    await this.databaseService.updateTransaction(transactionId, {
+      status: 'cancelled',
+      error_message: 'Authorization cancelled on order cancellation',
+    });
+    return {
+      success: true,
+      message: 'Payment authorization released (no charge was made)',
+    };
+  }
+
+  private isUncapturedChargeRefundError(error: any): boolean {
+    const msg = String(error?.message || error || '').toLowerCase();
+    return (
+      msg.includes('uncaptured charge') ||
+      msg.includes('cancel the paymentintent') ||
+      msg.includes('cancel the payment intent') ||
+      (msg.includes('requires_capture') && msg.includes('refund'))
+    );
   }
 
   private toMinorUnits(amount: number, currency: string): number {

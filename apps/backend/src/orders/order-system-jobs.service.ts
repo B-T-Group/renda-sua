@@ -101,6 +101,7 @@ export class OrderSystemJobsService {
       return 'cancelled';
     }
     const ps = (order as any).payment_status as string | null;
+    // Manual-capture holds and any pending auth: always cancel the PaymentIntent.
     if (ps === 'authorized' || ps === 'pending') {
       await this.releaseStripeAuthorizationIfNeeded(order);
       return 'cancelled';
@@ -116,11 +117,28 @@ export class OrderSystemJobsService {
         this.logger.warn(
           `Stripe refund failed for auto-declined order ${order.order_number}: ${refund.message}`
         );
+        // Auth may still be open despite paid status drift — try cancel as fallback.
+        const cancel = await this.stripeCaptureService.cancelOrderPaymentIntent({
+          orderNumber: order.order_number,
+          orderId: order.id,
+        });
+        if (cancel.success && !cancel.skipped) {
+          return 'cancelled';
+        }
         // Keep paid so order.cancelled Lambda can retry the refund.
         return 'paid';
       }
+      // Refund service also cancels uncaptured PIs and returns this message.
+      if (
+        refund.message?.toLowerCase().includes('authorization released') ||
+        refund.message?.toLowerCase().includes('already released')
+      ) {
+        return 'cancelled';
+      }
       return 'refunded';
     }
+    // Unknown card status: still attempt auth cancel (no-op if already captured).
+    await this.releaseStripeAuthorizationIfNeeded(order);
     return 'cancelled';
   }
 
