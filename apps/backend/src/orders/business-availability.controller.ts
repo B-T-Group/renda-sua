@@ -7,8 +7,9 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
@@ -37,16 +38,7 @@ export class BusinessAvailabilityController {
     return user.business.id;
   }
 
-  @Get('business/reliability')
-  @ApiOperation({ summary: 'Get reliability KPIs for the current business' })
-  async getMyReliability() {
-    const businessId = await this.requireBusinessId();
-    return this.orderAcceptanceService.getReliability(businessId);
-  }
-
-  @Get('admin/businesses/:id/reliability')
-  @ApiOperation({ summary: 'Get reliability KPIs for a business (admin)' })
-  async getAdminReliability(@Param('id') id: string) {
+  private async requireCrossBusinessAdmin(): Promise<void> {
     const user = await this.hasuraUserService.getUser();
     const allowed = await this.rbacService.hasPermission(
       user.id,
@@ -55,6 +47,46 @@ export class BusinessAvailabilityController {
     if (!allowed) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+  }
+
+  @Get('business/reliability')
+  @ApiOperation({ summary: 'Get reliability KPIs for the current business' })
+  async getMyReliability() {
+    const businessId = await this.requireBusinessId();
+    return this.orderAcceptanceService.getReliability(businessId);
+  }
+
+  @Get('admin/businesses/reliability')
+  @ApiOperation({
+    summary: 'List least reliable businesses for superuser follow-up',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({
+    name: 'tier',
+    required: false,
+    enum: ['ok', 'warn', 'demote', 'restrict', 'suspend'],
+  })
+  @ApiQuery({ name: 'minAutoDeclines30d', required: false, type: Number })
+  async listAdminReliability(
+    @Query('limit') limit?: string,
+    @Query('tier') tier?: string,
+    @Query('minAutoDeclines30d') minAutoDeclines30d?: string
+  ) {
+    await this.requireCrossBusinessAdmin();
+    const parsedLimit = limit != null ? Number(limit) : undefined;
+    const parsedMin =
+      minAutoDeclines30d != null ? Number(minAutoDeclines30d) : undefined;
+    return this.orderAcceptanceService.listLeastReliableBusinesses({
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      tier,
+      minAutoDeclines30d: Number.isFinite(parsedMin) ? parsedMin : undefined,
+    });
+  }
+
+  @Get('admin/businesses/:id/reliability')
+  @ApiOperation({ summary: 'Get reliability KPIs for a business (admin)' })
+  async getAdminReliability(@Param('id') id: string) {
+    await this.requireCrossBusinessAdmin();
     return this.orderAcceptanceService.getReliability(id);
   }
 

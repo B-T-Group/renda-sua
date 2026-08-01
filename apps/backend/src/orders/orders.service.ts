@@ -5587,6 +5587,14 @@ export class OrdersService {
             orderId: order.id,
             orderNumber: order.order_number,
             senderName,
+            persona:
+              order.client?.user_id === recipientUserId
+                ? 'client'
+                : order.business?.user_id === recipientUserId
+                  ? 'business'
+                  : order.assigned_agent?.user_id === recipientUserId
+                    ? 'agent'
+                    : undefined,
           })
         )
       );

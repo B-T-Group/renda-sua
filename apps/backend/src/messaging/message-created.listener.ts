@@ -44,6 +44,7 @@ export class MessageCreatedListener {
     event: MessageCreatedEvent,
     recipient: { id: string; recipient_user_id: string; recipient_type: string }
   ): Promise<void> {
+    const persona = this.personaFromRecipientType(recipient.recipient_type);
     if (event.messageType === 'DELIVERY_PIN') {
       await this.notificationsService.sendDeliveryPinSharedPush({
         recipientUserId: recipient.recipient_user_id,
@@ -52,6 +53,7 @@ export class MessageCreatedListener {
         senderName: event.senderName,
         messageId: event.messageId,
         fulfillmentMethod: event.fulfillmentMethod,
+        persona,
       });
     } else if (recipient.recipient_type === 'mentioned') {
       await this.notificationsService.sendMentionPush({
@@ -60,6 +62,7 @@ export class MessageCreatedListener {
         orderNumber: event.orderNumber,
         senderName: event.senderName,
         messageId: event.messageId,
+        persona,
       });
     } else {
       await this.notificationsService.sendNewOrderMessagePush({
@@ -68,10 +71,17 @@ export class MessageCreatedListener {
         orderNumber: event.orderNumber,
         senderName: event.senderName,
         messageId: event.messageId,
+        persona,
       });
     }
 
     await this.markRecipientNotified(recipient.id);
+  }
+
+  private personaFromRecipientType(recipientType: string): string | undefined {
+    const t = recipientType?.trim().toLowerCase();
+    if (t === 'client' || t === 'agent' || t === 'business') return t;
+    return undefined;
   }
 
   private async fetchUnnotifiedRecipients(messageId: string): Promise<

@@ -402,6 +402,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/business-reliability"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminBusinessReliabilityPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/location-transfers"
               element={
                 <ProtectedRoute>

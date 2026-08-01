@@ -308,6 +308,21 @@ export function useBusinessDashboardModules({
       },
       {
         title: t(
+          'business.dashboard.businessReliability',
+          'Business reliability'
+        ),
+        description: t(
+          'business.dashboard.businessReliabilityDescription',
+          'Top least reliable merchants by acceptance score'
+        ),
+        icon: <BizIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#bf360c',
+        requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        path: '/admin/business-reliability',
+      },
+      {
+        title: t(
           'business.dashboard.locationTransfers',
           'Location transfers'
         ),

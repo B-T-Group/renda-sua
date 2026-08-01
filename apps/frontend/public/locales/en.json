@@ -630,6 +630,32 @@
         "captionEventSubject": "Each slice: one CTA type and one subject together (e.g. browse on a given product)."
       }
     },
+    "businessReliability": {
+      "title": "Business reliability",
+      "subtitle": "Least reliable merchants by acceptance score — use this to follow up instead of per-order alerts.",
+      "tier": "Tier",
+      "allTiers": "All tiers",
+      "limit": "Limit",
+      "paused": "Paused",
+      "empty": "No businesses match these filters.",
+      "tiers": {
+        "ok": "OK",
+        "warn": "Warn",
+        "demote": "Demote",
+        "restrict": "Restrict",
+        "suspend": "Suspend"
+      },
+      "columns": {
+        "business": "Business",
+        "score": "Score",
+        "tier": "Tier",
+        "autoDeclines30d": "Auto-declines (30d)",
+        "acceptanceRate": "Acceptance %",
+        "avgAccept": "Avg accept (s)",
+        "lifecycle": "Lifecycle",
+        "contact": "Contact"
+      }
+    },
     "performance": {
       "pageTitle": "Platform performance",
       "pageDescription": "Enrollment and catalog growth by market and period.",
@@ -1724,6 +1750,8 @@
       "manageBrandsDescription": "Manage product brands and manufacturers",
       "manageBusinesses": "Manage Businesses",
       "manageBusinessesDescription": "View and update businesses",
+      "businessReliability": "Business reliability",
+      "businessReliabilityDescription": "Top least reliable merchants by acceptance score",
       "manageCategories": "Manage Categories",
       "manageCategoriesDescription": "Manage product categories and subcategories",
       "manageClients": "Manage Clients",

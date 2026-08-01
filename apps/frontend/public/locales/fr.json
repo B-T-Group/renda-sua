@@ -389,6 +389,32 @@
         "captionEventSubject": "Chaque part : un type de CTA et un sujet (ex. consultation sur un produit donné)."
       }
     },
+    "businessReliability": {
+      "title": "Fiabilité des commerces",
+      "subtitle": "Commerces les moins fiables selon le score d’acceptation — pour le suivi à la place des alertes par commande.",
+      "tier": "Niveau",
+      "allTiers": "Tous les niveaux",
+      "limit": "Limite",
+      "paused": "En pause",
+      "empty": "Aucun commerce ne correspond à ces filtres.",
+      "tiers": {
+        "ok": "OK",
+        "warn": "Alerte",
+        "demote": "Rétrogradé",
+        "restrict": "Restreint",
+        "suspend": "Suspendu"
+      },
+      "columns": {
+        "business": "Commerce",
+        "score": "Score",
+        "tier": "Niveau",
+        "autoDeclines30d": "Auto-refus (30 j)",
+        "acceptanceRate": "Acceptation %",
+        "avgAccept": "Accept. moy. (s)",
+        "lifecycle": "Cycle de vie",
+        "contact": "Contact"
+      }
+    },
     "performance": {
       "pageTitle": "Performance de la plateforme",
       "pageDescription": "Croissance des inscriptions et du catalogue par marché et par période.",
@@ -1467,6 +1493,8 @@
       "manageBrandsDescription": "Gérer les marques de produits et fabricants",
       "manageBusinesses": "Gérer les Entreprises",
       "manageBusinessesDescription": "Voir et mettre à jour les entreprises",
+      "businessReliability": "Fiabilité des commerces",
+      "businessReliabilityDescription": "Commerces les moins fiables selon le score d’acceptation",
       "manageCategories": "Gérer les Catégories",
       "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits",
       "manageClients": "Gérer les Clients",

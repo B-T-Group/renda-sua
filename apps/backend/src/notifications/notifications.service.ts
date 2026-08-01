@@ -340,6 +340,7 @@ export class NotificationsService {
     orderNumber: string;
     senderName: string;
     messageId?: string;
+    persona?: string;
   }): Promise<void> {
     const recipientUserId = params.recipientUserId?.trim();
     if (!recipientUserId) return;
@@ -359,6 +360,7 @@ export class NotificationsService {
         orderNumber: params.orderNumber,
         messageId: params.messageId,
         type: 'order_message',
+        ...(params.persona ? { persona: params.persona } : {}),
       });
     } catch (error: any) {
       this.logger.warn(
@@ -487,6 +489,7 @@ export class NotificationsService {
     orderNumber: string;
     senderName: string;
     messageId?: string;
+    persona?: string;
   }): Promise<void> {
     const recipientUserId = params.recipientUserId?.trim();
     if (!recipientUserId) return;
@@ -506,6 +509,7 @@ export class NotificationsService {
         orderNumber: params.orderNumber,
         messageId: params.messageId,
         type: 'order_message_mention',
+        ...(params.persona ? { persona: params.persona } : {}),
       });
     } catch (error: any) {
       this.logger.warn(
@@ -523,6 +527,7 @@ export class NotificationsService {
     senderName: string;
     messageId?: string;
     fulfillmentMethod?: string | null;
+    persona?: string;
   }): Promise<void> {
     const recipientUserId = params.recipientUserId?.trim();
     if (!recipientUserId) return;
@@ -544,6 +549,7 @@ export class NotificationsService {
         orderNumber: params.orderNumber,
         messageId: params.messageId,
         type: 'order_delivery_pin_shared',
+        ...(params.persona ? { persona: params.persona } : {}),
       });
     } catch (error: any) {
       this.logger.warn(
@@ -580,6 +586,7 @@ export class NotificationsService {
         itemId: params.itemId,
         messageId: params.messageId,
         type: 'stock_availability_check',
+        persona: 'business',
       });
     } catch (error: any) {
       this.logger.warn(
@@ -618,6 +625,7 @@ export class NotificationsService {
         status: params.status,
         quantity: params.quantity != null ? String(params.quantity) : undefined,
         type: 'stock_availability_result',
+        persona: 'client',
       });
     } catch (error: any) {
       this.logger.warn(
@@ -653,6 +661,7 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_escalation',
+        persona: 'business',
         graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
       });
     } catch (error: any) {
@@ -682,6 +691,7 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_auto_declined',
+        persona: 'client',
       });
     } catch (error: any) {
       this.logger.warn(
@@ -711,6 +721,7 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_busy',
+        persona: 'client',
         estimatedPrepMinutes: String(params.estimatedPrepMinutes),
       });
     } catch (error: any) {
@@ -737,56 +748,11 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_missed',
+        persona: 'business',
       });
     } catch (error: any) {
       this.logger.warn(
         `sendMerchantMissedOrderReminder failed: ${error?.message ?? String(error)}`
-      );
-    }
-  }
-
-  async notifySuperadminsOrderNoResponse(params: {
-    orderId: string;
-    orderNumber: string;
-    businessName: string;
-  }): Promise<void> {
-    try {
-      const result = await this.hasuraSystemService.executeQuery(
-        `query Superusers {
-          user_roles(where: { role: { key: { _eq: "superuser" } } }) {
-            user_id
-          }
-        }`
-      );
-      const ids = [
-        ...new Set(
-          (result.user_roles || [])
-            .map((r: { user_id?: string }) => r.user_id?.trim())
-            .filter(Boolean) as string[]
-        ),
-      ];
-      const title = 'Merchant no response';
-      const body = `${params.businessName} has not accepted order ${params.orderNumber}`;
-      await Promise.all(
-        ids.map((userId) =>
-          this.sendPushNotificationByUserId(userId, title, body, {
-            url: `/orders/${params.orderId}`,
-            orderId: params.orderId,
-            orderNumber: params.orderNumber,
-            event: 'order_acceptance_admin_alert',
-          }).catch((error: any) => {
-            this.logger.warn(
-              `Admin no-response push failed for ${userId}: ${error?.message}`
-            );
-          })
-        )
-      );
-      this.logger.warn(
-        `Order ${params.orderNumber} escalated: merchant no response (${ids.length} superusers notified)`
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `notifySuperadminsOrderNoResponse failed: ${error?.message ?? String(error)}`
       );
     }
   }
@@ -812,6 +778,7 @@ export class NotificationsService {
         orderId: data.orderId,
         orderNumber: data.orderNumber,
         event: 'order_created',
+        persona: 'business',
         acceptanceTimeoutSeconds:
           data.acceptanceTimeoutSeconds != null
             ? String(data.acceptanceTimeoutSeconds)
@@ -851,6 +818,14 @@ export class NotificationsService {
     });
 
     try {
+      const persona =
+        params.commissionType === 'base_delivery_fee' ||
+        params.commissionType === 'per_km_delivery_fee'
+          ? 'agent'
+          : params.commissionType === 'item_sale' ||
+              params.commissionType === 'order_subtotal'
+            ? 'business'
+            : undefined;
       await this.sendPushNotificationByUserId(userId, title, body, {
         url: '/accounts',
         event: 'wallet_credit',
@@ -859,6 +834,7 @@ export class NotificationsService {
         commissionType: params.commissionType,
         amount: String(params.amount),
         currency: params.currency,
+        ...(persona ? { persona } : {}),
       });
     } catch (error: any) {
       this.logger.warn(
@@ -939,6 +915,7 @@ export class NotificationsService {
         orderNumber: params.orderNumber,
         type: params.kind,
         event: params.kind,
+        persona: 'client',
       });
     } catch (error: any) {
       this.logger.warn(
@@ -1925,18 +1902,18 @@ export class NotificationsService {
     );
     if (!title || !body) return;
 
-    const pushPayload = {
-      url: `/orders/${data.orderId}`,
-      orderId: data.orderId,
-      orderNumber: data.orderNumber,
-    };
-
     try {
       const recipients = excludeActorFromOrderStatusRecipients(
         this.getRecipientsForStatus(status, data),
         actorUserId
       );
       for (const recipient of recipients) {
+        const pushPayload = {
+          url: `/orders/${data.orderId}`,
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          persona: recipient.type,
+        };
         if (recipient.userId?.trim()) {
           const { webSent, expoSent } = await this.sendPushNotificationByUserId(
             recipient.userId.trim(),
@@ -2208,6 +2185,7 @@ export class NotificationsService {
         type: 'order_offer',
         orderId: params.orderId,
         expiresAt: params.expiresAt,
+        persona: 'agent',
       },
       {
         priority: 'high',
@@ -2307,7 +2285,7 @@ export class NotificationsService {
       params.userId,
       title,
       body,
-      { type: 'ai_item_proposal', itemId: params.itemId },
+      { type: 'ai_item_proposal', itemId: params.itemId, persona: 'business' },
       { priority: 'high', sound: 'default', channelId: 'default' }
     );
   }
@@ -2326,7 +2304,11 @@ export class NotificationsService {
       params.userId,
       title,
       body,
-      { type: 'ai_rental_proposal', listingId: params.listingId },
+      {
+        type: 'ai_rental_proposal',
+        listingId: params.listingId,
+        persona: 'business',
+      },
       { priority: 'high', sound: 'default', channelId: 'default' }
     );
   }
@@ -2348,6 +2330,7 @@ export class NotificationsService {
       {
         type: 'order_offer_cancelled',
         orderId: params.orderId,
+        persona: 'agent',
       },
       {
         priority: 'high',

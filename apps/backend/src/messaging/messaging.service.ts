@@ -613,6 +613,7 @@ export class MessagingService {
             orderNumber: order.order_number,
             senderName,
             messageId,
+            persona: this.personaForOrderUser(order, recipientUserId),
           })
         )
       );
@@ -623,6 +624,16 @@ export class MessagingService {
         }`
       );
     }
+  }
+
+  private personaForOrderUser(
+    order: MessagingOrder,
+    userId: string
+  ): string | undefined {
+    if (order.client?.user_id === userId) return 'client';
+    if (order.business?.user_id === userId) return 'business';
+    if (order.assigned_agent?.user_id === userId) return 'agent';
+    return undefined;
   }
 
   private async insertRecipients(

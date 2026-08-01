@@ -247,6 +247,47 @@ export class OrderAcceptanceService {
     await this.recomputeReliability(businessId);
   }
 
+  private mapReliabilityRow(b: {
+    id: string;
+    name?: string | null;
+    orders_accepted_count?: number | null;
+    orders_auto_declined_count?: number | null;
+    orders_merchant_cancelled_count?: number | null;
+    acceptance_latency_sum_ms?: number | null;
+    reliability_score?: number | null;
+    reliability_tier?: string | null;
+    auto_decline_rolling_30d?: number | null;
+    acceptance_timeout_seconds?: number | null;
+    accepting_orders?: boolean | null;
+    paused_until?: string | null;
+    lifecycle_status?: string | null;
+    user?: {
+      id?: string;
+      email?: string | null;
+      phone_number?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+    } | null;
+  }) {
+    const accepted = b.orders_accepted_count || 0;
+    const auto = b.orders_auto_declined_count || 0;
+    const cancelled = b.orders_merchant_cancelled_count || 0;
+    const denom = accepted + auto + cancelled;
+    const avgSec =
+      accepted > 0
+        ? Math.round((b.acceptance_latency_sum_ms || 0) / accepted / 1000)
+        : null;
+    return {
+      ...b,
+      acceptanceRatePct: denom ? Math.round((accepted / denom) * 1000) / 10 : 100,
+      autoDeclineRatePct: denom ? Math.round((auto / denom) * 1000) / 10 : 0,
+      merchantCancelRatePct: denom
+        ? Math.round((cancelled / denom) * 1000) / 10
+        : 0,
+      averageAcceptanceSeconds: avgSec,
+    };
+  }
+
   async getReliability(businessId: string) {
     const res = await this.hasura.executeQuery(
       `query BizReliability($id: uuid!) {
@@ -268,23 +309,77 @@ export class OrderAcceptanceService {
     );
     const b = res.businesses_by_pk;
     if (!b) throw new HttpException('Business not found', HttpStatus.NOT_FOUND);
-    const accepted = b.orders_accepted_count || 0;
-    const auto = b.orders_auto_declined_count || 0;
-    const cancelled = b.orders_merchant_cancelled_count || 0;
-    const denom = accepted + auto + cancelled;
-    const avgSec =
-      accepted > 0
-        ? Math.round((b.acceptance_latency_sum_ms || 0) / accepted / 1000)
-        : null;
-    return {
-      ...b,
-      acceptanceRatePct: denom ? Math.round((accepted / denom) * 1000) / 10 : 100,
-      autoDeclineRatePct: denom ? Math.round((auto / denom) * 1000) / 10 : 0,
-      merchantCancelRatePct: denom
-        ? Math.round((cancelled / denom) * 1000) / 10
-        : 0,
-      averageAcceptanceSeconds: avgSec,
-    };
+    return this.mapReliabilityRow(b);
+  }
+
+  async listLeastReliableBusinesses(params: {
+    limit?: number;
+    tier?: string;
+    minAutoDeclines30d?: number;
+  }) {
+    const limit = Math.min(Math.max(params.limit ?? 25, 1), 100);
+    const where: Record<string, unknown> = {};
+    if (params.tier?.trim()) {
+      where.reliability_tier = { _eq: params.tier.trim() };
+    }
+    if (
+      params.minAutoDeclines30d != null &&
+      Number.isFinite(params.minAutoDeclines30d)
+    ) {
+      where.auto_decline_rolling_30d = {
+        _gte: Math.max(0, Math.floor(params.minAutoDeclines30d)),
+      };
+    }
+
+    const res = await this.hasura.executeQuery(
+      `query LeastReliableBusinesses($where: businesses_bool_exp!, $limit: Int!) {
+        businesses(
+          where: $where
+          order_by: [
+            { reliability_score: asc_nulls_last }
+            { auto_decline_rolling_30d: desc }
+          ]
+          limit: $limit
+        ) {
+          id name
+          lifecycle_status
+          orders_accepted_count
+          orders_auto_declined_count
+          orders_merchant_cancelled_count
+          acceptance_latency_sum_ms
+          reliability_score
+          reliability_tier
+          auto_decline_rolling_30d
+          acceptance_timeout_seconds
+          accepting_orders
+          paused_until
+          user {
+            id
+            email
+            phone_number
+            first_name
+            last_name
+          }
+        }
+      }`,
+      { where, limit }
+    );
+    const rows = (res.businesses || []) as Array<{
+      id: string;
+      auto_decline_rolling_30d?: number | null;
+    }>;
+    const businesses = await Promise.all(
+      rows.map(async (row) => {
+        const rolling = await this.refreshRollingAutoDeclines(row.id).catch(
+          () => row.auto_decline_rolling_30d ?? 0
+        );
+        return this.mapReliabilityRow({
+          ...row,
+          auto_decline_rolling_30d: rolling,
+        });
+      })
+    );
+    return { businesses };
   }
 
   async pauseBusiness(
@@ -601,11 +696,9 @@ export class OrderAcceptanceService {
         preferredLanguage: order.business?.user?.preferred_language,
         graceSeconds: this.orderConfig().acceptanceGraceSeconds,
       });
-      await this.notifications.notifySuperadminsOrderNoResponse({
-        orderId: order.id,
-        orderNumber: order.order_number,
-        businessName: order.business?.name || 'Business',
-      });
+      this.logger.warn(
+        `Order ${order.order_number} escalated: merchant no response (admin alert via reliability dashboard)`
+      );
     } catch (error: any) {
       this.logger.error(`Escalation notify failed: ${error?.message}`);
     }
