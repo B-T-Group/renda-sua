@@ -128,39 +128,78 @@ export function buildRentalStartPinSharedPushMessage(params: {
   };
 }
 
+function formatAcceptWindow(
+  seconds: number,
+  locale: ReturnType<typeof normalizeLanguage>
+): string {
+  if (seconds >= 60 && seconds % 60 === 0) {
+    const mins = seconds / 60;
+    if (locale === 'fr') {
+      return mins === 1 ? '1 minute' : `${mins} minutes`;
+    }
+    return mins === 1 ? '1 minute' : `${mins} minutes`;
+  }
+  if (locale === 'fr') {
+    return seconds === 1 ? '1 seconde' : `${seconds} secondes`;
+  }
+  return seconds === 1 ? '1 second' : `${seconds} seconds`;
+}
+
 export function buildBusinessOrderCreatedPushMessage(params: {
   orderNumber: string;
   clientName: string;
   preferredLanguage?: string | null;
+  acceptanceTimeoutSeconds?: number | null;
 }): { title: string; body: string } {
   const locale = normalizeLanguage(params.preferredLanguage);
-  const client = params.clientName?.trim() || (locale === 'fr' ? 'un client' : 'a customer');
+  const client =
+    params.clientName?.trim() || (locale === 'fr' ? 'un client' : 'a customer');
+  const timeoutSec =
+    typeof params.acceptanceTimeoutSeconds === 'number' &&
+    params.acceptanceTimeoutSeconds > 0
+      ? params.acceptanceTimeoutSeconds
+      : null;
+  const windowLabel = timeoutSec ? formatAcceptWindow(timeoutSec, locale) : null;
   if (locale === 'fr') {
     return {
       title: 'Nouvelle commande',
-      body: `Commande ${params.orderNumber} de ${client}`,
+      body: windowLabel
+        ? `Commande ${params.orderNumber} de ${client} — confirmez dans les ${windowLabel}`
+        : `Commande ${params.orderNumber} de ${client}`,
     };
   }
   return {
     title: 'New order',
-    body: `Order ${params.orderNumber} from ${client}`,
+    body: windowLabel
+      ? `Order ${params.orderNumber} from ${client} — confirm within ${windowLabel}`
+      : `Order ${params.orderNumber} from ${client}`,
   };
 }
 
 export function buildOrderAcceptanceEscalationPushMessage(params: {
   orderNumber: string;
   preferredLanguage?: string | null;
+  graceSeconds?: number | null;
 }): { title: string; body: string } {
   const locale = normalizeLanguage(params.preferredLanguage);
+  const graceSec =
+    typeof params.graceSeconds === 'number' && params.graceSeconds > 0
+      ? params.graceSeconds
+      : null;
+  const windowLabel = graceSec ? formatAcceptWindow(graceSec, locale) : null;
   if (locale === 'fr') {
     return {
       title: 'Commande en attente !',
-      body: `Répondez maintenant à la commande ${params.orderNumber} — délai dépassé`,
+      body: windowLabel
+        ? `Répondez maintenant à la commande ${params.orderNumber} — il vous reste ${windowLabel}`
+        : `Répondez maintenant à la commande ${params.orderNumber} — délai dépassé`,
     };
   }
   return {
     title: 'Order waiting!',
-    body: `Respond now to order ${params.orderNumber} — acceptance timer expired`,
+    body: windowLabel
+      ? `Respond now to order ${params.orderNumber} — ${windowLabel} left`
+      : `Respond now to order ${params.orderNumber} — acceptance timer expired`,
   };
 }
 

@@ -45,6 +45,8 @@ export interface NotificationData {
   fulfillmentMethod?: 'delivery' | 'pickup' | string | null;
   /** pay_now | pay_at_delivery | pay_at_pickup */
   paymentTiming?: string | null;
+  /** Seconds the merchant has to confirm before acceptance escalate/grace */
+  acceptanceTimeoutSeconds?: number;
 }
 
 export interface RentalPeriodEndedEmailPayload {

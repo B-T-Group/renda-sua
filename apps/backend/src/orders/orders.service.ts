@@ -6596,6 +6596,16 @@ export class OrdersService {
         throw new Error('Delivery address is undefined');
       }
 
+      const businessId =
+        order.business_id ||
+        order.business_location?.business?.id ||
+        order.business?.id;
+      const acceptanceTimeoutSeconds = businessId
+        ? await this.orderAcceptanceService.getAcceptanceTimeoutSeconds(
+            businessId
+          )
+        : undefined;
+
       const notificationData: NotificationData = {
         orderId: order.id,
         clientId: order.client?.id,
@@ -6640,6 +6650,7 @@ export class OrdersService {
         deliveryAddress: this.formatAddress(order.delivery_address),
         estimatedDeliveryTime: order.estimated_delivery_time || undefined,
         specialInstructions: order.special_instructions || undefined,
+        acceptanceTimeoutSeconds,
       };
 
       await this.notificationsService.sendOrderCreatedNotifications(
@@ -8300,6 +8311,16 @@ export class OrdersService {
             orderWithDetails?.business_location?.business?.user?.email &&
             notifyAddress
           ) {
+            const businessId =
+              orderWithDetails.business_id ||
+              orderWithDetails.business_location?.business?.id ||
+              orderWithDetails.business?.id;
+            const acceptanceTimeoutSeconds = businessId
+              ? await this.orderAcceptanceService.getAcceptanceTimeoutSeconds(
+                  businessId
+                )
+              : undefined;
+
             const notificationData: NotificationData = {
               orderId: orderWithDetails.id,
               clientId: orderWithDetails.client?.id,
@@ -8351,6 +8372,7 @@ export class OrdersService {
               estimatedDeliveryTime:
                 orderWithDetails.estimated_delivery_time || undefined,
               specialInstructions: orderWithDetails.special_instructions || undefined,
+              acceptanceTimeoutSeconds,
             };
 
             await this.notificationsService.sendOrderCreatedNotifications(

@@ -34,7 +34,7 @@ export class OrderAcceptanceService {
     if (!order || order.current_status !== 'pending') return;
     if (order.acceptance_state === 'accepted') return;
 
-    const timeoutSec = await this.resolveTimeoutSeconds(order.business_id);
+    const timeoutSec = await this.getAcceptanceTimeoutSeconds(order.business_id);
     const cfg = this.orderConfig();
     const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
     const basePrep = cfg.defaultEstimatedPrepMinutes;
@@ -494,7 +494,7 @@ export class OrderAcceptanceService {
     );
   }
 
-  private async resolveTimeoutSeconds(businessId: string): Promise<number> {
+  async getAcceptanceTimeoutSeconds(businessId: string): Promise<number> {
     const res = await this.hasura.executeQuery(
       `query BizTimeout($id: uuid!) {
         businesses_by_pk(id: $id) { acceptance_timeout_seconds }
@@ -599,6 +599,7 @@ export class OrderAcceptanceService {
         orderId: order.id,
         orderNumber: order.order_number,
         preferredLanguage: order.business?.user?.preferred_language,
+        graceSeconds: this.orderConfig().acceptanceGraceSeconds,
       });
       await this.notifications.notifySuperadminsOrderNoResponse({
         orderId: order.id,

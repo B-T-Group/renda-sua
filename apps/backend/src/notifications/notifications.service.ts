@@ -633,13 +633,19 @@ export class NotificationsService {
     orderId: string;
     orderNumber: string;
     preferredLanguage?: string | null;
+    graceSeconds?: number | null;
   }): Promise<void> {
     const userId = params.businessUserId?.trim();
     if (!userId) return;
     if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const graceSeconds =
+      params.graceSeconds ??
+      this.configService.get<Configuration['order']>('order')
+        ?.acceptanceGraceSeconds;
     const { title, body } = buildOrderAcceptanceEscalationPushMessage({
       orderNumber: params.orderNumber,
       preferredLanguage: params.preferredLanguage,
+      graceSeconds,
     });
     try {
       await this.sendPushNotificationByUserId(userId, title, body, {
@@ -647,6 +653,7 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_escalation',
+        graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
       });
     } catch (error: any) {
       this.logger.warn(
@@ -796,6 +803,7 @@ export class NotificationsService {
       orderNumber: data.orderNumber,
       clientName: data.clientName,
       preferredLanguage: data.businessPreferredLanguage,
+      acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
     });
 
     try {
@@ -804,6 +812,10 @@ export class NotificationsService {
         orderId: data.orderId,
         orderNumber: data.orderNumber,
         event: 'order_created',
+        acceptanceTimeoutSeconds:
+          data.acceptanceTimeoutSeconds != null
+            ? String(data.acceptanceTimeoutSeconds)
+            : undefined,
       });
     } catch (error: any) {
       this.logger.warn(
