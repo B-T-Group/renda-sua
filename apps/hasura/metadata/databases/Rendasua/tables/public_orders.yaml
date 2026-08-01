@@ -261,6 +261,12 @@ select_permissions:
         - cancelled_by
         - cancellation_reason_id
         - cancellation_notes
+        - acceptance_state
+        - acceptance_deadline_at
+        - grace_deadline_at
+        - accepted_at
+        - busy_extra_prep_minutes
+        - estimated_prep_minutes
       filter:
         business:
           user:
@@ -318,6 +324,12 @@ select_permissions:
         - cancelled_by
         - cancellation_reason_id
         - cancellation_notes
+        - acceptance_state
+        - acceptance_deadline_at
+        - grace_deadline_at
+        - accepted_at
+        - busy_extra_prep_minutes
+        - estimated_prep_minutes
       filter:
         client:
           user:

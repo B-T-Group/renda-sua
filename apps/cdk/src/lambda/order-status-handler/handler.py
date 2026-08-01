@@ -815,8 +815,9 @@ def trigger_stripe_refund_safe(
             )
             return {"success": True, "skipped": True, "reason": "Payment not captured"}
         
-        # Only trigger refund for client cancellations
-        if cancelled_by != 'client':
+        # Client cancellations always refund; system auto-decline also refunds
+        # captured charges (Nest may have already refunded — endpoint is idempotent).
+        if cancelled_by not in ('client', 'system'):
             log_info(
                 "Order cancelled by business, skipping Stripe refund",
                 order_id=order_id,

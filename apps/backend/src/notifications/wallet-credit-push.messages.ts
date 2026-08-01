@@ -147,6 +147,75 @@ export function buildBusinessOrderCreatedPushMessage(params: {
   };
 }
 
+export function buildOrderAcceptanceEscalationPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Commande en attente !',
+      body: `Répondez maintenant à la commande ${params.orderNumber} — délai dépassé`,
+    };
+  }
+  return {
+    title: 'Order waiting!',
+    body: `Respond now to order ${params.orderNumber} — acceptance timer expired`,
+  };
+}
+
+export function buildOrderAutoDeclinedPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Commande annulée',
+      body: `Le commerçant n'était pas disponible pour accepter la commande ${params.orderNumber}.`,
+    };
+  }
+  return {
+    title: 'Order cancelled',
+    body: `The merchant was unavailable to accept your order ${params.orderNumber}.`,
+  };
+}
+
+export function buildOrderBusyPushMessage(params: {
+  orderNumber: string;
+  estimatedPrepMinutes: number;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Demande élevée',
+      body: `Le commerçant a une demande plus élevée. Préparation estimée : ${params.estimatedPrepMinutes} min (commande ${params.orderNumber}).`,
+    };
+  }
+  return {
+    title: 'Higher demand',
+    body: `The merchant is experiencing higher demand. Estimated preparation: ${params.estimatedPrepMinutes} min (order ${params.orderNumber}).`,
+  };
+}
+
+export function buildMerchantMissedOrderReminderPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Commande manquée',
+      body: `Vous avez manqué la commande ${params.orderNumber}. Vérifiez que les notifications sont activées.`,
+    };
+  }
+  return {
+    title: 'Missed order',
+    body: `You missed order ${params.orderNumber}. Make sure notifications are enabled.`,
+  };
+}
+
 export function buildMentionPushMessage(params: {
   orderNumber: string;
   senderName: string;

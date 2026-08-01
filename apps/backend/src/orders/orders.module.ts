@@ -21,6 +21,9 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { BusinessAvailabilityController } from './business-availability.controller';
+import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
+import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
 import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
@@ -57,6 +60,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrdersController,
     FailedDeliveriesController,
     OrderNotificationsInternalController,
+    OrderAcceptanceInternalController,
+    BusinessAvailabilityController,
   ],
   providers: [
     OrdersService,
@@ -69,8 +74,17 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CheckoutPreflightService,
     CancellationPolicyService,
     OrderSystemJobsService,
+    OrderAcceptanceService,
     StripeAuthReconcilerService,
   ],
-  exports: [OrdersService, OrderStatusService, OrderPaymentCallbackHandler, CancellationPolicyService, RefundsModule, OrderSystemJobsService],
+  exports: [
+    OrdersService,
+    OrderStatusService,
+    OrderPaymentCallbackHandler,
+    CancellationPolicyService,
+    RefundsModule,
+    OrderSystemJobsService,
+    OrderAcceptanceService,
+  ],
 })
 export class OrdersModule {}

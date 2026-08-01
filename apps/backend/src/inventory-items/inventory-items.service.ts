@@ -420,6 +420,8 @@ const CATALOG_INVENTORY_LIST_GQL = `
           is_verified
           is_storefront_visible
           can_accept_orders
+          accepting_orders
+          reliability_tier
         }
         address {
           id
@@ -1098,6 +1100,8 @@ export class InventoryItemsService {
             is_verified
             can_accept_orders
             is_storefront_visible
+            accepting_orders
+            reliability_tier
           }
           address {
             city
@@ -1118,6 +1122,8 @@ export class InventoryItemsService {
         is_verified?: boolean;
         can_accept_orders?: boolean;
         is_storefront_visible?: boolean;
+        accepting_orders?: boolean;
+        reliability_tier?: string;
       } | null;
       address?: {
         city?: string | null;
@@ -1137,6 +1143,7 @@ export class InventoryItemsService {
           is_verified: loc.business?.is_verified === true,
           can_accept_orders: loc.business?.can_accept_orders === true,
           is_storefront_visible: loc.business?.is_storefront_visible === true,
+          reliability_tier: loc.business?.reliability_tier || 'ok',
           logo_url: loc.logo_url ?? null,
           latitude: loc.address?.latitude ?? null,
           longitude: loc.address?.longitude ?? null,
@@ -1183,6 +1190,7 @@ export class InventoryItemsService {
         is_verified: boolean;
         can_accept_orders: boolean;
         is_storefront_visible: boolean;
+        reliability_tier?: string;
         latitude?: number | null;
         longitude?: number | null;
       }
@@ -1190,7 +1198,10 @@ export class InventoryItemsService {
     origin: { lat: number; lng: number } | null,
     take: number
   ): TopInventoryStoreRow[] {
-    const scored = [...counts.keys()].map((id) => {
+    const demoted = new Set(['demote', 'restrict', 'suspend']);
+    const scored = [...counts.keys()]
+      .filter((id) => !demoted.has(byId.get(id)?.reliability_tier || 'ok'))
+      .map((id) => {
       const loc = byId.get(id);
       let distance_meters: number | null = null;
       if (origin && loc?.latitude != null && loc?.longitude != null) {
@@ -2966,6 +2977,19 @@ export class InventoryItemsService {
         0,
         InventoryItemsService.RELEVANCE_DISTANCE_MAX_BOOST - dist / 1000
       );
+    }
+    const tier = (item.business_location as any)?.business?.reliability_tier as
+      | string
+      | undefined;
+    if (tier === 'demote' || tier === 'restrict' || tier === 'suspend') {
+      score *= 0.5;
+    }
+    // Restrict tier: treat items as closer-only by penalizing far listings harder.
+    if (tier === 'restrict' && dist != null && Number.isFinite(dist)) {
+      const maxM = (item.item?.max_delivery_distance || 0) * 1000 * 0.5;
+      if (maxM > 0 && dist > maxM) {
+        score *= 0.25;
+      }
     }
     return score;
   }

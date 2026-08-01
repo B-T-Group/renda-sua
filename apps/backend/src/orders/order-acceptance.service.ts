@@ -1,0 +1,815 @@
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import type { Configuration } from '../config/configuration';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { OrderSystemJobsService } from './order-system-jobs.service';
+import {
+  CONFIRMABLE_ACCEPTANCE_STATES,
+  type OrderAcceptanceState,
+  type PendingAcceptanceOrder,
+  type ReliabilityTier,
+} from './order-acceptance.types';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+
+@Injectable()
+export class OrderAcceptanceService {
+  private readonly logger = new Logger(OrderAcceptanceService.name);
+
+  constructor(
+    private readonly hasura: HasuraSystemService,
+    private readonly configService: ConfigService<Configuration>,
+    private readonly waitAndExecute: WaitAndExecuteScheduleService,
+    private readonly orderSystemJobs: OrderSystemJobsService,
+    private readonly notifications: NotificationsService
+  ) {}
+
+  private orderConfig(): Configuration['order'] {
+    return this.configService.get('order') as Configuration['order'];
+  }
+
+  async startAcceptanceSla(orderId: string): Promise<void> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!order || order.current_status !== 'pending') return;
+    if (order.acceptance_state === 'accepted') return;
+
+    const timeoutSec = await this.resolveTimeoutSeconds(order.business_id);
+    const cfg = this.orderConfig();
+    const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
+    const basePrep = cfg.defaultEstimatedPrepMinutes;
+
+    await this.hasura.executeMutation(
+      `mutation StartAcceptanceSla(
+        $id: uuid!, $deadline: timestamptz!, $prep: Int!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            acceptance_state: awaiting_acceptance
+            acceptance_deadline_at: $deadline
+            grace_deadline_at: null
+            estimated_prep_minutes: $prep
+            busy_extra_prep_minutes: 0
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: orderId, deadline, prep: basePrep }
+    );
+
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_deadline',
+      { order_id: orderId },
+      timeoutSec
+    );
+    this.logger.log(
+      `Started acceptance SLA for ${order.order_number} (${timeoutSec}s)`
+    );
+  }
+
+  async onAcceptanceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!this.isPendingAwaiting(order)) {
+      return { success: true, skipped: true };
+    }
+    const graceSec = this.orderConfig().acceptanceGraceSeconds;
+    const graceDeadline = new Date(Date.now() + graceSec * 1000).toISOString();
+
+    // no_response → grace in one step: escalate + start grace window.
+    await this.hasura.executeMutation(
+      `mutation EscalateAcceptance($id: uuid!, $grace: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            acceptance_state: grace
+            grace_deadline_at: $grace
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: orderId, grace: graceDeadline }
+    );
+
+    await this.notifyEscalation(order!);
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_grace_deadline',
+      { order_id: orderId },
+      graceSec
+    );
+    return { success: true };
+  }
+
+  async onGraceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!order || order.current_status !== 'pending') {
+      return { success: true, skipped: true };
+    }
+    const state = order.acceptance_state as OrderAcceptanceState | null;
+    if (state !== 'no_response' && state !== 'grace') {
+      return { success: true, skipped: true };
+    }
+
+    const declined =
+      await this.orderSystemJobs.autoDeclineUnacceptedOrderAsSystem(orderId);
+    if (!declined) {
+      return { success: true, skipped: true };
+    }
+    await this.recordAutoDecline(order.business_id, orderId);
+    return { success: true };
+  }
+
+  async markAccepted(orderId: string, businessId: string, createdAt: string): Promise<void> {
+    const acceptedAt = new Date().toISOString();
+    await this.hasura.executeMutation(
+      `mutation MarkAccepted($id: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            acceptance_state: accepted
+            accepted_at: $at
+            updated_at: $at
+          }
+        ) { id }
+      }`,
+      { id: orderId, at: acceptedAt }
+    );
+    const latencyMs = Math.max(
+      0,
+      new Date(acceptedAt).getTime() - new Date(createdAt).getTime()
+    );
+    await this.bumpAcceptedCounters(businessId, latencyMs);
+  }
+
+  assertConfirmableAcceptance(order: {
+    current_status: string;
+    acceptance_state?: string | null;
+  }): void {
+    if (order.current_status !== 'pending') {
+      throw new HttpException(
+        `Cannot confirm order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const state = (order.acceptance_state ||
+      'awaiting_acceptance') as OrderAcceptanceState;
+    if (!CONFIRMABLE_ACCEPTANCE_STATES.includes(state)) {
+      throw new HttpException(
+        'Order is no longer awaiting merchant acceptance',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  async markBusy(orderId: string, businessUserId: string): Promise<{
+    success: boolean;
+    order: PendingAcceptanceOrder;
+    message: string;
+  }> {
+    const order = await this.fetchPendingAcceptanceDetail(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    await this.assertBusinessOwnsOrder(order.business_id, businessUserId);
+    this.assertConfirmableAcceptance(order);
+
+    const cfg = this.orderConfig();
+    const nextExtra = Math.min(
+      cfg.busyExtraPrepCapMinutes,
+      (order.busy_extra_prep_minutes || 0) + cfg.busyExtraPrepMinutes
+    );
+    const estimated =
+      cfg.defaultEstimatedPrepMinutes + nextExtra;
+
+    const updated = await this.hasura.executeMutation(
+      `mutation MarkBusy($id: uuid!, $extra: Int!, $prep: Int!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            busy_extra_prep_minutes: $extra
+            estimated_prep_minutes: $prep
+            updated_at: "now()"
+          }
+        ) {
+          id order_number acceptance_state acceptance_deadline_at
+          grace_deadline_at busy_extra_prep_minutes estimated_prep_minutes
+          current_status created_at total_amount currency business_id
+        }
+      }`,
+      { id: orderId, extra: nextExtra, prep: estimated }
+    );
+
+    await this.notifyClientBusy(order, estimated);
+    return {
+      success: true,
+      order: updated.update_orders_by_pk,
+      message: 'Customer notified of higher demand',
+    };
+  }
+
+  async getPendingAcceptanceForBusiness(
+    businessId: string
+  ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+    const res = await this.hasura.executeQuery(
+      `query PendingAcceptance($bid: uuid!) {
+        orders(
+          where: {
+            business_id: { _eq: $bid }
+            current_status: { _eq: pending }
+            acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
+          }
+          order_by: { created_at: asc }
+          limit: 1
+        ) {
+          id order_number current_status acceptance_state
+          acceptance_deadline_at grace_deadline_at
+          busy_extra_prep_minutes estimated_prep_minutes
+          created_at total_amount currency fulfillment_method business_id
+          client { user { first_name last_name } }
+          order_items { item_name quantity }
+        }
+      }`,
+      { bid: businessId }
+    );
+    const order = res.orders?.[0] ?? null;
+    return { active: !!order, order };
+  }
+
+  async recordMerchantCancelOfPending(businessId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation BumpMerchantCancel($id: uuid!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _inc: { orders_merchant_cancelled_count: 1 }
+          _set: { updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: businessId }
+    );
+    await this.recomputeReliability(businessId);
+  }
+
+  async getReliability(businessId: string) {
+    const res = await this.hasura.executeQuery(
+      `query BizReliability($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          id name
+          orders_accepted_count
+          orders_auto_declined_count
+          orders_merchant_cancelled_count
+          acceptance_latency_sum_ms
+          reliability_score
+          reliability_tier
+          auto_decline_rolling_30d
+          acceptance_timeout_seconds
+          accepting_orders
+          paused_until
+        }
+      }`,
+      { id: businessId }
+    );
+    const b = res.businesses_by_pk;
+    if (!b) throw new HttpException('Business not found', HttpStatus.NOT_FOUND);
+    const accepted = b.orders_accepted_count || 0;
+    const auto = b.orders_auto_declined_count || 0;
+    const cancelled = b.orders_merchant_cancelled_count || 0;
+    const denom = accepted + auto + cancelled;
+    const avgSec =
+      accepted > 0
+        ? Math.round((b.acceptance_latency_sum_ms || 0) / accepted / 1000)
+        : null;
+    return {
+      ...b,
+      acceptanceRatePct: denom ? Math.round((accepted / denom) * 1000) / 10 : 100,
+      autoDeclineRatePct: denom ? Math.round((auto / denom) * 1000) / 10 : 0,
+      merchantCancelRatePct: denom
+        ? Math.round((cancelled / denom) * 1000) / 10
+        : 0,
+      averageAcceptanceSeconds: avgSec,
+    };
+  }
+
+  async pauseBusiness(
+    businessId: string,
+    duration: '15m' | '1h' | 'until_tomorrow' | 'indefinite'
+  ): Promise<void> {
+    const pausedUntil = this.resolvePauseUntil(duration);
+    await this.hasura.executeMutation(
+      `mutation PauseBiz($id: uuid!, $until: timestamptz) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            accepting_orders: false
+            paused_until: $until
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: businessId, until: pausedUntil }
+    );
+  }
+
+  async resumeBusiness(businessId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation ResumeBiz($id: uuid!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            accepting_orders: true
+            paused_until: null
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: businessId }
+    );
+  }
+
+  async isBusinessAcceptingOrders(businessId: string): Promise<boolean> {
+    const res = await this.hasura.executeQuery(
+      `query BizAccepting($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          can_accept_orders
+          accepting_orders
+          paused_until
+          lifecycle_status
+        }
+      }`,
+      { id: businessId }
+    );
+    const b = res.businesses_by_pk;
+    if (!b) return false;
+    if (!b.can_accept_orders || b.lifecycle_status === 'suspended') return false;
+    if (b.paused_until) {
+      const until = new Date(b.paused_until).getTime();
+      if (Date.now() < until) return false;
+      if (!b.accepting_orders) {
+        await this.resumeBusiness(businessId);
+        return true;
+      }
+    }
+    return !!b.accepting_orders;
+  }
+
+  async updateLocationHours(
+    locationId: string,
+    businessId: string,
+    operatingHours: Record<string, unknown>
+  ): Promise<void> {
+    const res = await this.hasura.executeQuery(
+      `query Loc($id: uuid!) {
+        business_locations_by_pk(id: $id) { id business_id }
+      }`,
+      { id: locationId }
+    );
+    const loc = res.business_locations_by_pk;
+    if (!loc || loc.business_id !== businessId) {
+      throw new HttpException('Location not found', HttpStatus.NOT_FOUND);
+    }
+    await this.hasura.executeMutation(
+      `mutation SetHours($id: uuid!, $hours: jsonb!) {
+        update_business_locations_by_pk(
+          pk_columns: { id: $id }
+          _set: { operating_hours: $hours, updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: locationId, hours: operatingHours }
+    );
+  }
+
+  isWithinOperatingHours(
+    operatingHours: unknown,
+    now = new Date()
+  ): boolean {
+    if (!operatingHours || typeof operatingHours !== 'object') return true;
+    const hours = operatingHours as Record<
+      string,
+      { open?: string; close?: string; closed?: boolean } | null
+    >;
+    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const key = days[now.getDay()];
+    const day = hours[key] ?? hours[key.toUpperCase()];
+    if (!day || day.closed) return false;
+    if (!day.open || !day.close) return true;
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const open = this.parseHm(day.open);
+    const close = this.parseHm(day.close);
+    if (open == null || close == null) return true;
+    if (close < open) return mins >= open || mins < close;
+    return mins >= open && mins < close;
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async reconcileAcceptanceDeadlines(): Promise<void> {
+    try {
+      await this.reconcileExpiredAcceptances();
+      await this.reconcileExpiredGraces();
+      await this.clearExpiredPauses();
+    } catch (error: any) {
+      this.logger.error(`Acceptance reconciler failed: ${error?.message}`);
+    }
+  }
+
+  private async reconcileExpiredAcceptances(): Promise<void> {
+    const res = await this.hasura.executeQuery(
+      `query ExpiredAccept($now: timestamptz!) {
+        orders(
+          where: {
+            current_status: { _eq: pending }
+            acceptance_state: { _eq: awaiting_acceptance }
+            acceptance_deadline_at: { _lte: $now }
+          }
+          limit: 25
+        ) { id }
+      }`,
+      { now: new Date().toISOString() }
+    );
+    for (const row of res.orders || []) {
+      await this.onAcceptanceDeadline(row.id);
+    }
+  }
+
+  private async reconcileExpiredGraces(): Promise<void> {
+    const res = await this.hasura.executeQuery(
+      `query ExpiredGrace($now: timestamptz!) {
+        orders(
+          where: {
+            current_status: { _eq: pending }
+            acceptance_state: { _in: [no_response, grace] }
+            grace_deadline_at: { _lte: $now }
+          }
+          limit: 25
+        ) { id }
+      }`,
+      { now: new Date().toISOString() }
+    );
+    for (const row of res.orders || []) {
+      await this.onGraceDeadline(row.id);
+    }
+  }
+
+  private async clearExpiredPauses(): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation ClearPauses($now: timestamptz!) {
+        update_businesses(
+          where: {
+            accepting_orders: { _eq: false }
+            paused_until: { _lte: $now }
+          }
+          _set: { accepting_orders: true, paused_until: null, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { now: new Date().toISOString() }
+    );
+  }
+
+  private resolvePauseUntil(
+    duration: '15m' | '1h' | 'until_tomorrow' | 'indefinite'
+  ): string | null {
+    if (duration === 'indefinite') return null;
+    const now = new Date();
+    if (duration === '15m') {
+      return new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+    }
+    if (duration === '1h') {
+      return new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    }
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow.toISOString();
+  }
+
+  private parseHm(value: string): number | null {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  private isPendingAwaiting(
+    order: { current_status: string; acceptance_state?: string | null } | null
+  ): boolean {
+    return (
+      !!order &&
+      order.current_status === 'pending' &&
+      order.acceptance_state === 'awaiting_acceptance'
+    );
+  }
+
+  private async resolveTimeoutSeconds(businessId: string): Promise<number> {
+    const res = await this.hasura.executeQuery(
+      `query BizTimeout($id: uuid!) {
+        businesses_by_pk(id: $id) { acceptance_timeout_seconds }
+      }`,
+      { id: businessId }
+    );
+    const custom = res.businesses_by_pk?.acceptance_timeout_seconds;
+    if (typeof custom === 'number' && custom > 0) return custom;
+    return this.orderConfig().acceptanceTimeoutSeconds;
+  }
+
+  private async fetchOrderForSla(orderId: string): Promise<{
+    id: string;
+    order_number: string;
+    current_status: string;
+    acceptance_state: string | null;
+    business_id: string;
+    client?: {
+      user_id?: string;
+      user?: {
+        first_name?: string | null;
+        last_name?: string | null;
+        email?: string | null;
+        phone_number?: string | null;
+        preferred_language?: string | null;
+      } | null;
+    } | null;
+    business?: {
+      user_id?: string;
+      name?: string;
+      user?: {
+        preferred_language?: string | null;
+        email?: string | null;
+      } | null;
+    } | null;
+  } | null> {
+    const res = await this.hasura.executeQuery(
+      `query OrderSla($id: uuid!) {
+        orders_by_pk(id: $id) {
+          id order_number current_status acceptance_state business_id
+          client {
+            user_id
+            user { first_name last_name email phone_number preferred_language }
+          }
+          business {
+            user_id name
+            user { preferred_language email }
+          }
+        }
+      }`,
+      { id: orderId }
+    );
+    return res.orders_by_pk;
+  }
+
+  private async fetchPendingAcceptanceDetail(
+    orderId: string
+  ): Promise<PendingAcceptanceOrder | null> {
+    const res = await this.hasura.executeQuery(
+      `query OrderAcceptDetail($id: uuid!) {
+        orders_by_pk(id: $id) {
+          id order_number current_status acceptance_state
+          acceptance_deadline_at grace_deadline_at
+          busy_extra_prep_minutes estimated_prep_minutes
+          created_at total_amount currency fulfillment_method business_id
+          client { user { first_name last_name } }
+          order_items { item_name quantity }
+        }
+      }`,
+      { id: orderId }
+    );
+    return res.orders_by_pk;
+  }
+
+  private async assertBusinessOwnsOrder(
+    businessId: string,
+    userId: string
+  ): Promise<void> {
+    const res = await this.hasura.executeQuery(
+      `query Own($id: uuid!) {
+        businesses_by_pk(id: $id) { user_id }
+      }`,
+      { id: businessId }
+    );
+    if (res.businesses_by_pk?.user_id !== userId) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private async notifyEscalation(order: {
+    id: string;
+    order_number: string;
+    business?: {
+      user_id?: string;
+      name?: string;
+      user?: { preferred_language?: string | null } | null;
+    } | null;
+  }): Promise<void> {
+    try {
+      await this.notifications.sendOrderAcceptanceEscalationPush({
+        businessUserId: order.business?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        preferredLanguage: order.business?.user?.preferred_language,
+      });
+      await this.notifications.notifySuperadminsOrderNoResponse({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        businessName: order.business?.name || 'Business',
+      });
+    } catch (error: any) {
+      this.logger.error(`Escalation notify failed: ${error?.message}`);
+    }
+  }
+
+  private async notifyClientBusy(
+    order: PendingAcceptanceOrder,
+    estimatedPrepMinutes: number
+  ): Promise<void> {
+    try {
+      const detail = await this.fetchOrderForSla(order.id);
+      await this.notifications.sendOrderBusyPush({
+        clientUserId: detail?.client?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        estimatedPrepMinutes,
+        preferredLanguage: detail?.client?.user?.preferred_language,
+      });
+    } catch (error: any) {
+      this.logger.error(`Busy notify failed: ${error?.message}`);
+    }
+  }
+
+  private async bumpAcceptedCounters(
+    businessId: string,
+    latencyMs: number
+  ): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation BumpAccepted($id: uuid!, $ms: bigint!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _inc: { orders_accepted_count: 1, acceptance_latency_sum_ms: $ms }
+          _set: { updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: businessId, ms: latencyMs }
+    );
+    await this.recomputeReliability(businessId);
+  }
+
+  private async recordAutoDecline(
+    businessId: string,
+    orderId: string
+  ): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation BumpAutoDecline($id: uuid!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _inc: { orders_auto_declined_count: 1 }
+          _set: { updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: businessId }
+    );
+    const reliability = await this.recomputeReliability(businessId);
+    if (reliability.auto_decline_rolling_30d === 1) {
+      await this.sendFirstMissReminder(businessId, orderId);
+    }
+    if (reliability.tier === 'suspend') {
+      await this.suspendBusinessForReliability(businessId);
+    }
+  }
+
+  /** Live 30-day auto-decline count from orders (decays as old rows age out). */
+  private async refreshRollingAutoDeclines(businessId: string): Promise<number> {
+    const since = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const res = await this.hasura.executeQuery(
+      `query RollingAutoDeclines($bid: uuid!, $since: timestamptz!) {
+        orders_aggregate(
+          where: {
+            business_id: { _eq: $bid }
+            cancelled_by: { _eq: "system" }
+            cancellation_reason_id: { _eq: 19 }
+            cancelled_at: { _gte: $since }
+          }
+        ) { aggregate { count } }
+      }`,
+      { bid: businessId, since }
+    );
+    const count = res.orders_aggregate?.aggregate?.count ?? 0;
+    await this.hasura.executeMutation(
+      `mutation SetRolling($id: uuid!, $n: Int!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: { auto_decline_rolling_30d: $n, updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: businessId, n: count }
+    );
+    return count;
+  }
+
+  private async suspendBusinessForReliability(businessId: string): Promise<void> {
+    try {
+      await this.hasura.executeMutation(
+        `mutation SuspendBiz($id: uuid!) {
+          update_businesses_by_pk(
+            pk_columns: { id: $id }
+            _set: { lifecycle_status: suspended, updated_at: "now()" }
+          ) { id }
+        }`,
+        { id: businessId }
+      );
+      this.logger.warn(`Suspended business ${businessId} for acceptance misses`);
+    } catch (error: any) {
+      this.logger.error(`Suspend after auto-declines failed: ${error?.message}`);
+    }
+  }
+
+  private async sendFirstMissReminder(
+    businessId: string,
+    orderId: string
+  ): Promise<void> {
+    const biz = await this.hasura.executeQuery(
+      `query BizUser($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          user_id name
+          user { preferred_language email }
+        }
+      }`,
+      { id: businessId }
+    );
+    const order = await this.hasura.executeQuery(
+      `query OrdNum($id: uuid!) {
+        orders_by_pk(id: $id) { order_number }
+      }`,
+      { id: orderId }
+    );
+    const b = biz.businesses_by_pk;
+    if (!b?.user_id) return;
+    await this.notifications.sendMerchantMissedOrderReminder({
+      businessUserId: b.user_id,
+      orderId,
+      orderNumber: order.orders_by_pk?.order_number || '',
+      preferredLanguage: b.user?.preferred_language,
+    });
+  }
+
+  private async recomputeReliability(businessId: string): Promise<{
+    tier: ReliabilityTier;
+    auto_decline_rolling_30d: number;
+  }> {
+    const rolling = await this.refreshRollingAutoDeclines(businessId);
+    const res = await this.hasura.executeQuery(
+      `query RelInputs($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          orders_accepted_count
+          orders_auto_declined_count
+          orders_merchant_cancelled_count
+          auto_decline_rolling_30d
+        }
+      }`,
+      { id: businessId }
+    );
+    const b = res.businesses_by_pk;
+    const accepted = b?.orders_accepted_count || 0;
+    const auto = b?.orders_auto_declined_count || 0;
+    const cancelled = b?.orders_merchant_cancelled_count || 0;
+    const denom = Math.max(1, accepted + auto + cancelled);
+    const acceptRate = accepted / denom;
+    const autoRate = auto / denom;
+    const score = Math.max(
+      0,
+      Math.min(100, Math.round(acceptRate * 100 - autoRate * 40 - (cancelled / denom) * 20))
+    );
+    const tier = this.resolveTier(rolling, autoRate, denom);
+    await this.hasura.executeMutation(
+      `mutation SetRel($id: uuid!, $score: numeric!, $tier: String!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: { reliability_score: $score, reliability_tier: $tier, updated_at: "now()" }
+        ) { id }
+      }`,
+      { id: businessId, score, tier }
+    );
+    return { tier, auto_decline_rolling_30d: rolling };
+  }
+
+  private resolveTier(
+    rolling: number,
+    autoRate: number,
+    denom: number
+  ): ReliabilityTier {
+    const cfg = this.orderConfig();
+    if (
+      rolling >= cfg.reliabilitySuspendAutoDeclines ||
+      (denom >= 10 && autoRate >= 0.35)
+    ) {
+      return 'suspend';
+    }
+    if (
+      rolling >= cfg.reliabilityRestrictAutoDeclines ||
+      (denom >= 10 && autoRate >= 0.2)
+    ) {
+      return 'restrict';
+    }
+    if (
+      rolling >= cfg.reliabilityDemoteAutoDeclines ||
+      (denom >= 10 && autoRate >= 0.1)
+    ) {
+      return 'demote';
+    }
+    if (rolling >= 1) return 'warn';
+    return 'ok';
+  }
+}

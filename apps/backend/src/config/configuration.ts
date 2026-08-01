@@ -123,6 +123,22 @@ export interface OrderConfig {
   paymentTimeoutWaitMinutes?: number;
   /** When true, post-delivery refunds route to Stripe/wallet engine (default true). */
   refundsV2Enabled?: boolean;
+  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null. */
+  acceptanceTimeoutSeconds: number;
+  /** Grace seconds after no_response before auto-decline. */
+  acceptanceGraceSeconds: number;
+  /** Default estimated prep minutes before Busy adds. */
+  defaultEstimatedPrepMinutes: number;
+  /** Minutes added per Busy tap. */
+  busyExtraPrepMinutes: number;
+  /** Cap on busy_extra_prep_minutes. */
+  busyExtraPrepCapMinutes: number;
+  /** Auto-decline count (30d) to enter demote tier. */
+  reliabilityDemoteAutoDeclines: number;
+  /** Auto-decline count (30d) to enter restrict tier. */
+  reliabilityRestrictAutoDeclines: number;
+  /** Auto-decline count (30d) to suspend merchant. */
+  reliabilitySuspendAutoDeclines: number;
 }
 
 /** When agent has an active delivery, location update interval in ms (default 60s). */
@@ -644,6 +660,38 @@ export default (): Configuration => {
       refundsV2Enabled:
         process.env.REFUNDS_V2_ENABLED !== 'false' &&
         process.env.REFUNDS_V2_ENABLED !== '0',
+      acceptanceTimeoutSeconds: parseInt(
+        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '120',
+        10
+      ),
+      acceptanceGraceSeconds: parseInt(
+        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '120',
+        10
+      ),
+      defaultEstimatedPrepMinutes: parseInt(
+        process.env.ORDER_DEFAULT_ESTIMATED_PREP_MINUTES || '25',
+        10
+      ),
+      busyExtraPrepMinutes: parseInt(
+        process.env.ORDER_BUSY_EXTRA_PREP_MINUTES || '20',
+        10
+      ),
+      busyExtraPrepCapMinutes: parseInt(
+        process.env.ORDER_BUSY_EXTRA_PREP_CAP_MINUTES || '60',
+        10
+      ),
+      reliabilityDemoteAutoDeclines: parseInt(
+        process.env.RELIABILITY_DEMOTE_AUTO_DECLINES || '3',
+        10
+      ),
+      reliabilityRestrictAutoDeclines: parseInt(
+        process.env.RELIABILITY_RESTRICT_AUTO_DECLINES || '5',
+        10
+      ),
+      reliabilitySuspendAutoDeclines: parseInt(
+        process.env.RELIABILITY_SUSPEND_AUTO_DECLINES || '8',
+        10
+      ),
     },
     agentTracking: {
       activeDeliveryIntervalMs: parseInt(

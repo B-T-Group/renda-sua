@@ -2,10 +2,12 @@
 Wait-handler Lambda: generic handler invoked by Step Functions after a wait.
 
 Receives { event_type, payload, run_at }. Implements payment-timeout logic for
-order.created and order.claim_initiated.
+order.created and order.claim_initiated, plus merchant acceptance SLA callbacks.
 """
 import json
 import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -176,6 +178,41 @@ def _handle_order_claim_initiated(
     }
 
 
+def _call_backend_acceptance(path: str, order_id: str) -> Dict[str, Any]:
+    """POST Nest internal acceptance endpoints."""
+    base = (os.environ.get("BACKEND_INTERNAL_API_BASE_URL") or "").rstrip("/")
+    key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY") or ""
+    if not base or not key:
+        log_error("BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing")
+        return {"success": False, "error": "backend internal API not configured"}
+    url = f"{base}/api/orders/internal/{path}"
+    body = json.dumps({"orderId": order_id}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-rendasua-internal-key": key,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+            log_info("Acceptance callback OK", path=path, order_id=order_id, status=resp.status)
+            try:
+                return json.loads(raw) if raw else {"success": True}
+            except json.JSONDecodeError:
+                return {"success": True}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8") if e.fp else ""
+        log_error("Acceptance callback HTTP error", error=e, path=path, body=err_body)
+        return {"success": False, "error": f"HTTP {e.code}"}
+    except Exception as e:
+        log_error("Acceptance callback failed", error=e, path=path)
+        return {"success": False, "error": str(e)}
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Entry point. Input: { event_type, payload, run_at }.
@@ -214,6 +251,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 queue_url,
                 order_id,
             )
+
+        if event_type == "order.acceptance_deadline":
+            return _call_backend_acceptance("acceptance-deadline", order_id)
+
+        if event_type == "order.acceptance_grace_deadline":
+            return _call_backend_acceptance("acceptance-grace-deadline", order_id)
 
         if not transaction_id:
             log_error("Missing transaction_id in payload", payload=payload)

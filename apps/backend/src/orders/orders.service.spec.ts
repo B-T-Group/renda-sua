@@ -33,6 +33,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
+import { OrderAcceptanceService } from './order-acceptance.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
@@ -241,6 +242,17 @@ describe('OrdersService', () => {
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
         { provide: OrderSystemJobsService, useValue: {} },
+        {
+          provide: OrderAcceptanceService,
+          useValue: {
+            assertConfirmableAcceptance: jest.fn(),
+            markAccepted: jest.fn(),
+            startAcceptanceSla: jest.fn(),
+            isBusinessAcceptingOrders: jest.fn().mockResolvedValue(true),
+            isWithinOperatingHours: jest.fn().mockReturnValue(true),
+            recordMerchantCancelOfPending: jest.fn(),
+          },
+        },
         { provide: RbacService, useValue: {} },
         {
           provide: DeliveryAvailabilityService,

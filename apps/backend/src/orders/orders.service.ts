@@ -82,6 +82,7 @@ import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
+import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
@@ -393,6 +394,7 @@ export class OrdersService {
     private readonly cancellationPolicyService: CancellationPolicyService,
     private readonly locationsService: LocationsService,
     private readonly orderSystemJobsService: OrderSystemJobsService,
+    private readonly orderAcceptanceService: OrderAcceptanceService,
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
@@ -1224,11 +1226,7 @@ export class OrdersService {
         'Unauthorized to confirm this order',
         HttpStatus.FORBIDDEN
       );
-    if (order.current_status !== 'pending')
-      throw new HttpException(
-        `Cannot confirm order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
+    this.orderAcceptanceService.assertConfirmableAcceptance(order as any);
 
     // Validate that delivery/pickup window is provided
     if (!request.delivery_time_window_id && !request.delivery_window_details) {
@@ -1292,6 +1290,18 @@ export class OrdersService {
       request.orderId,
       'confirmed'
     );
+
+    try {
+      await this.orderAcceptanceService.markAccepted(
+        request.orderId,
+        order.business_id,
+        (order as any).created_at || new Date().toISOString()
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to mark acceptance for ${request.orderId}: ${error?.message}`
+      );
+    }
 
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -4019,6 +4029,18 @@ export class OrdersService {
       request.notes
     );
 
+    if (isBusinessOwner && previousStatus === 'pending') {
+      try {
+        await this.orderAcceptanceService.recordMerchantCancelOfPending(
+          order.business_id
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to record merchant cancel reliability: ${error?.message}`
+        );
+      }
+    }
+
     return {
       success: true,
       order: updatedOrder,
@@ -4846,6 +4868,12 @@ export class OrdersService {
           first_order_delivery_fee_promo
           currency
           current_status
+          acceptance_state
+          acceptance_deadline_at
+          grace_deadline_at
+          accepted_at
+          busy_extra_prep_minutes
+          estimated_prep_minutes
           estimated_delivery_time
           actual_delivery_time
           special_instructions
@@ -5034,6 +5062,12 @@ export class OrdersService {
           total_amount
           currency
           current_status
+          acceptance_state
+          acceptance_deadline_at
+          grace_deadline_at
+          accepted_at
+          busy_extra_prep_minutes
+          estimated_prep_minutes
           estimated_delivery_time
           actual_delivery_time
           special_instructions
@@ -5678,6 +5712,13 @@ export class OrdersService {
           id
           order_number
           current_status
+          acceptance_state
+          acceptance_deadline_at
+          grace_deadline_at
+          accepted_at
+          busy_extra_prep_minutes
+          estimated_prep_minutes
+          created_at
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -6088,6 +6129,13 @@ export class OrdersService {
         deliveryPin
       );
       await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(order.id);
+      } catch (slaError: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA after authorization for ${order.id}: ${slaError?.message}`
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Failed to authorize order payment: ${
@@ -6845,6 +6893,13 @@ export class OrdersService {
     if (currentStatus === 'pending_payment') {
       await this.updateOrderStatusAndPaymentStatus(orderId, 'pending', 'paid');
       await this.triggerCommerceInventoryCommit(orderId);
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(orderId);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA for ${orderId}: ${error?.message}`
+        );
+      }
       return;
     }
     await this.updateOrderPaymentStatusOnly(orderId, 'paid');
@@ -7294,6 +7349,7 @@ export class OrdersService {
           business_location {
             business_id
             is_active
+            operating_hours
             mobile_payment_phone {
               is_verified
             }
@@ -7438,6 +7494,39 @@ export class OrdersService {
           error: 'MERCHANT_NOT_ACCEPTING_ORDERS',
           message:
             'This merchant is currently completing account setup and is not yet accepting orders.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const merchantBusinessId = businessIds[0] as string;
+    const merchantAccepting =
+      await this.orderAcceptanceService.isBusinessAcceptingOrders(
+        merchantBusinessId
+      );
+    if (!merchantAccepting) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'MERCHANT_PAUSED',
+          message:
+            'This merchant is temporarily not accepting orders. Please try again later.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const locationHours =
+      businessInventories[0].business_location?.operating_hours;
+    if (
+      locationHours &&
+      !this.orderAcceptanceService.isWithinOperatingHours(locationHours)
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'MERCHANT_CLOSED',
+          message: 'This merchant is currently closed.',
         },
         HttpStatus.BAD_REQUEST
       );
@@ -8070,6 +8159,15 @@ export class OrdersService {
 
     if (current_status === 'pending' && payment_status === 'paid') {
       await this.triggerCommerceInventoryCommit(order.id);
+    }
+    if (current_status === 'pending') {
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(order.id);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
+        );
+      }
     }
 
     // Create order status history after order is created

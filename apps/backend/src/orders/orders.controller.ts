@@ -32,6 +32,7 @@ import {
   CheckoutPreflightDto,
   CheckoutPreflightResponseDto,
 } from './dto/checkout-preflight.dto';
+import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
@@ -44,6 +45,7 @@ import type {
 import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { isActivePersona } from '../users/persona.util';
 
 export interface UpdateOrderStatusRequest {
   status: string;
@@ -56,6 +58,7 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
+    private readonly orderAcceptanceService: OrderAcceptanceService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configurationsService: ConfigurationsService,
     private readonly loyaltyService: LoyaltyService,
@@ -317,6 +320,46 @@ export class OrdersController {
         statusCode
       );
     }
+  }
+
+  @Get('acceptance/pending')
+  @ApiOperation({
+    summary: 'Get the business pending acceptance interrupt (if any)',
+  })
+  async getPendingAcceptance() {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
+      return { active: false, order: null };
+    }
+    return this.orderAcceptanceService.getPendingAcceptanceForBusiness(
+      user.business.id
+    );
+  }
+
+  @Post('busy')
+  @ApiOperation({
+    summary: 'Mark order as busy (higher demand / longer prep ETA)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: { orderId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  async markBusy(@Body() body: { orderId?: string }) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'business')) {
+      throw new HttpException(
+        'Only business users can mark an order busy',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const orderId = body?.orderId?.trim();
+    if (!orderId) {
+      throw new HttpException('orderId is required', HttpStatus.BAD_REQUEST);
+    }
+    return this.orderAcceptanceService.markBusy(orderId, user.id);
   }
 
   @Post('confirm')

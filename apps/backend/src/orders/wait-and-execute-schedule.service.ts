@@ -49,18 +49,36 @@ export class WaitAndExecuteScheduleService {
     payload: WaitExecutePayload,
     waitMinutes?: number
   ): Promise<void> {
+    const orderConfig = this.configService.get<Configuration['order']>('order');
+    const minutes =
+      waitMinutes ?? orderConfig?.paymentTimeoutWaitMinutes ?? 10;
+    await this.scheduleEvent(eventType, payload, minutes * 60);
+  }
+
+  /** Schedule acceptance SLA callbacks (seconds-level wait via run_at). */
+  async scheduleAcceptanceTimeout(
+    eventType:
+      | 'order.acceptance_deadline'
+      | 'order.acceptance_grace_deadline',
+    payload: WaitExecutePayload,
+    waitSeconds: number
+  ): Promise<void> {
+    await this.scheduleEvent(eventType, payload, Math.max(1, waitSeconds));
+  }
+
+  private async scheduleEvent(
+    eventType: string,
+    payload: WaitExecutePayload,
+    waitSeconds: number
+  ): Promise<void> {
     if (!this.stateMachineArn) {
       this.logger.debug(
-        'Skipping payment timeout schedule: state machine ARN not configured'
+        `Skipping ${eventType} schedule: state machine ARN not configured`
       );
       return;
     }
 
-    const orderConfig = this.configService.get<Configuration['order']>('order');
-    const minutes =
-      waitMinutes ?? orderConfig?.paymentTimeoutWaitMinutes ?? 10;
-    const runAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
-
+    const runAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
     const input = {
       event_type: eventType,
       payload,
@@ -76,13 +94,13 @@ export class WaitAndExecuteScheduleService {
       const response = await this.sfnClient.send(command);
 
       this.logger.log(
-        `Scheduled ${eventType} timeout for order ${payload.order_id}, execution ${response.executionArn}, run_at=${runAt}, waitMinutes=${minutes}`
+        `Scheduled ${eventType} for order ${payload.order_id}, execution ${response.executionArn}, run_at=${runAt}, waitSeconds=${waitSeconds}`
       );
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `Failed to schedule ${eventType} timeout for order ${payload.order_id}: ${msg}`,
+        `Failed to schedule ${eventType} for order ${payload.order_id}: ${msg}`,
         stack
       );
     }

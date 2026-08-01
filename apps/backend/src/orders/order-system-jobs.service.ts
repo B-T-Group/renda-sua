@@ -5,6 +5,7 @@ import { Orders } from '../generated/graphql';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
+import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
@@ -19,11 +20,124 @@ export class OrderSystemJobsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly stripeCaptureService: StripeCaptureService,
+    private readonly stripeRefundService: StripeRefundService,
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>
   ) {}
+
+  /**
+   * Auto-decline: merchant never accepted within accept + grace window.
+   * Releases payment auth / refunds captured Stripe / reserved inventory.
+   * @returns true when the order was cancelled; false when preconditions no longer match.
+   */
+  async autoDeclineUnacceptedOrderAsSystem(orderId: string): Promise<boolean> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order || order.current_status !== 'pending') {
+      this.logger.warn(
+        `Skipping auto-decline for ${orderId}: not pending`
+      );
+      return false;
+    }
+
+    const previousStatus = order.current_status;
+    const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
+    await this.markOrderAutoDeclined(orderId, paymentStatus);
+
+    await this.runOrderCancellationSideEffects(
+      order,
+      orderId,
+      previousStatus,
+      'system',
+      'Auto-declined: merchant did not accept within the acceptance window'
+    );
+
+    try {
+      await this.notifyClientMerchantUnavailable(order, orderId);
+    } catch (error: any) {
+      this.logger.error(
+        `Auto-decline client notify failed for ${orderId}: ${error?.message}`
+      );
+    }
+    return true;
+  }
+
+  private async markOrderAutoDeclined(
+    orderId: string,
+    paymentStatus: 'cancelled' | 'refunded' | 'paid'
+  ): Promise<void> {
+    const at = new Date().toISOString();
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AutoDeclineOrder(
+        $orderId: uuid!
+        $at: timestamptz!
+        $paymentStatus: String!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: cancelled
+            cancelled_by: "system"
+            cancelled_at: $at
+            cancellation_reason_id: 19
+            cancellation_notes: "The merchant was unavailable to accept your order."
+            payment_status: $paymentStatus
+            updated_at: $at
+          }
+        ) { id }
+      }
+    `,
+      { orderId, at, paymentStatus }
+    );
+  }
+
+  /** Release auth, or full-refund captured card charges. */
+  private async releaseOrRefundStripeIfNeeded(
+    order: Orders
+  ): Promise<'cancelled' | 'refunded' | 'paid'> {
+    if ((order as any).payment_source !== 'credit_card') {
+      return 'cancelled';
+    }
+    const ps = (order as any).payment_status as string | null;
+    if (ps === 'authorized' || ps === 'pending') {
+      await this.releaseStripeAuthorizationIfNeeded(order);
+      return 'cancelled';
+    }
+    if (ps === 'paid') {
+      const refund = await this.stripeRefundService.initiateOrderRefund({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        cancellationFee: 0,
+        cancelledBy: 'system',
+      });
+      if (!refund.success) {
+        this.logger.warn(
+          `Stripe refund failed for auto-declined order ${order.order_number}: ${refund.message}`
+        );
+        // Keep paid so order.cancelled Lambda can retry the refund.
+        return 'paid';
+      }
+      return 'refunded';
+    }
+    return 'cancelled';
+  }
+
+  private async notifyClientMerchantUnavailable(
+    order: Orders,
+    orderId: string
+  ): Promise<void> {
+    const msg =
+      'The merchant was unavailable to accept your order.';
+    await this.notificationsService.sendOrderAutoDeclinedPush({
+      clientUserId: order.client?.user_id,
+      orderId,
+      orderNumber: order.order_number,
+      preferredLanguage: order.client?.user?.preferred_language,
+      failureMessage: msg,
+    });
+  }
 
   /** System-initiated cancel for stale authorized orders (reconciler). */
   async cancelStaleAuthorizedOrderAsSystem(orderId: string): Promise<void> {

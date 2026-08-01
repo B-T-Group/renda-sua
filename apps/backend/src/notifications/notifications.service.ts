@@ -50,8 +50,12 @@ import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildBusinessOrderCreatedPushMessage,
   buildMentionPushMessage,
+  buildMerchantMissedOrderReminderPushMessage,
   buildNewOrderMessagePushMessage,
   buildNewRentalBookingMessagePushMessage,
+  buildOrderAcceptanceEscalationPushMessage,
+  buildOrderAutoDeclinedPushMessage,
+  buildOrderBusyPushMessage,
   buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
   buildStockAvailabilityCheckPushMessage,
@@ -620,6 +624,162 @@ export class NotificationsService {
         `sendStockAvailabilityResultPush failed for inventory ${params.inventoryId}: ${
           error?.message ?? String(error)
         }`
+      );
+    }
+  }
+
+  async sendOrderAcceptanceEscalationPush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const userId = params.businessUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildOrderAcceptanceEscalationPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_acceptance_escalation',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderAcceptanceEscalationPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendOrderAutoDeclinedPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    failureMessage?: string;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildOrderAutoDeclinedPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_auto_declined',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderAutoDeclinedPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendOrderBusyPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    estimatedPrepMinutes: number;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildOrderBusyPushMessage({
+      orderNumber: params.orderNumber,
+      estimatedPrepMinutes: params.estimatedPrepMinutes,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_busy',
+        estimatedPrepMinutes: String(params.estimatedPrepMinutes),
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendOrderBusyPush failed: ${error?.message ?? String(error)}`);
+    }
+  }
+
+  async sendMerchantMissedOrderReminder(params: {
+    businessUserId: string;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const userId = params.businessUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildMerchantMissedOrderReminderPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_acceptance_missed',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendMerchantMissedOrderReminder failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async notifySuperadminsOrderNoResponse(params: {
+    orderId: string;
+    orderNumber: string;
+    businessName: string;
+  }): Promise<void> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery(
+        `query Superusers {
+          user_roles(where: { role: { key: { _eq: "superuser" } } }) {
+            user_id
+          }
+        }`
+      );
+      const ids = [
+        ...new Set(
+          (result.user_roles || [])
+            .map((r: { user_id?: string }) => r.user_id?.trim())
+            .filter(Boolean) as string[]
+        ),
+      ];
+      const title = 'Merchant no response';
+      const body = `${params.businessName} has not accepted order ${params.orderNumber}`;
+      await Promise.all(
+        ids.map((userId) =>
+          this.sendPushNotificationByUserId(userId, title, body, {
+            url: `/orders/${params.orderId}`,
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            event: 'order_acceptance_admin_alert',
+          }).catch((error: any) => {
+            this.logger.warn(
+              `Admin no-response push failed for ${userId}: ${error?.message}`
+            );
+          })
+        )
+      );
+      this.logger.warn(
+        `Order ${params.orderNumber} escalated: merchant no response (${ids.length} superusers notified)`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperadminsOrderNoResponse failed: ${error?.message ?? String(error)}`
       );
     }
   }
