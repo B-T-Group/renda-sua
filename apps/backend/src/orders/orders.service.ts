@@ -4097,9 +4097,31 @@ export class OrdersService {
       request.notes
     );
   }
+  /** Convert a free-text search into a Hasura orders_bool_exp. */
+  private buildOrderSearchFilter(search: string): Record<string, unknown> {
+    const pattern = `%${search}%`;
+    return {
+      _or: [
+        { order_number: { _ilike: pattern } },
+        { client: { user: { first_name: { _ilike: pattern } } } },
+        { client: { user: { last_name: { _ilike: pattern } } } },
+        { business_location: { name: { _ilike: pattern } } },
+      ],
+    };
+  }
+
+  private mergeFilterParts(
+    rest: Record<string, unknown>,
+    part: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (Object.keys(rest).length === 0) return part;
+    if (Object.keys(part).length === 0) return rest;
+    return { _and: [rest, part] };
+  }
+
   /**
-   * Normalize filters to convert 'status' field to 'current_status'
-   * This handles cases where filters are passed with the incorrect field name
+   * Normalize filters to convert convenience fields (status, search, etc.)
+   * into valid Hasura orders_bool_exp shapes.
    */
   private normalizeFilters(filters: any): any {
     if (!filters || typeof filters !== 'object') {
@@ -4120,6 +4142,30 @@ export class OrdersService {
         ...filters,
         _or: filters._or.map((filter: any) => this.normalizeFilters(filter)),
       };
+    }
+
+    if ('search' in filters) {
+      const { search, ...rest } = filters;
+      const term = typeof search === 'string' ? search.trim() : '';
+      const normalizedRest =
+        Object.keys(rest).length > 0 ? this.normalizeFilters(rest) : {};
+      if (!term) return normalizedRest;
+      return this.mergeFilterParts(
+        normalizedRest,
+        this.buildOrderSearchFilter(term)
+      );
+    }
+
+    if ('dateFrom' in filters || 'dateTo' in filters) {
+      const { dateFrom, dateTo, ...rest } = filters;
+      const created_at: Record<string, string> = {};
+      if (typeof dateFrom === 'string' && dateFrom) created_at._gte = dateFrom;
+      if (typeof dateTo === 'string' && dateTo) created_at._lte = dateTo;
+      const datePart =
+        Object.keys(created_at).length > 0 ? { created_at } : {};
+      const normalizedRest =
+        Object.keys(rest).length > 0 ? this.normalizeFilters(rest) : {};
+      return this.mergeFilterParts(normalizedRest, datePart);
     }
 
     if (
