@@ -571,12 +571,11 @@ export class HasuraUserService {
     return this.resolveContext(ctx).userId;
   }
 
-  /** @deprecated Session persona comes from JWT; use {@link getSessionPersona}. */
   getActivePersonaHeader(ctx?: RequestContext): string | undefined {
     return this.resolveContext(ctx).activePersona;
   }
 
-  /** Session persona from JWT `x-hasura-default-role`, validated against profile rows. */
+  /** Session persona from JWT + optional `X-Active-Persona`, validated against profiles. */
   getSessionPersona(
     user: {
       client?: { id: string } | null;
@@ -594,6 +593,7 @@ export class HasuraUserService {
     return {
       jwtDefaultRole: resolved.jwtDefaultRole,
       jwtAllowedRoles: resolved.jwtAllowedRoles,
+      activePersona: resolved.activePersona,
     };
   }
 

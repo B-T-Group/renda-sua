@@ -51,6 +51,36 @@ describe('persona.util (JWT session persona)', () => {
     expect(isActivePersona(user, 'client')).toBe(false);
   });
 
+  it('prefers validated X-Active-Persona over stale JWT default role', () => {
+    expect(
+      resolveSessionPersona(multiUser, {
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent', 'client'],
+        activePersona: 'client',
+      })
+    ).toBe('client');
+  });
+
+  it('ignores X-Active-Persona when not in JWT allowed roles', () => {
+    expect(
+      resolveSessionPersona(multiUser, {
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+        activePersona: 'client',
+      })
+    ).toBe('agent');
+  });
+
+  it('ignores X-Active-Persona without matching profile row', () => {
+    expect(
+      resolveSessionPersona(multiUser, {
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent', 'client', 'business'],
+        activePersona: 'business',
+      })
+    ).toBe('agent');
+  });
+
   it('getActivePersonaOrThrow uses active_persona on user', () => {
     expect(
       getActivePersonaOrThrow({ ...multiUser, active_persona: 'client' })

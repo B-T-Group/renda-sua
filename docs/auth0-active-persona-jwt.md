@@ -8,7 +8,7 @@ Personas (client / agent / business) live in **Hasura**, not in Auth0 `app_metad
 
   `getAccessTokenSilently({ cacheMode: 'off', authorizationParams: { active_persona: 'client' | 'agent' | 'business' } })`
 
-- Authenticated Nest calls should send header **`X-Active-Persona`** with the same value (the app already aligns this with stored choice + JWT `x-hasura-user-id`).
+- Authenticated Nest calls should send header **`X-Active-Persona`** with the same value (the app already aligns this with stored choice + JWT `x-hasura-user-id`). Nest prefers this header when it matches an enrolled persona and a JWT allowed role, so a stale `x-hasura-default-role` after a UI persona switch does not block client actions like creating orders.
 
 - **Auth0 application**: allow the custom parameter used on `/authorize` (and on the refresh path your tenant uses—confirm in Auth0 docs for your SDK version).
 

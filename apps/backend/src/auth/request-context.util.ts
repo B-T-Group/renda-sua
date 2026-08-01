@@ -100,7 +100,7 @@ export function extractHasuraUserIdFromToken(token: string): string {
   return extractHasuraClaimsFromToken(token).userId;
 }
 
-/** @deprecated Session persona is resolved from JWT, not this header. */
+/** Optional client-selected persona from `X-Active-Persona`. */
 export function extractActivePersonaHeader(
   headers: Record<string, unknown> | undefined
 ): string | undefined {

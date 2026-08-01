@@ -34,9 +34,11 @@ describe('request-context.util JWT extraction', () => {
     });
     const ctx = buildRequestContextFromHeaders({
       authorization: `Bearer ${token}`,
+      'x-active-persona': 'client',
     });
     expect(ctx.userId).toBe('user-2');
     expect(ctx.jwtDefaultRole).toBe('business');
     expect(ctx.jwtAllowedRoles).toEqual(['business']);
+    expect(ctx.activePersona).toBe('client');
   });
 });

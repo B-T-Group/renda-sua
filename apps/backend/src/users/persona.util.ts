@@ -32,8 +32,20 @@ export function userHasPersona(
   return personasFromProfileRelations(user).includes(p);
 }
 
+function isAllowedSessionRole(
+  role: PersonaId,
+  allowed: PersonaId[] | undefined
+): boolean {
+  return !allowed?.length || allowed.includes(role);
+}
+
 /**
- * Active persona from JWT `x-hasura-default-role`, validated against allowed roles and profile rows.
+ * Active persona for the request:
+ * 1. Prefer validated `X-Active-Persona` when enrolled + allowed by JWT
+ * 2. Else JWT `x-hasura-default-role`, validated against allowed roles + profiles
+ *
+ * Header preference keeps multi-persona clients working when the UI has switched
+ * but the access token still carries a stale default role.
  */
 export function resolveSessionPersona(
   user: UserPersonaShape & { personas?: PersonaId[] },
@@ -46,6 +58,17 @@ export function resolveSessionPersona(
       HttpStatus.FORBIDDEN
     );
   }
+
+  const headerRaw = ctx.activePersona?.trim().toLowerCase();
+  if (headerRaw && isPersonaId(headerRaw)) {
+    if (
+      userHasPersona(user, headerRaw) &&
+      isAllowedSessionRole(headerRaw, ctx.jwtAllowedRoles)
+    ) {
+      return headerRaw;
+    }
+  }
+
   const role = ctx.jwtDefaultRole;
   if (!role || !isPersonaId(role)) {
     throw new HttpException(
@@ -53,8 +76,7 @@ export function resolveSessionPersona(
       HttpStatus.UNAUTHORIZED
     );
   }
-  const allowed = ctx.jwtAllowedRoles ?? [];
-  if (allowed.length > 0 && !allowed.includes(role)) {
+  if (!isAllowedSessionRole(role, ctx.jwtAllowedRoles)) {
     throw new HttpException(
       'JWT default role is not in allowed roles',
       HttpStatus.FORBIDDEN

@@ -51,6 +51,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(service.sessionPersonaContext(ctx)).toEqual({
       jwtDefaultRole: 'agent',
       jwtAllowedRoles: ['agent', 'client'],
+      activePersona: undefined,
     });
     expect(service.isConfigured(ctx)).toBe(true);
   });
@@ -71,6 +72,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(service.sessionPersonaContext()).toEqual({
       jwtDefaultRole: 'business',
       jwtAllowedRoles: ['business'],
+      activePersona: undefined,
     });
     expect(service.user_id).toBe('cls-user');
     expect(service.isConfigured()).toBe(true);
@@ -83,6 +85,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(service.sessionPersonaContext()).toEqual({
       jwtDefaultRole: undefined,
       jwtAllowedRoles: undefined,
+      activePersona: undefined,
     });
   });
 
