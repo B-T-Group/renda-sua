@@ -255,9 +255,7 @@ export class OrderPickupMonitorService {
     const cutoff = new Date(
       Date.now() + config.reminderMinutesBefore * 60 * 1000
     ).toISOString();
-    const orders = await this.queryActive(['monitoring'], {
-      pickup_due_at: { _lte: cutoff },
-    });
+    const orders = await this.queryActive(['monitoring'], { _lte: cutoff });
     for (const order of orders) {
       await this.sendReminder(order);
     }
@@ -266,7 +264,7 @@ export class OrderPickupMonitorService {
   private async reconcileAtRisk(config: PickupMonitorConfig): Promise<void> {
     const now = new Date().toISOString();
     const orders = await this.queryActive(['monitoring', 'reminded'], {
-      pickup_due_at: { _lte: now },
+      _lte: now,
     });
     for (const order of orders) {
       await this.escalateAtRisk(order, config);
@@ -277,9 +275,7 @@ export class OrderPickupMonitorService {
     const cutoff = new Date(
       Date.now() - config.overdueGraceMinutes * 60 * 1000
     ).toISOString();
-    const orders = await this.queryActive(['at_risk'], {
-      pickup_due_at: { _lte: cutoff },
-    });
+    const orders = await this.queryActive(['at_risk'], { _lte: cutoff });
     for (const order of orders) {
       await this.escalateOverdue(order, config);
     }
@@ -292,9 +288,7 @@ export class OrderPickupMonitorService {
     const cutoff = new Date(
       Date.now() - config.reassignmentGraceMinutes * 60 * 1000
     ).toISOString();
-    const orders = await this.queryActive(['overdue'], {
-      pickup_due_at: { _lte: cutoff },
-    });
+    const orders = await this.queryActive(['overdue'], { _lte: cutoff });
     for (const order of orders) {
       await this.tryReassign(order, config);
     }
@@ -420,7 +414,7 @@ export class OrderPickupMonitorService {
 
   private async queryActive(
     states: OrderPickupState[],
-    dueFilter: Record<string, unknown>
+    dueFilter: { _lte: string }
   ): Promise<MonitoredPickupOrder[]> {
     const res = await this.hasura.executeQuery(
       `query PickupActive($states: [order_pickup_state!]!, $due: timestamptz_comparison_exp!) {

@@ -2,14 +2,34 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { DEFAULT_PICKUP_MONITOR_CONFIG } from './order-pickup.types';
 
 describe('OrderPickupMonitorService', () => {
-  const makeService = () =>
+  const makeService = (hasura?: { executeQuery: jest.Mock }) =>
     new OrderPickupMonitorService(
-      {} as any,
+      (hasura ?? { executeQuery: jest.fn() }) as any,
       {} as any,
       {} as any,
       {} as any,
       {} as any
     );
+
+  describe('queryActive due filter', () => {
+    it('passes timestamptz comparison without nesting pickup_due_at', async () => {
+      const executeQuery = jest.fn().mockResolvedValue({ orders: [] });
+      const service = makeService({ executeQuery });
+      await (service as any).reconcileReminders({
+        reminderMinutesBefore: 5,
+      });
+      expect(executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('PickupActive'),
+        expect.objectContaining({
+          states: ['monitoring'],
+          due: { _lte: expect.any(String) },
+        })
+      );
+      expect(executeQuery.mock.calls[0][1].due).not.toHaveProperty(
+        'pickup_due_at'
+      );
+    });
+  });
 
   describe('computePickupDueAt', () => {
     it('uses assignment SLA when pickup_by is null', () => {

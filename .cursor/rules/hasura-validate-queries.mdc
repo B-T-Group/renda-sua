@@ -1,0 +1,59 @@
+---
+description: Validate new/changed Hasura GraphQL against local Hasura before shipping
+globs: apps/backend/**/*.{ts,js}
+alwaysApply: false
+---
+
+# Validate Hasura GraphQL against local Hasura
+
+When you add or change a Hasura GraphQL **query/mutation** (or the variables passed into it) in the backend, validate it against **local Hasura** when reachable. Do not ship untested filter/variable shapes.
+
+## Local endpoint
+
+1. URL: `http://localhost:8080/v1/graphql` (`apps/hasura/config.yaml`)
+2. Default admin secret: `myadminsecretkey` (same as migrations / `apps/hasura/docker-compose.yaml`)
+3. If you get `access-denied`, the process on `:8080` may be a different Hasura — read `HASURA_GRAPHQL_ADMIN_SECRET` from the running container (`docker inspect <name>`) or use the Hasura MCP if authenticated. Do **not** commit alternate secrets into the repo.
+4. Confirm the instance has the app schema (`orders` on `query_root`). An empty/other Hasura will fail with `field 'orders' not found`.
+5. If local Hasura is unreachable or schema-less, note that and still fix the query logically — do not invent a successful validation
+
+## How to validate
+
+Send the exact operation + variables:
+
+```bash
+curl -s http://localhost:8080/v1/graphql \
+  -H 'Content-Type: application/json' \
+  -H 'x-hasura-admin-secret: myadminsecretkey' \
+  -d '{"query":"<OPERATION>","variables":{...}}'
+```
+
+Success = JSON with `data` and **no** `errors`. Fix any `validation-failed` / field / type errors before finishing.
+
+Use a minimal selection set for the smoke check, with the same `where` / args / variables as production code.
+
+## Variable shape (common failure)
+
+If the query already binds a column to a comparison variable, pass **only** the comparison object — do not re-nest the column name.
+
+```graphql
+# query
+orders(where: { pickup_due_at: $due })
+# $due: timestamptz_comparison_exp!
+```
+
+```ts
+// ❌ BAD — double nesting → field 'pickup_due_at' not found in timestamptz_comparison_exp
+due: { pickup_due_at: { _lte: cutoff } }
+
+// ✅ GOOD
+due: { _lte: cutoff }
+```
+
+Same rule for `_eq` / `_in` / `_gte` / bool_exp variables: the GraphQL variable type is the **inner** filter type.
+
+## When this applies
+
+- New `executeQuery` / `executeMutation` strings
+- Changed `where` / `order_by` / args
+- Changed variable construction for an existing operation
+- Cron/monitor jobs that build Hasura filters
