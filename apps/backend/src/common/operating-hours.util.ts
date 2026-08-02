@@ -50,11 +50,16 @@ export function getDayNameForIndex(dayIndex: number): DayName {
   return DAY_NAMES_BY_INDEX[((dayIndex % 7) + 7) % 7];
 }
 
+/**
+ * Parses `HH:mm` or `HH:mm:ss` (Postgres `time` columns round-trip through
+ * Hasura as `HH:mm:ss`, e.g. delivery_time_slots.start_time) into minutes
+ * since midnight. Seconds, if present, are truncated (not rounded).
+ */
 export function parseTimeToMinutes(
   value: string | undefined | null
 ): number | null {
   if (!value) return null;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
   if (!match) return null;
   const hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);

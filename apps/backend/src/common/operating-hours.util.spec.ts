@@ -22,6 +22,12 @@ describe('operating-hours.util', () => {
     expect(parseTimeToMinutes(undefined)).toBeNull();
   });
 
+  it('parses HH:mm:ss (Postgres `time` columns via Hasura) into minutes since midnight', () => {
+    expect(parseTimeToMinutes('08:00:00')).toBe(480);
+    expect(parseTimeToMinutes('20:30:45')).toBe(1230);
+    expect(parseTimeToMinutes('24:00:00')).toBeNull();
+  });
+
   it('normalizes full day name + open/close shape', () => {
     const normalized = normalizeOperatingHours({
       monday: { open: '08:00', close: '18:00' },
@@ -139,6 +145,15 @@ describe('operating-hours.util', () => {
 
     it('accepts a slot exactly matching the open window', () => {
       expect(isSlotFullyWithinHours(openDay, '08:00', '20:00')).toBe(true);
+    });
+
+    it('accepts a slot given as HH:mm:ss, matching delivery_time_slots as returned by Hasura', () => {
+      expect(isSlotFullyWithinHours(openDay, '08:00:00', '12:00:00')).toBe(
+        true
+      );
+      expect(isSlotFullyWithinHours(openDay, '16:00:00', '20:00:00')).toBe(
+        true
+      );
     });
   });
 });
