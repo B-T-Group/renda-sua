@@ -24,7 +24,7 @@ import {
   personasFromProfileRelations,
   resolveSessionPersona,
 } from '../users/persona.util';
-import type { PersonaId } from '../users/persona.types';
+import { isPersonaId, type PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
 import { HasuraSystemService } from './hasura-system.service';
@@ -133,6 +133,22 @@ export class HasuraUserService {
   }
 
   /**
+   * Role Hasura should use for this request. Prefer `X-Active-Persona` when it is
+   * a JWT-allowed persona so multi-persona clients are not stuck on a stale
+   * `x-hasura-default-role` (e.g. client JWT while the UI is in business mode).
+   */
+  hasuraRoleForRequest(resolved: RequestContext): string | undefined {
+    const allowed = resolved.jwtAllowedRoles;
+    const header = resolved.activePersona?.trim().toLowerCase();
+    if (header && isPersonaId(header)) {
+      if (!allowed?.length || allowed.includes(header)) {
+        return header;
+      }
+    }
+    return resolved.jwtDefaultRole;
+  }
+
+  /**
    * Creates a GraphQL client with user's auth token
    */
   createGraphQLClient(ctx?: RequestContext): GraphQLClient {
@@ -143,6 +159,10 @@ export class HasuraUserService {
 
     if (resolved.authToken) {
       headers.Authorization = `Bearer ${resolved.authToken}`;
+      const role = this.hasuraRoleForRequest(resolved);
+      if (role) {
+        headers['X-Hasura-Role'] = role;
+      }
     } else {
       headers['X-Hasura-Role'] = 'anonymous';
     }

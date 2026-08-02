@@ -102,4 +102,36 @@ describe('HasuraUserService (singleton + CLS)', () => {
       )
     ).toBe('agent');
   });
+
+  it('forwards X-Hasura-Role from X-Active-Persona when JWT allows it', () => {
+    const { service } = makeService();
+    const ctx = emptyRequestContext({
+      userId: 'u1',
+      authToken: 'token',
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client', 'business'],
+      activePersona: 'business',
+    });
+    const client = service.createGraphQLClient(ctx);
+    expect(client.requestConfig.headers).toMatchObject({
+      Authorization: 'Bearer token',
+      'X-Hasura-Role': 'business',
+    });
+  });
+
+  it('falls back to JWT default role when active persona is not allowed', () => {
+    const { service } = makeService();
+    const ctx = emptyRequestContext({
+      userId: 'u1',
+      authToken: 'token',
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+      activePersona: 'business',
+    });
+    expect(service.hasuraRoleForRequest(ctx)).toBe('client');
+    const client = service.createGraphQLClient(ctx);
+    expect(client.requestConfig.headers).toMatchObject({
+      'X-Hasura-Role': 'client',
+    });
+  });
 });
