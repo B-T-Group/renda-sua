@@ -19,6 +19,7 @@ import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
+import { initSentry } from './instrument';
 
 // Must run before bootstrap / Nest so Hasura GraphQL clients can resolve hostnames.
 configureRuntimeDns();
@@ -82,28 +83,9 @@ async function loadSecrets() {
 const JSON_BODY_LIMIT = '150mb';
 
 async function bootstrap() {
-  if (process.env.SENTRY_DSN) {
-    try {
-      const Sentry = await import('@sentry/node');
-      Sentry.init({
-        dsn: process.env.SENTRY_DSN,
-        environment: process.env.NODE_ENV || 'development',
-        tracesSampleRate: 0.1,
-      });
-      process.on('unhandledRejection', (reason: unknown) => {
-        Sentry.captureException(reason);
-      });
-      process.on('uncaughtException', (err: Error) => {
-        Sentry.captureException(err);
-        throw err;
-      });
-    } catch (e) {
-      console.warn('Sentry init skipped:', e);
-    }
-  }
-
-  // Load secrets BEFORE NestJS starts
+  // Load secrets BEFORE NestJS starts so SENTRY_DSN from Secrets Manager is available.
   await loadSecrets();
+  initSentry();
 
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   // Stripe webhooks require the raw, unparsed request body for signature

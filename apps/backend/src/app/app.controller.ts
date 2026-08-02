@@ -6,7 +6,9 @@ import {
   HttpStatus,
   Inject,
   Post,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { Public } from '../auth/public.decorator';
@@ -14,6 +16,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { AppService } from './app.service';
+
+type HealthHasura = { status: string; latencyMs?: number };
 
 @Controller()
 export class AppController {
@@ -25,10 +29,10 @@ export class AppController {
 
   @Public()
   @Get('health')
-  async getHealth(): Promise<{
+  async getHealth(@Res({ passthrough: true }) res: Response): Promise<{
     status: string;
     timestamp: string;
-    hasura?: { status: string; latencyMs?: number };
+    hasura?: HealthHasura;
   }> {
     this.logger.info('GET /health endpoint called', {
       service: 'AppController',
@@ -38,25 +42,40 @@ export class AppController {
     });
 
     const base = this.appService.getHealth();
-    let hasura: { status: string; latencyMs?: number } | undefined;
+    const hasura = await this.checkHasuraHealth();
+    if (hasura.status === 'down') {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE);
+      return { status: 'unhealthy', timestamp: base.timestamp, hasura };
+    }
+    return { ...base, hasura };
+  }
+
+  private async checkHasuraHealth(): Promise<HealthHasura> {
+    const start = Date.now();
+    const queryPromise = this.hasuraSystemService.executeQuery(
+      'query Health { user_types(limit: 1) { id } }',
+      {}
+    );
+    // Swallow late rejection if the timeout wins the race.
+    void queryPromise.catch(() => undefined);
     try {
-      const start = Date.now();
-      await this.hasuraSystemService.executeQuery(
-        'query Health { user_types(limit: 1) { id } }',
-        {}
-      );
-      const latencyMs = Date.now() - start;
-      hasura = { status: 'up', latencyMs };
+      await Promise.race([
+        queryPromise,
+        this.rejectAfterMs(1500, 'Hasura health check timed out'),
+      ]);
+      return { status: 'up', latencyMs: Date.now() - start };
     } catch (err) {
       this.logger.warn('Health check: Hasura unreachable', {
         error: err instanceof Error ? err.message : String(err),
       });
-      hasura = { status: 'down' };
+      return { status: 'down' };
     }
-    return {
-      ...base,
-      hasura,
-    };
+  }
+
+  private rejectAfterMs(ms: number, message: string): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), ms);
+    });
   }
 
   @Public()

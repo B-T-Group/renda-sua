@@ -118,6 +118,8 @@ jobs:
                           "environment": {
             "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
             "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
+            "GIT_SHA": "${{ github.sha }}",
+            "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
             "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
             "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
             "AWS_REGION": "${{ env.AWS_REGION }}"
@@ -130,10 +132,10 @@ jobs:
               "healthCheck": {
                 "healthyThreshold": 2,
                 "unhealthyThreshold": 2,
-                "timeoutSeconds": 2,
+                "timeoutSeconds": 5,
                 "intervalSeconds": 5,
-                "path": "/health",
-                "successCodes": "200-499"
+                "path": "/api/health",
+                "successCodes": "200-399"
               }
             }'
 

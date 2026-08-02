@@ -6,7 +6,9 @@ This backend application uses Winston logging with AWS CloudWatch integration fo
 
 - **Structured Logging**: JSON formatted logs with metadata
 - **Multiple Transports**: Console (development) and CloudWatch (production)
-- **Error Handling**: Automatic capture of uncaught exceptions and unhandled rejections
+- **Request correlation**: `requestId` / `userId` from CLS on every log line; `X-Request-Id` response header
+- **CloudWatch JSON**: Full JSON events (not truncated message-only strings)
+- **Error Handling**: Automatic capture of uncaught exceptions and unhandled rejections; 5xx via Sentry when configured
 - **Environment-based Configuration**: Different logging behavior for development and production
 - **NestJS Integration**: Winston replaces the default NestJS logger
 

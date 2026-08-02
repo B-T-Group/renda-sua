@@ -1,6 +1,7 @@
 import { utilities as nestWinstonModuleUtilities } from 'nest-winston';
 import * as winston from 'winston';
 import CloudWatchTransport from 'winston-cloudwatch';
+import { getRequestLogContext } from '../common/request-context-log.util';
 
 export interface LoggingConfig {
   logGroupName: string;
@@ -13,10 +14,33 @@ export interface LoggingConfig {
   enableConsole: boolean;
 }
 
+const requestContextFormat = winston.format((info) => {
+  const ctx = getRequestLogContext();
+  if (ctx.requestId) {
+    info.requestId = ctx.requestId;
+  }
+  if (ctx.userId) {
+    info.userId = ctx.userId;
+  }
+  return info;
+});
+
+/** Formats a Winston log info object as a single CloudWatch message string. */
+export function formatCloudWatchMessage(
+  item: Record<string, unknown>
+): string {
+  const { level, message, timestamp, ...meta } = item;
+  return JSON.stringify({
+    level,
+    message,
+    timestamp,
+    ...meta,
+  });
+}
+
 export const createWinstonConfig = (config: LoggingConfig) => {
   const transports: winston.transport[] = [];
 
-  // Console transport for local development
   if (config.enableConsole) {
     transports.push(
       new winston.transports.Console({
@@ -34,16 +58,12 @@ export const createWinstonConfig = (config: LoggingConfig) => {
     );
   }
 
-  // CloudWatch transport: use when enabled. Credentials optional—when omitted,
-  // the AWS SDK uses the default chain (e.g. IAM role on ECS/EC2/Lambda).
   if (config.enableCloudWatch) {
     const cloudWatchOptions: Record<string, unknown> = {
       logGroupName: config.logGroupName,
       logStreamName: config.logStreamName,
       awsRegion: config.region,
-      messageFormatter: (item: { level: string; message: string }) => {
-        return `[${item.level}]: ${item.message}`;
-      },
+      messageFormatter: formatCloudWatchMessage,
       errorHandler: (err: Error) => {
         console.error('CloudWatch logging error:', err);
       },
@@ -58,13 +78,13 @@ export const createWinstonConfig = (config: LoggingConfig) => {
   return {
     level: config.logLevel,
     format: winston.format.combine(
+      requestContextFormat(),
       winston.format.timestamp(),
       winston.format.errors({ stack: true }),
       winston.format.json()
     ),
     defaultMeta: { service: 'rendasua-backend' },
     transports,
-    // Handle uncaught exceptions and unhandled rejections
     exceptionHandlers: transports,
     rejectionHandlers: transports,
   };
