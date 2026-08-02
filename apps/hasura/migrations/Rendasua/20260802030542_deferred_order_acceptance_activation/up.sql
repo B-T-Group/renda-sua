@@ -8,9 +8,9 @@ ALTER TABLE public.orders
 COMMENT ON COLUMN public.orders.acceptance_activates_at IS
   'When scheduled acceptance SLA should start; null once active or for ASAP orders';
 
-CREATE INDEX IF NOT EXISTS idx_orders_acceptance_activates_at
-  ON public.orders (acceptance_activates_at)
-  WHERE current_status = 'pending' AND acceptance_state = 'scheduled';
+-- Note: the partial index on acceptance_activates_at is in a separate migration
+-- (20260802030543) because PostgreSQL requires a new enum value to be committed
+-- before it can be used in an index predicate (error 55P04).
 
 ALTER TABLE public.businesses
   ADD COLUMN IF NOT EXISTS future_acceptance_timeout_seconds integer,

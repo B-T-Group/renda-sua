@@ -1,5 +1,3 @@
-DROP INDEX IF EXISTS public.idx_orders_acceptance_activates_at;
-
 ALTER TABLE public.orders
   DROP COLUMN IF EXISTS acceptance_activates_at;
 
