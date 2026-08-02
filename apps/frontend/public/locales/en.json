@@ -3904,7 +3904,141 @@
     "client": {
       "actionRequired": {
         "delivered": "Action Required: Complete order to release payment"
+      },
+      "etaBy": "Estimated by {{when}}",
+      "nextStep": "What happens next",
+      "hero": {
+        "onTheWay": "Your order is on its way",
+        "preparing": "The business is preparing your order",
+        "readyPickup": "Ready for pickup",
+        "waitingAgent": "Waiting for a delivery agent",
+        "delivered": "Delivered — please confirm",
+        "complete": "Order complete"
+      },
+      "actions": {
+        "track": "Track delivery",
+        "reportIssue": "Report issue",
+        "contactBusiness": "Contact business",
+        "contactAgent": "Contact delivery agent"
+      },
+      "status": {
+        "out_for_delivery": "Your order is on its way",
+        "ready_for_pickup": "Waiting for delivery agent",
+        "preparing": "Being prepared",
+        "confirmed": "Confirmed — preparing soon",
+        "assigned_to_agent": "Agent assigned",
+        "picked_up": "Picked up by agent",
+        "in_transit": "On the way",
+        "delivered": "Delivered",
+        "complete": "Complete"
       }
+    },
+    "business": {
+      "hero": {
+        "accept": "Accept Order",
+        "prepare": "Prepare Order",
+        "confirmPickup": "Confirm Pickup",
+        "collectPayment": "Collect Pickup Payment",
+        "complete": "Complete Order",
+        "overwrite": "Generate Overwrite Code",
+        "reconcile": "Reconcile Cash",
+        "refund": "Manage Refund",
+        "waitingAgent": "Waiting for Agent",
+        "completed": "Order Completed"
+      },
+      "sla": {
+        "acceptWithin": "Accept within",
+        "prepBy": "Preparation expected by"
+      },
+      "actions": {
+        "reject": "Reject",
+        "contactCustomer": "Contact customer",
+        "contactAgent": "Contact agent"
+      },
+      "status": {
+        "pending": "Needs acceptance",
+        "confirmed": "Confirmed — prepare next",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Agent assigned",
+        "out_for_delivery": "Out for delivery",
+        "delivered": "Delivered",
+        "complete": "Completed"
+      }
+    },
+    "delivery": {
+      "hero": {
+        "claim": "Claim this delivery",
+        "goPickup": "Go to pickup",
+        "pickupDone": "Package picked up",
+        "deliver": "Deliver to customer",
+        "complete": "Complete delivery"
+      },
+      "urgency": {
+        "pickupWithin": "Pickup within",
+        "deliverBy": "Deliver by"
+      },
+      "stops": {
+        "pickup": "Pickup location",
+        "delivery": "Delivery location"
+      },
+      "properties": {
+        "fast": "Fast Delivery",
+        "heavy": "Heavy",
+        "fragile": "Fragile",
+        "frozen": "Frozen",
+        "perishable": "Perishable"
+      },
+      "requirements": {
+        "pin": "PIN required",
+        "signature": "Signature required",
+        "photo": "Photo proof",
+        "age": "Age verification",
+        "id": "ID verification"
+      },
+      "actions": {
+        "navigate": "Navigate",
+        "unablePickup": "Unable to Pickup",
+        "reportIssue": "Report Issue",
+        "contactBusiness": "Contact Business",
+        "contactCustomer": "Contact Customer"
+      },
+      "distance": "{{km}} km",
+      "earnings": "Earnings",
+      "packageInfo": "Package information",
+      "status": {
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Go to pickup",
+        "picked_up": "Picked up",
+        "in_transit": "In transit",
+        "out_for_delivery": "Deliver to customer",
+        "delivered": "Delivered",
+        "complete": "Complete"
+      }
+    },
+    "countdown": {
+      "hoursMinutes": "{{hours}}h {{mins}}m",
+      "minutesSeconds": "{{mins}}m {{secs}}s",
+      "seconds": "{{secs}}s",
+      "overdue": "Overdue"
+    },
+    "address": {
+      "unavailable": "Address unavailable",
+      "instructions": "Instructions",
+      "navigate": "Navigate"
+    },
+    "contact": {
+      "unavailable": "Contact unavailable"
+    },
+    "timeline": {
+      "title": "Timeline",
+      "empty": "No history yet"
+    },
+    "items": {
+      "empty": "No items"
+    },
+    "deliveryWindow": {
+      "selected": "{{date}} · {{start}} – {{end}}"
     },
     "clientHold": "Client Hold",
     "clientInfo": "Client Information",

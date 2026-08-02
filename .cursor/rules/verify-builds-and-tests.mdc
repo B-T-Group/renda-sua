@@ -1,0 +1,15 @@
+---
+description: Always verify that all apps build and tests pass before completing any task
+alwaysApply: true
+---
+
+# Mandatory verification: builds and tests
+
+After making any substantive code change (feature, refactor, bug fix), you MUST verify before considering the task complete:
+
+1. **Build all affected apps** — run `nx run-many --target=build --all` (or at minimum `nx build frontend` / `nx build backend` for the apps you touched).
+2. **Run the tests** — run `nx run-many --target=test --all` (or the scoped `nx test frontend` / `nx test backend` for touched apps).
+3. **Fix all failures you introduced** before ending the task. Do not report work as done with a failing build or failing tests.
+4. If a failure is pre-existing (reproducible on a clean checkout before your change), say so explicitly in your summary instead of silently skipping it.
+
+For multi-phase refactors, run this verification **at the end of every phase**, not only at the very end.

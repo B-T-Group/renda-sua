@@ -23,7 +23,7 @@ import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { orderModifiedAtMs } from '../../utils/orderListSort';
 import AvailableOrderCard from '../common/AvailableOrderCard';
-import OrderCard from '../common/OrderCard';
+import PersonaOrderCard from '../orders/PersonaOrderCard';
 import SEOHead from '../seo/SEOHead';
 
 interface OrderFilters {
@@ -409,7 +409,7 @@ const OpenOrdersPage: React.FC = () => {
                       sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                     >
                       {claimedOrders.map((order) => (
-                        <OrderCard key={order.id} order={order} />
+                        <PersonaOrderCard key={order.id} order={order} />
                       ))}
                     </Box>
                   </Box>

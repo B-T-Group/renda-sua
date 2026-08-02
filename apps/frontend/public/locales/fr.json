@@ -3645,8 +3645,143 @@
     "client": {
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande pour libérer le paiement"
+      },
+      "etaBy": "Estimé pour {{when}}",
+      "nextStep": "Prochaine étape",
+      "hero": {
+        "onTheWay": "Votre commande est en route",
+        "preparing": "Le commerce prépare votre commande",
+        "readyPickup": "Prête pour le retrait",
+        "waitingAgent": "En attente d'un livreur",
+        "delivered": "Livrée — veuillez confirmer",
+        "complete": "Commande terminée"
+      },
+      "actions": {
+        "track": "Suivre la livraison",
+        "reportIssue": "Signaler un problème",
+        "contactBusiness": "Contacter le commerce",
+        "contactAgent": "Contacter le livreur"
+      },
+      "status": {
+        "out_for_delivery": "Votre commande est en route",
+        "ready_for_pickup": "En attente d'un livreur",
+        "preparing": "En préparation",
+        "confirmed": "Confirmée — préparation bientôt",
+        "assigned_to_agent": "Livreur assigné",
+        "picked_up": "Récupérée par le livreur",
+        "in_transit": "En route",
+        "delivered": "Livrée",
+        "complete": "Terminée"
       }
     },
+    "business": {
+      "hero": {
+        "accept": "Accepter la commande",
+        "prepare": "Préparer la commande",
+        "confirmPickup": "Confirmer le retrait",
+        "collectPayment": "Encaisser le paiement",
+        "complete": "Terminer la commande",
+        "overwrite": "Générer un code de remplacement",
+        "reconcile": "Réconcilier le cash",
+        "refund": "Gérer le remboursement",
+        "waitingAgent": "En attente d'un livreur",
+        "completed": "Commande terminée"
+      },
+      "sla": {
+        "acceptWithin": "Accepter dans",
+        "prepBy": "Préparation attendue pour"
+      },
+      "actions": {
+        "reject": "Refuser",
+        "contactCustomer": "Contacter le client",
+        "contactAgent": "Contacter le livreur"
+      },
+      "status": {
+        "pending": "À accepter",
+        "confirmed": "Confirmée — à préparer",
+        "preparing": "En préparation",
+        "ready_for_pickup": "Prête pour le retrait",
+        "assigned_to_agent": "Livreur assigné",
+        "out_for_delivery": "En livraison",
+        "delivered": "Livrée",
+        "complete": "Terminée"
+      }
+    },
+    "delivery": {
+      "hero": {
+        "claim": "Prendre cette livraison",
+        "goPickup": "Aller au point de retrait",
+        "pickupDone": "Colis récupéré",
+        "deliver": "Livrer au client",
+        "complete": "Terminer la livraison"
+      },
+      "urgency": {
+        "pickupWithin": "Retrait dans",
+        "deliverBy": "Livrer avant"
+      },
+      "stops": {
+        "pickup": "Lieu de retrait",
+        "delivery": "Lieu de livraison"
+      },
+      "properties": {
+        "fast": "Livraison rapide",
+        "heavy": "Lourd",
+        "fragile": "Fragile",
+        "frozen": "Surgelé",
+        "perishable": "Périssable"
+      },
+      "requirements": {
+        "pin": "PIN requis",
+        "signature": "Signature requise",
+        "photo": "Preuve photo",
+        "age": "Vérification d'âge",
+        "id": "Vérification d'identité"
+      },
+      "actions": {
+        "navigate": "Naviguer",
+        "unablePickup": "Impossible de récupérer",
+        "reportIssue": "Signaler un problème",
+        "contactBusiness": "Contacter le commerce",
+        "contactCustomer": "Contacter le client"
+      },
+      "distance": "{{km}} km",
+      "earnings": "Gains",
+      "packageInfo": "Informations du colis",
+      "status": {
+        "ready_for_pickup": "Prête pour le retrait",
+        "assigned_to_agent": "Aller au retrait",
+        "picked_up": "Récupérée",
+        "in_transit": "En transit",
+        "out_for_delivery": "Livrer au client",
+        "delivered": "Livrée",
+        "complete": "Terminée"
+      }
+    },
+    "countdown": {
+      "hoursMinutes": "{{hours}}h {{mins}}m",
+      "minutesSeconds": "{{mins}}m {{secs}}s",
+      "seconds": "{{secs}}s",
+      "overdue": "En retard"
+    },
+    "address": {
+      "unavailable": "Adresse indisponible",
+      "instructions": "Instructions",
+      "navigate": "Naviguer"
+    },
+    "contact": {
+      "unavailable": "Contact indisponible"
+    },
+    "timeline": {
+      "title": "Historique",
+      "empty": "Aucun historique"
+    },
+    "items": {
+      "empty": "Aucun article"
+    },
+    "deliveryWindow": {
+      "selected": "{{date}} · {{start}} – {{end}}"
+    },
+
     "clientHold": "Retenue Client",
     "clientInfo": "Informations sur le Client",
     "color": "Couleur",

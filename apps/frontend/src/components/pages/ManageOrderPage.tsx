@@ -1,46 +1,15 @@
-import {
-  ArrowBack as ArrowBackIcon,
-  Business as BusinessIcon,
-  CheckCircle,
-  Event,
-  History as HistoryIcon,
-  LocalShipping,
-  LocationOn,
-  Payment,
-  Phone,
-  Receipt,
-  Refresh as RefreshIcon,
-  ShoppingBag,
-  Star,
-  Store,
-  Support as SupportIcon,
-  Timeline as TimelineIcon,
-} from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Star, Support as SupportIcon } from '@mui/icons-material';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
+  CircularProgress,
   Container,
-  Divider,
-  Grid,
   IconButton,
-  LinearProgress,
-  Paper,
   Skeleton,
   Stack,
-  Step,
-  StepConnector,
-  stepConnectorClasses,
-  StepIconProps,
-  StepLabel,
-  Stepper,
-  styled,
-  Tab,
-  Tabs,
   TextField,
   Typography,
   useMediaQuery,
@@ -50,7 +19,6 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import rendasuaLogo from '../../assets/rendasua.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -58,163 +26,53 @@ import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility';
+import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
-import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import RatingDialog, { type RatingDialogMode } from '../dialogs/RatingDialog';
 import ReportIssueDialog from '../dialogs/ReportIssueDialog';
-import AgentActions from '../orders/AgentActions';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
-import BusinessActions from '../orders/BusinessActions';
 import BusinessOrderAlerts from '../orders/BusinessOrderAlerts';
-import ClientActions from '../orders/ClientActions';
-import { ClientDeliveryPinButton } from '../orders/ClientDeliveryPinButton';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
+import BusinessOrderActions from '../orders/business/BusinessOrderActions';
+import ClientOrderActions from '../orders/client/ClientOrderActions';
+import DeliveryOrderActions from '../orders/delivery/DeliveryOrderActions';
 import { OrderPhaseBanner } from '../orders/OrderPhaseBanner';
+import PersonaOrderDetails, {
+  type OrderPersona,
+} from '../orders/PersonaOrderDetails';
 import {
   isRefundOrderStatus,
   RefundProgressCard,
 } from '../orders/RefundProgressCard';
-import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
-import SEOHead from '../seo/SEOHead';
 import {
-  ORDER_PRIMARY_ACTION_LABEL,
   messagesDefaultExpandedForOrder,
-  orderProgressSteps,
+  ORDER_PRIMARY_ACTION_LABEL,
   orderToPhaseInput,
   resolveOrderPhase,
 } from '../../utils/orderPhase';
-import { getPaymentStatusChipColor } from '../../utils/orderUtils';
+import SEOHead from '../seo/SEOHead';
 
-// Custom Step Connector
-const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
-  [`&.${stepConnectorClasses.alternativeLabel}`]: {
-    top: 22,
-  },
-  [`&.${stepConnectorClasses.active}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      backgroundImage:
-        'linear-gradient( 95deg,rgb(25,118,210) 0%,rgb(33,150,243) 50%,rgb(66,165,245) 100%)',
-    },
-  },
-  [`&.${stepConnectorClasses.completed}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      backgroundImage:
-        'linear-gradient( 95deg,rgb(46,125,50) 0%,rgb(56,142,60) 50%,rgb(76,175,80) 100%)',
-    },
-  },
-  [`& .${stepConnectorClasses.line}`]: {
-    height: 3,
-    border: 0,
-    backgroundColor:
-      theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#eaeaf0',
-    borderRadius: 1,
-  },
-}));
+const CLIENT_TRACKING_STATUSES = ['picked_up', 'in_transit', 'out_for_delivery'];
 
-// Custom Step Icon
-const ColorlibStepIconRoot = styled('div')<{
-  ownerState: { completed?: boolean; active?: boolean };
-}>(({ theme, ownerState }) => ({
-  backgroundColor:
-    theme.palette.mode === 'dark' ? theme.palette.grey[700] : '#ccc',
-  zIndex: 1,
-  color: '#fff',
-  width: 50,
-  height: 50,
-  display: 'flex',
-  borderRadius: '50%',
-  justifyContent: 'center',
-  alignItems: 'center',
-  ...(ownerState.active && {
-    backgroundImage:
-      'linear-gradient( 136deg, rgb(25,118,210) 0%, rgb(33,150,243) 50%, rgb(66,165,245) 100%)',
-    boxShadow: '0 4px 10px 0 rgba(0,0,0,.25)',
-  }),
-  ...(ownerState.completed && {
-    backgroundImage:
-      'linear-gradient( 136deg, rgb(46,125,50) 0%, rgb(56,142,60) 50%, rgb(76,175,80) 100%)',
-  }),
-}));
-
-function ColorlibStepIcon(props: StepIconProps) {
-  const { active, completed, className } = props;
-
-  const icons: { [index: string]: React.ReactElement } = {
-    1: <ShoppingBag />,
-    2: <Payment />,
-    3: <CheckCircle />,
-    4: <Store />,
-    5: <LocalShipping />,
-    6: <CheckCircle />,
-  };
-
-  return (
-    <ColorlibStepIconRoot
-      ownerState={{ completed, active }}
-      className={className}
-    >
-      {icons[String(props.icon)]}
-    </ColorlibStepIconRoot>
-  );
-}
-
-// Refund progress is rendered via RefundProgressCard component
-
-// Loading Skeleton Component
-const OrderDetailSkeleton: React.FC = () => (
-  <Container
-        maxWidth="xl"
-        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
-      >
-    <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-      <Skeleton variant="circular" width={40} height={40} />
-      <Skeleton variant="text" width={200} height={40} />
-    </Box>
-    <Grid container spacing={3}>
-      <Grid size={{ xs: 12, md: 8 }}>
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Skeleton variant="text" width="60%" height={32} sx={{ mb: 2 }} />
-            <Skeleton
-              variant="rectangular"
-              height={120}
-              sx={{ mb: 2, borderRadius: 2 }}
-            />
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Skeleton
-                variant="rectangular"
-                width="30%"
-                height={60}
-                sx={{ borderRadius: 2 }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="30%"
-                height={60}
-                sx={{ borderRadius: 2 }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="30%"
-                height={60}
-                sx={{ borderRadius: 2 }}
-              />
-            </Box>
-          </CardContent>
-        </Card>
-        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
-      </Grid>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
-      </Grid>
-    </Grid>
+const LoadingSkeleton = () => (
+  <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Skeleton variant="rectangular" height={80} sx={{ mb: 2, borderRadius: 2 }} />
+    <Skeleton variant="rectangular" height={200} sx={{ mb: 2, borderRadius: 2 }} />
+    <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
   </Container>
 );
+
+function resolvePersona(activePersona?: string | null): OrderPersona {
+  if (activePersona === 'business' || activePersona === 'agent') {
+    return activePersona;
+  }
+  return 'client';
+}
 
 const ManageOrderPage: React.FC = () => {
   const { t } = useTranslation();
@@ -223,11 +81,16 @@ const ManageOrderPage: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { orderId } = useParams<{ orderId: string }>();
   const { profile, userType: activePersona } = useUserProfileContext();
+  const persona = resolvePersona(activePersona);
+  const api = useApiClient();
   const { accounts } = useAccountInfo();
   const { enqueueSnackbar } = useSnackbar();
+  const {
+    cancelOrder,
+    retryOrderPayment,
+    loading: actionLoading,
+  } = useBackendOrders();
   const { status: connectStatus } = useStripeConnect();
-  // In Stripe-supported countries claiming an order imposes no caution/hold,
-  // so caution-related notices must be hidden.
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
@@ -235,48 +98,39 @@ const ManageOrderPage: React.FC = () => {
   const { eligibility, refetch: refetchEligibility } =
     useOrderRatingEligibility(
       orderId || '',
-      order?.current_status === 'complete' && activePersona !== 'business'
+      order?.current_status === 'complete' && persona !== 'business'
     );
   const { isActive: orderSubscriptionActive } = useOrderSubscription({
     orderId: orderId ?? null,
     onOrderUpdate: refetch,
     enabled: Boolean(orderId),
   });
-
-  const {
-    cancelOrder,
-    completeOrder,
-    retryOrderPayment,
-    loading: actionLoading,
-    error: actionError,
-  } = useBackendOrders();
-
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [refundDetail, setRefundDetail] = useState<RefundRequestDetail | null>(null);
-  const [refundDetailLoading, setRefundDetailLoading] = useState(false);
   const { getRefundRequest } = useOrderRefunds();
-  const [pendingAction, setPendingAction] = useState<{
-    action: string;
-    label: string;
-    color: string;
-  } | null>(null);
-  const [notes, setNotes] = useState('');
+
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [reportIssueDialogOpen, setReportIssueDialogOpen] = useState(false);
   const [ratingDialogMode, setRatingDialogMode] =
     useState<RatingDialogMode | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const api = useApiClient();
   const [notificationAlert, setNotificationAlert] = useState<{
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   } | null>(null);
-  const [activeTab, setActiveTab] = useState(0);
+  const [refundDetail, setRefundDetail] = useState<RefundRequestDetail | null>(
+    null
+  );
+  const [refundDetailLoading, setRefundDetailLoading] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [cancelNotes, setCancelNotes] = useState('');
+  const [pendingCancel, setPendingCancel] = useState(false);
+  const [cancellingClaim, setCancellingClaim] = useState(false);
 
-  // Auto-open the rating dialog from ?rate=agent|item|client (push deep links).
-  // Only consume the param when the dialog actually opens; if the user is not
-  // yet eligible (e.g. item rating still locked), keep the intent so a later
-  // eligibility refresh can honor it.
+  useEffect(() => {
+    if (orderId) {
+      void fetchOrder(orderId);
+    }
+  }, [orderId, fetchOrder]);
+
   useEffect(() => {
     const rateParam = searchParams.get('rate');
     if (!rateParam || !eligibility) return;
@@ -291,125 +145,8 @@ const ManageOrderPage: React.FC = () => {
     setSearchParams(searchParams, { replace: true });
   }, [eligibility, searchParams, setSearchParams]);
 
-  // Helper functions
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-      case 'pending_payment':
-        return 'warning';
-      case 'confirmed':
-        return 'info';
-      case 'preparing':
-        return 'primary';
-      case 'ready_for_pickup':
-        return 'secondary';
-      case 'assigned_to_agent':
-        return 'info';
-      case 'picked_up':
-        return 'primary';
-      case 'in_transit':
-        return 'primary';
-      case 'out_for_delivery':
-        return 'secondary';
-      case 'delivered':
-        return 'success';
-      case 'cancelled':
-        return 'error';
-      case 'failed':
-        return 'error';
-      case 'refunded':
-        return 'warning';
-      case 'refund_requested':
-        return 'warning';
-      case 'refund_approved_full':
-      case 'refund_approved_partial':
-      case 'refund_approved_replace':
-        return 'info';
-      case 'refund_rejected':
-        return 'error';
-      case 'complete':
-        return 'success';
-      default:
-        return 'default';
-    }
-  };
-
-  const getOrderStep = (status: string): number => {
-    const stepKeys = orderProgressSteps(order?.fulfillment_method);
-    const statusMap: Record<string, string> = {
-      pending: 'pending',
-      pending_payment: 'pending',
-      confirmed: 'confirmed',
-      preparing: 'confirmed',
-      ready_for_pickup: 'ready_for_pickup',
-      assigned_to_agent: 'assigned_to_agent',
-      picked_up: 'assigned_to_agent',
-      in_transit: 'assigned_to_agent',
-      out_for_delivery: 'out_for_delivery',
-      delivered: 'complete',
-      complete: 'complete',
-    };
-    const key = statusMap[status] ?? status;
-    const idx = stepKeys.indexOf(key);
-    return idx >= 0 ? idx : 0;
-  };
-
-  const formatCurrency = (amount: number, currency = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const formatAddress = (address: any) => {
-    if (!address) return '';
-    const parts = [
-      address.address_line_1,
-      address.address_line_2,
-      address.city,
-      address.state,
-      address.postal_code,
-      address.country,
-    ].filter(Boolean);
-    return parts.join(', ');
-  };
-
   useEffect(() => {
-    if (orderId) {
-      fetchOrder(orderId);
-    }
-  }, [orderId, fetchOrder]);
-
-  useEffect(() => {
-    if (!order) return;
-    if (activePersona === 'agent') {
-      setActiveTab(1);
-      return;
-    }
-    if (order.current_status === 'out_for_delivery') {
-      setActiveTab(1);
-      return;
-    }
-    if (order.current_status === 'complete') {
-      setActiveTab(2);
-      return;
-    }
-    setActiveTab(0);
-  }, [order, activePersona]);
-
-  useEffect(() => {
-    if (!order?.id || !isRefundOrderStatus(order.current_status)) {
+    if (!order || !isRefundOrderStatus(order.current_status)) {
       setRefundDetail(null);
       return;
     }
@@ -442,128 +179,31 @@ const ManageOrderPage: React.FC = () => {
     };
   }, [order?.id, order?.current_status, getRefundRequest]);
 
-  const handleBack = () => {
-    // Navigate back to the smart orders route
-    navigate('/orders');
-  };
-
-  const handleCancelOrder = (orderId: string) => {
-    setPendingAction({
-      action: 'cancel',
-      label: t('orders.actions.cancel', 'Cancel Order'),
-      color: 'error',
-    });
-    setConfirmationOpen(true);
-  };
-
-  const handleConfirmAction = async () => {
-    if (!pendingAction || !orderId) return;
-
-    try {
-      let response;
-      const actionData = { orderId, notes: notes.trim() || undefined };
-
-      switch (pendingAction.action) {
-        case 'cancel':
-          response = await cancelOrder(actionData);
-          break;
-        case 'complete':
-          response = await completeOrder(actionData);
-          break;
-        default:
-          throw new Error(`Unknown action: ${pendingAction.action}`);
-      }
-
-      if (response.success) {
-        // Refresh the order data
-        await refetch();
-      }
-    } catch (error) {
-      console.error('Failed to execute action:', error);
-    } finally {
-      setConfirmationOpen(false);
-      setPendingAction(null);
-      setNotes('');
-    }
-  };
-
-  const handleCancelAction = () => {
-    setConfirmationOpen(false);
-    setPendingAction(null);
-    setNotes('');
-  };
-
   const handleShowNotification = (
     message: string,
     severity: 'success' | 'error' | 'warning' | 'info'
-  ) => {
-    setNotificationAlert({ message, severity });
-    // Auto-clear success notifications after 5 seconds
-    if (severity === 'success') {
-      setTimeout(() => {
-        setNotificationAlert(null);
-      }, 5000);
-    }
-  };
+  ) => setNotificationAlert({ message, severity });
 
-  const handleClearNotification = () => {
-    setNotificationAlert(null);
-  };
+  if (loading && !order) return <LoadingSkeleton />;
 
-  // Show skeleton while loading
-  if (loading) {
-    return <OrderDetailSkeleton />;
-  }
-
-  // Show error state
   if (error || !order) {
     return (
-      <Container
-        maxWidth="xl"
-        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
-          <IconButton onClick={handleBack}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h4" fontWeight="bold">
-            {t('orders.manageOrder', 'Order Details')}
-          </Typography>
-        </Box>
-        <Alert
-          severity={error ? 'error' : 'warning'}
-          action={
-            error && (
-              <Button color="inherit" size="small" onClick={() => refetch()}>
-                {t('common.retry', 'Retry')}
-              </Button>
-            )
-          }
-        >
-          {error || t('orders.orderNotFound', 'Order not found')}
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Alert severity="error">
+          {error || t('orders.notFound', 'Order not found')}
         </Alert>
+        <Button sx={{ mt: 2 }} onClick={() => navigate('/orders')}>
+          {t('common.back', 'Back')}
+        </Button>
       </Container>
     );
   }
 
-  const fulfillmentStep = isRefundOrderStatus(order.current_status)
-    ? Math.max(orderProgressSteps(order.fulfillment_method).length - 1, 0)
-    : getOrderStep(order.current_status);
-  const hideFulfillmentProgress = ['cancelled', 'failed'].includes(
-    order.current_status
-  );
-  const isPickupFulfillment = order.fulfillment_method === 'pickup';
-  const progressStepKeys = orderProgressSteps(order.fulfillment_method);
-  const progressMax = Math.max(progressStepKeys.length - 1, 1);
-  const phaseRole =
-    activePersona === 'business' || activePersona === 'agent'
-      ? activePersona
-      : 'client';
-  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), phaseRole);
+  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), persona);
   const [primaryLabelKey, primaryLabelDefault] =
     ORDER_PRIMARY_ACTION_LABEL[phaseInfo.primaryActionId];
 
-  const handleRetryPaymentFromBanner = async () => {
+  const handleRetryPayment = async () => {
     try {
       const isStripeOrder =
         order.payment_source === 'credit_card' || isStripeRail;
@@ -577,56 +217,46 @@ const ManageOrderPage: React.FC = () => {
           isStripeOrder
             ? 'orders.retryPayment.successStripe'
             : 'orders.retryPayment.success',
-          isStripeOrder ? 'Opening checkout…' : 'Payment request sent.'
+          isStripeOrder
+            ? 'Opening secure card payment…'
+            : 'Payment retry started. Please check your phone to approve.'
         ),
         { variant: 'success' }
       );
       await refetch();
-    } catch (error: any) {
+    } catch (e: any) {
       enqueueSnackbar(
-        error?.message ||
-          t('orders.retryPayment.error', 'Failed to retry payment'),
+        e?.message || t('orders.retryPayment.error', 'Failed to retry payment'),
         { variant: 'error' }
       );
     }
   };
 
   const handlePrimaryPhaseAction = () => {
-    const id = phaseInfo.primaryActionId;
-    if (id === 'pay') {
-      void handleRetryPaymentFromBanner();
+    if (phaseInfo.primaryActionId === 'pay') {
+      void handleRetryPayment();
       return;
     }
-    if (id === 'rate') {
+    if (phaseInfo.primaryActionId === 'rate') {
       if (eligibility?.canRateAgent) setRatingDialogMode('agent');
       else if (eligibility?.canRateItem) setRatingDialogMode('item');
       else if (eligibility?.canRateClient) setRatingDialogMode('client');
     }
   };
 
-  // Agent lifecycle CTAs belong in the phase banner (same as list-card AgentActions).
-  // Desktop sidebar omits the duplicate; mobile keeps the sticky bar for thumb reach.
-  const agentBannerActionIds = [
-    'claim',
-    'pick_up',
-    'out_for_delivery',
-    'complete_delivery',
-  ] as const;
-  const showAgentPrimaryInBanner =
-    activePersona === 'agent' &&
-    agentBannerActionIds.includes(
-      phaseInfo.primaryActionId as (typeof agentBannerActionIds)[number]
-    );
-
-  const clientPhaseBannerButton =
-    phaseInfo.primaryActionId !== 'none' &&
-    ['pay', 'rate'].includes(phaseInfo.primaryActionId) ? (
+  const showPayCta =
+    phaseInfo.primaryActionId === 'pay' &&
+    order.payment_timing === 'pay_now' &&
+    order.payment_status !== 'paid';
+  const showRateCta = phaseInfo.primaryActionId === 'rate';
+  const phaseBannerAction =
+    persona === 'client' && (showPayCta || showRateCta) ? (
       <Button
         variant="contained"
         fullWidth
         onClick={handlePrimaryPhaseAction}
         disabled={
-          phaseInfo.primaryActionId === 'rate' &&
+          showRateCta &&
           !eligibility?.canRateAgent &&
           !eligibility?.canRateItem &&
           !eligibility?.canRateClient
@@ -636,1505 +266,323 @@ const ManageOrderPage: React.FC = () => {
       </Button>
     ) : null;
 
-  const phaseBannerAction =
-    phaseInfo.primaryActionId === 'send_pin' ? (
-      <ClientDeliveryPinButton
-        orderId={order.id}
-        pinAudience={
-          order.fulfillment_method === 'pickup' ? 'business' : 'agent'
-        }
-        fullWidth
-        onShowNotification={handleShowNotification}
-      />
-    ) : showAgentPrimaryInBanner ? (
-      <AgentActions
-        order={order}
-        agentAccounts={accounts}
-        onActionComplete={() => refetch()}
-        onShowNotification={handleShowNotification}
-        mobileView
-      />
-    ) : (
-      clientPhaseBannerButton
-    );
+  const handleCancelOrder = () => {
+    setPendingCancel(true);
+    setConfirmationOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!orderId) return;
+    try {
+      await cancelOrder({
+        orderId,
+        notes: cancelNotes.trim() || undefined,
+      });
+      await refetch();
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.message || t('orders.cancelFailed', 'Failed to cancel order'),
+        { variant: 'error' }
+      );
+    } finally {
+      setConfirmationOpen(false);
+      setPendingCancel(false);
+      setCancelNotes('');
+    }
+  };
+
+  const handleCancelClaimRequest = async () => {
+    if (!order) return;
+    setCancellingClaim(true);
+    try {
+      const response = await api.post('/orders/cancel-claim-request', {
+        orderId: order.id,
+      });
+      if (!response.data?.success) {
+        throw new Error(
+          response.data?.error ||
+            response.data?.message ||
+            t(
+              'orders.claimPending.cancelRequestFailed',
+              'Failed to cancel claim request'
+            )
+        );
+      }
+      enqueueSnackbar(
+        t(
+          'orders.claimPending.cancelRequestSuccess',
+          'Claim request cancelled successfully'
+        ),
+        { variant: 'success' }
+      );
+      await refetch();
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.response?.data?.error ||
+          e?.response?.data?.message ||
+          e?.message ||
+          t(
+            'orders.claimPending.cancelRequestFailed',
+            'Failed to cancel claim request'
+          ),
+        { variant: 'error' }
+      );
+    } finally {
+      setCancellingClaim(false);
+    }
+  };
+
+  const canSeeMessages =
+    persona !== 'agent' ||
+    (Boolean(profile?.agent?.id) &&
+      order.assigned_agent_id === profile?.agent?.id);
+
+  const tracking =
+    persona === 'client' &&
+    CLIENT_TRACKING_STATUSES.includes(order.current_status) ? (
+      <Box sx={{ mb: 3 }}>
+        <DeliveryTrackingMap
+          orderId={order.id}
+          pickupAddress={order.business_location?.address}
+          deliveryAddress={order.delivery_address ?? undefined}
+        />
+      </Box>
+    ) : persona === 'agent' &&
+      ['assigned_to_agent', 'picked_up', 'in_transit', 'out_for_delivery'].includes(
+        order.current_status
+      ) ? (
+      <Box sx={{ mb: 3 }}>
+        <DeliveryTrackingMap
+          orderId={order.id}
+          pickupAddress={order.business_location?.address}
+          deliveryAddress={order.delivery_address ?? undefined}
+        />
+      </Box>
+    ) : null;
+
+  const alerts = (
+    <>
+      {notificationAlert && (
+        <Alert
+          severity={notificationAlert.severity}
+          sx={{ mb: 2 }}
+          onClose={() => setNotificationAlert(null)}
+        >
+          {notificationAlert.message}
+        </Alert>
+      )}
+      {persona === 'agent' && <AgentOrderAlerts order={order as never} />}
+      {persona === 'business' && (
+        <BusinessOrderAlerts
+          order={order as never}
+          onCancelOrder={() => handleCancelOrder()}
+        />
+      )}
+      {persona === 'client' && <ClientOrderAlerts order={order as never} />}
+      {isRefundOrderStatus(order.current_status) && (
+        <RefundProgressCard
+          orderStatus={order.current_status}
+          detail={refundDetail}
+          loading={refundDetailLoading}
+        />
+      )}
+    </>
+  );
+
+  const messages = canSeeMessages ? (
+    <Card sx={{ mb: 2 }}>
+      <CardContent>
+        <UserMessagesComponent
+          entityType="order"
+          entityId={order.id}
+          title={t('messages.orderMessages', 'Order Messages')}
+          defaultExpanded={messagesDefaultExpandedForOrder(order.current_status)}
+          maxVisibleMessages={10}
+          compact={false}
+        />
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const extras = (
+    <Stack spacing={2} sx={{ mt: 2 }}>
+      <OrderRatingsDisplay ratings={ratings} userType={persona} />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        {eligibility?.canRateAgent && (
+          <Button
+            variant="contained"
+            startIcon={<Star />}
+            onClick={() => setRatingDialogMode('agent')}
+          >
+            {t('orders.actions.rateAgent', 'Rate Delivery Agent')}
+          </Button>
+        )}
+        {eligibility?.canRateItem && (
+          <Button
+            variant="contained"
+            startIcon={<Star />}
+            onClick={() => setRatingDialogMode('item')}
+          >
+            {t('orders.actions.rateItems', 'Rate Your Items')}
+          </Button>
+        )}
+        {eligibility &&
+          !eligibility.canRateItem &&
+          persona === 'client' &&
+          eligibility.itemRatingUnlocksAt &&
+          new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
+          eligibility.items.some((i) => !i.rated) && (
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.itemRatingUnlocksOn', {
+                defaultValue: 'You can rate your items from {{date}}',
+                date: new Date(
+                  eligibility.itemRatingUnlocksAt
+                ).toLocaleDateString(),
+              })}
+            </Typography>
+          )}
+        {eligibility?.canRateClient && (
+          <Button
+            variant="contained"
+            startIcon={<Star />}
+            onClick={() => setRatingDialogMode('client')}
+          >
+            {t('orders.actions.rateClient', 'Rate Client')}
+          </Button>
+        )}
+        <Button
+          variant="outlined"
+          startIcon={<HistoryIcon />}
+          onClick={() => setHistoryDialogOpen(true)}
+        >
+          {t('orders.actions.viewHistory', 'View History')}
+        </Button>
+        {persona === 'client' &&
+          ['delivered', 'failed', 'complete', 'refunded'].includes(
+            order.current_status
+          ) && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<SupportIcon />}
+              onClick={() => setReportIssueDialogOpen(true)}
+            >
+              {t('support.reportIssue', 'Report an issue')}
+            </Button>
+          )}
+      </Stack>
+    </Stack>
+  );
 
   return (
     <>
       <SEOHead
-        title={`${t('orders.orderNumber', 'Order')} #${order.order_number}`}
-        description={t(
-          'orders.manageOrderDescription',
-          'View and manage order details'
-        )}
+        title={t('orders.orderNumber', 'Order #{{orderNumber}}', {
+          orderNumber: order.order_number,
+        })}
       />
-      <Box
-        sx={{
-          bgcolor: 'grey.50',
-          minHeight: '100vh',
-          pb: 4,
-          // Add bottom padding on mobile for agents to account for sticky action bar + bottom nav
-          // Add bottom padding on mobile for clients to account for bottom nav (64px) + action buttons
-          paddingBottom:
-            isMobile &&
-            (activePersona === 'agent' ||
-              activePersona === 'client' ||
-              activePersona === 'business')
-              ? { xs: '200px', md: 4 }
-              : 4,
-        }}
-      >
-        <Container
-        maxWidth="xl"
-        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
-      >
-          {/* Header */}
-          <Box sx={{ mb: 3 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                mb: 2,
-                flexWrap: 'wrap',
-                gap: 2,
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <IconButton
-                  onClick={handleBack}
-                  sx={{
-                    bgcolor: 'background.paper',
-                    '&:hover': { bgcolor: 'grey.100' },
-                  }}
-                >
-                  <ArrowBackIcon />
-                </IconButton>
-                <Box>
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                    sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
-                  >
-                    {t('orders.orderNumber', 'Order')} #{order.order_number}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.placedOn', 'Placed on')}{' '}
-                    {formatDate(order.created_at)}
-                  </Typography>
-                </Box>
-              </Box>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  color={getStatusColor(order.current_status) as any}
-                  label={t(`common.orderStatus.${order.current_status}`)}
-                  size="medium"
-                  sx={{ fontWeight: 600, px: 2, py: 2.5 }}
-                />
-                {orderSubscriptionActive && (
-                  <Chip
-                    size="small"
-                    label={t('orders.liveUpdates', 'Live')}
-                    color="success"
-                    variant="outlined"
-                    sx={{ fontWeight: 500 }}
-                  />
-                )}
-                <IconButton
-                  onClick={refetch}
-                  disabled={loading}
-                  sx={{
-                    bgcolor: 'background.paper',
-                    '&:hover': { bgcolor: 'grey.100' },
-                  }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Stack>
-            </Box>
-
-            {/* Error Display */}
-            {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {actionError}
-              </Alert>
-            )}
-
-            {/* Notification Alert */}
-            {notificationAlert && (
-              <Alert
-                severity={notificationAlert.severity}
-                sx={{ mb: 2 }}
-                onClose={handleClearNotification}
-              >
-                {notificationAlert.message}
-              </Alert>
-            )}
-
-            {(activePersona === 'client' ||
-              activePersona === 'business' ||
-              activePersona === 'agent') && (
-              <Box sx={{ mb: 3 }}>
-                <OrderPhaseBanner
-                  order={order}
-                  role={phaseRole}
-                  action={phaseBannerAction}
-                />
-              </Box>
-            )}
+      <Box sx={{ pb: isMobile ? 'calc(64px + min(45vh, 280px))' : 0 }}>
+        <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <IconButton onClick={() => navigate('/orders')} aria-label="back">
+              <ArrowBackIcon />
+            </IconButton>
+            <Typography variant="body2" color="text.secondary">
+              {t('orders.placedOn', 'Placed on')}{' '}
+              {new Date(order.created_at).toLocaleString()}
+            </Typography>
           </Box>
 
-          {/* Order Progress Stepper */}
-          {!hideFulfillmentProgress && (
-            <Card sx={{ mb: 3, overflow: 'visible' }}>
-              <CardContent sx={{ p: { xs: 2, md: 4 } }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <TimelineIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontWeight="bold">
-                    {t('orders.orderProgress', 'Order Progress')}
-                  </Typography>
-                </Box>
-                <Stepper
-                  alternativeLabel
-                  activeStep={fulfillmentStep}
-                  connector={<ColorlibConnector />}
-                  sx={{ display: { xs: 'none', md: 'flex' } }}
-                >
-                  {progressStepKeys.map((stepKey) => (
-                    <Step key={stepKey}>
-                      <StepLabel StepIconComponent={ColorlibStepIcon}>
-                        {t(`common.orderStatus.${stepKey}`, stepKey)}
-                      </StepLabel>
-                    </Step>
-                  ))}
-                </Stepper>
-
-                {/* Mobile Progress Bar */}
-                <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {t('orders.progress', 'Progress')}:{' '}
-                      {Math.round((fulfillmentStep / progressMax) * 100)}%
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={(fulfillmentStep / progressMax) * 100}
-                      sx={{ height: 8, borderRadius: 1 }}
-                    />
-                  </Box>
-                  <Typography variant="body1" fontWeight="medium">
-                    {t(`common.orderStatus.${order.current_status}`)}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-
-          {isRefundOrderStatus(order.current_status) && (
-            <RefundProgressCard
-              orderStatus={order.current_status}
-              detail={refundDetail}
-              loading={refundDetailLoading}
+          {(persona === 'client' ||
+            persona === 'business' ||
+            persona === 'agent') && (
+            <OrderPhaseBanner
+              order={order}
+              role={persona}
+              action={phaseBannerAction}
             />
           )}
 
-          <Grid container spacing={3}>
-            {/* Main Content - Left Column */}
-            <Grid size={{ xs: 12, md: 8 }}>
-              {/* Persona-specific alerts */}
-              {/* eslint-disable @typescript-eslint/no-explicit-any */}
-              {activePersona === 'agent' && (
-                <AgentOrderAlerts order={order as any} />
-              )}
-              {activePersona === 'business' && (
-                <BusinessOrderAlerts
-                  order={order as any}
-                  onCancelOrder={handleCancelOrder}
-                />
-              )}
-              {activePersona === 'client' && (
-                <ClientOrderAlerts order={order as any} />
-              )}
-              {/* eslint-enable @typescript-eslint/no-explicit-any */}
-
-              {activePersona === 'client' &&
-                order.current_status === 'out_for_delivery' &&
-                order.payment_timing !== 'pay_at_delivery' &&
-                order.payment_method !== 'pay_on_delivery' && (
-                  <Stack spacing={2} sx={{ mb: 3 }}>
-                    <DeliveryTrackingMap
-                      orderId={order.id}
-                      pickupAddress={order.business_location?.address}
-                      deliveryAddress={order.delivery_address ?? undefined}
-                    />
-                    <ClientDeliveryPinButton
-                      orderId={order.id}
-                      fullWidth
-                      onShowNotification={handleShowNotification}
-                    />
-                  </Stack>
-                )}
-
-              {/* Tabbed Content */}
-              <Card sx={{ mb: 3 }}>
-                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                  <Tabs
-                    value={activeTab}
-                    onChange={(_, newValue) => setActiveTab(newValue)}
-                    variant={isMobile ? 'fullWidth' : 'standard'}
-                    sx={{ px: 2 }}
-                  >
-                    <Tab
-                      icon={<Receipt />}
-                      iconPosition="start"
-                      label={t('orders.details', 'Details')}
-                    />
-                    <Tab
-                      icon={<LocalShipping />}
-                      iconPosition="start"
-                      label={t('orders.delivery', 'Delivery')}
-                    />
-                    <Tab
-                      icon={<Star />}
-                      iconPosition="start"
-                      label={t('orders.ratings', 'Ratings')}
-                    />
-                  </Tabs>
-                </Box>
-
-                {/* Tab 0: Order Details */}
-                {activeTab === 0 && (
-                  <CardContent sx={{ p: 3 }}>
-                    {/* Order Items */}
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        {t('orders.orderItems', 'Order Items')}
-                      </Typography>
-                      <Stack spacing={2}>
-                        {order.order_items?.map((item) => {
-                          const variantSnap = (
-                            item as {
-                              variant_snapshot?: { image_url?: string | null };
-                              variant_name?: string | null;
-                            }
-                          ).variant_snapshot;
-                          const variantName = (
-                            item as { variant_name?: string | null }
-                          ).variant_name;
-                          const variantImg = variantSnap?.image_url?.trim();
-                          const categoryName =
-                            item.item?.item_sub_category?.item_category?.name ||
-                            item.item?.item_sub_category?.name;
-                          const hasAgentRestrictedView =
-                            !item.item?.item_images?.length &&
-                            item.item?.name == null;
-                          const thumb =
-                            variantImg || item.item?.item_images?.[0]?.image_url;
-                          return (
-                            <Paper
-                              key={item.id}
-                              variant="outlined"
-                              sx={{ p: 2 }}
-                            >
-                              <Box sx={{ display: 'flex', gap: 2 }}>
-                                {thumb && (
-                                  <Box
-                                    component="img"
-                                    src={thumb}
-                                    alt={item.item?.name ?? item.item_name ?? ''}
-                                    sx={{
-                                      width: 80,
-                                      height: 80,
-                                      objectFit: 'cover',
-                                      borderRadius: 1,
-                                    }}
-                                  />
-                                )}
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography
-                                    variant="subtitle1"
-                                    fontWeight="medium"
-                                  >
-                                    {hasAgentRestrictedView
-                                      ? categoryName || t('orders.item', 'Item')
-                                      : item.item?.name ?? item.item_name}
-                                  </Typography>
-                                  {variantName?.trim() ? (
-                                    <Typography
-                                      variant="body2"
-                                      color="primary"
-                                      fontWeight={600}
-                                    >
-                                      {t('orders.variant.label', 'Option')}:{' '}
-                                      {variantName}
-                                    </Typography>
-                                  ) : null}
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t('orders.quantity', 'Quantity')}:{' '}
-                                    {item.quantity}
-                                  </Typography>
-                                  {(item.item?.weight != null ||
-                                    item.item?.dimensions) && (
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
-                                    >
-                                      {[
-                                        item.item?.weight != null
-                                          ? `${item.item.weight} ${item.item.weight_unit ?? ''}`.trim()
-                                          : null,
-                                        item.item?.dimensions || null,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' · ')}
-                                    </Typography>
-                                  )}
-                                  {(item.item?.is_fragile ||
-                                    item.item?.is_perishable) && (
-                                    <Box
-                                      sx={{
-                                        display: 'flex',
-                                        gap: 0.5,
-                                        flexWrap: 'wrap',
-                                        mt: 0.5,
-                                      }}
-                                    >
-                                      {item.item?.is_fragile && (
-                                        <Chip
-                                          size="small"
-                                          label={t(
-                                            'orders.fragile',
-                                            'Fragile'
-                                          )}
-                                          color="warning"
-                                          variant="outlined"
-                                        />
-                                      )}
-                                      {item.item?.is_perishable && (
-                                        <Chip
-                                          size="small"
-                                          label={t(
-                                            'orders.perishable',
-                                            'Perishable'
-                                          )}
-                                          color="info"
-                                          variant="outlined"
-                                        />
-                                      )}
-                                    </Box>
-                                  )}
-                                  {item.unit_price !== undefined && (
-                                    <Typography
-                                      variant="h6"
-                                      color="primary"
-                                      sx={{ mt: 1 }}
-                                    >
-                                      {formatCurrency(
-                                        item.unit_price * item.quantity,
-                                        order.currency
-                                      )}
-                                    </Typography>
-                                  )}
-                                </Box>
-                              </Box>
-                            </Paper>
-                          );
-                        })}
-                      </Stack>
-                    </Box>
-
-                    {/* Business Info */}
-                    {order.business && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.businessInfo', 'Business Information')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 2,
-                            }}
-                          >
-                            <Avatar
-                              sx={{
-                                width: 56,
-                                height: 56,
-                                bgcolor: 'primary.main',
-                              }}
-                            >
-                              <BusinessIcon />
-                            </Avatar>
-                            <Box>
-                              <Typography
-                                variant="subtitle1"
-                                fontWeight="medium"
-                              >
-                                {order.business.name}
-                              </Typography>
-                              {order.business.user?.phone_number && (
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.5,
-                                  }}
-                                >
-                                  <Phone fontSize="small" color="action" />
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {order.business.user.phone_number}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {/* Client Info */}
-                    {order.client && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.clientInfo', 'Client Information')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              flexDirection: { xs: 'column', sm: 'row' },
-                              alignItems: { xs: 'stretch', sm: 'center' },
-                              gap: 2,
-                            }}
-                          >
-                            <Avatar
-                              sx={{
-                                width: { xs: 40, sm: 56 },
-                                height: { xs: 40, sm: 56 },
-                                bgcolor: 'secondary.main',
-                                alignSelf: { xs: 'flex-start', sm: 'center' },
-                              }}
-                            >
-                              <ShoppingBag />
-                            </Avatar>
-                            <Box
-                              sx={{
-                                minWidth: 0,
-                                flex: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="subtitle1"
-                                fontWeight="medium"
-                                sx={{
-                                  wordBreak: 'break-word',
-                                  overflowWrap: 'anywhere',
-                                }}
-                              >
-                                {order.client.user.first_name}{' '}
-                                {order.client.user.last_name}
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{
-                                  mt: 0.5,
-                                  fontSize: { xs: '0.8125rem', sm: 'inherit' },
-                                  wordBreak: 'break-word',
-                                  overflowWrap: 'anywhere',
-                                }}
-                              >
-                                {order.client.user.email}
-                              </Typography>
-                              {order.client.user.phone_number?.trim() && (
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.5,
-                                  }}
-                                >
-                                  <Phone fontSize="small" color="action" />
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{
-                                      wordBreak: 'break-word',
-                                      overflowWrap: 'anywhere',
-                                    }}
-                                  >
-                                    {order.client.user.phone_number}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
-                  </CardContent>
-                )}
-
-                {/* Tab 1: Delivery Info */}
-                {activeTab === 1 && (
-                  <CardContent sx={{ p: 3 }}>
-                    {/* Pickup Location */}
-                    {order.business_location && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.pickupLocation', 'Pickup Location')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Box sx={{ display: 'flex', gap: 2 }}>
-                            <LocationOn color="primary" />
-                            <Box sx={{ flex: 1 }}>
-                              <Typography
-                                variant="subtitle2"
-                                fontWeight="medium"
-                                gutterBottom
-                              >
-                                {order.business_location.name}
-                              </Typography>
-                              <Typography variant="body1">
-                                {formatAddress(order.business_location.address)}
-                              </Typography>
-                              {order.business_location.address?.instructions && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                  <strong>{t('addresses.howToFind', 'How to find')}:</strong>{' '}
-                                  {order.business_location.address.instructions}
-                                </Typography>
-                              )}
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {/* Delivery Address */}
-                    {order.delivery_address && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.deliveryAddress', 'Delivery Address')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Box sx={{ display: 'flex', gap: 2 }}>
-                            <LocationOn color="secondary" />
-                            <Box sx={{ flex: 1 }}>
-                              {order.client?.user?.first_name && (
-                                <Typography
-                                  variant="subtitle1"
-                                  fontWeight="medium"
-                                  gutterBottom
-                                >
-                                  {order.client.user.first_name}
-                                </Typography>
-                              )}
-                              <Typography variant="body1" component="div">
-                                {formatAddress(order.delivery_address)}
-                              </Typography>
-                              {order.delivery_address.instructions?.trim() && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  display="block"
-                                  sx={{ mt: 1.5 }}
-                                >
-                                  <strong>
-                                    {t(
-                                      'orders.deliveryInstructions',
-                                      'Delivery instructions'
-                                    )}
-                                    :
-                                  </strong>{' '}
-                                  {order.delivery_address.instructions}
-                                </Typography>
-                              )}
-                              {activePersona === 'agent' &&
-                                profile?.agent?.id &&
-                                order.assigned_agent_id &&
-                                order.assigned_agent_id ===
-                                  profile.agent.id &&
-                                order.client?.user?.phone_number && (
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 0.5,
-                                      mt: 1.5,
-                                    }}
-                                  >
-                                    <Phone fontSize="small" color="action" />
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
-                                    >
-                                      {order.client.user.phone_number}
-                                    </Typography>
-                                  </Box>
-                                )}
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {/* Delivery Information */}
-                    {(order.special_instructions ||
-                      (!isPickupFulfillment &&
-                        (order.preferred_delivery_time ||
-                          order.requires_fast_delivery ||
-                          order.estimated_delivery_time ||
-                          order.actual_delivery_time))) && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.deliveryInfo', 'Delivery Information')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Stack spacing={2}>
-                            {/* Preferred Delivery Time */}
-                            {order.preferred_delivery_time && (
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <Event color="primary" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t(
-                                      'orders.preferredDeliveryTime',
-                                      'Preferred Delivery Time'
-                                    )}
-                                  </Typography>
-                                  <Typography
-                                    variant="body1"
-                                    fontWeight="medium"
-                                  >
-                                    {new Date(
-                                      order.preferred_delivery_time
-                                    ).toLocaleString()}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            )}
-
-                            {/* Fast Delivery */}
-                            {order.requires_fast_delivery && (
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <LocalShipping color="primary" />
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t(
-                                      'orders.fastDelivery.title',
-                                      'Fast Delivery'
-                                    )}
-                                  </Typography>
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 1,
-                                    }}
-                                  >
-                                    <Chip
-                                      label={t(
-                                        'orders.fastDelivery.enabled',
-                                        'Enabled'
-                                      )}
-                                      color="primary"
-                                      size="small"
-                                    />
-                                    <Typography
-                                      variant="body1"
-                                      fontWeight="medium"
-                                      color="primary"
-                                    >
-                                      {order.base_delivery_fee !== undefined &&
-                                        formatCurrency(
-                                          order.base_delivery_fee,
-                                          order.currency
-                                        )}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              </Box>
-                            )}
-
-                            {/* Special Instructions */}
-                            {order.special_instructions && (
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'flex-start',
-                                }}
-                              >
-                                <Receipt color="primary" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t(
-                                      'orders.specialInstructions',
-                                      'Special Instructions'
-                                    )}
-                                  </Typography>
-                                  <Typography variant="body1">
-                                    {order.special_instructions}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            )}
-
-                            {/* Estimated Delivery Time */}
-                            {order.estimated_delivery_time && (
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <Event color="primary" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t(
-                                      'orders.estimatedDeliveryTime',
-                                      'Estimated Delivery Time'
-                                    )}
-                                  </Typography>
-                                  <Typography
-                                    variant="body1"
-                                    fontWeight="medium"
-                                  >
-                                    {new Date(
-                                      order.estimated_delivery_time
-                                    ).toLocaleString()}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            )}
-
-                            {/* Actual Delivery Time */}
-                            {order.actual_delivery_time && (
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <CheckCircle color="success" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t(
-                                      'orders.actualDeliveryTime',
-                                      'Actual Delivery Time'
-                                    )}
-                                  </Typography>
-                                  <Typography
-                                    variant="body1"
-                                    fontWeight="medium"
-                                    color="success.main"
-                                  >
-                                    {new Date(
-                                      order.actual_delivery_time
-                                    ).toLocaleString()}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            )}
-                          </Stack>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {/* Delivery Time Window */}
-                    <Box sx={{ mb: 4 }}>
-                      <DeliveryTimeWindowDisplay order={order} />
-                    </Box>
-
-                    {/* Track your delivery - client only when order is in transit */}
-                    {activePersona === 'client' &&
-                      ['picked_up', 'in_transit', 'out_for_delivery'].includes(
-                        order.current_status
-                      ) &&
-                      order.current_status !== 'out_for_delivery' && (
-                        <DeliveryTrackingMap
-                          orderId={order.id}
-                          pickupAddress={order.business_location?.address}
-                          deliveryAddress={order.delivery_address ?? undefined}
-                        />
-                      )}
-
-                    {/* Agent Info */}
-                    {order.assigned_agent && (
-                      <Box>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.deliveryAgent', 'Delivery Agent')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 2,
-                            }}
-                          >
-                            <Avatar
-                              src={
-                                order.assigned_agent.user.profile_picture_url
-                              }
-                              sx={{
-                                width: 56,
-                                height: 56,
-                                bgcolor: 'info.main',
-                              }}
-                            >
-                              {order.assigned_agent.user.first_name?.[0]}
-                              {order.assigned_agent.user.last_name?.[0]}
-                            </Avatar>
-                            <Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 0.5,
-                                }}
-                              >
-                                <Typography
-                                  variant="subtitle1"
-                                  fontWeight="medium"
-                                >
-                                  {order.assigned_agent.user.first_name}{' '}
-                                  {order.assigned_agent.user.last_name}
-                                </Typography>
-                                {order.assigned_agent.is_internal && (
-                                  <Box
-                                    component="img"
-                                    src={rendasuaLogo}
-                                    alt="Rendasua"
-                                    sx={{ width: 24, height: 24 }}
-                                    title={t(
-                                      'orders.internalAgent',
-                                      'Internal agent'
-                                    )}
-                                  />
-                                )}
-                              </Box>
-                              {order.assigned_agent.user.phone_number && (
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.5,
-                                  }}
-                                >
-                                  <Phone fontSize="small" color="action" />
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {order.assigned_agent.user.phone_number}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {!order.assigned_agent && (
-                      <Alert severity="info">
-                        {t(
-                          'orders.noAgentAssigned',
-                          'No delivery agent assigned yet'
-                        )}
-                      </Alert>
-                    )}
-                  </CardContent>
-                )}
-
-                {/* Tab 2: Ratings */}
-                {activeTab === 2 && (
-                  <CardContent sx={{ p: 3 }}>
-                    <OrderRatingsDisplay
-                      ratings={ratings}
-                      userType={
-                        (activePersona ??
-                          'client') as 'client' | 'agent' | 'business'
-                      }
-                    />
-                    {ratings.length === 0 && (
-                      <Alert severity="info">
-                        {t('orders.noRatingsYet', 'No ratings yet')}
-                      </Alert>
-                    )}
-                  </CardContent>
-                )}
-              </Card>
-
-              {/* Messages Section */}
-              {(activePersona !== 'agent' ||
-                (profile?.agent?.id &&
-                  order.assigned_agent_id === profile.agent.id)) && (
-                <Card>
-                  <CardContent sx={{ p: 3 }}>
-                    <UserMessagesComponent
-                      entityType="order"
-                      entityId={order.id}
-                      title={t('messages.orderMessages', 'Order Messages')}
-                      defaultExpanded={messagesDefaultExpandedForOrder(
-                        order.current_status
-                      )}
-                      maxVisibleMessages={10}
-                      compact={false}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-            </Grid>
-
-            {/* Right Column - Order Summary & Actions */}
-            <Grid size={{ xs: 12, md: 4 }}>
-              {/* Order Summary Card */}
-              <Card
-                sx={{
-                  mb: 3,
-                  position: { xs: 'static', md: 'sticky' },
-                  top: { md: 90 },
-                }}
-              >
-                <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    {t('orders.orderSummary', 'Order Summary')}
-                  </Typography>
-                  <Divider sx={{ my: 2 }} />
-
-                  {/* Order Date */}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      mb: 2,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Event fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.orderDate', 'Order Date')}
-                      </Typography>
-                    </Box>
-                    <Typography variant="body2" fontWeight="medium">
-                      {formatDate(order.created_at)}
-                    </Typography>
-                  </Box>
-
-                  {/* Payment Status */}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      mb: 2,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Payment fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.paymentStatus', 'Payment')}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={t(
-                        `common.paymentStatus.${order.payment_status || 'pending'}`,
-                        order.payment_status || 'Pending'
-                      )}
-                      size="small"
-                      color={getPaymentStatusChipColor(order.payment_status)}
-                    />
-                  </Box>
-
-                  {activePersona === 'client' &&
-                    order.current_status === 'pending_payment' &&
-                    order.payment_timing === 'pay_now' &&
-                    order.payment_status !== 'paid' && (
-                      <Box sx={{ mb: 2 }}>
-                        <Button
-                          fullWidth
-                          variant="contained"
-                          color="warning"
-                          onClick={async () => {
-                            try {
-                              const isStripeOrder =
-                                order.payment_source === 'credit_card' ||
-                                isStripeRail;
-                              const result = await retryOrderPayment(order.id);
-                              if (isStripeOrder && result.checkout_url) {
-                                window.location.assign(result.checkout_url);
-                                return;
-                              }
-                              enqueueSnackbar(
-                                t(
-                                  isStripeOrder
-                                    ? 'orders.retryPayment.successStripe'
-                                    : 'orders.retryPayment.success',
-                                  isStripeOrder
-                                    ? 'Opening secure card payment…'
-                                    : 'Payment retry started. Please check your phone to approve.'
-                                ),
-                                { variant: 'success' }
-                              );
-                              await refetch();
-                            } catch (e: unknown) {
-                              const message =
-                                e instanceof Error
-                                  ? e.message
-                                  : t(
-                                      'orders.retryPayment.error',
-                                      'Failed to retry payment'
-                                    );
-                              enqueueSnackbar(
-                                message,
-                                { variant: 'error' }
-                              );
-                            }
-                          }}
-                          sx={{ textTransform: 'none', borderRadius: 2 }}
-                        >
-                          {t('orders.retryPayment.cta', 'Retry payment')}
-                        </Button>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: 'block', mt: 0.75 }}
-                        >
-                          {t(
-                            order.payment_source === 'credit_card' || isStripeRail
-                              ? 'orders.retryPayment.helperStripe'
-                              : 'orders.retryPayment.helper',
-                            order.payment_source === 'credit_card' || isStripeRail
-                              ? 'You will be redirected to complete card payment securely.'
-                              : 'You can also cancel the order if you changed your mind.'
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
-
-                  <Divider sx={{ my: 2 }} />
-
-                  {/* Price Breakdown */}
-                  <Box sx={{ mb: 2 }}>
-                    {activePersona === 'agent' ? (
-                      // Agent view: Show only delivery commission
-                      order.delivery_commission !== undefined && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 1,
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            {t(
-                              'orders.deliveryCommission',
-                              'Delivery Commission'
-                            )}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            fontWeight="bold"
-                            color="primary"
-                          >
-                            {formatCurrency(
-                              order.delivery_commission,
-                              order.currency
-                            )}
-                          </Typography>
-                        </Box>
-                      )
-                    ) : (
-                      // Business/Client view: Show full breakdown
-                      <>
-                        {order.subtotal !== undefined && (
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              {t('orders.subtotal', 'Subtotal')}
-                            </Typography>
-                            <Typography variant="body2">
-                              {formatCurrency(order.subtotal, order.currency)}
-                            </Typography>
-                          </Box>
-                        )}
-                        {(order.base_delivery_fee !== undefined ||
-                          order.per_km_delivery_fee !== undefined) && (
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              {t('orders.deliveryFee', 'Delivery Fee')}
-                            </Typography>
-                            {isPickupFulfillment &&
-                            (order.base_delivery_fee || 0) +
-                              (order.per_km_delivery_fee || 0) ===
-                              0 ? (
-                              <Typography
-                                variant="body2"
-                                color="success.main"
-                                fontWeight={600}
-                              >
-                                {t('orders.deliveryFeeWaived', 'Waived')}
-                              </Typography>
-                            ) : (
-                              <Typography variant="body2">
-                                {formatCurrency(
-                                  (order.base_delivery_fee || 0) +
-                                    (order.per_km_delivery_fee || 0),
-                                  order.currency
-                                )}
-                              </Typography>
-                            )}
-                          </Box>
-                        )}
-                      </>
-                    )}
-                  </Box>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  {activePersona !== 'agent' &&
-                    order.subtotal !== undefined &&
-                    (order.base_delivery_fee !== undefined ||
-                      order.per_km_delivery_fee !== undefined) && (
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          mb: 3,
-                        }}
-                      >
-                        <Typography variant="h6" fontWeight="bold">
-                          {t('orders.total', 'Total')}
-                        </Typography>
-                        <Typography
-                          variant="h6"
-                          fontWeight="bold"
-                          color="primary"
-                        >
-                          {formatCurrency(
-                            order.subtotal +
-                              (order.base_delivery_fee || 0) +
-                              (order.per_km_delivery_fee || 0),
-                            order.currency
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
-
-                  <Divider sx={{ mb: 3 }} />
-
-                  {/* Action Buttons */}
-                  <Stack spacing={2}>
-                    {/* Persona-specific actions */}
-                    {activePersona === 'agent' && (
-                      <>
-                        {order.current_status === 'ready_for_pickup' &&
-                          !isStripeRail && (
-                            <Alert severity="info" icon={<RefreshIcon />}>
-                              <Typography variant="body2">
-                                {t(
-                                  'orders.refreshAfterHoldPayment',
-                                  'If you have confirmed the hold payment, please refresh the page using the refresh button at the top to update your account balance.'
-                                )}
-                              </Typography>
-                            </Alert>
-                          )}
-                        {/* Mobile: sticky bar. Desktop: phase banner when primary, else sidebar. */}
-                        {!showAgentPrimaryInBanner && (
-                          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                            <AgentActions
-                              order={order}
-                              agentAccounts={accounts}
-                              onActionComplete={() => refetch()}
-                              onShowNotification={handleShowNotification}
-                            />
-                          </Box>
-                        )}
-                      </>
-                    )}
-                    {activePersona === 'business' && (
-                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                        <BusinessActions
-                          order={order}
-                          onActionComplete={() => refetch()}
-                          onShowNotification={handleShowNotification}
-                          onShowHistory={() => setHistoryDialogOpen(true)}
-                        />
-                      </Box>
-                    )}
-                    {activePersona === 'client' && (
-                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                        <ClientActions
-                          order={order}
-                          onActionComplete={() => refetch()}
-                          onShowNotification={handleShowNotification}
-                          hideDeliveryPin={
-                            order.current_status === 'out_for_delivery' ||
-                            phaseInfo.primaryActionId === 'send_pin'
-                          }
-                        />
-                      </Box>
-                    )}
-
-                    {/* Rating buttons (eligibility-driven) */}
-                    {eligibility?.canRateAgent && (
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<Star />}
-                        onClick={() => setRatingDialogMode('agent')}
-                        fullWidth
-                      >
-                        {t('orders.actions.rateAgent', 'Rate Delivery Agent')}
-                      </Button>
-                    )}
-                    {eligibility?.canRateItem && (
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<Star />}
-                        onClick={() => setRatingDialogMode('item')}
-                        fullWidth
-                      >
-                        {t('orders.actions.rateItems', 'Rate Your Items')}
-                      </Button>
-                    )}
-                    {eligibility &&
-                      !eligibility.canRateItem &&
-                      activePersona === 'client' &&
-                      eligibility.itemRatingUnlocksAt &&
-                      new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
-                      eligibility.items.some((i) => !i.rated) && (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ textAlign: 'center' }}
-                        >
-                          {t('orders.itemRatingUnlocksOn', {
-                            defaultValue: 'You can rate your items from {{date}}',
-                            date: new Date(
-                              eligibility.itemRatingUnlocksAt
-                            ).toLocaleDateString(),
-                          })}
-                        </Typography>
-                      )}
-                    {eligibility?.canRateClient && (
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<Star />}
-                        onClick={() => setRatingDialogMode('client')}
-                        fullWidth
-                      >
-                        {t('orders.actions.rateClient', 'Rate Client')}
-                      </Button>
-                    )}
-
-                    {/* History button */}
-                    <Button
-                      variant="outlined"
-                      startIcon={<HistoryIcon />}
-                      onClick={() => setHistoryDialogOpen(true)}
-                      fullWidth
-                    >
-                      {t('orders.actions.viewHistory', 'View History')}
-                    </Button>
-
-                    {/* Report issue - client only for delivered/failed/complete/refunded */}
-                    {activePersona === 'client' &&
-                      ['delivered', 'failed', 'complete', 'refunded'].includes(
-                        order.current_status
-                      ) && (
-                        <Button
-                          variant="outlined"
-                          color="secondary"
-                          startIcon={<SupportIcon />}
-                          onClick={() => setReportIssueDialogOpen(true)}
-                          fullWidth
-                        >
-                          {t('support.reportIssue', 'Report an issue')}
-                        </Button>
-                      )}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+          <PersonaOrderDetails
+            persona={persona}
+            order={order}
+            live={orderSubscriptionActive}
+            onRefresh={refetch}
+            alerts={alerts}
+            messages={messages}
+            tracking={tracking}
+            extras={extras}
+            hideActions={isMobile}
+            onActionComplete={() => refetch()}
+            onShowNotification={handleShowNotification}
+          />
         </Container>
 
-        {/* Mobile sticky bar — keeps lifecycle CTAs reachable while scrolling */}
-        {activePersona === 'agent' && isMobile && (
+        {isMobile && (
           <Box
             sx={{
               position: 'fixed',
-              bottom: 64, // Position above bottom nav (64px height)
+              bottom: 64,
               left: 0,
               right: 0,
-              zIndex: 1100, // Above bottom nav (1000) but below modals
-              display: { xs: 'block', md: 'none' },
-              maxHeight: '50vh',
+              zIndex: 1100,
+              maxHeight: '45vh',
               overflowY: 'auto',
               bgcolor: 'background.paper',
               borderTop: 1,
               borderColor: 'divider',
               boxShadow: 3,
-              pointerEvents: 'none', // Allow clicks to pass through container
             }}
           >
-            <Box
-              sx={{
-                p: 2,
-                pointerEvents: 'auto', // Re-enable clicks on content
-              }}
-            >
-              <AgentActions
-                order={order}
-                agentAccounts={accounts}
-                onActionComplete={() => refetch()}
-                onShowNotification={handleShowNotification}
-                mobileView={true}
-              />
+            <Box sx={{ p: 2 }}>
+              {persona === 'agent' ? (
+                (order as { is_claim_pending?: boolean }).is_claim_pending ? (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    disabled={cancellingClaim}
+                    onClick={() => void handleCancelClaimRequest()}
+                    startIcon={
+                      cancellingClaim ? (
+                        <CircularProgress size={16} />
+                      ) : undefined
+                    }
+                  >
+                    {t(
+                      'orders.claimPending.cancelRequest',
+                      'Cancel claim request'
+                    )}
+                  </Button>
+                ) : (
+                  <DeliveryOrderActions
+                    order={order}
+                    agentAccounts={accounts}
+                    onActionComplete={() => refetch()}
+                    onShowNotification={handleShowNotification}
+                    mobileView
+                  />
+                )
+              ) : persona === 'business' ? (
+                <BusinessOrderActions
+                  order={order}
+                  onActionComplete={() => refetch()}
+                  onShowNotification={handleShowNotification}
+                  onShowHistory={() => setHistoryDialogOpen(true)}
+                />
+              ) : (
+                <ClientOrderActions
+                  order={order}
+                  onActionComplete={() => refetch()}
+                  onShowNotification={handleShowNotification}
+                  deliveryPinFullWidth
+                />
+              )}
             </Box>
           </Box>
         )}
-
-        {/* Mobile Sticky Action Bar for Client / Business */}
-        {(activePersona === 'client' || activePersona === 'business') &&
-          isMobile && (
-            <Box
-              sx={{
-                position: 'fixed',
-                bottom: 64,
-                left: 0,
-                right: 0,
-                zIndex: 1100,
-                display: { xs: 'block', md: 'none' },
-                maxHeight: '40vh',
-                overflowY: 'auto',
-                bgcolor: 'background.paper',
-                borderTop: 1,
-                borderColor: 'divider',
-                boxShadow: 3,
-              }}
-            >
-              <Box sx={{ p: 2 }}>
-                {activePersona === 'business' ? (
-                  <BusinessActions
-                    order={order}
-                    onActionComplete={() => refetch()}
-                    onShowNotification={handleShowNotification}
-                    onShowHistory={() => setHistoryDialogOpen(true)}
-                  />
-                ) : (
-                  <ClientActions
-                    order={order}
-                    onActionComplete={() => refetch()}
-                    onShowNotification={handleShowNotification}
-                    hideDeliveryPin={phaseInfo.primaryActionId === 'send_pin'}
-                    deliveryPinFullWidth
-                  />
-                )}
-              </Box>
-            </Box>
-          )}
       </Box>
 
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        open={confirmationOpen}
-        title={t('orders.confirmAction')}
-        message={
-          pendingAction
-            ? t('orders.confirmActionMessage', {
-                action: pendingAction.label,
-                orderNumber: order.order_number,
-              })
-            : ''
-        }
-        confirmText={t('common.confirm')}
-        cancelText={t('common.cancel')}
-        onConfirm={handleConfirmAction}
-        onCancel={handleCancelAction}
-        confirmColor={
-          pendingAction?.color as
-            | 'primary'
-            | 'secondary'
-            | 'error'
-            | 'info'
-            | 'success'
-            | 'warning'
-        }
-        loading={actionLoading}
-        additionalContent={
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label={t('orders.notes')}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={t('orders.notesPlaceholder')}
-            sx={{ mt: 2 }}
-          />
-        }
-      />
-
-      {/* Order History Dialog */}
       <OrderHistoryDialog
         open={historyDialogOpen}
         onClose={() => setHistoryDialogOpen(false)}
@@ -2148,7 +596,6 @@ const ManageOrderPage: React.FC = () => {
         orderNumber={order.order_number}
       />
 
-      {/* Report issue dialog */}
       <ReportIssueDialog
         open={reportIssueDialogOpen}
         onClose={() => setReportIssueDialogOpen(false)}
@@ -2157,13 +604,15 @@ const ManageOrderPage: React.FC = () => {
         onSubmit={async (payload) => {
           await api.post('/support/tickets', payload);
           handleShowNotification(
-            t('support.ticketCreated', 'Support ticket created. We will get back to you soon.'),
+            t(
+              'support.ticketCreated',
+              'Support ticket created. We will get back to you soon.'
+            ),
             'success'
           );
         }}
       />
 
-      {/* Rating Dialog */}
       <RatingDialog
         open={ratingDialogMode !== null}
         onClose={() => setRatingDialogMode(null)}
@@ -2175,6 +624,36 @@ const ManageOrderPage: React.FC = () => {
           refetchRatings();
           refetchEligibility();
         }}
+      />
+
+      <ConfirmationModal
+        open={confirmationOpen && pendingCancel}
+        title={t('orders.confirmAction', 'Confirm action')}
+        message={t('orders.confirmActionMessage', {
+          defaultValue: 'Cancel order #{{orderNumber}}?',
+          orderNumber: order.order_number,
+        })}
+        confirmText={t('common.confirm', 'Confirm')}
+        cancelText={t('common.cancel', 'Cancel')}
+        onConfirm={() => void handleConfirmCancel()}
+        onCancel={() => {
+          setConfirmationOpen(false);
+          setPendingCancel(false);
+          setCancelNotes('');
+        }}
+        confirmColor="error"
+        loading={actionLoading}
+        additionalContent={
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label={t('orders.notes', 'Notes')}
+            value={cancelNotes}
+            onChange={(e) => setCancelNotes(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+        }
       />
     </>
   );

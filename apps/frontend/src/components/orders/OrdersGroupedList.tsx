@@ -11,7 +11,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Order } from '../../hooks/useOrders';
 import { partitionOrdersByActivity } from '../../utils/orderListGrouping';
-import OrderCard from '../common/OrderCard';
+import PersonaOrderCard from './PersonaOrderCard';
 
 export interface OrdersGroupedListProps {
   orders: Order[];
@@ -27,7 +27,7 @@ const OrdersGroupedList: React.FC<OrdersGroupedListProps> = ({
 
   const renderOrderCards = (sectionOrders: Order[]) =>
     sectionOrders.map((order) => (
-      <OrderCard
+      <PersonaOrderCard
         key={order.id}
         order={order}
         onActionComplete={onActionComplete}

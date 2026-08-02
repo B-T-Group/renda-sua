@@ -52,8 +52,9 @@ import {
   type OrderHubFilter,
 } from '../../utils/orderPhase';
 import AddressAlert from '../common/AddressAlert';
-import OrderCard from '../common/OrderCard';
 import OrdersGroupedList from '../orders/OrdersGroupedList';
+import PersonaOrderCard from '../orders/PersonaOrderCard';
+import { getOrderStatusBoxColor } from '../orders/shared';
 
 import SEOHead from '../seo/SEOHead';
 
@@ -64,24 +65,6 @@ const QUEUE_LABELS: Record<BusinessOrderQueue, [string, string]> = {
   issues: ['orders.queue.issues', 'Issues'],
   all: ['orders.queue.all', 'All'],
 };
-
-const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
-  pending: '#fff3e0',
-  pending_payment: '#fff8e1',
-  confirmed: '#e3f2fd',
-  preparing: '#e3f2fd',
-  ready_for_pickup: '#e8eaf6',
-  assigned_to_agent: '#e8eaf6',
-  picked_up: '#e1f5fe',
-  in_transit: '#e1f5fe',
-  out_for_delivery: '#e0f7fa',
-  delivered: '#e8f5e9',
-  complete: '#e8f5e9',
-  completed: '#e8f5e9',
-};
-
-const getOrderStatusBoxColor = (status: string): string =>
-  ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
 
 /** Higher rank = list first for agents (most advanced / actionable stage). */
 const AGENT_ORDER_STATUS_RELEVANCE: Record<string, number> = {
@@ -1058,7 +1041,7 @@ const OrdersPage: React.FC = () => {
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {sortedOrdersForList.map((order) => (
-              <OrderCard
+              <PersonaOrderCard
                 key={order.id}
                 order={order}
                 onActionComplete={refreshOrders}
