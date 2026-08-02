@@ -22,7 +22,13 @@ describe('DashboardService', () => {
       hasuraUserService as any,
       hasuraSystemService as any,
       {} as any,
-      { hasPermission: jest.fn().mockResolvedValue(false) } as any
+      { hasPermission: jest.fn().mockResolvedValue(false) } as any,
+      {
+        listPendingForBusiness: jest
+          .fn()
+          .mockResolvedValue({ incoming: [], outgoing: [] }),
+      } as any,
+      { listPending: jest.fn().mockResolvedValue({ jobs: [], pendingResultCount: 0 }) } as any
     );
   });
 
@@ -175,6 +181,50 @@ describe('DashboardService', () => {
       ]);
       expect(result.totalCount).toBe(5);
     });
+
+    it('loads agent ID docs via document_type names and is_approved', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('AgentIdDoc')) {
+            return {
+              user_uploads: [{ id: 'up1', is_approved: false, note: 'bad scan' }],
+            };
+          }
+          return {
+            agents: [{ user: { addresses: [{ country: 'CM' }] } }],
+            orders_aggregate: { aggregate: { count: 0 } },
+            user_uploads: [],
+          };
+        }
+      );
+
+      const result = await service.getActionsNeeded();
+
+      const idCall = hasuraSystemService.executeQuery.mock.calls.find(
+        ([query]) => String(query).includes('AgentIdDoc')
+      );
+      expect(String(idCall?.[0])).toContain('document_type: { name: { _in: $names } }');
+      expect(String(idCall?.[0])).toContain('is_approved');
+      expect(String(idCall?.[0])).not.toContain('upload_type');
+      expect(idCall?.[1]).toEqual({
+        userId: 'u1',
+        names: ['id_card', 'passport', 'driver_license'],
+      });
+      expect(result.actions).toEqual([
+        expect.objectContaining({
+          id: 'id_verification',
+          kind: 'id_verification',
+          priority: 'critical',
+          count: 1,
+        }),
+      ]);
+    });
   });
 
   describe('getAggregates', () => {
@@ -202,8 +252,16 @@ describe('DashboardService', () => {
           isBusinessAdmin: jest.fn().mockResolvedValue(false),
         } as any,
         { hasAnyPermission: jest.fn().mockResolvedValue(false) } as any,
-        {} as any,
-        {} as any
+        {
+          listPendingForBusiness: jest
+            .fn()
+            .mockResolvedValue({ incoming: [], outgoing: [] }),
+        } as any,
+        {
+          listPending: jest
+            .fn()
+            .mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
+        } as any
       );
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',

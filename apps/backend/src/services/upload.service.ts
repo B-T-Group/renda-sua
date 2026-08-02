@@ -32,7 +32,11 @@ export interface UploadRecord {
   created_at: string;
 }
 
-const ID_DOCUMENT_TYPE_NAMES = ['id_card', 'passport', 'driver_license'];
+export const ID_DOCUMENT_TYPE_NAMES = [
+  'id_card',
+  'passport',
+  'driver_license',
+];
 
 /**
  * System-generated document types that never go through admin review and are

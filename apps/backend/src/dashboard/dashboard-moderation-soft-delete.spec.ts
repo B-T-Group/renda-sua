@@ -21,7 +21,17 @@ describe('DashboardService moderation soft-delete filters', () => {
       hasuraUserService as any,
       hasuraSystemService as any,
       {} as any,
-      { hasPermission: jest.fn().mockResolvedValue(false) } as any
+      { hasPermission: jest.fn().mockResolvedValue(false) } as any,
+      {
+        listPendingForBusiness: jest
+          .fn()
+          .mockResolvedValue({ incoming: [], outgoing: [] }),
+      } as any,
+      {
+        listPending: jest
+          .fn()
+          .mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
+      } as any
     );
   });
 

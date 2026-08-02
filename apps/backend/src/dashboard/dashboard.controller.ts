@@ -65,13 +65,8 @@ export class DashboardController {
       if (error instanceof HttpException) {
         throw error;
       }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch actions needed',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      const message = error?.message || 'Failed to fetch actions needed';
+      throw new HttpException(message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

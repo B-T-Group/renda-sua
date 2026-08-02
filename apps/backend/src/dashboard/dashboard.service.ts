@@ -7,6 +7,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
+import { ID_DOCUMENT_TYPE_NAMES } from '../services/upload.service';
 import { isActivePersona } from '../users/persona.util';
 
 export interface TopViewedProductDto {
@@ -426,17 +427,39 @@ export class DashboardService {
     userId: string
   ): Promise<{ needsAction: boolean; status: string }> {
     const q = `
-      query AgentIdDoc($userId: uuid!) {
-        user_uploads(where: { user_id: { _eq: $userId }, upload_type: { _eq: "id_document" } }, limit: 1, order_by: { created_at: desc }) {
-          id status
+      query AgentIdDoc($userId: uuid!, $names: [String!]!) {
+        user_uploads(
+          where: {
+            user_id: { _eq: $userId }
+            document_type: { name: { _in: $names } }
+          }
+          order_by: { created_at: desc }
+        ) {
+          id
+          is_approved
+          note
         }
       }
     `;
-    const r = await this.hasuraSystemService.executeQuery(q, { userId });
-    const upload = r?.user_uploads?.[0];
-    if (!upload) return { needsAction: true, status: 'missing' };
-    const needsAction = upload.status === 'rejected' || upload.status === 'missing';
-    return { needsAction, status: upload.status };
+    const r = await this.hasuraSystemService.executeQuery(q, {
+      userId,
+      names: ID_DOCUMENT_TYPE_NAMES,
+    });
+    const uploads =
+      (r?.user_uploads as
+        | { id: string; is_approved: boolean; note?: string | null }[]
+        | undefined) ?? [];
+    if (!uploads.length) {
+      return { needsAction: true, status: 'missing' };
+    }
+    if (uploads.some((u) => u.is_approved)) {
+      return { needsAction: false, status: 'approved' };
+    }
+    const latest = uploads[0];
+    if (latest?.note?.trim()) {
+      return { needsAction: true, status: 'rejected' };
+    }
+    return { needsAction: false, status: 'pending' };
   }
 
   private async countClientOrdersByStatus(clientId: string, statuses: string[]): Promise<number> {
