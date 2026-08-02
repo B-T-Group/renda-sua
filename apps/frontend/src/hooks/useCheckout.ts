@@ -98,6 +98,15 @@ function parseCheckoutApiError(
       )
     );
   }
+  if (data?.error === 'MERCHANT_CLOSED') {
+    return (
+      data.message ||
+      t(
+        'checkout.merchantClosed',
+        'This merchant is closed right now. Choose a delivery or pickup time when they are open.'
+      )
+    );
+  }
   if (typeof data?.message === 'string' && data.message.trim()) {
     return data.message;
   }

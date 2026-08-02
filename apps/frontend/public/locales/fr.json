@@ -2855,6 +2855,8 @@
       "paymentPendingCancellable": "Le paiement du client est en attente depuis plus d'1 heure. Vous pouvez maintenant annuler cette commande pour libérer l'inventaire.",
       "paymentPendingNotice": "Le paiement du client est toujours en attente. ${formatTimeRemaining(\n              timeRemaining\n            )} avant que vous puissiez annuler cette commande.",
       "pendingNotice": "💰 Nouvelle commande d'une valeur de {{revenue}} ! Le client attend la confirmation. Confirmez rapidement pour assurer la satisfaction du client et sécuriser cette vente.",
+      "scheduledNotice": "📅 Commande future d'une valeur de {{revenue}}. Le délai de confirmation commence à {{when}}. Vous pouvez confirmer plus tôt.",
+      "scheduledNoticeEarly": "📅 Commande future d'une valeur de {{revenue}}. Vous pouvez confirmer dès maintenant.",
       "pickedUpNotice": "La commande a été récupérée par l'agent et est livrée au client.",
       "refundedNotice": "La commande a été remboursée au client.",
       "subtitle": "Gérez et suivez toutes vos commandes clients",
@@ -3661,6 +3663,8 @@
       "cancelRequestSuccess": "Demande de réclamation annulée avec succès",
       "cancelRequestFailed": "Échec de l'annulation de la demande de réclamation"
     },
+    "scheduled": "Planifiée",
+    "scheduledActivates": "Active à {{when}}",
     "refreshAfterHoldPayment": "Si vous avez confirmé le paiement de retenue, veuillez cliquer sur le bouton d'actualisation en haut pour mettre à jour le statut de la commande et le solde de votre compte.",
     "confirmOrder": "Passer commande",
     "paymentTiming": {
@@ -5403,6 +5407,7 @@
     "success": "Commandes créées avec succès !",
     "error": "Échec de la création des commandes : {{error}}",
     "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes.",
+    "merchantClosed": "Ce marchand est fermé pour le moment. Choisissez un créneau de livraison ou de retrait lorsqu'il est ouvert.",
     "fulfillmentTitle": "Comment souhaitez-vous recevoir votre commande ?",
     "fulfillmentDelivery": "Livraison",
     "fulfillmentPickup": "Retrait en magasin",
@@ -5919,5 +5924,17 @@
     "verifyCta": "Vérifier le numéro Mobile Money",
     "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
     "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements."
+  },
+  "businessOrderTiming": {
+    "title": "Délais de confirmation",
+    "help": "Les commandes ASAP démarrent le délai immédiatement. Les commandes futures s'activent avant la préparation.",
+    "asapMinutes": "Délai de confirmation ASAP (minutes)",
+    "futureMinutes": "Délai de confirmation commande future (minutes)",
+    "activationLead": "Activer avant le début de la préparation",
+    "leadOption": "{{mins}} min",
+    "prepMinutes": "Temps de préparation par défaut (minutes)",
+    "saved": "Paramètres enregistrés.",
+    "saveFailed": "Impossible d'enregistrer les délais.",
+    "invalid": "Saisissez des valeurs valides."
   }
 }

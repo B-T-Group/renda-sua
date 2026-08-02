@@ -47,6 +47,9 @@ export interface NotificationData {
   paymentTiming?: string | null;
   /** Seconds the merchant has to confirm before acceptance escalate/grace */
   acceptanceTimeoutSeconds?: number;
+  /** asap = interrupt push; scheduled = soft notify (no SLA yet) */
+  acceptanceMode?: 'asap' | 'scheduled';
+  acceptanceActivatesAt?: string;
 }
 
 export interface RentalPeriodEndedEmailPayload {

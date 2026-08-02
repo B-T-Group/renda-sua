@@ -176,6 +176,23 @@ export function buildBusinessOrderCreatedPushMessage(params: {
   };
 }
 
+export function buildBusinessOrderScheduledPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Commande planifiée',
+      body: `Commande ${params.orderNumber} enregistrée — vous pourrez confirmer plus tard, ou dès maintenant.`,
+    };
+  }
+  return {
+    title: 'Scheduled order',
+    body: `Order ${params.orderNumber} saved — confirm early anytime, or when it becomes active.`,
+  };
+}
+
 export function buildOrderAcceptanceEscalationPushMessage(params: {
   orderNumber: string;
   preferredLanguage?: string | null;

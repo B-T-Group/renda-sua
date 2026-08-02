@@ -36,6 +36,7 @@ import {
   UpdateBusinessLocationData,
   useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
+import BusinessOrderTimingCard from '../business/BusinessOrderTimingCard';
 import LocationCard from '../business/LocationCard';
 import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
@@ -526,6 +527,9 @@ const BusinessLocationsPage: React.FC = () => {
             {t('business.locations.addLocation', 'Add Location')}
           </Button>
         </Stack>
+        <Box sx={{ mt: 2, mb: 3 }}>
+          <BusinessOrderTimingCard />
+        </Box>
 
         {!locationsLoading && !canAddLocation && profile?.business && (
           <Alert

@@ -234,6 +234,9 @@ select_permissions:
         - account_type
         - account_type_locked_until
         - acceptance_timeout_seconds
+        - future_acceptance_timeout_seconds
+        - order_activation_lead_minutes
+        - default_estimated_prep_minutes
         - orders_accepted_count
         - orders_auto_declined_count
         - orders_merchant_cancelled_count
@@ -273,6 +276,9 @@ update_permissions:
         - name
         - updated_at
         - acceptance_timeout_seconds
+        - future_acceptance_timeout_seconds
+        - order_activation_lead_minutes
+        - default_estimated_prep_minutes
         - accepting_orders
         - paused_until
       filter:

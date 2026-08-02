@@ -1,23 +1,71 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { DateTime } from 'luxon';
 import {
   getDayHours,
   getDayNameForIndex,
+  isSlotFullyWithinHours,
   isTimeOfDayWithinHours,
   normalizeOperatingHours,
+  type DayName,
 } from '../common/operating-hours.util';
 import type { Configuration } from '../config/configuration';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  DEFAULT_USER_TIMEZONE,
+  isValidIanaTimezone,
+  parseCalendarDatePartsFromPreferredDate,
+  timezoneFromAddressCountryCode,
+} from '../users/user-timezone.util';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import {
+  ACTIVATION_LEAD_MINUTES_ALLOWED,
   CONFIRMABLE_ACCEPTANCE_STATES,
   type OrderAcceptanceState,
   type PendingAcceptanceOrder,
   type ReliabilityTier,
 } from './order-acceptance.types';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+
+interface SlaOrder {
+  id: string;
+  order_number: string;
+  current_status: string;
+  acceptance_state: string | null;
+  business_id: string;
+  estimated_prep_minutes?: number | null;
+  acceptance_activates_at?: string | null;
+  client?: {
+    user_id?: string;
+    user?: {
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+      preferred_language?: string | null;
+      timezone?: string | null;
+    } | null;
+  } | null;
+  business?: {
+    user_id?: string;
+    name?: string;
+    user?: {
+      preferred_language?: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
+  business_location?: { address?: { country?: string | null } | null } | null;
+  delivery_address?: { country?: string | null } | null;
+  delivery_time_windows?: Array<{
+    preferred_date?: string | null;
+    time_slot_start?: string | null;
+    time_slot_end?: string | null;
+    is_confirmed?: boolean | null;
+  }> | null;
+}
 
 @Injectable()
 export class OrderAcceptanceService {
@@ -28,7 +76,8 @@ export class OrderAcceptanceService {
     private readonly configService: ConfigService<Configuration>,
     private readonly waitAndExecute: WaitAndExecuteScheduleService,
     private readonly orderSystemJobs: OrderSystemJobsService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly deliveryConfigService: DeliveryConfigService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -39,39 +88,42 @@ export class OrderAcceptanceService {
     const order = await this.fetchOrderForSla(orderId);
     if (!order || order.current_status !== 'pending') return;
     if (order.acceptance_state === 'accepted') return;
+    if (order.acceptance_state === 'awaiting_acceptance') return;
+    if (order.acceptance_state === 'scheduled') return;
 
-    const timeoutSec = await this.getAcceptanceTimeoutSeconds(order.business_id);
-    const cfg = this.orderConfig();
-    const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
-    const basePrep = cfg.defaultEstimatedPrepMinutes;
+    const timing = await this.getBusinessTiming(order.business_id);
+    const prep = timing.defaultEstimatedPrepMinutes;
+    const activationAt = await this.computeActivationAt(order, prep, timing);
+    if (!activationAt || activationAt.getTime() <= Date.now()) {
+      const timeoutSeconds = activationAt
+        ? timing.futureTimeoutSeconds
+        : timing.asapTimeoutSeconds;
+      await this.beginActiveAcceptanceSla(order, prep, timeoutSeconds);
+      return;
+    }
+    await this.beginScheduledAcceptance(order, prep, activationAt);
+  }
 
-    await this.hasura.executeMutation(
-      `mutation StartAcceptanceSla(
-        $id: uuid!, $deadline: timestamptz!, $prep: Int!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $id }
-          _set: {
-            acceptance_state: awaiting_acceptance
-            acceptance_deadline_at: $deadline
-            grace_deadline_at: null
-            estimated_prep_minutes: $prep
-            busy_extra_prep_minutes: 0
-            updated_at: "now()"
-          }
-        ) { id }
-      }`,
-      { id: orderId, deadline, prep: basePrep }
+  async activateAcceptanceSla(
+    orderId: string
+  ): Promise<{ success: boolean; skipped?: boolean }> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!order || order.current_status !== 'pending') {
+      return { success: true, skipped: true };
+    }
+    if (order.acceptance_state !== 'scheduled') {
+      return { success: true, skipped: true };
+    }
+    const timing = await this.getBusinessTiming(order.business_id);
+    const prep =
+      order.estimated_prep_minutes ?? timing.defaultEstimatedPrepMinutes;
+    await this.beginActiveAcceptanceSla(
+      order,
+      prep,
+      timing.futureTimeoutSeconds,
+      true
     );
-
-    await this.waitAndExecute.scheduleAcceptanceTimeout(
-      'order.acceptance_deadline',
-      { order_id: orderId },
-      timeoutSec
-    );
-    this.logger.log(
-      `Started acceptance SLA for ${order.order_number} (${timeoutSec}s)`
-    );
+    return { success: true };
   }
 
   async onAcceptanceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
@@ -134,6 +186,9 @@ export class OrderAcceptanceService {
           _set: {
             acceptance_state: accepted
             accepted_at: $at
+            acceptance_activates_at: null
+            acceptance_deadline_at: null
+            grace_deadline_at: null
             updated_at: $at
           }
         ) { id }
@@ -176,6 +231,12 @@ export class OrderAcceptanceService {
     if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     await this.assertBusinessOwnsOrder(order.business_id, businessUserId);
     this.assertConfirmableAcceptance(order);
+    if (order.acceptance_state === 'scheduled') {
+      throw new HttpException(
+        'Busy is only available after the confirmation timer has started',
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     const cfg = this.orderConfig();
     const nextExtra = Math.min(
@@ -488,14 +549,78 @@ export class OrderAcceptanceService {
     return isTimeOfDayWithinHours(dayHours, minutesSinceMidnight);
   }
 
+  /**
+   * Whether a calendar date + slot [start, end) falls fully within operating hours.
+   * `preferredDate` is YYYY-MM-DD (timezone-independent day-of-week).
+   */
+  isSlotWithinOperatingHours(
+    operatingHours: unknown,
+    preferredDate: string,
+    slotStartTime: string,
+    slotEndTime: string
+  ): boolean {
+    const normalized = normalizeOperatingHours(operatingHours);
+    if (!normalized) return true;
+    const dayName = this.getDayNameForCalendarDate(preferredDate);
+    const dayHours = getDayHours(normalized, dayName);
+    return isSlotFullyWithinHours(dayHours, slotStartTime, slotEndTime);
+  }
+
+  getDayNameForCalendarDate(preferredDate: string): DayName {
+    const [year, month, day] = preferredDate.split('-').map(Number);
+    return getDayNameForIndex(new Date(year, month - 1, day).getDay());
+  }
+
+  async fetchDeliverySlotTimes(
+    slotId: string
+  ): Promise<{ start_time: string; end_time: string } | null> {
+    const res = await this.hasura.executeQuery(
+      `query SlotTimes($id: uuid!) {
+        delivery_time_slots_by_pk(id: $id) {
+          start_time
+          end_time
+          is_active
+        }
+      }`,
+      { id: slotId }
+    );
+    const slot = res.delivery_time_slots_by_pk;
+    if (!slot?.is_active || !slot.start_time || !slot.end_time) return null;
+    return { start_time: slot.start_time, end_time: slot.end_time };
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async reconcileAcceptanceDeadlines(): Promise<void> {
     try {
+      await this.reconcileDueActivations();
       await this.reconcileExpiredAcceptances();
       await this.reconcileExpiredGraces();
       await this.clearExpiredPauses();
     } catch (error: any) {
       this.logger.error(`Acceptance reconciler failed: ${error?.message}`);
+    }
+  }
+
+  private async reconcileDueActivations(): Promise<void> {
+    const res = await this.hasura.executeQuery(
+      `query DueActivation($now: timestamptz!) {
+        orders(
+          where: {
+            current_status: { _eq: pending }
+            acceptance_state: { _eq: scheduled }
+            acceptance_activates_at: { _lte: $now }
+          }
+          limit: 25
+        ) { id }
+      }`,
+      { now: new Date().toISOString() }
+    );
+    for (const row of res.orders || []) {
+      try {
+        await this.activateAcceptanceSla(row.id);
+      } catch (err: any) {
+        this.logger.warn(`reconcileDueActivations: failed to activate order ${row.id}: ${err?.message}`);
+      }
     }
   }
 
@@ -580,53 +705,372 @@ export class OrderAcceptanceService {
   }
 
   async getAcceptanceTimeoutSeconds(businessId: string): Promise<number> {
+    const timing = await this.getBusinessTiming(businessId);
+    return timing.asapTimeoutSeconds;
+  }
+
+  async getOrderTiming(businessId: string) {
+    const timing = await this.getBusinessTiming(businessId);
+    const cfg = this.orderConfig();
+    return {
+      acceptance_timeout_seconds: timing.raw.acceptance_timeout_seconds,
+      future_acceptance_timeout_seconds:
+        timing.raw.future_acceptance_timeout_seconds,
+      order_activation_lead_minutes: timing.raw.order_activation_lead_minutes,
+      default_estimated_prep_minutes: timing.raw.default_estimated_prep_minutes,
+      effective: {
+        acceptance_timeout_seconds: timing.asapTimeoutSeconds,
+        future_acceptance_timeout_seconds: timing.futureTimeoutSeconds,
+        order_activation_lead_minutes: timing.activationLeadMinutes,
+        default_estimated_prep_minutes: timing.defaultEstimatedPrepMinutes,
+      },
+      defaults: {
+        acceptance_timeout_seconds: cfg.acceptanceTimeoutSeconds,
+        future_acceptance_timeout_seconds: cfg.futureAcceptanceTimeoutSeconds,
+        order_activation_lead_minutes: cfg.orderActivationLeadMinutes,
+        default_estimated_prep_minutes: cfg.defaultEstimatedPrepMinutes,
+      },
+      activation_lead_choices: [...ACTIVATION_LEAD_MINUTES_ALLOWED],
+    };
+  }
+
+  async updateOrderTiming(
+    businessId: string,
+    body: {
+      acceptance_timeout_seconds?: number | null;
+      future_acceptance_timeout_seconds?: number | null;
+      order_activation_lead_minutes?: number | null;
+      default_estimated_prep_minutes?: number | null;
+    }
+  ): Promise<void> {
+    const set: Record<string, number | null> = {};
+    this.assignOptionalPositiveSeconds(
+      set,
+      'acceptance_timeout_seconds',
+      body.acceptance_timeout_seconds
+    );
+    this.assignOptionalPositiveSeconds(
+      set,
+      'future_acceptance_timeout_seconds',
+      body.future_acceptance_timeout_seconds
+    );
+    this.assignOptionalActivationLead(
+      set,
+      body.order_activation_lead_minutes
+    );
+    this.assignOptionalPositiveMinutes(
+      set,
+      'default_estimated_prep_minutes',
+      body.default_estimated_prep_minutes
+    );
+    if (Object.keys(set).length === 0) {
+      throw new HttpException('No timing fields provided', HttpStatus.BAD_REQUEST);
+    }
+    await this.hasura.executeMutation(
+      `mutation UpdateOrderTiming($id: uuid!, $set: businesses_set_input!) {
+        update_businesses_by_pk(pk_columns: { id: $id }, _set: $set) { id }
+      }`,
+      {
+        id: businessId,
+        set: { ...set, updated_at: new Date().toISOString() },
+      }
+    );
+  }
+
+  private assignOptionalPositiveSeconds(
+    set: Record<string, number | null>,
+    key: string,
+    value: number | null | undefined
+  ): void {
+    if (value === undefined) return;
+    if (value === null) {
+      set[key] = null;
+      return;
+    }
+    if (!Number.isFinite(value) || value < 60 || value > 3600) {
+      throw new HttpException(
+        `${key} must be between 60 and 3600 seconds`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    set[key] = Math.round(value);
+  }
+
+  private assignOptionalActivationLead(
+    set: Record<string, number | null>,
+    value: number | null | undefined
+  ): void {
+    if (value === undefined) return;
+    if (value === null) {
+      set.order_activation_lead_minutes = null;
+      return;
+    }
+    if (
+      !(ACTIVATION_LEAD_MINUTES_ALLOWED as readonly number[]).includes(value)
+    ) {
+      throw new HttpException(
+        'order_activation_lead_minutes must be 30, 60, or 120',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    set.order_activation_lead_minutes = value;
+  }
+
+  private assignOptionalPositiveMinutes(
+    set: Record<string, number | null>,
+    key: string,
+    value: number | null | undefined
+  ): void {
+    if (value === undefined) return;
+    if (value === null) {
+      set[key] = null;
+      return;
+    }
+    if (!Number.isFinite(value) || value < 5 || value > 240) {
+      throw new HttpException(
+        `${key} must be between 5 and 240 minutes`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    set[key] = Math.round(value);
+  }
+
+  async getBusinessTiming(businessId: string): Promise<{
+    asapTimeoutSeconds: number;
+    futureTimeoutSeconds: number;
+    activationLeadMinutes: number;
+    defaultEstimatedPrepMinutes: number;
+    raw: {
+      acceptance_timeout_seconds: number | null;
+      future_acceptance_timeout_seconds: number | null;
+      order_activation_lead_minutes: number | null;
+      default_estimated_prep_minutes: number | null;
+    };
+  }> {
+    const cfg = this.orderConfig();
     const res = await this.hasura.executeQuery(
-      `query BizTimeout($id: uuid!) {
-        businesses_by_pk(id: $id) { acceptance_timeout_seconds }
+      `query BizTiming($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          acceptance_timeout_seconds
+          future_acceptance_timeout_seconds
+          order_activation_lead_minutes
+          default_estimated_prep_minutes
+        }
       }`,
       { id: businessId }
     );
-    const custom = res.businesses_by_pk?.acceptance_timeout_seconds;
-    if (typeof custom === 'number' && custom > 0) return custom;
-    return this.orderConfig().acceptanceTimeoutSeconds;
+    const b = res.businesses_by_pk || {};
+    const asap =
+      typeof b.acceptance_timeout_seconds === 'number' &&
+      b.acceptance_timeout_seconds > 0
+        ? b.acceptance_timeout_seconds
+        : cfg.acceptanceTimeoutSeconds;
+    const future =
+      typeof b.future_acceptance_timeout_seconds === 'number' &&
+      b.future_acceptance_timeout_seconds > 0
+        ? b.future_acceptance_timeout_seconds
+        : cfg.futureAcceptanceTimeoutSeconds;
+    const lead =
+      typeof b.order_activation_lead_minutes === 'number' &&
+      b.order_activation_lead_minutes > 0
+        ? b.order_activation_lead_minutes
+        : cfg.orderActivationLeadMinutes;
+    const prep =
+      typeof b.default_estimated_prep_minutes === 'number' &&
+      b.default_estimated_prep_minutes > 0
+        ? b.default_estimated_prep_minutes
+        : cfg.defaultEstimatedPrepMinutes;
+    return {
+      asapTimeoutSeconds: asap,
+      futureTimeoutSeconds: future,
+      activationLeadMinutes: lead,
+      defaultEstimatedPrepMinutes: prep,
+      raw: {
+        acceptance_timeout_seconds: b.acceptance_timeout_seconds ?? null,
+        future_acceptance_timeout_seconds:
+          b.future_acceptance_timeout_seconds ?? null,
+        order_activation_lead_minutes: b.order_activation_lead_minutes ?? null,
+        default_estimated_prep_minutes: b.default_estimated_prep_minutes ?? null,
+      },
+    };
   }
 
-  private async fetchOrderForSla(orderId: string): Promise<{
-    id: string;
-    order_number: string;
-    current_status: string;
-    acceptance_state: string | null;
-    business_id: string;
-    client?: {
-      user_id?: string;
-      user?: {
-        first_name?: string | null;
-        last_name?: string | null;
-        email?: string | null;
-        phone_number?: string | null;
-        preferred_language?: string | null;
-      } | null;
-    } | null;
-    business?: {
-      user_id?: string;
-      name?: string;
-      user?: {
-        preferred_language?: string | null;
-        email?: string | null;
-      } | null;
-    } | null;
-  } | null> {
+  private async beginActiveAcceptanceSla(
+    order: SlaOrder,
+    prep: number,
+    timeoutSec: number,
+    fromScheduled = false
+  ): Promise<void> {
+    const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
+    await this.hasura.executeMutation(
+      `mutation BeginActiveSla(
+        $id: uuid!, $deadline: timestamptz!, $prep: Int!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            acceptance_state: awaiting_acceptance
+            acceptance_deadline_at: $deadline
+            acceptance_activates_at: null
+            grace_deadline_at: null
+            estimated_prep_minutes: $prep
+            busy_extra_prep_minutes: 0
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: order.id, deadline, prep }
+    );
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_deadline',
+      { order_id: order.id },
+      timeoutSec
+    );
+    if (fromScheduled) {
+      await this.notifyAcceptanceActivate(order, timeoutSec);
+    }
+    this.logger.log(
+      `Started acceptance SLA for ${order.order_number} (${timeoutSec}s)`
+    );
+  }
+
+  private async beginScheduledAcceptance(
+    order: SlaOrder,
+    prep: number,
+    activationAt: Date
+  ): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation BeginScheduledSla(
+        $id: uuid!, $activates: timestamptz!, $prep: Int!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            acceptance_state: scheduled
+            acceptance_activates_at: $activates
+            acceptance_deadline_at: null
+            grace_deadline_at: null
+            estimated_prep_minutes: $prep
+            busy_extra_prep_minutes: 0
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      { id: order.id, activates: activationAt.toISOString(), prep }
+    );
+    const waitSeconds = Math.max(
+      1,
+      Math.round((activationAt.getTime() - Date.now()) / 1000)
+    );
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_activate',
+      { order_id: order.id },
+      waitSeconds
+    );
+    this.logger.log(
+      `Scheduled acceptance for ${order.order_number} at ${activationAt.toISOString()}`
+    );
+  }
+
+  private async computeActivationAt(
+    order: SlaOrder,
+    prepMinutes: number,
+    timing: { activationLeadMinutes: number }
+  ): Promise<Date | null> {
+    const window = order.delivery_time_windows?.[0];
+    if (!window?.preferred_date || !window.time_slot_start) return null;
+    const timezone = await this.resolveOrderTimezone(order);
+    const [h, m] = window.time_slot_start.split(':').map(Number);
+    const readiness = this.createDateTimeInTimezone(
+      window.preferred_date,
+      h,
+      m || 0,
+      timezone
+    );
+    const prepMs = prepMinutes * 60 * 1000;
+    const leadMs = timing.activationLeadMinutes * 60 * 1000;
+    return new Date(readiness.getTime() - prepMs - leadMs);
+  }
+
+  private async resolveOrderTimezone(order: SlaOrder): Promise<string> {
+    const clientTz = order.client?.user?.timezone;
+    if (clientTz && isValidIanaTimezone(clientTz)) return clientTz;
+    const country =
+      order.business_location?.address?.country ||
+      order.delivery_address?.country ||
+      'GA';
+    const configTz = await this.deliveryConfigService.getTimezone(country);
+    if (configTz && isValidIanaTimezone(configTz)) return configTz;
+    const fromCountry = timezoneFromAddressCountryCode(country);
+    if (isValidIanaTimezone(fromCountry)) return fromCountry;
+    return DEFAULT_USER_TIMEZONE;
+  }
+
+  private createDateTimeInTimezone(
+    preferredDate: string,
+    hours: number,
+    minutes: number,
+    timezone: string
+  ): Date {
+    const { year, month, day } =
+      parseCalendarDatePartsFromPreferredDate(preferredDate);
+    const dt = DateTime.fromObject(
+      { year, month, day, hour: hours, minute: minutes, second: 0 },
+      { zone: timezone }
+    );
+    if (!dt.isValid) {
+      throw new Error(`Invalid datetime: ${dt.invalidReason}`);
+    }
+    return dt.toUTC().toJSDate();
+  }
+
+  private async notifyAcceptanceActivate(
+    order: SlaOrder,
+    timeoutSec: number
+  ): Promise<void> {
+    try {
+      await this.notifications.sendOrderAcceptanceActivatePush({
+        businessUserId: order.business?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        preferredLanguage: order.business?.user?.preferred_language,
+        acceptanceTimeoutSeconds: timeoutSec,
+        clientName: `${order.client?.user?.first_name || ''} ${
+          order.client?.user?.last_name || ''
+        }`.trim(),
+      });
+    } catch (error: any) {
+      this.logger.error(`Activate notify failed: ${error?.message}`);
+    }
+  }
+
+  private async fetchOrderForSla(orderId: string): Promise<SlaOrder | null> {
     const res = await this.hasura.executeQuery(
       `query OrderSla($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status acceptance_state business_id
+          estimated_prep_minutes acceptance_activates_at
           client {
             user_id
-            user { first_name last_name email phone_number preferred_language }
+            user {
+              first_name last_name email phone_number
+              preferred_language timezone
+            }
           }
           business {
             user_id name
             user { preferred_language email }
+          }
+          business_location { address { country } }
+          delivery_address { country }
+          delivery_time_windows(
+            order_by: { created_at: desc }
+            limit: 1
+          ) {
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
           }
         }
       }`,

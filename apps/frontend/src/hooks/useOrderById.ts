@@ -21,6 +21,9 @@ export interface OrderData {
   total_amount?: number; // Optional for agents
   currency: string;
   current_status: string;
+  acceptance_state?: string | null;
+  acceptance_deadline_at?: string | null;
+  acceptance_activates_at?: string | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
   special_instructions?: string;

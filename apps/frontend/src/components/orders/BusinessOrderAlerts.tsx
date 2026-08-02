@@ -40,14 +40,41 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
 
     switch (order.current_status) {
       case 'pending':
-        alerts.push({
-          severity: 'warning' as const,
-          message: t(
-            'business.orders.pendingNotice',
-            '💰 New order worth {{revenue}}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.',
-            { revenue: formatCurrency(revenue) }
-          ),
-        });
+        if ((order as any).acceptance_state === 'scheduled') {
+          const activatesAt = (order as any).acceptance_activates_at as
+            | string
+            | null
+            | undefined;
+          alerts.push({
+            severity: 'info' as const,
+            message: activatesAt
+              ? t(
+                  'business.orders.scheduledNotice',
+                  '📅 Future order worth {{revenue}}. Confirmation timer starts at {{when}}. You can confirm early anytime.',
+                  {
+                    revenue: formatCurrency(revenue),
+                    when: new Date(activatesAt).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    }),
+                  }
+                )
+              : t(
+                  'business.orders.scheduledNoticeEarly',
+                  '📅 Future order worth {{revenue}}. You can confirm early anytime.',
+                  { revenue: formatCurrency(revenue) }
+                ),
+          });
+        } else {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'business.orders.pendingNotice',
+              '💰 New order worth {{revenue}}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.',
+              { revenue: formatCurrency(revenue) }
+            ),
+          });
+        }
         break;
 
       case 'confirmed':

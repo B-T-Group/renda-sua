@@ -154,4 +154,62 @@ export class BusinessAvailabilityController {
     );
     return { success: true };
   }
+
+  @Get('business/order-timing')
+  @ApiOperation({
+    summary:
+      'Get per-business order acceptance timing (ASAP SLA, future SLA, activation lead, prep)',
+  })
+  async getOrderTiming() {
+    const businessId = await this.requireBusinessId();
+    return this.orderAcceptanceService.getOrderTiming(businessId);
+  }
+
+  @Put('business/order-timing')
+  @ApiOperation({ summary: 'Update per-business order acceptance timing' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        acceptance_timeout_seconds: {
+          type: 'integer',
+          nullable: true,
+          description: 'ASAP confirm window in seconds (60–3600); null = platform default',
+        },
+        future_acceptance_timeout_seconds: {
+          type: 'integer',
+          nullable: true,
+          description:
+            'Confirm window after future-order activation (60–3600); null = default',
+        },
+        order_activation_lead_minutes: {
+          type: 'integer',
+          nullable: true,
+          enum: [30, 60, 120],
+          description: 'Minutes before prep start to activate SLA',
+        },
+        default_estimated_prep_minutes: {
+          type: 'integer',
+          nullable: true,
+          description: 'Default prep minutes (5–240); null = platform default',
+        },
+      },
+    },
+  })
+  async updateOrderTiming(
+    @Body()
+    body: {
+      acceptance_timeout_seconds?: number | null;
+      future_acceptance_timeout_seconds?: number | null;
+      order_activation_lead_minutes?: number | null;
+      default_estimated_prep_minutes?: number | null;
+    }
+  ) {
+    const businessId = await this.requireBusinessId();
+    await this.orderAcceptanceService.updateOrderTiming(businessId, body || {});
+    return {
+      success: true,
+      ...(await this.orderAcceptanceService.getOrderTiming(businessId)),
+    };
+  }
 }

@@ -123,8 +123,12 @@ export interface OrderConfig {
   paymentTimeoutWaitMinutes?: number;
   /** When true, post-delivery refunds route to Stripe/wallet engine (default true). */
   refundsV2Enabled?: boolean;
-  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null. */
+  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null (ASAP). */
   acceptanceTimeoutSeconds: number;
+  /** Default confirm window (seconds) after future-order activation. */
+  futureAcceptanceTimeoutSeconds: number;
+  /** Default minutes before prep start to activate acceptance SLA. */
+  orderActivationLeadMinutes: number;
   /** Grace seconds after no_response before auto-decline. */
   acceptanceGraceSeconds: number;
   /** Default estimated prep minutes before Busy adds. */
@@ -669,7 +673,15 @@ export default (): Configuration => {
         process.env.REFUNDS_V2_ENABLED !== 'false' &&
         process.env.REFUNDS_V2_ENABLED !== '0',
       acceptanceTimeoutSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '120',
+        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '300',
+        10
+      ),
+      futureAcceptanceTimeoutSeconds: parseInt(
+        process.env.ORDER_FUTURE_ACCEPTANCE_TIMEOUT_SECONDS || '900',
+        10
+      ),
+      orderActivationLeadMinutes: parseInt(
+        process.env.ORDER_ACTIVATION_LEAD_MINUTES || '30',
         10
       ),
       acceptanceGraceSeconds: parseInt(

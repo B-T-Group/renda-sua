@@ -5155,6 +5155,7 @@ export class OrdersService {
           current_status
           acceptance_state
           acceptance_deadline_at
+          acceptance_activates_at
           grace_deadline_at
           accepted_at
           busy_extra_prep_minutes
@@ -5349,6 +5350,7 @@ export class OrdersService {
           current_status
           acceptance_state
           acceptance_deadline_at
+          acceptance_activates_at
           grace_deadline_at
           accepted_at
           busy_extra_prep_minutes
@@ -6007,6 +6009,7 @@ export class OrdersService {
           current_status
           acceptance_state
           acceptance_deadline_at
+          acceptance_activates_at
           grace_deadline_at
           accepted_at
           busy_extra_prep_minutes
@@ -6185,6 +6188,9 @@ export class OrdersService {
           id
           order_number
           current_status
+          acceptance_state
+          acceptance_deadline_at
+          acceptance_activates_at
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -6425,7 +6431,6 @@ export class OrdersService {
         orderWithDetails.id,
         deliveryPin
       );
-      await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
       try {
         await this.orderAcceptanceService.startAcceptanceSla(order.id);
       } catch (slaError: any) {
@@ -6433,6 +6438,7 @@ export class OrdersService {
           `Failed to start acceptance SLA after authorization for ${order.id}: ${slaError?.message}`
         );
       }
+      await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
     } catch (error) {
       this.logger.error(
         `Failed to authorize order payment: ${
@@ -6851,11 +6857,12 @@ export class OrdersService {
         order.business_id ||
         order.business_location?.business?.id ||
         order.business?.id;
-      const acceptanceTimeoutSeconds = businessId
-        ? await this.orderAcceptanceService.getAcceptanceTimeoutSeconds(
-            businessId
-          )
-        : undefined;
+      const freshAcceptance = await this.fetchFreshAcceptanceFields(order.id);
+      const acceptanceNotify = await this.resolveAcceptanceNotifyFields(
+        businessId,
+        freshAcceptance.acceptance_state,
+        freshAcceptance.acceptance_activates_at
+      );
 
       const notificationData: NotificationData = {
         orderId: order.id,
@@ -6901,7 +6908,7 @@ export class OrdersService {
         deliveryAddress: this.formatAddress(order.delivery_address),
         estimatedDeliveryTime: order.estimated_delivery_time || undefined,
         specialInstructions: order.special_instructions || undefined,
-        acceptanceTimeoutSeconds,
+        ...acceptanceNotify,
       };
 
       await this.notificationsService.sendOrderCreatedNotifications(
@@ -7430,6 +7437,108 @@ export class OrdersService {
     }
   }
 
+  private async fetchFreshAcceptanceFields(
+    orderId: string
+  ): Promise<{ acceptance_state: string | null; acceptance_activates_at: string | null }> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        orders_by_pk: { acceptance_state: string | null; acceptance_activates_at: string | null } | null;
+      }>(
+        `query GetAcceptanceState($id: uuid!) {
+          orders_by_pk(id: $id) { acceptance_state acceptance_activates_at }
+        }`,
+        { id: orderId }
+      );
+      return result?.orders_by_pk ?? { acceptance_state: null, acceptance_activates_at: null };
+    } catch {
+      return { acceptance_state: null, acceptance_activates_at: null };
+    }
+  }
+
+  private async resolveAcceptanceNotifyFields(
+    businessId: string | undefined,
+    acceptanceState?: string | null,
+    acceptanceActivatesAt?: string | null
+  ): Promise<{
+    acceptanceTimeoutSeconds?: number;
+    acceptanceMode?: 'asap' | 'scheduled';
+    acceptanceActivatesAt?: string;
+  }> {
+    const acceptanceTimeoutSeconds = businessId
+      ? await this.orderAcceptanceService.getAcceptanceTimeoutSeconds(businessId)
+      : undefined;
+    if (acceptanceState === 'scheduled') {
+      return {
+        acceptanceTimeoutSeconds,
+        acceptanceMode: 'scheduled',
+        acceptanceActivatesAt: acceptanceActivatesAt || undefined,
+      };
+    }
+    return { acceptanceTimeoutSeconds, acceptanceMode: 'asap' };
+  }
+
+  /**
+   * ASAP (no window): merchant must be open now.
+   * Future slot: slot must fall fully within operating hours on that date.
+   */
+  private async assertMerchantOpenForCheckout(
+    locationHours: unknown,
+    deliveryWindow?: {
+      slot_id?: string;
+      preferred_date?: string;
+    } | null
+  ): Promise<void> {
+    if (!locationHours) return;
+
+    const slotId = deliveryWindow?.slot_id?.trim();
+    const preferredDate = deliveryWindow?.preferred_date?.trim();
+    if (slotId && preferredDate) {
+      const slot = await this.orderAcceptanceService.fetchDeliverySlotTimes(
+        slotId
+      );
+      if (!slot) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'INVALID_DELIVERY_SLOT',
+            message: 'Selected delivery time slot is not available.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (
+        !this.orderAcceptanceService.isSlotWithinOperatingHours(
+          locationHours,
+          preferredDate,
+          slot.start_time,
+          slot.end_time
+        )
+      ) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'MERCHANT_CLOSED',
+            message: 'This merchant is closed at the selected date and time.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return;
+    }
+
+    if (!this.orderAcceptanceService.isWithinOperatingHours(locationHours)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'MERCHANT_CLOSED',
+          message:
+            'This merchant is currently closed. Choose a delivery or pickup time when they are open.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   /**
    * Creates a random 8-digit order number
    */
@@ -7829,21 +7938,10 @@ export class OrdersService {
       );
     }
 
-    const locationHours =
-      businessInventories[0].business_location?.operating_hours;
-    if (
-      locationHours &&
-      !this.orderAcceptanceService.isWithinOperatingHours(locationHours)
-    ) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'MERCHANT_CLOSED',
-          message: 'This merchant is currently closed.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    await this.assertMerchantOpenForCheckout(
+      businessInventories[0].business_location?.operating_hours,
+      orderData.delivery_window
+    );
 
     const requestedQuantityByInventoryId =
       this.getRequestedQuantitiesByInventory(orderData.items);
@@ -8473,15 +8571,6 @@ export class OrdersService {
     if (current_status === 'pending' && payment_status === 'paid') {
       await this.triggerCommerceInventoryCommit(order.id);
     }
-    if (current_status === 'pending') {
-      try {
-        await this.orderAcceptanceService.startAcceptanceSla(order.id);
-      } catch (error: any) {
-        this.logger.warn(
-          `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
-        );
-      }
-    }
 
     // Create order status history after order is created
     const createStatusHistoryMutation = `
@@ -8512,7 +8601,7 @@ export class OrdersService {
       }
     );
 
-    // Create delivery/pickup time window if provided (applies to any fulfillment method)
+    // Create delivery/pickup window before acceptance SLA so future orders defer correctly
     let deliveryWindow = null;
     if (orderData.delivery_window) {
       try {
@@ -8529,8 +8618,16 @@ export class OrdersService {
         );
       } catch (error) {
         this.logger.error('Failed to create delivery window:', error);
-        // Don't fail the order creation if delivery window creation fails
-        // The order can still be processed without a delivery window
+      }
+    }
+
+    if (current_status === 'pending') {
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(order.id);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
+        );
       }
     }
 
@@ -8571,11 +8668,11 @@ export class OrdersService {
               orderWithDetails.business_id ||
               orderWithDetails.business_location?.business?.id ||
               orderWithDetails.business?.id;
-            const acceptanceTimeoutSeconds = businessId
-              ? await this.orderAcceptanceService.getAcceptanceTimeoutSeconds(
-                  businessId
-                )
-              : undefined;
+            const acceptanceNotify = await this.resolveAcceptanceNotifyFields(
+              businessId,
+              (orderWithDetails as any).acceptance_state,
+              (orderWithDetails as any).acceptance_activates_at
+            );
 
             const notificationData: NotificationData = {
               orderId: orderWithDetails.id,
@@ -8628,7 +8725,7 @@ export class OrdersService {
               estimatedDeliveryTime:
                 orderWithDetails.estimated_delivery_time || undefined,
               specialInstructions: orderWithDetails.special_instructions || undefined,
-              acceptanceTimeoutSeconds,
+              ...acceptanceNotify,
             };
 
             await this.notificationsService.sendOrderCreatedNotifications(

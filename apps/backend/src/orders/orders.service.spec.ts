@@ -250,6 +250,12 @@ describe('OrdersService', () => {
             startAcceptanceSla: jest.fn(),
             isBusinessAcceptingOrders: jest.fn().mockResolvedValue(true),
             isWithinOperatingHours: jest.fn().mockReturnValue(true),
+            isSlotWithinOperatingHours: jest.fn().mockReturnValue(true),
+            fetchDeliverySlotTimes: jest.fn().mockResolvedValue({
+              start_time: '12:00',
+              end_time: '13:00',
+            }),
+            getAcceptanceTimeoutSeconds: jest.fn().mockResolvedValue(300),
             recordMerchantCancelOfPending: jest.fn(),
           },
         },

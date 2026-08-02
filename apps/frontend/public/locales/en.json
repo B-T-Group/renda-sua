@@ -3142,6 +3142,8 @@
       "paymentPendingCancellable": "Customer payment has been pending for over 1 hour. You can now cancel this order to free up inventory.",
       "paymentPendingNotice": "Customer payment is still pending. ${formatTimeRemaining(\n              timeRemaining\n            )} before you can cancel this order.",
       "pendingNotice": "💰 New order worth {{revenue}}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.",
+      "scheduledNotice": "📅 Future order worth {{revenue}}. Confirmation timer starts at {{when}}. You can confirm early anytime.",
+      "scheduledNoticeEarly": "📅 Future order worth {{revenue}}. You can confirm early anytime.",
       "pickedUpNotice": "Order has been picked up by the agent and is being delivered to the customer.",
       "refundedNotice": "Order has been refunded to the customer.",
       "subtitle": "Manage and track all your customer orders",
@@ -3919,6 +3921,8 @@
       "cancelRequestSuccess": "Claim request cancelled successfully",
       "cancelRequestFailed": "Failed to cancel claim request"
     },
+    "scheduled": "Scheduled",
+    "scheduledActivates": "Activates {{when}}",
     "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
     "confirmOrder": "Place order",
     "paymentTiming": {
@@ -5665,6 +5669,7 @@
     "success": "Orders created successfully!",
     "error": "Failed to create orders: {{error}}",
     "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders.",
+    "merchantClosed": "This merchant is closed right now. Choose a delivery or pickup time when they are open.",
     "fulfillmentTitle": "How do you want to receive your order?",
     "fulfillmentDelivery": "Delivery",
     "fulfillmentPickup": "Store pickup",
@@ -5836,5 +5841,17 @@
     "verifyCta": "Verify mobile money number",
     "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
     "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts."
+  },
+  "businessOrderTiming": {
+    "title": "Order confirmation timing",
+    "help": "ASAP orders start the confirm timer immediately. Future orders activate before prep begins.",
+    "asapMinutes": "ASAP confirm window (minutes)",
+    "futureMinutes": "Future-order confirm window (minutes)",
+    "activationLead": "Activate before prep starts",
+    "leadOption": "{{mins}} min",
+    "prepMinutes": "Default prep time (minutes)",
+    "saved": "Timing settings saved.",
+    "saveFailed": "Could not save timing.",
+    "invalid": "Enter valid timing values."
   }
 }

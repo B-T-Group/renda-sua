@@ -299,6 +299,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 order_id,
             )
 
+        if event_type == "order.acceptance_activate":
+            return _call_backend_acceptance("acceptance-activate", order_id)
+
         if event_type == "order.acceptance_deadline":
             return _call_backend_acceptance("acceptance-deadline", order_id)
 

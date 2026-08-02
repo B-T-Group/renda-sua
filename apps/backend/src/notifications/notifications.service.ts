@@ -49,6 +49,7 @@ import {
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildBusinessOrderCreatedPushMessage,
+  buildBusinessOrderScheduledPushMessage,
   buildMentionPushMessage,
   buildMerchantMissedOrderReminderPushMessage,
   buildNewOrderMessagePushMessage,
@@ -759,12 +760,94 @@ export class NotificationsService {
   }
 
   /**
+   * Soft notify when a future order is stored before acceptance SLA starts.
+   */
+  async sendOrderScheduledPush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    activatesAt?: string | null;
+  }): Promise<void> {
+    const userId = params.businessUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildBusinessOrderScheduledPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_scheduled',
+        persona: 'business',
+        activatesAt: params.activatesAt || undefined,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderScheduledPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  /** Urgent interrupt when a scheduled order's acceptance SLA becomes active. */
+  async sendOrderAcceptanceActivatePush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    acceptanceTimeoutSeconds?: number | null;
+    clientName?: string | null;
+  }): Promise<void> {
+    const userId = params.businessUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildBusinessOrderCreatedPushMessage({
+      orderNumber: params.orderNumber,
+      clientName: params.clientName || '',
+      preferredLanguage: params.preferredLanguage,
+      acceptanceTimeoutSeconds: params.acceptanceTimeoutSeconds,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_acceptance_activate',
+        persona: 'business',
+        acceptanceTimeoutSeconds:
+          params.acceptanceTimeoutSeconds != null
+            ? String(params.acceptanceTimeoutSeconds)
+            : undefined,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendOrderAcceptanceActivatePush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  /**
    * Expo + web push when a business receives a new order (if push token registered).
+   * Scheduled future orders use a soft event so the mobile interrupt is not shown.
    */
   private async sendOrderCreatedBusinessPush(data: NotificationData): Promise<void> {
     const businessUserId = data.businessUserId?.trim();
     if (!businessUserId) return;
     if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    if (data.acceptanceMode === 'scheduled') {
+      await this.sendOrderScheduledPush({
+        businessUserId,
+        orderId: data.orderId,
+        orderNumber: data.orderNumber,
+        preferredLanguage: data.businessPreferredLanguage,
+        activatesAt: data.acceptanceActivatesAt,
+      });
+      return;
+    }
 
     const { title, body } = buildBusinessOrderCreatedPushMessage({
       orderNumber: data.orderNumber,

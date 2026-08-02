@@ -1,14 +1,18 @@
 export type OrderAcceptanceState =
+  | 'scheduled'
   | 'awaiting_acceptance'
   | 'no_response'
   | 'grace'
   | 'accepted';
 
 export const CONFIRMABLE_ACCEPTANCE_STATES: OrderAcceptanceState[] = [
+  'scheduled',
   'awaiting_acceptance',
   'no_response',
   'grace',
 ];
+
+export const ACTIVATION_LEAD_MINUTES_ALLOWED = [30, 60, 120] as const;
 
 export const MERCHANT_NO_RESPONSE_REASON_ID = 19;
 

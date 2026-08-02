@@ -641,6 +641,24 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
           icon={<FlashOn sx={{ fontSize: 14 }} />}
         />
       )}
+      {order.acceptance_state === 'scheduled' && (
+        <Chip
+          label={
+            order.acceptance_activates_at
+              ? t('orders.scheduledActivates', 'Activates {{when}}', {
+                  when: new Date(order.acceptance_activates_at).toLocaleString(
+                    undefined,
+                    { dateStyle: 'short', timeStyle: 'short' }
+                  ),
+                })
+              : t('orders.scheduled', 'Scheduled')
+          }
+          size="small"
+          color="info"
+          variant="outlined"
+          sx={{ height: 22, fontWeight: 600 }}
+        />
+      )}
       {userType === 'agent' &&
         currentStatus === 'ready_for_pickup' &&
         order.is_claim_pending && (

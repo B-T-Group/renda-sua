@@ -30,6 +30,29 @@ export class OrderAcceptanceInternalController {
   }
 
   @Public()
+  @Post('internal/acceptance-activate')
+  @ApiOperation({
+    summary: 'Internal: activate scheduled acceptance SLA (wait-handler Lambda)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: { orderId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Processed' })
+  async acceptanceActivate(
+    @Body() body: { orderId?: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ) {
+    this.assertInternalKey(internalKey);
+    const orderId = body?.orderId?.trim();
+    if (!orderId) return { success: false, error: 'orderId is required' };
+    return this.orderAcceptanceService.activateAcceptanceSla(orderId);
+  }
+
+  @Public()
   @Post('internal/acceptance-deadline')
   @ApiOperation({
     summary: 'Internal: merchant acceptance deadline (wait-handler Lambda)',
