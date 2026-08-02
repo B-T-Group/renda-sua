@@ -12,6 +12,13 @@ export interface OrderData {
   fulfillment_method?: 'delivery' | 'pickup';
   dispatch_ready_at?: string | null;
   pickup_by?: string | null;
+  assigned_at?: string | null;
+  pickup_due_at?: string | null;
+  pickup_state?: string | null;
+  pickup_extension_minutes?: number | null;
+  pickup_paused_at?: string | null;
+  pickup_pause_reason?: string | null;
+  reassignment_count?: number | null;
   dispatch_round?: number | null;
   dispatch_exhausted_at?: string | null;
   subtotal?: number; // Optional for agents

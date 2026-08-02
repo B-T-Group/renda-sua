@@ -76,6 +76,15 @@ array_relationships:
         remote_table:
           name: order_refund_requests
           schema: public
+  - name: order_events
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: order_events
+          schema: public
   - name: order_status_history
     using:
       manual_configuration:
@@ -207,6 +216,17 @@ select_permissions:
         - pickup_by
         - dispatch_round
         - dispatch_exhausted_at
+        - assigned_at
+        - pickup_due_at
+        - pickup_state
+        - pickup_reminder_sent_at
+        - pickup_at_risk_at
+        - pickup_overdue_at
+        - pickup_extension_minutes
+        - pickup_paused_at
+        - pickup_pause_reason
+        - reassignment_count
+        - agent_arrived_pickup_at
       filter:
         assigned_agent:
           user:
@@ -276,6 +296,17 @@ select_permissions:
         - pickup_by
         - dispatch_round
         - dispatch_exhausted_at
+        - assigned_at
+        - pickup_due_at
+        - pickup_state
+        - pickup_reminder_sent_at
+        - pickup_at_risk_at
+        - pickup_overdue_at
+        - pickup_extension_minutes
+        - pickup_paused_at
+        - pickup_pause_reason
+        - reassignment_count
+        - agent_arrived_pickup_at
       filter:
         business:
           user:
@@ -344,6 +375,10 @@ select_permissions:
         - pickup_by
         - dispatch_round
         - dispatch_exhausted_at
+        - assigned_at
+        - pickup_due_at
+        - pickup_state
+        - reassignment_count
       filter:
         client:
           user:

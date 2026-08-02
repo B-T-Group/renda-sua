@@ -410,6 +410,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/pickup-ops"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminPickupOpsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/location-transfers"
               element={
                 <ProtectedRoute>

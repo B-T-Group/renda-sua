@@ -33,6 +33,7 @@ import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
+import { OrderEventsTimeline } from '../orders/OrderEventsTimeline';
 import RatingDialog, { type RatingDialogMode } from '../dialogs/RatingDialog';
 import ReportIssueDialog from '../dialogs/ReportIssueDialog';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
@@ -376,6 +377,7 @@ const ManageOrderPage: React.FC = () => {
         <BusinessOrderAlerts
           order={order as never}
           onCancelOrder={() => handleCancelOrder()}
+          onOrderUpdated={() => void refetch()}
         />
       )}
       {persona === 'client' && <ClientOrderAlerts order={order as never} />}
@@ -582,6 +584,10 @@ const ManageOrderPage: React.FC = () => {
           </Box>
         )}
       </Box>
+
+      {order.current_status === 'assigned_to_agent' && (
+        <OrderEventsTimeline orderId={order.id} />
+      )}
 
       <OrderHistoryDialog
         open={historyDialogOpen}

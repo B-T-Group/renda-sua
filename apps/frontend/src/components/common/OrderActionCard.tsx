@@ -250,7 +250,7 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
         {/* Number of Items */}
         <Box sx={{ mb: 2 }}>
           <Typography variant="body1" color="text.secondary">
-            <strong>{t('orders.items', 'Items')}:</strong>{' '}
+            <strong>{t('orders.items.label', 'Items')}:</strong>{' '}
             {order.order_items?.length || 0}
           </Typography>
         </Box>

@@ -629,7 +629,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               }}
             >
               <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
-                {order.order_items?.length || 0} {t('orders.items', 'items')} •{' '}
+                {order.order_items?.length || 0} {t('orders.items.label', 'items')} •{' '}
                 {getTotalItemQuantity()} {t('orders.totalQuantity', 'qty')}
               </Typography>
             </Box>

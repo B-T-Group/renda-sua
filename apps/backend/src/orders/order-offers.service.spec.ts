@@ -6,6 +6,7 @@ import type { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrderOffersService } from './order-offers.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 describe('OrderOffersService', () => {
   let service: OrderOffersService;
@@ -45,12 +46,17 @@ describe('OrderOffersService', () => {
       {} as unknown as GoogleDistanceService
     );
 
+    const waitAndExecuteScheduleService = {
+      scheduleDispatchRound: jest.fn().mockResolvedValue(undefined),
+    } as unknown as WaitAndExecuteScheduleService;
+
     service = new OrderOffersService(
       hasuraSystemService,
       commissionsService,
       notificationsService,
       configService,
-      eligibleAgentsQueryService
+      eligibleAgentsQueryService,
+      waitAndExecuteScheduleService
     );
   });
 
@@ -72,20 +78,39 @@ describe('OrderOffersService', () => {
     });
 
     it('inserts and pushes offers to the nearest eligible token-enabled agents', async () => {
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({ order_offers: [] })
-        .mockResolvedValueOnce({ orders_by_pk: buildOfferOrder() })
-        .mockResolvedValueOnce({ agent_locations: buildAgentLocations() })
-        .mockResolvedValueOnce({
-          mobile_push_tokens: [
-            { user_id: 'user-near' },
-            { user_id: 'user-mid' },
-            { user_id: 'user-far' },
-            { user_id: 'user-wrong-region' },
-          ],
-        });
-      hasuraSystemService.executeMutation.mockResolvedValueOnce({
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('orders_by_pk')) {
+            return { orders_by_pk: buildOfferOrder() };
+          }
+          if (query.includes('agent_locations')) {
+            return { agent_locations: buildAgentLocations() };
+          }
+          if (query.includes('mobile_push_tokens')) {
+            return {
+              mobile_push_tokens: [
+                { user_id: 'user-near' },
+                { user_id: 'user-mid' },
+                { user_id: 'user-far' },
+                { user_id: 'user-wrong-region' },
+              ],
+            };
+          }
+          if (query.includes('pickup_reliability_score')) {
+            return {
+              agents: [
+                { id: 'agent-near', pickup_reliability_score: 100 },
+                { id: 'agent-mid', pickup_reliability_score: 90 },
+                { id: 'agent-far', pickup_reliability_score: 80 },
+              ],
+            };
+          }
+          return {};
+        }
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
         insert_order_offers: { affected_rows: 2 },
+        update_orders_by_pk: { id: 'order-1' },
       });
       commissionsService.calculateAgentEarnings.mockResolvedValue({
         totalEarnings: 42.6,
@@ -223,7 +248,13 @@ describe('OrderOffersService', () => {
   });
 
   function getInsertedOffers() {
-    return hasuraSystemService.executeMutation.mock.calls[0][1].objects;
+    const call = hasuraSystemService.executeMutation.mock.calls.find(
+      (c) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('insert_order_offers') &&
+        c[1]?.objects
+    );
+    return call?.[1]?.objects ?? [];
   }
 
   function buildOfferOrder() {

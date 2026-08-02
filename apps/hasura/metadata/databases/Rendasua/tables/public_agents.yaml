@@ -136,6 +136,10 @@ select_permissions:
         - location_tracking_consent_ios
         - location_tracking_consent_android
         - location_tracking_consent_web
+        - pickups_completed_count
+        - pickups_reassigned_count
+        - pickup_issues_reported_count
+        - pickup_reliability_score
       filter:
         user:
           id:

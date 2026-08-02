@@ -941,6 +941,25 @@
         "cancelled": "Annulé",
         "expired": "Expiré"
       }
+    },
+    "pickupOps": {
+      "title": "Opérations de collecte",
+      "liveAssigned": "Assignées en cours",
+      "atRisk": "Événements à risque",
+      "overdue": "Événements en retard",
+      "reassignments": "Réaffectations",
+      "slaCompliance": "Conformité SLA %",
+      "avgDelay": "Retard moyen de collecte (min)",
+      "reassignmentRate": "Taux de réaffectation %",
+      "merchantDelays": "Retards commerçant",
+      "healthBoard": "Santé des commandes assignées",
+      "health": "Santé",
+      "state": "État",
+      "due": "Échéance",
+      "agent": "Livreur",
+      "resume": "Reprendre",
+      "pause": "Pause",
+      "empty": "Aucune commande assignée surveillée actuellement."
     }
   },
   "agent": {
@@ -3608,6 +3627,37 @@
     "viewOnMap": "Voir la position de l'agent sur la carte",
     "weight": "Poids",
     "business": {
+      "hero": {
+        "accept": "Accepter la commande",
+        "prepare": "Préparer la commande",
+        "confirmPickup": "Confirmer le retrait",
+        "collectPayment": "Encaisser le paiement",
+        "complete": "Terminer la commande",
+        "overwrite": "Générer un code de remplacement",
+        "reconcile": "Réconcilier le cash",
+        "refund": "Gérer le remboursement",
+        "waitingAgent": "En attente d'un livreur",
+        "completed": "Commande terminée"
+      },
+      "sla": {
+        "acceptWithin": "Accepter dans",
+        "prepBy": "Préparation attendue pour"
+      },
+      "actions": {
+        "reject": "Refuser",
+        "contactCustomer": "Contacter le client",
+        "contactAgent": "Contacter le livreur"
+      },
+      "status": {
+        "pending": "À accepter",
+        "confirmed": "Confirmée — à préparer",
+        "preparing": "En préparation",
+        "ready_for_pickup": "Prête pour le retrait",
+        "assigned_to_agent": "Livreur assigné",
+        "out_for_delivery": "En livraison",
+        "delivered": "Livrée",
+        "complete": "Terminée"
+      },
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande",
         "pending": "Action Requise : Confirmer cette commande",
@@ -3670,39 +3720,6 @@
         "assigned_to_agent": "Livreur assigné",
         "picked_up": "Récupérée par le livreur",
         "in_transit": "En route",
-        "delivered": "Livrée",
-        "complete": "Terminée"
-      }
-    },
-    "business": {
-      "hero": {
-        "accept": "Accepter la commande",
-        "prepare": "Préparer la commande",
-        "confirmPickup": "Confirmer le retrait",
-        "collectPayment": "Encaisser le paiement",
-        "complete": "Terminer la commande",
-        "overwrite": "Générer un code de remplacement",
-        "reconcile": "Réconcilier le cash",
-        "refund": "Gérer le remboursement",
-        "waitingAgent": "En attente d'un livreur",
-        "completed": "Commande terminée"
-      },
-      "sla": {
-        "acceptWithin": "Accepter dans",
-        "prepBy": "Préparation attendue pour"
-      },
-      "actions": {
-        "reject": "Refuser",
-        "contactCustomer": "Contacter le client",
-        "contactAgent": "Contacter le livreur"
-      },
-      "status": {
-        "pending": "À accepter",
-        "confirmed": "Confirmée — à préparer",
-        "preparing": "En préparation",
-        "ready_for_pickup": "Prête pour le retrait",
-        "assigned_to_agent": "Livreur assigné",
-        "out_for_delivery": "En livraison",
         "delivered": "Livrée",
         "complete": "Terminée"
       }
@@ -3776,12 +3793,12 @@
       "empty": "Aucun historique"
     },
     "items": {
-      "empty": "Aucun article"
+      "empty": "Aucun article",
+      "label": "articles"
     },
     "deliveryWindow": {
       "selected": "{{date}} · {{start}} – {{end}}"
     },
-
     "clientHold": "Retenue Client",
     "clientInfo": "Informations sur le Client",
     "color": "Couleur",
@@ -3969,7 +3986,6 @@
     },
     "confirmStatusChange": "Confirmer le Changement de Statut",
     "confirmStatusChangeMessage": "Êtes-vous sûr de vouloir changer le statut de la commande ?",
-    "contact": "Contact",
     "cancelPurchase": "Annuler l'achat",
     "costToClaim": "Caution",
     "costToClaimDescription": "Un dépôt de garantie est requis pour réclamer cette commande. Ce montant est calculé automatiquement et sera libéré après une livraison réussie.",
@@ -3978,7 +3994,6 @@
     "createdAt": "Créé le",
     "databaseTransactionId": "ID de Transaction de Base de Données",
     "databaseTransactionStatus": "Statut de Transaction de Base de Données",
-    "delivery": "Livraison",
     "deliveryAddress": "Adresse de Livraison",
     "selectedAddress": "Adresse sélectionnée",
     "deliveryInstructions": "Instructions de livraison",
@@ -4091,7 +4106,6 @@
     "item": "article",
     "itemNotFound": "Article non trouvé",
     "itemNotFoundMessage": "L'article que vous recherchez n'est plus disponible.",
-    "items": "articles",
     "loadingCancellationFee": "Chargement des frais d'annulation...",
     "manageOrder": "Gérer la Commande",
     "manageOrderDescription": "Voir et gérer les détails de la commande",
@@ -4349,6 +4363,19 @@
       "completeBusiness": "Cette commande est terminée.",
       "completeAgent": "Cette livraison est terminée.",
       "refundRequested": "Une demande de remboursement nécessite votre attention."
+    },
+    "pickupSla": {
+      "pausedTitle": "Suivi de collecte en pause",
+      "pausedBody": "Le minuteur de collecte est en pause tant que la commande n’est pas prête.",
+      "overdueTitle": "Collecte en retard",
+      "overdueBody": "Le livreur assigné n’a pas encore récupéré cette commande. Une réaffectation peut suivre.",
+      "atRiskTitle": "Livreur en retard",
+      "atRiskBody": "Votre livreur assigné est en retard. Nous surveillons et trouverons un autre livreur si nécessaire.",
+      "monitoringTitle": "Collecte en cours",
+      "monitoringBody": "Un livreur est assigné et se dirige vers le point de collecte.",
+      "dueAt": "Collecte prévue avant {{time}}",
+      "needMoreTime": "Besoin de plus de temps",
+      "timeline": "Chronologie opérationnelle"
     }
   },
   "items": {

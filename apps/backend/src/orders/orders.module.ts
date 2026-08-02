@@ -25,14 +25,20 @@ import { BusinessAvailabilityController } from './business-availability.controll
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
+import { OrderEventsService } from './order-events.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
 import { OrderOffersService } from './order-offers.service';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
+import { OrderPickupAnalyticsService } from './order-pickup-analytics.service';
+import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderQueueService } from './order-queue.service';
+import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
+import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
@@ -59,6 +65,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
   ],
   controllers: [
     OrdersController,
+    AdminPickupOpsController,
     FailedDeliveriesController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
@@ -77,6 +84,11 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CancellationPolicyService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    OrderEventsService,
+    PickupProgressService,
+    OrderReassignmentService,
+    OrderPickupMonitorService,
+    OrderPickupAnalyticsService,
     StripeAuthReconcilerService,
   ],
   exports: [
@@ -87,6 +99,10 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     RefundsModule,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    OrderEventsService,
+    OrderPickupMonitorService,
+    OrderReassignmentService,
+    OrderPickupAnalyticsService,
   ],
 })
 export class OrdersModule {}

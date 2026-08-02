@@ -48,6 +48,17 @@ import {
 } from './order-status-recipients.util';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
+  buildPickupAtRiskAgentPushMessage,
+  buildPickupAtRiskBusinessPushMessage,
+  buildPickupEscalationPushMessage,
+  buildPickupOverdueAgentPushMessage,
+  buildPickupOverdueCustomerPushMessage,
+  buildPickupReassignedAgentPushMessage,
+  buildPickupReassignedBusinessPushMessage,
+  buildPickupReassignedCustomerPushMessage,
+  buildPickupReminderPushMessage,
+} from './pickup-push.messages';
+import {
   buildBusinessOrderCreatedPushMessage,
   buildBusinessOrderScheduledPushMessage,
   buildMentionPushMessage,
@@ -826,6 +837,176 @@ export class NotificationsService {
       this.logger.warn(
         `sendOrderAcceptanceActivatePush failed: ${error?.message ?? String(error)}`
       );
+    }
+  }
+
+  async sendPickupReminderPush(params: {
+    agentUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    businessName?: string | null;
+    pickupDueAt?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.agentUserId,
+      buildPickupReminderPushMessage(params),
+      params,
+      'pickup_reminder',
+      'agent'
+    );
+  }
+
+  async sendPickupAtRiskAgentPush(params: {
+    agentUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.agentUserId,
+      buildPickupAtRiskAgentPushMessage(params),
+      params,
+      'pickup_at_risk',
+      'agent'
+    );
+  }
+
+  async sendPickupAtRiskBusinessPush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.businessUserId,
+      buildPickupAtRiskBusinessPushMessage(params),
+      params,
+      'pickup_at_risk',
+      'business'
+    );
+  }
+
+  async sendPickupOverdueAgentPush(params: {
+    agentUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    reassignmentInMinutes: number;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.agentUserId,
+      buildPickupOverdueAgentPushMessage(params),
+      params,
+      'pickup_overdue',
+      'agent'
+    );
+  }
+
+  async sendPickupOverdueCustomerPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    estimatedDeliveryTime?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.clientUserId,
+      buildPickupOverdueCustomerPushMessage(params),
+      params,
+      'pickup_overdue',
+      'client'
+    );
+  }
+
+  async sendPickupReassignedAgentPush(params: {
+    agentUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.agentUserId,
+      buildPickupReassignedAgentPushMessage(params),
+      params,
+      'pickup_reassigned',
+      'agent'
+    );
+  }
+
+  async sendPickupReassignedBusinessPush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.businessUserId,
+      buildPickupReassignedBusinessPushMessage(params),
+      params,
+      'pickup_reassigned',
+      'business'
+    );
+  }
+
+  async sendPickupReassignedCustomerPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.sendPickupPush(
+      params.clientUserId,
+      buildPickupReassignedCustomerPushMessage(params),
+      params,
+      'pickup_reassigned',
+      'client'
+    );
+  }
+
+  async sendPickupReassignmentEscalationPush(params: {
+    businessUserId?: string | null;
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+  }): Promise<void> {
+    const msg = buildPickupEscalationPushMessage(params);
+    await this.sendPickupPush(
+      params.businessUserId,
+      msg,
+      params,
+      'pickup_escalation',
+      'business'
+    );
+    await this.sendPickupPush(
+      params.clientUserId,
+      msg,
+      params,
+      'pickup_escalation',
+      'client'
+    );
+  }
+
+  private async sendPickupPush(
+    userId: string | null | undefined,
+    message: { title: string; body: string },
+    params: { orderId: string; orderNumber: string },
+    event: string,
+    persona: string
+  ): Promise<void> {
+    const id = userId?.trim();
+    if (!id) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(id, message.title, message.body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event,
+        persona,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendPickupPush ${event} failed: ${error?.message}`);
     }
   }
 

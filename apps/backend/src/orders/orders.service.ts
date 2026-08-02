@@ -83,6 +83,9 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderEventsService } from './order-events.service';
+import { OrderPickupMonitorService } from './order-pickup-monitor.service';
+import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
@@ -395,6 +398,9 @@ export class OrdersService {
     private readonly locationsService: LocationsService,
     private readonly orderSystemJobsService: OrderSystemJobsService,
     private readonly orderAcceptanceService: OrderAcceptanceService,
+    private readonly orderPickupMonitorService: OrderPickupMonitorService,
+    private readonly orderReassignmentService: OrderReassignmentService,
+    private readonly orderEventsService: OrderEventsService,
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
@@ -1891,10 +1897,7 @@ export class OrdersService {
       'agent',
       user.id
     );
-    await this.orderOffersService.handleOrderAssigned(
-      request.orderId,
-      agent.id
-    );
+    await this.onOrderAssignedToAgent(request.orderId, agent.id);
     return {
       success: true,
       order: updatedOrder,
@@ -2072,10 +2075,7 @@ export class OrdersService {
         'agent',
         user.id
       );
-      await this.orderOffersService.handleOrderAssigned(
-        request.orderId,
-        agent.id
-      );
+      await this.onOrderAssignedToAgent(request.orderId, agent.id);
       return {
         success: true,
         order: updatedOrder,
@@ -2359,6 +2359,8 @@ export class OrdersService {
       user.id,
       request.notes
     );
+    await this.orderPickupMonitorService.markRecovered(request.orderId);
+    await this.bumpAgentPickupCompleted(agent.id);
     return {
       success: true,
       order: updatedOrder,
@@ -5174,6 +5176,15 @@ export class OrdersService {
           created_at
           updated_at
           completed_at
+          assigned_at
+          pickup_by
+          pickup_due_at
+          pickup_state
+          pickup_extension_minutes
+          pickup_paused_at
+          pickup_pause_reason
+          reassignment_count
+          agent_arrived_pickup_at
           client {
             id
             user_id
@@ -5369,6 +5380,15 @@ export class OrdersService {
           created_at
           updated_at
           completed_at
+          assigned_at
+          pickup_by
+          pickup_due_at
+          pickup_state
+          pickup_extension_minutes
+          pickup_paused_at
+          pickup_pause_reason
+          reassignment_count
+          agent_arrived_pickup_at
           client {
             id
             user_id
@@ -5912,6 +5932,7 @@ export class OrdersService {
       memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
       referenceId: order.id,
     });
+    await this.orderPickupMonitorService.clearMonitoring(request.orderId);
     return {
       success: true,
       order: result.update_orders_by_pk,
@@ -6039,6 +6060,15 @@ export class OrdersService {
           pickup_by
           dispatch_round
           dispatch_exhausted_at
+          assigned_at
+          pickup_due_at
+          pickup_state
+          pickup_extension_minutes
+          pickup_paused_at
+          pickup_pause_reason
+          reassignment_count
+          agent_arrived_pickup_at
+          estimated_delivery_time
           client {
             user_id
             user {
@@ -6059,6 +6089,8 @@ export class OrdersService {
             address_id
             address {
               country
+              latitude
+              longitude
             }
           }
           delivery_address {
@@ -7129,10 +7161,7 @@ export class OrdersService {
         user.id
       );
 
-      await this.orderOffersService.handleOrderAssigned(
-        order.id,
-        user.agent.id
-      );
+      await this.onOrderAssignedToAgent(order.id, user.agent.id);
 
       this.logger.log(
         `Successfully processed claim order payment for order ${order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
@@ -9378,6 +9407,166 @@ export class OrdersService {
    * claims/offer accepts cannot both win (first successful request wins).
    * Throws 409 ALREADY_ASSIGNED when the order was already taken.
    */
+  private async onOrderAssignedToAgent(
+    orderId: string,
+    agentId: string
+  ): Promise<void> {
+    try {
+      await this.orderOffersService.handleOrderAssigned(orderId, agentId);
+    } catch (error: any) {
+      this.logger.error(
+        `handleOrderAssigned failed for ${orderId}: ${error?.message}`
+      );
+    }
+    try {
+      await this.orderPickupMonitorService.startMonitoring(orderId);
+    } catch (error: any) {
+      this.logger.error(
+        `startMonitoring failed for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  async requestPickupDelay(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can request delay');
+    const agent = this.requireAgentRecord(user);
+    try {
+      return await this.orderPickupMonitorService.requestExtension(
+        orderId,
+        agent.id
+      );
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message || 'Unable to extend pickup deadline',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  async reportPickupIssue(orderId: string, reason: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can report issues');
+    const agent = this.requireAgentRecord(user);
+    const result = await this.orderReassignmentService.reportIssueAndRelease(
+      orderId,
+      agent.id,
+      reason || 'unspecified'
+    );
+    if (!result.success) {
+      throw new HttpException(result.message, HttpStatus.BAD_REQUEST);
+    }
+    return result;
+  }
+
+  async markPickupNotReady(orderId: string, extraMinutes?: number) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only businesses can mark pickup not ready'
+    );
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (order.business?.user_id !== user.id) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+    return this.orderPickupMonitorService.pausePickup(
+      orderId,
+      'merchant_delay',
+      'business',
+      user.id,
+      extraMinutes
+    );
+  }
+
+  async pausePickupMonitoring(
+    orderId: string,
+    reason: 'support_hold' | 'merchant_delay' = 'support_hold'
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const canAccess = await this.canAccessAnyOrder(user.id);
+    if (!canAccess) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+    return this.orderPickupMonitorService.pausePickup(
+      orderId,
+      reason,
+      'support',
+      user.id
+    );
+  }
+
+  async resumePickupMonitoring(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const canAccess = await this.canAccessAnyOrder(user.id);
+    if (canAccess) {
+      return this.orderPickupMonitorService.resumePickup(
+        orderId,
+        'support',
+        user.id
+      );
+    }
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only businesses or support can resume pickup monitoring'
+    );
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (order.business?.user_id !== user.id) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+    const pauseReason = (order as { pickup_pause_reason?: string | null })
+      .pickup_pause_reason;
+    if (pauseReason === 'support_hold') {
+      throw new HttpException(
+        'Support hold can only be resumed by support',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return this.orderPickupMonitorService.resumePickup(
+      orderId,
+      'business',
+      user.id
+    );
+  }
+
+  async getOrderEvents(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    await this.assertCanViewOrder(user, order);
+    const events = await this.orderEventsService.listForOrder(orderId);
+    return { success: true, events };
+  }
+
+  private async assertCanViewOrder(user: any, order: any): Promise<void> {
+    if (await this.canAccessAnyOrder(user.id)) return;
+    const isClient = order.client?.user_id === user.id;
+    const isBusiness = order.business?.user_id === user.id;
+    const isAgent = order.assigned_agent?.user_id === user.id;
+    if (!isClient && !isBusiness && !isAgent) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private async bumpAgentPickupCompleted(agentId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation BumpPickupDone($id: uuid!) {
+          update_agents_by_pk(
+            pk_columns: { id: $id }
+            _inc: { pickups_completed_count: 1 }
+          ) { id }
+        }`,
+        { id: agentId }
+      );
+    } catch (error: any) {
+      this.logger.warn(`bumpAgentPickupCompleted failed: ${error?.message}`);
+    }
+  }
+
   private async assignOrderToAgent(
     orderId: string,
     agentId: string,
@@ -9396,6 +9585,7 @@ export class OrdersService {
           _set: {
             current_status: $status,
             assigned_agent_id: $agentId,
+            assigned_at: "now()",
             updated_at: "now()"
           }
         ) {

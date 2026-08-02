@@ -7,15 +7,18 @@ import {
   formatTimeRemaining,
   getTimeRemainingForCancellation,
 } from '../../utils/orderUtils';
+import { PickupSlaBanner } from './PickupSlaBanner';
 
 interface BusinessOrderAlertsProps {
   order: OrderData;
   onCancelOrder?: (orderId: string) => void;
+  onOrderUpdated?: () => void;
 }
 
 const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
   order,
   onCancelOrder,
+  onOrderUpdated,
 }) => {
   const { t } = useTranslation();
 
@@ -288,13 +291,26 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
   };
 
   const alerts = getAlertsForStatus();
+  const showPickupBanner =
+    order.current_status === 'assigned_to_agent' &&
+    !!(order as OrderData & { pickup_state?: string }).pickup_state;
 
-  if (alerts.length === 0) {
+  if (alerts.length === 0 && !showPickupBanner) {
     return null;
   }
 
   return (
     <Box sx={{ mb: 2 }}>
+      {showPickupBanner && (
+        <PickupSlaBanner
+          orderId={order.id}
+          pickupState={(order as any).pickup_state}
+          pickupDueAt={(order as any).pickup_due_at}
+          pickupPausedAt={(order as any).pickup_paused_at}
+          showMerchantAction
+          onUpdated={onOrderUpdated}
+        />
+      )}
       {alerts.map((alert, index) => (
         <Alert
           key={index}

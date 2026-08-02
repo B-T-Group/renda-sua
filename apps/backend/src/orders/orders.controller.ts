@@ -1305,6 +1305,97 @@ export class OrdersController {
     return this.ordersService.dropOrder(request);
   }
 
+  @Post(':id/pickup-delay')
+  @ApiOperation({
+    summary: 'Agent requests a one-time pickup deadline extension',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Pickup deadline extended' })
+  @ApiResponse({ status: 400, description: 'Extension unavailable' })
+  async requestPickupDelay(@Param('id') orderId: string) {
+    return this.ordersService.requestPickupDelay(orderId);
+  }
+
+  @Post(':id/report-pickup-issue')
+  @ApiOperation({
+    summary: 'Agent reports a pickup issue and releases the order',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Issue reason (vehicle_breakdown, emergency, etc.)',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Order released for reassignment' })
+  async reportPickupIssue(
+    @Param('id') orderId: string,
+    @Body() body: { reason?: string }
+  ) {
+    return this.ordersService.reportPickupIssue(orderId, body?.reason || '');
+  }
+
+  @Post(':id/pickup-not-ready')
+  @ApiOperation({
+    summary: 'Business pauses pickup SLA because order is not ready',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        extraMinutes: {
+          type: 'number',
+          description: 'Optional extra minutes added to remaining SLA',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Pickup monitoring paused' })
+  async markPickupNotReady(
+    @Param('id') orderId: string,
+    @Body() body?: { extraMinutes?: number }
+  ) {
+    return this.ordersService.markPickupNotReady(orderId, body?.extraMinutes);
+  }
+
+  @Post(':id/pickup-pause')
+  @ApiOperation({ summary: 'Support/admin pause pickup monitoring' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Paused' })
+  async pausePickupMonitoring(
+    @Param('id') orderId: string,
+    @Body() body?: { reason?: 'support_hold' | 'merchant_delay' }
+  ) {
+    return this.ordersService.pausePickupMonitoring(
+      orderId,
+      body?.reason || 'support_hold'
+    );
+  }
+
+  @Post(':id/pickup-resume')
+  @ApiOperation({
+    summary: 'Resume pickup monitoring (business after merchant delay, or support)',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Resumed' })
+  async resumePickupMonitoring(@Param('id') orderId: string) {
+    return this.ordersService.resumePickupMonitoring(orderId);
+  }
+
+  @Get(':id/events')
+  @ApiOperation({ summary: 'List operational timeline events for an order' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Order events' })
+  async getOrderEvents(@Param('id') orderId: string) {
+    return this.ordersService.getOrderEvents(orderId);
+  }
+
   @Post('claim_order')
   async claimOrder(
     @Body() request: GetOrderRequest,

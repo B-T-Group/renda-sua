@@ -34,6 +34,9 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderEventsService } from './order-events.service';
+import { OrderPickupMonitorService } from './order-pickup-monitor.service';
+import { OrderReassignmentService } from './order-reassignment.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
@@ -242,6 +245,31 @@ describe('OrdersService', () => {
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
         { provide: OrderSystemJobsService, useValue: {} },
+        {
+          provide: OrderPickupMonitorService,
+          useValue: {
+            startMonitoring: jest.fn(),
+            clearMonitoring: jest.fn(),
+            markRecovered: jest.fn(),
+            requestExtension: jest.fn(),
+            pausePickup: jest.fn(),
+            resumePickup: jest.fn(),
+          },
+        },
+        {
+          provide: OrderReassignmentService,
+          useValue: {
+            reportIssueAndRelease: jest.fn(),
+            reassignOrder: jest.fn(),
+          },
+        },
+        {
+          provide: OrderEventsService,
+          useValue: {
+            listForOrder: jest.fn().mockResolvedValue([]),
+            recordEvent: jest.fn(),
+          },
+        },
         {
           provide: OrderAcceptanceService,
           useValue: {

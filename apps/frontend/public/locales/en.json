@@ -1182,6 +1182,25 @@
         "cancelled": "Cancelled",
         "expired": "Expired"
       }
+    },
+    "pickupOps": {
+      "title": "Pickup operations",
+      "liveAssigned": "Live assigned",
+      "atRisk": "At risk events",
+      "overdue": "Overdue events",
+      "reassignments": "Reassignments",
+      "slaCompliance": "SLA compliance %",
+      "avgDelay": "Avg pickup delay (min)",
+      "reassignmentRate": "Reassignment rate %",
+      "merchantDelays": "Merchant delays",
+      "healthBoard": "Assigned order health",
+      "health": "Health",
+      "state": "State",
+      "due": "Due",
+      "agent": "Agent",
+      "resume": "Resume",
+      "pause": "Pause",
+      "empty": "No assigned orders currently monitored."
     }
   },
   "agent": {
@@ -3867,6 +3886,37 @@
     "viewOnMap": "View agent location on map",
     "weight": "Weight",
     "business": {
+      "hero": {
+        "accept": "Accept Order",
+        "prepare": "Prepare Order",
+        "confirmPickup": "Confirm Pickup",
+        "collectPayment": "Collect Pickup Payment",
+        "complete": "Complete Order",
+        "overwrite": "Generate Overwrite Code",
+        "reconcile": "Reconcile Cash",
+        "refund": "Manage Refund",
+        "waitingAgent": "Waiting for Agent",
+        "completed": "Order Completed"
+      },
+      "sla": {
+        "acceptWithin": "Accept within",
+        "prepBy": "Preparation expected by"
+      },
+      "actions": {
+        "reject": "Reject",
+        "contactCustomer": "Contact customer",
+        "contactAgent": "Contact agent"
+      },
+      "status": {
+        "pending": "Needs acceptance",
+        "confirmed": "Confirmed — prepare next",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Agent assigned",
+        "out_for_delivery": "Out for delivery",
+        "delivered": "Delivered",
+        "complete": "Completed"
+      },
       "actionRequired": {
         "delivered": "Action Required: Complete order",
         "pending": "Action Required: Confirm this order",
@@ -3931,39 +3981,6 @@
         "in_transit": "On the way",
         "delivered": "Delivered",
         "complete": "Complete"
-      }
-    },
-    "business": {
-      "hero": {
-        "accept": "Accept Order",
-        "prepare": "Prepare Order",
-        "confirmPickup": "Confirm Pickup",
-        "collectPayment": "Collect Pickup Payment",
-        "complete": "Complete Order",
-        "overwrite": "Generate Overwrite Code",
-        "reconcile": "Reconcile Cash",
-        "refund": "Manage Refund",
-        "waitingAgent": "Waiting for Agent",
-        "completed": "Order Completed"
-      },
-      "sla": {
-        "acceptWithin": "Accept within",
-        "prepBy": "Preparation expected by"
-      },
-      "actions": {
-        "reject": "Reject",
-        "contactCustomer": "Contact customer",
-        "contactAgent": "Contact agent"
-      },
-      "status": {
-        "pending": "Needs acceptance",
-        "confirmed": "Confirmed — prepare next",
-        "preparing": "Preparing",
-        "ready_for_pickup": "Ready for Pickup",
-        "assigned_to_agent": "Agent assigned",
-        "out_for_delivery": "Out for delivery",
-        "delivered": "Delivered",
-        "complete": "Completed"
       }
     },
     "delivery": {
@@ -4035,7 +4052,8 @@
       "empty": "No history yet"
     },
     "items": {
-      "empty": "No items"
+      "empty": "No items",
+      "label": "items"
     },
     "deliveryWindow": {
       "selected": "{{date}} · {{start}} – {{end}}"
@@ -4224,7 +4242,6 @@
     },
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Are you sure you want to change the order status?",
-    "contact": "Contact",
     "cancelPurchase": "Cancel Purchase",
     "costToClaim": "Caution",
     "costToClaimDescription": "A security deposit is required to claim this order. This amount is automatically calculated and will be released upon successful delivery.",
@@ -4233,7 +4250,6 @@
     "createdAt": "Created",
     "databaseTransactionId": "Database Transaction ID",
     "databaseTransactionStatus": "Database Transaction Status",
-    "delivery": "Delivery",
     "deliveryAddress": "Delivery Address",
     "selectedAddress": "Selected Address",
     "deliveryInstructions": "Delivery instructions",
@@ -4346,7 +4362,6 @@
     "item": "item",
     "itemNotFound": "Item not found",
     "itemNotFoundMessage": "The item you are looking for is no longer available.",
-    "items": "items",
     "loadingCancellationFee": "Loading cancellation fee...",
     "manageOrder": "Manage Order",
     "manageOrderDescription": "View and manage order details",
@@ -4610,6 +4625,19 @@
       "completeBusiness": "This order is complete.",
       "completeAgent": "This delivery is complete.",
       "refundRequested": "A refund request needs attention."
+    },
+    "pickupSla": {
+      "pausedTitle": "Pickup monitoring paused",
+      "pausedBody": "The pickup timer is paused while the order is not ready.",
+      "overdueTitle": "Pickup overdue",
+      "overdueBody": "The assigned agent has not picked up this order yet. A reassignment may follow.",
+      "atRiskTitle": "Agent running late",
+      "atRiskBody": "Your assigned agent is running late. We are monitoring and will find another agent if needed.",
+      "monitoringTitle": "Pickup in progress",
+      "monitoringBody": "An agent is assigned and heading to pick up this order.",
+      "dueAt": "Pickup due by {{time}}",
+      "needMoreTime": "Need more time",
+      "timeline": "Operational timeline"
     }
   },
   "items": {

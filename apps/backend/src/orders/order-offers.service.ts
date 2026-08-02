@@ -786,8 +786,39 @@ export class OrderOffersService {
       }));
 
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
-    withPushToken.sort((a, b) => a.distanceKm - b.distanceKm);
-    return withPushToken.slice(0, this.maxAgents);
+    const ranked = await this.rankByPickupReliability(withPushToken);
+    return ranked.slice(0, this.maxAgents);
+  }
+
+  /** Prefer closer agents; among similar distance, prefer higher pickup reliability. */
+  private async rankByPickupReliability(
+    candidates: CandidateAgent[]
+  ): Promise<CandidateAgent[]> {
+    if (candidates.length === 0) return [];
+    const res = await this.hasuraSystemService.executeQuery(
+      `query AgentPickupRel($ids: [uuid!]!) {
+        agents(where: { id: { _in: $ids } }) {
+          id pickup_reliability_score
+        }
+      }`,
+      { ids: candidates.map((c) => c.agentId) }
+    );
+    const scoreById = new Map<string, number>(
+      ((res.agents || []) as Array<{ id: string; pickup_reliability_score?: number }>).map(
+        (a) => [a.id, Number(a.pickup_reliability_score ?? 100)]
+      )
+    );
+    const eligible = candidates.filter(
+      (c) => (scoreById.get(c.agentId) ?? 100) >= 40
+    );
+    const pool = eligible.length > 0 ? eligible : candidates;
+    return pool.sort((a, b) => {
+      const distDiff = a.distanceKm - b.distanceKm;
+      if (Math.abs(distDiff) > 0.5) return distDiff;
+      return (
+        (scoreById.get(b.agentId) ?? 100) - (scoreById.get(a.agentId) ?? 100)
+      );
+    });
   }
 
   private async filterAgentsWithPushToken(
