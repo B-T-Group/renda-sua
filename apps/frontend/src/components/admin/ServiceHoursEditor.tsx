@@ -20,6 +20,8 @@ export type ServiceHoursValue = Record<string, ServiceHourConfig>;
 interface ServiceHoursEditorProps {
   value: ServiceHoursValue;
   onChange: (value: ServiceHoursValue) => void;
+  title?: string;
+  description?: string;
 }
 
 const DAYS: Array<{ key: string; labelKey: string; fallback: string }> = [
@@ -37,6 +39,8 @@ const DAY_LABEL_WIDTH = 120;
 export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
   value,
   onChange,
+  title,
+  description,
 }) => {
   const { t } = useTranslation();
 
@@ -143,17 +147,19 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
   return (
     <Box>
       <Typography variant="subtitle1" sx={{ mb: 1 }}>
-        {t(
-          'admin.applicationSetup.fastDeliveryHours',
-          'Fast delivery service hours by day'
-        )}
+        {title ??
+          t(
+            'admin.applicationSetup.fastDeliveryHours',
+            'Fast delivery service hours by day'
+          )}
       </Typography>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {t(
-          'admin.applicationSetup.fastDeliveryHoursHelp',
-          'Uncheck a day to disable fast delivery. Times are in local time.'
-        )}
+        {description ??
+          t(
+            'admin.applicationSetup.fastDeliveryHoursHelp',
+            'Uncheck a day to disable fast delivery. Times are in local time.'
+          )}
       </Typography>
 
       <Box

@@ -1169,25 +1169,34 @@ const PlaceOrderPage: React.FC = () => {
     fetchSlots: fetchDeliverySlots,
   } = useDeliveryTimeSlots();
 
-  // Fetch slot details when delivery window is set and we have address
+  // Fetch slot details when delivery/pickup window is set and we know the relevant location
   useEffect(() => {
-    if (
-      deliveryWindow?.slot_id &&
-      deliveryWindow?.preferred_date &&
-      selectedAddress
-    ) {
+    if (!deliveryWindow?.slot_id || !deliveryWindow?.preferred_date) return;
+    if (isPickupOrder) {
+      if (!itemOriginCountryIso || !itemOriginState) return;
       fetchDeliverySlots(
-        selectedAddress.country,
-        selectedAddress.state,
+        itemOriginCountryIso,
+        itemOriginState,
         deliveryWindow.preferred_date,
-        requiresFastDelivery
+        false
       );
+      return;
     }
+    if (!selectedAddress) return;
+    fetchDeliverySlots(
+      selectedAddress.country,
+      selectedAddress.state,
+      deliveryWindow.preferred_date,
+      requiresFastDelivery
+    );
   }, [
     deliveryWindow?.slot_id,
     deliveryWindow?.preferred_date,
     selectedAddress,
     requiresFastDelivery,
+    isPickupOrder,
+    itemOriginCountryIso,
+    itemOriginState,
     fetchDeliverySlots,
   ]);
 
@@ -1329,6 +1338,7 @@ const PlaceOrderPage: React.FC = () => {
                 ? 'pay_now'
                 : 'pay_at_pickup') as const,
               requires_fast_delivery: false,
+              delivery_window: deliveryWindow,
             }
           : {
               delivery_address_id: selectedAddressId,
@@ -2060,6 +2070,28 @@ const PlaceOrderPage: React.FC = () => {
             </Card>
           )}
 
+          {isPickupOrder && selectedItem.business_location && (
+            <Card>
+              <CardContent sx={{ p: 1.5 }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                  {t(
+                    'orders.deliveryTimeWindow.pickupTimeTitle',
+                    'When will you pick up your order?'
+                  )}
+                </Typography>
+                <DeliveryTimeWindowSelector
+                  countryCode={itemOriginCountryIso}
+                  stateCode={itemOriginState}
+                  onChange={handleDeliveryWindowChange}
+                  loading={loading}
+                  shouldFetchNextAvailable={true}
+                  fulfillment="pickup"
+                  businessLocationId={selectedItem.business_location.id}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {/* Delivery Address (merged from former step 3) */}
           {!isPickupOrder && (addressesLoading || addresses.length === 0) && (
             <Card>
@@ -2152,6 +2184,7 @@ const PlaceOrderPage: React.FC = () => {
                   isFastDelivery={requiresFastDelivery}
                   loading={loading}
                   shouldFetchNextAvailable={true}
+                  businessLocationId={selectedItem?.business_location?.id}
                 />
               </CardContent>
             </Card>
@@ -2424,6 +2457,23 @@ const PlaceOrderPage: React.FC = () => {
                           )}
                         </Typography>
                       )}
+                    </Paper>
+                  )}
+
+                  {isPickupOrder && deliveryWindow && selectedSlot && (
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.deliveryTimeWindow.pickupReviewSummary', {
+                          date: deliveryReviewDateLabel,
+                          start: selectedSlot.start_time,
+                          end: selectedSlot.end_time,
+                          defaultValue:
+                            'Pickup on {{date}} between {{start}} and {{end}}.',
+                        })}
+                      </Typography>
                     </Paper>
                   )}
 
@@ -3532,6 +3582,29 @@ const PlaceOrderPage: React.FC = () => {
                 </Card>
               )}
 
+              {/* Pickup Time Card (pickup checkout only) */}
+              {isPickupOrder && selectedItem.business_location && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <Typography variant="h6" fontWeight="bold" gutterBottom>
+                      {t(
+                        'orders.deliveryTimeWindow.pickupTimeTitle',
+                        'When will you pick up your order?'
+                      )}
+                    </Typography>
+                    <DeliveryTimeWindowSelector
+                      countryCode={itemOriginCountryIso}
+                      stateCode={itemOriginState}
+                      onChange={handleDeliveryWindowChange}
+                      loading={loading}
+                      shouldFetchNextAvailable={true}
+                      fulfillment="pickup"
+                      businessLocationId={selectedItem.business_location.id}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Delivery Address Card */}
               {!isPickupOrder && (
               <Card>
@@ -3659,6 +3732,7 @@ const PlaceOrderPage: React.FC = () => {
                       isFastDelivery={requiresFastDelivery}
                       loading={loading}
                       shouldFetchNextAvailable={true}
+                      businessLocationId={selectedItem?.business_location?.id}
                     />
                   </CardContent>
                 </Card>

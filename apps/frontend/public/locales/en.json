@@ -452,6 +452,18 @@
     }
   },
   "admin": {
+    "operatingHours": {
+      "closed": "Closed",
+      "days": {
+        "monday": "Mon",
+        "tuesday": "Tue",
+        "wednesday": "Wed",
+        "thursday": "Thu",
+        "friday": "Fri",
+        "saturday": "Sat",
+        "sunday": "Sun"
+      }
+    },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",
       "pageDescription": "Initiate a mobile-money collection to top up the Rendasua HQ account. Funds are collected from the phone number provided and credited once confirmed.",
@@ -735,6 +747,9 @@
       "contractPending": "Pending",
       "paymentAccounts": "Payment accounts",
       "ownerLabel": "Owner",
+      "operatingHours": {
+        "title": "Locations & operating hours"
+      },
       "steps": {
         "contractDone": "Contract signed",
         "contractPending": "Contract pending",
@@ -4122,6 +4137,8 @@
       "selectSlot": "Select a time slot",
       "preferredDate": "Preferred delivery date",
       "pickupDate": "Pickup date",
+      "pickupTimeTitle": "When will you pick up your order?",
+      "pickupReviewSummary": "Pickup on {{date}} between {{start}} and {{end}}.",
       "flexible": "I'm flexible with timing",
       "alternativeDates": "Alternative dates",
       "specialInstructions": "Special delivery instructions",

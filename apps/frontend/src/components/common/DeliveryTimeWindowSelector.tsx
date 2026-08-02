@@ -41,6 +41,8 @@ interface DeliveryTimeWindowSelectorProps {
   shouldFetchNextAvailable?: boolean;
   /** When pickup, date label uses pickup wording instead of delivery. */
   fulfillment?: 'delivery' | 'pickup';
+  /** When provided, only slots fully contained within this location's operating hours are shown. */
+  businessLocationId?: string;
 }
 
 const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
@@ -52,6 +54,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
   validDeliveryWindow,
   shouldFetchNextAvailable = false,
   fulfillment = 'delivery',
+  businessLocationId,
 }) => {
   const { t } = useTranslation();
   const isPickup = fulfillment === 'pickup';
@@ -62,7 +65,12 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     slots: nextAvailableSlots,
     loading: loadingNextDay,
     fetchNextDay,
-  } = useNextAvailableDaySlots(countryCode, stateCode, isFastDelivery);
+  } = useNextAvailableDaySlots(
+    countryCode,
+    stateCode,
+    isFastDelivery,
+    businessLocationId
+  );
 
   // Find next available slot (prioritize closest: morning → afternoon → evening)
   const nextAvailableSlot = useMemo(() => {
@@ -171,13 +179,20 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
       stateCode &&
       !useNextAvailableSlots
     ) {
-      fetchSlots(countryCode, stateCode, selectedDateString, isFastDelivery);
+      fetchSlots(
+        countryCode,
+        stateCode,
+        selectedDateString,
+        isFastDelivery,
+        businessLocationId
+      );
     }
   }, [
     selectedDateString,
     countryCode,
     stateCode,
     isFastDelivery,
+    businessLocationId,
     useNextAvailableSlots,
     fetchSlots,
   ]);

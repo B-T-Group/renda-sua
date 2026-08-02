@@ -205,6 +205,18 @@ export class CheckoutGroupDto {
   })
   seller_country!: string;
 
+  @ApiPropertyOptional({
+    description:
+      'State/province of the seller primary location. Used to fetch pickup/delivery slots for this group.',
+  })
+  seller_state?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Business location id for this group (first location when a business has multiple). Used to filter available slots by operating hours.',
+  })
+  business_location_id?: string;
+
   @ApiProperty()
   subtotal!: number;
 

@@ -35,11 +35,20 @@ import {
   BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
+import {
+  DEFAULT_OPERATING_HOURS,
+  editorValueToOperatingHours,
+  operatingHoursToEditorValue,
+} from '../../utils/operatingHours';
 import { presignUploadLibraryImage } from './onboarding/onboardingPresignedUpload';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { getCountryStateCity } from '../../utils/countryStateCityLoader';
+import {
+  ServiceHoursEditor,
+  ServiceHoursValue,
+} from '../admin/ServiceHoursEditor';
 
 async function profileAddressToFormData(addr: Address): Promise<AddressFormData> {
   const { State } = await getCountryStateCity();
@@ -127,6 +136,10 @@ const LocationModal: React.FC<LocationModalProps> = ({
     instructions: '',
   });
 
+  const [operatingHours, setOperatingHours] = useState<ServiceHoursValue>(
+    operatingHoursToEditorValue(DEFAULT_OPERATING_HOURS)
+  );
+
   // Address dialog state
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
 
@@ -147,6 +160,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
         logo_url: location.logo_url ?? '',
       });
+      setOperatingHours(operatingHoursToEditorValue(location.operating_hours));
 
       void (async () => {
         const { State } = await getCountryStateCity();
@@ -177,6 +191,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         auto_withdraw_commissions: true,
         logo_url: '',
       });
+      setOperatingHours(operatingHoursToEditorValue(DEFAULT_OPERATING_HOURS));
 
       setAddressData({
         address_line_1: '',
@@ -250,6 +265,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     const payload = {
       ...formData,
       logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
+      operating_hours: editorValueToOperatingHours(operatingHours),
     };
     if (isStripeRail) {
       payload.auto_withdraw_commissions = false;
@@ -702,6 +718,18 @@ const LocationModal: React.FC<LocationModalProps> = ({
                   </Button>
                 )}
               </Stack>
+            </Box>
+
+            <Box>
+              <ServiceHoursEditor
+                value={operatingHours}
+                onChange={setOperatingHours}
+                title={t('business.locations.operatingHours', 'Operating hours')}
+                description={t(
+                  'business.locations.operatingHoursHint',
+                  'Clients can only book delivery or pickup time slots that fall fully within these hours.'
+                )}
+              />
             </Box>
           </Stack>
         </DialogContent>

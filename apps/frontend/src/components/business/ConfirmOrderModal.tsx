@@ -543,6 +543,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     validDeliveryWindow={validDeliveryWindow}
                     shouldFetchNextAvailable={!hasExistingWindows}
                     fulfillment={isPickup ? 'pickup' : 'delivery'}
+                    businessLocationId={order.business_location_id}
                   />
                 </Box>
               )}

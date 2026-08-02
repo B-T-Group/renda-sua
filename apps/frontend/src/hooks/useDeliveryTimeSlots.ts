@@ -19,7 +19,8 @@ export interface UseDeliveryTimeSlotsResult {
     countryCode: string,
     stateCode: string,
     date: string,
-    isFastDelivery?: boolean
+    isFastDelivery?: boolean,
+    businessLocationId?: string
   ) => Promise<void>;
 }
 
@@ -34,7 +35,8 @@ export const useDeliveryTimeSlots = (): UseDeliveryTimeSlotsResult => {
       countryCode: string,
       stateCode: string,
       date: string,
-      isFastDelivery?: boolean
+      isFastDelivery?: boolean,
+      businessLocationId?: string
     ) => {
       setLoading(true);
       setError(null);
@@ -47,6 +49,7 @@ export const useDeliveryTimeSlots = (): UseDeliveryTimeSlotsResult => {
           ...(isFastDelivery !== undefined && {
             isFastDelivery: isFastDelivery.toString(),
           }),
+          ...(businessLocationId && { businessLocationId }),
         });
 
         const response = await apiClient.get(

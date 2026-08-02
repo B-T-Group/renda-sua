@@ -567,6 +567,12 @@ const CheckoutPage: React.FC = () => {
     []
   );
 
+  // Clear any previously selected slot when switching between delivery and
+  // pickup, since each mode fetches slots for a different location/hours.
+  useEffect(() => {
+    setDeliveryWindow(null);
+  }, [fulfillment]);
+
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
@@ -873,7 +879,7 @@ const CheckoutPage: React.FC = () => {
         isPickup ? false : requiresFastDelivery,
         fastDeliveryFee,
         paymentTiming,
-        !isPickup && deliveryWindow
+        deliveryWindow
           ? {
               slot_id: deliveryWindow.slot_id,
               preferred_date: deliveryWindow.preferred_date,
@@ -1148,8 +1154,32 @@ const CheckoutPage: React.FC = () => {
                     onChange={handleDeliveryWindowChange}
                     isFastDelivery={requiresFastDelivery}
                     loading={checkoutLoading}
+                    businessLocationId={cartItems[0]?.businessLocationId}
                   />
                 </>
+              )}
+
+              {fulfillment === 'pickup' && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                    {t(
+                      'orders.deliveryTimeWindow.pickupTimeTitle',
+                      'When will you pick up your order?'
+                    )}
+                  </Typography>
+                  <DeliveryTimeWindowSelector
+                    countryCode={preflightGroups[0]?.seller_country || 'GA'}
+                    stateCode={preflightGroups[0]?.seller_state}
+                    onChange={handleDeliveryWindowChange}
+                    loading={checkoutLoading}
+                    shouldFetchNextAvailable={true}
+                    fulfillment="pickup"
+                    businessLocationId={
+                      preflightGroups[0]?.business_location_id ||
+                      cartItems[0]?.businessLocationId
+                    }
+                  />
+                </Box>
               )}
             </CardContent>
           </Card>

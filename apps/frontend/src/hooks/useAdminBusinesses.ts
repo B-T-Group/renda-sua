@@ -40,6 +40,13 @@ export interface AdminBusinessVerificationSummary {
   rail?: 'stripe' | 'mobile_money';
 }
 
+export interface AdminBusinessLocationSummary {
+  id: string;
+  name: string;
+  operating_hours?: import('../utils/operatingHours').OperatingHours | null;
+  is_active?: boolean;
+}
+
 export interface AdminBusiness {
   id: string;
   user_id: string;
@@ -54,6 +61,7 @@ export interface AdminBusiness {
   updated_at: string;
   user: AdminBusinessUser;
   addresses: any[];
+  locations?: AdminBusinessLocationSummary[];
   verificationSummary?: AdminBusinessVerificationSummary;
 }
 

@@ -1,6 +1,12 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import {
+  getDayHours,
+  getDayNameForIndex,
+  isTimeOfDayWithinHours,
+  normalizeOperatingHours,
+} from '../common/operating-hours.util';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -474,22 +480,12 @@ export class OrderAcceptanceService {
     operatingHours: unknown,
     now = new Date()
   ): boolean {
-    if (!operatingHours || typeof operatingHours !== 'object') return true;
-    const hours = operatingHours as Record<
-      string,
-      { open?: string; close?: string; closed?: boolean } | null
-    >;
-    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-    const key = days[now.getDay()];
-    const day = hours[key] ?? hours[key.toUpperCase()];
-    if (!day || day.closed) return false;
-    if (!day.open || !day.close) return true;
-    const mins = now.getHours() * 60 + now.getMinutes();
-    const open = this.parseHm(day.open);
-    const close = this.parseHm(day.close);
-    if (open == null || close == null) return true;
-    if (close < open) return mins >= open || mins < close;
-    return mins >= open && mins < close;
+    const normalized = normalizeOperatingHours(operatingHours);
+    if (!normalized) return true;
+    const dayName = getDayNameForIndex(now.getDay());
+    const dayHours = getDayHours(normalized, dayName);
+    const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+    return isTimeOfDayWithinHours(dayHours, minutesSinceMidnight);
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -571,12 +567,6 @@ export class OrderAcceptanceService {
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
     return tomorrow.toISOString();
-  }
-
-  private parseHm(value: string): number | null {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-    if (!m) return null;
-    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
   }
 
   private isPendingAwaiting(

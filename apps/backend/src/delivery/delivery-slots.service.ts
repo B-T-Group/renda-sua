@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
+import type { DayName } from '../common/operating-hours.util';
+import {
+  getDayHours,
+  getDayNameForIndex,
+  isSlotFullyWithinHours,
+  normalizeOperatingHours,
+} from '../common/operating-hours.util';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
@@ -42,13 +49,16 @@ export class DeliverySlotsService {
    * Get available delivery time slots for a specific location and date
    * Optimized to batch capacity checks in a single query
    * @param timezone - Optional IANA timezone (e.g. 'Africa/Libreville'). If not provided, fetched from country_delivery_configs.
+   * @param businessLocationId - When provided, slots are additionally filtered to only those
+   * fully contained within the business location's operating hours for the day of `date`.
    */
   async getAvailableSlots(
     countryCode: string,
     stateCode: string,
     date: string,
     isFastDelivery = false,
-    timezone?: string
+    timezone?: string,
+    businessLocationId?: string
   ): Promise<AvailableSlot[]> {
     try {
       const slotType = isFastDelivery ? 'fast' : 'standard';
@@ -94,8 +104,22 @@ export class DeliverySlotsService {
         return [];
       }
 
+      const slotsWithinBusinessHours = businessLocationId
+        ? await this.filterSlotsByBusinessHours(
+            slots,
+            businessLocationId,
+            date
+          )
+        : slots;
+
+      if (slotsWithinBusinessHours.length === 0) {
+        return [];
+      }
+
       // Batch capacity check: Get booking counts for all slots in a single query
-      const slotIds = slots.map((slot: DeliveryTimeSlot) => slot.id);
+      const slotIds = slotsWithinBusinessHours.map(
+        (slot: DeliveryTimeSlot) => slot.id
+      );
 
       const capacityQuery = `
         query GetSlotCapacities($slot_ids: [uuid!]!, $date: date!) {
@@ -149,7 +173,7 @@ export class DeliverySlotsService {
 
       // Calculate available capacity and time-based availability for each slot
       const slotsWithCapacity = await Promise.all(
-        slots.map(async (slot: DeliveryTimeSlot) => {
+        slotsWithinBusinessHours.map(async (slot: DeliveryTimeSlot) => {
           const totalCapacity =
             slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
           const bookedCount = bookingCountMap.get(slot.id) || 0;
@@ -281,7 +305,8 @@ export class DeliverySlotsService {
   async getNextAvailableDay(
     countryCode: string,
     stateCode: string,
-    isFastDelivery = false
+    isFastDelivery = false,
+    businessLocationId?: string
   ): Promise<{ date: string; slots: AvailableSlot[] } | null> {
     try {
       // Get timezone from country_delivery_configs
@@ -302,7 +327,8 @@ export class DeliverySlotsService {
           stateCode,
           dateStr,
           isFastDelivery,
-          timezone
+          timezone,
+          businessLocationId
         );
 
         // Filter to only available slots (is_available === true and available_capacity > 0)
@@ -324,6 +350,52 @@ export class DeliverySlotsService {
       this.logger.error('Failed to get next available day:', error);
       throw error;
     }
+  }
+
+  /**
+   * Filters slots down to those fully contained within the business location's
+   * operating hours for the day-of-week of `date`. If the location has no hours
+   * configured, all slots pass through unfiltered.
+   */
+  private async filterSlotsByBusinessHours(
+    slots: DeliveryTimeSlot[],
+    businessLocationId: string,
+    date: string
+  ): Promise<DeliveryTimeSlot[]> {
+    const rawHours = await this.getBusinessLocationOperatingHours(
+      businessLocationId
+    );
+    const normalized = normalizeOperatingHours(rawHours);
+    if (!normalized) return slots;
+
+    const dayName = this.getDayNameForDate(date);
+    const dayHours = getDayHours(normalized, dayName);
+
+    return slots.filter((slot) =>
+      isSlotFullyWithinHours(dayHours, slot.start_time, slot.end_time)
+    );
+  }
+
+  private async getBusinessLocationOperatingHours(
+    businessLocationId: string
+  ): Promise<unknown> {
+    const query = `
+      query BusinessLocationHours($id: uuid!) {
+        business_locations_by_pk(id: $id) {
+          operating_hours
+        }
+      }
+    `;
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      id: businessLocationId,
+    });
+    return response.business_locations_by_pk?.operating_hours ?? null;
+  }
+
+  /** `date` (YYYY-MM-DD) is a plain calendar date, so its day-of-week is timezone-independent. */
+  private getDayNameForDate(date: string): DayName {
+    const [year, month, day] = date.split('-').map(Number);
+    return getDayNameForIndex(new Date(year, month - 1, day).getDay());
   }
 
   /**

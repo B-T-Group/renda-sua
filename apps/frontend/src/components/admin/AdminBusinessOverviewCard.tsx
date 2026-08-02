@@ -1,9 +1,13 @@
 import {
   Description as DescriptionIcon,
   Edit as EditIcon,
+  ExpandMore as ExpandMoreIcon,
   Message as MessageIcon,
 } from '@mui/icons-material';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
@@ -19,6 +23,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { AdminBusiness } from '../../hooks/useAdminBusinesses';
 import { AdminBusinessVerificationSteps } from './AdminBusinessVerificationSteps';
 import { AdminLifecycleChip } from './AdminLifecycleChip';
+import { AdminOperatingHoursSummary } from './AdminOperatingHoursSummary';
 import { formatVerificationBlocker } from './AdminBusinessVerificationDialog';
 
 export interface AdminBusinessOverviewCardProps {
@@ -204,6 +209,47 @@ export const AdminBusinessOverviewCard: React.FC<
         </Stack>
 
         <Divider />
+
+        {business.locations && business.locations.length > 0 ? (
+          <Accordion
+            disableGutters
+            elevation={0}
+            sx={{
+              bgcolor: 'transparent',
+              '&:before': { display: 'none' },
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="body2" fontWeight={600}>
+                {t(
+                  'admin.businesses.operatingHours.title',
+                  'Locations & operating hours'
+                )}
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1.5} divider={<Divider flexItem />}>
+                {business.locations.map((location) => (
+                  <Box key={location.id}>
+                    <Typography
+                      variant="caption"
+                      fontWeight={600}
+                      sx={{ display: 'block', mb: 0.5 }}
+                    >
+                      {location.name}
+                    </Typography>
+                    <AdminOperatingHoursSummary
+                      operatingHours={location.operating_hours}
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        ) : null}
 
         <Box
           sx={{

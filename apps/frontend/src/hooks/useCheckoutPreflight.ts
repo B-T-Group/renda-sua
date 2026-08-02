@@ -27,6 +27,12 @@ export interface CheckoutPreflightGroup {
   delivery_availability?: CheckoutDeliveryAvailability | null;
   /** True when every item in this seller group supports store pickup. */
   pickup_eligible?: boolean;
+  /** ISO 3166-1 alpha-2 country code of the seller primary location. */
+  seller_country?: string;
+  /** State/province of the seller primary location. */
+  seller_state?: string;
+  /** Business location id for this group, used to filter slots by operating hours. */
+  business_location_id?: string;
 }
 
 export interface CheckoutPreflightResult {

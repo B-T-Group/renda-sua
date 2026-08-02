@@ -210,6 +210,18 @@
     }
   },
   "admin": {
+    "operatingHours": {
+      "closed": "Fermé",
+      "days": {
+        "monday": "Lun",
+        "tuesday": "Mar",
+        "wednesday": "Mer",
+        "thursday": "Jeu",
+        "friday": "Ven",
+        "saturday": "Sam",
+        "sunday": "Dim"
+      }
+    },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",
       "pageDescription": "Initiez une collecte mobile pour recharger le compte HQ Rendasua. Les fonds sont prélevés depuis le numéro fourni et crédités après confirmation.",
@@ -494,6 +506,9 @@
       "contractPending": "En attente",
       "paymentAccounts": "Comptes de paiement",
       "ownerLabel": "Propriétaire",
+      "operatingHours": {
+        "title": "Emplacements et horaires d'ouverture"
+      },
       "steps": {
         "contractDone": "Contrat signé",
         "contractPending": "Contrat en attente",
@@ -3866,6 +3881,8 @@
       "selectSlot": "Sélectionner un créneau horaire",
       "preferredDate": "Date de livraison préférée",
       "pickupDate": "Date de retrait",
+      "pickupTimeTitle": "Quand récupérerez-vous votre commande ?",
+      "pickupReviewSummary": "Retrait le {{date}} entre {{start}} et {{end}}.",
       "flexible": "Je suis flexible avec les horaires",
       "alternativeDates": "Dates alternatives",
       "specialInstructions": "Instructions spéciales de livraison",

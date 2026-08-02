@@ -465,6 +465,12 @@ export class AdminService {
               updated_at
             }
           }
+          business_locations(where: { is_active: { _eq: true } }, order_by: { name: asc }) {
+            id
+            name
+            operating_hours
+            is_active
+          }
         }
         businesses_aggregate(where: $where) {
           aggregate {
@@ -532,6 +538,7 @@ export class AdminService {
     const {
       business_contracts: _contracts,
       business_addresses,
+      business_locations,
       user,
       ...rest
     } = b;
@@ -541,6 +548,7 @@ export class AdminService {
       ...rest,
       user: userRest,
       addresses: (business_addresses || []).map((x: any) => x.address),
+      locations: business_locations || [],
       verificationSummary,
     };
   }

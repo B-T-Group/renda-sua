@@ -8512,9 +8512,9 @@ export class OrdersService {
       }
     );
 
-    // Create delivery window if provided
+    // Create delivery/pickup time window if provided (applies to any fulfillment method)
     let deliveryWindow = null;
-    if (orderData.delivery_window && fulfillmentMethod === 'delivery') {
+    if (orderData.delivery_window) {
       try {
         deliveryWindow = await this.deliveryWindowsService.createDeliveryWindow(
           {

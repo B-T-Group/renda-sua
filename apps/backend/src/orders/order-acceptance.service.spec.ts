@@ -8,7 +8,26 @@ describe('OrderAcceptanceService helpers', () => {
     expect(svc.isWithinOperatingHours(undefined)).toBe(true);
   });
 
-  it('respects closed day and open window', () => {
+  it('respects closed day and open window (full day names)', () => {
+    const mondayNoon = new Date('2026-08-03T12:00:00'); // Monday
+    expect(
+      svc.isWithinOperatingHours(
+        { monday: { open: '09:00', close: '17:00' } },
+        mondayNoon
+      )
+    ).toBe(true);
+    expect(
+      svc.isWithinOperatingHours({ monday: { closed: true } }, mondayNoon)
+    ).toBe(false);
+    expect(
+      svc.isWithinOperatingHours(
+        { monday: { open: '13:00', close: '17:00' } },
+        mondayNoon
+      )
+    ).toBe(false);
+  });
+
+  it('supports legacy 3-letter day keys for backward compatibility', () => {
     const mondayNoon = new Date('2026-08-03T12:00:00'); // Monday
     expect(
       svc.isWithinOperatingHours(
@@ -16,15 +35,9 @@ describe('OrderAcceptanceService helpers', () => {
         mondayNoon
       )
     ).toBe(true);
-    expect(
-      svc.isWithinOperatingHours({ mon: { closed: true } }, mondayNoon)
-    ).toBe(false);
-    expect(
-      svc.isWithinOperatingHours(
-        { mon: { open: '13:00', close: '17:00' } },
-        mondayNoon
-      )
-    ).toBe(false);
+    expect(svc.isWithinOperatingHours({ mon: { closed: true } }, mondayNoon)).toBe(
+      false
+    );
   });
 
   it('assertConfirmableAcceptance allows pending awaiting states', () => {

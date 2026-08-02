@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { businessItemsApiParams } from '../utils/businessItemsApiParams';
+import { OperatingHours } from '../utils/operatingHours';
 
 export interface BusinessLocation {
   id: string;
@@ -24,7 +25,7 @@ export interface BusinessLocation {
     verified_at?: string | null;
   } | null;
   email?: string;
-  operating_hours?: any;
+  operating_hours?: OperatingHours | null;
   is_active: boolean;
   is_primary: boolean;
   location_type: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -47,7 +48,7 @@ export interface AddBusinessLocationData {
   phone?: string;
   mobile_payment_phone_id?: string | null;
   email?: string;
-  operating_hours?: any;
+  operating_hours?: OperatingHours;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_primary?: boolean;
   /** Defaults to true when omitted (server default). */
@@ -70,7 +71,7 @@ export interface UpdateBusinessLocationData {
   phone?: string;
   mobile_payment_phone_id?: string | null;
   email?: string;
-  operating_hours?: any;
+  operating_hours?: OperatingHours;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_active?: boolean;
   is_primary?: boolean;
@@ -141,6 +142,18 @@ export const useBusinessLocations = (
     }
   }, [apiClient, businessId]);
 
+  const putLocationHours = useCallback(
+    async (locationId: string, hours: OperatingHours) => {
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+      await apiClient.put(`/business/locations/${locationId}/hours`, {
+        operatingHours: hours,
+      });
+    },
+    [apiClient]
+  );
+
   const addLocation = useCallback(
     async (data: AddBusinessLocationData) => {
       setLoading(true);
@@ -193,11 +206,15 @@ export const useBusinessLocations = (
           data?: { business_location?: BusinessLocation };
         }>('/business-items/locations', body, businessItemsApiParams(businessId));
         if (response.data.success && response.data.data?.business_location) {
+          const created = response.data.data.business_location;
+          if (data.operating_hours) {
+            await putLocationHours(created.id, data.operating_hours);
+          }
           await fetchLocations();
           if (onAddressCreated) {
             onAddressCreated();
           }
-          return response.data.data.business_location;
+          return created;
         }
         throw new Error(response.data.message ?? 'Failed to create location');
       } catch (err) {
@@ -209,7 +226,8 @@ export const useBusinessLocations = (
         setLoading(false);
       }
     },
-    [apiClient, businessId, fetchLocations, onAddressCreated]
+    [apiClient, businessId, fetchLocations, onAddressCreated, putLocationHours]
+
   );
 
   const updateLocation = useCallback(
@@ -262,6 +280,10 @@ export const useBusinessLocations = (
             locationFields,
             businessItemsApiParams(businessId)
           );
+        }
+
+        if (locationData.operating_hours) {
+          await putLocationHours(id, locationData.operating_hours);
         }
 
         // If address data is provided, update the address using REST API
@@ -337,7 +359,7 @@ export const useBusinessLocations = (
         setLoading(false);
       }
     },
-    [fetchLocations, apiClient]
+    [fetchLocations, apiClient, putLocationHours]
   );
 
   const deleteLocation = useCallback(

@@ -56,6 +56,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         selling_price
       }
       business_location {
+        id
         business_id
         is_active
         mobile_payment_phone {
@@ -207,7 +208,16 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const businessMap = new Map<
       string,
-      { businessId: string; ownerId: string; sellerCountry: string; businessName: string; items: typeof dto.items; inventoryRows: any[] }
+      {
+        businessId: string;
+        ownerId: string;
+        sellerCountry: string;
+        sellerState: string;
+        businessLocationId: string;
+        businessName: string;
+        items: typeof dto.items;
+        inventoryRows: any[];
+      }
     >();
 
     for (const line of dto.items) {
@@ -216,6 +226,10 @@ export class CheckoutPreflightService {
       const ownerId: string = inv.business_location?.business?.user?.id ?? '';
       const sellerCountry: string =
         (inv.business_location?.address?.country ?? '').trim().toUpperCase();
+      const sellerState: string = (
+        inv.business_location?.address?.state ?? ''
+      ).trim();
+      const businessLocationId: string = inv.business_location?.id ?? '';
       const businessName: string = inv.business_location?.business?.name ?? '';
 
       if (!businessMap.has(businessId)) {
@@ -223,6 +237,8 @@ export class CheckoutPreflightService {
           businessId,
           ownerId,
           sellerCountry,
+          sellerState,
+          businessLocationId,
           businessName,
           items: [],
           inventoryRows: [],
@@ -541,6 +557,8 @@ export class CheckoutPreflightService {
         allowed_payment_timings: allowedPaymentTimings,
         requires_payment_phone: requiresPhone,
         seller_country: group.sellerCountry,
+        seller_state: group.sellerState || undefined,
+        business_location_id: group.businessLocationId || undefined,
         subtotal,
         delivery_fee: deliveryFee,
         is_first_order_client: isFirstOrderClient,

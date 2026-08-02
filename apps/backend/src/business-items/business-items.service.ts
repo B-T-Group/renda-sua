@@ -202,6 +202,7 @@ const GET_BUSINESS_LOCATIONS = `
       phone
       mobile_payment_phone_id
       email
+      operating_hours
       location_type
       is_active
       is_primary

@@ -242,9 +242,7 @@ export const useCheckout = () => {
             requires_fast_delivery:
               fulfillmentMethod === 'pickup' ? false : requiresFastDelivery,
             payment_timing: paymentTiming,
-            ...(fulfillmentMethod === 'delivery' && deliveryWindow
-              ? { delivery_window: deliveryWindow }
-              : {}),
+            ...(deliveryWindow ? { delivery_window: deliveryWindow } : {}),
           };
 
           const response = await apiClient.post('/orders', orderData);

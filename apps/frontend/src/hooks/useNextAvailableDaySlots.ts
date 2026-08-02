@@ -13,7 +13,8 @@ export interface UseNextAvailableDaySlotsResult {
 export const useNextAvailableDaySlots = (
   countryCode?: string,
   stateCode?: string,
-  isFastDelivery?: boolean
+  isFastDelivery?: boolean,
+  businessLocationId?: string
 ): UseNextAvailableDaySlotsResult => {
   const apiClient = useApiClient();
   const [date, setDate] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export const useNextAvailableDaySlots = (
         ...(isFastDelivery !== undefined && {
           isFastDelivery: isFastDelivery.toString(),
         }),
+        ...(businessLocationId && { businessLocationId }),
       });
 
       const response = await apiClient.get(
@@ -67,7 +69,7 @@ export const useNextAvailableDaySlots = (
     } finally {
       setLoading(false);
     }
-  }, [countryCode, stateCode, isFastDelivery, apiClient]);
+  }, [countryCode, stateCode, isFastDelivery, businessLocationId, apiClient]);
 
   return {
     date,

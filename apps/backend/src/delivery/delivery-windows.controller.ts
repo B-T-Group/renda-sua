@@ -70,6 +70,14 @@ export class DeliveryWindowsController {
       'Whether to get fast delivery slots (2-4h) or standard delivery slots (24-48h)',
     example: false,
   })
+  @ApiQuery({
+    name: 'businessLocationId',
+    required: false,
+    type: String,
+    description:
+      'Business location ID. When provided, slots are additionally filtered to those fully contained within that location\'s operating hours for the requested date.',
+    example: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Available delivery slots retrieved successfully',
@@ -99,7 +107,8 @@ export class DeliveryWindowsController {
     @Query('countryCode') countryCode: string,
     @Query('stateCode') stateCode: string,
     @Query('date') date: string,
-    @Query('isFastDelivery') isFastDelivery?: string
+    @Query('isFastDelivery') isFastDelivery?: string,
+    @Query('businessLocationId') businessLocationId?: string
   ) {
     try {
       if (!countryCode || !stateCode || !date) {
@@ -129,7 +138,9 @@ export class DeliveryWindowsController {
         countryCode,
         stateCode,
         date,
-        isFastDeliveryBool
+        isFastDeliveryBool,
+        undefined,
+        businessLocationId
       );
 
       return {
@@ -182,6 +193,14 @@ export class DeliveryWindowsController {
       'Whether to get fast delivery slots (2-4h) or standard delivery slots (24-48h)',
     example: false,
   })
+  @ApiQuery({
+    name: 'businessLocationId',
+    required: false,
+    type: String,
+    description:
+      'Business location ID. When provided, only days/slots fully contained within that location\'s operating hours are considered.',
+    example: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Next available day retrieved successfully',
@@ -226,7 +245,8 @@ export class DeliveryWindowsController {
   async getNextAvailableDay(
     @Query('countryCode') countryCode: string,
     @Query('stateCode') stateCode: string,
-    @Query('isFastDelivery') isFastDelivery?: string
+    @Query('isFastDelivery') isFastDelivery?: string,
+    @Query('businessLocationId') businessLocationId?: string
   ) {
     try {
       if (!countryCode || !stateCode) {
@@ -246,7 +266,8 @@ export class DeliveryWindowsController {
       const result = await this.deliverySlotsService.getNextAvailableDay(
         countryCode,
         stateCode,
-        isFastDeliveryBool
+        isFastDeliveryBool,
+        businessLocationId
       );
 
       if (!result) {
