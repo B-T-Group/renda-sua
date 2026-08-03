@@ -65,11 +65,16 @@ export class BusinessVerificationService {
     const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
       businessId
     );
+    const suspension =
+      lifecycle?.lifecycle_status === 'suspended'
+        ? await this.merchantLifecycleService.getLatestSuspension(businessId)
+        : null;
     return {
       ...base,
       lifecycle_status: lifecycle?.lifecycle_status ?? 'created',
       is_storefront_visible: lifecycle?.is_storefront_visible ?? false,
       can_accept_orders: lifecycle?.can_accept_orders ?? false,
+      suspension,
       contract: await this.businessContractsService.getContractStatus(businessId),
     };
   }

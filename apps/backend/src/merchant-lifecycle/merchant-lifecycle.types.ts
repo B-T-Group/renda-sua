@@ -47,3 +47,18 @@ export interface BusinessLifecycleSnapshot {
   merchant_agreement_accepted_at?: string | null;
   user?: { id: string; email?: string | null; first_name?: string | null; last_name?: string | null };
 }
+
+/** Stable codes shown to merchants (mapped to i18n on clients). */
+export type BusinessSuspensionReasonCode =
+  | 'reliability_missed_orders'
+  | 'admin'
+  | 'unknown';
+
+/** Stored on lifecycle history for system auto-suspends. */
+export const SUSPENSION_REASON_RELIABILITY_MISSED_ORDERS =
+  'reliability_missed_orders' as const;
+
+export interface BusinessSuspensionInfo {
+  code: BusinessSuspensionReasonCode;
+  suspendedAt: string | null;
+}

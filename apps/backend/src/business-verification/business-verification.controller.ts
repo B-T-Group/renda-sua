@@ -73,6 +73,17 @@ export class BusinessVerificationController {
             lifecycle_status: { type: 'string' },
             is_storefront_visible: { type: 'boolean' },
             can_accept_orders: { type: 'boolean' },
+            suspension: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                code: {
+                  type: 'string',
+                  enum: ['reliability_missed_orders', 'admin', 'unknown'],
+                },
+                suspendedAt: { type: 'string', nullable: true },
+              },
+            },
             steps: { type: 'object' },
           },
         },

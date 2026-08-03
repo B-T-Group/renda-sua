@@ -21,6 +21,7 @@ import {
   type BusinessVerificationStatus,
 } from '../../hooks/useBusinessVerification';
 import { firstItemOnboardingPath } from '../../utils/businessSetup';
+import { suspendedReasonMessage } from '../../utils/suspendedReasonMessage';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
 
@@ -95,6 +96,7 @@ export const BusinessVerificationBanner: React.FC = () => {
   }
 
   if (status.lifecycle_status === 'suspended') {
+    const reasonText = suspendedReasonMessage(status.suspension?.code, t);
     const mailto = supportMailto(
       t(
         'business.lifecycle.suspendedEmailSubject',
@@ -110,6 +112,9 @@ export const BusinessVerificationBanner: React.FC = () => {
         <AlertTitle>
           {t('business.lifecycle.suspendedTitle', 'Store suspended')}
         </AlertTitle>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          {reasonText}
+        </Typography>
         <Typography variant="body2" sx={{ mb: 1.5 }}>
           {t(
             'business.lifecycle.suspendedNotice',

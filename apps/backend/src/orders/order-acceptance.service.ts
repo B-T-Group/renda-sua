@@ -13,6 +13,7 @@ import {
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   DEFAULT_USER_TIMEZONE,
@@ -77,7 +78,8 @@ export class OrderAcceptanceService {
     private readonly waitAndExecute: WaitAndExecuteScheduleService,
     private readonly orderSystemJobs: OrderSystemJobsService,
     private readonly notifications: NotificationsService,
-    private readonly deliveryConfigService: DeliveryConfigService
+    private readonly deliveryConfigService: DeliveryConfigService,
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -1229,15 +1231,7 @@ export class OrderAcceptanceService {
 
   private async suspendBusinessForReliability(businessId: string): Promise<void> {
     try {
-      await this.hasura.executeMutation(
-        `mutation SuspendBiz($id: uuid!) {
-          update_businesses_by_pk(
-            pk_columns: { id: $id }
-            _set: { lifecycle_status: suspended, updated_at: "now()" }
-          ) { id }
-        }`,
-        { id: businessId }
-      );
+      await this.merchantLifecycleService.suspendBySystem(businessId);
       this.logger.warn(`Suspended business ${businessId} for acceptance misses`);
     } catch (error: any) {
       this.logger.error(`Suspend after auto-declines failed: ${error?.message}`);

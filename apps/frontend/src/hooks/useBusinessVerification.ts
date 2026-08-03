@@ -40,6 +40,10 @@ export interface BusinessVerificationStatus {
     | 'suspended';
   is_storefront_visible?: boolean;
   can_accept_orders?: boolean;
+  suspension?: {
+    code: 'reliability_missed_orders' | 'admin' | 'unknown';
+    suspendedAt: string | null;
+  } | null;
   accountFullName: string;
   nextAction: VerificationNextAction;
   /** True when nextAction is a merchant setup step (agreement, payouts/ID, phone, or catalog). */

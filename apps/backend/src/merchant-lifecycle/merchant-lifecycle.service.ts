@@ -13,8 +13,11 @@ import {
   BusinessLifecycleSnapshot,
   BusinessLifecycleStatus,
   BusinessPaymentProvider,
+  BusinessSuspensionInfo,
+  BusinessSuspensionReasonCode,
   DbPaymentCapabilityStatus,
   PaymentCapabilityStatus,
+  SUSPENSION_REASON_RELIABILITY_MISSED_ORDERS,
 } from './merchant-lifecycle.types';
 
 const BUSINESS_FIELDS = `
@@ -62,18 +65,27 @@ export class MerchantLifecycleService {
     reason: string,
     adminUserId: string
   ): Promise<BusinessLifecycleSnapshot | null> {
-    const current = await this.getBusinessSnapshot(businessId);
-    if (!current) return null;
-    await this.setLifecycleStatus(businessId, 'suspended');
-    await this.recordHistory({
-      businessId,
-      fromStatus: current.lifecycle_status,
-      toStatus: 'suspended',
-      reason,
-      changedByType: 'admin',
-      changedByUserId: adminUserId,
-    });
-    return this.getBusinessSnapshot(businessId);
+    return this.applySuspend(businessId, reason, 'admin', adminUserId);
+  }
+
+  async suspendBySystem(
+    businessId: string,
+    reason: string = SUSPENSION_REASON_RELIABILITY_MISSED_ORDERS
+  ): Promise<BusinessLifecycleSnapshot | null> {
+    return this.applySuspend(businessId, reason, 'system');
+  }
+
+  async getLatestSuspension(
+    businessId: string
+  ): Promise<BusinessSuspensionInfo | null> {
+    const row = await this.fetchLatestSuspendHistory(businessId);
+    if (row) {
+      return {
+        code: this.mapSuspensionCode(row.reason, row.changed_by_type),
+        suspendedAt: row.created_at ?? null,
+      };
+    }
+    return this.inferSuspensionWithoutHistory(businessId);
   }
 
   async reinstate(
@@ -336,6 +348,90 @@ export class MerchantLifecycleService {
       id: businessId,
     });
     return res.businesses_by_pk?.user_id ?? null;
+  }
+
+  private async applySuspend(
+    businessId: string,
+    reason: string,
+    changedByType: 'system' | 'admin',
+    changedByUserId?: string
+  ): Promise<BusinessLifecycleSnapshot | null> {
+    const current = await this.getBusinessSnapshot(businessId);
+    if (!current) return null;
+    if (current.lifecycle_status === 'suspended') return current;
+    await this.setLifecycleStatus(businessId, 'suspended');
+    await this.recordHistory({
+      businessId,
+      fromStatus: current.lifecycle_status,
+      toStatus: 'suspended',
+      reason,
+      changedByType,
+      changedByUserId,
+    });
+    return this.getBusinessSnapshot(businessId);
+  }
+
+  private async fetchLatestSuspendHistory(businessId: string): Promise<{
+    reason?: string | null;
+    changed_by_type?: string | null;
+    created_at?: string | null;
+  } | null> {
+    const query = `
+      query LatestSuspend($id: uuid!) {
+        business_lifecycle_status_history(
+          where: { business_id: { _eq: $id }, to_status: { _eq: suspended } }
+          order_by: { created_at: desc }
+          limit: 1
+        ) {
+          reason
+          changed_by_type
+          created_at
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      id: businessId,
+    });
+    return res.business_lifecycle_status_history?.[0] ?? null;
+  }
+
+  private mapSuspensionCode(
+    reason: string | null | undefined,
+    changedByType: string | null | undefined
+  ): BusinessSuspensionReasonCode {
+    if (
+      reason === SUSPENSION_REASON_RELIABILITY_MISSED_ORDERS ||
+      reason?.startsWith('reliability_')
+    ) {
+      return 'reliability_missed_orders';
+    }
+    if (changedByType === 'admin') return 'admin';
+    return 'unknown';
+  }
+
+  private async inferSuspensionWithoutHistory(
+    businessId: string
+  ): Promise<BusinessSuspensionInfo | null> {
+    const query = `
+      query BizTier($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          lifecycle_status
+          reliability_tier
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      id: businessId,
+    });
+    const biz = res.businesses_by_pk;
+    if (!biz || biz.lifecycle_status !== 'suspended') return null;
+    return {
+      code:
+        biz.reliability_tier === 'suspend'
+          ? 'reliability_missed_orders'
+          : 'unknown',
+      suspendedAt: null,
+    };
   }
 
   private async setLifecycleStatus(
