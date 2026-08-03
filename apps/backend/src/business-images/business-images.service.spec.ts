@@ -100,6 +100,47 @@ describe('BusinessImagesService mutations', () => {
     expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
   });
 
+  it('associates a library main image as gallery when the item already has a main', async () => {
+    const libraryMain = {
+      ...createImage(),
+      image_type: 'main' as const,
+    };
+    hasuraUserService.executeQuery
+      .mockResolvedValueOnce({
+        items_by_pk: { id: 'item-1', business_id: businessId },
+      })
+      .mockResolvedValueOnce({
+        item_images: [{ id: 'existing-main', image_type: 'main' }],
+      });
+    hasuraSystemService.executeQuery
+      .mockResolvedValueOnce({ item_images: [libraryMain] })
+      .mockResolvedValueOnce({
+        item_images_aggregate: { aggregate: { max: { display_order: 0 } } },
+      })
+      .mockResolvedValueOnce({ item_images: [libraryMain] });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_item_images_by_pk: {
+        ...libraryMain,
+        item_id: 'item-1',
+        image_type: 'gallery',
+      },
+    });
+
+    await service.associateImageToItem(businessId, imageId, 'item-1');
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('update_item_images_by_pk'),
+      {
+        id: imageId,
+        changes: expect.objectContaining({
+          item_id: 'item-1',
+          image_type: 'gallery',
+          status: 'assigned',
+        }),
+      }
+    );
+  });
+
   function createImage(): BusinessImage {
     return {
       id: imageId,

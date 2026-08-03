@@ -382,13 +382,49 @@ export class BusinessImagesService {
         HttpStatus.BAD_REQUEST
       );
     }
+    if (image.item_id === itemId) {
+      return;
+    }
     const displayOrder = await this.nextDisplayOrderForItem(itemId);
+    const imageType = await this.resolveImageTypeForAssociate(
+      businessId,
+      itemId,
+      image.image_type
+    );
     await this.applyImageUpdate(businessId, imageId, {
       item_id: itemId,
       status: 'assigned',
       display_order: displayOrder,
+      image_type: imageType,
     });
     await this.itemAiReviewService.resubmitIfRejected(itemId);
+  }
+
+  /**
+   * Library uploads often mark the first photo in each batch as `main`. Associating
+   * a second such row onto an item that already has a main would violate
+   * `uniq_item_images_one_main_per_item`.
+   */
+  private async resolveImageTypeForAssociate(
+    businessId: string,
+    itemId: string,
+    currentType: string | null | undefined
+  ): Promise<'main' | 'gallery'> {
+    const hasMain = await this.itemAlreadyHasMainImage(businessId, itemId);
+    if (hasMain) {
+      return 'gallery';
+    }
+    return currentType === 'gallery' ? 'gallery' : 'main';
+  }
+
+  private async itemAlreadyHasMainImage(
+    businessId: string,
+    itemId: string
+  ): Promise<boolean> {
+    const data = await this.hasuraUserService.executeQuery<{
+      item_images: { id: string; image_type: string }[];
+    }>(ITEM_IMAGES_TYPES_FOR_ITEM, { itemId, businessId });
+    return (data.item_images ?? []).some((i) => i.image_type === 'main');
   }
 
   async disassociateImageFromItem(
@@ -416,10 +452,16 @@ export class BusinessImagesService {
       );
     }
     const displayOrder = await this.nextDisplayOrderForItem(itemId);
+    const imageType = await this.resolveImageTypeForAssociate(
+      businessId,
+      itemId,
+      image.image_type
+    );
     await this.applyImageUpdate(businessId, imageId, {
       item_id: itemId,
       status: 'assigned',
       display_order: displayOrder,
+      image_type: imageType,
     });
   }
 
