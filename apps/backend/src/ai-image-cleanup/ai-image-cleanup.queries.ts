@@ -54,6 +54,11 @@ export const VERSION_IMAGE_FIELDS = `
   enhanced_at
   reverted_at
   content_hash
+  width
+  height
+  validation_warnings
+  validation_errors
+  quality_score
 `;
 
 export const INSERT_JOB = `

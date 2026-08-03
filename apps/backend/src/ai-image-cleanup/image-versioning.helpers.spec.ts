@@ -51,6 +51,15 @@ describe('image versioning helpers', () => {
         original_s3_key: null,
         s3_key: 'orig-key',
         content_hash: 'abc123',
+        validation_warnings: [
+          { code: 'LOW_RESOLUTION', message: 'too small', severity: 'warning' },
+          {
+            code: 'CLUTTERED_BACKGROUND',
+            message: 'busy',
+            severity: 'warning',
+          },
+        ],
+        validation_errors: [],
       },
       now: '2026-08-03T12:00:00Z',
     });
@@ -60,6 +69,16 @@ describe('image versioning helpers', () => {
     expect(patch.active_version).toBe('enhanced');
     expect(patch.reverted_at).toBeNull();
     expect(patch.content_hash).toBe('abc123');
+    expect(patch.width).toBe(1024);
+    expect(patch.height).toBe(1024);
+    expect(patch.validation_warnings).toEqual([
+      {
+        code: 'CLUTTERED_BACKGROUND',
+        message: 'busy',
+        severity: 'warning',
+      },
+    ]);
+    expect(patch.quality_score).toBe(90);
   });
 
   it('builds revert patch back to original', () => {

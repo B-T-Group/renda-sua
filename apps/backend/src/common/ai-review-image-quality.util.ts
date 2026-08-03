@@ -10,16 +10,20 @@ export const AI_REVIEW_MIN_APPROVE_QUALITY_SCORE = 85;
 /** Below this score, reject without calling the model. */
 export const AI_REVIEW_HARD_REJECT_QUALITY_SCORE = 70;
 
-const REJECT_WARNING_CODES = new Set<string>([
-  VALIDATION_CODES.LOW_RESOLUTION,
-  VALIDATION_CODES.IMAGE_BLURRY,
-]);
+/**
+ * Hard-reject only when a side is below this. Between this and MIN_WIDTH/HEIGHT,
+ * resolution is propose-only so borderline phone photos can still be salvaged.
+ */
+export const AI_REVIEW_HARD_REJECT_MIN_DIM = 600;
+
+const REJECT_WARNING_CODES = new Set<string>([VALIDATION_CODES.IMAGE_BLURRY]);
 
 const PROPOSE_WARNING_CODES = new Set<string>([
   VALIDATION_CODES.CLUTTERED_BACKGROUND,
   VALIDATION_CODES.PRODUCT_TOO_SMALL,
   VALIDATION_CODES.POOR_LIGHTING,
   VALIDATION_CODES.TOO_MUCH_TEXT,
+  VALIDATION_CODES.LOW_RESOLUTION,
 ]);
 
 export interface AiReviewImageQualityInput {
@@ -57,13 +61,32 @@ function extractCodes(raw: unknown): string[] {
     .filter((code): code is string => !!code);
 }
 
-function isLowResolution(image: AiReviewImageQualityInput): boolean {
+function resolutionSeverity(
+  image: AiReviewImageQualityInput,
+  warningCodes: string[]
+): 'reject' | 'propose' | null {
+  // Cleanup always writes 1024×1024; ignore stale dims/warnings on cleaned photos.
+  if (image.is_ai_cleaned) return null;
+
   const width = image.width ?? 0;
   const height = image.height ?? 0;
-  if (width > 0 && height > 0) {
-    return width < MIN_WIDTH || height < MIN_HEIGHT;
+  const hasDims = width > 0 && height > 0;
+  if (hasDims) {
+    if (
+      width < AI_REVIEW_HARD_REJECT_MIN_DIM ||
+      height < AI_REVIEW_HARD_REJECT_MIN_DIM
+    ) {
+      return 'reject';
+    }
+    if (width < MIN_WIDTH || height < MIN_HEIGHT) {
+      return 'propose';
+    }
+    return null;
   }
-  return false;
+  if (warningCodes.includes(VALIDATION_CODES.LOW_RESOLUTION)) {
+    return 'propose';
+  }
+  return null;
 }
 
 function assessOneImage(
@@ -74,6 +97,12 @@ function assessOneImage(
   const warningCodes = extractCodes(image.validation_warnings);
 
   for (const code of errorCodes) {
+    if (
+      code === VALIDATION_CODES.LOW_RESOLUTION &&
+      image.is_ai_cleaned
+    ) {
+      continue;
+    }
     issues.push({
       imageId: image.id,
       code,
@@ -82,16 +111,16 @@ function assessOneImage(
     });
   }
 
-  if (
-    warningCodes.includes(VALIDATION_CODES.LOW_RESOLUTION) ||
-    isLowResolution(image)
-  ) {
+  const resolution = resolutionSeverity(image, warningCodes);
+  if (resolution) {
     issues.push({
       imageId: image.id,
       code: VALIDATION_CODES.LOW_RESOLUTION,
       message:
-        'Image resolution is below 800800 pixels and is not acceptable for approval.',
-      severity: 'reject',
+        resolution === 'reject'
+          ? `Image resolution is below ${AI_REVIEW_HARD_REJECT_MIN_DIM}×${AI_REVIEW_HARD_REJECT_MIN_DIM} pixels and is not acceptable for approval.`
+          : `Image resolution is below the recommended ${MIN_WIDTH}×${MIN_HEIGHT} pixels.`,
+      severity: resolution,
     });
   }
 
@@ -118,12 +147,22 @@ function assessOneImage(
 
   const score = image.quality_score;
   if (score != null && score < AI_REVIEW_HARD_REJECT_QUALITY_SCORE) {
-    issues.push({
-      imageId: image.id,
-      code: 'LOW_QUALITY_SCORE',
-      message: `Image quality score ${score} is too low for approval.`,
-      severity: 'reject',
-    });
+    // Cleaned photos often keep a stale score from the original; don't hard-reject.
+    if (!image.is_ai_cleaned) {
+      issues.push({
+        imageId: image.id,
+        code: 'LOW_QUALITY_SCORE',
+        message: `Image quality score ${score} is too low for approval.`,
+        severity: 'reject',
+      });
+    } else if (score < AI_REVIEW_MIN_APPROVE_QUALITY_SCORE) {
+      issues.push({
+        imageId: image.id,
+        code: 'LOW_QUALITY_SCORE',
+        message: `Image quality score ${score} is below the approval threshold.`,
+        severity: 'propose',
+      });
+    }
   } else if (
     score != null &&
     score < AI_REVIEW_MIN_APPROVE_QUALITY_SCORE
@@ -144,12 +183,21 @@ export function assessAiReviewImageQuality(
 ): AiReviewImageQualityAssessment {
   const issues = images.flatMap(assessOneImage);
   const mustReject = issues.some((issue) => issue.severity === 'reject');
-  const mustNotApprove = mustReject || issues.some((issue) => issue.severity === 'propose');
+  const mustNotApprove =
+    mustReject || issues.some((issue) => issue.severity === 'propose');
   return { mustReject, mustNotApprove, issues };
 }
 
-export function hasStoredValidationErrors(images: AiReviewImageQualityInput[]): boolean {
-  return images.some((img) => extractCodes(img.validation_errors).length > 0);
+export function hasStoredValidationErrors(
+  images: AiReviewImageQualityInput[]
+): boolean {
+  return images.some((img) => {
+    const codes = extractCodes(img.validation_errors);
+    if (img.is_ai_cleaned) {
+      return codes.some((c) => c !== VALIDATION_CODES.LOW_RESOLUTION);
+    }
+    return codes.length > 0;
+  });
 }
 
 export function buildImageQualityRejectReason(
@@ -158,7 +206,7 @@ export function buildImageQualityRejectReason(
   const headline = assessment.issues.some(
     (i) => i.code === VALIDATION_CODES.LOW_RESOLUTION
   )
-    ? 'One or more photos are too low resolution (minimum 800800 pixels).'
+    ? `One or more photos are too low resolution (minimum ${AI_REVIEW_HARD_REJECT_MIN_DIM}×${AI_REVIEW_HARD_REJECT_MIN_DIM} pixels).`
     : assessment.issues.some(
           (i) => i.code === VALIDATION_CODES.CLUTTERED_BACKGROUND
         )

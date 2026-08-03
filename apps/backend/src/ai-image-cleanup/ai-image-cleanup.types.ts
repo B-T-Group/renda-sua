@@ -93,4 +93,9 @@ export type VersionedImageRow = {
   is_ai_cleaned: boolean;
   reverted_at: string | null;
   content_hash?: string | null;
+  width?: number | null;
+  height?: number | null;
+  validation_warnings?: unknown;
+  validation_errors?: unknown;
+  quality_score?: number | null;
 };

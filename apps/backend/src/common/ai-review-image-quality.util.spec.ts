@@ -1,5 +1,6 @@
 import { VALIDATION_CODES } from '../image-validation/types/image-validation.types';
 import {
+  AI_REVIEW_HARD_REJECT_MIN_DIM,
   AI_REVIEW_HARD_REJECT_QUALITY_SCORE,
   AI_REVIEW_MIN_APPROVE_QUALITY_SCORE,
   assessAiReviewImageQuality,
@@ -7,18 +8,26 @@ import {
 } from './ai-review-image-quality.util';
 
 describe('assessAiReviewImageQuality', () => {
-  it('rejects low-resolution dimensions', () => {
+  it('hard-rejects very small dimensions', () => {
     const assessment = assessAiReviewImageQuality([
-      { id: 'img-1', width: 640, height: 640, quality_score: 90 },
+      { id: 'img-1', width: 400, height: 400, quality_score: 90 },
     ]);
     expect(assessment.mustReject).toBe(true);
-    expect(assessment.mustNotApprove).toBe(true);
-    expect(assessment.issues.some((i) => i.code === VALIDATION_CODES.LOW_RESOLUTION)).toBe(
-      true
-    );
+    expect(
+      assessment.issues.some((i) => i.code === VALIDATION_CODES.LOW_RESOLUTION)
+    ).toBe(true);
   });
 
-  it('rejects stored LOW_RESOLUTION warnings', () => {
+  it('proposes instead of rejecting borderline resolution', () => {
+    const dim = AI_REVIEW_HARD_REJECT_MIN_DIM + 50;
+    const assessment = assessAiReviewImageQuality([
+      { id: 'img-1', width: dim, height: dim, quality_score: 90 },
+    ]);
+    expect(assessment.mustReject).toBe(false);
+    expect(assessment.mustNotApprove).toBe(true);
+  });
+
+  it('does not hard-reject stale LOW_RESOLUTION warnings when dims are fine', () => {
     const assessment = assessAiReviewImageQuality([
       {
         id: 'img-1',
@@ -28,7 +37,22 @@ describe('assessAiReviewImageQuality', () => {
         quality_score: 90,
       },
     ]);
-    expect(assessment.mustReject).toBe(true);
+    expect(assessment.mustReject).toBe(false);
+    expect(assessment.mustNotApprove).toBe(false);
+  });
+
+  it('ignores resolution issues on AI-cleaned images', () => {
+    const assessment = assessAiReviewImageQuality([
+      {
+        id: 'img-1',
+        width: 640,
+        height: 640,
+        is_ai_cleaned: true,
+        validation_warnings: [{ code: VALIDATION_CODES.LOW_RESOLUTION }],
+        quality_score: 40,
+      },
+    ]);
+    expect(assessment.mustReject).toBe(false);
   });
 
   it('does not approve cluttered backgrounds', () => {
