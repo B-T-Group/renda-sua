@@ -1717,7 +1717,32 @@
           "prompt": "Qu’avez-vous photographié ? (facultatif)",
           "helpTitle": "Aidez l’IA (facultatif)",
           "use": "Utiliser l’indice",
-          "example1": "Coca-Cola Zero 1,5 L"
+          "example1": "Coca-Cola Zero 1,5 L",
+          "example2": "Tomates fraîches",
+          "example3": "Sac à main en cuir femme",
+          "example4": "Samsung Galaxy A35"
+        },
+        "description": {
+          "title": "Qu’avez-vous photographié ?",
+          "body": "Une courte description nous aide à remplir la fiche. Vous pourrez tout modifier ensuite.",
+          "required": "Ajoutez une courte description de ce que vous avez photographié"
+        },
+        "processing": {
+          "title": "Préparation de votre fiche",
+          "body": "Cela prend généralement un moment. Laissez cet écran ouvert.",
+          "doneBody": "Prêt — vérifiez les détails que nous avons remplis.",
+          "timeoutBody": "Certaines étapes ont pris trop de temps. Vous pouvez continuer et finaliser à l’écran suivant.",
+          "upload": "Téléversement des photos",
+          "draft": "Création du brouillon produit",
+          "cleanup": "Envoi des photos pour nettoyage IA",
+          "cleanupQueued": "En file d’attente",
+          "analyze": "Analyse des photos et extraction des détails",
+          "continue": "Continuer vers la vérification",
+          "timeoutContinue": "Continuer quand même"
+        },
+        "publish": {
+          "title": "Stock et emplacement",
+          "body": "Choisissez où ce produit est vendu et combien vous en avez en stock."
         },
         "quality": {
           "label": "Qualité de la fiche"
@@ -1725,9 +1750,11 @@
         "review": {
           "analyzing": "Rempli à partir de vos photos — finalisation…",
           "filledBanner": "Rempli à partir de vos photos — modifiez si besoin",
+          "manualFill": "Remplissez les détails ci-dessous, puis continuez pour publier.",
           "confirm": "Confirmer",
           "duplicateBody": "« {{name}} » est peut-être déjà dans votre boutique.",
           "addStockInstead": "Ajouter du stock à la place",
+          "continuePublish": "Continuer vers la publication",
           "publish": "Publier le produit",
           "finishLater": "Terminer plus tard",
           "submitted": "Produit soumis pour approbation",
@@ -1735,8 +1762,11 @@
         },
         "steps": {
           "upload": "Photos",
+          "description": "Description",
+          "processing": "Traitement",
           "create": "Détails du produit",
           "review": "Vérification",
+          "publish": "Publication",
           "location": "Emplacement",
           "done": "Terminé"
         },

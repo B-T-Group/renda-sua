@@ -31,11 +31,8 @@ import {
   SUPPORTED_IMAGE_ACCEPT,
   isSupportedImageFile,
 } from '../../../../constants/supportedImageFormats';
-import { useBusinessImages } from '../../../../hooks/useBusinessImages';
-import { useAws } from '../../../../hooks/useAws';
 import { useImageValidation } from '../../../../hooks/useImageValidation';
 import type { ImageValidationResult } from '../../../../types/imageValidation';
-import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 const GUIDELINES_DISMISSED_KEY = 'upload_guidelines_dismissed';
@@ -43,6 +40,8 @@ const minPhotos = 1;
 
 interface FirstSaleItemUploadStepProps {
   intent?: SaleItemFromImageIntent;
+  /** Restore previously selected files when returning from a later step. */
+  initialFiles?: File[];
   onComplete: (
     imageIds: string[],
     files: File[],
@@ -52,6 +51,7 @@ interface FirstSaleItemUploadStepProps {
 
 const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   intent = 'first',
+  initialFiles = [],
   onComplete,
 }) => {
   const { t } = useTranslation();
@@ -60,12 +60,10 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
-  const { generateImageUploadUrl } = useAws();
-  const { bulkCreateImages, submitting } = useBusinessImages();
-  const { validateFiles, metadataFromResults, validating } = useImageValidation();
+  const { validateFiles, validating } = useImageValidation();
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>(() => initialFiles);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -79,7 +77,6 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const cleanupEnabled = aiTokensRemaining > 0;
   const tokenCost = files.length;
   const canAfford = aiTokensRemaining >= tokenCost;
-  const bucketName = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
 
   const objectUrls = useMemo(
     () => files.map((f) => URL.createObjectURL(f)),
@@ -158,39 +155,12 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     setPreviewIndex(null);
   };
 
-  const doUpload = async (
-    bid: string,
-    results: ImageValidationResult[],
-    asyncCleanupRequested: boolean
-  ) => {
-    const meta = metadataFromResults(results);
-    const prefix = `businesses/${bid}/images`;
-    const errMsg = t('business.onboarding.firstSale.upload.presignError', 'Failed to prepare image upload');
-    const payloads = [];
-    for (let i = 0; i < files.length; i++) {
-      payloads.push({
-        ...(await presignUploadLibraryImage(files[i], bucketName, prefix, generateImageUploadUrl, errMsg)),
-        ...meta[i],
-      });
-    }
-    const ids = await bulkCreateImages({ images: payloads }, { skipRefetch: true });
-    if (!ids.length) {
-      throw new Error(t('business.onboarding.firstSale.upload.noIds', 'Upload did not return image ids'));
-    }
-    enqueueSnackbar(
-      t('business.onboarding.firstSale.upload.success', 'Images uploaded successfully'),
-      { variant: 'success' }
-    );
-    onComplete(
-      ids.map((r) => r.id),
-      files,
-      asyncCleanupRequested
-    );
+  const finishWithLocalFiles = (asyncCleanupRequested: boolean) => {
+    onComplete([], files, asyncCleanupRequested);
   };
 
   const handleContinue = async () => {
-    const bid = profile?.business?.id;
-    if (!bid || files.length < minPhotos) return;
+    if (files.length < minPhotos) return;
     setBusy(true);
     try {
       const validation = await validateFiles(files);
@@ -206,7 +176,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         setShowCleanupStep(true);
         return;
       }
-      await doUpload(bid, validation.results, false);
+      finishWithLocalFiles(false);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
@@ -217,36 +187,12 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     }
   };
 
-  const handleOptInAndUpload = async () => {
-    const bid = profile?.business?.id;
-    if (!bid) return;
-    setBusy(true);
-    try {
-      await doUpload(bid, validationResults, true);
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
-        { variant: 'error' }
-      );
-    } finally {
-      setBusy(false);
-    }
+  const handleOptInAndContinue = () => {
+    finishWithLocalFiles(true);
   };
 
-  const handleSkipAndUpload = async () => {
-    const bid = profile?.business?.id;
-    if (!bid) return;
-    setBusy(true);
-    try {
-      await doUpload(bid, validationResults, false);
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
-        { variant: 'error' }
-      );
-    } finally {
-      setBusy(false);
-    }
+  const handleSkipAndContinue = () => {
+    finishWithLocalFiles(false);
   };
 
   if (showCleanupStep) {
@@ -286,21 +232,13 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         <Stack spacing={1.5}>
           <Button
             variant="contained"
-            onClick={() => void handleOptInAndUpload()}
-            disabled={busy || submitting || !canAfford}
+            onClick={handleOptInAndContinue}
+            disabled={busy || !canAfford}
             fullWidth
-            startIcon={
-              busy || submitting ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <AutoAwesomeIcon />
-              )
-            }
+            startIcon={<AutoAwesomeIcon />}
             sx={{ minHeight: 48, textTransform: 'none' }}
           >
-            {busy || submitting
-              ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
-              : t('business.images.asyncCleanup.yes', 'Yes, clean in background')}
+            {t('business.images.asyncCleanup.yes', 'Yes, clean in background')}
           </Button>
           {!canAfford ? (
             <Button
@@ -314,14 +252,12 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           ) : null}
           <Button
             variant="outlined"
-            onClick={() => void handleSkipAndUpload()}
-            disabled={busy || submitting}
+            onClick={handleSkipAndContinue}
+            disabled={busy}
             fullWidth
             sx={{ minHeight: 48, textTransform: 'none' }}
           >
-            {busy || submitting
-              ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
-              : t('business.images.asyncCleanup.noThanks', 'No thanks')}
+            {t('business.images.asyncCleanup.noThanks', 'No thanks')}
           </Button>
         </Stack>
       </Stack>
@@ -584,7 +520,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           variant="outlined"
           startIcon={<CloudUploadIcon />}
           onClick={pickFiles}
-          disabled={busy || submitting}
+          disabled={busy}
           fullWidth={isNarrow}
         >
           {t('business.onboarding.firstSale.upload.chooseFiles', 'Choose images')}
@@ -592,18 +528,18 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         <Button
           variant="contained"
           onClick={() => void handleContinue()}
-          disabled={busy || submitting || validating || files.length < minPhotos}
+          disabled={busy || validating || files.length < minPhotos}
           fullWidth={isNarrow}
           startIcon={
-            busy || submitting || validating ? (
+            busy || validating ? (
               <CircularProgress color="inherit" size={18} />
             ) : undefined
           }
         >
           {validating
             ? t('business.images.validation.validating', 'Checking image quality…')
-            : busy || submitting
-              ? t('business.onboarding.firstSale.upload.uploading', 'Uploading…')
+            : busy
+              ? t('common.loading', 'Loading…')
               : t('business.onboarding.firstSale.upload.continue', 'Continue')}
         </Button>
       </Stack>

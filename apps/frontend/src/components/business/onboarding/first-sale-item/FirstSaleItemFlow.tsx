@@ -12,7 +12,6 @@ import {
   DialogTitle,
   LinearProgress,
   Paper,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -21,13 +20,28 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
-import FirstSaleItemReviewStep from './FirstSaleItemReviewStep';
+import FirstSaleItemDescriptionStep from './FirstSaleItemDescriptionStep';
+import FirstSaleItemProcessingStep from './FirstSaleItemProcessingStep';
+import FirstSaleItemPublishStep from './FirstSaleItemPublishStep';
+import FirstSaleItemReviewStep, {
+  type ReviewFormValues,
+} from './FirstSaleItemReviewStep';
 import FirstSaleItemSuccessStep from './FirstSaleItemSuccessStep';
 import FirstSaleItemUploadStep from './FirstSaleItemUploadStep';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 export type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
+
+const STEP = {
+  photos: 0,
+  description: 1,
+  processing: 2,
+  review: 3,
+  publish: 4,
+  done: 5,
+} as const;
 
 export interface FirstSaleItemFlowProps {
   intent?: SaleItemFromImageIntent;
@@ -49,10 +63,19 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
     ? `/business/items?location=${encodeURIComponent(initialLocationId)}`
     : '/business/items';
   const exitPath = isFirst ? '/dashboard' : itemsPath;
+
   const [step, setStep] = useState(0);
+  const [files, setFiles] = useState<File[]>([]);
+  const [asyncCleanupRequested, setAsyncCleanupRequested] = useState(false);
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [merchantHint, setMerchantHint] = useState('');
+  const [itemId, setItemId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ImageItemSuggestions | null>(
+    null
+  );
+  const [reviewForm, setReviewForm] = useState<ReviewFormValues | null>(null);
+  const [processedCleanup, setProcessedCleanup] = useState(false);
   const [item, setItem] = useState<CreatedSaleItemSummary | null>(null);
   const [locationName, setLocationName] = useState<string | undefined>(
     undefined
@@ -72,14 +95,41 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
 
   const labels = [
     t('business.onboarding.firstSale.steps.upload', 'Photos'),
+    t('business.onboarding.firstSale.steps.description', 'Description'),
+    t('business.onboarding.firstSale.steps.processing', 'Processing'),
     t('business.onboarding.firstSale.steps.review', 'Review'),
+    t('business.onboarding.firstSale.steps.publish', 'Publish'),
     t('business.onboarding.firstSale.steps.done', 'Done'),
   ];
   const stepCount = labels.length;
   const progressPct = ((step + 1) / stepCount) * 100;
+  const showChrome = step < STEP.done;
+  const canGoPrevious =
+    step === STEP.description || step === STEP.review || step === STEP.publish;
+
+  const filesMatch = (a: File[], b: File[]) =>
+    a.length === b.length &&
+    a.every(
+      (f, i) => f.name === b[i]?.name && f.size === b[i]?.size && f.lastModified === b[i]?.lastModified
+    );
+
+  const handlePrevious = () => {
+    if (step === STEP.description) {
+      setStep(STEP.photos);
+      return;
+    }
+    if (step === STEP.review) {
+      // Skip processing so we do not re-queue cleanup / re-analyze.
+      setStep(STEP.description);
+      return;
+    }
+    if (step === STEP.publish) {
+      setStep(STEP.review);
+    }
+  };
 
   const handleBackClick = () => {
-    if (step === 0) {
+    if (step === STEP.photos) {
       navigate(exitPath);
     } else {
       setExitDialogOpen(true);
@@ -96,13 +146,13 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         pb: { xs: 'max(16px, env(safe-area-inset-bottom))', sm: 4 },
       }}
     >
-      {step < 2 && (
+      {showChrome && (
         <Button
           startIcon={<BackIcon />}
           onClick={handleBackClick}
           sx={{ mb: { xs: 1.5, sm: 2 }, minHeight: 44, px: { xs: 1, sm: 2 } }}
         >
-          {step === 0
+          {step === STEP.photos
             ? isFirst
               ? t('business.onboarding.firstSale.back', 'Back')
               : t('business.onboarding.firstSale.backToItems', 'Back to items')
@@ -129,60 +179,62 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             )}
       </Typography>
 
-      <Box sx={{ mb: { xs: 2, sm: 3 } }}>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          component="p"
-          sx={{ mb: 0.5, letterSpacing: 0.3 }}
-        >
-          {t(
-            'business.onboarding.firstSale.stepProgress',
-            'Step {{current}} of {{total}}',
-            { current: step + 1, total: stepCount }
-          )}
-        </Typography>
-        <Typography
-          variant="h6"
-          component="h2"
-          sx={{
-            fontWeight: 600,
-            mb: 1.5,
-            fontSize: { xs: '1rem', sm: '1.25rem' },
-          }}
-        >
-          {labels[step]}
-        </Typography>
-        <LinearProgress
-          variant="determinate"
-          value={progressPct}
-          sx={{
-            height: 8,
-            borderRadius: 1,
-            bgcolor: 'action.hover',
-            '& .MuiLinearProgress-bar': { borderRadius: 1 },
-          }}
-          aria-label={t(
-            'business.onboarding.firstSale.stepProgressLabel',
-            'Step {{current}} of {{total}}: {{label}}',
-            {
-              current: step + 1,
-              total: stepCount,
-              label: labels[step],
-            }
-          )}
-          aria-valuenow={step + 1}
-          aria-valuemin={1}
-          aria-valuemax={stepCount}
-        />
-      </Box>
+      {showChrome && (
+        <Box sx={{ mb: { xs: 2, sm: 3 } }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="p"
+            sx={{ mb: 0.5, letterSpacing: 0.3 }}
+          >
+            {t(
+              'business.onboarding.firstSale.stepProgress',
+              'Step {{current}} of {{total}}',
+              { current: step + 1, total: stepCount }
+            )}
+          </Typography>
+          <Typography
+            variant="h6"
+            component="h2"
+            sx={{
+              fontWeight: 600,
+              mb: 1.5,
+              fontSize: { xs: '1rem', sm: '1.25rem' },
+            }}
+          >
+            {labels[step]}
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={progressPct}
+            sx={{
+              height: 8,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              '& .MuiLinearProgress-bar': { borderRadius: 1 },
+            }}
+            aria-label={t(
+              'business.onboarding.firstSale.stepProgressLabel',
+              'Step {{current}} of {{total}}: {{label}}',
+              {
+                current: step + 1,
+                total: stepCount,
+                label: labels[step],
+              }
+            )}
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={stepCount}
+          />
+        </Box>
+      )}
 
-      {step > 0 && step < 2 && (
+      {canGoPrevious && (
         <Button
           type="button"
           startIcon={<ChevronLeftIcon />}
           variant="outlined"
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          onClick={handlePrevious}
           fullWidth={isNarrow}
           sx={{ mb: { xs: 1.5, sm: 2 }, minHeight: 44 }}
         >
@@ -199,67 +251,95 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           borderColor: { xs: 'divider', sm: 'transparent' },
         }}
       >
-        {step === 0 && (
-          <>
-            <TextField
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-              label={t(
-                'business.onboarding.firstSale.hint.prompt',
-                'What did you photograph? (optional)'
-              )}
-              placeholder={t(
-                'business.onboarding.firstSale.hint.example1',
-                'Coca-Cola Zero 1.5L'
-              )}
-              value={merchantHint}
-              onChange={(e) => setMerchantHint(e.target.value)}
-              helperText={t(
-                'business.onboarding.firstSale.hint.helpTitle',
-                'Help the AI (optional)'
-              )}
-            />
-            <FirstSaleItemUploadStep
-              intent={intent}
-              onComplete={(ids, uploadedFiles) => {
-                setImagePreviewUrls((prev) => {
-                  prev.forEach((u) => URL.revokeObjectURL(u));
-                  return uploadedFiles.map((f) => URL.createObjectURL(f));
-                });
-                setImageIds((prev) => {
-                  if (JSON.stringify(prev) !== JSON.stringify(ids)) {
-                    setItem(null);
-                  }
-                  return ids;
-                });
-                setStep(1);
-              }}
-            />
-          </>
+        {step === STEP.photos && (
+          <FirstSaleItemUploadStep
+            intent={intent}
+            initialFiles={files}
+            onComplete={(_ids, uploadedFiles, cleanupRequested) => {
+              const sameFiles = filesMatch(files, uploadedFiles);
+              setImagePreviewUrls((prev) => {
+                prev.forEach((u) => URL.revokeObjectURL(u));
+                return uploadedFiles.map((f) => URL.createObjectURL(f));
+              });
+              setFiles(uploadedFiles);
+              setAsyncCleanupRequested(!!cleanupRequested);
+              if (!sameFiles) {
+                setImageIds([]);
+                setItemId(null);
+                setSuggestions(null);
+                setReviewForm(null);
+                setProcessedCleanup(false);
+              }
+              setStep(STEP.description);
+            }}
+          />
         )}
-        {step === 1 && (
+        {step === STEP.description && (
+          <FirstSaleItemDescriptionStep
+            hint={merchantHint}
+            onChange={setMerchantHint}
+            onContinue={() => {
+              if (!merchantHint.trim()) return;
+              setReviewForm(null);
+              setStep(STEP.processing);
+            }}
+          />
+        )}
+        {step === STEP.processing && (
+          <FirstSaleItemProcessingStep
+            files={files}
+            merchantHint={merchantHint}
+            asyncCleanupRequested={asyncCleanupRequested}
+            initialImageIds={imageIds}
+            initialItemId={itemId}
+            initialSuggestions={suggestions}
+            initialCleanupQueued={processedCleanup}
+            onContinue={(payload) => {
+              setImageIds(payload.imageIds);
+              setItemId(payload.itemId);
+              setSuggestions(payload.suggestions);
+              setProcessedCleanup(payload.cleanupQueued);
+              setReviewForm(null);
+              setStep(STEP.review);
+            }}
+          />
+        )}
+        {step === STEP.review && itemId && (
           <FirstSaleItemReviewStep
-            imageIds={imageIds}
             imagePreviewUrls={imagePreviewUrls}
             merchantHint={merchantHint}
+            suggestions={suggestions}
+            initialValues={reviewForm}
+            onContinue={(values) => {
+              setReviewForm(values);
+              setStep(STEP.publish);
+            }}
+          />
+        )}
+        {step === STEP.publish && itemId && reviewForm && (
+          <FirstSaleItemPublishStep
+            itemId={itemId}
+            imageIds={imageIds}
+            form={reviewForm}
+            merchantHint={merchantHint}
+            qualityScore={suggestions?.listingQuality?.score}
             initialLocationId={initialLocationId}
             onComplete={(summary, asDraft, locName) => {
               setItem(summary);
               setSavedAsDraft(asDraft);
               setLocationName(locName);
-              setStep(2);
+              setStep(STEP.done);
             }}
           />
         )}
-        {step === 2 && item && (
+        {step === STEP.done && item && (
           <FirstSaleItemSuccessStep
             item={item}
             intent={intent}
             locationName={locationName}
             savedAsDraft={savedAsDraft}
             initialLocationId={initialLocationId}
-            photoCount={imageIds.length}
+            photoCount={imageIds.length || files.length}
           />
         )}
       </Paper>
@@ -277,7 +357,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           <Typography variant="body2" color="text.secondary">
             {t(
               'business.onboarding.firstSale.exitBody',
-              'Your draft is saved on the server when photos upload. You can resume from your items list.',
+              'Photos stay on this device until processing finishes. Leave anyway?',
               { step: step + 1 }
             )}
           </Typography>

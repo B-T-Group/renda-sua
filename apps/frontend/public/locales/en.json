@@ -2003,7 +2003,32 @@
           "prompt": "What did you photograph? (optional)",
           "helpTitle": "Help the AI (optional)",
           "use": "Use hint",
-          "example1": "Coca-Cola Zero 1.5L"
+          "example1": "Coca-Cola Zero 1.5L",
+          "example2": "Fresh tomatoes",
+          "example3": "Women's leather handbag",
+          "example4": "Samsung Galaxy A35"
+        },
+        "description": {
+          "title": "What did you photograph?",
+          "body": "A short description helps us fill the listing. You can edit everything on the next screens.",
+          "required": "Add a short description of what you photographed"
+        },
+        "processing": {
+          "title": "Preparing your listing",
+          "body": "This usually takes a moment. Please keep this screen open.",
+          "doneBody": "Ready — review the details we filled in.",
+          "timeoutBody": "Some steps took too long. You can continue and finish details on the next screen.",
+          "upload": "Uploading photos",
+          "draft": "Creating product draft",
+          "cleanup": "Sending photos for AI cleanup",
+          "cleanupQueued": "Queued",
+          "analyze": "Analyzing photos & extracting details",
+          "continue": "Continue to review",
+          "timeoutContinue": "Continue anyway"
+        },
+        "publish": {
+          "title": "Stock & location",
+          "body": "Choose where this product is sold and how many you have in stock."
         },
         "quality": {
           "label": "Listing quality"
@@ -2011,9 +2036,11 @@
         "review": {
           "analyzing": "Filled from your photos — finishing details…",
           "filledBanner": "Filled from your photos — edit anything",
+          "manualFill": "Fill in the details below, then continue to publish.",
           "confirm": "Confirm",
           "duplicateBody": "\"{{name}}\" may already be in your store.",
           "addStockInstead": "Add stock instead",
+          "continuePublish": "Continue to publish",
           "publish": "Publish product",
           "finishLater": "Finish later",
           "submitted": "Product submitted for approval",
@@ -2021,8 +2048,11 @@
         },
         "steps": {
           "upload": "Photos",
+          "description": "Description",
+          "processing": "Processing",
           "create": "Product details",
           "review": "Review",
+          "publish": "Publish",
           "location": "Location",
           "done": "Done"
         },
