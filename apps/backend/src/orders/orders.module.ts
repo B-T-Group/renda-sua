@@ -35,6 +35,8 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderStatusService } from './order-status.service';
+import { OrderCleanupCronService } from './order-cleanup-cron.service';
+import { OrderCleanupService } from './order-cleanup.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { OrdersController } from './orders.controller';
@@ -84,6 +86,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
     CancellationPolicyService,
+    OrderCleanupService,
+    OrderCleanupCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
     OrderEventsService,
@@ -99,6 +103,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPaymentCallbackHandler,
     CancellationPolicyService,
     RefundsModule,
+    OrderCleanupService,
     OrderSystemJobsService,
     OrderAcceptanceService,
     OrderEventsService,

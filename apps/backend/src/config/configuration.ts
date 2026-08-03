@@ -143,6 +143,12 @@ export interface OrderConfig {
   reliabilityRestrictAutoDeclines: number;
   /** Auto-decline count (30d) to suspend merchant. */
   reliabilitySuspendAutoDeclines: number;
+  /** Daily cleanup cron: hours after window end / unpaid age before action (default 24). */
+  cleanupGraceHours: number;
+  /** Max orders processed per cleanup bucket per cron run. */
+  cleanupBatchLimit: number;
+  /** When false, OrderCleanupCronService no-ops. */
+  cleanupEnabled: boolean;
 }
 
 /** When agent has an active delivery, location update interval in ms (default 60s). */
@@ -712,6 +718,17 @@ export default (): Configuration => {
         process.env.RELIABILITY_SUSPEND_AUTO_DECLINES || '12',
         10
       ),
+      cleanupGraceHours: parseInt(
+        process.env.ORDER_CLEANUP_GRACE_HOURS || '24',
+        10
+      ),
+      cleanupBatchLimit: parseInt(
+        process.env.ORDER_CLEANUP_BATCH_LIMIT || '100',
+        10
+      ),
+      cleanupEnabled:
+        process.env.ORDER_CLEANUP_ENABLED !== 'false' &&
+        process.env.ORDER_CLEANUP_ENABLED !== '0',
     },
     agentTracking: {
       activeDeliveryIntervalMs: parseInt(

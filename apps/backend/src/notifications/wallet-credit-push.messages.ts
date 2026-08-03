@@ -237,6 +237,31 @@ export function buildOrderAutoDeclinedPushMessage(params: {
   };
 }
 
+export function buildPendingPaymentCleanupDigestPushMessage(params: {
+  orderNumbers: string[];
+  preferredLanguage?: string | null;
+  persona: 'client' | 'business';
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const list = params.orderNumbers.join(', ');
+  const count = params.orderNumbers.length;
+  if (locale === 'fr') {
+    const title =
+      count === 1 ? 'Commande annulée' : `${count} commandes annulées`;
+    const body =
+      params.persona === 'business'
+        ? `Commande(s) non payée(s) annulée(s) : ${list}.`
+        : `Votre/vos commande(s) en attente de paiement a/ont été annulée(s) : ${list}.`;
+    return { title, body };
+  }
+  const title = count === 1 ? 'Order cancelled' : `${count} orders cancelled`;
+  const body =
+    params.persona === 'business'
+      ? `Unpaid order(s) cancelled: ${list}.`
+      : `Your unpaid order(s) were cancelled: ${list}.`;
+  return { title, body };
+}
+
 export function buildOrderBusyPushMessage(params: {
   orderNumber: string;
   estimatedPrepMinutes: number;

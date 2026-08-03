@@ -6,6 +6,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
+import { OrderCleanupService } from './order-cleanup.service';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
@@ -24,8 +25,42 @@ export class OrderSystemJobsService {
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly notificationsService: NotificationsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly orderCleanupService: OrderCleanupService
   ) {}
+
+  /** Daily cleanup: unpaid pending_payment past grace. */
+  cancelStalePendingPaymentOrders(
+    graceHours: number,
+    limit: number
+  ): Promise<number> {
+    return this.orderCleanupService.cancelStalePendingPaymentOrders(
+      graceHours,
+      limit
+    );
+  }
+
+  /** Daily cleanup: ready_for_pickup past delivery/pickup window. */
+  cancelMissedPickupOrders(
+    graceHours: number,
+    limit: number
+  ): Promise<number> {
+    return this.orderCleanupService.cancelMissedPickupOrders(
+      graceHours,
+      limit
+    );
+  }
+
+  /** Daily cleanup: mid-fulfillment past window → failed + failed_deliveries. */
+  failMissedDeliveryOrders(
+    graceHours: number,
+    limit: number
+  ): Promise<number> {
+    return this.orderCleanupService.failMissedDeliveryOrders(
+      graceHours,
+      limit
+    );
+  }
 
   /**
    * Auto-decline: merchant never accepted within accept + grace window.

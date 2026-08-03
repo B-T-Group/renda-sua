@@ -69,6 +69,7 @@ import {
   buildOrderAutoDeclinedPushMessage,
   buildOrderBusyPushMessage,
   buildOrderNoAgentPushMessage,
+  buildPendingPaymentCleanupDigestPushMessage,
   buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
   buildStockAvailabilityCheckPushMessage,
@@ -709,6 +710,37 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendOrderAutoDeclinedPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  /** One digest push after daily pending_payment cleanup (client or business). */
+  async sendPendingPaymentCleanupDigestPush(params: {
+    userId?: string | null;
+    orderNumbers: string[];
+    preferredLanguage?: string | null;
+    persona: 'client' | 'business';
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId || params.orderNumbers.length === 0) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildPendingPaymentCleanupDigestPushMessage({
+      orderNumbers: params.orderNumbers,
+      preferredLanguage: params.preferredLanguage,
+      persona: params.persona,
+    });
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: '/orders',
+        event: 'order_pending_payment_cleanup',
+        persona: params.persona,
+        orderNumbers: params.orderNumbers.join(','),
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendPendingPaymentCleanupDigestPush failed: ${
+          error?.message ?? String(error)
+        }`
       );
     }
   }
