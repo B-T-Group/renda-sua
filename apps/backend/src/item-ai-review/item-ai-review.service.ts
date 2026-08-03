@@ -15,6 +15,7 @@ import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecyc
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
+import { stripRedundantCleanupRecommendations } from './strip-redundant-cleanup-recommendations';
 import {
   AiReviewModelResult,
   ItemForAiReview,
@@ -160,12 +161,23 @@ export class ItemAiReviewService {
         return;
       }
       const reviewId = await this.createRunningReview(item);
-      const { result, modelMeta } = await this.model.reviewItem(item);
-      const finalResult = this.applyImageQualityGuard(
+      const cleanupJobOpen = await this.isCleanupJobOpen(item.id);
+      const { result, modelMeta } = await this.model.reviewItem(item, {
+        cleanupAlreadyQueued: cleanupJobOpen,
+      });
+      const guarded = this.applyImageQualityGuard(
         result,
         qualityAssessment,
         item.item_images ?? []
       );
+      const finalResult = stripRedundantCleanupRecommendations(guarded, {
+        cleanupJobOpen,
+        cleanedImageIds: new Set(
+          (item.item_images ?? [])
+            .filter((img) => !!img.is_ai_cleaned)
+            .map((img) => img.id)
+        ),
+      });
       await this.applyDecision(item, reviewId, finalResult, modelMeta);
     } catch (err: any) {
       // Attach item name so callers can include it in failure notifications
@@ -211,6 +223,13 @@ export class ItemAiReviewService {
       proposedTitle: result.proposedTitle,
       proposedDescription: result.proposedDescription,
     };
+  }
+
+  private async isCleanupJobOpen(itemId: string): Promise<boolean> {
+    const open = await this.hasura.executeQuery<{
+      ai_image_cleanup_jobs: { id: string }[];
+    }>(Q.GET_OPEN_CLEANUP_JOB_FOR_ITEM, { itemId });
+    return (open.ai_image_cleanup_jobs?.length ?? 0) > 0;
   }
 
   private hasBlockingImageErrors(item: ItemForAiReview): boolean {

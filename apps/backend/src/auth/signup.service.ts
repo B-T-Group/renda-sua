@@ -1,19 +1,13 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
-import { AgentReferralsService } from '../agents/agent-referrals.service';
-import { BusinessContractsService } from '../business-contracts/business-contracts.service';
-import { BusinessReferralsService, ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { Auth0Service } from './auth0.service';
-
-type SignupGoalId =
-  | 'browse_buy'
-  | 'delivery_agent'
-  | 'sell_items'
-  | 'rent_and_earn';
+import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
+import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
+import { normalizeSignupAddress } from './provisioning/signup-address.normalize';
+import { UserProvisioningService } from './provisioning/user-provisioning.service';
 
 interface SignupStartPayload {
   first_name: string;
@@ -22,19 +16,28 @@ interface SignupStartPayload {
   phone_number?: string | null;
   /** @deprecated use `personas`; kept for backward compatibility */
   user_type_id?: 'client' | 'agent' | 'business';
-  /** When set (1–3 values), creates all selected profiles in one user row */
   personas?: PersonaId[];
-  signup_goal?: SignupGoalId;
   profile: {
     vehicle_type_id?: string;
     name?: string;
     main_interest?: 'sell_items' | 'rent_items';
   };
+  country?: string;
+  store_location?: {
+    street: string;
+    city: string;
+    region: string;
+    postal_code?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  /** @deprecated prefer country + store_location */
   address?: {
     address_line_1: string;
     country: string;
     city: string;
     state: string;
+    postal_code?: string;
     latitude?: number;
     longitude?: number;
   };
@@ -68,16 +71,13 @@ export interface SignupCreatedUser {
 
 @Injectable()
 export class SignupService {
-  private readonly logger = new Logger(SignupService.name);
-
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
     private readonly addressesService: AddressesService,
-    private readonly businessReferralsService: BusinessReferralsService,
-    private readonly agentReferralsService: AgentReferralsService,
-    private readonly businessContractsService: BusinessContractsService,
-    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
+    private readonly userProvisioning: UserProvisioningService,
+    private readonly businessProvisioning: BusinessProvisioningService,
+    private readonly referralProvisioning: ReferralProvisioningService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -161,104 +161,134 @@ export class SignupService {
       );
     }
 
-    if (email) {
-      const emailTaken = await this.isEmailTaken(email);
-      if (emailTaken) {
-        throw new HttpException(
-          { success: false, error: 'Email is already taken' },
-          HttpStatus.CONFLICT
-        );
-      }
-    }
-
-    if (phoneNumber) {
-      const phoneTaken = await this.isPhoneTaken(phoneNumber);
-      if (phoneTaken) {
-        throw new HttpException(
-          { success: false, error: 'Phone number is already taken' },
-          HttpStatus.CONFLICT
-        );
-      }
-    }
-
-    const personas = this.normalizeSignupPersonas({
-      ...payload,
-      email: email || null,
-      phone_number: phoneNumber || null,
-    });
-    let businessReferral: ResolvedBusinessReferral | null = null;
-    if (personas.includes('business')) {
-      businessReferral =
-        await this.businessReferralsService.resolveBusinessReferralCode(
-          payload.referral_agent_code
-        );
-    }
-
-    const { user, entities } = await this.createPendingUser(
-      {
-        ...payload,
-        email: email || null,
-        phone_number: phoneNumber || null,
-      },
-      businessReferral
-    );
-    if (payload.address && entities.length > 0) {
-      const uid = user.id;
-      for (const entity of entities) {
-        const seeded = await this.addressesService.createAddressForSignup(
-          uid,
-          entity.id,
-          entity.type,
-          payload.address
-        );
-        if (entity.type === 'business' && seeded.businessLocationId) {
-          await this.mobilePaymentPhoneSeedService.ensureAndLinkContactPhoneToLocation(
-            uid,
-            seeded.businessLocationId,
-            payload.address.country,
-            phoneNumber || payload.phone_number
-          );
-        }
-      }
-    }
-
-    const businessEntity = entities.find((e) => e.type === 'business');
-    if (businessEntity && !payload.address) {
-      await this.mobilePaymentPhoneSeedService.ensureFromContactPhone(
-        user.id,
-        undefined,
-        phoneNumber || payload.phone_number
+    if (email && (await this.isEmailTaken(email))) {
+      throw new HttpException(
+        { success: false, error: 'Email is already taken' },
+        HttpStatus.CONFLICT
       );
     }
-    if (businessEntity && businessReferral) {
-      const businessName =
-        payload.profile?.name?.trim() ||
-        `${payload.first_name}'s Business`;
-      await this.businessReferralsService.notifyAgentOfBusinessReferral(
+
+    if (phoneNumber && (await this.isPhoneTaken(phoneNumber))) {
+      throw new HttpException(
+        { success: false, error: 'Phone number is already taken' },
+        HttpStatus.CONFLICT
+      );
+    }
+
+    const personas = this.normalizeSignupPersonas(payload);
+    if (
+      payload.store_location &&
+      !payload.country?.trim() &&
+      !payload.address?.country?.trim()
+    ) {
+      throw new HttpException(
         {
-          businessId: businessEntity.id,
-          countryCode: payload.address?.country,
-          businessName,
-          businessOwnerName: `${payload.first_name} ${payload.last_name}`.trim(),
+          success: false,
+          error: 'country is required when store_location is provided',
         },
-        businessReferral
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const normalizedAddress = normalizeSignupAddress({
+      country: payload.country,
+      store_location: payload.store_location,
+      address: payload.address,
+    });
+
+    const businessReferral =
+      await this.referralProvisioning.resolveBusinessReferral(
+        personas,
+        payload.referral_agent_code
+      );
+    const referralFields =
+      this.referralProvisioning.getBusinessInsertReferralFields(businessReferral);
+
+    const businessName =
+      payload.profile?.name?.trim() || `${payload.first_name}'s Business`;
+
+    const nestStoreAddress =
+      personas.includes('business') &&
+      normalizedAddress &&
+      !normalizedAddress.countryOnly
+        ? normalizedAddress
+        : undefined;
+
+    const { user, entities, businessLocation } =
+      await this.userProvisioning.createPendingUser({
+        email: email || null,
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+        phone_number: phoneNumber || null,
+        email_verified: false,
+        personas,
+        vehicle_type_id: payload.profile?.vehicle_type_id,
+        business_name: businessName,
+        main_interest: payload.profile?.main_interest ?? 'sell_items',
+        ...referralFields,
+        storeAddress: nestStoreAddress,
+      });
+
+    // Seed addresses for personas that were not covered by the nested business insert.
+    // When businessLocation exists, skip the business entity (already nested) but still
+    // link client/agent addresses from the same store/country address.
+    if (normalizedAddress) {
+      await this.seedLegacyAddresses(
+        user.id,
+        entities,
+        normalizedAddress,
+        Boolean(businessLocation)
       );
     }
 
-    const agentEntity = entities.find((e) => e.type === 'agent');
-    if (agentEntity) {
-      await this.agentReferralsService.creditAgentReferralIfPresent(
-        agentEntity.id,
-        payload.referral_agent_code,
-        payload.address?.country
-      );
-    }
+    await this.businessProvisioning.runPostCommitEffects({
+      userId: user.id,
+      entities,
+      businessLocation,
+      storeAddress: nestStoreAddress ?? normalizedAddress,
+      phoneNumber: phoneNumber || payload.phone_number,
+      businessName,
+    });
 
-    if (businessEntity) {
-      this.scheduleEnsureContract(businessEntity.id);
-    }
+    await this.referralProvisioning.runPostCommitEffects({
+      entities,
+      referral: businessReferral,
+      referralAgentCode: payload.referral_agent_code,
+      country: normalizedAddress?.country,
+      businessName,
+      ownerName: `${payload.first_name} ${payload.last_name}`.trim(),
+    });
 
     return { user };
+  }
+
+  private async seedLegacyAddresses(
+    userId: string,
+    entities: Array<{ id: string; type: PersonaId }>,
+    address: NonNullable<ReturnType<typeof normalizeSignupAddress>>,
+    businessLocationAlreadyCreated = false
+  ): Promise<void> {
+    for (const entity of entities) {
+      if (entity.type === 'business') {
+        // Nested insert already created business location + address.
+        if (businessLocationAlreadyCreated) continue;
+        // Country-only address is not enough for a business location.
+        if (address.countryOnly) continue;
+      }
+      await this.addressesService.createAddressForSignup(
+        userId,
+        entity.id,
+        entity.type,
+        {
+          address_line_1: address.address_line_1,
+          country: address.country,
+          city: address.city,
+          state: address.state,
+          postal_code: address.postal_code,
+          latitude: address.latitude,
+          longitude: address.longitude,
+        }
+      );
+    }
   }
 
   async updateContact(body: UpdateContactPayload): Promise<{ user: SignupCreatedUser }> {
@@ -426,16 +456,6 @@ export class SignupService {
     return { user: result.update_users_by_pk };
   }
 
-  private scheduleEnsureContract(businessId: string): void {
-    this.businessContractsService
-      .ensureContractForBusiness(businessId)
-      .catch((error: any) => {
-        this.logger.warn(
-          `Contract creation after signup failed for ${businessId}: ${error?.message}`
-        );
-      });
-  }
-
   private async ensureContractForSignupUser(userId: string): Promise<void> {
     const result = await this.hasuraSystemService.executeQuery<{
       users_by_pk: { business?: { id: string } | null } | null;
@@ -448,7 +468,7 @@ export class SignupService {
       { id: userId }
     );
     const businessId = result.users_by_pk?.business?.id;
-    if (businessId) this.scheduleEnsureContract(businessId);
+    if (businessId) this.businessProvisioning.scheduleEnsureContract(businessId);
   }
 
   async verifyOtp(body: {
@@ -555,7 +575,7 @@ export class SignupService {
     const user = update.update_users_by_pk;
     const businessId = user?.business?.id;
     if (businessId) {
-      this.scheduleEnsureContract(businessId);
+      this.businessProvisioning.scheduleEnsureContract(businessId);
     }
     return { user };
   }
@@ -578,60 +598,5 @@ export class SignupService {
       { success: false, error: 'personas or user_type_id is required' },
       HttpStatus.BAD_REQUEST
     );
-  }
-
-  private entitiesFromInsert(row: {
-    client?: { id: string } | null;
-    agent?: { id: string } | null;
-    business?: { id: string } | null;
-  }): Array<{ id: string; type: PersonaId }> {
-    const out: Array<{ id: string; type: PersonaId }> = [];
-    if (row.client?.id) out.push({ id: row.client.id, type: 'client' });
-    if (row.agent?.id) out.push({ id: row.agent.id, type: 'agent' });
-    if (row.business?.id) out.push({ id: row.business.id, type: 'business' });
-    return out;
-  }
-
-  private async createPendingUser(
-    payload: SignupStartPayload,
-    businessReferral: ResolvedBusinessReferral | null = null
-  ): Promise<{
-    user: SignupCreatedUser;
-    entities: Array<{ id: string; type: PersonaId }>;
-  }> {
-    const personas = this.normalizeSignupPersonas(payload);
-    const businessName =
-      payload.profile?.name?.trim() ||
-      `${payload.first_name}'s Business`;
-    const inserted = await this.hasuraSystemService.insertUserWithPersonas({
-      email: payload.email,
-      first_name: payload.first_name,
-      last_name: payload.last_name,
-      phone_number: payload.phone_number ?? null,
-      email_verified: false,
-      personas,
-      vehicle_type_id: payload.profile?.vehicle_type_id,
-      business_name: businessName,
-      main_interest: payload.profile?.main_interest ?? 'sell_items',
-      ...this.businessReferralsService.getBusinessInsertReferralFields(
-        businessReferral
-      ),
-    });
-    const u = inserted.user;
-    const user: SignupCreatedUser = {
-      id: u.id,
-      email: u.email,
-      first_name: u.first_name,
-      last_name: u.last_name,
-      user_type_id: u.user_type_id,
-      phone_number: u.phone_number ?? null,
-      email_verified: u.email_verified,
-    };
-    const entities = this.entitiesFromInsert({
-      client: inserted.client,
-      agent: inserted.agent,
-      business: inserted.business,
-    });
-    return { user, entities };
   }
 }

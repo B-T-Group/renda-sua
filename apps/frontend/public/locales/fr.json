@@ -1155,7 +1155,10 @@
       "contact": "Contact",
       "goal": "Votre objectif",
       "address": "Adresse",
-      "review": "Vérification"
+      "review": "Vérification",
+      "personas": "Personas",
+      "country": "Pays",
+      "storeLocation": "Emplacement du magasin"
     },
     "next": "Suivant",
     "back": "Retour",
@@ -1176,7 +1179,10 @@
       "phone": "Téléphone",
       "goal": "Objectif",
       "business": "Entreprise",
-      "address": "Adresse"
+      "address": "Adresse",
+      "personas": "Personas",
+      "country": "Pays",
+      "storeLocation": "Emplacement du magasin"
     },
     "firstName": "Prénom",
     "lastName": "Nom",
@@ -1222,7 +1228,29 @@
       "agent": "Vérifiez pour voir les courses à proximité",
       "business": "Vérifiez pour configurer votre boutique"
     },
-    "businessIntentStrip": "Vous vous inscrivez en tant qu'entreprise — voici ce que vous obtenez :"
+    "businessIntentStrip": "Vous vous inscrivez en tant qu'entreprise — voici ce que vous obtenez :",
+    "personasSubtitle": "Sélectionnez tout ce qui s’applique—vous pouvez utiliser plusieurs modes sur un seul compte.",
+    "countrySubtitle": "Votre pays détermine les paiements, la vérification et les options locales.",
+    "storeLocationSubtitle": "Ceci devient votre premier emplacement commercial. Vous pourrez en ajouter d’autres plus tard.",
+    "countryStepTitle": "Votre pays",
+    "countryStepHint": "Votre pays détermine les paiements, la vérification et les options locales.",
+    "countryChangedReset": "Les champs d’emplacement du magasin ont été réinitialisés pour le nouveau pays.",
+    "storeLocationTitle": "Votre premier emplacement",
+    "storeLocationHint": "Ceci devient votre premier emplacement commercial. Vous pourrez en ajouter d’autres plus tard.",
+    "personasRequired": "Sélectionnez au moins une persona.",
+    "emailTakenLogin": "Cet e-mail est déjà enregistré. Connectez-vous plutôt.",
+    "logIn": "Se connecter",
+    "personas": {
+      "client": {
+        "title": "Client"
+      },
+      "agent": {
+        "title": "Agent"
+      },
+      "business": {
+        "title": "Entreprise"
+      }
+    }
   },
   "signup": {
     "benefits": {

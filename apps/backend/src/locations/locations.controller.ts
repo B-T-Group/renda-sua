@@ -30,6 +30,7 @@ import {
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
+import { CountryOnboardingService } from './country-onboarding.service';
 import { LocationsService } from './locations.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -106,7 +107,8 @@ export class LocationsController {
     private readonly hasuraService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly deliveryConfigService: DeliveryConfigService,
-    private readonly locationsService: LocationsService
+    private readonly locationsService: LocationsService,
+    private readonly countryOnboardingService: CountryOnboardingService
   ) {}
 
   @Get('supported')
@@ -468,6 +470,9 @@ export class LocationsController {
       serviceStatus: string;
       deliveryEnabled: boolean;
       supportedPaymentMethods: string[];
+      signupEnabled: boolean;
+      postalCodeRequired: boolean;
+      verificationFlow: string;
     }>;
   }> {
     try {
@@ -489,9 +494,12 @@ export class LocationsController {
       const response = await this.hasuraService.executeQuery(query);
       const paymentMethodsByCountry =
         await this.getActivePaymentMethodsByCountry();
+      const onboardingMap =
+        await this.countryOnboardingService.getConfigMap();
       const countries = this.aggregateSupportedCountries(
         response.supported_country_states || [],
-        paymentMethodsByCountry
+        paymentMethodsByCountry,
+        onboardingMap
       );
 
       return { success: true, countries };
@@ -795,7 +803,16 @@ export class LocationsController {
 
   private aggregateSupportedCountries(
     rows: any[],
-    paymentMethodsByCountry: Map<string, string[]>
+    paymentMethodsByCountry: Map<string, string[]>,
+    onboardingMap?: Map<
+      string,
+      {
+        signupEnabled: boolean;
+        postalCodeRequired: boolean;
+        verificationFlow: string;
+        defaultCurrency: string;
+      }
+    >
   ): Array<{
     code: string;
     name: string;
@@ -803,6 +820,9 @@ export class LocationsController {
     serviceStatus: string;
     deliveryEnabled: boolean;
     supportedPaymentMethods: string[];
+    signupEnabled: boolean;
+    postalCodeRequired: boolean;
+    verificationFlow: string;
   }> {
     const countryMap = new Map<string, any>();
 
@@ -814,6 +834,8 @@ export class LocationsController {
         continue;
       }
 
+      const code = String(row.country_code || '').trim().toUpperCase();
+      const onboarding = onboardingMap?.get(code);
       countryMap.set(row.country_code, {
         code: row.country_code,
         name: row.country_name,
@@ -822,6 +844,9 @@ export class LocationsController {
         deliveryEnabled: row.delivery_enabled,
         supportedPaymentMethods:
           paymentMethodsByCountry.get(row.country_code) || [],
+        signupEnabled: onboarding?.signupEnabled ?? false,
+        postalCodeRequired: onboarding?.postalCodeRequired ?? false,
+        verificationFlow: onboarding?.verificationFlow ?? 'national_id',
       });
     }
 

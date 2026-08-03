@@ -1407,7 +1407,10 @@
       "contact": "Contact",
       "goal": "Your goal",
       "address": "Address",
-      "review": "Review"
+      "review": "Review",
+      "personas": "Personas",
+      "country": "Country",
+      "storeLocation": "Store location"
     },
     "next": "Next",
     "back": "Back",
@@ -1428,7 +1431,10 @@
       "phone": "Phone",
       "goal": "Goal",
       "business": "Business",
-      "address": "Address"
+      "address": "Address",
+      "personas": "Personas",
+      "country": "Country",
+      "storeLocation": "Store location"
     },
     "firstName": "First name",
     "lastName": "Last name",
@@ -1474,7 +1480,29 @@
       "agent": "Verify to see nearby runs",
       "business": "Verify to set up your store"
     },
-    "businessIntentStrip": "You're signing up as a business — here's what you get:"
+    "businessIntentStrip": "You're signing up as a business — here's what you get:",
+    "personasSubtitle": "Select all that apply—you can use more than one mode on one account.",
+    "countrySubtitle": "Your country determines payments, verification, and local options.",
+    "storeLocationSubtitle": "This becomes your first business location. You can add more locations later.",
+    "countryStepTitle": "Your country",
+    "countryStepHint": "Your country determines payments, verification, and local options.",
+    "countryChangedReset": "Store location fields were reset for the new country.",
+    "storeLocationTitle": "Your first store location",
+    "storeLocationHint": "This becomes your first business location. You can add more locations later.",
+    "personasRequired": "Select at least one persona.",
+    "emailTakenLogin": "This email is already registered. Log in instead.",
+    "logIn": "Log in",
+    "personas": {
+      "client": {
+        "title": "Client"
+      },
+      "agent": {
+        "title": "Agent"
+      },
+      "business": {
+        "title": "Business"
+      }
+    }
   },
   "signup": {
     "benefits": {

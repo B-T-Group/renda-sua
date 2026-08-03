@@ -29,6 +29,7 @@ export interface AiReviewImageQualityInput {
   validation_errors?: unknown;
   validation_warnings?: unknown;
   quality_score?: number | null;
+  is_ai_cleaned?: boolean | null;
 }
 
 export interface AiReviewImageQualityIssue {
@@ -230,14 +231,16 @@ export function buildQualityProposeModelResult(
     proposedDescription: null,
     imageActions: images.map((img) => {
       const issue = assessment.issues.find((i) => i.imageId === img.id);
+      const wantsCleanup =
+        issue?.code === VALIDATION_CODES.CLUTTERED_BACKGROUND &&
+        !img.is_ai_cleaned;
       return {
         imageId: img.id,
-        action:
-          issue?.code === VALIDATION_CODES.CLUTTERED_BACKGROUND
-            ? ('cleanup' as const)
-            : issue
-              ? ('replace_required' as const)
-              : ('keep' as const),
+        action: wantsCleanup
+          ? ('cleanup' as const)
+          : issue
+            ? ('replace_required' as const)
+            : ('keep' as const),
         note: issue?.message,
       };
     }),

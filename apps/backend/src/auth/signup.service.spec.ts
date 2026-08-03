@@ -1,12 +1,11 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddressesService } from '../addresses/addresses.service';
-import { AgentReferralsService } from '../agents/agent-referrals.service';
-import { BusinessContractsService } from '../business-contracts/business-contracts.service';
-import { BusinessReferralsService } from '../business-referrals/business-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import { Auth0Service } from './auth0.service';
+import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
+import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
+import { UserProvisioningService } from './provisioning/user-provisioning.service';
 import { SignupService } from './signup.service';
 
 describe('SignupService', () => {
@@ -14,8 +13,9 @@ describe('SignupService', () => {
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let auth0Service: jest.Mocked<Auth0Service>;
   let addressesService: jest.Mocked<AddressesService>;
-  let businessReferralsService: jest.Mocked<BusinessReferralsService>;
-  let agentReferralsService: jest.Mocked<AgentReferralsService>;
+  let userProvisioning: jest.Mocked<UserProvisioningService>;
+  let businessProvisioning: jest.Mocked<BusinessProvisioningService>;
+  let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
 
   const insertedUser = {
     id: 'user-123',
@@ -36,7 +36,6 @@ describe('SignupService', () => {
           useValue: {
             executeQuery: jest.fn().mockResolvedValue({ users_by_pk: null }),
             executeMutation: jest.fn(),
-            insertUserWithPersonas: jest.fn(),
           },
         },
         {
@@ -58,32 +57,24 @@ describe('SignupService', () => {
           },
         },
         {
-          provide: BusinessReferralsService,
+          provide: UserProvisioningService,
           useValue: {
-            resolveBusinessReferralCode: jest.fn().mockResolvedValue(null),
+            createPendingUser: jest.fn(),
+          },
+        },
+        {
+          provide: BusinessProvisioningService,
+          useValue: {
+            runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
+            scheduleEnsureContract: jest.fn(),
+          },
+        },
+        {
+          provide: ReferralProvisioningService,
+          useValue: {
+            resolveBusinessReferral: jest.fn().mockResolvedValue(null),
             getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
-            notifyAgentOfBusinessReferral: jest.fn(),
-          },
-        },
-        {
-          provide: AgentReferralsService,
-          useValue: {
-            creditAgentReferralIfPresent: jest.fn(),
-          },
-        },
-        {
-          provide: BusinessContractsService,
-          useValue: {
-            ensureContractForBusiness: jest.fn().mockResolvedValue(undefined),
-          },
-        },
-        {
-          provide: MobilePaymentPhoneSeedService,
-          useValue: {
-            ensureFromContactPhone: jest.fn().mockResolvedValue(null),
-            ensureAndLinkContactPhoneToLocation: jest
-              .fn()
-              .mockResolvedValue(undefined),
+            runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -93,8 +84,9 @@ describe('SignupService', () => {
     hasuraSystemService = module.get(HasuraSystemService);
     auth0Service = module.get(Auth0Service);
     addressesService = module.get(AddressesService);
-    businessReferralsService = module.get(BusinessReferralsService);
-    agentReferralsService = module.get(AgentReferralsService);
+    userProvisioning = module.get(UserProvisioningService);
+    businessProvisioning = module.get(BusinessProvisioningService);
+    referralProvisioning = module.get(ReferralProvisioningService);
   });
 
   describe('availability checks', () => {
@@ -138,7 +130,7 @@ describe('SignupService', () => {
           HttpStatus.BAD_REQUEST
         )
       );
-      expect(hasuraSystemService.insertUserWithPersonas).not.toHaveBeenCalled();
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
 
     it('rejects a taken phone before creating a pending user', async () => {
@@ -157,16 +149,17 @@ describe('SignupService', () => {
           HttpStatus.CONFLICT
         )
       );
-      expect(hasuraSystemService.insertUserWithPersonas).not.toHaveBeenCalled();
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
 
-    it('creates a phone-only pending signup and links returned personas to the address', async () => {
+    it('creates a phone-only pending signup and seeds legacy addresses', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      hasuraSystemService.insertUserWithPersonas.mockResolvedValue({
+      userProvisioning.createPendingUser.mockResolvedValue({
         user: { ...insertedUser, email: null },
-        client: { id: 'client-123' },
-        agent: { id: 'agent-123' },
-        business: null,
+        entities: [
+          { id: 'client-123', type: 'client' },
+          { id: 'agent-123', type: 'agent' },
+        ],
       });
 
       const address = {
@@ -184,7 +177,7 @@ describe('SignupService', () => {
       });
 
       expect(result.user.email).toBeNull();
-      expect(hasuraSystemService.insertUserWithPersonas).toHaveBeenCalledWith(
+      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
         expect.objectContaining({
           email: null,
           phone_number: '+237600000001',
@@ -193,23 +186,155 @@ describe('SignupService', () => {
         })
       );
       expect(addressesService.createAddressForSignup).toHaveBeenCalledTimes(2);
+      expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalled();
+      expect(referralProvisioning.runPostCommitEffects).toHaveBeenCalledWith(
+        expect.objectContaining({
+          country: 'CM',
+        })
+      );
+    });
+
+    it('nests store_location for business and skips legacy address seed', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'biz-1', type: 'business' }],
+        businessLocation: {
+          id: 'loc-1',
+          addressId: 'addr-1',
+          country: 'CA',
+          city: 'Montreal',
+        },
+      });
+
+      await service.startSignup({
+        first_name: 'Biz',
+        last_name: 'Owner',
+        email: 'biz@example.com',
+        personas: ['business'],
+        profile: { name: 'Acme', main_interest: 'sell_items' },
+        country: 'CA',
+        store_location: {
+          street: '1 Main',
+          city: 'Montreal',
+          region: 'Quebec',
+          postal_code: 'H2X1Y4',
+        },
+      });
+
+      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          storeAddress: expect.objectContaining({
+            address_line_1: '1 Main',
+            country: 'CA',
+            postal_code: 'H2X1Y4',
+            countryOnly: false,
+          }),
+        })
+      );
+      expect(addressesService.createAddressForSignup).not.toHaveBeenCalled();
+      expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalledWith(
+        expect.objectContaining({
+          businessLocation: expect.objectContaining({ id: 'loc-1' }),
+        })
+      );
+    });
+
+    it('still seeds client/agent addresses when business location is nested', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [
+          { id: 'client-1', type: 'client' },
+          { id: 'biz-1', type: 'business' },
+        ],
+        businessLocation: {
+          id: 'loc-1',
+          addressId: 'addr-1',
+          country: 'CA',
+          city: 'Montreal',
+        },
+      });
+
+      await service.startSignup({
+        first_name: 'Biz',
+        last_name: 'Owner',
+        email: 'biz@example.com',
+        personas: ['client', 'business'],
+        profile: { name: 'Acme', main_interest: 'sell_items' },
+        country: 'CA',
+        store_location: {
+          street: '1 Main',
+          city: 'Montreal',
+          region: 'Quebec',
+          postal_code: 'H2X1Y4',
+        },
+      });
+
+      expect(addressesService.createAddressForSignup).toHaveBeenCalledTimes(1);
       expect(addressesService.createAddressForSignup).toHaveBeenCalledWith(
         'user-123',
-        'client-123',
+        'client-1',
         'client',
-        address
+        expect.objectContaining({
+          address_line_1: '1 Main',
+          country: 'CA',
+          city: 'Montreal',
+          state: 'Quebec',
+        })
       );
-      expect(addressesService.createAddressForSignup).toHaveBeenCalledWith(
-        'user-123',
-        'agent-123',
-        'agent',
-        address
+    });
+
+    it('accepts guest checkout client-only payload without country', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-1', type: 'client' }],
+      });
+
+      await service.startSignup({
+        first_name: 'Guest',
+        last_name: 'Buyer',
+        email: 'guest@example.com',
+        personas: ['client'],
+        profile: {},
+      });
+
+      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          personas: ['client'],
+          storeAddress: undefined,
+        })
       );
-      expect(agentReferralsService.creditAgentReferralIfPresent).toHaveBeenCalledWith(
-        'agent-123',
-        undefined,
-        'CM'
+      expect(addressesService.createAddressForSignup).not.toHaveBeenCalled();
+    });
+
+    it('rejects store_location without country', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+
+      await expect(
+        service.startSignup({
+          first_name: 'Biz',
+          last_name: 'Owner',
+          email: 'biz@example.com',
+          personas: ['business'],
+          profile: { name: 'Acme' },
+          store_location: {
+            street: '1 Main',
+            city: 'Montreal',
+            region: 'Quebec',
+          },
+        })
+      ).rejects.toThrow(
+        new HttpException(
+          {
+            success: false,
+            error: 'country is required when store_location is provided',
+          },
+          HttpStatus.BAD_REQUEST
+        )
       );
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
   });
 

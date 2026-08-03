@@ -1,0 +1,48 @@
+table:
+  name: country_onboarding_configs
+  schema: public
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - country_code
+        - signup_enabled
+        - postal_code_required
+        - verification_flow
+        - default_currency
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - country_code
+        - signup_enabled
+        - postal_code_required
+        - verification_flow
+        - default_currency
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - country_code
+        - signup_enabled
+        - postal_code_required
+        - verification_flow
+        - default_currency
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - country_code
+        - signup_enabled
+        - postal_code_required
+        - verification_flow
+        - default_currency
+        - created_at
+        - updated_at
+      filter: {}

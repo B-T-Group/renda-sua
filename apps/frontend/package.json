@@ -27,6 +27,7 @@
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
+    "@hookform/resolvers": "^5.7.1",
     "@mui/icons-material": "^7.1.2",
     "@mui/lab": "^7.0.0-beta.14",
     "@mui/material": "^7.1.2",
@@ -48,10 +49,12 @@
     "react": "19.0.0",
     "react-apexcharts": "^1.7.0",
     "react-dom": "19.0.0",
+    "react-hook-form": "^7.84.0",
     "react-i18next": "^15.5.3",
     "react-pdf": "^10.3.0",
     "react-phone-number-input": "^3.4.12",
-    "react-router-dom": "6.29.0"
+    "react-router-dom": "6.29.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/react": "16.1.0"

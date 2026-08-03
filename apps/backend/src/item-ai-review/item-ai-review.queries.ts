@@ -23,6 +23,7 @@ export const ITEM_FOR_AI_REVIEW = `
         validation_errors
         validation_warnings
         quality_score
+        is_ai_cleaned
       }
     }
   }
@@ -33,6 +34,22 @@ export const GET_ITEM_MODERATION_STATUS = `
     items_by_pk(id: $id) {
       id
       moderation_status
+    }
+  }
+`;
+
+export const GET_OPEN_CLEANUP_JOB_FOR_ITEM = `
+  query GetOpenAiImageCleanupJobForAiReview($itemId: uuid!) {
+    ai_image_cleanup_jobs(
+      where: {
+        item_id: { _eq: $itemId }
+        item_variant_id: { _is_null: true }
+        status: { _in: [queued, processing, ready_for_review] }
+      }
+      limit: 1
+    ) {
+      id
+      status
     }
   }
 `;

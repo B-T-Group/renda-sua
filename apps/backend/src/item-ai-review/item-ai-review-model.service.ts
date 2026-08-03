@@ -20,7 +20,8 @@ export class ItemAiReviewModelService {
   constructor(private readonly configService: ConfigService) {}
 
   async reviewItem(
-    item: ItemForAiReview
+    item: ItemForAiReview,
+    opts?: { cleanupAlreadyQueued?: boolean }
   ): Promise<{ result: AiReviewModelResult; modelMeta: Record<string, unknown> }> {
     const apiKey = this.configService.get<string>('openai.apiKey');
     if (!apiKey) {
@@ -29,7 +30,7 @@ export class ItemAiReviewModelService {
     const model =
       this.configService.get<string>('itemAiReview.model')?.trim() || 'gpt-4.1';
     const started = Date.now();
-    const content = await this.buildMultimodalContent(item);
+    const content = await this.buildMultimodalContent(item, opts);
     const data = await this.callWithRetry(apiKey, model, content);
     const raw = data?.choices?.[0]?.message?.content;
     if (!raw) throw new Error('Empty model response');
@@ -97,13 +98,17 @@ export class ItemAiReviewModelService {
     }
   }
 
-  private async buildMultimodalContent(item: ItemForAiReview) {
+  private async buildMultimodalContent(
+    item: ItemForAiReview,
+    opts?: { cleanupAlreadyQueued?: boolean }
+  ) {
     const images = item.item_images ?? [];
     const text = buildAiReviewUserPrompt({
       title: item.name,
       description: item.description ?? '',
       price: item.price,
       currency: item.currency,
+      cleanupAlreadyQueued: !!opts?.cleanupAlreadyQueued,
       images: images.map((img) => ({
         id: img.id,
         width: img.width,
@@ -111,6 +116,7 @@ export class ItemAiReviewModelService {
         validationErrors: img.validation_errors,
         validationWarnings: img.validation_warnings,
         qualityScore: img.quality_score,
+        alreadyCleaned: !!img.is_ai_cleaned,
       })),
     });
     const content: Array<{ type: string; text?: string; image_url?: object }> = [

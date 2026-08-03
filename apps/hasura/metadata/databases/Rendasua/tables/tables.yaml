@@ -43,6 +43,7 @@
 - "!include public_commission_payouts.yaml"
 - "!include public_contract_templates.yaml"
 - "!include public_country_delivery_configs.yaml"
+- "!include public_country_onboarding_configs.yaml"
 - "!include public_delivery_configs.yaml"
 - "!include public_delivery_failure_reasons.yaml"
 - "!include public_delivery_pin_share_events.yaml"

@@ -9,6 +9,7 @@ export function buildAiReviewSystemPrompt(): string {
     'approve — title, description, images, and price are aligned, appropriate, and meet strict marketplace quality standards.',
     'propose — salvageable: suggest improved title and/or description and/or image cleanup.',
     'reject — inappropriate, mismatched product vs text, misleading price, or image quality too poor to fix with cleanup alone.',
+    'Never recommend image cleanup (action=cleanup) for an image marked already_cleaned=true, or when cleanup_already_queued=true for the item.',
     AI_REVIEW_IMAGE_QUALITY_RULES,
     'Do not invent a new price; flag price issues in issues/rubric only.',
     'Return JSON only matching the schema. Be concise in reason and issue messages.',
@@ -21,6 +22,7 @@ export function buildAiReviewUserPrompt(input: {
   description: string;
   price: number;
   currency: string;
+  cleanupAlreadyQueued?: boolean;
   images: Array<{
     id: string;
     width?: number | null;
@@ -28,6 +30,7 @@ export function buildAiReviewUserPrompt(input: {
     validationErrors?: unknown;
     validationWarnings?: unknown;
     qualityScore?: number | null;
+    alreadyCleaned?: boolean;
   }>;
 }): string {
   const imageLines = input.images
@@ -40,7 +43,7 @@ export function buildAiReviewUserPrompt(input: {
         : '[]';
       const dims =
         img.width && img.height ? `${img.width}x${img.height}` : 'unknown';
-      return `Image ${i + 1} id=${img.id} dimensions=${dims} quality=${img.qualityScore ?? 'n/a'} validation_errors=${errs} validation_warnings=${warnings}`;
+      return `Image ${i + 1} id=${img.id} dimensions=${dims} quality=${img.qualityScore ?? 'n/a'} already_cleaned=${img.alreadyCleaned ? 'true' : 'false'} validation_errors=${errs} validation_warnings=${warnings}`;
     })
     .join('\n');
   return [
@@ -48,6 +51,7 @@ export function buildAiReviewUserPrompt(input: {
     `Title: ${input.title}`,
     `Description: ${input.description || '(empty)'}`,
     `Price: ${input.price} ${input.currency}`,
+    `cleanup_already_queued=${input.cleanupAlreadyQueued ? 'true' : 'false'}`,
     'Images (in order; image bytes attached separately):',
     imageLines || '(no images)',
     '',

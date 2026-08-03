@@ -6,6 +6,8 @@ import {
   HttpStatus,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from './user.decorator';
@@ -49,6 +51,7 @@ export class SignupController {
   @Public()
   @Post('signup/start')
   @HttpCode(HttpStatus.CREATED)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({ summary: 'Create pending signup user' })
   @ApiBody({ type: SignupStartDto })
   @ApiResponse({ status: 201, description: 'User created' })

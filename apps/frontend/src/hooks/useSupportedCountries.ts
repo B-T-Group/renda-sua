@@ -8,6 +8,10 @@ export interface SupportedCountry {
   serviceStatus: string;
   deliveryEnabled: boolean;
   supportedPaymentMethods: string[];
+  /** From country_onboarding_configs when available */
+  signupEnabled?: boolean;
+  postalCodeRequired?: boolean;
+  verificationFlow?: string;
 }
 
 interface SupportedCountriesResponse {

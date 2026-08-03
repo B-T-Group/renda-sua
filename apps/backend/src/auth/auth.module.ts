@@ -15,6 +15,9 @@ import { LoginService } from './login.service';
 import { PermissionService } from './permission.service';
 import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
+import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
+import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
+import { UserProvisioningService } from './provisioning/user-provisioning.service';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { SignupService } from './signup.service';
     LoginService,
     PermissionService,
     SignupService,
+    UserProvisioningService,
+    BusinessProvisioningService,
+    ReferralProvisioningService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

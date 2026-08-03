@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { CountryOnboardingService } from './country-onboarding.service';
 import { LocationsController } from './locations.controller';
 import { LocationsService } from './locations.service';
 
@@ -25,7 +26,33 @@ describe('LocationsController', () => {
       {
         upsertMyAgentLocation: jest.fn(),
         getLatestAgentLocation: jest.fn(),
-      } as unknown as LocationsService
+      } as unknown as LocationsService,
+      {
+        getConfigMap: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              'CA',
+              {
+                countryCode: 'CA',
+                signupEnabled: true,
+                postalCodeRequired: true,
+                verificationFlow: 'stripe_connect',
+                defaultCurrency: 'CAD',
+              },
+            ],
+            [
+              'CM',
+              {
+                countryCode: 'CM',
+                signupEnabled: true,
+                postalCodeRequired: false,
+                verificationFlow: 'national_id',
+                defaultCurrency: 'XAF',
+              },
+            ],
+          ])
+        ),
+      } as unknown as CountryOnboardingService
     );
   });
 
@@ -81,6 +108,9 @@ describe('LocationsController', () => {
             serviceStatus: 'coming_soon',
             deliveryEnabled: true,
             supportedPaymentMethods: ['Interac'],
+            signupEnabled: true,
+            postalCodeRequired: true,
+            verificationFlow: 'stripe_connect',
           },
           {
             code: 'CM',
@@ -89,6 +119,9 @@ describe('LocationsController', () => {
             serviceStatus: 'active',
             deliveryEnabled: true,
             supportedPaymentMethods: ['MTN MoMo', 'Orange Money'],
+            signupEnabled: true,
+            postalCodeRequired: false,
+            verificationFlow: 'national_id',
           },
         ],
       });

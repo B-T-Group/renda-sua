@@ -593,6 +593,7 @@ export class AddressesService {
       country: string;
       city: string;
       state: string;
+      postal_code?: string;
       latitude?: number;
       longitude?: number;
     }
@@ -655,7 +656,7 @@ export class AddressesService {
         addressLine1: addressData.address_line_1,
         city: addressData.city,
         state: addressData.state,
-        postalCode: '',
+        postalCode: postalCodeForStorage(addressData.postal_code),
         country: addressData.country,
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
