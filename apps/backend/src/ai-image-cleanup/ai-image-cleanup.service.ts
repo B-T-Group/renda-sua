@@ -17,7 +17,9 @@ import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
+import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
 import { isActivePersona } from '../users/persona.util';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
 import * as Q from './ai-image-cleanup.queries';
@@ -51,7 +53,9 @@ export class AiImageCleanupService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly imageThumbnails: ImageThumbnailsService,
-    private readonly confidence: EnhancementConfidenceService
+    private readonly confidence: EnhancementConfidenceService,
+    private readonly itemAiReview: ItemAiReviewService,
+    private readonly rentalListingAiReview: RentalListingAiReviewService
   ) {}
 
   onModuleInit(): void {
@@ -213,6 +217,7 @@ export class AiImageCleanupService implements OnModuleInit {
         reused_count: classified.reusable.length,
       });
       const completed = await this.loadJob(job.id);
+      await this.maybeResumeModeration(completed);
       return { job: completed, ai_tokens_remaining: balanceAfter };
     }
     const toCharge = classified.toProcess;
@@ -397,6 +402,7 @@ export class AiImageCleanupService implements OnModuleInit {
       await this.tokens.refundTokens(businessId, tokenCost);
       if (jobId) {
         await this.setJobStatus(jobId, 'cancelled');
+        await this.maybeResumeModeration(await this.loadJob(jobId));
       }
     } catch (rollbackError: any) {
       this.logger.error(
@@ -673,6 +679,7 @@ export class AiImageCleanupService implements OnModuleInit {
         updated_at: now,
       },
     });
+    await this.maybeResumeModeration(await this.loadJob(jobId));
     return { success: true };
   }
 
@@ -911,6 +918,64 @@ export class AiImageCleanupService implements OnModuleInit {
       (r) => r.status === 'accepted' && r.applied_at
     ).length;
     await this.notifyProcessed(forNotify, needsReview, autoAppliedCount);
+    await this.maybeResumeModeration(forNotify);
+  }
+
+  /**
+   * When cleanup is no longer open, resume AI moderation that was deferred
+   * (or re-review if it already rejected on cluttered originals).
+   */
+  private async maybeResumeModeration(
+    job: AiImageCleanupJobRow
+  ): Promise<void> {
+    if (['queued', 'processing', 'ready_for_review'].includes(job.status)) {
+      return;
+    }
+    try {
+      await this.resumeItemReviewIfNeeded(job);
+      await this.resumeRentalReviewsIfNeeded(job);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to resume AI review after cleanup ${job.id}: ${error?.message}`
+      );
+    }
+  }
+
+  private async resumeItemReviewIfNeeded(
+    job: AiImageCleanupJobRow
+  ): Promise<void> {
+    if (!job.item_id || job.item_variant_id) return;
+    await this.itemAiReview.resumeReviewAfterCleanup(job.item_id);
+  }
+
+  private async resumeRentalReviewsIfNeeded(
+    job: AiImageCleanupJobRow
+  ): Promise<void> {
+    const rentalItemIds = await this.rentalItemIdsForJob(job);
+    for (const rentalItemId of rentalItemIds) {
+      await this.rentalListingAiReview.resumeReviewsForRentalItem(rentalItemId);
+    }
+  }
+
+  private async rentalItemIdsForJob(
+    job: AiImageCleanupJobRow
+  ): Promise<string[]> {
+    const imageIds = [
+      ...new Set(
+        (job.results ?? [])
+          .map((r) => r.rental_item_image_id)
+          .filter((id): id is string => !!id)
+      ),
+    ];
+    if (!imageIds.length) return [];
+    const data = await this.hasura.executeQuery<{
+      rental_item_images: Array<{ rental_item_id: string }>;
+    }>(Q.GET_RENTAL_ITEM_IDS_FOR_IMAGES, { ids: imageIds });
+    return [
+      ...new Set(
+        (data.rental_item_images ?? []).map((row) => row.rental_item_id)
+      ),
+    ];
   }
 
   private async notifyProcessed(
@@ -1293,6 +1358,7 @@ export class AiImageCleanupService implements OnModuleInit {
         updated_at: new Date().toISOString(),
       },
     });
+    await this.maybeResumeModeration(await this.loadJob(jobId));
   }
 
   private async insertRetryResult(

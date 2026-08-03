@@ -60,14 +60,51 @@ export class RentalListingAiReviewService {
     }
   }
 
+  /** Resume listing moderation after rental image cleanup finishes. */
+  async resumeReviewAfterCleanup(listingId: string): Promise<void> {
+    if (!this.isEnabled()) return;
+    const row = await this.loadModerationRow(listingId);
+    if (!row || row.deleted_at) return;
+    if (await this.hasOpenCleanupForListing(listingId)) {
+      this.logger.debug(
+        `Cleanup still open for listing ${listingId}; skip AI review resume`
+      );
+      return;
+    }
+    await this.resumeByStatus(row);
+  }
+
+  /** Resume all awaiting listings for a rental item after cleanup. */
+  async resumeReviewsForRentalItem(rentalItemId: string): Promise<void> {
+    if (!this.isEnabled()) return;
+    const data = await this.hasura.executeQuery<{
+      rental_location_listings: Array<{
+        id: string;
+        moderation_status: string;
+        ai_review_version: number;
+      }>;
+    }>(Q.GET_LISTINGS_AWAITING_REVIEW_FOR_RENTAL_ITEM, { rentalItemId });
+    for (const listing of data.rental_location_listings ?? []) {
+      await this.resumeReviewAfterCleanup(listing.id);
+    }
+  }
+
   async runReview(
     listingId: string,
     expectedVersion?: number
-  ): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    skipped?: boolean;
+    retryLater?: boolean;
+    error?: string;
+  }> {
     if (!this.isEnabled()) return { success: true, skipped: true };
     try {
-      await this.executeReview(listingId, expectedVersion);
-      return { success: true };
+      const outcome = await this.executeReview(listingId, expectedVersion);
+      if (outcome === 'retry_later') {
+        return { success: false, retryLater: true };
+      }
+      return { success: true, skipped: outcome === 'deferred' };
     } catch (error: any) {
       if (this.isStaleOrConflict(error)) {
         this.logger.warn(
@@ -113,41 +150,29 @@ export class RentalListingAiReviewService {
     return { version: row.ai_review_version };
   }
 
+  /** @returns review outcome for the SQS worker */
   private async executeReview(
     listingId: string,
     expectedVersion?: number
-  ): Promise<void> {
+  ): Promise<'done' | 'deferred' | 'retry_later'> {
     const listing = await this.loadListing(listingId);
     try {
       this.assertReviewable(listing, expectedVersion);
-      const images = listing.rental_item.rental_item_images ?? [];
-      const qualityAssessment = assessAiReviewImageQuality(images);
-      if (qualityAssessment.mustReject) {
-        await this.applyRejectDecision(
-          listing,
-          await this.createRunningReview(listing),
-          buildQualityRejectModelResult(images, qualityAssessment),
-          { provider: 'prefilter', model: 'image_quality' }
+      const cleanupStatus = await this.getOpenCleanupJobStatus(listing);
+      if (cleanupStatus === 'queued' || cleanupStatus === 'processing') {
+        this.logger.log(
+          `Deferring AI review for listing ${listingId}; cleanup still ${cleanupStatus}`
         );
-        return;
+        return 'retry_later';
       }
-      if (this.hasBlockingImageErrors(listing)) {
-        await this.applyRejectDecision(
-          listing,
-          await this.createRunningReview(listing),
-          this.hardBlockResult(listing),
-          { provider: 'prefilter', model: 'validation_errors' }
+      if (cleanupStatus === 'ready_for_review') {
+        this.logger.log(
+          `Deferring AI review for listing ${listingId}; cleanup awaiting merchant review`
         );
-        return;
+        return 'deferred';
       }
-      const reviewId = await this.createRunningReview(listing);
-      const { result, modelMeta } = await this.model.reviewListing(listing);
-      const finalResult = this.applyImageQualityGuard(
-        result,
-        qualityAssessment,
-        images
-      );
-      await this.applyDecision(listing, reviewId, finalResult, modelMeta);
+      await this.runReviewPipeline(listing);
+      return 'done';
     } catch (err: any) {
       // Attach listing name so callers can include it in failure notifications
       if (err && typeof err === 'object') {
@@ -155,6 +180,126 @@ export class RentalListingAiReviewService {
       }
       throw err;
     }
+  }
+
+  private async runReviewPipeline(listing: ListingForAiReview): Promise<void> {
+    const images = listing.rental_item.rental_item_images ?? [];
+    const qualityAssessment = assessAiReviewImageQuality(images);
+    if (qualityAssessment.mustReject) {
+      await this.rejectWithQuality(listing, images, qualityAssessment);
+      return;
+    }
+    if (this.hasBlockingImageErrors(listing)) {
+      await this.applyRejectDecision(
+        listing,
+        await this.createRunningReview(listing),
+        this.hardBlockResult(listing),
+        { provider: 'prefilter', model: 'validation_errors' }
+      );
+      return;
+    }
+    await this.runModelReview(listing, images, qualityAssessment);
+  }
+
+  private async rejectWithQuality(
+    listing: ListingForAiReview,
+    images: ListingForAiReview['rental_item']['rental_item_images'],
+    qualityAssessment: ReturnType<typeof assessAiReviewImageQuality>
+  ): Promise<void> {
+    await this.applyRejectDecision(
+      listing,
+      await this.createRunningReview(listing),
+      buildQualityRejectModelResult(images, qualityAssessment),
+      { provider: 'prefilter', model: 'image_quality' }
+    );
+  }
+
+  private async runModelReview(
+    listing: ListingForAiReview,
+    images: ListingForAiReview['rental_item']['rental_item_images'],
+    qualityAssessment: ReturnType<typeof assessAiReviewImageQuality>
+  ): Promise<void> {
+    const reviewId = await this.createRunningReview(listing);
+    const { result, modelMeta } = await this.model.reviewListing(listing);
+    const finalResult = this.applyImageQualityGuard(
+      result,
+      qualityAssessment,
+      images
+    );
+    await this.applyDecision(listing, reviewId, finalResult, modelMeta);
+  }
+
+  private async resumeByStatus(row: {
+    id: string;
+    moderation_status: string;
+    ai_review_version: number;
+  }): Promise<void> {
+    if (row.moderation_status === 'ai_reviewing') {
+      await this.enqueueExistingReview(row.id, row.ai_review_version);
+      return;
+    }
+    if (row.moderation_status === 'pending') {
+      void this.requestReview(row.id);
+    }
+  }
+
+  private async loadModerationRow(listingId: string): Promise<{
+    id: string;
+    moderation_status: string;
+    ai_review_version: number;
+    deleted_at: string | null;
+  } | null> {
+    const result = await this.hasura.executeQuery<{
+      rental_location_listings_by_pk: {
+        id: string;
+        moderation_status: string;
+        ai_review_version: number;
+        deleted_at: string | null;
+      } | null;
+    }>(Q.GET_LISTING_MODERATION_STATUS, { id: listingId });
+    return result.rental_location_listings_by_pk;
+  }
+
+  private async enqueueExistingReview(
+    listingId: string,
+    reviewVersion: number
+  ): Promise<void> {
+    const enqueued = await this.queue.enqueueListingReview(
+      listingId,
+      reviewVersion
+    );
+    if (!enqueued) {
+      await this.failToPendingIfAiReviewing(
+        listingId,
+        'SQS enqueue failed after cleanup resume',
+        ''
+      );
+    }
+  }
+
+  private async hasOpenCleanupForListing(listingId: string): Promise<boolean> {
+    try {
+      const listing = await this.loadListing(listingId);
+      return (await this.getOpenCleanupJobStatus(listing)) != null;
+    } catch {
+      return false;
+    }
+  }
+
+  private async getOpenCleanupJobStatus(
+    listing: ListingForAiReview
+  ): Promise<string | null> {
+    const imageIds = (listing.rental_item.rental_item_images ?? []).map(
+      (img) => img.id
+    );
+    if (!imageIds.length) return null;
+    const open = await this.hasura.executeQuery<{
+      ai_image_cleanup_results: Array<{
+        id: string;
+        job?: { status: string } | null;
+      }>;
+    }>(Q.GET_OPEN_CLEANUP_FOR_RENTAL_IMAGES, { imageIds });
+    return open.ai_image_cleanup_results?.[0]?.job?.status ?? null;
   }
 
   private assertReviewable(

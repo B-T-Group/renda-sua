@@ -34,6 +34,7 @@ export const GET_ITEM_MODERATION_STATUS = `
     items_by_pk(id: $id) {
       id
       moderation_status
+      ai_review_version
     }
   }
 `;

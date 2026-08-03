@@ -23,8 +23,54 @@ export const LISTING_FOR_AI_REVIEW = `
           validation_errors
           validation_warnings
           quality_score
+          is_ai_cleaned
         }
       }
+    }
+  }
+`;
+
+export const GET_LISTING_MODERATION_STATUS = `
+  query GetListingModerationStatus($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      id
+      moderation_status
+      ai_review_version
+      deleted_at
+    }
+  }
+`;
+
+export const GET_OPEN_CLEANUP_FOR_RENTAL_IMAGES = `
+  query GetOpenCleanupForRentalImages($imageIds: [uuid!]!) {
+    ai_image_cleanup_results(
+      where: {
+        rental_item_image_id: { _in: $imageIds }
+        status: { _in: [queued, processing, ready] }
+        job: { status: { _in: [queued, processing, ready_for_review] } }
+      }
+      limit: 1
+    ) {
+      id
+      job {
+        status
+      }
+    }
+  }
+`;
+
+export const GET_LISTINGS_AWAITING_REVIEW_FOR_RENTAL_ITEM = `
+  query GetListingsAwaitingReviewForRentalItem($rentalItemId: uuid!) {
+    rental_location_listings(
+      where: {
+        rental_item_id: { _eq: $rentalItemId }
+        deleted_at: { _is_null: true }
+        moderation_status: { _in: [ai_reviewing, pending] }
+      }
+    ) {
+      id
+      moderation_status
+      ai_review_version
     }
   }
 `;

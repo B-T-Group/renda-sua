@@ -38,6 +38,7 @@ export interface ListingImageForReview {
   validation_errors?: unknown;
   validation_warnings?: unknown;
   quality_score?: number | null;
+  is_ai_cleaned?: boolean | null;
 }
 
 export interface ListingForAiReview {

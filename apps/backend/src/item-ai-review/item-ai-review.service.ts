@@ -63,7 +63,11 @@ export class ItemAiReviewService {
   /** Move a rejected item back to pending and enqueue AI review when enabled. */
   async resubmitIfRejected(itemId: string): Promise<boolean> {
     const result = await this.hasura.executeQuery<{
-      items_by_pk: { id: string; moderation_status: string } | null;
+      items_by_pk: {
+        id: string;
+        moderation_status: string;
+        ai_review_version: number;
+      } | null;
     }>(Q.GET_ITEM_MODERATION_STATUS, { id: itemId });
     if (result.items_by_pk?.moderation_status !== 'rejected') {
       return false;
@@ -81,14 +85,47 @@ export class ItemAiReviewService {
     return true;
   }
 
+  /**
+   * After AI image cleanup finishes (applied, cancelled, or failed), resume
+   * moderation if the item was waiting on cleaned photos.
+   * Does not auto-resubmit already-rejected items (admin or AI) — only
+   * deferred `ai_reviewing` / still-`pending` queues.
+   */
+  async resumeReviewAfterCleanup(itemId: string): Promise<void> {
+    if (!this.isEnabled()) return;
+    if (await this.isCleanupJobOpen(itemId)) {
+      this.logger.debug(
+        `Cleanup still open for item ${itemId}; skip AI review resume`
+      );
+      return;
+    }
+    const row = await this.loadModerationRow(itemId);
+    if (!row) return;
+    if (row.moderation_status === 'ai_reviewing') {
+      await this.enqueueExistingReview(itemId, row.ai_review_version);
+      return;
+    }
+    if (row.moderation_status === 'pending') {
+      void this.requestReview(itemId);
+    }
+  }
+
   async runReview(
     itemId: string,
     expectedVersion?: number
-  ): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    skipped?: boolean;
+    retryLater?: boolean;
+    error?: string;
+  }> {
     if (!this.isEnabled()) return { success: true, skipped: true };
     try {
-      await this.executeReview(itemId, expectedVersion);
-      return { success: true };
+      const outcome = await this.executeReview(itemId, expectedVersion);
+      if (outcome === 'retry_later') {
+        return { success: false, retryLater: true };
+      }
+      return { success: true, skipped: outcome === 'deferred' };
     } catch (error: any) {
       if (this.isStaleOrConflict(error)) {
         this.logger.warn(
@@ -134,57 +171,121 @@ export class ItemAiReviewService {
     return { version: row.ai_review_version };
   }
 
+  /** @returns review outcome for the SQS worker */
   private async executeReview(
     itemId: string,
     expectedVersion?: number
-  ): Promise<void> {
+  ): Promise<'done' | 'deferred' | 'retry_later'> {
     const item = await this.loadItem(itemId);
     try {
       this.assertReviewable(item, expectedVersion);
-      const qualityAssessment = assessAiReviewImageQuality(item.item_images ?? []);
-      if (qualityAssessment.mustReject) {
-        await this.applyRejectDecision(
-          item,
-          await this.createRunningReview(item),
-          buildQualityRejectModelResult(item.item_images ?? [], qualityAssessment),
-          { provider: 'prefilter', model: 'image_quality' }
+      const cleanupStatus = await this.getOpenCleanupJobStatus(item.id);
+      if (cleanupStatus === 'queued' || cleanupStatus === 'processing') {
+        this.logger.log(
+          `Deferring AI review for item ${itemId}; cleanup still ${cleanupStatus}`
         );
-        return;
+        return 'retry_later';
       }
-      if (this.hasBlockingImageErrors(item)) {
-        await this.applyRejectDecision(
-          item,
-          await this.createRunningReview(item),
-          this.hardBlockResult(item),
-          { provider: 'prefilter', model: 'validation_errors' }
+      if (cleanupStatus === 'ready_for_review') {
+        this.logger.log(
+          `Deferring AI review for item ${itemId}; cleanup awaiting merchant review`
         );
-        return;
+        return 'deferred';
       }
-      const reviewId = await this.createRunningReview(item);
-      const cleanupJobOpen = await this.isCleanupJobOpen(item.id);
-      const { result, modelMeta } = await this.model.reviewItem(item, {
-        cleanupAlreadyQueued: cleanupJobOpen,
-      });
-      const guarded = this.applyImageQualityGuard(
-        result,
-        qualityAssessment,
-        item.item_images ?? []
-      );
-      const finalResult = stripRedundantCleanupRecommendations(guarded, {
-        cleanupJobOpen,
-        cleanedImageIds: new Set(
-          (item.item_images ?? [])
-            .filter((img) => !!img.is_ai_cleaned)
-            .map((img) => img.id)
-        ),
-      });
-      await this.applyDecision(item, reviewId, finalResult, modelMeta);
+      await this.runReviewPipeline(item);
+      return 'done';
     } catch (err: any) {
       // Attach item name so callers can include it in failure notifications
       if (err && typeof err === 'object') {
         err.__itemName = item.name;
       }
       throw err;
+    }
+  }
+
+  private async runReviewPipeline(item: ItemForAiReview): Promise<void> {
+    const images = item.item_images ?? [];
+    const qualityAssessment = assessAiReviewImageQuality(images);
+    if (qualityAssessment.mustReject) {
+      await this.rejectWithQuality(item, images, qualityAssessment);
+      return;
+    }
+    if (this.hasBlockingImageErrors(item)) {
+      await this.applyRejectDecision(
+        item,
+        await this.createRunningReview(item),
+        this.hardBlockResult(item),
+        { provider: 'prefilter', model: 'validation_errors' }
+      );
+      return;
+    }
+    await this.runModelReview(item, images, qualityAssessment);
+  }
+
+  private async rejectWithQuality(
+    item: ItemForAiReview,
+    images: ItemForAiReview['item_images'],
+    qualityAssessment: ReturnType<typeof assessAiReviewImageQuality>
+  ): Promise<void> {
+    await this.applyRejectDecision(
+      item,
+      await this.createRunningReview(item),
+      buildQualityRejectModelResult(images, qualityAssessment),
+      { provider: 'prefilter', model: 'image_quality' }
+    );
+  }
+
+  private async runModelReview(
+    item: ItemForAiReview,
+    images: ItemForAiReview['item_images'],
+    qualityAssessment: ReturnType<typeof assessAiReviewImageQuality>
+  ): Promise<void> {
+    const reviewId = await this.createRunningReview(item);
+    const { result, modelMeta } = await this.model.reviewItem(item, {
+      cleanupAlreadyQueued: false,
+    });
+    const guarded = this.applyImageQualityGuard(
+      result,
+      qualityAssessment,
+      images
+    );
+    const finalResult = stripRedundantCleanupRecommendations(guarded, {
+      cleanupJobOpen: false,
+      cleanedImageIds: new Set(
+        images.filter((img) => !!img.is_ai_cleaned).map((img) => img.id)
+      ),
+    });
+    await this.applyDecision(item, reviewId, finalResult, modelMeta);
+  }
+
+  private async loadModerationRow(
+    itemId: string
+  ): Promise<{
+    id: string;
+    moderation_status: string;
+    ai_review_version: number;
+  } | null> {
+    const result = await this.hasura.executeQuery<{
+      items_by_pk: {
+        id: string;
+        moderation_status: string;
+        ai_review_version: number;
+      } | null;
+    }>(Q.GET_ITEM_MODERATION_STATUS, { id: itemId });
+    return result.items_by_pk;
+  }
+
+  private async enqueueExistingReview(
+    itemId: string,
+    reviewVersion: number
+  ): Promise<void> {
+    const enqueued = await this.queue.enqueueItemReview(itemId, reviewVersion);
+    if (!enqueued) {
+      await this.failToPendingIfAiReviewing(
+        itemId,
+        'SQS enqueue failed after cleanup resume',
+        ''
+      );
     }
   }
 
@@ -226,10 +327,16 @@ export class ItemAiReviewService {
   }
 
   private async isCleanupJobOpen(itemId: string): Promise<boolean> {
+    return (await this.getOpenCleanupJobStatus(itemId)) != null;
+  }
+
+  private async getOpenCleanupJobStatus(
+    itemId: string
+  ): Promise<string | null> {
     const open = await this.hasura.executeQuery<{
-      ai_image_cleanup_jobs: { id: string }[];
+      ai_image_cleanup_jobs: { id: string; status: string }[];
     }>(Q.GET_OPEN_CLEANUP_JOB_FOR_ITEM, { itemId });
-    return (open.ai_image_cleanup_jobs?.length ?? 0) > 0;
+    return open.ai_image_cleanup_jobs?.[0]?.status ?? null;
   }
 
   private hasBlockingImageErrors(item: ItemForAiReview): boolean {

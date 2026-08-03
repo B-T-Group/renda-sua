@@ -244,6 +244,14 @@ export const GET_RENTAL_IMAGE_BY_ID = `
   }
 `;
 
+export const GET_RENTAL_ITEM_IDS_FOR_IMAGES = `
+  query GetRentalItemIdsForImages($ids: [uuid!]!) {
+    rental_item_images(where: { id: { _in: $ids } }) {
+      rental_item_id
+    }
+  }
+`;
+
 export const FIND_ENHANCED_BY_HASH = `
   query FindEnhancedByContentHash($businessId: uuid!, $contentHash: String!) {
     item_images(

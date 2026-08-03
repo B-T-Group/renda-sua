@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Headers,
+  HttpException,
+  HttpStatus,
   Param,
   Post,
   UnauthorizedException,
@@ -36,13 +38,27 @@ export class RentalListingAiReviewInternalController {
   })
   @ApiResponse({ status: 200, description: 'Review attempt finished' })
   @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  @ApiResponse({
+    status: 503,
+    description: 'Deferred — cleanup still processing; SQS should retry',
+  })
   async runAiReview(
     @Param('listingId') listingId: string,
     @Body() body: { reviewVersion?: number },
     @Headers('x-rendasua-internal-key') internalKey?: string
   ): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
     this.assertInternalKey(internalKey);
-    return this.reviewService.runReview(listingId, body?.reviewVersion);
+    const result = await this.reviewService.runReview(
+      listingId,
+      body?.reviewVersion
+    );
+    if (result.retryLater) {
+      throw new HttpException(
+        'AI review deferred; cleanup still processing',
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
+    }
+    return result;
   }
 
   private assertInternalKey(internalKey?: string): void {
