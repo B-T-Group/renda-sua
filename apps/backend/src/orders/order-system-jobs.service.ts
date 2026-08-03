@@ -64,7 +64,8 @@ export class OrderSystemJobsService {
 
   /**
    * Auto-decline: merchant never accepted within accept + grace window.
-   * Releases payment auth / refunds captured Stripe / reserved inventory.
+   * Claims the cancel with a pending-only CAS before any Stripe release so a
+   * concurrent merchant confirm cannot lose its authorization.
    * @returns true when the order was cancelled; false when preconditions no longer match.
    */
   async autoDeclineUnacceptedOrderAsSystem(orderId: string): Promise<boolean> {
@@ -77,9 +78,25 @@ export class OrderSystemJobsService {
     }
 
     const previousStatus = order.current_status;
-    const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
-    await this.markOrderAutoDeclined(orderId, paymentStatus);
+    const claimed = await this.claimAutoDecline(orderId);
+    if (!claimed) {
+      this.logger.warn(
+        `Skipping auto-decline for ${orderId}: lost pending claim race`
+      );
+      return false;
+    }
 
+    await this.finalizeAutoDeclinedOrder(order, orderId, previousStatus);
+    return true;
+  }
+
+  private async finalizeAutoDeclinedOrder(
+    order: Orders,
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
+    await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
     await this.runOrderCancellationSideEffects(
       order,
       orderId,
@@ -87,7 +104,6 @@ export class OrderSystemJobsService {
       'system',
       'Auto-declined: merchant did not accept within the acceptance window'
     );
-
     try {
       await this.notifyClientMerchantUnavailable(order, orderId);
     } catch (error: any) {
@@ -95,36 +111,54 @@ export class OrderSystemJobsService {
         `Auto-decline client notify failed for ${orderId}: ${error?.message}`
       );
     }
-    return true;
   }
 
-  private async markOrderAutoDeclined(
-    orderId: string,
-    paymentStatus: 'cancelled' | 'refunded' | 'paid'
-  ): Promise<void> {
+  /** CAS: cancel only while still pending so confirm cannot be overwritten. */
+  private async claimAutoDecline(orderId: string): Promise<boolean> {
     const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
+    const result = await this.hasuraSystemService.executeMutation(
       `
-      mutation AutoDeclineOrder(
-        $orderId: uuid!
-        $at: timestamptz!
-        $paymentStatus: String!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
+      mutation ClaimAutoDecline($orderId: uuid!, $at: timestamptz!) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: pending } }
+            ]
+          }
           _set: {
             current_status: cancelled
             cancelled_by: "system"
             cancelled_at: $at
             cancellation_reason_id: 19
             cancellation_notes: "The merchant was unavailable to accept your order."
-            payment_status: $paymentStatus
             updated_at: $at
           }
+        ) { affected_rows }
+      }
+    `,
+      { orderId, at }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  private async patchAutoDeclinePaymentStatus(
+    orderId: string,
+    paymentStatus: 'cancelled' | 'refunded' | 'paid'
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation PatchAutoDeclinePayment(
+        $orderId: uuid!
+        $paymentStatus: String!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { payment_status: $paymentStatus, updated_at: "now()" }
         ) { id }
       }
     `,
-      { orderId, at, paymentStatus }
+      { orderId, paymentStatus }
     );
   }
 
@@ -203,9 +237,15 @@ export class OrderSystemJobsService {
     }
 
     const previousStatus = order.current_status;
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    await this.markOrderCancelledBySystem(orderId);
+    const claimed = await this.claimStaleAuthorizedCancel(orderId);
+    if (!claimed) {
+      this.logger.warn(
+        `Skipping stale cancel for ${orderId}: lost unassigned claim race`
+      );
+      return;
+    }
 
+    await this.releaseStripeAuthorizationIfNeeded(order);
     await this.runOrderCancellationSideEffects(
       order,
       orderId,
@@ -213,6 +253,36 @@ export class OrderSystemJobsService {
       'system',
       'Auto-cancelled: no agent claimed within timeout'
     );
+  }
+
+  /** CAS: cancel only while still unassigned ready_for_pickup. */
+  private async claimStaleAuthorizedCancel(orderId: string): Promise<boolean> {
+    const at = new Date().toISOString();
+    const result = await this.hasuraSystemService.executeMutation(
+      `
+      mutation ClaimStaleAuthorizedCancel($orderId: uuid!, $at: timestamptz!) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: ready_for_pickup } }
+              { assigned_agent_id: { _is_null: true } }
+              { payment_status: { _eq: "authorized" } }
+            ]
+          }
+          _set: {
+            current_status: cancelled
+            cancelled_by: "system"
+            cancelled_at: $at
+            payment_status: "cancelled"
+            updated_at: $at
+          }
+        ) { affected_rows }
+      }
+    `,
+      { orderId, at }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   /** Re-check reconciler preconditions immediately before mutating. */
@@ -270,27 +340,6 @@ export class OrderSystemJobsService {
       );
       throw error;
     }
-  }
-
-  private async markOrderCancelledBySystem(orderId: string): Promise<void> {
-    const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation CancelStaleAuthorizedOrder($orderId: uuid!, $at: timestamptz!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            current_status: cancelled
-            cancelled_by: "system"
-            cancelled_at: $at
-            payment_status: "cancelled"
-            updated_at: $at
-          }
-        ) { id }
-      }
-    `,
-      { orderId, at }
-    );
   }
 
   private async markPaymentFailed(
