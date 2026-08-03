@@ -14,6 +14,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { SUPPORT_EMAIL, supportMailto } from '../../constants/support';
 import { useApiClient } from '../../hooks/useApiClient';
 import {
   useBusinessVerification,
@@ -94,17 +95,33 @@ export const BusinessVerificationBanner: React.FC = () => {
   }
 
   if (status.lifecycle_status === 'suspended') {
+    const mailto = supportMailto(
+      t(
+        'business.lifecycle.suspendedEmailSubject',
+        'Store suspension appeal'
+      ),
+      t(
+        'business.lifecycle.suspendedEmailBody',
+        'Hello,\n\nMy store appears to be suspended. Please review my account.\n\nThank you.'
+      )
+    );
     return (
       <Alert severity="error" sx={{ mb: 3 }}>
         <AlertTitle>
           {t('business.lifecycle.suspendedTitle', 'Store suspended')}
         </AlertTitle>
-        <Typography variant="body2">
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
           {t(
             'business.lifecycle.suspendedNotice',
-            'Your store is hidden and cannot accept orders. Contact support if you believe this is a mistake.'
+            'Your store is hidden and cannot accept orders. Email {{email}} if you believe this is a mistake.',
+            { email: SUPPORT_EMAIL }
           )}
         </Typography>
+        <Button variant="contained" color="error" href={mailto} component="a">
+          {t('business.lifecycle.emailSupport', 'Email {{email}}', {
+            email: SUPPORT_EMAIL,
+          })}
+        </Button>
       </Alert>
     );
   }
