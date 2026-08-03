@@ -27,7 +27,17 @@ export type VerificationNextAction =
   | 'verify_mobile_payment_phone'
   | 'complete';
 
+const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
+  new Set([
+    'sign_agreement',
+    'setup_stripe_connect',
+    'upload_id',
+    'verify_mobile_payment_phone',
+    'publish_catalog',
+  ]);
+
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
+
 @Injectable()
 export class BusinessVerificationService {
   constructor(
@@ -199,6 +209,7 @@ export class BusinessVerificationService {
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, identity, mobilePaymentPhone },
       nextAction,
+      requiresMerchantAction: this.requiresMerchantAction(nextAction),
       paymentRail: 'mobile_money' as const,
     };
   }
@@ -225,8 +236,13 @@ export class BusinessVerificationService {
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, stripeConnect, catalog },
       nextAction,
+      requiresMerchantAction: this.requiresMerchantAction(nextAction),
       paymentRail: 'stripe' as const,
     };
+  }
+
+  private requiresMerchantAction(nextAction: VerificationNextAction): boolean {
+    return MERCHANT_ACTION_NEXT_ACTIONS.has(nextAction);
   }
 
   private async getStripeConnectStep(userId: string) {

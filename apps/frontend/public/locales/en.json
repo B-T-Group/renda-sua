@@ -1701,6 +1701,26 @@
       "referralCodeHelp": "Enter the code of the Rendasua agent helping you get started.",
       "invalidCodeLength": "Agent referral code must be 6 characters."
     },
+    "setup": {
+      "title": "Set up your store",
+      "subtitle": "Complete these steps to go live and accept orders. Operational tools like orders appear after setup.",
+      "illustrationLabel": "Setup step",
+      "stepAgreement": "Sign merchant agreement",
+      "stepAgreementDesc": "Accept the partnership terms to sell on Rendasua.",
+      "ctaAgreement": "Sign agreement",
+      "stepPayouts": "Connect payouts",
+      "stepPayoutsDesc": "Link Stripe so you can receive customer payments.",
+      "stepIdentity": "Upload identification",
+      "stepIdentityDesc": "Upload a national ID, passport, or driver's license.",
+      "ctaIdentity": "Upload ID",
+      "stepMobileMoney": "Verify mobile money number",
+      "stepMobileMoneyDesc": "Add and verify a payout number for your locations.",
+      "stepCatalog": "Add your first product",
+      "stepCatalogDesc": "Publish an approved product or rental to open your storefront.",
+      "ctaCatalog": "Add product",
+      "stepPreview": "Preview your store",
+      "stepPreviewDesc": "See how customers will discover your products."
+    },
     "verification": {
       "noticeTitle": "Account verification required",
       "notice": "Your business account must be verified before your items are visible to customers. Complete the steps below.",

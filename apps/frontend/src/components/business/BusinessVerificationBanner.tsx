@@ -19,6 +19,8 @@ import {
   useBusinessVerification,
   type BusinessVerificationStatus,
 } from '../../hooks/useBusinessVerification';
+import { firstItemOnboardingPath } from '../../utils/businessSetup';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
 
 function needsMobilePaymentPhone(status: BusinessVerificationStatus): boolean {
@@ -32,8 +34,11 @@ export const BusinessVerificationBanner: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const apiClient = useApiClient();
+  const { profile } = useUserProfileContext();
   const { status, loading, refresh } = useBusinessVerification();
   const [refreshing, setRefreshing] = useState(false);
+  const mainInterest = profile?.business?.main_interest ?? 'sell_items';
+  const catalogPath = firstItemOnboardingPath(mainInterest);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -257,11 +262,12 @@ export const BusinessVerificationBanner: React.FC = () => {
             </Button>
           ) : null}
           {status.nextAction === 'publish_catalog' &&
-          !status.steps.catalog?.hasPendingItem ? (
+          !status.steps.catalog?.hasPendingItem &&
+          !status.steps.catalog?.hasPendingRental ? (
             <Button
               variant="contained"
               color="warning"
-              onClick={() => navigate('/business/items')}
+              onClick={() => navigate(catalogPath)}
             >
               {t('business.verification.addProduct', 'Add a product')}
             </Button>
@@ -281,7 +287,8 @@ export const BusinessVerificationBanner: React.FC = () => {
           </Box>
         ) : null}
         {status.nextAction === 'publish_catalog' &&
-        status.steps.catalog?.hasPendingItem ? (
+        (status.steps.catalog?.hasPendingItem ||
+          status.steps.catalog?.hasPendingRental) ? (
           <Typography variant="body2" sx={{ mt: 2 }}>
             {t(
               'business.verification.catalogPendingNotice',

@@ -21,7 +21,7 @@ import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessExcitementStats } from '../business/BusinessExcitementStats';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
 import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
-import { BusinessGetReadyChecklist } from '../business/BusinessGetReadyChecklist';
+import { BusinessSetupHome } from '../business/BusinessSetupHome';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
   BusinessDashboardModule,
@@ -30,7 +30,9 @@ import BusinessDashboardSection from '../business/BusinessDashboardSection';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
+import { isSetupMode } from '../../utils/businessSetup';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
@@ -49,11 +51,32 @@ const BusinessDashboard: React.FC = () => {
     loading: aggregatesLoading,
     error: aggregatesError,
   } = useDashboardAggregates(profile?.business?.id);
-  const { status: verificationStatus } = useBusinessVerification(!!profile?.business?.id);
+  const apiClient = useApiClient();
+  const {
+    status: verificationStatus,
+    loading: verificationLoading,
+    refresh: refreshVerification,
+  } = useBusinessVerification(!!profile?.business?.id);
+  const setupMode = isSetupMode(verificationStatus);
+  // Avoid flashing operational modules before verification status resolves.
+  const showOperationalModules = !verificationLoading && !setupMode;
+
+  const handleSetupRefresh = useCallback(async () => {
+    try {
+      await apiClient.post('/business-contracts/refresh');
+    } catch {
+      // Status refresh still useful if contract refresh fails.
+    }
+    await refreshVerification();
+  }, [apiClient, refreshVerification]);
 
   const [cleanupPendingCount, setCleanupPendingCount] = useState(0);
-  const [cleanupPendingJobId, setCleanupPendingJobId] = useState<string | null>(null);
-  const [cleanupPendingItemName, setCleanupPendingItemName] = useState<string | undefined>();
+  const [cleanupPendingJobId, setCleanupPendingJobId] = useState<string | null>(
+    null
+  );
+  const [cleanupPendingItemName, setCleanupPendingItemName] = useState<
+    string | undefined
+  >();
 
   const loadCleanupPending = useCallback(async () => {
     try {
@@ -84,8 +107,7 @@ const BusinessDashboard: React.FC = () => {
     void fetchPendingTransfers();
   }, [fetchPendingTransfers, profile?.business?.id]);
 
-  const mainInterest =
-    profile?.business?.main_interest ?? 'sell_items';
+  const mainInterest = profile?.business?.main_interest ?? 'sell_items';
   const isRentalFocused = mainInterest === 'rent_items';
   const isLoading = aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
@@ -101,9 +123,15 @@ const BusinessDashboard: React.FC = () => {
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
   const showFirstSaleCta =
-    !isLoading && mainInterest === 'sell_items' && itemCount === 0;
+    showOperationalModules &&
+    !isLoading &&
+    mainInterest === 'sell_items' &&
+    itemCount === 0;
   const showFirstRentalCta =
-    !isLoading && mainInterest === 'rent_items' && rentalItemCount === 0;
+    showOperationalModules &&
+    !isLoading &&
+    mainInterest === 'rent_items' &&
+    rentalItemCount === 0;
 
   const renderModules = (modules: BusinessDashboardModule[]) =>
     modules.map((mod) => (
@@ -144,38 +172,56 @@ const BusinessDashboard: React.FC = () => {
             canAcceptOrders={verificationStatus?.can_accept_orders}
             isStorefrontVisible={verificationStatus?.is_storefront_visible}
           />
-          {hasAdminAccess && (
-            <StatusBadge type="admin" />
-          )}
+          {hasAdminAccess && <StatusBadge type="admin" />}
         </Box>
       </Box>
 
-      <BusinessAccountTypeLink />
+      {showOperationalModules ? <BusinessAccountTypeLink /> : null}
 
-      <BusinessExcitementStats
-        clientCount={
-          aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
-        }
-        productViews={
-          aggregatesError ? null : (aggregates?.totalProductViews ?? null)
-        }
-        productViewsLast7d={
-          aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
-        }
-        loading={isLoading}
-        onClientsClick={() => navigate('/business/client-cities')}
-      />
+      {showOperationalModules ? (
+        <BusinessExcitementStats
+          clientCount={
+            aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
+          }
+          productViews={
+            aggregatesError ? null : (aggregates?.totalProductViews ?? null)
+          }
+          productViewsLast7d={
+            aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
+          }
+          loading={isLoading}
+          onClientsClick={() => navigate('/business/client-cities')}
+        />
+      ) : null}
 
-      <BusinessTopViewedProducts
-        products={aggregatesError ? [] : (aggregates?.topViewedProducts ?? [])}
-        loading={isLoading}
-        onProductClick={(product) => {
-          if (!product.itemId) return;
-          navigate(`/business/items/${product.itemId}`);
-        }}
-      />
+      {showOperationalModules ? (
+        <BusinessTopViewedProducts
+          products={
+            aggregatesError ? [] : (aggregates?.topViewedProducts ?? [])
+          }
+          loading={isLoading}
+          onProductClick={(product) => {
+            if (!product.itemId) return;
+            navigate(`/business/items/${product.itemId}`);
+          }}
+        />
+      ) : null}
 
-      <BusinessVerificationBanner />
+      {setupMode && verificationStatus ? (
+        <BusinessSetupHome
+          status={verificationStatus}
+          mainInterest={mainInterest}
+          businessId={profile.business.id}
+          hasAnyItem={
+            mainInterest === 'rent_items'
+              ? rentalItemCount > 0
+              : itemCount > 0
+          }
+          onRefresh={handleSetupRefresh}
+        />
+      ) : !verificationLoading ? (
+        <BusinessVerificationBanner />
+      ) : null}
 
       <LocationTransferPendingCard
         pendingCount={incomingTransfers.length}
@@ -199,15 +245,7 @@ const BusinessDashboard: React.FC = () => {
         }}
       />
 
-      <BusinessGetReadyChecklist
-        status={verificationStatus}
-        mainInterest={mainInterest}
-        itemCount={itemCount}
-        rentalItemCount={rentalItemCount}
-        businessId={profile.business.id}
-      />
-
-      {accounts.length > 0 && (
+      {showOperationalModules && accounts.length > 0 ? (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
             {t('accounts.accountInformation')}
@@ -222,7 +260,7 @@ const BusinessDashboard: React.FC = () => {
               />
             ))}
           </Box>
-          {hasMoreAccounts && (
+          {hasMoreAccounts ? (
             <Button
               variant="outlined"
               size="small"
@@ -233,58 +271,76 @@ const BusinessDashboard: React.FC = () => {
                 count: accounts.length,
               })}
             </Button>
-          )}
+          ) : null}
         </Box>
-      )}
+      ) : null}
 
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-        {t(
-          'business.dashboard.subtitleSimplified',
-          'Manage orders, reconcile cash payments, and resolve delivery issues. Use catalog tools for your products and locations.'
-        )}
-      </Typography>
+      {showOperationalModules ? (
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+          {t(
+            'business.dashboard.subtitleSimplified',
+            'Manage orders, reconcile cash payments, and resolve delivery issues. Use catalog tools for your products and locations.'
+          )}
+        </Typography>
+      ) : null}
 
-      {showFirstSaleCta && <BusinessDashboardFirstItemCta variant="sale" />}
-      {showFirstRentalCta && (
+      {showFirstSaleCta ? (
+        <BusinessDashboardFirstItemCta variant="sale" />
+      ) : null}
+      {showFirstRentalCta ? (
         <BusinessDashboardFirstItemCta variant="rental" />
-      )}
+      ) : null}
 
       <AddressAlert />
 
-      {aggregatesError && (
+      {aggregatesError ? (
         <Alert severity="error" sx={{ mb: 2 }}>
           {aggregatesError}
         </Alert>
-      )}
+      ) : null}
 
-      <BusinessDashboardSection
-        title={t(
-          'business.dashboard.sections.ordersAndDelivery',
-          'Orders & delivery'
-        )}
-        subtitle={t(
-          'business.dashboard.sections.ordersPrimaryHint',
-          'Your day-to-day order workflows.'
-        )}
-      >
-        {renderModules([...primaryOrderModules, moreHubModule])}
-      </BusinessDashboardSection>
+      {showOperationalModules ? (
+        <BusinessDashboardSection
+          title={t(
+            'business.dashboard.sections.ordersAndDelivery',
+            'Orders & delivery'
+          )}
+          subtitle={t(
+            'business.dashboard.sections.ordersPrimaryHint',
+            'Your day-to-day order workflows.'
+          )}
+        >
+          {renderModules([...primaryOrderModules, moreHubModule])}
+        </BusinessDashboardSection>
+      ) : null}
 
-      <BusinessDashboardSection
-        title={t(
-          'business.dashboard.sections.catalog',
-          'Catalog & locations'
-        )}
-        subtitle={t(
-          'business.dashboard.sections.catalogPrimaryHint',
-          'Products and where you sell from.'
-        )}
-      >
-        {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
-        <BusinessPreviewStoreCta businessId={profile.business.id} />
-      </BusinessDashboardSection>
+      {showOperationalModules ? (
+        <BusinessDashboardSection
+          title={t(
+            'business.dashboard.sections.catalog',
+            'Catalog & locations'
+          )}
+          subtitle={t(
+            'business.dashboard.sections.catalogPrimaryHint',
+            'Products and where you sell from.'
+          )}
+        >
+          {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
+          <BusinessPreviewStoreCta businessId={profile.business.id} />
+        </BusinessDashboardSection>
+      ) : null}
 
-      {hasAdminAccess && (
+      {setupMode &&
+      (verificationStatus?.steps.catalog?.hasApprovedItem ||
+        verificationStatus?.steps.catalog?.hasPendingItem ||
+        verificationStatus?.steps.catalog?.hasApprovedRental ||
+        verificationStatus?.steps.catalog?.hasPendingRental) ? (
+        <Box sx={{ mb: 2 }}>
+          <BusinessPreviewStoreCta businessId={profile.business.id} />
+        </Box>
+      ) : null}
+
+      {hasAdminAccess ? (
         <BusinessDashboardSection
           title={t('business.dashboard.adminManagement')}
           subtitle={t(
@@ -294,7 +350,7 @@ const BusinessDashboard: React.FC = () => {
         >
           {renderModules([adminHubModule])}
         </BusinessDashboardSection>
-      )}
+      ) : null}
     </Container>
   );
 };

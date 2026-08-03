@@ -1444,6 +1444,26 @@
       "referralCodeHelp": "Entrez le code de l'agent Rendasua qui vous accompagne pour démarrer.",
       "invalidCodeLength": "Le code agent doit comporter 6 caractères."
     },
+    "setup": {
+      "title": "Configurez votre boutique",
+      "subtitle": "Complétez ces étapes pour être en ligne et accepter des commandes. Les outils opérationnels comme les commandes apparaissent après la configuration.",
+      "illustrationLabel": "Étape de configuration",
+      "stepAgreement": "Signer le contrat marchand",
+      "stepAgreementDesc": "Acceptez les conditions de partenariat pour vendre sur Rendasua.",
+      "ctaAgreement": "Signer le contrat",
+      "stepPayouts": "Connecter les paiements",
+      "stepPayoutsDesc": "Liez Stripe pour recevoir les paiements des clients.",
+      "stepIdentity": "Téléverser une pièce d'identité",
+      "stepIdentityDesc": "Téléversez une carte d'identité, un passeport ou un permis de conduire.",
+      "ctaIdentity": "Téléverser l'ID",
+      "stepMobileMoney": "Vérifier le numéro Mobile Money",
+      "stepMobileMoneyDesc": "Ajoutez et vérifiez un numéro de paiement pour vos emplacements.",
+      "stepCatalog": "Ajoutez votre premier produit",
+      "stepCatalogDesc": "Publiez un produit ou une location approuvé pour ouvrir votre vitrine.",
+      "ctaCatalog": "Ajouter un produit",
+      "stepPreview": "Prévisualiser votre boutique",
+      "stepPreviewDesc": "Voyez comment les clients découvriront vos produits."
+    },
     "verification": {
       "noticeTitle": "Vérification du compte requise",
       "notice": "Votre compte entreprise doit être vérifié avant que vos articles soient visibles par les clients. Complétez les étapes ci-dessous.",

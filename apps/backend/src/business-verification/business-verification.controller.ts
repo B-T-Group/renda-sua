@@ -37,7 +37,48 @@ export class BusinessVerificationController {
 
   @Get('status')
   @ApiOperation({ summary: 'Get business account verification status' })
-  @ApiResponse({ status: 200, description: 'Verification status' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Verification status including nextAction, steps, lifecycle flags, and requiresMerchantAction (true when the merchant still has a setup step to complete)',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            is_verified: { type: 'boolean' },
+            nextAction: {
+              type: 'string',
+              enum: [
+                'sign_agreement',
+                'upload_id',
+                'setup_stripe_connect',
+                'publish_catalog',
+                'pending_review',
+                'verify_mobile_payment_phone',
+                'complete',
+              ],
+            },
+            requiresMerchantAction: {
+              type: 'boolean',
+              description:
+                'True when nextAction is a merchant setup step (agreement, payouts/ID, phone, or catalog)',
+            },
+            paymentRail: {
+              type: 'string',
+              enum: ['stripe', 'mobile_money'],
+            },
+            lifecycle_status: { type: 'string' },
+            is_storefront_visible: { type: 'boolean' },
+            can_accept_orders: { type: 'boolean' },
+            steps: { type: 'object' },
+          },
+        },
+      },
+    },
+  })
   async getStatus() {
     const data = await this.businessVerificationService.getStatus();
     return { success: true, data };

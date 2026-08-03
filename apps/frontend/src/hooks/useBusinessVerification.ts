@@ -42,6 +42,8 @@ export interface BusinessVerificationStatus {
   can_accept_orders?: boolean;
   accountFullName: string;
   nextAction: VerificationNextAction;
+  /** True when nextAction is a merchant setup step (agreement, payouts/ID, phone, or catalog). */
+  requiresMerchantAction?: boolean;
   paymentRail?: 'stripe' | 'mobile_money';
   contract?: MerchantContractStatus;
   steps: {
