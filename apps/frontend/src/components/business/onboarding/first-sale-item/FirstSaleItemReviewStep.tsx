@@ -34,6 +34,8 @@ export interface ReviewFormValues {
 export interface FirstSaleItemReviewStepProps {
   imagePreviewUrls: string[];
   merchantHint: string;
+  /** Price captured on the description step — preferred over AI suggestion. */
+  merchantPrice?: string;
   suggestions: ImageItemSuggestions | null;
   /** Prefer previously edited values when returning from publish. */
   initialValues?: ReviewFormValues | null;
@@ -43,6 +45,7 @@ export interface FirstSaleItemReviewStepProps {
 const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
   imagePreviewUrls,
   merchantHint,
+  merchantPrice = '',
   suggestions,
   initialValues = null,
   onContinue,
@@ -79,10 +82,12 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     setCategoryName(suggestions?.categoryName?.trim() || '');
     setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
     setBrandName(suggestions?.brandName?.trim() || '');
-    if (suggestions?.price != null) {
+    if (merchantPrice.trim()) {
+      setPrice(merchantPrice.trim());
+    } else if (suggestions?.price != null) {
       setPrice(String(suggestions.price));
     }
-  }, [filled, initialValues, merchantHint, suggestions]);
+  }, [filled, initialValues, merchantHint, merchantPrice, suggestions]);
 
   const currency =
     initialValues?.currency ||

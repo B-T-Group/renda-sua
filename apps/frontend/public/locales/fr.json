@@ -1736,19 +1736,25 @@
         },
         "description": {
           "title": "Qu’avez-vous photographié ?",
-          "body": "Une courte description nous aide à remplir la fiche. Vous pourrez tout modifier ensuite.",
-          "required": "Ajoutez une courte description de ce que vous avez photographié"
+          "body": "Ajoutez un court nom et le prix de vente. Nous remplissons le reste — il ne reste qu’à vérifier.",
+          "required": "Ajoutez une courte description de ce que vous avez photographié",
+          "productLabel": "Produit",
+          "priceHint": "C’est le prix que verront les clients. Vous pourrez encore le modifier ensuite."
         },
         "processing": {
           "title": "Préparation de votre fiche",
-          "body": "Cela prend généralement un moment. Laissez cet écran ouvert.",
+          "body": "Nous gérons l’envoi, les miniatures et les détails IA pour vous — laissez cet écran ouvert.",
           "doneBody": "Prêt — vérifiez les détails que nous avons remplis.",
           "timeoutBody": "Certaines étapes ont pris trop de temps. Vous pouvez continuer et finaliser à l’écran suivant.",
+          "checklistTitle": "Ce que nous faisons pour vous",
           "upload": "Téléversement des photos",
+          "thumbnails": "Création des miniatures",
           "draft": "Création du brouillon produit",
+          "optimize": "Optimisation des images pour le catalogue",
           "cleanup": "Envoi des photos pour nettoyage IA",
           "cleanupQueued": "En file d’attente",
-          "analyze": "Analyse des photos et extraction des détails",
+          "analyze": "Analyse des photos avec l’IA",
+          "details": "Extraction du titre, de la catégorie et du prix",
           "continue": "Continuer vers la vérification",
           "timeoutContinue": "Continuer quand même"
         },

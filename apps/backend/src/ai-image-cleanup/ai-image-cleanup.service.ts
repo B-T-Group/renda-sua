@@ -1020,15 +1020,44 @@ export class AiImageCleanupService implements OnModuleInit {
   }
 
   private async assertNoOpenJobForItem(itemId: string): Promise<void> {
-    const data = await this.hasura.executeQuery<{
-      ai_image_cleanup_jobs: { id: string }[];
-    }>(Q.GET_OPEN_JOB_FOR_ITEM, { itemId });
-    if (data.ai_image_cleanup_jobs?.length) {
+    const open = await this.findOpenJobForItem(itemId);
+    if (open) {
       throw new HttpException(
         'An AI cleanup job is already in progress for this item',
         HttpStatus.CONFLICT
       );
     }
+  }
+
+  /** Public check used by AI proposal UI to hide cleanup CTA when a job is open. */
+  async getOpenJobForItem(
+    itemId: string
+  ): Promise<{ open: boolean; jobId: string | null; status: string | null }> {
+    const { businessId } = await this.requireBusinessContext();
+    const data = await this.hasura.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(
+      `query($id: uuid!) { items_by_pk(id: $id) { id business_id } }`,
+      { id: itemId }
+    );
+    if (!data.items_by_pk || data.items_by_pk.business_id !== businessId) {
+      throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
+    }
+    const open = await this.findOpenJobForItem(itemId);
+    return {
+      open: !!open,
+      jobId: open?.id ?? null,
+      status: open?.status ?? null,
+    };
+  }
+
+  private async findOpenJobForItem(
+    itemId: string
+  ): Promise<{ id: string; status: string } | null> {
+    const data = await this.hasura.executeQuery<{
+      ai_image_cleanup_jobs: { id: string; status: string }[];
+    }>(Q.GET_OPEN_JOB_FOR_ITEM, { itemId });
+    return data.ai_image_cleanup_jobs?.[0] ?? null;
   }
 
   private async assertNoOpenJobForVariant(variantId: string): Promise<void> {

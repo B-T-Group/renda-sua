@@ -11,17 +11,26 @@ const PLACEHOLDERS = [
 
 export interface FirstSaleItemDescriptionStepProps {
   hint: string;
+  price: string;
+  currency: string;
   onChange: (hint: string) => void;
+  onPriceChange: (price: string) => void;
   onContinue: () => void;
+}
+
+function isValidPrice(price: string): boolean {
+  const n = Number.parseFloat(price.replace(',', '.'));
+  return price.trim().length > 0 && !Number.isNaN(n) && n > 0;
 }
 
 const FirstSaleItemDescriptionStep: React.FC<
   FirstSaleItemDescriptionStepProps
-> = ({ hint, onChange, onContinue }) => {
+> = ({ hint, price, currency, onChange, onPriceChange, onContinue }) => {
   const { t } = useTranslation();
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [phKey, phDefault] = PLACEHOLDERS[placeholderIndex];
-  const canContinue = hint.trim().length > 0;
+  const priceOk = isValidPrice(price);
+  const canContinue = hint.trim().length > 0 && priceOk;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -41,7 +50,7 @@ const FirstSaleItemDescriptionStep: React.FC<
       <Typography variant="body2" color="text.secondary">
         {t(
           'business.onboarding.firstSale.description.body',
-          'A short description helps us fill the listing. You can edit everything on the next screens.'
+          'Add a short name and the selling price. We’ll fill the rest — you only review next.'
         )}
       </Typography>
       <TextField
@@ -52,9 +61,38 @@ const FirstSaleItemDescriptionStep: React.FC<
         onChange={(e) => onChange(e.target.value)}
         placeholder={t(phKey, phDefault)}
         label={t(
-          'business.onboarding.firstSale.description.title',
-          'What did you photograph?'
+          'business.onboarding.firstSale.description.productLabel',
+          'Product'
         )}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && canContinue) onContinue();
+        }}
+      />
+      <TextField
+        fullWidth
+        required
+        value={price}
+        onChange={(e) => onPriceChange(e.target.value)}
+        label={t('business.onboarding.firstSale.create.price', 'Price')}
+        placeholder={t(
+          'business.onboarding.firstSale.create.priceHelper',
+          'e.g. 5000'
+        )}
+        type="number"
+        inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
+        InputProps={{ endAdornment: currency }}
+        error={price.trim().length > 0 && !priceOk}
+        helperText={
+          price.trim().length > 0 && !priceOk
+            ? t(
+                'business.onboarding.firstSale.create.priceInvalid',
+                'Must be a positive number'
+              )
+            : t(
+                'business.onboarding.firstSale.description.priceHint',
+                'This is the price customers will see. You can still edit it later.'
+              )
+        }
         onKeyDown={(e) => {
           if (e.key === 'Enter' && canContinue) onContinue();
         }}

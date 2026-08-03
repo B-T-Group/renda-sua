@@ -37,6 +37,18 @@ export class AiImageCleanupController {
     return { success: true, data };
   }
 
+  @Get('items/:itemId/ai-image-cleanup/open')
+  @ApiOperation({
+    summary:
+      'Check whether an AI cleanup job is already queued/processing/ready for this item',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Open-job status' })
+  async getOpenJob(@Param('itemId') itemId: string) {
+    const data = await this.cleanupService.getOpenJobForItem(itemId);
+    return { success: true, data };
+  }
+
   @Get('ai-image-cleanup/pending')
   @ApiOperation({
     summary:

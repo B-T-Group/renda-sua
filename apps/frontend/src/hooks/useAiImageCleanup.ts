@@ -71,6 +71,23 @@ export function useAiImageCleanup() {
     [apiClient]
   );
 
+  const getOpenForItem = useCallback(
+    async (
+      itemId: string
+    ): Promise<{ open: boolean; jobId: string | null; status: string | null }> => {
+      const res = await apiClient.get<{
+        success: boolean;
+        data?: { open: boolean; jobId: string | null; status: string | null };
+      }>(
+        `/business-items/items/${encodeURIComponent(itemId)}/ai-image-cleanup/open`
+      );
+      return (
+        res.data?.data ?? { open: false, jobId: null, status: null }
+      );
+    },
+    [apiClient]
+  );
+
   const requestVariantCleanup = useCallback(
     async (variantId: string, imageIds?: string[]) => {
       const res = await apiClient.post<{
@@ -215,6 +232,7 @@ export function useAiImageCleanup() {
   return {
     requestCleanup,
     requestVariantCleanup,
+    getOpenForItem,
     getPending,
     getActivity,
     getPreference,

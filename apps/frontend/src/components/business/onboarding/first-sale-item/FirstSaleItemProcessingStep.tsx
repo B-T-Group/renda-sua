@@ -25,6 +25,8 @@ import { useImageValidation } from '../../../../hooks/useImageValidation';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import {
   PROCESSING_TIMEOUTS_MS,
+  PACED_STAGE_MS,
+  delay,
   initialProcessingStages,
   withTimeout,
   type ProcessingStageKey,
@@ -61,10 +63,20 @@ function stageLabel(
         'business.onboarding.firstSale.processing.upload',
         'Uploading photos'
       );
+    case 'thumbnails':
+      return t(
+        'business.onboarding.firstSale.processing.thumbnails',
+        'Creating thumbnails'
+      );
     case 'draft':
       return t(
         'business.onboarding.firstSale.processing.draft',
         'Creating product draft'
+      );
+    case 'optimize':
+      return t(
+        'business.onboarding.firstSale.processing.optimize',
+        'Optimizing images for catalog'
       );
     case 'cleanup':
       return t(
@@ -74,7 +86,12 @@ function stageLabel(
     case 'analyze':
       return t(
         'business.onboarding.firstSale.processing.analyze',
-        'Analyzing photos & extracting details'
+        'Analyzing photos with AI'
+      );
+    case 'details':
+      return t(
+        'business.onboarding.firstSale.processing.details',
+        'Extracting title, category & price'
       );
     default:
       return key;
@@ -232,6 +249,11 @@ const FirstSaleItemProcessingStep: React.FC<
       imageIdsRef.current = uploadedIds;
       patchStage('upload', { status: 'done' });
 
+      patchStage('thumbnails', { status: 'active' });
+      await delay(PACED_STAGE_MS.thumbnails ?? 1100);
+      if (runIdRef.current !== runId) return;
+      patchStage('thumbnails', { status: 'done' });
+
       patchStage('draft', { status: 'active' });
       let itemId = itemIdRef.current;
       if (!itemId) {
@@ -258,6 +280,11 @@ const FirstSaleItemProcessingStep: React.FC<
       }
       patchStage('draft', { status: 'done' });
 
+      patchStage('optimize', { status: 'active' });
+      await delay(PACED_STAGE_MS.optimize ?? 900);
+      if (runIdRef.current !== runId) return;
+      patchStage('optimize', { status: 'done' });
+
       if (asyncCleanupRequested && itemId) {
         patchStage('cleanup', { status: 'active' });
         try {
@@ -282,6 +309,7 @@ const FirstSaleItemProcessingStep: React.FC<
       }
 
       patchStage('analyze', { status: 'active' });
+      let analyzeOk = false;
       try {
         const data = await withTimeout(
           fetchSuggestions(uploadedIds),
@@ -291,11 +319,21 @@ const FirstSaleItemProcessingStep: React.FC<
         if (runIdRef.current !== runId) return;
         suggestionsRef.current = data;
         patchStage('analyze', { status: 'done' });
+        analyzeOk = true;
       } catch (e: any) {
         patchStage('analyze', {
           status: 'error',
           detail: e?.message || 'Analyze failed',
         });
+      }
+
+      if (analyzeOk) {
+        patchStage('details', { status: 'active' });
+        await delay(PACED_STAGE_MS.details ?? 800);
+        if (runIdRef.current !== runId) return;
+        patchStage('details', { status: 'done' });
+      } else {
+        patchStage('details', { status: 'skipped' });
       }
 
       if (runIdRef.current === runId) {
@@ -373,6 +411,12 @@ const FirstSaleItemProcessingStep: React.FC<
       </Box>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          {t(
+            'business.onboarding.firstSale.processing.checklistTitle',
+            'What we’re doing for you'
+          )}
+        </Typography>
         <Stack spacing={1.5}>
           {stages.map((stage) => (
             <Stack key={stage.key} direction="row" spacing={1.5} alignItems="flex-start">

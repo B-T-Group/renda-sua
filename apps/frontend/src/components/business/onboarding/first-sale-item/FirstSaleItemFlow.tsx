@@ -20,6 +20,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
+import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 import FirstSaleItemDescriptionStep from './FirstSaleItemDescriptionStep';
@@ -58,6 +59,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const { lockedCurrency } = useBusinessLockedCurrency(profile?.business?.id);
   const isFirst = intent === 'first';
   const itemsPath = initialLocationId
     ? `/business/items?location=${encodeURIComponent(initialLocationId)}`
@@ -70,6 +72,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [merchantHint, setMerchantHint] = useState('');
+  const [merchantPrice, setMerchantPrice] = useState('');
   const [itemId, setItemId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ImageItemSuggestions | null>(
     null
@@ -277,9 +280,14 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
         {step === STEP.description && (
           <FirstSaleItemDescriptionStep
             hint={merchantHint}
+            price={merchantPrice}
+            currency={lockedCurrency || 'XAF'}
             onChange={setMerchantHint}
+            onPriceChange={setMerchantPrice}
             onContinue={() => {
               if (!merchantHint.trim()) return;
+              const n = Number.parseFloat(merchantPrice.replace(',', '.'));
+              if (Number.isNaN(n) || n <= 0) return;
               setReviewForm(null);
               setStep(STEP.processing);
             }}
@@ -308,6 +316,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           <FirstSaleItemReviewStep
             imagePreviewUrls={imagePreviewUrls}
             merchantHint={merchantHint}
+            merchantPrice={merchantPrice}
             suggestions={suggestions}
             initialValues={reviewForm}
             onContinue={(values) => {

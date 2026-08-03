@@ -19,6 +19,7 @@ import {
   useItems,
   type BusinessItemAiProposalPayload,
 } from '../../hooks/useItems';
+import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
@@ -35,6 +36,7 @@ const BusinessItemAiProposalPage: React.FC = () => {
     acceptItemAiProposal,
     declineItemAiProposal,
   } = useItems(businessId, { skipInitialItemsFetch: true });
+  const { getOpenForItem } = useAiImageCleanup();
 
   const [data, setData] = useState<BusinessItemAiProposalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,7 @@ const BusinessItemAiProposalPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [applyTitle, setApplyTitle] = useState(false);
   const [applyDescription, setApplyDescription] = useState(false);
+  const [cleanupJobOpen, setCleanupJobOpen] = useState(false);
 
   useEffect(() => {
     if (!itemId) return;
@@ -51,10 +54,18 @@ const BusinessItemAiProposalPage: React.FC = () => {
     setData(null);
     setTitle('');
     setDescription('');
+    setCleanupJobOpen(false);
 
     void (async () => {
       try {
-        const res = await fetchItemAiProposal(itemId);
+        const [res, open] = await Promise.all([
+          fetchItemAiProposal(itemId),
+          getOpenForItem(itemId).catch(() => ({
+            open: false,
+            jobId: null,
+            status: null,
+          })),
+        ]);
         if (cancelled) return;
         setData(res);
         setTitle(res.proposal?.proposed_title ?? res.item?.name ?? '');
@@ -63,6 +74,7 @@ const BusinessItemAiProposalPage: React.FC = () => {
         );
         setApplyTitle(!!res.proposal?.proposed_title);
         setApplyDescription(!!res.proposal?.proposed_description);
+        setCleanupJobOpen(!!open.open);
       } catch (e: any) {
         if (cancelled) return;
         enqueueSnackbar(
@@ -81,7 +93,7 @@ const BusinessItemAiProposalPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [enqueueSnackbar, fetchItemAiProposal, itemId, t]);
+  }, [enqueueSnackbar, fetchItemAiProposal, getOpenForItem, itemId, t]);
 
   const goBackToItem = () => {
     if (itemId) {
@@ -282,13 +294,14 @@ const BusinessItemAiProposalPage: React.FC = () => {
               ) : null}
             </Paper>
 
-            <Alert severity="info">
-              {t(
-                'business.items.aiProposal.cleanupHint',
-                "Want cleaner photos? You can run AI photo cleanup (uses AI tokens) anytime from the item's Images tab — it never runs automatically."
-              )}
-            </Alert>
-
+            {!cleanupJobOpen ? (
+              <Alert severity="info">
+                {t(
+                  'business.items.aiProposal.cleanupHint',
+                  "Want cleaner photos? You can run AI photo cleanup (uses AI tokens) anytime from the item's Images tab — it never runs automatically."
+                )}
+              </Alert>
+            ) : null}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button
                 variant="contained"

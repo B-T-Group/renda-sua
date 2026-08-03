@@ -2022,19 +2022,25 @@
         },
         "description": {
           "title": "What did you photograph?",
-          "body": "A short description helps us fill the listing. You can edit everything on the next screens.",
-          "required": "Add a short description of what you photographed"
+          "body": "Add a short name and the selling price. We’ll fill the rest — you only review next.",
+          "required": "Add a short description of what you photographed",
+          "productLabel": "Product",
+          "priceHint": "This is the price customers will see. You can still edit it later."
         },
         "processing": {
           "title": "Preparing your listing",
-          "body": "This usually takes a moment. Please keep this screen open.",
+          "body": "We handle uploads, thumbnails, and AI details for you — keep this screen open.",
           "doneBody": "Ready — review the details we filled in.",
           "timeoutBody": "Some steps took too long. You can continue and finish details on the next screen.",
+          "checklistTitle": "What we’re doing for you",
           "upload": "Uploading photos",
+          "thumbnails": "Creating thumbnails",
           "draft": "Creating product draft",
+          "optimize": "Optimizing images for catalog",
           "cleanup": "Sending photos for AI cleanup",
           "cleanupQueued": "Queued",
-          "analyze": "Analyzing photos & extracting details",
+          "analyze": "Analyzing photos with AI",
+          "details": "Extracting title, category & price",
           "continue": "Continue to review",
           "timeoutContinue": "Continue anyway"
         },

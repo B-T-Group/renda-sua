@@ -1,9 +1,12 @@
 /** Stage keys for the product-create processing screen. */
 export type ProcessingStageKey =
   | 'upload'
+  | 'thumbnails'
   | 'draft'
+  | 'optimize'
   | 'cleanup'
-  | 'analyze';
+  | 'analyze'
+  | 'details';
 
 export type ProcessingStageStatus =
   | 'pending'
@@ -27,12 +30,21 @@ export const PROCESSING_TIMEOUTS_MS = {
   overall: 210_000,
 } as const;
 
+/** Minimum visible duration for paced UX stages (ms). */
+export const PACED_STAGE_MS: Partial<Record<ProcessingStageKey, number>> = {
+  thumbnails: 1100,
+  optimize: 900,
+  details: 800,
+};
+
 export function initialProcessingStages(
   includeCleanup: boolean
 ): ProcessingStageState[] {
   const stages: ProcessingStageState[] = [
     { key: 'upload', status: 'pending' },
+    { key: 'thumbnails', status: 'pending' },
     { key: 'draft', status: 'pending' },
+    { key: 'optimize', status: 'pending' },
   ];
   if (includeCleanup) {
     stages.push({ key: 'cleanup', status: 'pending' });
@@ -40,7 +52,12 @@ export function initialProcessingStages(
     stages.push({ key: 'cleanup', status: 'skipped' });
   }
   stages.push({ key: 'analyze', status: 'pending' });
+  stages.push({ key: 'details', status: 'pending' });
   return stages;
+}
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function withTimeout<T>(
