@@ -1471,7 +1471,7 @@
     "verifyEmailToContinue": "Verify your email to continue",
     "alreadyHaveAccount": "Already have an account? Log in",
     "createAccountError": "Unable to create account at this time.",
-    "goalSectionHintMulti": "Select all that apply—you can use more than one mode on one account.",
+    "goalSectionHintMulti": "Choose how you want to start. You can add other modes later.",
     "primaryBusinessFocus": "Primary business focus",
     "trustContact": "We'll only use this to verify your account and send order updates.",
     "whyAccount": "Why create an account?",
@@ -1481,7 +1481,7 @@
       "business": "Verify to set up your store"
     },
     "businessIntentStrip": "You're signing up as a business — here's what you get:",
-    "personasSubtitle": "Select all that apply—you can use more than one mode on one account.",
+    "personasSubtitle": "Choose how you want to start. You can add other modes later.",
     "countrySubtitle": "Your country determines payments, verification, and local options.",
     "storeLocationSubtitle": "This becomes your first business location. You can add more locations later.",
     "countryStepTitle": "Your country",
@@ -1510,19 +1510,22 @@
         "headline": "Shop local, track every order",
         "b1": "Browse and buy from nearby stores in one place",
         "b2": "Track delivery in real time and chat with your agent",
-        "b3": "Save addresses and reorder faster next time"
+        "b3": "Save addresses and reorder faster next time",
+        "tagline": "Shop nearby · track every order"
       },
       "agent": {
         "headline": "Deliver on your schedule, get paid per trip",
         "b1": "Claim nearby delivery runs when it suits you",
         "b2": "Navigate pickups and drop-offs with in-app guidance",
-        "b3": "Get paid per completed delivery"
+        "b3": "Get paid per completed delivery",
+        "tagline": "Deliver on your schedule · get paid"
       },
       "business": {
         "headline": "Open your storefront and start selling",
         "b1": "List products with photos and AI-assisted details",
         "b2": "Manage orders, inventory, and locations in one dashboard",
-        "b3": "Reach local buyers; we handle delivery coordination"
+        "b3": "Reach local buyers; we handle delivery coordination",
+        "tagline": "List products · manage orders"
       },
       "businessRent": {
         "headline": "List rentals and start earning",

@@ -4,9 +4,9 @@ import {
   Box,
   Card,
   CardContent,
-  Checkbox,
   InputAdornment,
   MenuItem,
+  Radio,
   Stack,
   TextField,
   Typography,
@@ -60,10 +60,9 @@ export const PersonasStep: React.FC = () => {
   } = useAgentReferralLookup(referralCode);
 
   const togglePersona = (id: PersonaId) => {
-    const has = personas.includes(id);
-    if (has && personas.length <= 1) return;
-    const next = has ? personas.filter((p) => p !== id) : [...personas, id];
-    setValue('personas', next, { shouldDirty: true, shouldValidate: true });
+    // Signup allows exactly one persona; additional roles can be enrolled later.
+    if (personas.length === 1 && personas[0] === id) return;
+    setValue('personas', [id], { shouldDirty: true, shouldValidate: true });
   };
 
   const hasBusiness = personas.includes('business');
@@ -76,7 +75,7 @@ export const PersonasStep: React.FC = () => {
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
         {t(
           'signupPage.goalSectionHintMulti',
-          'Select all that apply—you can use more than one mode on one account.'
+          'Choose how you want to start. You can add other modes later.'
         )}
       </Typography>
       <Box
@@ -109,12 +108,13 @@ export const PersonasStep: React.FC = () => {
               onClick={() => togglePersona(opt.id)}
             >
               <CardContent sx={{ py: { xs: 2, sm: 2 }, px: { xs: 2, sm: 1.5 } }}>
-                <Checkbox
+                <Radio
                   checked={selected}
                   size="small"
                   onChange={() => togglePersona(opt.id)}
                   onClick={(e) => e.stopPropagation()}
                   sx={{ position: 'absolute', top: 6, right: 6, zIndex: 1, p: 0.5 }}
+                  inputProps={{ 'aria-label': t(opt.titleKey, opt.titleDefault) }}
                 />
                 <Box
                   sx={{
@@ -139,11 +139,38 @@ export const PersonasStep: React.FC = () => {
                 >
                   {t(opt.titleKey, opt.titleDefault)}
                 </Typography>
-                <PersonaBenefitBullets
-                  persona={opt.id}
-                  compact
-                  align="center"
-                />
+                {selected ? (
+                  <Box
+                    sx={{
+                      mt: 0.5,
+                      pt: 1,
+                      borderTop: 1,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <PersonaBenefitBullets
+                      persona={opt.id}
+                      compact
+                      align="center"
+                    />
+                  </Box>
+                ) : (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    textAlign="center"
+                    sx={{ lineHeight: 1.35, display: 'block' }}
+                  >
+                    {t(
+                      `signup.benefits.${opt.id}.tagline`,
+                      opt.id === 'client'
+                        ? 'Shop nearby · track every order'
+                        : opt.id === 'agent'
+                          ? 'Deliver on your schedule · get paid'
+                          : 'List products · manage orders'
+                    )}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           );

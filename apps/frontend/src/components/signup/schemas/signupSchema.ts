@@ -16,7 +16,8 @@ export const contactSchema = z.object({
 
 export const personasSchema = z
   .array(personaEnum)
-  .min(1, 'Select at least one persona');
+  .min(1, 'Select a persona')
+  .max(1, 'Select only one persona');
 
 export const businessSchema = z.object({
   name: z.string().trim().min(1, 'Required'),

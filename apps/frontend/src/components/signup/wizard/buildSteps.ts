@@ -33,7 +33,7 @@ export const WIZARD_STEP_META: WizardStepMeta[] = [
     labelDefault: 'Personas',
     subtitleKey: 'signupPage.personasSubtitle',
     subtitleDefault:
-      'Select all that apply—you can use more than one mode on one account.',
+      'Choose how you want to start. You can add other modes later.',
     fields: [
       'personas',
       'business.name',
