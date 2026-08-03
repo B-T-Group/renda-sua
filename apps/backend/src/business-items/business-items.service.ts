@@ -641,6 +641,9 @@ const FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME = `
   }
 `;
 
+const DEFAULT_DRAFT_CATEGORY_NAME = 'Other';
+const DEFAULT_DRAFT_SUB_CATEGORY_NAME = 'Other';
+
 const FIND_CATEGORY_BY_NAME = `
   query FindCategoryByName($categoryName: String!) {
     item_categories(
@@ -2709,13 +2712,15 @@ export class BusinessItemsService {
     const subCategoryName = dto.subCategoryName?.trim();
     const brandName = dto.brandName?.trim();
 
+    // items.item_sub_category_id is NOT NULL — eager drafts without a known
+    // category fall back to "Other" until the merchant/AI sets the real one.
     const subCategoryId =
       categoryName && subCategoryName
-        ? await this.ensureSubCategoryId(
-            categoryName,
-            subCategoryName
-          )
-        : null;
+        ? await this.ensureSubCategoryId(categoryName, subCategoryName)
+        : await this.ensureSubCategoryId(
+            DEFAULT_DRAFT_CATEGORY_NAME,
+            DEFAULT_DRAFT_SUB_CATEGORY_NAME
+          );
 
     const brandId = brandName
       ? await this.ensureBrandId(brandName)
@@ -2726,7 +2731,7 @@ export class BusinessItemsService {
       name,
       description: generatedDescription,
       sku,
-      ...(subCategoryId != null && { item_sub_category_id: subCategoryId }),
+      item_sub_category_id: subCategoryId,
       ...(brandId && { brand_id: brandId }),
       ...(hasPrice && { price }),
       ...(currency && { currency }),
