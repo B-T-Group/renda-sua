@@ -383,16 +383,19 @@ export class DashboardService {
     const q = `
       query AgentOpenOrdersByCountry($userId: uuid!) {
         agents(where: { user_id: { _eq: $userId } }) {
-          user {
-            addresses(where: { is_primary: { _eq: true } }, limit: 1) {
-              country
-            }
+          agent_addresses(
+            where: { address: { status: { _eq: active } } }
+            order_by: { address: { is_primary: desc } }
+            limit: 1
+          ) {
+            address { country }
           }
         }
       }
     `;
     const r = await this.hasuraSystemService.executeQuery(q, { userId });
-    const country: string | null = r?.agents?.[0]?.user?.addresses?.[0]?.country ?? null;
+    const country: string | null =
+      r?.agents?.[0]?.agent_addresses?.[0]?.address?.country ?? null;
     if (!country) return 0;
     const countQ = `
       query AgentOpenOrdersCount($country: String!) {

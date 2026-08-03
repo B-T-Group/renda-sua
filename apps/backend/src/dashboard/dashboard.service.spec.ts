@@ -197,7 +197,9 @@ describe('DashboardService', () => {
             };
           }
           return {
-            agents: [{ user: { addresses: [{ country: 'CM' }] } }],
+            agents: [
+              { agent_addresses: [{ address: { country: 'CM' } }] },
+            ],
             orders_aggregate: { aggregate: { count: 0 } },
             user_uploads: [],
           };
