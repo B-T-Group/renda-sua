@@ -32,6 +32,7 @@ export interface ImageItemSuggestions {
   descriptionSuggestion?: string;
   price?: number;
   currency?: string;
+  isUsed?: boolean;
   confidence?: ImageItemSuggestionConfidence;
   categoryAlternates?: string[];
   subCategoryAlternates?: string[];

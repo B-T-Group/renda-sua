@@ -69,6 +69,7 @@ export type BusinessItemLike = {
   name?: string | null;
   description?: string | null;
   price?: number | null;
+  is_used?: boolean | null;
   brand?: { name?: string | null } | null;
   business?: { name?: string | null } | null;
   item_images?: ItemImageLike[] | null;
@@ -318,7 +319,7 @@ function buildRow(
     title,
     description,
     availability: availabilityForInventoryRow(inv),
-    condition: 'new',
+    condition: item.is_used ? 'used' : 'new',
     price,
     link,
     image_link: img,

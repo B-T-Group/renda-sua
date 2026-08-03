@@ -7,8 +7,10 @@ import {
   Box,
   Button,
   Chip,
+  FormControlLabel,
   LinearProgress,
   Stack,
+  Switch,
   TextField,
   Typography,
   useMediaQuery,
@@ -29,6 +31,7 @@ export interface ReviewFormValues {
   brandName: string;
   price: string;
   currency: string;
+  isUsed: boolean;
 }
 
 export interface FirstSaleItemReviewStepProps {
@@ -63,6 +66,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
   const [subCategoryName, setSubCategoryName] = useState('');
   const [brandName, setBrandName] = useState('');
   const [price, setPrice] = useState('');
+  const [isUsed, setIsUsed] = useState(false);
   const [filled, setFilled] = useState(false);
 
   useEffect(() => {
@@ -75,6 +79,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
       setSubCategoryName(initialValues.subCategoryName);
       setBrandName(initialValues.brandName);
       setPrice(initialValues.price);
+      setIsUsed(initialValues.isUsed);
       return;
     }
     setName(suggestions?.name?.trim() || merchantHint.trim() || '');
@@ -82,6 +87,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     setCategoryName(suggestions?.categoryName?.trim() || '');
     setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
     setBrandName(suggestions?.brandName?.trim() || '');
+    setIsUsed(suggestions?.isUsed === true);
     if (merchantPrice.trim()) {
       setPrice(merchantPrice.trim());
     } else if (suggestions?.price != null) {
@@ -232,6 +238,19 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
         multiline
         minRows={2}
       />
+      <FormControlLabel
+        control={
+          <Switch
+            checked={isUsed}
+            onChange={(e) => setIsUsed(e.target.checked)}
+            color="warning"
+          />
+        }
+        label={t(
+          'business.onboarding.firstSale.review.isUsed',
+          'This item is used'
+        )}
+      />
 
       <Button
         variant="contained"
@@ -248,6 +267,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
             brandName,
             price,
             currency,
+            isUsed,
           })
         }
       >

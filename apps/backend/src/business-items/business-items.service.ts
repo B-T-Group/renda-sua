@@ -46,6 +46,7 @@ const GET_ITEMS = `
       color
       is_fragile
       is_perishable
+      is_used
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
@@ -282,6 +283,7 @@ const GET_SINGLE_ITEM = `
       color
       is_fragile
       is_perishable
+      is_used
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
@@ -511,6 +513,7 @@ const GET_AVAILABLE_ITEMS = `
       color
       is_fragile
       is_perishable
+      is_used
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
@@ -2808,6 +2811,7 @@ export class BusinessItemsService {
       min_order_quantity: 1,
       max_order_quantity: 10,
       is_active: false,
+      ...(typeof dto.is_used === 'boolean' && { is_used: dto.is_used }),
     };
 
     const newItem = await this.itemsService.createItem(

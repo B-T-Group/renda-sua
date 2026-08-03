@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -83,5 +84,13 @@ export class CreateItemFromImageDto {
   @IsString()
   @IsOptional()
   hint?: string;
+
+  @ApiProperty({
+    description: 'True when the item is used / pre-owned (not new)',
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  is_used?: boolean;
 }
 

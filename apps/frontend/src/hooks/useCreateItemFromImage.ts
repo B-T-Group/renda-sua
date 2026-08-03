@@ -12,6 +12,7 @@ export interface CreateItemFromImagePayload {
   price?: number;
   currency?: string;
   hint?: string;
+  is_used?: boolean;
 }
 
 export const useCreateItemFromImage = () => {

@@ -50,6 +50,7 @@ export interface BusinessInventoryItem {
     color: string | null;
     is_fragile: boolean;
     is_perishable: boolean;
+    is_used: boolean;
     requires_special_handling: boolean;
     max_delivery_distance: number | null;
     estimated_delivery_time: number | null;
@@ -144,6 +145,7 @@ const GET_BUSINESS_INVENTORY = `
         color
         is_fragile
         is_perishable
+        is_used
         requires_special_handling
         max_delivery_distance
         estimated_delivery_time

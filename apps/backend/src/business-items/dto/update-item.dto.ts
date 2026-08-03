@@ -18,6 +18,8 @@ export class UpdateItemDto {
   color?: string | null;
   is_fragile?: boolean;
   is_perishable?: boolean;
+  /** True when the item is used / pre-owned (not new). */
+  is_used?: boolean;
   requires_special_handling?: boolean;
   max_delivery_distance?: number | null;
   estimated_delivery_time?: number | null;

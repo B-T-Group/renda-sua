@@ -1804,7 +1804,8 @@
           "publish": "Publier le produit",
           "finishLater": "Terminer plus tard",
           "submitted": "Produit soumis pour approbation",
-          "publishFailed": "Impossible de publier le produit"
+          "publishFailed": "Impossible de publier le produit",
+          "isUsed": "Cet article est d'occasion"
         },
         "steps": {
           "upload": "Photos",
@@ -2818,7 +2819,8 @@
       "inlineEdit": "Modification rapide",
       "weight": "Poids",
       "weightUnit": "Unité de poids",
-      "dimensions": "Dimensions (optionnel)"
+      "dimensions": "Dimensions (optionnel)",
+      "isUsed": "Occasion"
     },
     "variants": {
       "sectionTitle": "Variantes",
@@ -4582,7 +4584,8 @@
       "dimensions": "Taille",
       "specialHandling": "Spécial",
       "fragile": "Fragile",
-      "perishable": "Périssable"
+      "perishable": "Périssable",
+      "used": "Occasion"
     },
     "dealEndsOn": "Se termine le {{date}}",
     "similarItems": "Articles similaires",
@@ -4666,7 +4669,9 @@
       "loadingTitle": "Produit | Rendasua",
       "loadingWebPageName": "Produit"
     },
-    "appTrackingNote": "Suivez votre commande en temps réel — disponible dans l'application Rendasua."
+    "appTrackingNote": "Suivez votre commande en temps réel — disponible dans l'application Rendasua.",
+    "usedBadge": "Occasion",
+    "isUsed": "Occasion"
   },
   "persona": {
     "client": "Client",

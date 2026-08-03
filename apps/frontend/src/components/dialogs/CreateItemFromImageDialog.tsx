@@ -5,7 +5,9 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -39,6 +41,7 @@ export const CreateItemFromImageDialog: React.FC<
   const [brandName, setBrandName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState<string>('');
+  const [isUsed, setIsUsed] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [createdItem, setCreatedItem] = useState<any | null>(null);
 
@@ -68,6 +71,7 @@ export const CreateItemFromImageDialog: React.FC<
           ? String(suggestions.price)
           : ''
       );
+      setIsUsed(suggestions.isUsed === true);
     } else {
       setName(image.caption || '');
       setCategoryName('');
@@ -75,6 +79,7 @@ export const CreateItemFromImageDialog: React.FC<
       setBrandName('');
       setDescription('');
       setPrice('');
+      setIsUsed(false);
     }
   }, [open, image, suggestions]);
 
@@ -136,6 +141,7 @@ export const CreateItemFromImageDialog: React.FC<
         numericPrice != null && !Number.isNaN(numericPrice)
           ? lockedCurrency
           : undefined,
+      is_used: isUsed,
     });
     if (!result) return;
     setCreatedItem(result);
@@ -280,6 +286,17 @@ export const CreateItemFromImageDialog: React.FC<
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         disabled={createLoading || suggestionsLoading}
+      />
+      <FormControlLabel
+        control={
+          <Switch
+            checked={isUsed}
+            onChange={(e) => setIsUsed(e.target.checked)}
+            color="warning"
+            disabled={createLoading || suggestionsLoading}
+          />
+        }
+        label={t('business.items.isUsed', 'Used')}
       />
     </Stack>
   );

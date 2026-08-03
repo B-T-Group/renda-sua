@@ -60,6 +60,8 @@ export interface ImageItemSuggestionResult {
   weight?: number | null;
   weightUnit?: string | null;
   dimensions?: string | null;
+  /** True when photos/text indicate a used / pre-owned item. */
+  isUsed?: boolean | null;
   confidence?: ImageItemSuggestionConfidence;
   categoryAlternates?: string[];
   subCategoryAlternates?: string[];
@@ -85,6 +87,8 @@ export interface ItemRefinementSuggestionResult {
   dimensions?: string | null;
   isFragile?: boolean | null;
   isPerishable?: boolean | null;
+  /** True when photos/text indicate a used / pre-owned item. */
+  isUsed?: boolean | null;
   requiresSpecialHandling?: boolean | null;
   minOrderQuantity?: number | null;
   maxOrderQuantity?: number | null;
@@ -595,6 +599,7 @@ export class AiService {
       weight: null,
       weightUnit: null,
       dimensions: null,
+      isUsed: null,
       confidence: this.defaultConfidence(!!input.hint?.trim()),
       categoryAlternates: [],
       subCategoryAlternates: [],
@@ -832,6 +837,7 @@ export class AiService {
           : null,
       dimensions:
         typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
+      isUsed: typeof parsed.isUsed === 'boolean' ? parsed.isUsed : null,
       confidence: { ...defaults, ...confidence },
       categoryAlternates,
       subCategoryAlternates,
@@ -892,6 +898,7 @@ Rules:
 - If a field should stay as-is, repeat the current value or omit if unchanged.
 - Only specify dimensions/weight/weightUnit if they are visible on the image.
 - weightUnit MUST be one of: "g", "kg", "lb", "oz" (lowercase). Never use "Kg", "KG", "ml", or "l".
+- Set isUsed to true only when photos/text clearly indicate used, second-hand, refurbished, open-box, wear, or scratches. Set false only when clearly new/sealed. If uncertain, set isUsed to null (do not guess).
 
 Return ONLY a single JSON object with this exact shape (null allowed for unknowns):
 {
@@ -911,6 +918,7 @@ Return ONLY a single JSON object with this exact shape (null allowed for unknown
   "dimensions": string | null,
   "isFragile": boolean | null,
   "isPerishable": boolean | null,
+  "isUsed": boolean | null,
   "requiresSpecialHandling": boolean | null,
   "minOrderQuantity": number | null,
   "maxOrderQuantity": number | null
@@ -1007,6 +1015,7 @@ Then extract from the images:
 - Product weight as a number (if visible)
 - Weight unit: only "g", "kg", "lb", or "oz" (lowercase). Never "Kg", "ml", or "l".
 - Product dimensions string (e.g. 20x10x5 cm) if visible.
+- Whether the item appears used / pre-owned (not new): set isUsed true only when photos or text clearly show wear, scratches, open packaging, or "used"/"second-hand"/"refurbished"/"open-box" labels. Set false only when clearly new/sealed. If uncertain, set isUsed to null (do not guess).
 - Up to 3 alternate category names and subcategory names.
 - Per-field confidence: "high" | "medium" | "low".
 
@@ -1031,6 +1040,7 @@ Return ONLY a single JSON object with this exact shape:
   "weight": number | null,
   "weightUnit": "g" | "kg" | "lb" | "oz" | null,
   "dimensions": string | null,
+  "isUsed": boolean | null,
   "categoryAlternates": string[] | null,
   "subCategoryAlternates": string[] | null,
   "confidence": {
@@ -1061,6 +1071,7 @@ Extract when possible from captions/alt text only:
 - Description in ${languageLabel}
 - Price, currency (default "${defaultCurrency}" if unknown)
 - Barcodes, weight, dimensions
+- isUsed: true only if the text clearly says used/second-hand/refurbished/open-box; false only if clearly new; otherwise null
 
 Name rules:
 - Do NOT use placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", or "Product name".
@@ -1084,7 +1095,8 @@ Return ONLY a single JSON object with this exact shape:
   "barcodeValues": string[] | null,
   "weight": number | null,
   "weightUnit": "g" | "kg" | "lb" | "oz" | null,
-  "dimensions": string | null
+  "dimensions": string | null,
+  "isUsed": boolean | null
 }
 
 The "description" field MUST be written in ${languageLabel}.`;
@@ -1308,6 +1320,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         typeof parsed.dimensions === 'string' ? parsed.dimensions : undefined,
       isFragile: bool(parsed.isFragile),
       isPerishable: bool(parsed.isPerishable),
+      isUsed: bool(parsed.isUsed),
       requiresSpecialHandling: bool(parsed.requiresSpecialHandling),
       minOrderQuantity: num(parsed.minOrderQuantity),
       maxOrderQuantity: num(parsed.maxOrderQuantity),

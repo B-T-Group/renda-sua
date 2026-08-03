@@ -23,6 +23,7 @@ export interface Item {
   color: string | null;
   is_fragile: boolean;
   is_perishable: boolean;
+  is_used: boolean;
   requires_special_handling: boolean;
   max_delivery_distance: number | null;
   estimated_delivery_time: number | null;
@@ -138,6 +139,7 @@ export interface CreateItemData {
   color?: string;
   is_fragile?: boolean;
   is_perishable?: boolean;
+  is_used?: boolean;
   requires_special_handling?: boolean;
   max_delivery_distance?: number;
   estimated_delivery_time?: number;

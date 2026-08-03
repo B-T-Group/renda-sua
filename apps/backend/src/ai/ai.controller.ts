@@ -291,6 +291,7 @@ export class AiController {
         weight: suggestion.weight ?? undefined,
         weightUnit: suggestion.weightUnit ?? undefined,
         dimensions: suggestion.dimensions ?? undefined,
+        isUsed: suggestion.isUsed ?? undefined,
         confidence: suggestion.confidence,
         categoryAlternates: suggestion.categoryAlternates ?? [],
         subCategoryAlternates: suggestion.subCategoryAlternates ?? [],
@@ -396,6 +397,7 @@ export class AiController {
         dimensions: suggestion.dimensions ?? undefined,
         isFragile: suggestion.isFragile ?? undefined,
         isPerishable: suggestion.isPerishable ?? undefined,
+        isUsed: suggestion.isUsed ?? undefined,
         requiresSpecialHandling:
           suggestion.requiresSpecialHandling ?? undefined,
         minOrderQuantity: suggestion.minOrderQuantity ?? undefined,
@@ -423,6 +425,7 @@ export class AiController {
       currency?: string;
       is_fragile?: boolean;
       is_perishable?: boolean;
+      is_used?: boolean;
       requires_special_handling?: boolean;
       min_order_quantity?: number;
       max_order_quantity?: number | null;
@@ -455,6 +458,7 @@ export class AiController {
       brand: row.brand?.name ?? null,
       is_fragile: row.is_fragile,
       is_perishable: row.is_perishable,
+      is_used: row.is_used,
       requires_special_handling: row.requires_special_handling,
       min_order_quantity: row.min_order_quantity,
       max_order_quantity: row.max_order_quantity,

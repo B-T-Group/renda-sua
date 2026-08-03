@@ -1,0 +1,2 @@
+ALTER TABLE public.items
+  ADD COLUMN IF NOT EXISTS is_used BOOLEAN NOT NULL DEFAULT false;

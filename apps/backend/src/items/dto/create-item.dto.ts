@@ -46,6 +46,11 @@ export class CreateItemDto {
   @ApiPropertyOptional()
   is_perishable?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'True when the item is used / pre-owned (not new).',
+  })
+  is_used?: boolean;
+
   @ApiPropertyOptional()
   requires_special_handling?: boolean;
 

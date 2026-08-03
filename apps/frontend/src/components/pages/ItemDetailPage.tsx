@@ -1310,6 +1310,9 @@ export default function ItemDetailPage() {
 
             {/* Quick specs chips */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {item.is_used && (
+                <Chip label={t('items.usedBadge', 'Used')} size="small" color="default" />
+              )}
               {item.is_fragile && (
                 <Chip label={t('items.fragile', 'Fragile')} size="small" color="warning" />
               )}
@@ -1547,7 +1550,10 @@ export default function ItemDetailPage() {
             )}
           </Stack>
 
-          {(item.is_fragile || item.is_perishable || item.requires_special_handling) && (
+          {(item.is_used ||
+            item.is_fragile ||
+            item.is_perishable ||
+            item.requires_special_handling) && (
             <>
               <Divider sx={{ my: 1.25 }} />
               <Typography
@@ -1560,6 +1566,9 @@ export default function ItemDetailPage() {
                 {t('items.specialProperties', 'Special properties')}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {item.is_used && (
+                  <Chip label={t('items.usedBadge', 'Used')} size="small" color="default" />
+                )}
                 {item.is_fragile && (
                   <Chip label={t('items.fragile', 'Fragile')} size="small" color="warning" />
                 )}

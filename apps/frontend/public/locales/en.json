@@ -2090,7 +2090,8 @@
           "publish": "Publish product",
           "finishLater": "Finish later",
           "submitted": "Product submitted for approval",
-          "publishFailed": "Could not publish product"
+          "publishFailed": "Could not publish product",
+          "isUsed": "This item is used"
         },
         "steps": {
           "upload": "Photos",
@@ -3104,7 +3105,8 @@
       "inlineEdit": "Quick edit",
       "weight": "Weight",
       "weightUnit": "Weight Unit",
-      "dimensions": "Dimensions (Optional)"
+      "dimensions": "Dimensions (Optional)",
+      "isUsed": "Used"
     },
     "variants": {
       "sectionTitle": "Variants",
@@ -4844,7 +4846,8 @@
       "dimensions": "Size",
       "specialHandling": "Special",
       "fragile": "Fragile",
-      "perishable": "Perishable"
+      "perishable": "Perishable",
+      "used": "Used"
     },
     "dealEndsOn": "Ends on {{date}}",
     "similarItems": "Similar Items",
@@ -4928,7 +4931,9 @@
       "loadingTitle": "Product | Rendasua",
       "loadingWebPageName": "Product"
     },
-    "appTrackingNote": "Track your order in real time — available in the Rendasua app."
+    "appTrackingNote": "Track your order in real time — available in the Rendasua app.",
+    "usedBadge": "Used",
+    "isUsed": "Used"
   },
   "persona": {
     "client": "Client",

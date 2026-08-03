@@ -97,6 +97,7 @@ export interface InventoryItem {
     color: string;
     is_fragile: boolean;
     is_perishable: boolean;
+    is_used: boolean;
     requires_special_handling: boolean;
     max_delivery_distance: number;
     estimated_delivery_time: number;
@@ -323,6 +324,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         color
         is_fragile
         is_perishable
+        is_used
         requires_special_handling
         max_delivery_distance
         estimated_delivery_time
@@ -2068,6 +2070,7 @@ export class InventoryItemsService {
             color
             is_fragile
             is_perishable
+            is_used
             requires_special_handling
             max_delivery_distance
             estimated_delivery_time
@@ -2415,6 +2418,7 @@ export class InventoryItemsService {
               color
               is_fragile
               is_perishable
+              is_used
               requires_special_handling
               max_delivery_distance
               estimated_delivery_time

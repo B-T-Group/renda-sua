@@ -111,6 +111,7 @@ insert_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -142,6 +143,7 @@ select_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -177,6 +179,7 @@ select_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -212,6 +215,7 @@ select_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -254,6 +258,7 @@ select_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -289,6 +294,7 @@ select_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -323,6 +329,7 @@ update_permissions:
         - color
         - is_fragile
         - is_perishable
+        - is_used
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time

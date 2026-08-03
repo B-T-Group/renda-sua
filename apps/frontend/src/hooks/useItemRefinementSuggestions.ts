@@ -18,6 +18,7 @@ export interface ItemRefinementSuggestionData {
   dimensions?: string;
   isFragile?: boolean;
   isPerishable?: boolean;
+  isUsed?: boolean;
   requiresSpecialHandling?: boolean;
   minOrderQuantity?: number;
   maxOrderQuantity?: number;

@@ -954,11 +954,20 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           </Box>
 
           {/* Special Handling Chips */}
-          {(inventory.item.is_fragile ||
+          {(inventory.item.is_used ||
+            inventory.item.is_fragile ||
             inventory.item.is_perishable ||
             inventory.item.requires_special_handling) && (
             <Box sx={{ mb: 1 }}>
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {inventory.item.is_used && (
+                  <Chip
+                    label={t('items.itemCard.used', 'Used')}
+                    color="default"
+                    size="small"
+                    sx={{ fontSize: '0.7rem', height: '20px' }}
+                  />
+                )}
                 {inventory.item.is_fragile && (
                   <Chip
                     label={t('items.itemCard.fragile', 'Fragile')}

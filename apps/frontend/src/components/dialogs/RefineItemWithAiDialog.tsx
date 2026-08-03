@@ -110,6 +110,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
   const [brandId, setBrandId] = useState<string | null>(null);
   const [fragile, setFragile] = useState(false);
   const [perishable, setPerishable] = useState(false);
+  const [isUsed, setIsUsed] = useState(false);
   const [specialHandling, setSpecialHandling] = useState(false);
   const [minOrder, setMinOrder] = useState<string>('1');
   const [maxOrder, setMaxOrder] = useState<string>('');
@@ -132,6 +133,26 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
       setAiPayload(null);
       return;
     }
+    setName(item.name ?? '');
+    setDescription(item.description ?? '');
+    setSku(item.sku ?? '');
+    setModel(item.model ?? '');
+    setColor(item.color ?? '');
+    setWeight(item.weight != null ? String(item.weight) : '');
+    setWeightUnit(item.weight_unit ?? '');
+    setDimensions(item.dimensions ?? '');
+    setItemSubCategoryId(item.item_sub_category_id || 0);
+    setBrandId(item.brand_id ?? null);
+    setFragile(item.is_fragile ?? false);
+    setPerishable(item.is_perishable ?? false);
+    setIsUsed(item.is_used ?? false);
+    setSpecialHandling(item.requires_special_handling ?? false);
+    setMinOrder(String(item.min_order_quantity ?? 1));
+    setMaxOrder(
+      item.max_order_quantity != null ? String(item.max_order_quantity) : ''
+    );
+    setLockedPrice(item.price ?? 0);
+    setLockedCurrency(item.currency ?? 'USD');
     let cancelled = false;
     (async () => {
       fetchTags().catch(() => undefined);
@@ -180,6 +201,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
     setBrandId(br);
     setFragile(data.isFragile ?? cur.is_fragile ?? false);
     setPerishable(data.isPerishable ?? cur.is_perishable ?? false);
+    setIsUsed(data.isUsed ?? cur.is_used ?? false);
     setSpecialHandling(
       data.requiresSpecialHandling ?? cur.requires_special_handling ?? false
     );
@@ -263,6 +285,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
           dimensions: dimensions.trim() || null,
           is_fragile: fragile,
           is_perishable: perishable,
+          is_used: isUsed,
           requires_special_handling: specialHandling,
           min_order_quantity:
             minOrder === '' ? 1 : Math.max(1, Number(minOrder) || 1),
@@ -527,6 +550,15 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                   />
                 }
                 label={t('business.items.perishable', 'Perishable')}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isUsed}
+                    onChange={(e) => setIsUsed(e.target.checked)}
+                  />
+                }
+                label={t('business.items.isUsed', 'Used')}
               />
               <FormControlLabel
                 control={

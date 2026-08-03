@@ -24,6 +24,7 @@ const MUTABLE_ITEM_FIELDS = [
   'color',
   'is_fragile',
   'is_perishable',
+  'is_used',
   'requires_special_handling',
   'max_delivery_distance',
   'estimated_delivery_time',
@@ -82,6 +83,7 @@ const UPDATE_ITEM = `
       color
       is_fragile
       is_perishable
+      is_used
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
