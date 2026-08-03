@@ -10,8 +10,11 @@ export class CreateItemDto {
   @ApiProperty()
   item_sub_category_id!: number;
 
-  @ApiProperty()
-  price!: number;
+  @ApiPropertyOptional({
+    description:
+      'Catalog price. Optional for drafts; required before publishing.',
+  })
+  price?: number;
 
   @ApiProperty({ default: 'XAF' })
   currency!: string;

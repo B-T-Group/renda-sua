@@ -74,6 +74,7 @@ describe('BusinessItemsService CSV upload', () => {
           name: row.name,
           description: row.description,
           status: 'active',
+          price: row.price,
         },
       }),
       executeMutation: jest.fn().mockResolvedValue({
@@ -100,8 +101,8 @@ describe('BusinessItemsService CSV upload', () => {
       itemsService as any,
       itemAiReviewService as any,
       {} as any,
-      {} as any,
       merchantLifecycleService as any,
+      {} as any,
       {} as any
     );
 

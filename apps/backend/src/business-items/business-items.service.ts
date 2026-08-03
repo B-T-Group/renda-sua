@@ -1981,6 +1981,7 @@ export class BusinessItemsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    await this.assertItemHasPublishablePrice(businessId, itemId);
     const result = await this.hasuraSystemService.executeMutation<{
       update_items: {
         affected_rows: number;
@@ -2004,6 +2005,32 @@ export class BusinessItemsService {
     }
     void this.itemAiReviewService.requestReview(itemId);
     return row;
+  }
+
+  private async assertItemHasPublishablePrice(
+    businessId: string,
+    itemId: string
+  ): Promise<void> {
+    const itemRow = await this.hasuraSystemService.executeQuery<{
+      items_by_pk: { id: string; business_id: string; price: number | null } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = itemRow.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (item.price == null || Number.isNaN(item.price) || item.price <= 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'PRICE_REQUIRED',
+          message: 'A valid price is required before publishing',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   /**
@@ -2053,7 +2080,17 @@ export class BusinessItemsService {
     const sellingPrice =
       input.sellingPrice != null && !Number.isNaN(input.sellingPrice)
         ? input.sellingPrice
-        : item.price ?? 0;
+        : item.price;
+    if (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'PRICE_REQUIRED',
+          message: 'A valid price is required before publishing',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     if (
       item.moderation_status === 'draft' &&
@@ -2736,9 +2773,10 @@ export class BusinessItemsService {
 
     const hasPrice = dto.price != null && !Number.isNaN(dto.price as number);
     const price = hasPrice ? (dto.price as number) : undefined;
-    const currency = hasPrice
-      ? await this.hasuraSystemService.resolveBusinessCurrency(businessId)
-      : undefined;
+    // Always lock currency to the business even when price is still unset.
+    const currency = await this.hasuraSystemService.resolveBusinessCurrency(
+      businessId
+    );
 
     const categoryName = dto.categoryName?.trim();
     const subCategoryName = dto.subCategoryName?.trim();
@@ -2766,7 +2804,7 @@ export class BusinessItemsService {
       item_sub_category_id: subCategoryId,
       ...(brandId && { brand_id: brandId }),
       ...(hasPrice && { price }),
-      ...(currency && { currency }),
+      currency,
       min_order_quantity: 1,
       max_order_quantity: 10,
       is_active: false,
