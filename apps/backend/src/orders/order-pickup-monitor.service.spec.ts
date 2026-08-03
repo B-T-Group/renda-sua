@@ -40,7 +40,7 @@ describe('OrderPickupMonitorService', () => {
         assignedAt,
         DEFAULT_PICKUP_MONITOR_CONFIG
       );
-      expect(due.toISOString()).toBe('2026-08-02T12:20:00.000Z');
+      expect(due.toISOString()).toBe('2026-08-02T12:40:00.000Z');
     });
 
     it('uses later pickup_by for scheduled windows', () => {
@@ -62,7 +62,7 @@ describe('OrderPickupMonitorService', () => {
         assignedAt,
         DEFAULT_PICKUP_MONITOR_CONFIG
       );
-      expect(due.toISOString()).toBe('2026-08-02T12:20:00.000Z');
+      expect(due.toISOString()).toBe('2026-08-02T12:40:00.000Z');
     });
   });
 });

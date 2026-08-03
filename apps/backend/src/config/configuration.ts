@@ -123,15 +123,15 @@ export interface OrderConfig {
   paymentTimeoutWaitMinutes?: number;
   /** When true, post-delivery refunds route to Stripe/wallet engine (default true). */
   refundsV2Enabled?: boolean;
-  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null (ASAP). */
+  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null (ASAP). Launch default: 900 (15m). */
   acceptanceTimeoutSeconds: number;
-  /** Default confirm window (seconds) after future-order activation. */
+  /** Default confirm window (seconds) after future-order activation. Launch default: 1800 (30m). */
   futureAcceptanceTimeoutSeconds: number;
   /** Default minutes before prep start to activate acceptance SLA. */
   orderActivationLeadMinutes: number;
-  /** Grace seconds after no_response before auto-decline. */
+  /** Grace seconds after no_response before auto-decline. Launch default: 300 (5m). */
   acceptanceGraceSeconds: number;
-  /** Default estimated prep minutes before Busy adds. */
+  /** Default estimated prep minutes before Busy adds. Launch default: 30. */
   defaultEstimatedPrepMinutes: number;
   /** Minutes added per Busy tap. */
   busyExtraPrepMinutes: number;
@@ -673,11 +673,11 @@ export default (): Configuration => {
         process.env.REFUNDS_V2_ENABLED !== 'false' &&
         process.env.REFUNDS_V2_ENABLED !== '0',
       acceptanceTimeoutSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '300',
+        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '900',
         10
       ),
       futureAcceptanceTimeoutSeconds: parseInt(
-        process.env.ORDER_FUTURE_ACCEPTANCE_TIMEOUT_SECONDS || '900',
+        process.env.ORDER_FUTURE_ACCEPTANCE_TIMEOUT_SECONDS || '1800',
         10
       ),
       orderActivationLeadMinutes: parseInt(
@@ -685,11 +685,11 @@ export default (): Configuration => {
         10
       ),
       acceptanceGraceSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '120',
+        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '300',
         10
       ),
       defaultEstimatedPrepMinutes: parseInt(
-        process.env.ORDER_DEFAULT_ESTIMATED_PREP_MINUTES || '25',
+        process.env.ORDER_DEFAULT_ESTIMATED_PREP_MINUTES || '30',
         10
       ),
       busyExtraPrepMinutes: parseInt(
@@ -701,15 +701,15 @@ export default (): Configuration => {
         10
       ),
       reliabilityDemoteAutoDeclines: parseInt(
-        process.env.RELIABILITY_DEMOTE_AUTO_DECLINES || '3',
+        process.env.RELIABILITY_DEMOTE_AUTO_DECLINES || '5',
         10
       ),
       reliabilityRestrictAutoDeclines: parseInt(
-        process.env.RELIABILITY_RESTRICT_AUTO_DECLINES || '5',
+        process.env.RELIABILITY_RESTRICT_AUTO_DECLINES || '8',
         10
       ),
       reliabilitySuspendAutoDeclines: parseInt(
-        process.env.RELIABILITY_SUSPEND_AUTO_DECLINES || '8',
+        process.env.RELIABILITY_SUSPEND_AUTO_DECLINES || '12',
         10
       ),
     },

@@ -114,10 +114,10 @@ export interface MonitoredPickupOrder {
 }
 
 export const DEFAULT_PICKUP_MONITOR_CONFIG: PickupMonitorConfig = {
-  pickupSlaMinutes: 20,
-  reminderMinutesBefore: 5,
-  overdueGraceMinutes: 10,
-  reassignmentGraceMinutes: 20,
+  pickupSlaMinutes: 40,
+  reminderMinutesBefore: 10,
+  overdueGraceMinutes: 15,
+  reassignmentGraceMinutes: 40,
   extensionMinutes: 10,
   geofenceMeters: 150,
   approachDeltaMeters: 150,
