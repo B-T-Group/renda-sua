@@ -473,7 +473,11 @@ export class AiService {
     const base =
       'Clean up the background of this product image for e-commerce. ' +
       'IMPORTANT: Do NOT alter, replace, or reimagine the product itself — keep the exact same product, shape, color, and details. ' +
-      'Only improve the background and lighting around the product. ' +
+      'Improve the background and lighting around the product. ' +
+      'Prefer a clean, uncluttered scene, but you MAY keep or lightly stylize a few background elements when they add useful context or meaning ' +
+      '(for example packaging, a related accessory, a natural setting that shows how the product is used, or scale cues). ' +
+      'Do not invent unrelated props; only keep or refine what helps the viewer understand the product. ' +
+      'Remove trash, clutter, people, unrelated objects, and anything that competes with the product. ' +
       'Choose a background tone (light, dark, or mid-tone) that best complements and contrasts with the product colors — ' +
       'for example a dark background for light-colored products, or a light background for dark products. ' +
       'Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
@@ -484,7 +488,8 @@ export class AiService {
     }
     if (codes.has('CLUTTERED_BACKGROUND') || codes.has('POOR_LIGHTING')) {
       hints.push(
-        'Replace the cluttered or poorly lit background with a clean, well-lit background chosen to best complement the product. Do not touch the product.'
+        'Simplify a cluttered or poorly lit background into a clean, well-lit scene that complements the product. ' +
+          'You may retain a small number of contextual background elements if they clarify the product; remove everything else. Do not touch the product.'
       );
     }
     if (codes.has('PRODUCT_TOO_SMALL')) {
@@ -497,7 +502,7 @@ export class AiService {
     }
     if (!hints.length) {
       hints.push(
-        'Replace the background with a clean, minimal surface whose tone (light or dark) best complements the product. Keep the product completely unchanged.'
+        'Clean the background into a complementary scene. Prefer minimal surfaces, but optionally keep a few meaningful contextual elements. Keep the product completely unchanged.'
       );
     }
     return `${base} ${hints.join(' ')}`;

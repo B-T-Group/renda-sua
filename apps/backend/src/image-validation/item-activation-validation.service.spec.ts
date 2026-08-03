@@ -7,7 +7,11 @@ describe('ItemActivationValidationService', () => {
 
   beforeEach(() => {
     executeQuery = jest.fn();
-    service = new ItemActivationValidationService({ executeQuery } as never);
+    // assertItemCanActivate uses hasuraUser; rental uses the same mock.
+    service = new ItemActivationValidationService(
+      { executeQuery } as never,
+      { executeQuery } as never
+    );
   });
 
   function mockImages(key: string, images: unknown[]): void {
@@ -30,11 +34,8 @@ describe('ItemActivationValidationService', () => {
     }
   }
 
-  it('allows activating a sale item with two images and no blocking errors', async () => {
-    mockImages('item_images', [
-      { validation_errors: [] },
-      { validation_errors: null },
-    ]);
+  it('allows activating a sale item with one image and no blocking errors', async () => {
+    mockImages('item_images', [{ validation_errors: [] }]);
 
     await expect(service.assertItemCanActivate('item-1')).resolves.toBeUndefined();
     expect(executeQuery).toHaveBeenCalledWith(expect.any(String), {
@@ -42,8 +43,8 @@ describe('ItemActivationValidationService', () => {
     });
   });
 
-  it('blocks activating a sale item with fewer than two images', async () => {
-    mockImages('item_images', [{ validation_errors: [] }]);
+  it('blocks activating a sale item with no images', async () => {
+    mockImages('item_images', []);
 
     await expectActivationError(
       () => service.assertItemCanActivate('item-1'),
@@ -53,7 +54,6 @@ describe('ItemActivationValidationService', () => {
 
   it('blocks activating a sale item when any image has validation errors', async () => {
     mockImages('item_images', [
-      { validation_errors: [] },
       { validation_errors: [{ code: 'LOW_RESOLUTION' }] },
     ]);
 
@@ -75,6 +75,15 @@ describe('ItemActivationValidationService', () => {
     expect(executeQuery).toHaveBeenCalledWith(expect.any(String), {
       rentalItemId: 'rental-item-1',
     });
+  });
+
+  it('blocks activating a rental item with fewer than two images', async () => {
+    mockImages('rental_item_images', [{ validation_errors: [] }]);
+
+    await expectActivationError(
+      () => service.assertRentalItemCanActivate('rental-item-1'),
+      'ITEM_MIN_IMAGES'
+    );
   });
 
   it('blocks activating a rental item with validation errors', async () => {

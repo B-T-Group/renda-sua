@@ -18,7 +18,8 @@ const COUNT_RENTAL_IMAGES = `
   }
 `;
 
-const MIN_IMAGES_FOR_ACTIVE = 2;
+const MIN_SALE_IMAGES_FOR_ACTIVE = 1;
+const MIN_RENTAL_IMAGES_FOR_ACTIVE = 2;
 
 @Injectable()
 export class ItemActivationValidationService {
@@ -47,7 +48,7 @@ export class ItemActivationValidationService {
       rental_item_images: { validation_errors: unknown[] }[];
     }>(COUNT_RENTAL_IMAGES, { rentalItemId });
     const images = row?.rental_item_images ?? [];
-    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
+    if (images.length < MIN_RENTAL_IMAGES_FOR_ACTIVE) {
       throw new HttpException(
         {
           success: false,
@@ -64,13 +65,13 @@ export class ItemActivationValidationService {
   private assertItemImagesReady(
     images: { validation_errors: unknown[] }[]
   ): void {
-    if (images.length < MIN_IMAGES_FOR_ACTIVE) {
+    if (images.length < MIN_SALE_IMAGES_FOR_ACTIVE) {
       throw new HttpException(
         {
           success: false,
           error: 'ITEM_MIN_IMAGES',
           message:
-            'At least two product images are required before activating this item.',
+            'At least one product image is required before activating this item.',
         },
         HttpStatus.BAD_REQUEST
       );
