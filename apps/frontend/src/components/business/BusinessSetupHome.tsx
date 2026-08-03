@@ -120,6 +120,14 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
   );
 
   const current = steps.find((s) => s.current && !s.done) ?? steps.find((s) => !s.done);
+  const catalogPath =
+    mainInterest === 'rent_items'
+      ? '/business/rentals/catalog'
+      : '/business/items';
+  const viewItemsLabel =
+    mainInterest === 'rent_items'
+      ? t('business.setup.ctaViewRentals', 'View rentals')
+      : t('business.setup.ctaViewItems', 'View items');
 
   return (
     <Card
@@ -191,6 +199,15 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
               }}
             >
               {current.cta}
+            </Button>
+          ) : null}
+          {hasCatalogItem ? (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(catalogPath)}
+            >
+              {viewItemsLabel}
             </Button>
           ) : null}
           {onRefresh ? (
@@ -341,10 +358,8 @@ function buildStripeRailSteps(params: BuildParams): SetupStep[] {
       ),
       done: status.steps.catalog?.complete === true,
       current: next === 'publish_catalog',
-      to: catalogPending ? undefined : firstItemOnboardingPath(mainInterest),
-      cta: catalogPending
-        ? undefined
-        : t('business.setup.ctaCatalog', 'Add product'),
+      to: firstItemOnboardingPath(mainInterest),
+      cta: t('business.setup.ctaCatalog', 'Add product'),
       pendingNote: catalogPending
         ? t(
             'business.verification.catalogPendingNotice',

@@ -1727,6 +1727,8 @@
       "stepCatalog": "Add your first product",
       "stepCatalogDesc": "Publish an approved product or rental to open your storefront.",
       "ctaCatalog": "Add product",
+      "ctaViewItems": "View items",
+      "ctaViewRentals": "View rentals",
       "stepPreview": "Preview your store",
       "stepPreviewDesc": "See how customers will discover your products."
     },

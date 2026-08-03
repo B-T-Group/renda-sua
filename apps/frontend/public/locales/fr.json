@@ -1470,6 +1470,8 @@
       "stepCatalog": "Ajoutez votre premier produit",
       "stepCatalogDesc": "Publiez un produit ou une location approuvé pour ouvrir votre vitrine.",
       "ctaCatalog": "Ajouter un produit",
+      "ctaViewItems": "Voir les articles",
+      "ctaViewRentals": "Voir les locations",
       "stepPreview": "Prévisualiser votre boutique",
       "stepPreviewDesc": "Voyez comment les clients découvriront vos produits."
     },

@@ -39,6 +39,14 @@ export const BusinessVerificationBanner: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const mainInterest = profile?.business?.main_interest ?? 'sell_items';
   const catalogPath = firstItemOnboardingPath(mainInterest);
+  const itemsListPath =
+    mainInterest === 'rent_items'
+      ? '/business/rentals/catalog'
+      : '/business/items';
+  const viewItemsLabel =
+    mainInterest === 'rent_items'
+      ? t('business.setup.ctaViewRentals', 'View rentals')
+      : t('business.setup.ctaViewItems', 'View items');
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -261,15 +269,25 @@ export const BusinessVerificationBanner: React.FC = () => {
               {t('mobilePaymentPhone.verifyCta', 'Verify mobile money number')}
             </Button>
           ) : null}
-          {status.nextAction === 'publish_catalog' &&
-          !status.steps.catalog?.hasPendingItem &&
-          !status.steps.catalog?.hasPendingRental ? (
+          {status.nextAction === 'publish_catalog' ? (
             <Button
               variant="contained"
               color="warning"
               onClick={() => navigate(catalogPath)}
             >
               {t('business.verification.addProduct', 'Add a product')}
+            </Button>
+          ) : null}
+          {status.steps.catalog?.hasPendingItem ||
+          status.steps.catalog?.hasApprovedItem ||
+          status.steps.catalog?.hasPendingRental ||
+          status.steps.catalog?.hasApprovedRental ? (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => navigate(itemsListPath)}
+            >
+              {viewItemsLabel}
             </Button>
           ) : null}
           <Button
