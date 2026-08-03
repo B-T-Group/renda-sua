@@ -53,6 +53,7 @@ describe('ItemsService privileged field filtering', () => {
       name: 'Safe item',
       business_id: 'business-1',
       is_active: false,
+      moderation_status: 'draft',
     });
   });
 

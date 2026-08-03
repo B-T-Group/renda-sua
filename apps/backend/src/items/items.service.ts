@@ -140,6 +140,9 @@ export class ItemsService {
       business_id: businessId,
       // Never allow clients to activate on create; moderation must approve first
       is_active: false,
+      // Explicit draft so create-from-image / catalog creates never inherit a
+      // surprising status if defaults or presets change.
+      moderation_status: 'draft',
     };
     const result = await this.hasuraSystemService.executeMutation<{
       insert_items_one: {

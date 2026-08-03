@@ -1969,6 +1969,13 @@ export class BusinessItemsService {
   ): Promise<{ id: string; moderation_status: string }> {
     const item = await this.loadItemModerationRow(businessId, itemId);
     if (item.moderation_status !== 'draft') {
+      // Idempotent: retries after a successful submit (or double-tap) should not fail.
+      if (this.isAlreadySubmittedForModeration(item.moderation_status)) {
+        return {
+          id: item.id,
+          moderation_status: item.moderation_status,
+        };
+      }
       throw new HttpException(
         'Only draft items can be published',
         HttpStatus.BAD_REQUEST
@@ -1982,6 +1989,14 @@ export class BusinessItemsService {
     }>(PUBLISH_ITEM_FROM_DRAFT, { id: itemId });
     const row = result.update_items?.returning?.[0];
     if (!row || result.update_items.affected_rows < 1) {
+      // Lost the race to another publish — treat submitted state as success.
+      const again = await this.loadItemModerationRow(businessId, itemId);
+      if (this.isAlreadySubmittedForModeration(again.moderation_status)) {
+        return {
+          id: again.id,
+          moderation_status: again.moderation_status,
+        };
+      }
       throw new HttpException(
         'Failed to publish item',
         HttpStatus.BAD_REQUEST
@@ -2006,7 +2021,7 @@ export class BusinessItemsService {
     item: { id: string; moderation_status: string };
     inventory: { id: string };
   }> {
-    const itemRow = await this.hasuraUserService.executeQuery<{
+    const itemRow = await this.hasuraSystemService.executeQuery<{
       items_by_pk: {
         id: string;
         business_id: string;
@@ -2021,7 +2036,10 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
-    if (item.moderation_status !== 'draft') {
+    if (
+      item.moderation_status !== 'draft' &&
+      !this.isAlreadySubmittedForModeration(item.moderation_status)
+    ) {
       throw new HttpException(
         'Only draft items can be published',
         HttpStatus.BAD_REQUEST
@@ -2038,6 +2056,7 @@ export class BusinessItemsService {
         : item.price ?? 0;
 
     if (
+      item.moderation_status === 'draft' &&
       input.sellingPrice != null &&
       !Number.isNaN(input.sellingPrice) &&
       input.sellingPrice !== item.price
@@ -2199,6 +2218,15 @@ export class BusinessItemsService {
       );
     }
     return item;
+  }
+
+  private isAlreadySubmittedForModeration(status: string): boolean {
+    return (
+      status === 'pending' ||
+      status === 'ai_reviewing' ||
+      status === 'approved' ||
+      status === 'proposal_pending'
+    );
   }
 
   private async resetRejectedItemToPendingModeration(
@@ -2666,20 +2694,24 @@ export class BusinessItemsService {
     );
     // Idempotent: resume an existing draft linked to this image (eager create race).
     if (image.item_id) {
-      const existing = await this.hasuraUserService.executeQuery<{
+      const existing = await this.hasuraSystemService.executeQuery<{
         items_by_pk: {
           id: string;
           name: string;
           sku: string | null;
           business_id: string;
+          moderation_status: string;
         } | null;
       }>(GET_ITEM_BY_ID, { itemId: image.item_id });
       const row = existing.items_by_pk;
       if (row && row.business_id === businessId) {
+        // Only resume drafts. A linked non-draft means this photo was already
+        // submitted — return it so quick-publish can complete idempotently.
         return {
           id: row.id,
           name: row.name,
           sku: row.sku,
+          moderation_status: row.moderation_status,
         };
       }
       throw new HttpException(
