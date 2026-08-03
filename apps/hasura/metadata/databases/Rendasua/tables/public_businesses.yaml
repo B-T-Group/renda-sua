@@ -227,6 +227,7 @@ select_permissions:
         - is_storefront_visible
         - can_accept_orders
         - ai_tokens
+        - auto_enhance_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
         - referred_by_agent_id
@@ -281,6 +282,7 @@ update_permissions:
         - default_estimated_prep_minutes
         - accepting_orders
         - paused_until
+        - auto_enhance_enabled
       filter:
         user:
           id:

@@ -13,11 +13,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { AiService } from '../ai/ai.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { BusinessTokensService } from '../business-tokens/business-tokens.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { CleanupPreviewDto } from './dto/cleanup-preview.dto';
 import { ValidateImagesDto } from './dto/validate-images.dto';
 import { ImageValidationService } from './image-validation.service';
 import { ReqContext } from '../auth/req-context.decorator';
@@ -30,9 +27,7 @@ import type { RequestContext } from '../auth/request-context';
 export class ImageValidationController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly imageValidationService: ImageValidationService,
-    private readonly aiService: AiService,
-    private readonly businessTokensService: BusinessTokensService
+    private readonly imageValidationService: ImageValidationService
   ) {}
 
   @Post('validate')
@@ -75,44 +70,20 @@ export class ImageValidationController {
 
   @Post('cleanup-preview')
   @ApiOperation({
-    summary: 'AI cleanup preview before S3 upload',
-    description:
-      'Returns a cleaned image preview as base64. Consumes 1 AI token per request.',
+    summary: 'Deprecated — use async AI image cleanup jobs instead',
+    deprecated: true,
   })
-  @ApiBody({ type: CleanupPreviewDto })
-  @ApiResponse({ status: 200, description: 'Cleanup preview generated' })
-  @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  async cleanupPreview(@ReqContext() ctx: RequestContext, @Body() dto: CleanupPreviewDto) {
-    const user = await this.hasuraUserService.getUser(ctx);
-    const businessId = user?.business?.id;
-    if (!businessId) {
-      throw new HttpException(
-        { success: false, error: 'User has no business' },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const { result, balanceAfter } =
-      await this.businessTokensService.runCleanupWithToken(
-        {
-          businessId,
-          userId: user.id,
-          subjectType: 'preview',
-          subjectId: null,
-          imageUrl: dto.imageUrl ?? null,
-        },
-        () =>
-          this.aiService.cleanupProductImage({
-            imageUrl: dto.imageUrl,
-            imageBase64: dto.imageBase64,
-            mimeType: dto.mimeType,
-            issues: dto.issues,
-          })
-      );
-    return {
-      success: true,
-      data: result,
-      ai_tokens_remaining: balanceAfter,
-    };
+  @ApiResponse({ status: 410, description: 'Endpoint removed' })
+  async cleanupPreview() {
+    throw new HttpException(
+      {
+        success: false,
+        error:
+          'cleanup-preview has been removed. Upload the image, then request async AI cleanup.',
+        code: 'CLEANUP_PREVIEW_REMOVED',
+      },
+      HttpStatus.GONE
+    );
   }
 
   private async getBusinessIdOrThrow(ctx: RequestContext): Promise<string> {

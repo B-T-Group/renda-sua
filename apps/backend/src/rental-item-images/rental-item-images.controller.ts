@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,8 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
-import { AiService } from '../ai/ai.service';
-import { BusinessTokensService } from '../business-tokens/business-tokens.service';
+import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateRentalFromImageDto } from './dto/create-rental-from-image.dto';
 import { RentalFromImageSuggestionsDto } from './dto/rental-from-image-suggestions.dto';
@@ -48,8 +46,7 @@ export class RentalItemImagesController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly rentalItemImagesService: RentalItemImagesService,
-    private readonly aiService: AiService,
-    private readonly businessTokensService: BusinessTokensService
+    private readonly aiImageCleanupService: AiImageCleanupService
   ) {}
 
   @Get()
@@ -293,9 +290,10 @@ export class RentalItemImagesController {
 
   @Post(':id/cleanup')
   @ApiOperation({
-    summary: 'AI cleanup preview (base64); accept by PATCH with new URL + is_ai_cleaned. Consumes 1 AI token.',
+    summary:
+      'Enqueue async AI cleanup for a rental image (1 token). Returns jobId immediately.',
   })
-  @ApiResponse({ status: 200, description: 'Returns b64_json for preview' })
+  @ApiResponse({ status: 200, description: 'Cleanup job queued' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
   async cleanup(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
     const user = await this.hasuraUserService.getUser(ctx);
@@ -306,28 +304,15 @@ export class RentalItemImagesController {
         HttpStatus.FORBIDDEN
       );
     }
-    const image = await this.rentalItemImagesService.getImageForBusiness(
-      businessId,
-      id
-    );
-    if (image.is_ai_cleaned) {
-      throw new BadRequestException('Image was already cleaned with AI');
-    }
-    const { result, balanceAfter } =
-      await this.businessTokensService.runCleanupWithToken(
-        {
-          businessId,
-          userId: user.id,
-          subjectType: 'rental_item_image',
-          subjectId: id,
-          imageUrl: image.image_url,
-        },
-        () => this.aiService.cleanupProductImage(image.image_url)
-      );
+    void ctx;
+    const data = await this.aiImageCleanupService.requestRentalImageCleanup(id);
     return {
       success: true,
-      data: result,
-      ai_tokens_remaining: balanceAfter,
+      data: {
+        jobId: data.job.id,
+        job: data.job,
+      },
+      ai_tokens_remaining: data.ai_tokens_remaining,
     };
   }
 

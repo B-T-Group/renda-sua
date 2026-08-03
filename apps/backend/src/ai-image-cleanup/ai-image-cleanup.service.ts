@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { createHash } from 'crypto';
+import axios from 'axios';
 import { AiService } from '../ai/ai.service';
 import { AwsService } from '../aws/aws.service';
 import { CLEANUP_TOKEN_COST } from '../business-tokens/business-tokens.packs';
@@ -20,10 +22,20 @@ import { isActivePersona } from '../users/persona.util';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
 import * as Q from './ai-image-cleanup.queries';
 import type {
+  AiImageCleanupConfidenceTier,
+  AiImageCleanupJobMode,
   AiImageCleanupJobRow,
+  AiImageCleanupJobSource,
   AiImageCleanupResultRow,
   CleanupEligibleImage,
+  VersionedImageRow,
 } from './ai-image-cleanup.types';
+import { EnhancementConfidenceService } from './enhancement-confidence.service';
+import {
+  buildApplyPatch,
+  buildRevertPatch,
+  shouldSkipAutoApply,
+} from './image-versioning.helpers';
 
 @Injectable()
 export class AiImageCleanupService implements OnModuleInit {
@@ -38,7 +50,8 @@ export class AiImageCleanupService implements OnModuleInit {
     private readonly queue: AiImageCleanupQueueService,
     private readonly notifications: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly imageThumbnails: ImageThumbnailsService
+    private readonly imageThumbnails: ImageThumbnailsService,
+    private readonly confidence: EnhancementConfidenceService
   ) {}
 
   onModuleInit(): void {
@@ -49,7 +62,8 @@ export class AiImageCleanupService implements OnModuleInit {
 
   async requestCleanup(
     itemId: string,
-    imageIds?: string[]
+    imageIds?: string[],
+    source: AiImageCleanupJobSource = 'creation'
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
     await this.assertNoOpenJobForItem(itemId);
@@ -64,6 +78,7 @@ export class AiImageCleanupService implements OnModuleInit {
       itemId,
       itemVariantId: null,
       images,
+      source,
     });
   }
 
@@ -84,18 +99,124 @@ export class AiImageCleanupService implements OnModuleInit {
       itemId,
       itemVariantId: variantId,
       images,
+      source: 'variant',
+    });
+  }
+
+  /** Enqueue async cleanup for a single library/item image (replaces sync 180s path). */
+  async requestLibraryImageCleanup(
+    imageId: string,
+    source: AiImageCleanupJobSource = 'library'
+  ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
+    const { businessId, userId } = await this.requireBusinessContext();
+    const image = await this.loadItemImageRow(imageId);
+    if (!image || image.business_id !== businessId) {
+      throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+    }
+    if (image.is_ai_cleaned && image.active_version === 'enhanced') {
+      throw new HttpException(
+        'Image was already cleaned with AI',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.assertNoOpenJobForImage('item_image', imageId);
+    if (image.item_id) {
+      await this.assertNoOpenJobForItem(image.item_id);
+    }
+    return this.enqueueCleanupJob({
+      businessId,
+      userId,
+      itemId: image.item_id,
+      itemVariantId: null,
+      images: [
+        {
+          id: image.id,
+          image_url: image.original_image_url || image.image_url,
+          s3_key: image.original_s3_key || image.s3_key,
+          content_hash: image.content_hash,
+          source: 'item_image',
+        },
+      ],
+      source,
+    });
+  }
+
+  async requestRentalImageCleanup(
+    imageId: string
+  ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
+    const { businessId, userId } = await this.requireBusinessContext();
+    const image = await this.loadRentalImageRow(imageId);
+    if (!image || image.business_id !== businessId) {
+      throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+    }
+    if (image.is_ai_cleaned && image.active_version === 'enhanced') {
+      throw new HttpException(
+        'Image was already cleaned with AI',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.assertNoOpenJobForImage('rental_image', imageId);
+    return this.enqueueCleanupJob({
+      businessId,
+      userId,
+      itemId: null,
+      itemVariantId: null,
+      images: [
+        {
+          id: image.id,
+          image_url: image.original_image_url || image.image_url,
+          s3_key: image.original_s3_key || image.s3_key,
+          content_hash: image.content_hash,
+          source: 'rental_image',
+        },
+      ],
+      source: 'rental',
     });
   }
 
   private async enqueueCleanupJob(args: {
     businessId: string;
     userId: string;
-    itemId: string;
+    itemId: string | null;
     itemVariantId: string | null;
     images: CleanupEligibleImage[];
+    source: AiImageCleanupJobSource;
   }): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
-    const { businessId, userId, itemId, itemVariantId, images } = args;
-    const tokenCost = images.length * CLEANUP_TOKEN_COST;
+    const { businessId, userId, itemId, itemVariantId, images, source } = args;
+    const classified = await this.classifyByContentHash(businessId, images);
+    if (!classified.toProcess.length && classified.reusable.length) {
+      const balanceAfter = await this.tokens.getBalance(businessId);
+      const mode = await this.resolveJobMode(businessId);
+      const job = await this.createJob({
+        businessId,
+        itemId,
+        userId,
+        tokensReserved: 0,
+        itemVariantId,
+        mode,
+        source,
+      });
+      await this.applyReusableEnhancements(job.id, classified.reusable);
+      const now = new Date().toISOString();
+      await this.hasura.executeMutation(Q.UPDATE_JOB, {
+        id: job.id,
+        _set: {
+          status: 'completed',
+          completed_at: now,
+          updated_at: now,
+        },
+      });
+      await this.trackEvent('enhancement_requested', job.id, {
+        source,
+        mode,
+        image_count: 0,
+        reused_count: classified.reusable.length,
+      });
+      const completed = await this.loadJob(job.id);
+      return { job: completed, ai_tokens_remaining: balanceAfter };
+    }
+    const toCharge = classified.toProcess;
+    const tokenCost = toCharge.length * CLEANUP_TOKEN_COST;
     const balanceAfter = await this.tokens.tryReserveTokens(
       businessId,
       tokenCost
@@ -113,14 +234,17 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     let job: AiImageCleanupJobRow | null = null;
     try {
-      job = await this.createJob(
+      const mode = await this.resolveJobMode(businessId);
+      job = await this.createJob({
         businessId,
         itemId,
         userId,
-        tokenCost,
-        itemVariantId
-      );
-      await this.createResults(job.id, images);
+        tokensReserved: tokenCost,
+        itemVariantId,
+        mode,
+        source,
+      });
+      await this.createResults(job.id, toCharge);
       await this.tokens.recordCleanupUsage({
         businessId,
         userId,
@@ -129,6 +253,15 @@ export class AiImageCleanupService implements OnModuleInit {
         tokensConsumed: tokenCost,
       });
       await this.queue.enqueueJob(job.id);
+      if (classified.reusable.length) {
+        await this.applyReusableEnhancements(job.id, classified.reusable);
+      }
+      await this.trackEvent('enhancement_requested', job.id, {
+        source,
+        mode,
+        image_count: toCharge.length,
+        reused_count: classified.reusable.length,
+      });
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
       await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
@@ -136,7 +269,125 @@ export class AiImageCleanupService implements OnModuleInit {
     }
   }
 
-  /** Refund reserved tokens (and cancel the job if created) when setup fails. */
+  private async applyReusableEnhancements(
+    jobId: string,
+    reusable: Array<{ img: CleanupEligibleImage; existing: VersionedImageRow }>
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    for (const entry of reusable) {
+      await this.hasura.executeMutation(Q.INSERT_RESULTS, {
+        objects: [
+          {
+            job_id: jobId,
+            business_image_id:
+              entry.img.source === 'item_image' ? entry.img.id : null,
+            item_variant_image_id:
+              entry.img.source === 'variant_image' ? entry.img.id : null,
+            rental_item_image_id:
+              entry.img.source === 'rental_image' ? entry.img.id : null,
+            original_image_url: entry.img.image_url,
+            original_s3_key: entry.img.s3_key,
+            cleaned_image_url: entry.existing.enhanced_image_url,
+            cleaned_s3_key: entry.existing.enhanced_s3_key,
+            status: 'accepted',
+            confidence_tier: 'high',
+            confidence_score: 1,
+            changes: ['Reused identical prior enhancement'],
+            applied_at: now,
+            completed_at: now,
+            provider: 'dedupe',
+            provider_model: 'content_hash',
+          },
+        ],
+      });
+      await this.reuseEnhancement(entry.img, entry.existing);
+    }
+  }
+
+  private async classifyByContentHash(
+    businessId: string,
+    images: CleanupEligibleImage[]
+  ): Promise<{
+    toProcess: CleanupEligibleImage[];
+    reusable: Array<{ img: CleanupEligibleImage; existing: VersionedImageRow }>;
+  }> {
+    const toProcess: CleanupEligibleImage[] = [];
+    const reusable: Array<{
+      img: CleanupEligibleImage;
+      existing: VersionedImageRow;
+    }> = [];
+    for (const img of images) {
+      const hash =
+        img.content_hash ||
+        (await this.computeContentHash(img.image_url).catch(() => null));
+      if (hash) {
+        img.content_hash = hash;
+        const existing = await this.findEnhancedByHash(businessId, hash);
+        if (existing?.enhanced_image_url) {
+          reusable.push({ img, existing });
+          continue;
+        }
+      }
+      toProcess.push(img);
+    }
+    return { toProcess, reusable };
+  }
+
+  private async reuseEnhancement(
+    img: CleanupEligibleImage,
+    existing: VersionedImageRow
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const patch = {
+      original_image_url: img.image_url,
+      original_s3_key: img.s3_key,
+      enhanced_image_url: existing.enhanced_image_url,
+      enhanced_s3_key: existing.enhanced_s3_key,
+      image_url: existing.enhanced_image_url,
+      s3_key: existing.enhanced_s3_key,
+      active_version: 'enhanced',
+      is_ai_cleaned: true,
+      enhanced_at: now,
+      reverted_at: null,
+      content_hash: img.content_hash,
+    };
+    if (img.source === 'item_image') {
+      await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
+        id: img.id,
+        _set: patch,
+      });
+      void this.imageThumbnails.regenerate('item_image', img.id);
+    } else if (img.source === 'variant_image') {
+      await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
+        id: img.id,
+        _set: patch,
+      });
+      void this.imageThumbnails.regenerate('item_variant_image', img.id);
+    } else {
+      await this.hasura.executeMutation(Q.UPDATE_RENTAL_IMAGE, {
+        id: img.id,
+        _set: patch,
+      });
+      void this.imageThumbnails.regenerate('rental_item_image', img.id);
+    }
+  }
+
+  private async resolveJobMode(
+    businessId: string
+  ): Promise<AiImageCleanupJobMode> {
+    const forceReview = process.env.AI_ENHANCEMENT_FORCE_REVIEW_ALL === 'true';
+    if (forceReview) return 'review_all';
+    const shadowOnly = process.env.AI_ENHANCEMENT_SHADOW_ONLY === 'true';
+    if (shadowOnly) return 'review_all';
+    const data = await this.hasura.executeQuery<{
+      businesses_by_pk: { auto_enhance_enabled: boolean } | null;
+    }>(Q.GET_BUSINESS_AUTO_ENHANCE, { businessId });
+    // Default: auto_apply when preference is on (Phase 3+)
+    return data.businesses_by_pk?.auto_enhance_enabled === false
+      ? 'review_all'
+      : 'auto_apply';
+  }
+
   private async rollbackFailedRequest(
     businessId: string,
     tokenCost: number,
@@ -162,12 +413,33 @@ export class AiImageCleanupService implements OnModuleInit {
     const data = await this.hasura.executeQuery<{
       ai_image_cleanup_jobs: AiImageCleanupJobRow[];
     }>(Q.GET_PENDING_JOBS, { businessId });
-    const jobs = data.ai_image_cleanup_jobs ?? [];
-    const pendingResultCount = jobs.reduce(
+    const jobs = (data.ai_image_cleanup_jobs ?? []).map((job) => ({
+      ...job,
+      results: (job.results ?? []).filter((r) => {
+        if (r.status === 'failed') return true;
+        if (r.status !== 'ready') return false;
+        // Hold for review: low tier, missing tier, review_all mode, or auto-apply skipped.
+        if (job.mode === 'review_all') return true;
+        if (!r.confidence_tier || r.confidence_tier === 'low') return true;
+        if (!r.applied_at) return true;
+        return false;
+      }),
+    }));
+    const withPending = jobs.filter((j) => (j.results?.length ?? 0) > 0);
+    const pendingResultCount = withPending.reduce(
       (sum, j) => sum + (j.results?.length ?? 0),
       0
     );
-    return { jobs, pendingResultCount };
+    return { jobs: withPending, pendingResultCount };
+  }
+
+  async listActivity(): Promise<{ results: AiImageCleanupResultRow[] }> {
+    const { businessId } = await this.requireBusinessContext();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const data = await this.hasura.executeQuery<{
+      ai_image_cleanup_results: AiImageCleanupResultRow[];
+    }>(Q.GET_RECENT_ACTIVITY, { businessId, since });
+    return { results: data.ai_image_cleanup_results ?? [] };
   }
 
   async getJob(jobId: string): Promise<AiImageCleanupJobRow> {
@@ -177,42 +449,200 @@ export class AiImageCleanupService implements OnModuleInit {
     return job;
   }
 
+  async getAutoEnhancePreference(): Promise<{
+    auto_enhance_enabled: boolean;
+    ai_tokens: number;
+  }> {
+    const { businessId } = await this.requireBusinessContext();
+    const data = await this.hasura.executeQuery<{
+      businesses_by_pk: {
+        auto_enhance_enabled: boolean;
+        ai_tokens: number;
+      } | null;
+    }>(Q.GET_BUSINESS_AUTO_ENHANCE, { businessId });
+    return {
+      auto_enhance_enabled: data.businesses_by_pk?.auto_enhance_enabled ?? true,
+      ai_tokens: data.businesses_by_pk?.ai_tokens ?? 0,
+    };
+  }
+
+  async setAutoEnhancePreference(
+    enabled: boolean
+  ): Promise<{ auto_enhance_enabled: boolean }> {
+    const { businessId } = await this.requireBusinessContext();
+    const data = await this.hasura.executeMutation<{
+      update_businesses_by_pk: { id: string; auto_enhance_enabled: boolean };
+    }>(Q.UPDATE_BUSINESS_AUTO_ENHANCE, { id: businessId, enabled });
+    await this.trackEvent(
+      enabled ? 'enhancement_opted_in' : 'enhancement_opted_out',
+      businessId,
+      {}
+    );
+    return {
+      auto_enhance_enabled:
+        data.update_businesses_by_pk?.auto_enhance_enabled ?? enabled,
+    };
+  }
+
   async acceptResult(resultId: string): Promise<{ success: boolean }> {
     const { businessId } = await this.requireBusinessContext();
     const result = await this.loadResult(resultId);
     this.assertResultOwned(result, businessId);
     if (result.status !== 'ready') {
-      throw new HttpException('Result is not ready to accept', HttpStatus.BAD_REQUEST);
-    }
-    if (!result.cleaned_image_url) {
-      throw new HttpException('No cleaned image available', HttpStatus.BAD_REQUEST);
-    }
-    const patch = {
-      image_url: result.cleaned_image_url,
-      s3_key: result.cleaned_s3_key,
-      is_ai_cleaned: true,
-    };
-    if (result.item_variant_image_id) {
-      await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
-        id: result.item_variant_image_id,
-        _set: patch,
-      });
-      void this.imageThumbnails.regenerate(
-        'item_variant_image',
-        result.item_variant_image_id
+      throw new HttpException(
+        'Result is not ready to accept',
+        HttpStatus.BAD_REQUEST
       );
-    } else if (result.business_image_id) {
-      await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
-        id: result.business_image_id,
-        _set: patch,
-      });
-      void this.imageThumbnails.regenerate('item_image', result.business_image_id);
-    } else {
-      throw new HttpException('Result has no source image', HttpStatus.BAD_REQUEST);
     }
-    await this.markResult(resultId, 'accepted');
+    const applied = await this.applyEnhancement(result, { force: true });
+    if (!applied) {
+      throw new HttpException(
+        'Could not apply enhancement (image changed or already reverted)',
+        HttpStatus.CONFLICT
+      );
+    }
+    await this.markResult(resultId, 'accepted', {
+      applied_at: new Date().toISOString(),
+    });
     await this.maybeCompleteJob(result.job_id);
+    await this.trackEvent('enhancement_approved', resultId, {
+      job_id: result.job_id,
+      tier: result.confidence_tier,
+    });
     return { success: true };
+  }
+
+  async revertResult(resultId: string): Promise<{ success: boolean }> {
+    const { businessId } = await this.requireBusinessContext();
+    const result = await this.loadResult(resultId);
+    this.assertResultOwned(result, businessId);
+    if (result.status !== 'accepted') {
+      throw new HttpException(
+        'Only accepted enhancements can be reverted',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.revertEnhancement(result);
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(Q.UPDATE_RESULT, {
+      id: resultId,
+      _set: { reverted_at: now, updated_at: now },
+    });
+    await this.trackEvent('enhancement_reverted', resultId, {
+      job_id: result.job_id,
+      tier: result.confidence_tier,
+    });
+    return { success: true };
+  }
+
+  async reapplyResult(resultId: string): Promise<{ success: boolean }> {
+    const { businessId } = await this.requireBusinessContext();
+    const result = await this.loadResult(resultId);
+    this.assertResultOwned(result, businessId);
+    if (result.status !== 'accepted' || !result.cleaned_image_url) {
+      throw new HttpException(
+        'Nothing to reapply',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.reapplyEnhancement(result);
+    await this.hasura.executeMutation(Q.UPDATE_RESULT, {
+      id: resultId,
+      _set: {
+        reverted_at: null,
+        applied_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    });
+    await this.trackEvent('enhancement_reapplied', resultId, {
+      job_id: result.job_id,
+    });
+    return { success: true };
+  }
+
+  /**
+   * Pointer-flip apply: preserve original_*, set enhanced_*, flip live URL.
+   * Skips if merchant already reverted or source image was replaced.
+   */
+  async applyEnhancement(
+    result: AiImageCleanupResultRow,
+    opts: { force?: boolean } = {}
+  ): Promise<boolean> {
+    if (!result.cleaned_image_url) return false;
+    const row = await this.loadSourceImage(result);
+    if (!row) return false;
+    if (
+      shouldSkipAutoApply({
+        revertedAt: row.reverted_at,
+        liveS3Key: row.s3_key,
+        activeVersion: row.active_version,
+        expectedOriginalKey: result.original_s3_key,
+        force: opts.force,
+      })
+    ) {
+      return false;
+    }
+    const patch = buildApplyPatch({
+      result,
+      row,
+      contentHash: row.content_hash,
+      now: new Date().toISOString(),
+    });
+    if (!patch.content_hash && result.original_image_url) {
+      const hash = await this.computeContentHash(result.original_image_url).catch(
+        () => null
+      );
+      if (hash) {
+        (patch as { content_hash?: string }).content_hash = hash;
+      }
+    }
+    await this.updateSourceImage(result, patch);
+    this.regenerateThumb(result);
+    return true;
+  }
+
+  private async revertEnhancement(
+    result: AiImageCleanupResultRow
+  ): Promise<void> {
+    const row = await this.loadSourceImage(result);
+    if (!row) {
+      throw new HttpException('Source image not found', HttpStatus.NOT_FOUND);
+    }
+    const originalUrl = row.original_image_url || result.original_image_url;
+    const originalKey =
+      row.original_s3_key ?? result.original_s3_key ?? null;
+    if (!originalUrl) {
+      throw new HttpException('Original image missing', HttpStatus.CONFLICT);
+    }
+    const patch = buildRevertPatch({
+      originalUrl,
+      originalKey,
+      now: new Date().toISOString(),
+    });
+    await this.updateSourceImage(result, patch);
+    this.regenerateThumb(result);
+  }
+
+  private async reapplyEnhancement(
+    result: AiImageCleanupResultRow
+  ): Promise<void> {
+    const row = await this.loadSourceImage(result);
+    if (!row?.enhanced_image_url && !result.cleaned_image_url) {
+      throw new HttpException('Enhanced image missing', HttpStatus.CONFLICT);
+    }
+    const enhancedUrl = row?.enhanced_image_url || result.cleaned_image_url;
+    const enhancedKey =
+      row?.enhanced_s3_key ?? result.cleaned_s3_key ?? null;
+    const now = new Date().toISOString();
+    await this.updateSourceImage(result, {
+      image_url: enhancedUrl,
+      s3_key: enhancedKey,
+      active_version: 'enhanced',
+      is_ai_cleaned: true,
+      enhanced_at: now,
+      reverted_at: null,
+    });
+    this.regenerateThumb(result);
   }
 
   async cancelJob(jobId: string): Promise<{ success: boolean }> {
@@ -231,8 +661,6 @@ export class AiImageCleanupService implements OnModuleInit {
       updatedAt: now,
       completedAt: now,
     });
-    // Accepted results stay applied; if any exist, mark completed rather than
-    // cancelled so history reflects that some cleaned images were kept.
     const refreshed = await this.loadJob(jobId);
     const anyAccepted = (refreshed.results ?? []).some(
       (r) => r.status === 'accepted'
@@ -253,10 +681,17 @@ export class AiImageCleanupService implements OnModuleInit {
     const result = await this.loadResult(resultId);
     this.assertResultOwned(result, businessId);
     if (result.status !== 'ready' && result.status !== 'failed') {
-      throw new HttpException('Result cannot be rejected', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Result cannot be rejected',
+        HttpStatus.BAD_REQUEST
+      );
     }
     await this.markResult(resultId, 'rejected');
     await this.maybeCompleteJob(result.job_id);
+    await this.trackEvent('enhancement_rejected', resultId, {
+      job_id: result.job_id,
+      tier: result.confidence_tier,
+    });
     return { success: true };
   }
 
@@ -269,7 +704,10 @@ export class AiImageCleanupService implements OnModuleInit {
     const result = await this.loadResult(resultId);
     this.assertResultOwned(result, businessId);
     if (result.status !== 'rejected' && result.status !== 'failed') {
-      throw new HttpException('Only rejected or failed results can be retried', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Only rejected or failed results can be retried',
+        HttpStatus.BAD_REQUEST
+      );
     }
     const balanceAfter = await this.tokens.tryReserveTokens(
       businessId,
@@ -286,7 +724,6 @@ export class AiImageCleanupService implements OnModuleInit {
       );
     }
     const inserted = await this.insertRetryResult(result);
-    // Hide the superseded failure/reject so the review list only shows the new attempt.
     if (result.status === 'failed' || result.status === 'rejected') {
       await this.markResult(result.id, 'rejected');
     }
@@ -325,7 +762,6 @@ export class AiImageCleanupService implements OnModuleInit {
     return { success: true };
   }
 
-  /** Atomically move the job from queued to processing; false if another worker owns it. */
   private async claimJob(jobId: string): Promise<boolean> {
     const data = await this.hasura.executeMutation<{
       update_ai_image_cleanup_jobs: { affected_rows: number };
@@ -333,7 +769,6 @@ export class AiImageCleanupService implements OnModuleInit {
     return (data.update_ai_image_cleanup_jobs?.affected_rows ?? 0) > 0;
   }
 
-  /** Atomically move a result from queued to processing; false if already claimed. */
   private async claimResult(resultId: string): Promise<boolean> {
     const data = await this.hasura.executeMutation<{
       update_ai_image_cleanup_results: { affected_rows: number };
@@ -350,9 +785,14 @@ export class AiImageCleanupService implements OnModuleInit {
     try {
       const uploaded = await this.cleanupAndUpload(
         job.business_id,
-        job.item_id,
+        job.item_id ?? 'library',
         result.original_image_url
       );
+      const assessment = await this.confidence.assess(
+        result.original_image_url,
+        uploaded.url
+      );
+      const now = new Date().toISOString();
       await this.hasura.executeMutation(Q.UPDATE_RESULT, {
         id: result.id,
         _set: {
@@ -360,10 +800,50 @@ export class AiImageCleanupService implements OnModuleInit {
           cleaned_image_url: uploaded.url,
           cleaned_s3_key: uploaded.key,
           error_message: null,
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          confidence_score: assessment.score,
+          confidence_tier: assessment.tier,
+          confidence_signals: assessment.signals,
+          changes: assessment.changes,
+          provider: 'openai',
+          provider_model: 'gpt-image-1.5',
+          completed_at: now,
+          updated_at: now,
         },
       });
+      await this.trackEvent('enhancement_completed', result.id, {
+        job_id: job.id,
+        tier: assessment.tier,
+        score: assessment.score,
+        mode: job.mode,
+      });
+
+      const refreshed = { ...result, cleaned_image_url: uploaded.url, cleaned_s3_key: uploaded.key, confidence_tier: assessment.tier };
+      if (
+        job.mode === 'auto_apply' &&
+        (assessment.tier === 'high' || assessment.tier === 'medium')
+      ) {
+        const applied = await this.applyEnhancement(refreshed);
+        if (applied) {
+          await this.markResult(result.id, 'accepted', {
+            applied_at: now,
+          });
+          await this.trackEvent('enhancement_auto_applied', result.id, {
+            job_id: job.id,
+            tier: assessment.tier,
+          });
+        } else {
+          await this.trackEvent('enhancement_held_for_review', result.id, {
+            job_id: job.id,
+            tier: assessment.tier,
+            reason: 'apply_skipped',
+          });
+        }
+      } else if (assessment.tier === 'low' || job.mode === 'review_all') {
+        await this.trackEvent('enhancement_held_for_review', result.id, {
+          job_id: job.id,
+          tier: assessment.tier,
+        });
+      }
       return 'ready';
     } catch (error: any) {
       this.logger.warn(
@@ -379,6 +859,10 @@ export class AiImageCleanupService implements OnModuleInit {
         },
       });
       await this.tokens.refundTokens(job.business_id, CLEANUP_TOKEN_COST);
+      await this.trackEvent('enhancement_failed', result.id, {
+        job_id: job.id,
+        error: error?.message,
+      });
       return 'failed';
     }
   }
@@ -389,26 +873,50 @@ export class AiImageCleanupService implements OnModuleInit {
     refunded: number
   ): Promise<void> {
     const refreshed = await this.loadJob(job.id);
-    const readyCount = (refreshed.results ?? []).filter(
+    const readyForReview = (refreshed.results ?? []).filter(
       (r) => r.status === 'ready'
-    ).length;
-    const status = readyCount > 0 ? 'ready_for_review' : 'failed';
+    );
+    const anyAccepted = (refreshed.results ?? []).some(
+      (r) => r.status === 'accepted'
+    );
+    const anyFailed = (refreshed.results ?? []).some(
+      (r) => r.status === 'failed'
+    );
+    let status: AiImageCleanupJobRow['status'];
+    if (readyForReview.length > 0) {
+      status = 'ready_for_review';
+    } else if (anyAccepted) {
+      status = 'completed';
+    } else if (anyFailed) {
+      status = 'failed';
+    } else {
+      status = 'completed';
+    }
+    const now = new Date().toISOString();
     await this.hasura.executeMutation(Q.UPDATE_JOB, {
       id: job.id,
       _set: {
         status,
         tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
         tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
+        ...(status === 'completed' || status === 'failed'
+          ? { completed_at: now }
+          : {}),
       },
     });
     const forNotify = await this.loadJob(job.id);
-    await this.notifyProcessed(forNotify, status === 'ready_for_review');
+    const needsReview = readyForReview.length > 0;
+    const autoAppliedCount = (forNotify.results ?? []).filter(
+      (r) => r.status === 'accepted' && r.applied_at
+    ).length;
+    await this.notifyProcessed(forNotify, needsReview, autoAppliedCount);
   }
 
   private async notifyProcessed(
     job: AiImageCleanupJobRow,
-    anyReady: boolean
+    needsReview: boolean,
+    autoAppliedCount: number
   ): Promise<void> {
     const data = await this.hasura.executeQuery<{
       businesses_by_pk: {
@@ -418,8 +926,6 @@ export class AiImageCleanupService implements OnModuleInit {
     }>(Q.GET_BUSINESS_USER, { businessId: job.business_id });
     const userId = data.businesses_by_pk?.user_id;
     if (!userId) return;
-    const readyCount = (job.results ?? []).filter((r) => r.status === 'ready')
-      .length;
     const lang =
       data.businesses_by_pk?.user?.preferred_language?.toLowerCase() ?? 'en';
     const isFr = lang.startsWith('fr');
@@ -427,29 +933,42 @@ export class AiImageCleanupService implements OnModuleInit {
       job.item_variant?.name ??
       job.item?.name ??
       (isFr ? 'votre article' : 'your item');
-    const title = anyReady
-      ? isFr
-        ? 'Photos nettoyées prêtes'
-        : 'AI-cleaned photos ready'
-      : isFr
+    let title: string;
+    let body: string;
+    let type: string;
+    if (needsReview) {
+      const readyCount = (job.results ?? []).filter(
+        (r) => r.status === 'ready'
+      ).length;
+      title = isFr ? 'Photos à examiner' : 'Photos need review';
+      body = isFr
+        ? `${readyCount} photo(s) nécessitent votre avis pour « ${itemName} ».`
+        : `${readyCount} photo(s) need your review for “${itemName}”.`;
+      type = 'ai_image_cleanup_ready';
+    } else if (autoAppliedCount > 0) {
+      title = isFr ? 'Photos améliorées' : 'Photos enhanced';
+      body = isFr
+        ? `${autoAppliedCount} photo(s) améliorées pour « ${itemName} ».`
+        : `${autoAppliedCount} photo(s) enhanced for “${itemName}”.`;
+      type = 'ai_image_cleanup_applied';
+    } else {
+      title = isFr
         ? 'Échec du nettoyage des photos'
         : 'Photo cleanup failed';
-    const body = anyReady
-      ? isFr
-        ? `${readyCount} photo(s) prêtes à examiner pour « ${itemName} ».`
-        : `${readyCount} photo(s) ready to review for “${itemName}”.`
-      : isFr
-        ? `Le nettoyage IA a échoué pour « ${itemName} ». Vos jetons ont été remboursés. Vous pouvez réessayer.`
-        : `AI cleanup failed for “${itemName}”. Your tokens were refunded. You can retry.`;
+      body = isFr
+        ? `Le nettoyage IA a échoué pour « ${itemName} ». Vos jetons ont été remboursés.`
+        : `AI cleanup failed for “${itemName}”. Your tokens were refunded.`;
+      type = 'ai_image_cleanup_ready';
+    }
     try {
       await this.notifications.sendAiImageCleanupReadyPush({
         userId,
         title,
         body,
         data: {
-          type: 'ai_image_cleanup_ready',
+          type,
           jobId: job.id,
-          itemId: job.item_id,
+          itemId: job.item_id ?? '',
           ...(job.item_variant_id ? { variantId: job.item_variant_id } : {}),
           url: `/business/items/ai-image-cleanup/${job.id}`,
         },
@@ -492,7 +1011,10 @@ export class AiImageCleanupService implements OnModuleInit {
   }> {
     const user = await this.hasuraUser.getUser();
     if (!isActivePersona(user, 'business') || !user.business?.id) {
-      throw new HttpException('Business profile required', HttpStatus.FORBIDDEN);
+      throw new HttpException(
+        'Business profile required',
+        HttpStatus.FORBIDDEN
+      );
     }
     return { businessId: user.business.id, userId: user.id };
   }
@@ -521,6 +1043,25 @@ export class AiImageCleanupService implements OnModuleInit {
     }
   }
 
+  private async assertNoOpenJobForImage(
+    source: 'item_image' | 'rental_image',
+    imageId: string
+  ): Promise<void> {
+    const query =
+      source === 'item_image'
+        ? Q.GET_OPEN_JOB_FOR_ITEM_IMAGE
+        : Q.GET_OPEN_JOB_FOR_RENTAL_IMAGE;
+    const data = await this.hasura.executeQuery<{
+      ai_image_cleanup_results: { id: string }[];
+    }>(query, { imageId });
+    if (data.ai_image_cleanup_results?.length) {
+      throw new HttpException(
+        'An AI cleanup job is already in progress for this image',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
   private async loadEligibleItemImages(
     itemId: string,
     businessId: string,
@@ -528,18 +1069,16 @@ export class AiImageCleanupService implements OnModuleInit {
   ): Promise<CleanupEligibleImage[]> {
     const data = await this.hasura.executeQuery<{
       items_by_pk: { id: string; business_id: string } | null;
-      item_images: Array<{
-        id: string;
-        image_url: string;
-        s3_key: string | null;
-        is_ai_cleaned: boolean;
-        business_id: string;
-      }>;
+      item_images: Array<
+        VersionedImageRow & { item_id: string; business_id: string }
+      >;
     }>(Q.GET_ITEM_IMAGES, { itemId, businessId });
     if (!data.items_by_pk || data.items_by_pk.business_id !== businessId) {
       throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
     }
-    let images = (data.item_images ?? []).filter((i) => !i.is_ai_cleaned);
+    let images = (data.item_images ?? []).filter(
+      (i) => !(i.is_ai_cleaned && i.active_version === 'enhanced')
+    );
     if (imageIds != null) {
       const wanted = new Set(imageIds);
       images = images.filter((i) => wanted.has(i.id));
@@ -552,8 +1091,9 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     return images.map((img) => ({
       id: img.id,
-      image_url: img.image_url,
-      s3_key: img.s3_key,
+      image_url: img.original_image_url || img.image_url,
+      s3_key: img.original_s3_key || img.s3_key,
+      content_hash: img.content_hash,
       source: 'item_image' as const,
     }));
   }
@@ -569,18 +1109,15 @@ export class AiImageCleanupService implements OnModuleInit {
         item_id: string;
         item: { id: string; business_id: string } | null;
       } | null;
-      item_variant_images: Array<{
-        id: string;
-        image_url: string;
-        s3_key: string | null;
-        is_ai_cleaned: boolean;
-      }>;
+      item_variant_images: VersionedImageRow[];
     }>(Q.GET_VARIANT_IMAGES, { variantId });
     const variant = data.item_variants_by_pk;
     if (!variant?.item || variant.item.business_id !== businessId) {
       throw new HttpException('Variant not found', HttpStatus.NOT_FOUND);
     }
-    let images = (data.item_variant_images ?? []).filter((i) => !i.is_ai_cleaned);
+    let images = (data.item_variant_images ?? []).filter(
+      (i) => !(i.is_ai_cleaned && i.active_version === 'enhanced')
+    );
     if (imageIds != null) {
       const wanted = new Set(imageIds);
       images = images.filter((i) => wanted.has(i.id));
@@ -595,30 +1132,35 @@ export class AiImageCleanupService implements OnModuleInit {
       itemId: variant.item_id,
       images: images.map((img) => ({
         id: img.id,
-        image_url: img.image_url,
-        s3_key: img.s3_key,
+        image_url: img.original_image_url || img.image_url,
+        s3_key: img.original_s3_key || img.s3_key,
+        content_hash: img.content_hash,
         source: 'variant_image' as const,
       })),
     };
   }
 
-  private async createJob(
-    businessId: string,
-    itemId: string,
-    userId: string,
-    tokensReserved: number,
-    itemVariantId: string | null
-  ): Promise<AiImageCleanupJobRow> {
+  private async createJob(args: {
+    businessId: string;
+    itemId: string | null;
+    userId: string;
+    tokensReserved: number;
+    itemVariantId: string | null;
+    mode: AiImageCleanupJobMode;
+    source: AiImageCleanupJobSource;
+  }): Promise<AiImageCleanupJobRow> {
     const data = await this.hasura.executeMutation<{
       insert_ai_image_cleanup_jobs_one: AiImageCleanupJobRow;
     }>(Q.INSERT_JOB, {
       object: {
-        business_id: businessId,
-        item_id: itemId,
-        item_variant_id: itemVariantId,
-        requested_by_user_id: userId,
+        business_id: args.businessId,
+        item_id: args.itemId,
+        item_variant_id: args.itemVariantId,
+        requested_by_user_id: args.userId,
         status: 'queued',
-        tokens_reserved: tokensReserved,
+        tokens_reserved: args.tokensReserved,
+        mode: args.mode,
+        source: args.source,
       },
     });
     return data.insert_ai_image_cleanup_jobs_one;
@@ -633,6 +1175,7 @@ export class AiImageCleanupService implements OnModuleInit {
         job_id: jobId,
         business_image_id: img.source === 'item_image' ? img.id : null,
         item_variant_image_id: img.source === 'variant_image' ? img.id : null,
+        rental_item_image_id: img.source === 'rental_image' ? img.id : null,
         original_image_url: img.image_url,
         original_s3_key: img.s3_key,
         status: 'queued',
@@ -681,7 +1224,8 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private async markResult(
     resultId: string,
-    status: AiImageCleanupResultRow['status']
+    status: AiImageCleanupResultRow['status'],
+    extra: Record<string, unknown> = {}
   ): Promise<void> {
     await this.hasura.executeMutation(Q.UPDATE_RESULT, {
       id: resultId,
@@ -691,6 +1235,7 @@ export class AiImageCleanupService implements OnModuleInit {
         ...(status === 'accepted' || status === 'rejected'
           ? { completed_at: new Date().toISOString() }
           : {}),
+        ...extra,
       },
     });
   }
@@ -734,6 +1279,7 @@ export class AiImageCleanupService implements OnModuleInit {
           job_id: result.job_id,
           business_image_id: result.business_image_id,
           item_variant_image_id: result.item_variant_image_id,
+          rental_item_image_id: result.rental_item_image_id ?? null,
           original_image_url: result.original_image_url,
           original_s3_key: result.original_s3_key,
           status: 'queued',
@@ -753,5 +1299,145 @@ export class AiImageCleanupService implements OnModuleInit {
         updated_at: new Date().toISOString(),
       },
     });
+  }
+
+  private async loadItemImageRow(
+    id: string
+  ): Promise<(VersionedImageRow & { item_id: string | null; business_id: string }) | null> {
+    const data = await this.hasura.executeQuery<{
+      item_images_by_pk:
+        | (VersionedImageRow & {
+            item_id: string | null;
+            business_id: string;
+          })
+        | null;
+    }>(Q.GET_ITEM_IMAGE_BY_ID, { id });
+    return data.item_images_by_pk;
+  }
+
+  private async loadRentalImageRow(
+    id: string
+  ): Promise<(VersionedImageRow & { business_id: string }) | null> {
+    const data = await this.hasura.executeQuery<{
+      rental_item_images_by_pk:
+        | (VersionedImageRow & { business_id: string })
+        | null;
+    }>(Q.GET_RENTAL_IMAGE_BY_ID, { id });
+    return data.rental_item_images_by_pk;
+  }
+
+  private async loadSourceImage(
+    result: AiImageCleanupResultRow
+  ): Promise<VersionedImageRow | null> {
+    if (result.item_variant_image_id) {
+      const data = await this.hasura.executeQuery<{
+        item_variant_images_by_pk: VersionedImageRow | null;
+      }>(
+        `query($id: uuid!) { item_variant_images_by_pk(id: $id) { ${Q.VERSION_IMAGE_FIELDS} } }`,
+        { id: result.item_variant_image_id }
+      );
+      return data.item_variant_images_by_pk;
+    }
+    if (result.rental_item_image_id) {
+      return this.loadRentalImageRow(result.rental_item_image_id);
+    }
+    if (result.business_image_id) {
+      return this.loadItemImageRow(result.business_image_id);
+    }
+    return null;
+  }
+
+  private async updateSourceImage(
+    result: AiImageCleanupResultRow,
+    patch: Record<string, unknown>
+  ): Promise<void> {
+    if (result.item_variant_image_id) {
+      await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
+        id: result.item_variant_image_id,
+        _set: patch,
+      });
+      return;
+    }
+    if (result.rental_item_image_id) {
+      await this.hasura.executeMutation(Q.UPDATE_RENTAL_IMAGE, {
+        id: result.rental_item_image_id,
+        _set: patch,
+      });
+      return;
+    }
+    if (result.business_image_id) {
+      await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
+        id: result.business_image_id,
+        _set: patch,
+      });
+      return;
+    }
+    throw new HttpException('Result has no source image', HttpStatus.BAD_REQUEST);
+  }
+
+  private regenerateThumb(result: AiImageCleanupResultRow): void {
+    if (result.item_variant_image_id) {
+      void this.imageThumbnails.regenerate(
+        'item_variant_image',
+        result.item_variant_image_id
+      );
+    } else if (result.rental_item_image_id) {
+      void this.imageThumbnails.regenerate(
+        'rental_item_image',
+        result.rental_item_image_id
+      );
+    } else if (result.business_image_id) {
+      void this.imageThumbnails.regenerate(
+        'item_image',
+        result.business_image_id
+      );
+    }
+  }
+
+  private async findEnhancedByHash(
+    businessId: string,
+    contentHash: string
+  ): Promise<VersionedImageRow | null> {
+    const data = await this.hasura.executeQuery<{
+      item_images: VersionedImageRow[];
+    }>(Q.FIND_ENHANCED_BY_HASH, { businessId, contentHash });
+    return data.item_images?.[0] ?? null;
+  }
+
+  private async computeContentHash(imageUrl: string): Promise<string> {
+    const res = await axios.get<ArrayBuffer>(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      maxContentLength: 25 * 1024 * 1024,
+    });
+    return createHash('sha256').update(Buffer.from(res.data)).digest('hex');
+  }
+
+  private async trackEvent(
+    eventType: string,
+    subjectId: string,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await this.hasura.executeMutation(Q.INSERT_SITE_EVENT, {
+        object: {
+          event_type: eventType,
+          subject_type: 'ai_image_cleanup',
+          subject_id: subjectId,
+          metadata,
+          viewer_type: 'system',
+          viewer_id: 'ai-image-cleanup',
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`Analytics event ${eventType} failed: ${error?.message}`);
+    }
+  }
+
+  /** Exposed for unit tests: tier computation without I/O. */
+  computeTierForTest(
+    signals: Parameters<EnhancementConfidenceService['computeTier']>[0]
+  ): AiImageCleanupConfidenceTier {
+    return this.confidence.computeTier(signals);
   }
 }

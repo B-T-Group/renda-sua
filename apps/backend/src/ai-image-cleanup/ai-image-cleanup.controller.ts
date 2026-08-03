@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -31,16 +31,54 @@ export class AiImageCleanupController {
   ) {
     const data = await this.cleanupService.requestCleanup(
       itemId,
-      body?.imageIds
+      body?.imageIds,
+      'creation'
     );
     return { success: true, data };
   }
 
   @Get('ai-image-cleanup/pending')
-  @ApiOperation({ summary: 'List AI cleanup jobs ready for merchant review' })
+  @ApiOperation({
+    summary:
+      'List AI cleanup jobs that need merchant review (low-confidence / review_all)',
+  })
   @ApiResponse({ status: 200, description: 'Pending jobs' })
   async listPending() {
     const data = await this.cleanupService.listPending();
+    return { success: true, data };
+  }
+
+  @Get('ai-image-cleanup/activity')
+  @ApiOperation({
+    summary: 'Recent auto-applied enhancements (for toast hydration)',
+  })
+  async listActivity() {
+    const data = await this.cleanupService.listActivity();
+    return { success: true, data };
+  }
+
+  @Get('ai-image-cleanup/preference')
+  @ApiOperation({ summary: 'Get auto-enhance preference and token balance' })
+  async getPreference() {
+    const data = await this.cleanupService.getAutoEnhancePreference();
+    return { success: true, data };
+  }
+
+  @Patch('ai-image-cleanup/preference')
+  @ApiOperation({ summary: 'Set auto-enhance preference' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { auto_enhance_enabled: { type: 'boolean' } },
+      required: ['auto_enhance_enabled'],
+    },
+  })
+  async setPreference(
+    @Body() body: { auto_enhance_enabled: boolean }
+  ) {
+    const data = await this.cleanupService.setAutoEnhancePreference(
+      !!body.auto_enhance_enabled
+    );
     return { success: true, data };
   }
 
@@ -53,10 +91,26 @@ export class AiImageCleanupController {
   }
 
   @Post('ai-image-cleanup/results/:resultId/accept')
-  @ApiOperation({ summary: 'Accept cleaned image and replace the live URL' })
+  @ApiOperation({
+    summary: 'Accept cleaned image (pointer-flip to enhanced, keep original)',
+  })
   @ApiParam({ name: 'resultId', format: 'uuid' })
   async accept(@Param('resultId') resultId: string) {
     return this.cleanupService.acceptResult(resultId);
+  }
+
+  @Post('ai-image-cleanup/results/:resultId/revert')
+  @ApiOperation({ summary: 'Revert to original after an accepted enhancement' })
+  @ApiParam({ name: 'resultId', format: 'uuid' })
+  async revert(@Param('resultId') resultId: string) {
+    return this.cleanupService.revertResult(resultId);
+  }
+
+  @Post('ai-image-cleanup/results/:resultId/reapply')
+  @ApiOperation({ summary: 'Re-apply enhanced version after a revert' })
+  @ApiParam({ name: 'resultId', format: 'uuid' })
+  async reapply(@Param('resultId') resultId: string) {
+    return this.cleanupService.reapplyResult(resultId);
   }
 
   @Post('ai-image-cleanup/results/:resultId/reject')
@@ -70,7 +124,9 @@ export class AiImageCleanupController {
   }
 
   @Post('ai-image-cleanup/results/:resultId/retry')
-  @ApiOperation({ summary: 'Retry AI cleanup for a rejected/failed result (1 token)' })
+  @ApiOperation({
+    summary: 'Retry AI cleanup for a rejected/failed result (1 token)',
+  })
   @ApiParam({ name: 'resultId', format: 'uuid' })
   async retry(@Param('resultId') resultId: string) {
     const data = await this.cleanupService.retryResult(resultId);

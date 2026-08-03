@@ -49,6 +49,9 @@ insert_permissions:
         - validation_errors
         - validation_warnings
         - validated_at
+        - original_image_url
+        - original_s3_key
+        - content_hash
 select_permissions:
   - role: anonymous
     permission:
@@ -58,6 +61,9 @@ select_permissions:
         - image_url
         - alt_text
         - display_order
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -98,6 +104,14 @@ select_permissions:
         - validation_errors
         - validation_warnings
         - validated_at
+        - original_image_url
+        - original_s3_key
+        - enhanced_image_url
+        - enhanced_s3_key
+        - active_version
+        - enhanced_at
+        - reverted_at
+        - content_hash
         - thumbnail
         - thumbnail_s3_key
         - thumbnail_status
@@ -118,6 +132,9 @@ select_permissions:
         - image_url
         - alt_text
         - display_order
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -157,6 +174,14 @@ update_permissions:
         - validation_errors
         - validation_warnings
         - validated_at
+        - original_image_url
+        - original_s3_key
+        - enhanced_image_url
+        - enhanced_s3_key
+        - active_version
+        - enhanced_at
+        - reverted_at
+        - content_hash
       filter:
         business:
           user:

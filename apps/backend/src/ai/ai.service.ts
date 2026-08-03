@@ -1212,6 +1212,13 @@ The "description" field MUST be written in ${languageLabel}.`;
     return data;
   }
 
+  /** Public wrapper for enhancement confidence VLM self-check. */
+  async runOpenAiChatForConfidence(
+    body: ChatCompletionRequest
+  ): Promise<ChatCompletionResponse> {
+    return this.openAiChatCompletions(body, 60000);
+  }
+
   private messageContentToString(raw: unknown): string {
     if (typeof raw === 'string') {
       return raw;

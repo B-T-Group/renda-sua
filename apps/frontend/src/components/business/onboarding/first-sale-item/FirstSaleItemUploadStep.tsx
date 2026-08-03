@@ -1,5 +1,4 @@
 import {
-  AutoAwesome as AutoAwesomeIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
   ErrorOutline as ErrorOutlineIcon,
@@ -14,9 +13,11 @@ import {
   Collapse,
   Dialog,
   DialogContent,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
+  Switch,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -31,6 +32,7 @@ import {
   SUPPORTED_IMAGE_ACCEPT,
   isSupportedImageFile,
 } from '../../../../constants/supportedImageFormats';
+import { useAiImageCleanup } from '../../../../hooks/useAiImageCleanup';
 import { useImageValidation } from '../../../../hooks/useImageValidation';
 import type { ImageValidationResult } from '../../../../types/imageValidation';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
@@ -59,8 +61,9 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfileContext();
+  const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const { validateFiles, validating } = useImageValidation();
+  const { getPreference, setPreference } = useAiImageCleanup();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>(() => initialFiles);
@@ -68,7 +71,9 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [validationResults, setValidationResults] = useState<ImageValidationResult[]>([]);
-  const [showCleanupStep, setShowCleanupStep] = useState(false);
+  const [autoEnhanceEnabled, setAutoEnhanceEnabled] = useState(true);
+  const [preferenceLoading, setPreferenceLoading] = useState(false);
+  const [preferenceSaving, setPreferenceSaving] = useState(false);
   const [guidelinesOpen, setGuidelinesOpen] = useState(
     () => sessionStorage.getItem(GUIDELINES_DISMISSED_KEY) !== '1'
   );
@@ -77,6 +82,26 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const cleanupEnabled = aiTokensRemaining > 0;
   const tokenCost = files.length;
   const canAfford = aiTokensRemaining >= tokenCost;
+
+  useEffect(() => {
+    if (!cleanupEnabled) return;
+    let cancelled = false;
+    setPreferenceLoading(true);
+    void getPreference()
+      .then((pref) => {
+        if (cancelled) return;
+        setAutoEnhanceEnabled(pref.auto_enhance_enabled);
+        if (typeof pref.ai_tokens === 'number') {
+          updateBusinessAiTokens(pref.ai_tokens);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreferenceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cleanupEnabled, getPreference, updateBusinessAiTokens]);
 
   const objectUrls = useMemo(
     () => files.map((f) => URL.createObjectURL(f)),
@@ -159,8 +184,29 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     onComplete([], files, asyncCleanupRequested);
   };
 
+  const handlePreferenceToggle = async (enabled: boolean) => {
+    setAutoEnhanceEnabled(enabled);
+    setPreferenceSaving(true);
+    try {
+      await setPreference(enabled);
+    } catch (e: any) {
+      setAutoEnhanceEnabled(!enabled);
+      enqueueSnackbar(
+        e?.message ||
+          t(
+            'business.aiImageCleanup.preferenceFailed',
+            'Could not update auto-enhance preference'
+          ),
+        { variant: 'error' }
+      );
+    } finally {
+      setPreferenceSaving(false);
+    }
+  };
+
   const handleContinue = async () => {
     if (files.length < minPhotos) return;
+    if (cleanupEnabled && (preferenceLoading || preferenceSaving)) return;
     setBusy(true);
     try {
       const validation = await validateFiles(files);
@@ -172,11 +218,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         );
         return;
       }
-      if (cleanupEnabled) {
-        setShowCleanupStep(true);
-        return;
-      }
-      finishWithLocalFiles(false);
+      finishWithLocalFiles(cleanupEnabled && autoEnhanceEnabled && canAfford);
     } catch (e: any) {
       enqueueSnackbar(
         e?.message || t('business.onboarding.firstSale.upload.error', 'Failed to upload images'),
@@ -186,83 +228,6 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       setBusy(false);
     }
   };
-
-  const handleOptInAndContinue = () => {
-    finishWithLocalFiles(true);
-  };
-
-  const handleSkipAndContinue = () => {
-    finishWithLocalFiles(false);
-  };
-
-  if (showCleanupStep) {
-    return (
-      <Stack spacing={2.5}>
-        <Box sx={{ textAlign: 'center' }}>
-          <AutoAwesomeIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            {t('business.images.asyncCleanup.title', 'Clean up photos with AI?')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'business.images.asyncCleanup.hint',
-              'We’ll clean your photos in the background after you create the product. You’ll get a notification to review before and after.'
-            )}
-          </Typography>
-        </Box>
-
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2">
-            {t(
-              'business.images.asyncCleanup.tokenCost',
-              'Uses {{count}} AI tokens (1 per photo). You have {{balance}}.',
-              { count: tokenCost, balance: aiTokensRemaining }
-            )}
-          </Typography>
-          {!canAfford ? (
-            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-              {t(
-                'business.images.asyncCleanup.insufficientTokens',
-                'Not enough tokens for all photos.'
-              )}
-            </Typography>
-          ) : null}
-        </Paper>
-
-        <Stack spacing={1.5}>
-          <Button
-            variant="contained"
-            onClick={handleOptInAndContinue}
-            disabled={busy || !canAfford}
-            fullWidth
-            startIcon={<AutoAwesomeIcon />}
-            sx={{ minHeight: 48, textTransform: 'none' }}
-          >
-            {t('business.images.asyncCleanup.yes', 'Yes, clean in background')}
-          </Button>
-          {!canAfford ? (
-            <Button
-              variant="outlined"
-              onClick={() => navigate('/business/ai-tokens')}
-              fullWidth
-              sx={{ minHeight: 48, textTransform: 'none' }}
-            >
-              {t('business.images.asyncCleanup.buyTokens', 'Buy AI tokens')}
-            </Button>
-          ) : null}
-          <Button
-            variant="outlined"
-            onClick={handleSkipAndContinue}
-            disabled={busy}
-            fullWidth
-            sx={{ minHeight: 48, textTransform: 'none' }}
-          >
-            {t('business.images.asyncCleanup.noThanks', 'No thanks')}
-          </Button>
-        </Stack>
-      </Stack>
-    );
-  }
 
   return (
     <Stack
@@ -283,6 +248,65 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           'Add one or more photos. The main photo is used to create the listing; you can change which image is main before continuing. Extra photos attach to the same item.'
         )}
       </Typography>
+
+      {cleanupEnabled ? (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            alignItems={{ sm: 'center' }}
+            justifyContent="space-between"
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle2" fontWeight={600}>
+                {t(
+                  'business.aiImageCleanup.autoEnhanceLabel',
+                  'Auto-enhance photos with AI'
+                )}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'business.aiImageCleanup.autoEnhanceHint',
+                  'Uses 1 AI token per photo. You have {{balance}}.',
+                  { balance: aiTokensRemaining }
+                )}
+              </Typography>
+              {!canAfford && files.length > 0 ? (
+                <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
+                  {t(
+                    'business.images.asyncCleanup.insufficientTokens',
+                    'Not enough tokens for all photos.'
+                  )}
+                </Typography>
+              ) : null}
+            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={autoEnhanceEnabled}
+                  disabled={preferenceLoading || preferenceSaving || busy}
+                  onChange={(_, checked) => void handlePreferenceToggle(checked)}
+                />
+              }
+              label={
+                autoEnhanceEnabled
+                  ? t('business.aiImageCleanup.autoEnhanceOn', 'On')
+                  : t('business.aiImageCleanup.autoEnhanceOff', 'Off')
+              }
+              sx={{ m: 0 }}
+            />
+          </Stack>
+          {!canAfford ? (
+            <Button
+              size="small"
+              sx={{ mt: 1, textTransform: 'none' }}
+              onClick={() => navigate('/business/ai-tokens')}
+            >
+              {t('business.images.asyncCleanup.buyTokens', 'Buy AI tokens')}
+            </Button>
+          ) : null}
+        </Paper>
+      ) : null}
 
       <Collapse in={guidelinesOpen}>
         <Alert
@@ -528,7 +552,12 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
         <Button
           variant="contained"
           onClick={() => void handleContinue()}
-          disabled={busy || validating || files.length < minPhotos}
+          disabled={
+            busy ||
+            validating ||
+            files.length < minPhotos ||
+            (cleanupEnabled && (preferenceLoading || preferenceSaving))
+          }
           fullWidth={isNarrow}
           startIcon={
             busy || validating ? (

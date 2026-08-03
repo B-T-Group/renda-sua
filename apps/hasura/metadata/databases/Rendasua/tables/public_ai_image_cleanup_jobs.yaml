@@ -35,6 +35,8 @@ select_permissions:
         - tokens_reserved
         - tokens_consumed
         - tokens_refunded
+        - mode
+        - source
         - created_at
         - updated_at
         - completed_at

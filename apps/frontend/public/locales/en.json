@@ -1795,6 +1795,11 @@
       "suspended": "Suspended",
       "suspendedTitle": "Store suspended",
       "suspendedNotice": "Your store is hidden and cannot accept orders. Email {{email}} if you believe this is a mistake.",
+      "suspendedReason": {
+        "reliability": "Suspended after too many unanswered orders in the last 30 days.",
+        "admin": "Suspended by Rendasua after an account review.",
+        "unknown": "Your store was suspended and cannot accept orders."
+      },
       "emailSupport": "Email {{email}}",
       "suspendedEmailSubject": "Store suspension appeal",
       "suspendedEmailBody": "Hello,\n\nMy store appears to be suspended. Please review my account.\n\nThank you.",
@@ -2756,6 +2761,29 @@
         "suggestionsError": "Failed to get suggestions from image",
         "createError": "Failed to create item from image",
         "summaryTitle": "Item created from image"
+      }
+    },
+    "aiImageCleanup": {
+      "enhancing": "Enhancing…",
+      "enhancedToast": "Photo enhanced — tap to compare or revert",
+      "compare": "Compare",
+      "compareTitle": "Compare enhancement",
+      "enhanced": "Enhanced",
+      "revert": "Revert",
+      "revertSuccess": "Restored original photo",
+      "reapplySuccess": "Enhanced photo restored",
+      "useOriginal": "Use original",
+      "useEnhanced": "Use enhanced",
+      "actionFailed": "Action failed",
+      "preferenceFailed": "Could not update auto-enhance preference",
+      "autoEnhanceLabel": "Auto-enhance photos with AI",
+      "autoEnhanceHint": "Uses 1 AI token per photo. You have {{balance}}.",
+      "autoEnhanceOn": "On",
+      "autoEnhanceOff": "Off",
+      "confidence": {
+        "high": "High confidence",
+        "medium": "Medium confidence",
+        "low": "Needs review"
       }
     },
     "items": {

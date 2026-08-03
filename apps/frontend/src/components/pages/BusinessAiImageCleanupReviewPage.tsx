@@ -2,6 +2,7 @@ import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Paper,
@@ -23,8 +24,14 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
-  const { getJob, acceptResult, rejectResult, retryResult, cancelJob } =
-    useAiImageCleanup();
+  const {
+    getJob,
+    acceptResult,
+    rejectResult,
+    revertResult,
+    retryResult,
+    cancelJob,
+  } = useAiImageCleanup();
 
   const [results, setResults] = useState<AiImageCleanupResult[]>([]);
   const [itemName, setItemName] = useState('');
@@ -63,7 +70,9 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     void load();
   }, [load]);
 
-  const snackForAction = (action: 'accept' | 'reject' | 'retry' | 'dismiss') => {
+  const snackForAction = (
+    action: 'accept' | 'reject' | 'retry' | 'dismiss' | 'revert'
+  ) => {
     if (action === 'accept') {
       return t('business.images.asyncCleanup.acceptSuccess', 'Image updated');
     }
@@ -76,16 +85,20 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
     if (action === 'reject') {
       return t('business.images.asyncCleanup.rejectSuccess', 'Kept original');
     }
+    if (action === 'revert') {
+      return t('business.aiImageCleanup.revertSuccess', 'Restored original photo');
+    }
     return t('business.images.asyncCleanup.retryStarted', 'Retry started');
   };
 
   const runAction = async (
     resultId: string,
-    action: 'accept' | 'reject' | 'retry' | 'dismiss'
+    action: 'accept' | 'reject' | 'retry' | 'dismiss' | 'revert'
   ) => {
     setBusyId(resultId);
     try {
       if (action === 'accept') await acceptResult(resultId);
+      else if (action === 'revert') await revertResult(resultId);
       else if (action === 'reject' || action === 'dismiss') {
         await rejectResult(resultId);
       } else {
@@ -232,13 +245,13 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
               </Box>
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  {t('business.images.cleanup.cleaned', 'Cleaned')}
+                  {t('business.aiImageCleanup.enhanced', 'Enhanced')}
                 </Typography>
                 {result.cleaned_image_url ? (
                   <Box
                     component="img"
                     src={result.cleaned_image_url}
-                    alt={t('business.images.cleanup.cleaned', 'Cleaned')}
+                    alt={t('business.aiImageCleanup.enhanced', 'Enhanced')}
                     sx={{
                       width: '100%',
                       height: 160,
@@ -271,15 +284,34 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
               </Box>
             </Box>
 
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              {result.confidence_tier ? (
+                <Chip
+                  size="small"
+                  label={t(
+                    `business.aiImageCleanup.confidence.${result.confidence_tier}`,
+                    result.confidence_tier
+                  )}
+                  color={confidenceChipColor(result.confidence_tier)}
+                  variant="outlined"
+                />
+              ) : null}
+              <Chip size="small" label={result.status} variant="outlined" />
+            </Stack>
+
+            {result.changes && result.changes.length > 0 ? (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                {result.changes.map((change) => (
+                  <Chip key={change} size="small" label={change} />
+                ))}
+              </Stack>
+            ) : null}
+
             {result.error_message ? (
               <Typography variant="body2" color="error" sx={{ mb: 1 }}>
                 {result.error_message}
               </Typography>
             ) : null}
-
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              {result.status}
-            </Typography>
 
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {result.status === 'ready' ? (
@@ -306,6 +338,21 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
                     {t('business.images.cleanup.reject', 'Reject')}
                   </Button>
                 </>
+              ) : null}
+              {result.status === 'accepted' && !result.reverted_at ? (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={!!busyId || cancelling}
+                  startIcon={
+                    busyId === result.id ? (
+                      <CircularProgress size={14} color="inherit" />
+                    ) : undefined
+                  }
+                  onClick={() => void runAction(result.id, 'revert')}
+                >
+                  {t('business.aiImageCleanup.revert', 'Revert')}
+                </Button>
               ) : null}
               {result.status === 'failed' || result.status === 'rejected' ? (
                 <>
@@ -362,13 +409,22 @@ const BusinessAiImageCleanupReviewPage: React.FC = () => {
   );
 };
 
+function confidenceChipColor(
+  tier: string
+): 'success' | 'warning' | 'error' | 'default' {
+  if (tier === 'high') return 'success';
+  if (tier === 'medium') return 'warning';
+  if (tier === 'low') return 'error';
+  return 'default';
+}
+
 function isVisibleCleanupResult(
   result: AiImageCleanupResult,
   all: AiImageCleanupResult[]
 ): boolean {
-  if (result.status === 'accepted') return false;
   if (all.some((r) => r.retry_of_result_id === result.id)) return false;
   if (result.status === 'rejected' && !result.cleaned_image_url) return false;
+  if (result.status === 'accepted' && result.reverted_at) return false;
   return true;
 }
 

@@ -11,6 +11,7 @@ import { AiImageCleanupInternalController } from './ai-image-cleanup-internal.co
 import { AiImageCleanupVariantController } from './ai-image-cleanup-variant.controller';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
 import { AiImageCleanupService } from './ai-image-cleanup.service';
+import { EnhancementConfidenceService } from './enhancement-confidence.service';
 
 @Module({
   imports: [
@@ -27,7 +28,11 @@ import { AiImageCleanupService } from './ai-image-cleanup.service';
     AiImageCleanupVariantController,
     AiImageCleanupInternalController,
   ],
-  providers: [AiImageCleanupQueueService, AiImageCleanupService],
+  providers: [
+    AiImageCleanupQueueService,
+    AiImageCleanupService,
+    EnhancementConfidenceService,
+  ],
   exports: [AiImageCleanupService],
 })
 export class AiImageCleanupModule {}

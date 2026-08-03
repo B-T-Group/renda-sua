@@ -42,7 +42,7 @@ import {
 import { alpha } from '@mui/material/styles';
 import axios from 'axios';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -50,13 +50,13 @@ import {
   isSupportedImageFile,
 } from '../../constants/supportedImageFormats';
 import ConfirmationModal from '../common/ConfirmationModal';
-import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { CreateItemFromImageDialog } from '../dialogs/CreateItemFromImageDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessImages, type BusinessImage } from '../../hooks/useBusinessImages';
 import { useBusinessItemSearch } from '../../hooks/useBusinessItemSearch';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useAws } from '../../hooks/useAws';
+import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 
 type StatusFilter = 'all' | 'unassigned' | 'assigned' | 'archived';
 
@@ -319,14 +319,11 @@ const BusinessImagesPage: React.FC = () => {
   const [imageToDelete, setImageToDelete] = useState<BusinessImage | null>(null);
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
   const [imageToView, setImageToView] = useState<BusinessImage | null>(null);
-  const [imageToCleanup, setImageToCleanup] = useState<BusinessImage | null>(
-    null
-  );
-  const [cleanedB64, setCleanedB64] = useState<string | null>(null);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
   const [imageCategoryFilters, setImageCategoryFilters] = useState<
     Record<string, string>
   >({});
+  const { trackJob, inFlightJobIds } = useImageEnhancements();
+  const prevInFlightCountRef = useRef(0);
 
   const bucketName = useMemo(
     () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
@@ -400,21 +397,26 @@ const BusinessImagesPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!imageToCleanup) return;
-    let cancelled = false;
-    cleanupImage(imageToCleanup.id).then((result) => {
-      if (!cancelled && result?.b64_json) {
-        setCleanedB64(result.b64_json);
-        if (typeof result.ai_tokens_remaining === 'number') {
-          updateBusinessAiTokens(result.ai_tokens_remaining);
-        }
-      }
-      if (!cancelled) setCleanupLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [imageToCleanup, cleanupImage, updateBusinessAiTokens]);
+    const prev = prevInFlightCountRef.current;
+    prevInFlightCountRef.current = inFlightJobIds.length;
+    if (prev > 0 && inFlightJobIds.length === 0) {
+      void fetchImages({
+        page,
+        pageSize,
+        sub_category_id: effectiveSubcategoryFilter ?? undefined,
+        status: effectiveStatusFilter,
+        search: search || undefined,
+      });
+    }
+  }, [
+    inFlightJobIds.length,
+    fetchImages,
+    page,
+    pageSize,
+    effectiveSubcategoryFilter,
+    effectiveStatusFilter,
+    search,
+  ]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
@@ -720,7 +722,7 @@ const BusinessImagesPage: React.FC = () => {
     });
   };
 
-  const handleOpenCleanup = (img: BusinessImage) => {
+  const handleOpenCleanup = async (img: BusinessImage) => {
     if (img.is_ai_cleaned) {
       enqueueSnackbar(
         t(
@@ -731,49 +733,22 @@ const BusinessImagesPage: React.FC = () => {
       );
       return;
     }
-    setImageToCleanup(img);
-    setCleanedB64(null);
-    setCleanupLoading(true);
-  };
-
-  const handleCleanupAccept = async () => {
-    if (!imageToCleanup || !cleanedB64) return;
-    try {
-      const byteCharacters = atob(cleanedB64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/png' });
-      const file = new File([blob], 'cleaned-image.png', { type: 'image/png' });
-      const uploaded = await uploadFileToS3(file);
-      await updateImage(imageToCleanup.id, {
-        ...uploaded,
-        is_ai_cleaned: true,
-      });
+    enqueueSnackbar(
+      t('business.aiImageCleanup.enhancing', 'Enhancing…'),
+      { variant: 'info' }
+    );
+    const result = await cleanupImage(img.id);
+    if (!result?.jobId) {
       enqueueSnackbar(
-        t(
-          'business.images.cleanup.success',
-          'Image replaced with cleaned version'
-        ),
-        { variant: 'success' }
-      );
-      setImageToCleanup(null);
-      setCleanedB64(null);
-      handleRefresh();
-    } catch (err: any) {
-      enqueueSnackbar(
-        err?.message ||
-          t('business.images.cleanup.error', 'Failed to cleanup image'),
+        t('business.images.cleanup.error', 'Failed to cleanup image'),
         { variant: 'error' }
       );
+      return;
     }
-  };
-
-  const handleCleanupReject = () => {
-    setImageToCleanup(null);
-    setCleanedB64(null);
+    if (typeof result.ai_tokens_remaining === 'number') {
+      updateBusinessAiTokens(result.ai_tokens_remaining);
+    }
+    trackJob(result.jobId);
   };
 
   const handleEditCaptionAlt = async (
@@ -1699,7 +1674,7 @@ const BusinessImagesPage: React.FC = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<AutoFixHighIcon />}
-                              onClick={() => handleOpenCleanup(img)}
+                              onClick={() => void handleOpenCleanup(img)}
                               disabled={submitting || img.is_ai_cleaned}
                               fullWidth
                             >
@@ -1894,19 +1869,6 @@ const BusinessImagesPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      <ImageCleanupPreviewDialog
-        open={imageToCleanup != null}
-        onClose={() => {
-          setImageToCleanup(null);
-          setCleanedB64(null);
-        }}
-        originalUrl={imageToCleanup?.image_url ?? ''}
-        cleanedB64={cleanedB64}
-        loading={cleanupLoading}
-        onAccept={handleCleanupAccept}
-        onReject={handleCleanupReject}
-      />
     </Box>
   );
 };

@@ -8,6 +8,8 @@ export const JOB_FIELDS = `
   tokens_reserved
   tokens_consumed
   tokens_refunded
+  mode
+  source
   created_at
   updated_at
   completed_at
@@ -18,6 +20,7 @@ export const RESULT_FIELDS = `
   job_id
   business_image_id
   item_variant_image_id
+  rental_item_image_id
   original_image_url
   original_s3_key
   cleaned_image_url
@@ -25,9 +28,32 @@ export const RESULT_FIELDS = `
   status
   error_message
   retry_of_result_id
+  confidence_score
+  confidence_tier
+  confidence_signals
+  changes
+  applied_at
+  reverted_at
+  provider
+  provider_model
   created_at
   updated_at
   completed_at
+`;
+
+export const VERSION_IMAGE_FIELDS = `
+  id
+  image_url
+  s3_key
+  original_image_url
+  original_s3_key
+  enhanced_image_url
+  enhanced_s3_key
+  active_version
+  is_ai_cleaned
+  enhanced_at
+  reverted_at
+  content_hash
 `;
 
 export const INSERT_JOB = `
@@ -78,6 +104,24 @@ export const GET_PENDING_JOBS = `
   }
 `;
 
+export const GET_RECENT_ACTIVITY = `
+  query GetAiImageCleanupActivity($businessId: uuid!, $since: timestamptz!) {
+    ai_image_cleanup_results(
+      where: {
+        job: { business_id: { _eq: $businessId } }
+        applied_at: { _gte: $since }
+        status: { _eq: accepted }
+        reverted_at: { _is_null: true }
+      }
+      order_by: { applied_at: desc }
+      limit: 20
+    ) {
+      ${RESULT_FIELDS}
+      job { ${JOB_FIELDS} item { id name } item_variant { id name } }
+    }
+  }
+`;
+
 export const GET_OPEN_JOB_FOR_ITEM = `
   query GetOpenAiImageCleanupJob($itemId: uuid!) {
     ai_image_cleanup_jobs(
@@ -107,6 +151,36 @@ export const GET_OPEN_JOB_FOR_VARIANT = `
   }
 `;
 
+export const GET_OPEN_JOB_FOR_ITEM_IMAGE = `
+  query GetOpenCleanupJobForItemImage($imageId: uuid!) {
+    ai_image_cleanup_results(
+      where: {
+        business_image_id: { _eq: $imageId }
+        status: { _in: [queued, processing, ready] }
+        job: { status: { _in: [queued, processing, ready_for_review] } }
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
+export const GET_OPEN_JOB_FOR_RENTAL_IMAGE = `
+  query GetOpenCleanupJobForRentalImage($imageId: uuid!) {
+    ai_image_cleanup_results(
+      where: {
+        rental_item_image_id: { _eq: $imageId }
+        status: { _in: [queued, processing, ready] }
+        job: { status: { _in: [queued, processing, ready_for_review] } }
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
 export const GET_ITEM_IMAGES = `
   query GetItemImagesForCleanup($itemId: uuid!, $businessId: uuid!) {
     items_by_pk(id: $itemId) {
@@ -122,10 +196,7 @@ export const GET_ITEM_IMAGES = `
       }
       order_by: [{ display_order: asc_nulls_last }, { created_at: asc }]
     ) {
-      id
-      image_url
-      s3_key
-      is_ai_cleaned
+      ${VERSION_IMAGE_FIELDS}
       item_id
       business_id
     }
@@ -147,11 +218,66 @@ export const GET_VARIANT_IMAGES = `
       where: { item_variant_id: { _eq: $variantId } }
       order_by: [{ display_order: asc }, { created_at: asc }]
     ) {
-      id
-      image_url
-      s3_key
-      is_ai_cleaned
+      ${VERSION_IMAGE_FIELDS}
       item_variant_id
+    }
+  }
+`;
+
+export const GET_ITEM_IMAGE_BY_ID = `
+  query GetItemImageForCleanup($id: uuid!) {
+    item_images_by_pk(id: $id) {
+      ${VERSION_IMAGE_FIELDS}
+      item_id
+      business_id
+    }
+  }
+`;
+
+export const GET_RENTAL_IMAGE_BY_ID = `
+  query GetRentalImageForCleanup($id: uuid!) {
+    rental_item_images_by_pk(id: $id) {
+      ${VERSION_IMAGE_FIELDS}
+      rental_item_id
+      business_id
+    }
+  }
+`;
+
+export const FIND_ENHANCED_BY_HASH = `
+  query FindEnhancedByContentHash($businessId: uuid!, $contentHash: String!) {
+    item_images(
+      where: {
+        business_id: { _eq: $businessId }
+        content_hash: { _eq: $contentHash }
+        enhanced_image_url: { _is_null: false }
+        is_ai_cleaned: { _eq: true }
+      }
+      limit: 1
+    ) {
+      ${VERSION_IMAGE_FIELDS}
+    }
+  }
+`;
+
+export const GET_BUSINESS_AUTO_ENHANCE = `
+  query GetBusinessAutoEnhance($businessId: uuid!) {
+    businesses_by_pk(id: $businessId) {
+      id
+      auto_enhance_enabled
+      ai_tokens
+    }
+  }
+`;
+
+export const UPDATE_BUSINESS_AUTO_ENHANCE = `
+  mutation UpdateBusinessAutoEnhance($id: uuid!, $enabled: Boolean!) {
+    update_businesses_by_pk(
+      pk_columns: { id: $id }
+      _set: { auto_enhance_enabled: $enabled }
+    ) {
+      id
+      auto_enhance_enabled
     }
   }
 `;
@@ -164,7 +290,6 @@ export const UPDATE_JOB = `
   }
 `;
 
-/** Atomically claim a job for processing (only from queued). */
 export const CLAIM_JOB = `
   mutation ClaimAiImageCleanupJob($id: uuid!, $updatedAt: timestamptz!) {
     update_ai_image_cleanup_jobs(
@@ -176,7 +301,6 @@ export const CLAIM_JOB = `
   }
 `;
 
-/** Atomically claim a result for processing (only from queued). */
 export const CLAIM_RESULT = `
   mutation ClaimAiImageCleanupResult($id: uuid!, $updatedAt: timestamptz!) {
     update_ai_image_cleanup_results(
@@ -221,7 +345,7 @@ export const REJECT_ACTIONABLE_RESULTS = `
 export const UPDATE_ITEM_IMAGE = `
   mutation ApplyCleanedItemImage($id: uuid!, $_set: item_images_set_input!) {
     update_item_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
-      id image_url s3_key is_ai_cleaned
+      ${VERSION_IMAGE_FIELDS}
     }
   }
 `;
@@ -229,7 +353,15 @@ export const UPDATE_ITEM_IMAGE = `
 export const UPDATE_VARIANT_IMAGE = `
   mutation ApplyCleanedVariantImage($id: uuid!, $_set: item_variant_images_set_input!) {
     update_item_variant_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
-      id image_url s3_key is_ai_cleaned
+      ${VERSION_IMAGE_FIELDS}
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_IMAGE = `
+  mutation ApplyCleanedRentalImage($id: uuid!, $_set: rental_item_images_set_input!) {
+    update_rental_item_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
+      ${VERSION_IMAGE_FIELDS}
     }
   }
 `;
@@ -252,7 +384,16 @@ export const GET_BUSINESS_USER = `
     businesses_by_pk(id: $businessId) {
       id
       user_id
+      auto_enhance_enabled
       user { id preferred_language }
+    }
+  }
+`;
+
+export const INSERT_SITE_EVENT = `
+  mutation InsertEnhancementSiteEvent($object: site_events_insert_input!) {
+    insert_site_events_one(object: $object) {
+      id
     }
   }
 `;

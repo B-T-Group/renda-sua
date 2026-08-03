@@ -23,6 +23,9 @@ insert_permissions:
         - caption
         - display_order
         - is_primary
+        - original_image_url
+        - original_s3_key
+        - content_hash
 select_permissions:
   - role: agent
     permission:
@@ -35,6 +38,9 @@ select_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -55,6 +61,9 @@ select_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -75,6 +84,14 @@ select_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - original_s3_key
+        - enhanced_image_url
+        - enhanced_s3_key
+        - active_version
+        - enhanced_at
+        - reverted_at
+        - content_hash
         - thumbnail
         - thumbnail_status
         - display_url
@@ -98,6 +115,9 @@ select_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -118,6 +138,9 @@ select_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - enhanced_image_url
+        - active_version
         - thumbnail
         - thumbnail_status
         - display_url
@@ -138,6 +161,14 @@ update_permissions:
         - display_order
         - is_primary
         - is_ai_cleaned
+        - original_image_url
+        - original_s3_key
+        - enhanced_image_url
+        - enhanced_s3_key
+        - active_version
+        - enhanced_at
+        - reverted_at
+        - content_hash
         - updated_at
       filter:
         item_variant:

@@ -46,12 +46,12 @@ import {
   isSupportedImageFile,
 } from '../../constants/supportedImageFormats';
 import ConfirmationModal from '../common/ConfirmationModal';
-import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import {
   CreateRentalFromImageDialog,
   type CreateRentalFromImageEntrySource,
 } from '../dialogs/CreateRentalFromImageDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import {
   useRentalItemImages,
   type RentalItemImage,
@@ -215,6 +215,7 @@ const RentalItemImagesPage: React.FC = () => {
     setPage,
   } = useRentalItemImages();
   const { generateImageUploadUrl } = useAws();
+  const { trackJob } = useImageEnhancements();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [filterCategoryId, setFilterCategoryId] = useState('all');
@@ -231,11 +232,6 @@ const RentalItemImagesPage: React.FC = () => {
   const [createEntrySource, setCreateEntrySource] =
     useState<CreateRentalFromImageEntrySource>('manual');
   const [delImage, setDelImage] = useState<RentalItemImage | null>(null);
-  const [cleanupTarget, setCleanupTarget] = useState<RentalItemImage | null>(
-    null
-  );
-  const [cleanedB64, setCleanedB64] = useState<string | null>(null);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   const bucketName = useMemo(
     () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
@@ -262,24 +258,6 @@ const RentalItemImagesPage: React.FC = () => {
     statusParam,
     search,
   ]);
-
-  useEffect(() => {
-    if (!cleanupTarget) return;
-    let cancelled = false;
-    setCleanupLoading(true);
-    void cleanupImage(cleanupTarget.id).then((r) => {
-      if (!cancelled && r?.b64_json) {
-        setCleanedB64(r.b64_json);
-        if (typeof r.ai_tokens_remaining === 'number') {
-          updateBusinessAiTokens(r.ai_tokens_remaining);
-        }
-      }
-      if (!cancelled) setCleanupLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [cleanupTarget, cleanupImage, updateBusinessAiTokens]);
 
   const uploadFileToS3 = async (file: File) => {
     const presigned = await generateImageUploadUrl({
@@ -353,7 +331,7 @@ const RentalItemImagesPage: React.FC = () => {
     }
   };
 
-  const openCleanup = (img: RentalItemImage) => {
+  const openCleanup = async (img: RentalItemImage) => {
     if (img.is_ai_cleaned) {
       enqueueSnackbar(
         t(
@@ -364,50 +342,22 @@ const RentalItemImagesPage: React.FC = () => {
       );
       return;
     }
-    setCleanupTarget(img);
-    setCleanedB64(null);
-  };
-
-  const acceptCleanup = async () => {
-    if (!cleanupTarget || !cleanedB64) return;
-    try {
-      const byteCharacters = atob(cleanedB64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const blob = new Blob([new Uint8Array(byteNumbers)], {
-        type: 'image/png',
-      });
-      const file = new File([blob], 'cleaned.png', { type: 'image/png' });
-      const uploaded = await uploadFileToS3(file);
-      await updateImage(cleanupTarget.id, {
-        ...uploaded,
-        is_ai_cleaned: true,
-      });
+    enqueueSnackbar(
+      t('business.aiImageCleanup.enhancing', 'Enhancing…'),
+      { variant: 'info' }
+    );
+    const result = await cleanupImage(img.id);
+    if (!result?.jobId) {
       enqueueSnackbar(
-        t(
-          'business.images.cleanup.success',
-          'Image replaced with cleaned version'
-        ),
-        { variant: 'success' }
-      );
-      setCleanupTarget(null);
-      setCleanedB64(null);
-      void fetchImages({
-        page,
-        pageSize,
-        rental_category_id: categoryParam,
-        status: statusParam,
-        search: search || undefined,
-      });
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message ||
-          t('business.images.cleanup.error', 'Cleanup failed'),
+        t('business.images.cleanup.error', 'Cleanup failed'),
         { variant: 'error' }
       );
+      return;
     }
+    if (typeof result.ai_tokens_remaining === 'number') {
+      updateBusinessAiTokens(result.ai_tokens_remaining);
+    }
+    trackJob(result.jobId);
   };
 
   if (profileLoading) {
@@ -772,7 +722,7 @@ const RentalItemImagesPage: React.FC = () => {
                   {(profile?.business?.ai_tokens ?? 0) > 0 ? (
                     <IconButton
                       size="small"
-                      onClick={() => openCleanup(img)}
+                      onClick={() => void openCleanup(img)}
                       disabled={img.is_ai_cleaned}
                       aria-label={t(
                         'business.images.actions.cleanup',
@@ -874,22 +824,6 @@ const RentalItemImagesPage: React.FC = () => {
           } finally {
             setDelImage(null);
           }
-        }}
-      />
-
-      <ImageCleanupPreviewDialog
-        open={Boolean(cleanupTarget)}
-        onClose={() => {
-          setCleanupTarget(null);
-          setCleanedB64(null);
-        }}
-        originalUrl={cleanupTarget?.image_url || ''}
-        cleanedB64={cleanedB64}
-        loading={cleanupLoading}
-        onAccept={() => void acceptCleanup()}
-        onReject={() => {
-          setCleanupTarget(null);
-          setCleanedB64(null);
         }}
       />
     </Box>

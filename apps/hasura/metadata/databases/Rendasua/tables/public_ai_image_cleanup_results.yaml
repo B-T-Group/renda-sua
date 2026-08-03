@@ -8,6 +8,9 @@ object_relationships:
   - name: item_variant_image
     using:
       foreign_key_constraint_on: item_variant_image_id
+  - name: rental_item_image
+    using:
+      foreign_key_constraint_on: rental_item_image_id
   - name: job
     using:
       foreign_key_constraint_on: job_id
@@ -29,6 +32,15 @@ select_permissions:
         - status
         - error_message
         - retry_of_result_id
+        - confidence_score
+        - confidence_tier
+        - confidence_signals
+        - changes
+        - applied_at
+        - reverted_at
+        - provider
+        - provider_model
+        - rental_item_image_id
         - created_at
         - updated_at
         - completed_at

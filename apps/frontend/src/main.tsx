@@ -14,6 +14,7 @@ import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { SessionAuthProvider } from './contexts/SessionAuthContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
+import { ImageEnhancementsProvider } from './hooks/useImageEnhancements';
 import { i18nInitPromise } from './i18n';
 import ApolloProvider from './providers/ApolloProvider';
 import { theme } from './theme/theme';
@@ -87,9 +88,11 @@ async function bootstrap() {
                 <UserProfileProvider>
                   <CartProvider>
                     <SnackbarProvider maxSnack={3} autoHideDuration={4000}>
-                      <ApolloProvider>
-                        <App />
-                      </ApolloProvider>
+                      <ImageEnhancementsProvider>
+                        <ApolloProvider>
+                          <App />
+                        </ApolloProvider>
+                      </ImageEnhancementsProvider>
                     </SnackbarProvider>
                   </CartProvider>
                 </UserProfileProvider>

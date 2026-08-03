@@ -1538,6 +1538,11 @@
       "suspended": "Suspendu",
       "suspendedTitle": "Boutique suspendue",
       "suspendedNotice": "Votre boutique est masquée et ne peut pas accepter de commandes. Écrivez à {{email}} si vous pensez qu'il s'agit d'une erreur.",
+      "suspendedReason": {
+        "reliability": "Suspendue après trop de commandes sans réponse au cours des 30 derniers jours.",
+        "admin": "Suspendue par Rendasua après un examen du compte.",
+        "unknown": "Votre boutique a été suspendue et ne peut pas accepter de commandes."
+      },
       "emailSupport": "Écrire à {{email}}",
       "suspendedEmailSubject": "Demande de rétablissement de boutique",
       "suspendedEmailBody": "Bonjour,\n\nMa boutique semble suspendue. Merci de revoir mon compte.\n\nCordialement.",
@@ -2470,6 +2475,29 @@
         "suggestionsError": "Échec de la récupération des suggestions à partir de l'image",
         "createError": "Échec de la création de l'article à partir de l'image",
         "summaryTitle": "Article créé à partir de l'image"
+      }
+    },
+    "aiImageCleanup": {
+      "enhancing": "Amélioration…",
+      "enhancedToast": "Photo améliorée — appuyez pour comparer ou rétablir",
+      "compare": "Comparer",
+      "compareTitle": "Comparer l'amélioration",
+      "enhanced": "Améliorée",
+      "revert": "Rétablir",
+      "revertSuccess": "Photo originale rétablie",
+      "reapplySuccess": "Photo améliorée restaurée",
+      "useOriginal": "Utiliser l'originale",
+      "useEnhanced": "Utiliser l'améliorée",
+      "actionFailed": "Action échouée",
+      "preferenceFailed": "Impossible de mettre à jour la préférence d'auto-amélioration",
+      "autoEnhanceLabel": "Améliorer automatiquement les photos avec l'IA",
+      "autoEnhanceHint": "Utilise 1 jeton IA par photo. Il vous en reste {{balance}}.",
+      "autoEnhanceOn": "Activé",
+      "autoEnhanceOff": "Désactivé",
+      "confidence": {
+        "high": "Confiance élevée",
+        "medium": "Confiance moyenne",
+        "low": "À examiner"
       }
     },
     "items": {

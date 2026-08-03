@@ -13,19 +13,18 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import axios from 'axios';
 import { useSnackbar } from 'notistack';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAws } from '../../hooks/useAws';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import { useBusinessImages } from '../../hooks/useBusinessImages';
 import {
   BusinessInventoryItem,
   useBusinessInventory,
 } from '../../hooks/useBusinessInventory';
+import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import { Item, useItems } from '../../hooks/useItems';
 import { ItemImage } from '../../types/image';
 import {
@@ -45,21 +44,9 @@ import {
   buildInventorySummary,
 } from '../business/item-view/itemViewHelpers';
 import VariantsManagerSection from '../business/variants/VariantsManagerSection';
-import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { ManageItemCollectionsDialog } from '../dialogs/ManageItemCollectionsDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
-
-function cleanedPngB64ToFile(b64: string): File {
-  const byteCharacters = atob(b64);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  return new File([new Uint8Array(byteNumbers)], 'cleaned-image.png', {
-    type: 'image/png',
-  });
-}
 
 export default function ItemViewPage() {
   const { t } = useTranslation();
@@ -98,20 +85,10 @@ export default function ItemViewPage() {
     setImageAsMain,
     setImageAsGallery,
     cleanupImage,
-    updateImage,
     submitting: imageActionsBusy,
   } = useBusinessImages();
-  const { generateImageUploadUrl } = useAws();
-
-  const bucketName = useMemo(
-    () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
-    []
-  );
-
-  const [imageToCleanup, setImageToCleanup] = useState<ItemImage | null>(null);
-  const [cleanedB64, setCleanedB64] = useState<string | null>(null);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
-
+  const { trackJob, inFlightJobIds } = useImageEnhancements();
+  const prevInFlightCountRef = useRef(0);
   const {
     fetchSingleItem,
     brands,
@@ -151,6 +128,14 @@ export default function ItemViewPage() {
     const hasListPreview = listItem?.id === itemId;
     void fetchItemDetails({ silent: hasListPreview });
   }, [itemId, listItem?.id, fetchItemDetails]);
+
+  useEffect(() => {
+    const prev = prevInFlightCountRef.current;
+    prevInFlightCountRef.current = inFlightJobIds.length;
+    if (prev > 0 && inFlightJobIds.length === 0) {
+      void fetchItemDetails({ silent: true });
+    }
+  }, [inFlightJobIds.length, fetchItemDetails]);
 
   useEffect(() => {
     if (effectiveBusinessId) {
@@ -335,52 +320,8 @@ export default function ItemViewPage() {
     [enqueueSnackbar, fetchItemDetails, setImageAsGallery, t]
   );
 
-  const uploadFileToS3 = useCallback(
-    async (file: File) => {
-      const presigned = await generateImageUploadUrl({
-        bucketName,
-        originalFileName: file.name,
-        contentType: file.type,
-        prefix: `businesses/${profile?.business?.id || 'unknown'}/images`,
-      });
-      if (!presigned?.success || !presigned.data) {
-        throw new Error(
-          t('business.images.upload.presignError', 'Failed to prepare image upload')
-        );
-      }
-      await axios.put(presigned.data.url, file, {
-        headers: { 'Content-Type': file.type },
-      });
-      const imageUrl = `https://${bucketName}.s3.amazonaws.com/${presigned.data.key}`;
-      return {
-        image_url: imageUrl,
-        s3_key: presigned.data.key,
-        file_size: file.size,
-        format: file.type,
-      };
-    },
-    [bucketName, generateImageUploadUrl, profile?.business?.id, t]
-  );
-
-  useEffect(() => {
-    if (!imageToCleanup) return;
-    let cancelled = false;
-    cleanupImage(imageToCleanup.id).then((result) => {
-      if (!cancelled && result?.b64_json) {
-        setCleanedB64(result.b64_json);
-        if (typeof result.ai_tokens_remaining === 'number') {
-          updateBusinessAiTokens(result.ai_tokens_remaining);
-        }
-      }
-      if (!cancelled) setCleanupLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [imageToCleanup, cleanupImage, updateBusinessAiTokens]);
-
   const handleOpenItemImageCleanup = useCallback(
-    (img: ItemImage) => {
+    async (img: ItemImage) => {
       if (img.is_ai_cleaned) {
         enqueueSnackbar(
           t('business.images.cleanup.alreadyCleaned', 'Image was already cleaned with AI'),
@@ -388,41 +329,25 @@ export default function ItemViewPage() {
         );
         return;
       }
-      setImageToCleanup(img);
-      setCleanedB64(null);
-      setCleanupLoading(true);
+      enqueueSnackbar(
+        t('business.aiImageCleanup.enhancing', 'Enhancing…'),
+        { variant: 'info' }
+      );
+      const result = await cleanupImage(img.id);
+      if (!result?.jobId) {
+        enqueueSnackbar(
+          t('business.images.cleanup.error', 'Failed to cleanup image'),
+          { variant: 'error' }
+        );
+        return;
+      }
+      if (typeof result.ai_tokens_remaining === 'number') {
+        updateBusinessAiTokens(result.ai_tokens_remaining);
+      }
+      trackJob(result.jobId);
     },
-    [enqueueSnackbar, t]
+    [cleanupImage, enqueueSnackbar, t, trackJob, updateBusinessAiTokens]
   );
-
-  const handleCleanupAccept = useCallback(async () => {
-    if (!imageToCleanup || !cleanedB64) return;
-    try {
-      const file = cleanedPngB64ToFile(cleanedB64);
-      const uploaded = await uploadFileToS3(file);
-      await updateImage(imageToCleanup.id, { ...uploaded, is_ai_cleaned: true });
-      enqueueSnackbar(
-        t('business.images.cleanup.success', 'Image replaced with cleaned version'),
-        { variant: 'success' }
-      );
-      setImageToCleanup(null);
-      setCleanedB64(null);
-      await fetchItemDetails();
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('business.images.cleanup.error', 'Failed to cleanup image'),
-        { variant: 'error' }
-      );
-    }
-  }, [
-    cleanedB64,
-    enqueueSnackbar,
-    fetchItemDetails,
-    imageToCleanup,
-    t,
-    updateImage,
-    uploadFileToS3,
-  ]);
 
   useEffect(() => {
     if (imageLightboxIndex === null) return undefined;
@@ -707,22 +632,6 @@ export default function ItemViewPage() {
         onClose={() => setShowCollectionsDialog(false)}
         onSaved={() => {
           void fetchItemDetails();
-        }}
-      />
-
-      <ImageCleanupPreviewDialog
-        open={imageToCleanup != null}
-        onClose={() => {
-          setImageToCleanup(null);
-          setCleanedB64(null);
-        }}
-        originalUrl={imageToCleanup?.image_url ?? ''}
-        cleanedB64={cleanedB64}
-        loading={cleanupLoading}
-        onAccept={() => void handleCleanupAccept()}
-        onReject={() => {
-          setImageToCleanup(null);
-          setCleanedB64(null);
         }}
       />
     </Container>

@@ -11,6 +11,7 @@ export interface ChatCompletionRequest {
   messages: ChatCompletionMessage[];
   max_tokens?: number;
   temperature?: number;
+  response_format?: { type: 'json_object' | 'text' };
 }
 
 export interface ChatCompletionResponse {

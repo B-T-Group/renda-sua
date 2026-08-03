@@ -3,15 +3,7 @@ import type {
   ImageValidationMetadata,
   ImageValidationResult,
   ValidateImagesResponse,
-  ValidationIssue,
 } from '../types/imageValidation';
-import { useApiClient } from './useApiClient';
-
-export interface CleanupPreviewInput {
-  imageBase64: string;
-  mimeType: string;
-  issues?: ValidationIssue[];
-}
 
 const passedResultForFile = (
   file: File,
@@ -26,9 +18,7 @@ const passedResultForFile = (
 });
 
 export const useImageValidation = () => {
-  const apiClient = useApiClient();
   const [validating] = useState(false);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
   const [lastResults, setLastResults] = useState<ImageValidationResult[]>([]);
 
   // Pre-upload image validation is intentionally disabled: sending the image
@@ -67,32 +57,10 @@ export const useImageValidation = () => {
     []
   );
 
-  const cleanupPreview = useCallback(
-    async (input: CleanupPreviewInput) => {
-      setCleanupLoading(true);
-      try {
-        const response = await apiClient.post<{
-          success: boolean;
-          data: { b64_json: string };
-          ai_tokens_remaining?: number;
-        }>('/images/cleanup-preview', input);
-        return {
-          b64_json: response.data.data.b64_json,
-          ai_tokens_remaining: response.data.ai_tokens_remaining,
-        };
-      } finally {
-        setCleanupLoading(false);
-      }
-    },
-    [apiClient]
-  );
-
   return {
     validating,
-    cleanupLoading,
     lastResults,
     validateFiles,
     metadataFromResults,
-    cleanupPreview,
   };
 };

@@ -13,9 +13,7 @@ function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
   const method = (config.method ?? 'get').toLowerCase();
   if (
     method === 'post' &&
-    (url.includes('/cleanup') ||
-      url.includes('/images/cleanup-preview') ||
-      url.includes('/ai-image-cleanup'))
+    (url.includes('/cleanup') || url.includes('/ai-image-cleanup'))
   ) {
     config.timeout = environment.imageCleanupRequestTimeoutMs;
   }

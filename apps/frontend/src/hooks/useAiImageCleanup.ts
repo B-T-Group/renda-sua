@@ -1,15 +1,23 @@
 import { useCallback } from 'react';
 import { useApiClient } from './useApiClient';
 
+export type AiImageCleanupConfidenceTier = 'high' | 'medium' | 'low';
+
 export interface AiImageCleanupResult {
   id: string;
   business_image_id: string | null;
   item_variant_image_id?: string | null;
+  rental_item_image_id?: string | null;
   original_image_url: string;
   cleaned_image_url: string | null;
   status: string;
   error_message: string | null;
   retry_of_result_id?: string | null;
+  confidence_score?: number | null;
+  confidence_tier?: AiImageCleanupConfidenceTier | null;
+  changes?: string[] | null;
+  applied_at?: string | null;
+  reverted_at?: string | null;
 }
 
 export interface AiImageCleanupJob {
@@ -35,6 +43,15 @@ export interface AiImageCleanupPendingJob {
 export interface AiImageCleanupPendingData {
   jobs: AiImageCleanupPendingJob[];
   pendingResultCount: number;
+}
+
+export interface AiImageCleanupActivityData {
+  results: AiImageCleanupResult[];
+}
+
+export interface AiImageCleanupPreference {
+  auto_enhance_enabled: boolean;
+  ai_tokens: number;
 }
 
 export function useAiImageCleanup() {
@@ -81,6 +98,40 @@ export function useAiImageCleanup() {
     );
   }, [apiClient]);
 
+  const getActivity = useCallback(async (): Promise<AiImageCleanupActivityData> => {
+    const res = await apiClient.get<{
+      success: boolean;
+      data?: AiImageCleanupActivityData;
+    }>('/business-items/ai-image-cleanup/activity');
+    return res.data?.data ?? { results: [] };
+  }, [apiClient]);
+
+  const getPreference = useCallback(async (): Promise<AiImageCleanupPreference> => {
+    const res = await apiClient.get<{
+      success: boolean;
+      data?: AiImageCleanupPreference;
+    }>('/business-items/ai-image-cleanup/preference');
+    return (
+      res.data?.data ?? {
+        auto_enhance_enabled: true,
+        ai_tokens: 0,
+      }
+    );
+  }, [apiClient]);
+
+  const setPreference = useCallback(
+    async (autoEnhanceEnabled: boolean) => {
+      const res = await apiClient.patch<{
+        success: boolean;
+        data?: { auto_enhance_enabled: boolean };
+      }>('/business-items/ai-image-cleanup/preference', {
+        auto_enhance_enabled: autoEnhanceEnabled,
+      });
+      return res.data;
+    },
+    [apiClient]
+  );
+
   const getJob = useCallback(
     async (jobId: string): Promise<AiImageCleanupJob | null> => {
       const res = await apiClient.get<{
@@ -107,6 +158,28 @@ export function useAiImageCleanup() {
     async (resultId: string) => {
       const res = await apiClient.post(
         `/business-items/ai-image-cleanup/results/${encodeURIComponent(resultId)}/reject`,
+        {}
+      );
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const revertResult = useCallback(
+    async (resultId: string) => {
+      const res = await apiClient.post(
+        `/business-items/ai-image-cleanup/results/${encodeURIComponent(resultId)}/revert`,
+        {}
+      );
+      return res.data;
+    },
+    [apiClient]
+  );
+
+  const reapplyResult = useCallback(
+    async (resultId: string) => {
+      const res = await apiClient.post(
+        `/business-items/ai-image-cleanup/results/${encodeURIComponent(resultId)}/reapply`,
         {}
       );
       return res.data;
@@ -143,9 +216,14 @@ export function useAiImageCleanup() {
     requestCleanup,
     requestVariantCleanup,
     getPending,
+    getActivity,
+    getPreference,
+    setPreference,
     getJob,
     acceptResult,
     rejectResult,
+    revertResult,
+    reapplyResult,
     retryResult,
     cancelJob,
   };

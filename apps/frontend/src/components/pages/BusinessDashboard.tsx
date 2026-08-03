@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
+import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import { useLocationTransfers } from '../../hooks/useLocationTransfers';
@@ -49,6 +50,7 @@ const BusinessDashboard: React.FC = () => {
   const { profile } = useUserProfileContext();
   const { accounts } = useAccountInfo();
   const { getPending } = useAiImageCleanup();
+  const { hydrateActivity } = useImageEnhancements();
   const previewAccounts = accounts.slice(0, DASHBOARD_ACCOUNT_PREVIEW_LIMIT);
   const hasMoreAccounts = accounts.length > DASHBOARD_ACCOUNT_PREVIEW_LIMIT;
   const {
@@ -105,7 +107,8 @@ const BusinessDashboard: React.FC = () => {
   useEffect(() => {
     if (!profile?.business?.id) return;
     void loadCleanupPending();
-  }, [loadCleanupPending, profile?.business?.id]);
+    void hydrateActivity();
+  }, [hydrateActivity, loadCleanupPending, profile?.business?.id]);
 
   const prevBusinessIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {

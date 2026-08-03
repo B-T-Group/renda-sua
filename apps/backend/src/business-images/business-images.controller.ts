@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,8 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
-import { AiService } from '../ai/ai.service';
-import { BusinessTokensService } from '../business-tokens/business-tokens.service';
+import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService, CreateBusinessImageInput } from './business-images.service';
 import { isActivePersona } from '../users/persona.util';
@@ -36,8 +34,7 @@ export class BusinessImagesController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly businessImagesService: BusinessImagesService,
-    private readonly aiService: AiService,
-    private readonly businessTokensService: BusinessTokensService
+    private readonly aiImageCleanupService: AiImageCleanupService
   ) {}
 
   @Get()
@@ -317,30 +314,12 @@ export class BusinessImagesController {
   @Post(':id/cleanup')
   @ApiOperation({
     summary:
-      'Clean up a business image using AI (e.g. nicer background). Returns base64 image for preview.',
+      'Enqueue async AI cleanup for a library/item image (1 token). Returns jobId immediately.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Cleaned image returned as base64',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        data: {
-          type: 'object',
-          properties: { b64_json: { type: 'string' } },
-          required: ['b64_json'],
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 402,
-    description: 'Insufficient AI tokens',
-  })
+  @ApiResponse({ status: 200, description: 'Cleanup job queued' })
+  @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
   @ApiResponse({ status: 400, description: 'Image was already cleaned with AI' })
   @ApiResponse({ status: 404, description: 'Image not found' })
-  @ApiResponse({ status: 429, description: 'OpenAI rate limit exceeded' })
   async cleanupImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
@@ -350,28 +329,19 @@ export class BusinessImagesController {
         HttpStatus.FORBIDDEN
       );
     }
-    const image = await this.businessImagesService.getImageForBusiness(
-      businessId,
-      id
+    // Auth context is established by the guard; service re-reads the business user.
+    void ctx;
+    const data = await this.aiImageCleanupService.requestLibraryImageCleanup(
+      id,
+      'library'
     );
-    if (image.is_ai_cleaned) {
-      throw new BadRequestException('Image was already cleaned with AI');
-    }
-    const { result, balanceAfter } =
-      await this.businessTokensService.runCleanupWithToken(
-        {
-          businessId,
-          userId: user.id,
-          subjectType: 'business_image',
-          subjectId: id,
-          imageUrl: image.image_url,
-        },
-        () => this.aiService.cleanupProductImage(image.image_url)
-      );
     return {
       success: true,
-      data: result,
-      ai_tokens_remaining: balanceAfter,
+      data: {
+        jobId: data.job.id,
+        job: data.job,
+      },
+      ai_tokens_remaining: data.ai_tokens_remaining,
     };
   }
 
