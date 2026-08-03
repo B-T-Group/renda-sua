@@ -334,6 +334,68 @@ export function buildMentionPushMessage(params: {
   };
 }
 
+export function buildQuickMessagePushMessage(params: {
+  orderNumber: string;
+  senderName: string;
+  templateId?: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const sender =
+    params.senderName?.trim() || (locale === 'fr' ? "Quelqu'un" : 'Someone');
+  const bodies: Record<string, { en: string; fr: string }> = {
+    agent_arrived: {
+      en: `${sender}: I've arrived at your location`,
+      fr: `${sender} : Je suis arrivé à votre adresse`,
+    },
+    client_unreachable: {
+      en: `${sender}: Unable to reach the client`,
+      fr: `${sender} : Impossible de joindre le client`,
+    },
+    on_my_way: {
+      en: `${sender}: I'm on my way with your order`,
+      fr: `${sender} : Je suis en route avec votre commande`,
+    },
+    running_late_to_client: {
+      en: `${sender}: Running a few minutes late`,
+      fr: `${sender} : Je suis en retard de quelques minutes`,
+    },
+    client_coming_down: {
+      en: `${sender}: I'm coming down / will meet you shortly`,
+      fr: `${sender} : Je descends / je vous rejoins sous peu`,
+    },
+    client_call_me: {
+      en: `${sender}: Please call me when you arrive`,
+      fr: `${sender} : Appelez-moi à votre arrivée`,
+    },
+    order_ready_for_pickup: {
+      en: `${sender}: Order is ready for pickup`,
+      fr: `${sender} : La commande est prête à être récupérée`,
+    },
+    need_client_contact: {
+      en: `${sender}: Please help us reach the client`,
+      fr: `${sender} : Aidez-nous à joindre le client`,
+    },
+  };
+  const bodyEntry = params.templateId
+    ? bodies[params.templateId]
+    : undefined;
+  const body =
+    locale === 'fr'
+      ? bodyEntry?.fr ?? `${sender} a envoyé un message rapide pour la commande ${params.orderNumber}`
+      : bodyEntry?.en ?? `${sender} sent a quick message for order ${params.orderNumber}`;
+  if (locale === 'fr') {
+    return {
+      title: `Message rapide · Commande ${params.orderNumber}`,
+      body,
+    };
+  }
+  return {
+    title: `Quick message · Order ${params.orderNumber}`,
+    body,
+  };
+}
+
 export function buildDeliveryPinSharedPushMessage(params: {
   orderNumber: string;
   senderName: string;

@@ -23,6 +23,14 @@ export interface DeliveryPinStructuredContent {
   revokedReason?: string;
 }
 
+export interface QuickMessageStructuredContent {
+  templateId: string;
+  taggedUserIds: string[];
+  taggedPersonas: string[];
+  bodyI18nKey: string;
+  bodyDefault: string;
+}
+
 export interface OrderMessage {
   id: string;
   user_id: string;
@@ -33,8 +41,12 @@ export interface OrderMessage {
   updated_at: string;
   sender_persona?: PersonaId;
   message_type?: string;
-  structured_content?: DeliveryPinStructuredContent | null;
+  structured_content?:
+    | DeliveryPinStructuredContent
+    | QuickMessageStructuredContent
+    | null;
   mention?: MessageMention | null;
+  mentions?: MessageMention[];
   user: {
     id: string;
     identifier?: string;

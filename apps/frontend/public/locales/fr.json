@@ -4029,6 +4029,46 @@
         "agentNoPin": "Le client n'a pas encore partagé de PIN de livraison dans le chat. Demandez-lui d'appuyer sur Envoyer le PIN de livraison, ou saisissez le PIN manuellement."
       }
     },
+    "quickMessages": {
+      "title": "Message rapide",
+      "cardA11y": "Message rapide",
+      "actionsA11y": "Messages rapides",
+      "sendSuccess": "Message rapide envoyé.",
+      "sendError": "Échec de l'envoi du message rapide",
+      "fallback": "Message rapide",
+      "agentArrived": {
+        "button": "Je suis arrivé",
+        "body": "Je suis arrivé à votre adresse"
+      },
+      "clientUnreachable": {
+        "button": "Client injoignable",
+        "body": "Impossible de joindre le client"
+      },
+      "onMyWay": {
+        "button": "En route",
+        "body": "Je suis en route avec votre commande"
+      },
+      "runningLateToClient": {
+        "button": "En retard",
+        "body": "Je suis en retard de quelques minutes"
+      },
+      "clientComingDown": {
+        "button": "Je descends",
+        "body": "Je descends / je vous rejoins sous peu"
+      },
+      "clientCallMe": {
+        "button": "Appelez-moi",
+        "body": "Appelez-moi à votre arrivée"
+      },
+      "orderReadyForPickup": {
+        "button": "Prête pour retrait",
+        "body": "La commande est prête à être récupérée"
+      },
+      "needClientContact": {
+        "button": "Contacter le client",
+        "body": "Aidez-nous à joindre le client"
+      }
+    },
     "overwriteCode": {
       "button": "Générer un code de contournement",
       "title": "Code de contournement de livraison",

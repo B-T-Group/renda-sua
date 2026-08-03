@@ -4290,6 +4290,46 @@
         "agentNoPin": "The client has not shared a delivery PIN in the order chat yet. Ask them to tap Send delivery PIN, or enter the PIN manually below."
       }
     },
+    "quickMessages": {
+      "title": "Quick message",
+      "cardA11y": "Quick message",
+      "actionsA11y": "Quick messages",
+      "sendSuccess": "Quick message sent.",
+      "sendError": "Failed to send quick message",
+      "fallback": "Quick message",
+      "agentArrived": {
+        "button": "I've arrived",
+        "body": "I've arrived at your location"
+      },
+      "clientUnreachable": {
+        "button": "Client unreachable",
+        "body": "Unable to reach the client"
+      },
+      "onMyWay": {
+        "button": "On my way",
+        "body": "I'm on my way with your order"
+      },
+      "runningLateToClient": {
+        "button": "Running late",
+        "body": "Running a few minutes late"
+      },
+      "clientComingDown": {
+        "button": "I'm coming down",
+        "body": "I'm coming down / will meet you shortly"
+      },
+      "clientCallMe": {
+        "button": "Please call me",
+        "body": "Please call me when you arrive"
+      },
+      "orderReadyForPickup": {
+        "button": "Ready for pickup",
+        "body": "Order is ready for pickup"
+      },
+      "needClientContact": {
+        "button": "Need client contact",
+        "body": "Please help us reach the client"
+      }
+    },
     "overwriteCode": {
       "button": "Generate overwrite code",
       "title": "Delivery overwrite code",

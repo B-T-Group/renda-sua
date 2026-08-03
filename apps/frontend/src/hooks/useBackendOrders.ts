@@ -32,6 +32,16 @@ export interface UpdateOrderStatusRequest {
   status: string;
 }
 
+export interface QuickMessageTemplate {
+  id: string;
+  buttonLabelKey: string;
+  buttonLabelEn: string;
+  buttonLabelFr: string;
+  bodyI18nKey: string;
+  bodyDefaultEn: string;
+  tagPersonas: Array<'client' | 'agent' | 'business'>;
+}
+
 export interface UpdateOrderStatusResponse {
   success: boolean;
   order: any;
@@ -1016,6 +1026,43 @@ export const useBackendOrders = () => {
     }
   };
 
+  const getQuickMessageTemplates = async (
+    orderId: string
+  ): Promise<QuickMessageTemplate[]> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.get<{
+      success: boolean;
+      templates: QuickMessageTemplate[];
+    }>(`/orders/${orderId}/messages/quick-templates`);
+
+    return response.data?.templates ?? [];
+  };
+
+  const sendQuickMessage = async (
+    orderId: string,
+    templateId: string
+  ): Promise<void> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.post<{ success: boolean }>(
+      `/orders/${orderId}/messages/quick`,
+      { templateId }
+    );
+
+    if (!response.data?.success) {
+      throw new Error('Failed to send quick message');
+    }
+  };
+
   const getActiveDeliveryPin = async (
     orderId: string
   ): Promise<{
@@ -1101,6 +1148,8 @@ export const useBackendOrders = () => {
     reconcileCashException,
     getDeliveryPin,
     sendDeliveryPin,
+    getQuickMessageTemplates,
+    sendQuickMessage,
     getActiveDeliveryPin,
     generateDeliveryOverwriteCode,
 

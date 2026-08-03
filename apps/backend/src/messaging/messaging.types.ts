@@ -46,7 +46,9 @@ export interface OrderMessage {
     id: string;
     comment: string;
   };
+  /** @deprecated Prefer `mentions` for multi-tag quick messages. */
   mention?: MessageMention | null;
+  mentions?: MessageMention[];
   message_type?: string;
   message_payload?: Record<string, unknown> | null;
   is_immutable?: boolean;
@@ -99,4 +101,5 @@ export interface MessageCreatedEvent {
   recipients: ResolvedRecipient[];
   messageType?: string;
   fulfillmentMethod?: string | null;
+  quickMessageTemplateId?: string;
 }

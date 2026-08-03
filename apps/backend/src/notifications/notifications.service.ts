@@ -72,6 +72,7 @@ import {
   buildPendingPaymentCleanupDigestPushMessage,
   buildRentalStartPinSharedPushMessage,
   buildDeliveryPinSharedPushMessage,
+  buildQuickMessagePushMessage,
   buildStockAvailabilityCheckPushMessage,
   buildStockAvailabilityResultPushMessage,
   buildWalletCreditPushMessage,
@@ -528,6 +529,47 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(
         `sendMentionPush failed for order ${params.orderNumber}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async sendQuickMessagePush(params: {
+    recipientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    senderName: string;
+    messageId?: string;
+    templateId?: string;
+    persona?: string;
+  }): Promise<void> {
+    const recipientUserId = params.recipientUserId?.trim();
+    if (!recipientUserId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+
+    const recipient = await this.getUserRowForEmail(recipientUserId);
+    const { title, body } = buildQuickMessagePushMessage({
+      orderNumber: params.orderNumber,
+      senderName: params.senderName,
+      templateId: params.templateId,
+      preferredLanguage: recipient?.preferred_language,
+    });
+
+    const highlight = params.messageId ?? '';
+    try {
+      await this.sendPushNotificationByUserId(recipientUserId, title, body, {
+        url: `/orders/${params.orderId}?messages=1&highlight=${highlight}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        messageId: params.messageId,
+        type: 'order_quick_message',
+        templateId: params.templateId,
+        ...(params.persona ? { persona: params.persona } : {}),
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendQuickMessagePush failed for order ${params.orderNumber}: ${
           error?.message ?? String(error)
         }`
       );

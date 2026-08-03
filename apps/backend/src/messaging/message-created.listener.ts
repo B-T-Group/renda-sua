@@ -55,6 +55,16 @@ export class MessageCreatedListener {
         fulfillmentMethod: event.fulfillmentMethod,
         persona,
       });
+    } else if (event.messageType === 'QUICK_MESSAGE') {
+      await this.notificationsService.sendQuickMessagePush({
+        recipientUserId: recipient.recipient_user_id,
+        orderId: event.orderId,
+        orderNumber: event.orderNumber,
+        senderName: event.senderName,
+        messageId: event.messageId,
+        templateId: event.quickMessageTemplateId,
+        persona,
+      });
     } else if (recipient.recipient_type === 'mentioned') {
       await this.notificationsService.sendMentionPush({
         recipientUserId: recipient.recipient_user_id,

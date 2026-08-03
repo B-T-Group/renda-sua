@@ -10,7 +10,25 @@ export const MESSAGE_TYPES = [
   'PAYMENT',
   'LOCATION',
   'IMAGE',
+  'QUICK_MESSAGE',
 ] as const;
+
+export interface QuickMessagePayloadV1 {
+  version: 1;
+  templateId: string;
+  taggedUserIds: string[];
+  taggedPersonas: string[];
+  [key: string]: unknown;
+}
+
+export interface QuickMessageStructuredContent {
+  templateId: string;
+  taggedUserIds: string[];
+  taggedPersonas: string[];
+  bodyI18nKey: string;
+  bodyDefault: string;
+  [key: string]: unknown;
+}
 
 export type MessageType = (typeof MESSAGE_TYPES)[number];
 

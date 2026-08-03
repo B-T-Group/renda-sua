@@ -44,7 +44,9 @@ describe('OrdersController', () => {
           useValue: mockHasuraUserService,
         },
       ],
-    }).compile();
+    })
+      .useMocker(() => ({}))
+      .compile();
 
     controller = module.get<OrdersController>(OrdersController);
     ordersService = module.get(OrdersService);

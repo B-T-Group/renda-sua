@@ -153,10 +153,19 @@ export class MessagingService {
     const senderPersona =
       participants.find((p) => p.userId === msg.user_id)?.persona ?? undefined;
 
-    const rawMention = msg.mentions?.[0];
-    const mentionParticipant = rawMention
-      ? participants.find((p) => p.userId === rawMention.mentioned_user_id)
-      : undefined;
+    const mentions = (msg.mentions ?? []).map((rawMention) => {
+      const mentionParticipant = participants.find(
+        (p) => p.userId === rawMention.mentioned_user_id
+      );
+      return {
+        mentionedUserId: rawMention.mentioned_user_id,
+        persona: rawMention.mentioned_persona as PersonaId,
+        displayName: mentionParticipant?.displayName ?? '',
+        textOffset: rawMention.text_offset,
+        textLength: rawMention.text_length,
+      };
+    });
+    const rawMention = mentions[0];
 
     const messageType = (msg.message_type ?? 'TEXT') as MessageType;
     const structuredContent = this.structuredMessageRegistry.enrichForViewer(
@@ -180,15 +189,8 @@ export class MessagingService {
       message_payload: msg.message_payload ?? null,
       is_immutable: msg.is_immutable ?? false,
       structured_content: structuredContent,
-      mention: rawMention
-        ? {
-            mentionedUserId: rawMention.mentioned_user_id,
-            persona: rawMention.mentioned_persona as PersonaId,
-            displayName: mentionParticipant?.displayName ?? '',
-            textOffset: rawMention.text_offset,
-            textLength: rawMention.text_length,
-          }
-        : null,
+      mentions,
+      mention: rawMention ?? null,
     };
   }
 

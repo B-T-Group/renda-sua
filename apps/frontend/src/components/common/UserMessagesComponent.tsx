@@ -13,6 +13,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  Snackbar,
   Stack,
   Typography,
 } from '@mui/material';
@@ -25,6 +26,7 @@ import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useRentalBookingParticipants } from '../../hooks/useRentalBookingParticipants';
 import { useUserMessages, type UserMessage } from '../../hooks/useUserMessages';
 import { MessageRenderer } from '../messaging/MessageRenderer';
+import { QuickMessageButtons } from '../orders/QuickMessageButtons';
 import { MentionChip } from './MentionChip';
 import { MentionPicker } from './MentionPicker';
 import { PersonaBadge } from './PersonaBadge';
@@ -72,6 +74,10 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [viewAllDialog, setViewAllDialog] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  } | null>(null);
 
   // Mention state
   const [selectedMention, setSelectedMention] = useState<MentionableParticipant | null>(null);
@@ -330,17 +336,23 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                                 : userMessagesHook.formatDate(message.created_at)}
                             </Typography>
                           </Box>
-                          {orderMsg?.mention && (
-                            <Box sx={{ mb: 0.5 }}>
+                          {(orderMsg?.mentions?.length
+                            ? orderMsg.mentions
+                            : orderMsg?.mention
+                              ? [orderMsg.mention]
+                              : []
+                          ).map((m) => (
+                            <Box key={m.mentionedUserId} sx={{ mb: 0.5, display: 'inline-block', mr: 0.5 }}>
                               <MentionChip
-                                displayName={orderMsg.mention.displayName}
-                                persona={orderMsg.mention.persona}
+                                displayName={m.displayName}
+                                persona={m.persona}
                               />
                             </Box>
-                          )}
+                          ))}
                           {orderMsg &&
                           (orderMsg.message_type === 'DELIVERY_PIN' ||
-                            orderMsg.message_type === 'RENTAL_START_PIN') ? (
+                            orderMsg.message_type === 'RENTAL_START_PIN' ||
+                            orderMsg.message_type === 'QUICK_MESSAGE') ? (
                             <MessageRenderer message={orderMsg} compact={compact} />
                           ) : (
                           <Typography
@@ -406,6 +418,15 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 
                 {/* Composer */}
                 <Box ref={composerRef}>
+                  {isOrder ? (
+                    <QuickMessageButtons
+                      orderId={entityId}
+                      onSent={() => void orderMessagesHook.refetch(entityId)}
+                      onShowNotification={(message, severity) =>
+                        setSnackbar({ message, severity })
+                      }
+                    />
+                  ) : null}
                   <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
                     {t('messages.addNew', 'Add Message')}
                   </Typography>
@@ -458,6 +479,14 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
         </Card>
       </Box>
 
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar(null)}
+        message={snackbar?.message}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+
       {/* View All Dialog */}
       <Dialog open={viewAllDialog} onClose={() => setViewAllDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -509,17 +538,23 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                           : userMessagesHook.formatDate(message.created_at)}
                       </Typography>
                     </Box>
-                    {orderMsg?.mention && (
-                      <Box sx={{ mb: 0.5 }}>
+                    {(orderMsg?.mentions?.length
+                      ? orderMsg.mentions
+                      : orderMsg?.mention
+                        ? [orderMsg.mention]
+                        : []
+                    ).map((m) => (
+                      <Box key={m.mentionedUserId} sx={{ mb: 0.5, display: 'inline-block', mr: 0.5 }}>
                         <MentionChip
-                          displayName={orderMsg.mention.displayName}
-                          persona={orderMsg.mention.persona}
+                          displayName={m.displayName}
+                          persona={m.persona}
                         />
                       </Box>
-                    )}
+                    ))}
                     {orderMsg &&
                     (orderMsg.message_type === 'DELIVERY_PIN' ||
-                      orderMsg.message_type === 'RENTAL_START_PIN') ? (
+                      orderMsg.message_type === 'RENTAL_START_PIN' ||
+                      orderMsg.message_type === 'QUICK_MESSAGE') ? (
                       <MessageRenderer message={orderMsg} />
                     ) : (
                     <Typography

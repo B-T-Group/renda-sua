@@ -27,6 +27,7 @@ import { HasuraUserService, type CreateOrderRequest } from '../hasura/hasura-use
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
+import { QuickMessageService } from '../messaging/structured/quick-message.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import {
   CheckoutPreflightDto,
@@ -65,7 +66,8 @@ export class OrdersController {
     private readonly checkoutPreflightService: CheckoutPreflightService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly messagingService: MessagingService,
-    private readonly deliveryPinShareService: DeliveryPinShareService
+    private readonly deliveryPinShareService: DeliveryPinShareService,
+    private readonly quickMessageService: QuickMessageService
   ) {}
 
   // -------------------------------------------------------------------------
@@ -2043,6 +2045,70 @@ export class OrdersController {
       const participants =
         await this.messagingService.getMentionableParticipants(orderId);
       return { success: true, participants };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':orderId/messages/quick-templates')
+  @ApiOperation({
+    summary: 'List quick message templates available to the current user for this order',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({ status: 200, description: 'Eligible quick message templates' })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getQuickMessageTemplates(@Param('orderId') orderId: string) {
+    try {
+      const templates =
+        await this.quickMessageService.listEligibleTemplates(orderId);
+      return { success: true, templates };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':orderId/messages/quick')
+  @ApiOperation({
+    summary: 'Send a structured quick message in order chat',
+    description:
+      'Creates an immutable QUICK_MESSAGE with mentions/recipients from the catalog template. Gated by sender persona and order status.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['templateId'],
+      properties: {
+        templateId: {
+          type: 'string',
+          description: 'Catalog template id (e.g. agent_arrived)',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Quick message sent' })
+  @ApiResponse({ status: 400, description: 'Invalid template or order state' })
+  @ApiResponse({ status: 403, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Rate limited' })
+  async sendQuickMessage(
+    @Param('orderId') orderId: string,
+    @Body() body: { templateId: string }
+  ) {
+    try {
+      const message = await this.quickMessageService.sendQuickMessage(
+        orderId,
+        body?.templateId
+      );
+      return { success: true, message };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
