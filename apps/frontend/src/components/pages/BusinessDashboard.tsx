@@ -5,7 +5,7 @@ import {
   Container,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -21,6 +21,7 @@ import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessExcitementStats } from '../business/BusinessExcitementStats';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
 import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
+import { BusinessGoLiveCelebration } from '../business/BusinessGoLiveCelebration';
 import { BusinessSetupHome } from '../business/BusinessSetupHome';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
@@ -32,7 +33,11 @@ import StatusBadge from '../common/StatusBadge';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessVerification } from '../../hooks/useBusinessVerification';
-import { isSetupMode } from '../../utils/businessSetup';
+import {
+  isSetupMode,
+  markGoLiveCelebrated,
+  shouldShowGoLiveCelebration,
+} from '../../utils/businessSetup';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
@@ -60,6 +65,9 @@ const BusinessDashboard: React.FC = () => {
   const setupMode = isSetupMode(verificationStatus);
   // Avoid flashing operational modules before verification status resolves.
   const showOperationalModules = !verificationLoading && !setupMode;
+  const [goLiveOpen, setGoLiveOpen] = useState(false);
+  const goLiveDismissedRef = useRef(false);
+  const canAcceptOrders = verificationStatus?.can_accept_orders === true;
 
   const handleSetupRefresh = useCallback(async () => {
     try {
@@ -98,6 +106,32 @@ const BusinessDashboard: React.FC = () => {
     if (!profile?.business?.id) return;
     void loadCleanupPending();
   }, [loadCleanupPending, profile?.business?.id]);
+
+  const prevBusinessIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const businessId = profile?.business?.id;
+    if (businessId && businessId !== prevBusinessIdRef.current) {
+      goLiveDismissedRef.current = false;
+    }
+    prevBusinessIdRef.current = businessId;
+  }, [profile?.business?.id]);
+
+  useEffect(() => {
+    const businessId = profile?.business?.id;
+    if (setupMode || !canAcceptOrders || !businessId) {
+      if (!canAcceptOrders) setGoLiveOpen(false);
+      return;
+    }
+    if (goLiveDismissedRef.current) return;
+    setGoLiveOpen(shouldShowGoLiveCelebration(verificationStatus, businessId));
+  }, [setupMode, canAcceptOrders, verificationStatus, profile?.business?.id]);
+
+  const dismissGoLive = useCallback(() => {
+    goLiveDismissedRef.current = true;
+    setGoLiveOpen(false);
+    const id = profile?.business?.id;
+    if (id) markGoLiveCelebrated(id);
+  }, [profile?.business?.id]);
 
   const { incoming: incomingTransfers, fetchPending: fetchPendingTransfers } =
     useLocationTransfers(profile?.business?.id);
@@ -351,6 +385,13 @@ const BusinessDashboard: React.FC = () => {
           {renderModules([adminHubModule])}
         </BusinessDashboardSection>
       ) : null}
+
+      <BusinessGoLiveCelebration
+        open={goLiveOpen}
+        businessId={profile.business.id}
+        mainInterest={mainInterest}
+        onDismiss={dismissGoLive}
+      />
     </Container>
   );
 };

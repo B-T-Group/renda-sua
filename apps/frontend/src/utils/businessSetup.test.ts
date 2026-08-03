@@ -1,4 +1,9 @@
-import { isSetupMode, requiresMerchantAction } from './businessSetup';
+import {
+  isSetupMode,
+  markGoLiveCelebrated,
+  requiresMerchantAction,
+  shouldShowGoLiveCelebration,
+} from './businessSetup';
 import type { BusinessVerificationStatus } from '../hooks/useBusinessVerification';
 
 function baseStatus(
@@ -82,5 +87,41 @@ describe('isSetupMode', () => {
         })
       )
     ).toBe(true);
+  });
+});
+
+describe('shouldShowGoLiveCelebration', () => {
+  const businessId = 'biz-go-live-1';
+
+  beforeEach(() => {
+    localStorage.removeItem(`rendasua:business:${businessId}:go-live-celebrated`);
+  });
+
+  it('is true when can_accept_orders and not yet celebrated', () => {
+    expect(
+      shouldShowGoLiveCelebration(
+        baseStatus({ can_accept_orders: true, nextAction: 'complete' }),
+        businessId
+      )
+    ).toBe(true);
+  });
+
+  it('is false after dismiss is persisted', () => {
+    markGoLiveCelebrated(businessId);
+    expect(
+      shouldShowGoLiveCelebration(
+        baseStatus({ can_accept_orders: true, nextAction: 'complete' }),
+        businessId
+      )
+    ).toBe(false);
+  });
+
+  it('is false when cannot accept orders', () => {
+    expect(
+      shouldShowGoLiveCelebration(
+        baseStatus({ can_accept_orders: false }),
+        businessId
+      )
+    ).toBe(false);
   });
 });

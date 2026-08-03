@@ -1701,6 +1701,15 @@
       "referralCodeHelp": "Enter the code of the Rendasua agent helping you get started.",
       "invalidCodeLength": "Agent referral code must be 6 characters."
     },
+    "goLive": {
+      "title": "Your store is live!",
+      "body": "Customers can discover your products and place orders. Keep your catalog fresh and share your store.",
+      "bodyRental": "Customers can discover your rentals and request bookings. Keep your catalog fresh and share your store.",
+      "illustrationLabel": "Store is live",
+      "ctaAddProduct": "Add a product",
+      "ctaAddRental": "Add a rental",
+      "ctaContinue": "Continue to dashboard"
+    },
     "setup": {
       "title": "Set up your store",
       "subtitle": "Complete these steps to go live and accept orders. Operational tools like orders appear after setup.",

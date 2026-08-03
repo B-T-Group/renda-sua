@@ -1444,6 +1444,15 @@
       "referralCodeHelp": "Entrez le code de l'agent Rendasua qui vous accompagne pour démarrer.",
       "invalidCodeLength": "Le code agent doit comporter 6 caractères."
     },
+    "goLive": {
+      "title": "Votre boutique est en ligne !",
+      "body": "Les clients peuvent découvrir vos produits et passer des commandes. Enrichissez votre catalogue et partagez votre boutique.",
+      "bodyRental": "Les clients peuvent découvrir vos locations et demander des réservations. Enrichissez votre catalogue et partagez votre boutique.",
+      "illustrationLabel": "Boutique en ligne",
+      "ctaAddProduct": "Ajouter un produit",
+      "ctaAddRental": "Ajouter une location",
+      "ctaContinue": "Continuer vers le tableau de bord"
+    },
     "setup": {
       "title": "Configurez votre boutique",
       "subtitle": "Complétez ces étapes pour être en ligne et accepter des commandes. Les outils opérationnels comme les commandes apparaissent après la configuration.",

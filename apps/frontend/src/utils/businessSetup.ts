@@ -54,3 +54,23 @@ export function isStorePreviewDone(businessId: string): boolean {
 export function markStorePreviewDone(businessId: string): void {
   localStorage.setItem(previewStorageKey(businessId), '1');
 }
+
+const goLiveStorageKey = (businessId: string) =>
+  `rendasua:business:${businessId}:go-live-celebrated`;
+
+export function isGoLiveCelebrated(businessId: string): boolean {
+  return localStorage.getItem(goLiveStorageKey(businessId)) === '1';
+}
+
+export function markGoLiveCelebrated(businessId: string): void {
+  localStorage.setItem(goLiveStorageKey(businessId), '1');
+}
+
+/** True when the merchant can accept orders and has not dismissed the celebration. */
+export function shouldShowGoLiveCelebration(
+  status: BusinessVerificationStatus | null | undefined,
+  businessId: string | undefined
+): boolean {
+  if (!businessId || !status?.can_accept_orders) return false;
+  return !isGoLiveCelebrated(businessId);
+}
