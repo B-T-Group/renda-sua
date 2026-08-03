@@ -315,8 +315,10 @@ describe('OrderCleanupService', () => {
     it('skips when disabled', async () => {
       config.get.mockReturnValue({ cleanupEnabled: false });
       const spy = jest.spyOn(service, 'cancelStalePendingPaymentOrders');
-      await service.runDailyCleanup();
+      const result = await service.runDailyCleanup();
       expect(spy).not.toHaveBeenCalled();
+      expect(result.skipped).toBe(true);
     });
   });
 });
+

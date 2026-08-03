@@ -36,6 +36,7 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
+import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
@@ -74,6 +75,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
     OrderDispatchInternalController,
+    OrderCleanupInternalController,
     BusinessAvailabilityController,
   ],
   providers: [

@@ -15,7 +15,12 @@ export class OrderCleanupCronService {
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async handleDailyOrderCleanup(): Promise<void> {
     try {
-      await this.orderCleanupService.runDailyCleanup();
+      const result = await this.orderCleanupService.runDailyCleanup();
+      if (!result.skipped) {
+        this.logger.log(
+          `Daily cleanup done: pending=${result.pendingPaymentCancelled}, ready=${result.readyForPickupCancelled}, failed=${result.midFulfillmentFailed}`
+        );
+      }
     } catch (error: any) {
       this.logger.error(
         `Daily order cleanup failed: ${error?.message ?? String(error)}`

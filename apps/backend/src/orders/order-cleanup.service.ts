@@ -73,11 +73,21 @@ export class OrderCleanupService {
     private readonly configService: ConfigService<Configuration>
   ) {}
 
-  async runDailyCleanup(): Promise<void> {
+  async runDailyCleanup(): Promise<{
+    skipped?: boolean;
+    pendingPaymentCancelled: number;
+    readyForPickupCancelled: number;
+    midFulfillmentFailed: number;
+  }> {
     const cfg = this.configService.get<Configuration['order']>('order');
     if (cfg?.cleanupEnabled === false) {
       this.logger.debug('Order cleanup disabled; skipping');
-      return;
+      return {
+        skipped: true,
+        pendingPaymentCancelled: 0,
+        readyForPickupCancelled: 0,
+        midFulfillmentFailed: 0,
+      };
     }
     const grace = cfg?.cleanupGraceHours ?? 24;
     const limit = cfg?.cleanupBatchLimit ?? 100;
@@ -87,6 +97,11 @@ export class OrderCleanupService {
     this.logger.log(
       `Order cleanup: pending_payment=${pending}, ready_for_pickup=${missed}, mid_fulfillment_failed=${failed}`
     );
+    return {
+      pendingPaymentCancelled: pending,
+      readyForPickupCancelled: missed,
+      midFulfillmentFailed: failed,
+    };
   }
 
   /**
