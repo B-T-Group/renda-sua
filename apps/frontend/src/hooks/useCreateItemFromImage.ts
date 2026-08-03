@@ -3,13 +3,15 @@ import { useApiClient } from './useApiClient';
 
 export interface CreateItemFromImagePayload {
   imageId: string;
-  name: string;
+  /** Optional for eager drafts — backend defaults to "Untitled product". */
+  name?: string;
   categoryName?: string;
   subCategoryName?: string;
   brandName?: string;
   description?: string;
-   price?: number;
-   currency?: string;
+  price?: number;
+  currency?: string;
+  hint?: string;
 }
 
 export const useCreateItemFromImage = () => {

@@ -185,6 +185,38 @@ const GET_ITEMS = `
   }
 `;
 
+const GET_ITEMS_BY_MODERATION_STATUS = `
+  query GetItemsByModerationStatus(
+    $businessId: uuid!
+    $moderationStatus: item_moderation_status!
+  ) {
+    items(
+      where: {
+        business_id: { _eq: $businessId }
+        status: { _eq: active }
+        moderation_status: { _eq: $moderationStatus }
+      }
+      order_by: { updated_at: desc }
+    ) {
+      id
+      name
+      description
+      price
+      currency
+      moderation_status
+      is_active
+      created_at
+      updated_at
+      item_images(order_by: { display_order: asc }, limit: 1) {
+        id
+        image_url
+        display_url
+        thumbnail
+      }
+    }
+  }
+`;
+
 const GET_BUSINESS_LOCATIONS = `
   query GetBusinessLocations($businessId: uuid!) {
     business_locations(
@@ -680,6 +712,9 @@ const GET_ITEM_BY_ID = `
       business_id
       name
       description
+      sku
+      price
+      moderation_status
     }
   }
 `;
@@ -808,7 +843,19 @@ export class BusinessItemsService {
     }
   }
 
-  async getItems(businessId: string) {
+  async getItems(
+    businessId: string,
+    options?: { moderationStatus?: string }
+  ) {
+    if (options?.moderationStatus) {
+      const result = await this.hasuraUserService.executeQuery<{
+        items: any[];
+      }>(GET_ITEMS_BY_MODERATION_STATUS, {
+        businessId,
+        moderationStatus: options.moderationStatus,
+      });
+      return result.items ?? [];
+    }
     const result = await this.hasuraUserService.executeQuery<{ items: any[] }>(
       GET_ITEMS,
       { businessId }
@@ -1941,6 +1988,127 @@ export class BusinessItemsService {
     return row;
   }
 
+  /**
+   * Create inventory with sane defaults and publish the draft in one call.
+   */
+  async quickPublishBusinessItem(
+    businessId: string,
+    itemId: string,
+    input: {
+      locationId: string;
+      quantity?: number;
+      sellingPrice?: number;
+    }
+  ): Promise<{
+    item: { id: string; moderation_status: string };
+    inventory: { id: string };
+  }> {
+    const itemRow = await this.hasuraUserService.executeQuery<{
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        price: number | null;
+        moderation_status: string;
+      } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = itemRow.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (item.moderation_status !== 'draft') {
+      throw new HttpException(
+        'Only draft items can be published',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const quantity =
+      input.quantity != null && !Number.isNaN(input.quantity)
+        ? Math.max(0, Math.floor(input.quantity))
+        : 1;
+    const sellingPrice =
+      input.sellingPrice != null && !Number.isNaN(input.sellingPrice)
+        ? input.sellingPrice
+        : item.price ?? 0;
+
+    if (
+      input.sellingPrice != null &&
+      !Number.isNaN(input.sellingPrice) &&
+      input.sellingPrice !== item.price
+    ) {
+      await this.updateItem(businessId, itemId, {
+        price: input.sellingPrice,
+      });
+    }
+
+    const inventoryId = await this.ensureInventoryForQuickPublish(
+      businessId,
+      itemId,
+      input.locationId,
+      quantity,
+      sellingPrice
+    );
+
+    const published = await this.publishBusinessItem(businessId, itemId);
+    return {
+      item: published,
+      inventory: { id: inventoryId },
+    };
+  }
+
+  private async ensureInventoryForQuickPublish(
+    businessId: string,
+    itemId: string,
+    locationId: string,
+    quantity: number,
+    sellingPrice: number
+  ): Promise<string> {
+    const existing = await this.hasuraUserService.executeQuery<{
+      business_inventory: { id: string }[];
+    }>(
+      `
+      query FindInventory($itemId: uuid!, $locationId: uuid!) {
+        business_inventory(
+          where: {
+            item_id: { _eq: $itemId }
+            business_location_id: { _eq: $locationId }
+            item_variant_id: { _is_null: true }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `,
+      { itemId, locationId }
+    );
+    const existingId = existing.business_inventory?.[0]?.id;
+    if (existingId) {
+      await this.updateInventoryItem(businessId, existingId, {
+        quantity,
+        selling_price: sellingPrice,
+        unit_cost: sellingPrice,
+        is_active: true,
+      });
+      return existingId;
+    }
+    const created = await this.createInventoryItem(businessId, {
+      business_location_id: locationId,
+      item_id: itemId,
+      quantity,
+      reserved_quantity: 0,
+      reorder_point: 0,
+      reorder_quantity: 0,
+      unit_cost: sellingPrice,
+      selling_price: sellingPrice,
+      is_active: true,
+    });
+    return created.id;
+  }
+
   async updateItem(
     businessId: string,
     itemId: string,
@@ -1949,7 +2117,26 @@ export class BusinessItemsService {
     await this.assertOfflinePaymentAllowed(businessId, updates);
     const existing = await this.loadItemModerationRow(businessId, itemId);
     const wasRejected = existing.moderation_status === 'rejected';
-    const payload: UpdateItemDto = { ...updates };
+    const {
+      categoryName,
+      subCategoryName,
+      brandName,
+      ...rest
+    } = updates;
+    const payload: UpdateItemDto = { ...rest };
+    if (
+      categoryName?.trim() &&
+      subCategoryName?.trim() &&
+      payload.item_sub_category_id == null
+    ) {
+      payload.item_sub_category_id = await this.ensureSubCategoryId(
+        categoryName.trim(),
+        subCategoryName.trim()
+      );
+    }
+    if (brandName?.trim() && payload.brand_id === undefined) {
+      payload.brand_id = await this.ensureBrandId(brandName.trim());
+    }
     if (updates.currency !== undefined || updates.price !== undefined) {
       payload.currency =
         await this.hasuraSystemService.resolveBusinessCurrency(businessId);
@@ -2039,6 +2226,107 @@ export class BusinessItemsService {
     if (item.moderation_status === 'rejected') {
       await this.itemAiReviewService.resubmitIfRejected(itemId);
     }
+  }
+
+  /**
+   * Replace item tags with the given names (find-or-create tags).
+   */
+  async setItemTags(
+    businessId: string,
+    itemId: string,
+    tagNames: string[]
+  ): Promise<{ tags: string[] }> {
+    const itemResult = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = itemResult?.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const cleaned = [
+      ...new Set(
+        tagNames
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t.length > 0)
+      ),
+    ].slice(0, 20);
+
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation ClearItemTags($itemId: uuid!) {
+        delete_item_tags(where: { item_id: { _eq: $itemId } }) {
+          affected_rows
+        }
+      }
+    `,
+      { itemId }
+    );
+
+    if (cleaned.length === 0) {
+      return { tags: [] };
+    }
+
+    const tagIds: string[] = [];
+    for (const name of cleaned) {
+      const found = await this.hasuraSystemService.executeQuery<{
+        tags: { id: string }[];
+      }>(
+        `
+        query FindTag($name: String!) {
+          tags(where: { name: { _ilike: $name } }, limit: 1) {
+            id
+          }
+        }
+      `,
+        { name }
+      );
+      let tagId: string | undefined = found.tags?.[0]?.id;
+      if (!tagId) {
+        const inserted = await this.hasuraSystemService.executeMutation<{
+          insert_tags_one: { id: string } | null;
+        }>(
+          `
+          mutation InsertTag($name: String!) {
+            insert_tags_one(object: { name: $name }) {
+              id
+            }
+          }
+        `,
+          { name }
+        );
+        tagId = inserted.insert_tags_one?.id ?? undefined;
+      }
+      if (tagId) {
+        tagIds.push(tagId);
+      }
+    }
+
+    if (tagIds.length) {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation LinkItemTags($objects: [item_tags_insert_input!]!) {
+          insert_item_tags(
+            objects: $objects
+            on_conflict: {
+              constraint: item_tags_pkey
+              update_columns: []
+            }
+          ) {
+            affected_rows
+          }
+        }
+      `,
+        {
+          objects: tagIds.map((tag_id) => ({ item_id: itemId, tag_id })),
+        }
+      );
+    }
+
+    return { tags: cleaned };
   }
 
   /**
@@ -2373,7 +2661,24 @@ export class BusinessItemsService {
       businessId,
       dto.imageId
     );
+    // Idempotent: resume an existing draft linked to this image (eager create race).
     if (image.item_id) {
+      const existing = await this.hasuraUserService.executeQuery<{
+        items_by_pk: {
+          id: string;
+          name: string;
+          sku: string | null;
+          business_id: string;
+        } | null;
+      }>(GET_ITEM_BY_ID, { itemId: image.item_id });
+      const row = existing.items_by_pk;
+      if (row && row.business_id === businessId) {
+        return {
+          id: row.id,
+          name: row.name,
+          sku: row.sku,
+        };
+      }
       throw new HttpException(
         {
           success: false,
@@ -2390,7 +2695,7 @@ export class BusinessItemsService {
       preferredLanguage
     );
 
-    const name = dto.name.trim();
+    const name = (dto.name?.trim() || 'Untitled product').trim();
     const baseSku = this.buildSkuBase(name);
     const sku = await this.generateUniqueSku(businessId, baseSku);
 
@@ -2470,6 +2775,7 @@ export class BusinessItemsService {
       imageUrls: [imageUrl],
       caption,
       altText,
+      hint: dto.hint?.trim() || dto.name?.trim() || null,
       defaultCurrency: 'XAF',
       preferredLanguage,
     });

@@ -36,6 +36,17 @@ interface OpenAIImageEditResponse {
   data?: Array<{ b64_json?: string; url?: string }>;
 }
 
+export type SuggestionFieldConfidence = 'high' | 'medium' | 'low';
+
+export interface ImageItemSuggestionConfidence {
+  name: SuggestionFieldConfidence;
+  categoryName: SuggestionFieldConfidence;
+  subCategoryName: SuggestionFieldConfidence;
+  brandName: SuggestionFieldConfidence;
+  description: SuggestionFieldConfidence;
+  price: SuggestionFieldConfidence;
+}
+
 export interface ImageItemSuggestionResult {
   name?: string;
   categoryName?: string;
@@ -48,6 +59,9 @@ export interface ImageItemSuggestionResult {
   weight?: number | null;
   weightUnit?: string | null;
   dimensions?: string | null;
+  confidence?: ImageItemSuggestionConfidence;
+  categoryAlternates?: string[];
+  subCategoryAlternates?: string[];
 }
 
 /** AI refinement for an existing catalog item (price/currency excluded). */
@@ -516,8 +530,13 @@ export class AiService {
     imageUrls: string[];
     caption?: string | null;
     altText?: string | null;
+    /** Optional short merchant description of what was photographed. */
+    hint?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
+    country?: string | null;
+    existingCatalogNames?: string[];
+    existingBrandNames?: string[];
     /** Defaults to `openai` (vision). */
     provider?: ImageItemSuggestionsProvider;
   }): Promise<ImageItemSuggestionResult> {
@@ -529,28 +548,54 @@ export class AiService {
     const languageLabel =
       descriptionLanguage === 'fr' ? 'French' : 'English';
     const textContextParts: string[] = [];
+    if (input.hint?.trim()) {
+      textContextParts.push(
+        `Merchant hint (authoritative for product identity): ${input.hint.trim()}`
+      );
+    }
     if (input.caption) {
       textContextParts.push(`Caption: ${input.caption}`);
     }
     if (input.altText) {
       textContextParts.push(`Alt text: ${input.altText}`);
     }
+    if (input.country) {
+      textContextParts.push(`Business country: ${input.country}`);
+    }
+    if (input.existingBrandNames?.length) {
+      textContextParts.push(
+        `Known brands in this catalog: ${input.existingBrandNames
+          .slice(0, 40)
+          .join(', ')}`
+      );
+    }
+    if (input.existingCatalogNames?.length) {
+      textContextParts.push(
+        `Existing product names (avoid near-duplicates): ${input.existingCatalogNames
+          .slice(0, 40)
+          .join(', ')}`
+      );
+    }
     const textContext = textContextParts.join('\n');
+    const emptyResult = (): ImageItemSuggestionResult => ({
+      name: input.hint?.trim() || input.caption || input.altText || undefined,
+      categoryName: undefined,
+      subCategoryName: undefined,
+      brandName: undefined,
+      description: undefined,
+      price: null,
+      currency: defaultCurrency,
+      barcodeValues: null,
+      weight: null,
+      weightUnit: null,
+      dimensions: null,
+      confidence: this.defaultConfidence(!!input.hint?.trim()),
+      categoryAlternates: [],
+      subCategoryAlternates: [],
+    });
 
     if (!urls.length) {
-      return {
-        name: input.caption || input.altText || undefined,
-        categoryName: undefined,
-        subCategoryName: undefined,
-        brandName: undefined,
-        description: undefined,
-        price: null,
-        currency: defaultCurrency,
-        barcodeValues: null,
-        weight: null,
-        weightUnit: null,
-        dimensions: null,
-      };
+      return emptyResult();
     }
 
     const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
@@ -558,7 +603,8 @@ export class AiService {
     const visionUserText = this.buildImageItemVisionUserText(
       defaultCurrency,
       languageLabel,
-      textContext
+      textContext,
+      !!input.hint?.trim()
     );
     const textOnlyUserText = this.buildImageItemTextOnlyUserText(
       urls,
@@ -624,43 +670,11 @@ export class AiService {
         parsed = {};
       }
 
-      const suggestion: ImageItemSuggestionResult = {
-        name: this.sanitizeSuggestedProductName(
-          typeof parsed.name === 'string' ? parsed.name : undefined
-        ),
-        categoryName:
-          typeof parsed.categoryName === 'string' ? parsed.categoryName : undefined,
-        subCategoryName:
-          typeof parsed.subCategoryName === 'string'
-            ? parsed.subCategoryName
-            : undefined,
-        brandName:
-          typeof parsed.brandName === 'string' ? parsed.brandName : undefined,
-        description:
-          typeof parsed.description === 'string' ? parsed.description : undefined,
-        price:
-          typeof parsed.price === 'number'
-            ? parsed.price
-            : parsed.price != null
-            ? Number(parsed.price) || null
-            : null,
-        currency:
-          typeof parsed.currency === 'string' ? parsed.currency : defaultCurrency,
-        barcodeValues: Array.isArray(parsed.barcodeValues)
-          ? (parsed.barcodeValues as unknown[]).filter(
-              (v): v is string => typeof v === 'string'
-            )
-          : null,
-        weight:
-          typeof parsed.weight === 'number'
-            ? parsed.weight
-            : parsed.weight != null
-            ? Number(parsed.weight) || null
-            : null,
-        weightUnit: typeof parsed.weightUnit === 'string' ? parsed.weightUnit : null,
-        dimensions:
-          typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
-      };
+      const suggestion = this.parseImageItemSuggestion(
+        parsed,
+        defaultCurrency,
+        !!input.hint?.trim()
+      );
       const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
       if (!barcode) {
         return suggestion;
@@ -681,6 +695,14 @@ export class AiService {
         weight: lookup.weight ?? suggestion.weight,
         weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
         dimensions: lookup.dimensions ?? suggestion.dimensions,
+        confidence: {
+          ...suggestion.confidence!,
+          name: 'high',
+          brandName: lookup.brandName ? 'high' : suggestion.confidence!.brandName,
+          categoryName: lookup.categoryName
+            ? 'high'
+            : suggestion.confidence!.categoryName,
+        },
       };
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -690,21 +712,122 @@ export class AiService {
         `Failed to generate image item suggestions for ${urls.length} image(s)`,
         error
       );
-      // Fallback: minimal suggestion using caption/alt text only
-      return {
-        name: input.caption || input.altText || undefined,
-        categoryName: undefined,
-        subCategoryName: undefined,
-        brandName: undefined,
-        description: undefined,
-        price: null,
-        currency: defaultCurrency,
-        barcodeValues: null,
-        weight: null,
-        weightUnit: null,
-        dimensions: null,
-      };
+      return emptyResult();
     }
+  }
+
+  private defaultConfidence(
+    hasHint: boolean
+  ): ImageItemSuggestionConfidence {
+    const nameLevel: SuggestionFieldConfidence = hasHint ? 'medium' : 'low';
+    return {
+      name: nameLevel,
+      categoryName: 'low',
+      subCategoryName: 'low',
+      brandName: 'low',
+      description: 'low',
+      price: 'low',
+    };
+  }
+
+  private parseConfidenceLevel(
+    value: unknown,
+    fallback: SuggestionFieldConfidence
+  ): SuggestionFieldConfidence {
+    if (value === 'high' || value === 'medium' || value === 'low') {
+      return value;
+    }
+    return fallback;
+  }
+
+  private parseImageItemSuggestion(
+    parsed: Record<string, unknown>,
+    defaultCurrency: string,
+    hasHint: boolean
+  ): ImageItemSuggestionResult {
+    const confRaw =
+      parsed.confidence && typeof parsed.confidence === 'object'
+        ? (parsed.confidence as Record<string, unknown>)
+        : {};
+    const name = this.sanitizeSuggestedProductName(
+      typeof parsed.name === 'string' ? parsed.name : undefined
+    );
+    const categoryName =
+      typeof parsed.categoryName === 'string' ? parsed.categoryName : undefined;
+    const subCategoryName =
+      typeof parsed.subCategoryName === 'string'
+        ? parsed.subCategoryName
+        : undefined;
+    const brandName =
+      typeof parsed.brandName === 'string' ? parsed.brandName : undefined;
+    const description =
+      typeof parsed.description === 'string' ? parsed.description : undefined;
+    const price =
+      typeof parsed.price === 'number'
+        ? parsed.price
+        : parsed.price != null
+        ? Number(parsed.price) || null
+        : null;
+    const defaults = this.defaultConfidence(hasHint);
+    const confidence: ImageItemSuggestionConfidence = {
+      name: name
+        ? this.parseConfidenceLevel(confRaw.name, hasHint ? 'high' : 'medium')
+        : 'low',
+      categoryName: categoryName
+        ? this.parseConfidenceLevel(confRaw.categoryName, 'medium')
+        : 'low',
+      subCategoryName: subCategoryName
+        ? this.parseConfidenceLevel(confRaw.subCategoryName, 'medium')
+        : 'low',
+      brandName: brandName
+        ? this.parseConfidenceLevel(confRaw.brandName, 'medium')
+        : 'low',
+      description: description
+        ? this.parseConfidenceLevel(confRaw.description, 'medium')
+        : 'low',
+      price:
+        price != null
+          ? this.parseConfidenceLevel(confRaw.price, 'medium')
+          : 'low',
+    };
+    const categoryAlternates = Array.isArray(parsed.categoryAlternates)
+      ? (parsed.categoryAlternates as unknown[]).filter(
+          (v): v is string => typeof v === 'string'
+        )
+      : [];
+    const subCategoryAlternates = Array.isArray(parsed.subCategoryAlternates)
+      ? (parsed.subCategoryAlternates as unknown[]).filter(
+          (v): v is string => typeof v === 'string'
+        )
+      : [];
+    return {
+      name,
+      categoryName,
+      subCategoryName,
+      brandName,
+      description,
+      price,
+      currency:
+        typeof parsed.currency === 'string' ? parsed.currency : defaultCurrency,
+      barcodeValues: Array.isArray(parsed.barcodeValues)
+        ? (parsed.barcodeValues as unknown[]).filter(
+            (v): v is string => typeof v === 'string'
+          )
+        : null,
+      weight:
+        typeof parsed.weight === 'number'
+          ? parsed.weight
+          : parsed.weight != null
+          ? Number(parsed.weight) || null
+          : null,
+      weightUnit:
+        typeof parsed.weightUnit === 'string' ? parsed.weightUnit : null,
+      dimensions:
+        typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
+      confidence: { ...defaults, ...confidence },
+      categoryAlternates,
+      subCategoryAlternates,
+    };
   }
 
   async generateItemRefinementSuggestions(input: {
@@ -847,8 +970,18 @@ Do not include any text outside the JSON.`;
   private buildImageItemVisionUserText(
     defaultCurrency: string,
     languageLabel: string,
-    textContext: string
+    textContext: string,
+    hasMerchantHint = false
   ): string {
+    const hintRules = hasMerchantHint
+      ? `
+Merchant hint rules:
+- The merchant hint is authoritative for product *identity* (what the item is called).
+- Prefer the hint for the product name when the image is ambiguous.
+- Still read visual attributes (size, color, brand marks, price tags) from the images.
+- Reconcile conflicts: identity → hint; visual facts → image.
+`
+      : '';
     return `
 Analyze the attached product images in order (first image is primary). Merge information across all photos; use the clearest view of text, barcodes, labels, and price tags.
 
@@ -865,12 +998,14 @@ Then extract from the images:
 - Product weight as a number (if visible)
 - Weight unit (e.g. g, kg, ml, l)
 - Product dimensions string (e.g. 20x10x5 cm) if visible.
+- Up to 3 alternate category names and subcategory names.
+- Per-field confidence: "high" | "medium" | "low".
 
 Name rules:
 - Use the real commercial product name from the image text when readable.
 - Do NOT use placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", "Product name", or similar demo/API test strings.
 - If you cannot determine a real name, set "name" to null (leave blank). Prefer null over guessing.
-
+${hintRules}
 Additional text context from the image record (may be empty):
 ${textContext || 'N/A'}
 
@@ -886,7 +1021,17 @@ Return ONLY a single JSON object with this exact shape:
   "barcodeValues": string[] | null,
   "weight": number | null,
   "weightUnit": string | null,
-  "dimensions": string | null
+  "dimensions": string | null,
+  "categoryAlternates": string[] | null,
+  "subCategoryAlternates": string[] | null,
+  "confidence": {
+    "name": "high" | "medium" | "low",
+    "categoryName": "high" | "medium" | "low",
+    "subCategoryName": "high" | "medium" | "low",
+    "brandName": "high" | "medium" | "low",
+    "description": "high" | "medium" | "low",
+    "price": "high" | "medium" | "low"
+  }
 }
 
 Do not include any explanation outside of the JSON.

@@ -1999,9 +1999,30 @@
         "backToItems": "Back to items",
         "stepProgress": "Step {{current}} of {{total}}",
         "previousStep": "Previous step",
+        "hint": {
+          "prompt": "What did you photograph? (optional)",
+          "helpTitle": "Help the AI (optional)",
+          "use": "Use hint",
+          "example1": "Coca-Cola Zero 1.5L"
+        },
+        "quality": {
+          "label": "Listing quality"
+        },
+        "review": {
+          "analyzing": "Filled from your photos — finishing details…",
+          "filledBanner": "Filled from your photos — edit anything",
+          "confirm": "Confirm",
+          "duplicateBody": "\"{{name}}\" may already be in your store.",
+          "addStockInstead": "Add stock instead",
+          "publish": "Publish product",
+          "finishLater": "Finish later",
+          "submitted": "Product submitted for approval",
+          "publishFailed": "Could not publish product"
+        },
         "steps": {
           "upload": "Photos",
           "create": "Product details",
+          "review": "Review",
           "location": "Location",
           "done": "Done"
         },

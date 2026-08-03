@@ -3,7 +3,9 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
+import ProductEnrichmentNudge from './ProductEnrichmentNudge';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 interface FirstSaleItemSuccessStepProps {
@@ -12,6 +14,7 @@ interface FirstSaleItemSuccessStepProps {
   locationName?: string;
   savedAsDraft?: boolean;
   initialLocationId?: string;
+  photoCount?: number;
 }
 
 const scaleIn = {
@@ -27,9 +30,11 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
   locationName,
   savedAsDraft = false,
   initialLocationId,
+  photoCount = 1,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { profile } = useUserProfileContext();
   const isFirst = intent === 'first';
   const itemsPath = initialLocationId
     ? `/business/items?location=${encodeURIComponent(initialLocationId)}`
@@ -98,6 +103,16 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
       <Typography variant="body1" color="text.secondary" textAlign="center">
         {bodyText}
       </Typography>
+      {!savedAsDraft ? (
+        <Box sx={{ width: '100%', maxWidth: 480 }}>
+          <ProductEnrichmentNudge
+            itemId={item.id}
+            businessId={profile?.business?.id}
+            photoCount={photoCount}
+            onOpenItem={() => navigate(`/business/items/${item.id}`)}
+          />
+        </Box>
+      ) : null}
       <Stack spacing={1} sx={{ width: '100%', maxWidth: 400 }}>
         {savedAsDraft ? (
           <Button

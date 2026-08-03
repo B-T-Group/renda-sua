@@ -23,6 +23,7 @@ export interface BusinessImage {
   tags: string[];
   status: string;
   is_ai_cleaned: boolean;
+  quality_score?: number | null;
   thumbnail?: string | null;
   thumbnail_status?: string | null;
   display_url?: string | null;
@@ -100,6 +101,7 @@ const LIBRARY_IMAGE_FIELDS = `
   tags
   status
   is_ai_cleaned
+  quality_score
   thumbnail
   thumbnail_status
   display_url

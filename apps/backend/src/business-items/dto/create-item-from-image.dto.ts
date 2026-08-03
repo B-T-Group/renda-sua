@@ -17,11 +17,13 @@ export class CreateItemFromImageDto {
   imageId!: string;
 
   @ApiProperty({
-    description: 'Item name',
+    description:
+      'Item name. Optional for eager draft creation — defaults to "Untitled product" when omitted.',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  name!: string;
+  @IsOptional()
+  name?: string;
 
   @ApiProperty({
     description: 'Category name (created if not existing)',
@@ -71,5 +73,15 @@ export class CreateItemFromImageDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @ApiProperty({
+    description:
+      'Optional merchant hint describing the product (improves AI description when description is omitted)',
+    required: false,
+    maxLength: 200,
+  })
+  @IsString()
+  @IsOptional()
+  hint?: string;
 }
 

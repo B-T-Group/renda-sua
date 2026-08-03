@@ -2,6 +2,9 @@ export class UpdateItemDto {
   name?: string;
   description?: string;
   item_sub_category_id?: number;
+  /** Resolve or create subcategory from names (alternative to item_sub_category_id). */
+  categoryName?: string;
+  subCategoryName?: string;
   weight?: number | null;
   weight_unit?: string | null;
   dimensions?: string | null;
@@ -9,6 +12,8 @@ export class UpdateItemDto {
   currency?: string;
   sku?: string | null;
   brand_id?: string | null;
+  /** Resolve or create brand from name (alternative to brand_id). */
+  brandName?: string;
   model?: string | null;
   color?: string | null;
   is_fragile?: boolean;

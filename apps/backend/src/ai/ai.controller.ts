@@ -16,12 +16,18 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import { AiService } from './ai.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
+import { ImageItemSuggestionsDto } from './dto/image-item-suggestions.dto';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { BusinessItemsService } from '../business-items/business-items.service';
 import { ItemRefinementDto } from './dto/item-refinement.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import {
+  computeListingQuality,
+  nameSimilarity,
+} from './listing-quality.util';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -31,6 +37,7 @@ export class AiController {
   constructor(
     private readonly aiService: AiService,
     private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
     private readonly businessItemsService: BusinessItemsService
   ) {}
@@ -131,49 +138,14 @@ export class AiController {
   @ApiOperation({
     summary: 'Get AI-based item field suggestions from a business image',
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        imageId: { type: 'string', format: 'uuid' },
-        imageIds: {
-          type: 'array',
-          items: { type: 'string', format: 'uuid' },
-        },
-      },
-      description:
-        'Send imageIds (all photos to analyze) or legacy single imageId.',
-    },
-  })
+  @ApiBody({ type: ImageItemSuggestionsDto })
   @ApiResponse({
     status: 200,
     description: 'Suggestions generated successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        data: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            categoryName: { type: 'string' },
-            subCategoryName: { type: 'string' },
-            brandName: { type: 'string' },
-            descriptionSuggestion: { type: 'string' },
-            price: { type: 'number' },
-            currency: { type: 'string' },
-            barcodeValues: { type: 'array', items: { type: 'string' } },
-            weight: { type: 'number' },
-            weightUnit: { type: 'string' },
-            dimensions: { type: 'string' },
-          },
-        },
-      },
-    },
   })
   async getImageItemSuggestions(
     @ReqContext() ctx: RequestContext,
-    @Body() body: { imageId?: string; imageIds?: string[] }
+    @Body() body: ImageItemSuggestionsDto
   ) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
@@ -214,12 +186,53 @@ export class AiController {
     const alts = images
       .map((img) => img!.alt_text)
       .filter((a): a is string => !!a?.trim());
+
+    const [currency, country, catalogItems] = await Promise.all([
+      this.hasuraSystemService.resolveBusinessCurrency(businessId),
+      this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId),
+      this.businessItemsService.getItems(businessId),
+    ]);
+
+    const linkedItemIds = new Set(
+      images
+        .map((img) => img!.item_id)
+        .filter((id): id is string => typeof id === 'string' && !!id)
+    );
+    const catalogForContext = (
+      catalogItems as {
+        id: string;
+        name?: string;
+        moderation_status?: string;
+        brand?: { name?: string } | null;
+      }[]
+    ).filter(
+      (i) =>
+        !linkedItemIds.has(i.id) &&
+        i.moderation_status !== 'draft' &&
+        (i.name ?? '').trim().toLowerCase() !== 'untitled product'
+    );
+
+    const existingCatalogNames = catalogForContext
+      .map((i) => i.name)
+      .filter((n): n is string => !!n?.trim());
+    const existingBrandNames = [
+      ...new Set(
+        catalogForContext
+          .map((i) => i.brand?.name)
+          .filter((n): n is string => !!n?.trim())
+      ),
+    ];
+
     const suggestion = await this.aiService.generateImageItemSuggestions({
       imageUrls: images.map((img) => img!.image_url),
       caption: captions.length ? captions.join(' | ') : null,
       altText: alts.length ? alts.join(' | ') : null,
-      defaultCurrency: 'XAF',
+      hint: body.hint?.trim() || null,
+      defaultCurrency: currency || 'XAF',
       preferredLanguage: user?.preferred_language ?? 'en',
+      country,
+      existingCatalogNames,
+      existingBrandNames,
     });
 
     if (suggestion.barcodeValues?.length) {
@@ -230,6 +243,40 @@ export class AiController {
       );
     }
 
+    const scoredImages = images.filter(
+      (img) => typeof img!.quality_score === 'number'
+    );
+    const avgQuality =
+      scoredImages.length > 0
+        ? scoredImages.reduce(
+            (sum, img) => sum + (img!.quality_score as number),
+            0
+          ) / scoredImages.length
+        : 70;
+
+    const listingQuality = computeListingQuality({
+      photoCount: images.length,
+      averageImageQuality: avgQuality,
+      name: suggestion.name,
+      description: suggestion.description,
+      categoryName: suggestion.categoryName,
+      brandName: suggestion.brandName,
+      hasWeightOrDimensions: !!(suggestion.weight || suggestion.dimensions),
+      hasBarcode: !!(suggestion.barcodeValues?.length),
+    });
+
+    const duplicateCandidates = suggestion.name
+      ? catalogForContext
+          .map((item) => ({
+            itemId: item.id,
+            name: item.name ?? '',
+            similarity: nameSimilarity(suggestion.name!, item.name ?? ''),
+          }))
+          .filter((c) => c.similarity >= 0.7)
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, 5)
+      : [];
+
     return {
       success: true,
       data: {
@@ -239,11 +286,16 @@ export class AiController {
         brandName: suggestion.brandName,
         descriptionSuggestion: suggestion.description,
         price: suggestion.price ?? undefined,
-        currency: suggestion.currency || 'XAF',
+        currency: suggestion.currency || currency || 'XAF',
         barcodeValues: suggestion.barcodeValues ?? undefined,
         weight: suggestion.weight ?? undefined,
         weightUnit: suggestion.weightUnit ?? undefined,
         dimensions: suggestion.dimensions ?? undefined,
+        confidence: suggestion.confidence,
+        categoryAlternates: suggestion.categoryAlternates ?? [],
+        subCategoryAlternates: suggestion.subCategoryAlternates ?? [],
+        duplicateCandidates,
+        listingQuality,
       },
     };
   }

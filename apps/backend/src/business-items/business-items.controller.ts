@@ -38,8 +38,10 @@ import { CreateItemDto } from '../items/dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
+import { QuickPublishDto } from './dto/quick-publish.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
+import { SetItemTagsDto } from './dto/set-item-tags.dto';
 import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
 import { CreateLocationTransferRequestDto } from './dto/create-location-transfer-request.dto';
 import { ReqContext } from '../auth/req-context.decorator';
@@ -100,11 +102,23 @@ export class BusinessItemsController {
   @Get('items')
   @ApiOperation({ summary: 'Get items for the current business' })
   @ApiQuery({ name: 'businessId', required: false })
+  @ApiQuery({
+    name: 'moderation_status',
+    required: false,
+    description:
+      'Filter by moderation status (e.g. draft). When omitted, returns all active items.',
+  })
   @ApiResponse({ status: 200, description: 'Items retrieved successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  async getItems(@Query('businessId') businessId?: string) {
+  async getItems(
+    @Query('businessId') businessId?: string,
+    @Query('moderation_status') moderationStatus?: string
+  ) {
     const ctx = await this.accessService.resolveAccess(businessId);
-    const items = await this.businessItemsService.getItems(ctx.targetBusinessId);
+    const items = await this.businessItemsService.getItems(
+      ctx.targetBusinessId,
+      moderationStatus ? { moderationStatus } : undefined
+    );
     return { success: true, data: { items } };
   }
 
@@ -751,6 +765,61 @@ export class BusinessItemsController {
       itemId
     );
     return { success: true, data: { item } };
+  }
+
+  @Post('items/:id/quick-publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Create inventory with defaults and publish a draft sale item in one call',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiBody({ type: QuickPublishDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Inventory created and item submitted for review',
+  })
+  @ApiResponse({ status: 400, description: 'Item is not a draft' })
+  @ApiResponse({ status: 404, description: 'Item or location not found' })
+  async quickPublishItem(
+    @Param('id') itemId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: QuickPublishDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const result = await this.businessItemsService.quickPublishBusinessItem(
+      ctx.targetBusinessId,
+      itemId,
+      {
+        locationId: body.locationId,
+        quantity: body.quantity,
+        sellingPrice: body.sellingPrice,
+      }
+    );
+    return { success: true, data: result };
+  }
+
+  @Put('items/:itemId/tags')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Replace tags on a business item (find-or-create by name)',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiBody({ type: SetItemTagsDto })
+  @ApiResponse({ status: 200, description: 'Tags updated' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async setItemTags(
+    @Param('itemId') itemId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: SetItemTagsDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const result = await this.businessItemsService.setItemTags(
+      ctx.targetBusinessId,
+      itemId,
+      body.tags ?? []
+    );
+    return { success: true, data: result };
   }
 
   @Patch('items/:itemId')

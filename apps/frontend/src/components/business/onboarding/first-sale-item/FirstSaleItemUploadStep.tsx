@@ -39,14 +39,14 @@ import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
 import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 const GUIDELINES_DISMISSED_KEY = 'upload_guidelines_dismissed';
-const minPhotos = 2;
+const minPhotos = 1;
 
 interface FirstSaleItemUploadStepProps {
   intent?: SaleItemFromImageIntent;
   onComplete: (
     imageIds: string[],
     files: File[],
-    asyncCleanupRequested: boolean
+    asyncCleanupRequested?: boolean
   ) => void;
 }
 

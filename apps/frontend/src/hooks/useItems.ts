@@ -124,6 +124,8 @@ export interface CreateItemData {
   name: string;
   description: string;
   item_sub_category_id: number;
+  categoryName?: string;
+  subCategoryName?: string;
   weight?: number;
   weight_unit?: string;
   dimensions?: string;
@@ -131,6 +133,7 @@ export interface CreateItemData {
   currency: string;
   sku?: string;
   brand_id?: string;
+  brandName?: string;
   model?: string;
   color?: string;
   is_fragile?: boolean;
@@ -426,6 +429,50 @@ export const useItems = (
     [apiClient, businessId]
   );
 
+  const quickPublishItem = useCallback(
+    async (
+      itemId: string,
+      body: { locationId: string; quantity?: number; sellingPrice?: number }
+    ) => {
+      const response = await apiClient.post<{
+        success: boolean;
+        data?: {
+          item: { id: string; moderation_status: string };
+          inventory: { id: string };
+        };
+        error?: string;
+      }>(
+        `/business-items/items/${itemId}/quick-publish`,
+        body,
+        businessItemsApiParams(businessId)
+      );
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || 'Failed to publish item');
+      }
+      return response.data.data;
+    },
+    [apiClient, businessId]
+  );
+
+  const setItemTags = useCallback(
+    async (itemId: string, tags: string[]) => {
+      const response = await apiClient.put<{
+        success: boolean;
+        data?: { tags: string[] };
+        error?: string;
+      }>(
+        `/business-items/items/${itemId}/tags`,
+        { tags },
+        businessItemsApiParams(businessId)
+      );
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || 'Failed to update tags');
+      }
+      return response.data.data?.tags ?? [];
+    },
+    [apiClient, businessId]
+  );
+
   const fetchItemAiProposal = useCallback(
     async (itemId: string): Promise<BusinessItemAiProposalPayload> => {
       const { data } = await apiClient.get<{
@@ -497,6 +544,8 @@ export const useItems = (
     createBrand,
     updateItem,
     publishItem,
+    quickPublishItem,
+    setItemTags,
     fetchItemAiProposal,
     acceptItemAiProposal,
     declineItemAiProposal,
