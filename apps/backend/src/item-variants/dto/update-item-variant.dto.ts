@@ -33,7 +33,11 @@ export class UpdateItemVariantDto {
   @Min(0)
   weight?: number | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'g',
+    enum: ['g', 'kg', 'lb', 'oz'],
+    description: 'Postgres weight_units_enum (case-insensitive; normalized to lowercase)',
+  })
   @IsOptional()
   @IsString()
   weight_unit?: string | null;

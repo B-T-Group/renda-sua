@@ -1,4 +1,8 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  normalizeWeightUnit,
+  type WeightUnit,
+} from '../common/weight-units';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import type { CreateItemVariantDto } from './dto/create-item-variant.dto';
@@ -43,6 +47,24 @@ export class ItemVariantsService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly imageThumbnailsService: ImageThumbnailsService
   ) {}
+
+  /** Empty → null; invalid casing/aliases normalized; unknown → 400. */
+  private resolveWeightUnit(
+    value: string | null | undefined
+  ): WeightUnit | null {
+    if (value == null || !String(value).trim()) return null;
+    const normalized = normalizeWeightUnit(value);
+    if (!normalized) {
+      throw new HttpException(
+        {
+          success: false,
+          error: `Invalid weight_unit "${value}". Allowed: g, kg, lb, oz`,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return normalized;
+  }
 
   private async assertSkuUniqueForItem(
     itemId: string,
@@ -154,7 +176,9 @@ export class ItemVariantsService {
       ...(dto.sku !== undefined && { sku: dto.sku }),
       ...(dto.price !== undefined && { price: dto.price }),
       ...(dto.weight !== undefined && { weight: dto.weight }),
-      ...(dto.weight_unit !== undefined && { weight_unit: dto.weight_unit }),
+      ...(dto.weight_unit !== undefined && {
+        weight_unit: this.resolveWeightUnit(dto.weight_unit),
+      }),
       ...(dto.dimensions !== undefined && { dimensions: dto.dimensions }),
       ...(dto.color !== undefined && { color: dto.color }),
       ...(dto.attributes !== undefined && { attributes: dto.attributes }),
@@ -225,7 +249,10 @@ export class ItemVariantsService {
     const keys = Object.keys(dto) as (keyof UpdateItemVariantDto)[];
     for (const k of keys) {
       if (dto[k] !== undefined) {
-        _set[k] = dto[k] as unknown;
+        _set[k] =
+          k === 'weight_unit'
+            ? this.resolveWeightUnit(dto.weight_unit)
+            : (dto[k] as unknown);
       }
     }
     if (Object.keys(_set).length === 0) {

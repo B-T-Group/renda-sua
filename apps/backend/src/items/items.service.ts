@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { normalizeWeightUnit } from '../common/weight-units';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -248,8 +249,40 @@ export class ItemsService {
     return Object.fromEntries(
       MUTABLE_ITEM_FIELDS.filter((field) =>
         Object.prototype.hasOwnProperty.call(source, field)
-      ).map((field) => [field, source[field]])
+      ).map((field) => {
+        const value = source[field];
+        if (field === 'weight_unit') {
+          return [field, this.resolveWeightUnit(value)];
+        }
+        return [field, value];
+      })
     );
+  }
+
+  private resolveWeightUnit(value: unknown): string | null {
+    if (value == null || (typeof value === 'string' && !value.trim())) {
+      return null;
+    }
+    if (typeof value !== 'string') {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Invalid weight_unit. Allowed: g, kg, lb, oz',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const normalized = normalizeWeightUnit(value);
+    if (!normalized) {
+      throw new HttpException(
+        {
+          success: false,
+          error: `Invalid weight_unit "${value}". Allowed: g, kg, lb, oz`,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return normalized;
   }
 
   private async syncEmbeddings(

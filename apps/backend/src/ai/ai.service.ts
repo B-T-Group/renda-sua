@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import FormData from 'form-data';
+import { normalizeWeightUnit } from '../common/weight-units';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -826,7 +827,9 @@ export class AiService {
           ? Number(parsed.weight) || null
           : null,
       weightUnit:
-        typeof parsed.weightUnit === 'string' ? parsed.weightUnit : null,
+        typeof parsed.weightUnit === 'string'
+          ? normalizeWeightUnit(parsed.weightUnit)
+          : null,
       dimensions:
         typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
       confidence: { ...defaults, ...confidence },
@@ -888,6 +891,7 @@ Rules:
 - For "name": use only a real product name visible on the image or in the current fields. Never invent placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", or "Product name". If no real name can be determined, set "name" to null (leave blank).
 - If a field should stay as-is, repeat the current value or omit if unchanged.
 - Only specify dimensions/weight/weightUnit if they are visible on the image.
+- weightUnit MUST be one of: "g", "kg", "lb", "oz" (lowercase). Never use "Kg", "KG", "ml", or "l".
 
 Return ONLY a single JSON object with this exact shape (null allowed for unknowns):
 {
@@ -903,7 +907,7 @@ Return ONLY a single JSON object with this exact shape (null allowed for unknown
   "suggestedTagsFr": string[] | null,
   "barcodeValues": string[] | null,
   "weight": number | null,
-  "weightUnit": string | null,
+  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
   "dimensions": string | null,
   "isFragile": boolean | null,
   "isPerishable": boolean | null,
@@ -1001,7 +1005,7 @@ Then extract from the images:
 - The currency code (3-letter code). If none visible, default to "${defaultCurrency}".
 - Any decoded barcode values (EAN/UPC/etc) if readable.
 - Product weight as a number (if visible)
-- Weight unit (e.g. g, kg, ml, l)
+- Weight unit: only "g", "kg", "lb", or "oz" (lowercase). Never "Kg", "ml", or "l".
 - Product dimensions string (e.g. 20x10x5 cm) if visible.
 - Up to 3 alternate category names and subcategory names.
 - Per-field confidence: "high" | "medium" | "low".
@@ -1025,7 +1029,7 @@ Return ONLY a single JSON object with this exact shape:
   "currency": string | null,
   "barcodeValues": string[] | null,
   "weight": number | null,
-  "weightUnit": string | null,
+  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
   "dimensions": string | null,
   "categoryAlternates": string[] | null,
   "subCategoryAlternates": string[] | null,
@@ -1079,7 +1083,7 @@ Return ONLY a single JSON object with this exact shape:
   "currency": string | null,
   "barcodeValues": string[] | null,
   "weight": number | null,
-  "weightUnit": string | null,
+  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
   "dimensions": string | null
 }
 
@@ -1297,7 +1301,9 @@ The "description" field MUST be written in ${languageLabel}.`;
         : null,
       weight: num(parsed.weight),
       weightUnit:
-        typeof parsed.weightUnit === 'string' ? parsed.weightUnit : undefined,
+        typeof parsed.weightUnit === 'string'
+          ? normalizeWeightUnit(parsed.weightUnit) ?? undefined
+          : undefined,
       dimensions:
         typeof parsed.dimensions === 'string' ? parsed.dimensions : undefined,
       isFragile: bool(parsed.isFragile),
@@ -1633,7 +1639,8 @@ Image URL (reference only): ${imageUrl}`;
       );
       if (qtyMatch) {
         weight = Number(qtyMatch[1].replace(',', '.')) || null;
-        weightUnit = qtyMatch[2].toLowerCase();
+        weightUnit = normalizeWeightUnit(qtyMatch[2]);
+        if (!weightUnit) weight = null;
       }
 
       return {
