@@ -285,7 +285,13 @@ export class OrderStatusService {
       preparing: isBusinessOwner ? ['ready_for_pickup', 'cancelled'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
-      ready_for_pickup: isAssignedAgent ? ['assigned_to_agent'] : [],
+      // Clients may still cancel until an agent takes the order (mirrors
+      // CancellationPolicyService.CLIENT_CANCELLABLE_STATUSES).
+      ready_for_pickup: isAssignedAgent
+        ? ['assigned_to_agent']
+        : isClient
+        ? ['cancelled']
+        : [],
       assigned_to_agent: isAssignedAgent ? ['picked_up'] : [],
       picked_up: isAssignedAgent ? ['in_transit', 'out_for_delivery'] : [],
       in_transit: isAssignedAgent ? ['out_for_delivery'] : [],
