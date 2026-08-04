@@ -4207,10 +4207,11 @@ export class OrdersService {
 
     await this.releaseStripeAuthorizationIfNeeded(order);
 
-    // Update order status to cancelled
+    // Update order status to cancelled (dedicated path; not via PATCH status)
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      'cancelled'
+      'cancelled',
+      { viaCancelEndpoint: true }
     );
 
     // Persist cancellation metadata on the orders row

@@ -276,7 +276,11 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Update order status' })
+  @ApiOperation({
+    summary: 'Update order status',
+    description:
+      'Cancellation must use POST /orders/cancel. PATCH with status=cancelled is routed there so Stripe release and inventory restore always run.',
+  })
   @ApiResponse({
     status: 409,
     description:
@@ -286,6 +290,12 @@ export class OrdersController {
     @Param('id') orderId: string,
     @Body() updateData: UpdateOrderStatusRequest
   ) {
+    // Never apply cancelled via the generic status path — that skips payment
+    // release and inventory restore. Route to the dedicated cancel flow.
+    if (updateData.status === 'cancelled') {
+      return this.ordersService.cancelOrder({ orderId });
+    }
+
     try {
       const order = await this.orderStatusService.updateOrderStatus(
         orderId,
@@ -309,7 +319,8 @@ export class OrdersController {
         statusCode = HttpStatus.NOT_FOUND;
       } else if (
         errorMessage.includes('Invalid status transition') ||
-        errorMessage.includes('Unauthorized')
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('Cancellations must use POST /orders/cancel')
       ) {
         statusCode = HttpStatus.BAD_REQUEST;
       }
