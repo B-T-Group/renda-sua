@@ -4,7 +4,7 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 describe('FailedDeliveriesService contact and address fields', () => {
   const businessUser = {
     id: 'user-1',
-    user_type_id: 'business',
+    active_persona: 'business' as const,
     business: { id: 'biz-1' },
   };
 
