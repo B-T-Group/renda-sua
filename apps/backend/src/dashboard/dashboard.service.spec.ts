@@ -218,6 +218,14 @@ describe('DashboardService', () => {
         userId: 'u1',
         names: ['id_card', 'passport', 'driver_license'],
       });
+
+      const openOrdersCall = hasuraSystemService.executeQuery.mock.calls.find(
+        ([query]) => String(query).includes('AgentOpenOrdersCount')
+      );
+      expect(String(openOrdersCall?.[0])).toContain(
+        'business_locations: { address: { country: { _eq: $country } } }'
+      );
+
       expect(result.actions).toEqual([
         expect.objectContaining({
           id: 'id_verification',

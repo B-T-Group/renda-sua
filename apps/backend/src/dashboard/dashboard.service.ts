@@ -403,7 +403,9 @@ export class DashboardService {
           where: {
             current_status: { _eq: "pending" }
             assigned_agent_id: { _is_null: true }
-            business: { locations: { address: { country: { _eq: $country } } } }
+            business: {
+              business_locations: { address: { country: { _eq: $country } } }
+            }
           }
         ) { aggregate { count } }
       }
