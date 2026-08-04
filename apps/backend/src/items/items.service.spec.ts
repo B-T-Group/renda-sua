@@ -74,4 +74,38 @@ describe('ItemsService privileged field filtering', () => {
       name: 'New name',
     });
   });
+
+  it('preserves is_used on create and update while still stripping privileged fields', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation
+      .mockResolvedValueOnce({
+        insert_items_one: { id: 'item-1', name: 'Used item' },
+      })
+      .mockResolvedValueOnce({
+        update_items_by_pk: { id: 'item-1', name: 'Used item' },
+      });
+
+    await service.createItem('business-1', {
+      name: 'Used item',
+      is_used: true,
+      moderation_status: 'approved',
+    });
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      name: 'Used item',
+      is_used: true,
+      business_id: 'business-1',
+      is_active: false,
+      moderation_status: 'draft',
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      is_used: false,
+      business_id: 'victim-business',
+      moderation_status: 'approved',
+    });
+    expect(hasuraSystem.executeMutation.mock.calls[1][1].itemData).toEqual({
+      is_used: false,
+    });
+  });
 });
+
