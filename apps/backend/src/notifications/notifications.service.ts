@@ -2253,12 +2253,18 @@ export class NotificationsService {
           orderNumber: data.orderNumber,
           persona: recipient.type,
         };
+        const pushOptions = this.getClientAlertPushOptions(
+          status,
+          recipient.type,
+          data
+        );
         if (recipient.userId?.trim()) {
           const { webSent, expoSent } = await this.sendPushNotificationByUserId(
             recipient.userId.trim(),
             title,
             body,
-            pushPayload
+            pushPayload,
+            pushOptions
           );
           if (
             webSent + expoSent === 0 &&
@@ -2286,6 +2292,28 @@ export class NotificationsService {
         `Push notification failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+  }
+
+  /**
+   * Alerting (high-priority, audible) push options for the client on the
+   * order milestones they must act on or notice promptly: their order being
+   * confirmed and a store-pickup order becoming ready for pickup. Other
+   * recipients/statuses keep the default silent-banner delivery.
+   */
+  private getClientAlertPushOptions(
+    status: string,
+    recipientType: string,
+    data: NotificationData
+  ): ExpoPushOptions | undefined {
+    if (recipientType !== 'client') return undefined;
+    const isConfirmed = status === 'confirmed';
+    const isReadyForStorePickup =
+      status === 'ready_for_pickup' && data.fulfillmentMethod === 'pickup';
+    if (!isConfirmed && !isReadyForStorePickup) return undefined;
+    // No channelId on purpose: Android 8+ drops pushes that target a channel
+    // the device has not registered, so we rely on Expo's auto-created
+    // fallback channel (sound enabled) that these pushes already use today.
+    return { priority: 'high', sound: 'default' };
   }
 
   /**
