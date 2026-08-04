@@ -411,26 +411,22 @@ describe('OrdersController', () => {
   });
 
   describe('updateOrderStatus', () => {
-    it('should update order status successfully', async () => {
+    it('routes cancelled to cancelOrder so payment release runs', async () => {
       const orderId = 'order-123';
-      const updateData = { status: 'confirmed' };
       const expectedResult = {
         success: true,
-        order: { id: 'order-123', current_status: 'confirmed' },
-        message: 'Order status updated successfully',
+        order: { id: 'order-123', current_status: 'cancelled' },
+        message: 'Order cancelled successfully',
       };
 
-      hasuraUserService.updateOrderStatus.mockResolvedValue(
-        expectedResult.order
-      );
+      ordersService.cancelOrder.mockResolvedValue(expectedResult);
 
-      const result = await controller.updateOrderStatus(orderId, updateData);
+      const result = await controller.updateOrderStatus(orderId, {
+        status: 'cancelled',
+      });
 
       expect(result).toEqual(expectedResult);
-      expect(hasuraUserService.updateOrderStatus).toHaveBeenCalledWith(
-        orderId,
-        updateData.status
-      );
+      expect(ordersService.cancelOrder).toHaveBeenCalledWith({ orderId });
     });
   });
 });
