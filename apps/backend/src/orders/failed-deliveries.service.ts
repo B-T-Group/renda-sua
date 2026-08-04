@@ -129,6 +129,7 @@ export class FailedDeliveriesService {
                 first_name
                 last_name
                 email
+                phone_number
               }
             }
             business {
@@ -141,7 +142,18 @@ export class FailedDeliveriesService {
                 id
                 first_name
                 last_name
+                email
+                phone_number
               }
+            }
+            delivery_address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
             }
           }
           failure_reason {
@@ -194,6 +206,7 @@ export class FailedDeliveriesService {
                 first_name
                 last_name
                 email
+                phone_number
               }
             }
             business {
@@ -206,6 +219,8 @@ export class FailedDeliveriesService {
                 id
                 first_name
                 last_name
+                email
+                phone_number
               }
             }
             order_items {
@@ -215,6 +230,11 @@ export class FailedDeliveriesService {
             }
             delivery_address {
               id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
               country
             }
           }
