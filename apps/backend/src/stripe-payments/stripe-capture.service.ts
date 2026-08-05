@@ -101,8 +101,11 @@ export class StripeCaptureService {
       );
     }
 
+    // Persist reduced amount before Stripe capture so a concurrent
+    // payment_intent.succeeded webhook cannot credit the pre-waiver total.
     await this.databaseService.updateTransaction(tx.id, {
       status: 'capture_pending',
+      ...(params.captureAmount != null ? { amount: params.captureAmount } : {}),
     });
 
     try {
@@ -118,6 +121,9 @@ export class StripeCaptureService {
         await this.databaseService.updateTransaction(tx.id, {
           status: 'success',
           captured_at: capturedAt,
+          ...(params.captureAmount != null
+            ? { amount: params.captureAmount }
+            : {}),
         });
         this.logger.log(
           `stripe_capture_success order=${params.orderNumber} tx=${tx.id}`
@@ -126,15 +132,29 @@ export class StripeCaptureService {
       }
       return { success: true, message: 'Capture initiated', captured: false };
     } catch (error: any) {
-      await this.databaseService.updateTransaction(tx.id, {
-        status: 'authorized',
-        error_message: error?.message || 'Capture failed',
-      });
+      await this.restoreAuthorizationAfterFailedCapture(
+        tx,
+        params.captureAmount,
+        error?.message || 'Capture failed'
+      );
       this.logger.error(
         `Capture failed for order ${params.orderNumber}: ${error?.message}`
       );
       return { success: false, message: error?.message || 'Capture failed' };
     }
+  }
+
+  private async restoreAuthorizationAfterFailedCapture(
+    tx: StripePaymentTransaction,
+    captureAmount: number | undefined,
+    errorMessage: string
+  ): Promise<void> {
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'authorized',
+      error_message: errorMessage,
+      // Restore pre-capture amount if we had written a partial captureAmount.
+      ...(captureAmount != null ? { amount: tx.amount } : {}),
+    });
   }
 
   /** Credit client wallet after synchronous capture (webhook skips when tx is already success). */
