@@ -1,4 +1,10 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -208,6 +214,29 @@ export class AwsService {
     } catch (error: any) {
       throw new Error(
         `Failed to generate presigned download URL: ${error.message || 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Check whether an object exists in S3.
+   */
+  async objectExists(bucketName: string, key: string): Promise<boolean> {
+    if (!bucketName) throw new Error('Bucket name is required');
+    if (!key) throw new Error('Object key is required');
+    try {
+      await this.s3Client.send(
+        new HeadObjectCommand({ Bucket: bucketName, Key: key })
+      );
+      return true;
+    } catch (error: any) {
+      const status = error?.$metadata?.httpStatusCode ?? error?.statusCode;
+      const name = error?.name ?? error?.Code;
+      if (status === 404 || name === 'NotFound' || name === 'NoSuchKey') {
+        return false;
+      }
+      throw new Error(
+        `Failed to check S3 object existence: ${error.message || 'Unknown error'}`
       );
     }
   }

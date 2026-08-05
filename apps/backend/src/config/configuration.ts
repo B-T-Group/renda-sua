@@ -381,6 +381,13 @@ export interface ItemAiReviewConfig {
   model: string;
 }
 
+export interface IdDocumentAiReviewConfig {
+  /** Master switch for AI auto-approval of identity document uploads. */
+  enabled: boolean;
+  /** OpenAI multimodal model for ID name matching (default gpt-4.1). */
+  model: string;
+}
+
 export interface ShopifyCommerceConfig {
   apiKey: string;
   apiSecret: string;
@@ -452,6 +459,7 @@ export interface Configuration {
   boldsign: BoldSignConfig;
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
+  idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
   metaConversions: MetaConversionsConfig;
 }
@@ -909,6 +917,10 @@ export default (): Configuration => {
     itemAiReview: {
       enabled: process.env.ITEM_AI_AUTO_REVIEW_ENABLED === 'true',
       model: process.env.ITEM_AI_REVIEW_MODEL || 'gpt-4.1',
+    },
+    idDocumentAiReview: {
+      enabled: process.env.ID_AI_REVIEW_ENABLED === 'true',
+      model: process.env.ID_AI_REVIEW_MODEL || 'gpt-4.1',
     },
     commerceIntegrations: {
       tokenEncryptionKey: process.env.COMMERCE_TOKEN_ENCRYPTION_KEY || '',

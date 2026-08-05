@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.idx_id_document_ai_reviews_active_upload;

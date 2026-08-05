@@ -243,14 +243,11 @@ export class UploadService {
   }> {
     let ownerId: string;
     let persona: string;
-    let requestUser: Awaited<
-      ReturnType<HasuraUserService['getUser']>
-    > | null = null;
     if (targetUser) {
       ownerId = targetUser.userId;
       persona = targetUser.persona;
     } else {
-      requestUser = await this.hasuraUserService.getUser();
+      const requestUser = await this.hasuraUserService.getUser();
       ownerId = requestUser.id;
       persona = getActivePersonaOrThrow(requestUser);
     }
@@ -350,48 +347,11 @@ export class UploadService {
       }
     );
 
-    const inserted = uploadRecord.insert_user_uploads_one as
-      | { id: string }
-      | undefined;
-    if (inserted?.id && requestUser && persona === 'business') {
-      void this.notifyBusinessIdUploadIfNeeded(
-        requestUser,
-        uploadData.document_type_id,
-        inserted.id
-      );
-    }
-
     return {
       upload_record: uploadRecord.insert_user_uploads_one,
       presigned_url: presignedUrlResponse.url,
       expires_at: presignedUrlResponse.expiresAt,
     };
-  }
-
-  private async notifyBusinessIdUploadIfNeeded(
-    user: {
-      id: string;
-      business?: { name?: string | null } | null;
-    },
-    documentTypeId: number,
-    uploadId: string
-  ): Promise<void> {
-    try {
-      const documentType = await this.getDocumentTypeName(documentTypeId);
-      if (!documentType || !ID_DOCUMENT_TYPE_NAMES.includes(documentType)) {
-        return;
-      }
-      await this.notificationsService.notifySuperusersIdDocumentUploaded({
-        businessUserId: user.id,
-        businessName: user.business?.name?.trim() || 'Business',
-        documentType,
-        uploadId,
-      });
-    } catch (error: any) {
-      this.logger.error(
-        `notifyBusinessIdUploadIfNeeded: ${error?.message ?? String(error)}`
-      );
-    }
   }
 
   private async getDocumentTypeName(

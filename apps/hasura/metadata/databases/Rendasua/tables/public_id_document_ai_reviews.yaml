@@ -1,0 +1,10 @@
+table:
+  name: id_document_ai_reviews
+  schema: public
+object_relationships:
+  - name: upload
+    using:
+      foreign_key_constraint_on: upload_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id

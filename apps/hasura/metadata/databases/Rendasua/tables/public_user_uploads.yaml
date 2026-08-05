@@ -20,6 +20,14 @@ object_relationships:
         remote_table:
           name: users
           schema: public
+array_relationships:
+  - name: id_document_ai_reviews
+    using:
+      foreign_key_constraint_on:
+        column: upload_id
+        table:
+          name: id_document_ai_reviews
+          schema: public
 insert_permissions:
   - role: agent
     permission:

@@ -3319,23 +3319,37 @@ export class NotificationsService {
   }
 
   async notifySuperusersIdDocumentUploaded(params: {
-    businessUserId: string;
-    businessName: string;
+    userId: string;
+    displayName: string;
+    persona: 'business' | 'agent';
     documentType: string;
     uploadId: string;
+    reason?: string;
+    adminUrl?: string;
   }): Promise<void> {
     try {
       const recipients = await this.listSuperuserRecipients();
-      const safeName = escapeHtmlForEmail(params.businessName || 'Business');
-      const safeDoc = escapeHtmlForEmail(formatIdDocumentTypeLabel(params.documentType));
-      const subject = `ID document uploaded — ${params.businessName || 'Business'}`;
+      const displayName = params.displayName || 'Account';
+      const adminUrl =
+        params.adminUrl ||
+        (params.persona === 'agent' ? '/admin/agents' : '/admin/businesses');
+      const safeName = escapeHtmlForEmail(displayName);
+      const safeDoc = escapeHtmlForEmail(
+        formatIdDocumentTypeLabel(params.documentType)
+      );
+      const safeReason = params.reason
+        ? escapeHtmlForEmail(params.reason)
+        : null;
+      const personaLabel = params.persona === 'agent' ? 'Agent' : 'Business';
+      const subject = `ID document needs review — ${displayName}`;
       const html = `
-        <p>Business <strong>${safeName}</strong> uploaded a <strong>${safeDoc}</strong> for verification.</p>
-        <p>Review it in the admin businesses panel (<code>/admin/businesses</code>).</p>
+        <p>${personaLabel} <strong>${safeName}</strong> uploaded a <strong>${safeDoc}</strong> that needs manual verification.</p>
+        ${safeReason ? `<p><strong>AI outcome:</strong> ${safeReason}</p>` : ''}
+        <p>Review it in the admin panel (<code>${escapeHtmlForEmail(adminUrl)}</code>).</p>
         <p>Upload id: ${escapeHtmlForEmail(params.uploadId)}</p>
       `;
-      const title = 'ID document uploaded';
-      const body = `${params.businessName || 'A business'} uploaded ${formatIdDocumentTypeLabel(params.documentType)} for review.`;
+      const title = 'ID document needs review';
+      const body = `${displayName} uploaded ${formatIdDocumentTypeLabel(params.documentType)} for manual review.`;
       for (const recipient of recipients) {
         if (recipient.email) {
           await this.sendSimpleLifecycleEmail({
@@ -3347,8 +3361,9 @@ export class NotificationsService {
         await this.sendPushNotificationByUserId(recipient.userId, title, body, {
           type: 'admin_id_uploaded',
           uploadId: params.uploadId,
-          businessUserId: params.businessUserId,
-          url: '/admin/businesses',
+          userId: params.userId,
+          persona: params.persona,
+          url: adminUrl,
         });
       }
     } catch (error: any) {

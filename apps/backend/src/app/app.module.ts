@@ -57,6 +57,7 @@ import { RatingsModule } from '../ratings/ratings.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
+import { IdDocumentAiReviewModule } from '../id-document-ai-review/id-document-ai-review.module';
 import { AiImageCleanupModule } from '../ai-image-cleanup/ai-image-cleanup.module';
 import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.module';
 import { RentalsModule } from '../rentals/rentals.module';
@@ -146,6 +147,7 @@ import { AppService } from './app.service';
     RentalsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
+    IdDocumentAiReviewModule,
     AiImageCleanupModule,
     ImageThumbnailsModule,
     RentalItemImagesModule,
