@@ -91,7 +91,7 @@ describe('RentalListingAiReviewService cleanup deferral', () => {
     const notifications = {
       sendRentalListingApprovedEmail: jest.fn(),
       sendRentalListingRejectedEmail: jest.fn(),
-      notifySuperusersRentalListingAiReviewFailed: jest.fn(),
+      notifySuperusersListingAiReviewFailed: jest.fn(),
     };
     const configService = {
       get: jest.fn(() => ({ enabled: true })),
