@@ -286,7 +286,14 @@ export class ItemAiReviewService {
         'SQS enqueue failed after cleanup resume',
         ''
       );
+      return;
     }
+    // Restart the stuck-sweeper clock so a long cleanup wait is not treated
+    // as a stalled AI claim once review is re-enqueued.
+    await this.hasura.executeMutation(Q.TOUCH_ITEM_UPDATED_AT, {
+      id: itemId,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   private assertReviewable(

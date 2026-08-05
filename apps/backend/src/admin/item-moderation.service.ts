@@ -1,8 +1,10 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { resolveSaleItemRejectionReasons } from '../common/moderation-rejection-reason';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ThreadsService } from '../threads/threads.service';
 import * as Q from './item-moderation.queries';
 
 type ModerationStatusFilter =
@@ -12,28 +14,43 @@ type ModerationStatusFilter =
   | 'proposal_pending'
   | 'all';
 
+export interface ItemAiReviewSummary {
+  id: string;
+  status: string;
+  decision_reason: string | null;
+  rejection_fields: string[] | null;
+  created_at: string;
+}
+
 export interface ItemModerationRow {
   id: string;
   name: string;
   description: string | null;
   moderation_status: string;
+  moderation_source: string | null;
+  moderated_at: string | null;
   created_at: string;
   price: number | string | null;
   currency: string | null;
   is_active: boolean;
   business: { id: string; name: string; user_id: string };
   item_images?: Array<{ id: string; image_url: string; display_order: number }>;
+  ai_reviews?: ItemAiReviewSummary[];
+  latest_ai_review?: ItemAiReviewSummary | null;
+  rejection_reason?: string | null;
 }
 
 type ItemForModerationRow = {
   id: string;
   name: string;
   moderation_status: string;
+  moderation_source: string | null;
   status: string;
   business: { id: string; user_id: string };
 };
 
 const HUMAN_REVIEWABLE = new Set(['pending', 'ai_reviewing']);
+const APPROVABLE = new Set(['pending', 'ai_reviewing', 'rejected']);
 
 @Injectable()
 export class ItemModerationService {
@@ -41,7 +58,8 @@ export class ItemModerationService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     private readonly activationValidation: ItemActivationValidationService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly threadsService: ThreadsService
   ) {}
 
   async listModerationQueue(params: {
@@ -69,13 +87,21 @@ export class ItemModerationService {
       items: ItemModerationRow[];
       items_aggregate: { aggregate: { count: number } | null };
     }>(Q.ITEMS_MODERATION_LIST, { where, limit, offset });
-    return this.toModerationListResult(result, page, limit);
+    const enriched = await this.enrichModerationRows(result.items ?? []);
+    return this.toModerationListResult(
+      { ...result, items: enriched },
+      page,
+      limit
+    );
   }
 
   async approveItem(itemId: string, moderatorUserId: string): Promise<void> {
     const item = await this.fetchItemForModeration(itemId);
-    this.assertPendingModeration(item.moderation_status, 'approved');
+    this.assertApprovable(item.moderation_status);
     await this.activationValidation.assertItemCanActivateAsSystem(itemId);
+    if (item.moderation_status === 'rejected') {
+      await this.stampAiOverrideIfNeeded(itemId, item.moderation_source);
+    }
     await this.runModerationPatch(
       itemId,
       moderatorUserId,
@@ -113,6 +139,57 @@ export class ItemModerationService {
       itemName: item.name,
       rejectionReason: trimmed,
     });
+  }
+
+  async messageBusinessAboutItem(params: {
+    itemId: string;
+    senderUserId: string;
+    body: string;
+    subject?: string;
+  }): Promise<{ threadId: string; messageId: string }> {
+    const item = await this.fetchItemForModeration(params.itemId);
+    const body = params.body.trim();
+    if (!body) {
+      throw new HttpException('body is required', HttpStatus.BAD_REQUEST);
+    }
+    const subject =
+      params.subject?.trim() || `Re: ${item.name || 'your product'}`;
+    const result = await this.threadsService.createThread({
+      senderUserId: params.senderUserId,
+      recipientUserId: item.business.user_id,
+      body,
+      subject,
+    });
+    return { threadId: result.thread.id, messageId: result.message.id };
+  }
+
+  private async enrichModerationRows(
+    items: ItemModerationRow[]
+  ): Promise<ItemModerationRow[]> {
+    if (!items.length) return items;
+    const rejectedIds = items
+      .filter((i) => i.moderation_status === 'rejected')
+      .map((i) => i.id);
+    const reasons = await resolveSaleItemRejectionReasons(
+      this.hasuraSystemService,
+      rejectedIds
+    );
+    return items.map((item) => this.toEnrichedRow(item, reasons));
+  }
+
+  private toEnrichedRow(
+    item: ItemModerationRow,
+    reasons: Map<string, string>
+  ): ItemModerationRow {
+    const latest = item.ai_reviews?.[0] ?? null;
+    return {
+      ...item,
+      latest_ai_review: latest,
+      rejection_reason:
+        item.moderation_status === 'rejected'
+          ? reasons.get(item.id) ?? latest?.decision_reason ?? null
+          : null,
+    };
   }
 
   private toModerationListResult(
@@ -171,6 +248,14 @@ export class ItemModerationService {
         ],
       };
     }
+    if (status === 'pending') {
+      return {
+        _and: [
+          base,
+          { moderation_status: { _in: ['pending', 'ai_reviewing'] } },
+        ],
+      };
+    }
     return {
       _and: [base, { moderation_status: { _eq: status } }],
     };
@@ -186,6 +271,30 @@ export class ItemModerationService {
       `Only items pending or in AI review can be ${verb}`,
       HttpStatus.BAD_REQUEST
     );
+  }
+
+  private assertApprovable(status: string): void {
+    if (APPROVABLE.has(status)) return;
+    throw new HttpException(
+      'Only items pending, in AI review, or rejected can be approved',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async stampAiOverrideIfNeeded(
+    itemId: string,
+    moderationSource: string | null
+  ): Promise<void> {
+    if (moderationSource !== 'ai') return;
+    const result = await this.hasuraSystemService.executeQuery<{
+      item_ai_reviews: Array<{ id: string }>;
+    }>(Q.LATEST_AI_REVIEW_FOR_ITEM, { itemId });
+    const reviewId = result.item_ai_reviews?.[0]?.id;
+    if (!reviewId) return;
+    await this.hasuraSystemService.executeMutation(Q.SET_AI_REVIEW_OVERRIDE, {
+      id: reviewId,
+      action: 'force_approve',
+    });
   }
 
   private async fetchItemForModeration(

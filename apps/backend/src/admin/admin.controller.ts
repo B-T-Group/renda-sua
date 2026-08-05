@@ -29,7 +29,10 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
 import type { CountryOnboardingConfigDto } from './dto/country-onboarding.dto';
 import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
-import { RejectSaleItemDto } from './dto/item-moderation.dto';
+import {
+  MessageBusinessAboutItemDto,
+  RejectSaleItemDto,
+} from './dto/item-moderation.dto';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
 import { ThreadsService } from '../threads/threads.service';
@@ -326,11 +329,12 @@ export class AdminController {
   @Post('items/:itemId/approve')
   @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
   @ApiOperation({
-    summary: 'Approve a pending sale item (sets is_active=true)',
+    summary:
+      'Approve a pending, AI-reviewing, or rejected sale item (overrule)',
   })
   @ApiParam({ name: 'itemId', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Item approved' })
-  @ApiResponse({ status: 400, description: 'Item not pending' })
+  @ApiResponse({ status: 400, description: 'Item not approvable' })
   async approveSaleItem(
     @Param('itemId') itemId: string,
     @Req() request: RequestWithUser
@@ -367,6 +371,31 @@ export class AdminController {
       reason
     );
     return { success: true };
+  }
+
+  @Post('items/:itemId/message')
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
+  @ApiOperation({
+    summary: 'Start a thread with the business about a sale item',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiBody({ type: MessageBusinessAboutItemDto })
+  @ApiResponse({ status: 201, description: 'Thread created' })
+  @ApiResponse({ status: 400, description: 'Invalid body' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async messageBusinessAboutItem(
+    @Param('itemId') itemId: string,
+    @Body() body: MessageBusinessAboutItemDto,
+    @Req() request: RequestWithUser
+  ) {
+    const senderUserId = request.user?.id || request.user?.user_id;
+    const result = await this.itemModerationService.messageBusinessAboutItem({
+      itemId,
+      senderUserId,
+      body: body.body,
+      subject: body.subject,
+    });
+    return { success: true, data: result };
   }
 
   @Get('items/ai-reviews')

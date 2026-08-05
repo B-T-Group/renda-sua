@@ -10,6 +10,8 @@ export const ITEMS_MODERATION_LIST = `
       name
       description
       moderation_status
+      moderation_source
+      moderated_at
       created_at
       price
       currency
@@ -23,6 +25,13 @@ export const ITEMS_MODERATION_LIST = `
         id
         image_url
         display_order
+      }
+      ai_reviews(order_by: { created_at: desc }, limit: 1) {
+        id
+        status
+        decision_reason
+        rejection_fields
+        created_at
       }
     }
     items_aggregate(where: $where) {
@@ -39,11 +48,26 @@ export const ITEM_FOR_MODERATION_BY_PK = `
       id
       name
       moderation_status
+      moderation_source
       status
       business {
         id
         user_id
       }
+    }
+  }
+`;
+
+export const LATEST_AI_REVIEW_FOR_ITEM = `
+  query LatestAiReviewForItem($itemId: uuid!) {
+    item_ai_reviews(
+      where: { item_id: { _eq: $itemId } }
+      order_by: { created_at: desc }
+      limit: 1
+    ) {
+      id
+      status
+      admin_override_action
     }
   }
 `;
@@ -104,6 +128,20 @@ export const INSERT_ITEM_REJECTION_MESSAGE = `
         message: $message
         message_type: ITEM_REJECTED
       }
+    ) {
+      id
+    }
+  }
+`;
+
+export const SET_AI_REVIEW_OVERRIDE = `
+  mutation SetAiReviewOverrideFromModeration(
+    $id: uuid!
+    $action: item_ai_override_action!
+  ) {
+    update_item_ai_reviews_by_pk(
+      pk_columns: { id: $id }
+      _set: { admin_override_action: $action }
     ) {
       id
     }

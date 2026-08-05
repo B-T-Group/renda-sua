@@ -11,6 +11,7 @@ import { ItemAiReviewInternalController } from './item-ai-review-internal.contro
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import { ItemAiReviewService } from './item-ai-review.service';
+import { ItemAiReviewSweeperService } from './item-ai-review-sweeper.service';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ItemAiReviewService } from './item-ai-review.service';
     ItemAiReviewService,
     ItemAiProposalService,
     ItemAiReviewAdminService,
+    ItemAiReviewSweeperService,
   ],
   exports: [
     ItemAiReviewService,

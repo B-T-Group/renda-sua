@@ -420,3 +420,71 @@ export const INSERT_OWNER_MESSAGE = `
     }
   }
 `;
+
+/** Stale ai_reviewing rows older than $staleBefore (sweeper). */
+export const STALE_AI_REVIEWING_ITEMS = `
+  query StaleAiReviewingItems($staleBefore: timestamptz!, $limit: Int!) {
+    items(
+      where: {
+        moderation_status: { _eq: ai_reviewing }
+        status: { _eq: active }
+        updated_at: { _lt: $staleBefore }
+      }
+      order_by: { updated_at: asc }
+      limit: $limit
+    ) {
+      id
+      name
+      updated_at
+    }
+  }
+`;
+
+export const OPEN_CLEANUP_JOBS_FOR_ITEMS = `
+  query OpenCleanupJobsForItems($itemIds: [uuid!]!) {
+    ai_image_cleanup_jobs(
+      where: {
+        item_id: { _in: $itemIds }
+        item_variant_id: { _is_null: true }
+        status: { _in: [queued, processing, ready_for_review] }
+      }
+    ) {
+      id
+      item_id
+      status
+    }
+  }
+`;
+
+export const TOUCH_ITEM_UPDATED_AT = `
+  mutation TouchItemUpdatedAt($id: uuid!, $updatedAt: timestamptz!) {
+    update_items(
+      where: {
+        id: { _eq: $id }
+        moderation_status: { _eq: ai_reviewing }
+      }
+      _set: { updated_at: $updatedAt }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const FAIL_RUNNING_AI_REVIEWS_FOR_ITEM = `
+  mutation FailRunningAiReviewsForItem(
+    $itemId: uuid!
+    $decisionReason: String!
+    $completedAt: timestamptz!
+  ) {
+    update_item_ai_reviews(
+      where: { item_id: { _eq: $itemId }, status: { _eq: running } }
+      _set: {
+        status: failed
+        decision_reason: $decisionReason
+        completed_at: $completedAt
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;

@@ -75,6 +75,36 @@ const GET_LISTING_AI_REASONS_BATCH = `
   }
 `;
 
+const GET_ITEM_MESSAGES_BATCH = `
+  query GetItemRejectionMessages($entityIds: [uuid!]!) {
+    user_messages(
+      where: {
+        entity_type: { _eq: sale_item }
+        entity_id: { _in: $entityIds }
+      }
+      order_by: { created_at: desc }
+    ) {
+      entity_id
+      message
+    }
+  }
+`;
+
+const GET_ITEM_AI_REASONS_BATCH = `
+  query GetItemAiRejectionReasons($itemIds: [uuid!]!) {
+    item_ai_reviews(
+      where: {
+        item_id: { _in: $itemIds }
+        status: { _eq: rejected }
+      }
+      order_by: { created_at: desc }
+    ) {
+      item_id
+      decision_reason
+    }
+  }
+`;
+
 type MessageRow = { message: string | null };
 type AiReasonRow = { decision_reason: string | null };
 
@@ -152,6 +182,37 @@ export async function resolveRentalListingRejectionReasons(
   for (const row of aiReviews.rental_listing_ai_reviews ?? []) {
     const reason = firstNonEmpty(row.decision_reason);
     if (reason && !map.has(row.listing_id)) map.set(row.listing_id, reason);
+  }
+  return map;
+}
+
+/** Batch-resolve rejection reasons for sale items (admin message > AI). */
+export async function resolveSaleItemRejectionReasons(
+  hasura: HasuraSystemService,
+  itemIds: string[]
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!itemIds.length) return map;
+
+  const [messages, aiReviews] = await Promise.all([
+    hasura.executeQuery<{
+      user_messages: Array<{ entity_id: string; message: string | null }>;
+    }>(GET_ITEM_MESSAGES_BATCH, { entityIds: itemIds }),
+    hasura.executeQuery<{
+      item_ai_reviews: Array<{
+        item_id: string;
+        decision_reason: string | null;
+      }>;
+    }>(GET_ITEM_AI_REASONS_BATCH, { itemIds }),
+  ]);
+
+  for (const row of messages.user_messages ?? []) {
+    const reason = firstNonEmpty(row.message);
+    if (reason && !map.has(row.entity_id)) map.set(row.entity_id, reason);
+  }
+  for (const row of aiReviews.item_ai_reviews ?? []) {
+    const reason = firstNonEmpty(row.decision_reason);
+    if (reason && !map.has(row.item_id)) map.set(row.item_id, reason);
   }
   return map;
 }
