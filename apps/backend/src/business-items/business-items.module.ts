@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessItemsController } from './business-items.controller';
 import { BusinessItemsService } from './business-items.service';
 import { BusinessItemsAccessService } from './business-items-access.service';
@@ -19,6 +20,7 @@ import { BusinessAccountTypeService } from './business-account-type.service';
 @Module({
   imports: [
     AuthModule,
+    BusinessContractsModule,
     BusinessImagesModule,
     ImageThumbnailsModule,
     AiGenerationModule,

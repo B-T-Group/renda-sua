@@ -34,6 +34,16 @@ export class BusinessContractReconcilerService {
     for (const row of pending) {
       if (!row.boldsign_document_id.startsWith('pending:')) continue;
       try {
+        if (
+          !(await this.contractsService.isBoldSignEnabledForBusiness(
+            row.business_id
+          ))
+        ) {
+          await this.contractsService.revokeInFlightIfInAppCountry(
+            row.business_id
+          );
+          continue;
+        }
         await this.contractsService.resumePendingContract(row);
       } catch (error: any) {
         this.logger.warn(
@@ -48,6 +58,16 @@ export class BusinessContractReconcilerService {
     const rows = await this.db.listStaleSentContracts(cutoff);
     for (const row of rows) {
       try {
+        if (
+          !(await this.contractsService.isBoldSignEnabledForBusiness(
+            row.business_id
+          ))
+        ) {
+          await this.contractsService.revokeInFlightIfInAppCountry(
+            row.business_id
+          );
+          continue;
+        }
         await this.contractsService.syncInFlightFromBoldsign(row.business_id);
       } catch (error: any) {
         this.logger.debug(`Sync skip ${row.id}: ${error?.message}`);
@@ -66,6 +86,16 @@ export class BusinessContractReconcilerService {
     for (const row of stale) {
       if (row.boldsign_document_id.startsWith('legacy:')) continue;
       try {
+        if (
+          !(await this.contractsService.isBoldSignEnabledForBusiness(
+            row.business_id
+          ))
+        ) {
+          await this.contractsService.revokeInFlightIfInAppCountry(
+            row.business_id
+          );
+          continue;
+        }
         const result = await this.boldsign.remindDocument(
           row.boldsign_document_id
         );

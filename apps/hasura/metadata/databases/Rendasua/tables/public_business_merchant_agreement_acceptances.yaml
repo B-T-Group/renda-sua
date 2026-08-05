@@ -8,16 +8,21 @@ object_relationships:
   - name: pdf_upload
     using:
       foreign_key_constraint_on: pdf_upload_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
 select_permissions:
   - role: business
     permission:
       columns:
         - id
         - business_id
+        - user_id
         - agreement_version
         - signer_legal_name
         - signer_email
         - business_name
+        - country_code
         - accepted_at
         - pdf_upload_id
       filter:

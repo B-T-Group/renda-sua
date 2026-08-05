@@ -9,7 +9,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -20,6 +20,19 @@ import {
 } from '../../utils/renderMerchantAgreementHtml';
 import type { MerchantContractStatus } from '../../hooks/useBusinessVerification';
 
+const SCROLL_END_THRESHOLD_PX = 24;
+
+function buildWebDeviceInfo() {
+  return {
+    platform: 'web',
+    osName: navigator.platform || undefined,
+    osVersion: undefined,
+    modelName: navigator.userAgent || undefined,
+    appVersion: undefined,
+    brand: undefined,
+  };
+}
+
 export const BusinessMerchantAgreementPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -28,12 +41,14 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [html, setHtml] = useState('');
   const [version, setVersion] = useState('');
   const [agreed, setAgreed] = useState(false);
+  const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [legalName, setLegalName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [contract, setContract] = useState<MerchantContractStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const defaultName = profile
     ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
@@ -42,6 +57,20 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   useEffect(() => {
     if (defaultName && !legalName) setLegalName(defaultName);
   }, [defaultName, legalName]);
+
+  const checkScrollEnd = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_END_THRESHOLD_PX;
+    if (nearBottom) setHasScrolledToEnd(true);
+  }, []);
+
+  useEffect(() => {
+    // Content may fit without scrolling.
+    const id = window.setTimeout(checkScrollEnd, 150);
+    return () => window.clearTimeout(id);
+  }, [html, checkScrollEnd]);
 
   const loadStatus = useCallback(async () => {
     if (!apiClient) return;
@@ -71,6 +100,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       if (res.data.success) {
         const { html: raw, version: v, locale } = res.data.data;
         setVersion(v);
+        setHasScrolledToEnd(false);
         const vars = merchantAgreementPreviewVars(
           profile,
           v,
@@ -126,13 +156,14 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   };
 
   const submit = async () => {
-    if (!apiClient || !agreed || !legalName.trim()) return;
+    if (!apiClient || !agreed || !hasScrolledToEnd || !legalName.trim()) return;
     setBusy(true);
     setError(null);
     try {
       await apiClient.post('/business-verification/merchant-agreement/accept', {
         legalName: legalName.trim(),
         agreementVersion: version,
+        deviceInfo: buildWebDeviceInfo(),
       });
       setDone(true);
     } catch (e: any) {
@@ -244,14 +275,33 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         {t('business.verification.agreementPageTitle', 'Merchant partnership agreement')}
       </Typography>
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, maxHeight: 420, overflow: 'auto' }}>
+      <Paper
+        ref={scrollRef}
+        variant="outlined"
+        onScroll={checkScrollEnd}
+        sx={{ p: 2, mb: 2, maxHeight: 420, overflow: 'auto' }}
+      >
         <Box dangerouslySetInnerHTML={{ __html: html }} />
       </Paper>
+      {!hasScrolledToEnd ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {t(
+            'business.verification.scrollHint',
+            'Please scroll to the end of the agreement before accepting.'
+          )}
+        </Typography>
+      ) : null}
       <FormControlLabel
-        control={<Checkbox checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />}
+        control={
+          <Checkbox
+            checked={agreed}
+            disabled={!hasScrolledToEnd}
+            onChange={(e) => setAgreed(e.target.checked)}
+          />
+        }
         label={t(
           'business.verification.agreeCheckbox',
-          'I have read and agree to the Merchant Agreement.'
+          'I have read and agree to the Merchant Partnership Agreement.'
         )}
       />
       <TextField
@@ -268,7 +318,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       ) : null}
       <Button
         variant="contained"
-        disabled={busy || !agreed || !legalName.trim() || !version}
+        disabled={busy || !agreed || !hasScrolledToEnd || !legalName.trim() || !version}
         onClick={() => void submit()}
       >
         {t('business.verification.acceptAgreement', 'Accept agreement')}

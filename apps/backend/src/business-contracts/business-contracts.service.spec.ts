@@ -9,6 +9,7 @@ import {
   BusinessContractRow,
   ContractTemplateRow,
 } from './business-contracts.types';
+import { MerchantAgreementProviderService } from './merchant-agreement-provider.service';
 
 jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
   MerchantLifecycleService: class MerchantLifecycleService {},
@@ -49,6 +50,15 @@ describe('BusinessContractsService', () => {
       executeQuery: jest.fn().mockResolvedValue(signerQueryResult),
     } as unknown as jest.Mocked<HasuraSystemService>;
 
+    const agreementProvider = {
+      usesInAppAgreement: jest.fn().mockResolvedValue(false),
+      getProviderForBusiness: jest.fn().mockResolvedValue({
+        provider: 'boldsign',
+        countryCode: 'CA',
+      }),
+      getBusinessCountryCode: jest.fn().mockResolvedValue('CA'),
+    } as unknown as MerchantAgreementProviderService;
+
     service = new BusinessContractsService(
       db,
       boldsign,
@@ -56,6 +66,7 @@ describe('BusinessContractsService', () => {
       hasuraSystemService,
       buildNotificationsMock(),
       buildConfigMock(),
+      agreementProvider,
       buildMerchantLifecycleMock()
     );
   });

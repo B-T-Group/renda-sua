@@ -31,6 +31,7 @@ import {
   ContractStatus,
   ContractStatusSnapshot,
 } from './business-contracts.types';
+import { MerchantAgreementProviderService } from './merchant-agreement-provider.service';
 
 interface ContractSignerContext {
   name: string;
@@ -50,6 +51,7 @@ export class BusinessContractsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
+    private readonly agreementProvider: MerchantAgreementProviderService,
     @Inject(
       forwardRef(() => {
         // Lazy require breaks the ESM cycle with MerchantLifecycleService.
@@ -65,34 +67,73 @@ export class BusinessContractsService {
     return this.configService.get<BoldSignConfig>('boldsign') as BoldSignConfig;
   }
 
+  /** Global BoldSign env/API key gate (not country-aware). */
   isBoldSignEnabled(): boolean {
     return this.config.enabled && this.boldsign.isConfigured();
   }
 
+  /**
+   * Per-business BoldSign gate: global enablement AND country provider is not in_app.
+   */
+  async isBoldSignEnabledForBusiness(businessId: string): Promise<boolean> {
+    if (!this.isBoldSignEnabled()) return false;
+    const usesInApp = await this.agreementProvider.usesInAppAgreement(businessId);
+    return !usesInApp;
+  }
+
   async hasValidSignedContract(businessId: string): Promise<boolean> {
     if (await this.db.hasValidSignedContract(businessId)) return true;
-    if (!this.isBoldSignEnabled()) {
+    const boldSignForBusiness = await this.isBoldSignEnabledForBusiness(
+      businessId
+    );
+    if (!boldSignForBusiness) {
       return this.hasLegacyAgreement(businessId);
     }
     return false;
   }
 
   async getContractStatus(businessId: string): Promise<ContractStatusSnapshot> {
+    await this.revokeInFlightIfInAppCountry(businessId);
     const latest = await this.db.getLatestContract(businessId);
     const complete = await this.hasValidSignedContract(businessId);
+    const boldSignEnabled = await this.isBoldSignEnabledForBusiness(businessId);
+    const legacyAcceptedAt = complete && !boldSignEnabled
+      ? await this.getLegacyAcceptedAt(businessId)
+      : null;
+    const statusForClient =
+      complete && latest?.status === 'cancelled'
+        ? null
+        : latest?.status ?? null;
     return {
       complete,
-      status: latest?.status ?? null,
+      status: statusForClient,
       version: latest?.contract_version ?? null,
-      acceptedAt: latest?.signed_at ?? null,
-      contractId: latest?.id ?? null,
+      acceptedAt: latest?.signed_at ?? legacyAcceptedAt,
+      contractId: latest?.status === 'cancelled' && complete ? null : latest?.id ?? null,
       canDownload: latest?.status === 'signed' && !!latest.signed_pdf_s3_key,
-      boldSignEnabled: this.isBoldSignEnabled(),
+      boldSignEnabled,
     };
   }
 
+  private async getLegacyAcceptedAt(businessId: string): Promise<string | null> {
+    const query = `
+      query LegacyAcceptedAt($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          merchant_agreement_accepted_at
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      id: businessId,
+    });
+    return res.businesses_by_pk?.merchant_agreement_accepted_at ?? null;
+  }
+
   async ensureContractForBusiness(businessId: string): Promise<void> {
-    if (!this.isBoldSignEnabled()) return;
+    if (!(await this.isBoldSignEnabledForBusiness(businessId))) {
+      await this.revokeInFlightIfInAppCountry(businessId);
+      return;
+    }
     const inFlight = await this.db.getInFlightContract(businessId);
     if (inFlight) {
       await this.resumeInFlightContract(inFlight);
@@ -104,17 +145,67 @@ export class BusinessContractsService {
   }
 
   /**
+   * Revoke pending BoldSign contracts when the business country uses in-app agreement.
+   * Used at ensure/status/reconciler so CM/GA merchants switch without waiting for signup.
+   */
+  async revokeInFlightIfInAppCountry(businessId: string): Promise<boolean> {
+    const usesInApp = await this.agreementProvider.usesInAppAgreement(businessId);
+    if (!usesInApp) return false;
+    const inFlight = await this.db.getInFlightContract(businessId);
+    if (!inFlight) return false;
+    await this.revokeAndCancelContract(
+      inFlight,
+      'Country uses in-app merchant agreement'
+    );
+    return true;
+  }
+
+  async revokeAndCancelContract(
+    contract: BusinessContractRow,
+    reason: string
+  ): Promise<void> {
+    const documentId = contract.boldsign_document_id;
+    if (
+      documentId &&
+      !documentId.startsWith('legacy:') &&
+      !documentId.startsWith('pending:')
+    ) {
+      try {
+        await this.boldsign.revokeDocument(documentId, reason);
+      } catch (error: any) {
+        this.logger.warn(
+          `BoldSign revoke failed for ${contract.id}: ${error?.message}`
+        );
+      }
+    }
+    await this.db.updateContract(contract.id, {
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      failure_reason: reason,
+    });
+  }
+
+  /**
    * Sync BoldSign completion into our DB (for refresh / missed webhooks),
    * then return the latest status snapshot.
+   * Always revoke in-app-country in-flight contracts before syncing so a
+   * completed BoldSign envelope cannot bypass the in-app acceptance path.
    */
   async refreshContractForBusiness(
     businessId: string
   ): Promise<ContractStatusSnapshot> {
-    await this.syncInFlightFromBoldsign(businessId);
+    const revoked = await this.revokeInFlightIfInAppCountry(businessId);
+    if (!revoked && (await this.isBoldSignEnabledForBusiness(businessId))) {
+      await this.syncInFlightFromBoldsign(businessId);
+    }
     return this.getContractStatus(businessId);
   }
 
   async syncInFlightFromBoldsign(businessId: string): Promise<void> {
+    if (!(await this.isBoldSignEnabledForBusiness(businessId))) {
+      await this.revokeInFlightIfInAppCountry(businessId);
+      return;
+    }
     const latest = await this.db.getLatestContract(businessId);
     if (!latest || (latest.status !== 'sent' && latest.status !== 'viewed')) {
       return;
@@ -171,6 +262,11 @@ export class BusinessContractsService {
   }
 
   async resendContract(businessId: string): Promise<BusinessContractRow> {
+    if (!(await this.isBoldSignEnabledForBusiness(businessId))) {
+      throw new BadRequestException(
+        'This business uses the in-app merchant agreement and does not receive BoldSign emails.'
+      );
+    }
     const latest = await this.db.getLatestContract(businessId);
     if (latest && (latest.status === 'sent' || latest.status === 'viewed')) {
       if (!latest.boldsign_document_id.startsWith('legacy:')) {

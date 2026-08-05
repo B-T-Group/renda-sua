@@ -65,6 +65,19 @@ export class BusinessItemsController {
     private readonly businessAccountTypeService: BusinessAccountTypeService
   ) {}
 
+  @Get('business/account-type')
+  @ApiOperation({
+    summary:
+      'Get the calling merchant account type, lock status, and country-specific plan commission rates',
+  })
+  @ApiResponse({ status: 200, description: 'Account type and plans retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Business not found' })
+  async getAccountType(@ReqContext() ctx: RequestContext) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    const result = await this.businessAccountTypeService.getCurrentForUser(userId);
+    return { success: true, data: result };
+  }
+
   @Patch('business/account-type')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change the account type for the calling merchant (self-serve, 30-day lock-in)' })

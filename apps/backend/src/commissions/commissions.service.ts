@@ -348,7 +348,9 @@ export class CommissionsService {
       return acc;
     }, {});
 
-    // Resolve item commission from the business account type (single source of truth)
+    // Resolve item commission from business account type + business primary country
+    // (same source as GET /business-items/business/account-type) so UI rates and
+    // order commissions stay aligned for multi-location merchants.
     let rendasuaItemCommissionPercentage = getCommissionForBusinessAccountType();
 
     if (businessLocationId) {
@@ -356,7 +358,17 @@ export class CommissionsService {
         query GetBusinessLocationAccountType($id: uuid!) {
           business_locations_by_pk(id: $id) {
             business {
+              id
               account_type
+              business_locations(
+                where: { is_active: { _eq: true } }
+                order_by: { is_primary: desc }
+              ) {
+                address { country }
+              }
+              business_addresses {
+                address { country }
+              }
             }
           }
         }
@@ -364,10 +376,27 @@ export class CommissionsService {
       const locResponse = await this.hasuraSystemService.executeQuery(locQuery, {
         id: businessLocationId,
       });
-      const accountType =
-        locResponse.business_locations_by_pk?.business?.account_type;
-      rendasuaItemCommissionPercentage =
-        getCommissionForBusinessAccountType(accountType);
+      const business = locResponse.business_locations_by_pk?.business;
+      const accountType = business?.account_type;
+      let countryCode: string | null = null;
+      for (const loc of business?.business_locations ?? []) {
+        if (loc?.address?.country) {
+          countryCode = loc.address.country;
+          break;
+        }
+      }
+      if (!countryCode) {
+        for (const row of business?.business_addresses ?? []) {
+          if (row?.address?.country) {
+            countryCode = row.address.country;
+            break;
+          }
+        }
+      }
+      rendasuaItemCommissionPercentage = getCommissionForBusinessAccountType(
+        accountType,
+        countryCode
+      );
     }
 
     return {

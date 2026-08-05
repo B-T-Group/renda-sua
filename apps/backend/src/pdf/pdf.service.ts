@@ -4,7 +4,11 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as Mustache from 'mustache';
 import * as path from 'path';
-import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
+import {
+  MERCHANT_AGREEMENT_TEMPLATE,
+  MERCHANT_AGREEMENT_VERSION,
+} from '../agreements/merchant-agreement.constants';
+import { getCommissionMapForCountry } from '../commissions/business-account-type';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
@@ -380,13 +384,14 @@ export class PdfService {
     agreementVersion: string;
     acceptedAt: string;
     signatureBase64?: string;
+    countryCode?: string | null;
   }): Promise<{ id: string }> {
     const lang = params.locale?.startsWith('fr') ? 'fr' : 'en';
     const templatePath = path.join(
       __dirname,
       '..',
       'agreements',
-      `merchant-agreement-v1.${lang}.html`
+      `${MERCHANT_AGREEMENT_TEMPLATE}.${lang}.html`
     );
     const template = fs.readFileSync(templatePath, 'utf8');
     let signatureImageUrl: string | undefined;
@@ -396,10 +401,14 @@ export class PdfService {
         ? raw
         : `data:image/png;base64,${raw}`;
     }
+    const commissionMap = getCommissionMapForCountry(params.countryCode);
     const html = Mustache.render(template, {
       ...params,
       agreementVersion: params.agreementVersion || MERCHANT_AGREEMENT_VERSION,
       signatureImageUrl,
+      standardCommission: commissionMap.STANDARD,
+      premiumCommission: commissionMap.PREMIUM,
+      eliteCommission: commissionMap.ELITE,
     });
     const pdfBuffer = await this.convertHtmlToPdf(html);
     const docTypeId = await this.getDocumentTypeId('rendasua_contract_agreement');

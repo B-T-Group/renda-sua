@@ -67,7 +67,8 @@ def get_commission_configs(
         for config in configs_data:
             config_map[config["config_key"]] = config["number_value"]
 
-        # Resolve item commission from business account type (single source of truth)
+        # Resolve item commission from business account type + business primary country
+        # (aligned with account-type API / Nest commissions.service)
         rendasua_item_commission_percentage = get_commission_for_business_account_type()
 
         if business_location_id:
@@ -75,19 +76,40 @@ def get_commission_configs(
             query GetBusinessLocationAccountType($id: uuid!) {
               business_locations_by_pk(id: $id) {
                 business {
+                  id
                   account_type
+                  business_locations(
+                    where: { is_active: { _eq: true } }
+                    order_by: { is_primary: desc }
+                  ) {
+                    address { country }
+                  }
+                  business_addresses {
+                    address { country }
+                  }
                 }
               }
             }
             """
             loc_data = client.execute(loc_query, {"id": business_location_id})
-            account_type = (
-                loc_data.get("business_locations_by_pk", {})
-                .get("business", {})
-                .get("account_type")
-            )
+            business = (loc_data.get("business_locations_by_pk") or {}).get(
+                "business"
+            ) or {}
+            account_type = business.get("account_type")
+            country_code = None
+            for loc in business.get("business_locations") or []:
+                country = (loc.get("address") or {}).get("country")
+                if country:
+                    country_code = country
+                    break
+            if not country_code:
+                for row in business.get("business_addresses") or []:
+                    country = (row.get("address") or {}).get("country")
+                    if country:
+                        country_code = country
+                        break
             rendasua_item_commission_percentage = (
-                get_commission_for_business_account_type(account_type)
+                get_commission_for_business_account_type(account_type, country_code)
             )
 
         return CommissionConfig(

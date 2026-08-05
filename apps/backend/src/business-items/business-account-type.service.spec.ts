@@ -2,7 +2,10 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BusinessAccountTypeService } from './business-account-type.service';
 
 describe('BusinessAccountTypeService', () => {
-  function buildService(business: Record<string, unknown> | null) {
+  function buildService(
+    business: Record<string, unknown> | null,
+    countryCode: string | null = 'CA'
+  ) {
     const executeQuery = jest.fn(async (query: string) => {
       if (query.includes('GetBusinessAccountTypeById')) {
         return { businesses_by_pk: business };
@@ -15,9 +18,11 @@ describe('BusinessAccountTypeService', () => {
         vars: {
           accountType: string;
           lockedUntil: string | null;
+          id: string;
         }
       ) => ({
         update_businesses_by_pk: {
+          id: vars.id,
           account_type: vars.accountType,
           account_type_locked_until: vars.lockedUntil,
         },
@@ -25,10 +30,17 @@ describe('BusinessAccountTypeService', () => {
       })
     );
 
-    const service = new BusinessAccountTypeService({
-      executeQuery,
-      executeMutation,
-    } as never);
+    const agreementProvider = {
+      getBusinessCountryCode: jest.fn().mockResolvedValue(countryCode),
+    };
+
+    const service = new BusinessAccountTypeService(
+      {
+        executeQuery,
+        executeMutation,
+      } as never,
+      agreementProvider as never
+    );
 
     return { service, executeQuery, executeMutation };
   }
@@ -66,6 +78,12 @@ describe('BusinessAccountTypeService', () => {
 
     expect(result.accountType).toBe('ELITE');
     expect(result.commissionPercentage).toBe(20);
+    expect(result.plans).toEqual(
+      expect.arrayContaining([
+        { id: 'STANDARD', commissionPercent: 12 },
+        { id: 'ELITE', commissionPercent: 20 },
+      ])
+    );
     expect(executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('UpdateBusinessAccountType'),
       expect.objectContaining({
@@ -84,6 +102,27 @@ describe('BusinessAccountTypeService', () => {
     expect(Math.abs(lockedUntil - expected)).toBeLessThan(5000);
   });
 
+  it('returns CM plan rates for Cameroon businesses', async () => {
+    const { service } = buildService(
+      {
+        id: 'biz-cm',
+        account_type: 'STANDARD',
+        account_type_locked_until: null,
+      },
+      'CM'
+    );
+
+    const result = await service.selfServeChange('user-1', 'STANDARD');
+
+    expect(result.commissionPercentage).toBe(7);
+    expect(result.countryCode).toBe('CM');
+    expect(result.plans).toEqual([
+      { id: 'STANDARD', commissionPercent: 7 },
+      { id: 'PREMIUM', commissionPercent: 12 },
+      { id: 'ELITE', commissionPercent: 15 },
+    ]);
+  });
+
   it('returns the current plan without mutating when type is unchanged', async () => {
     const { service, executeMutation } = buildService({
       id: 'biz-1',
@@ -93,11 +132,14 @@ describe('BusinessAccountTypeService', () => {
 
     const result = await service.selfServeChange('user-1', 'PREMIUM');
 
-    expect(result).toEqual({
-      accountType: 'PREMIUM',
-      commissionPercentage: 15,
-      lockedUntil: null,
-    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        accountType: 'PREMIUM',
+        commissionPercentage: 15,
+        lockedUntil: null,
+        countryCode: 'CA',
+      })
+    );
     expect(executeMutation).not.toHaveBeenCalled();
   });
 
@@ -115,11 +157,13 @@ describe('BusinessAccountTypeService', () => {
       'manual upgrade'
     );
 
-    expect(result).toEqual({
-      accountType: 'PREMIUM',
-      commissionPercentage: 15,
-      lockedUntil: null,
-    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        accountType: 'PREMIUM',
+        commissionPercentage: 15,
+        lockedUntil: null,
+      })
+    );
     expect(executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('UpdateBusinessAccountType'),
       expect.objectContaining({

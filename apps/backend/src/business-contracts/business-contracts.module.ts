@@ -10,6 +10,7 @@ import { BusinessContractsController } from './business-contracts.controller';
 import { BusinessContractsDatabaseService } from './business-contracts-database.service';
 import { BusinessContractsService } from './business-contracts.service';
 import { BusinessContractsWebhookController } from './business-contracts-webhook.controller';
+import { MerchantAgreementProviderService } from './merchant-agreement-provider.service';
 
 @Module({
   imports: [
@@ -25,7 +26,12 @@ import { BusinessContractsWebhookController } from './business-contracts-webhook
     BusinessContractsService,
     BusinessContractTemplatesService,
     BusinessContractReconcilerService,
+    MerchantAgreementProviderService,
   ],
-  exports: [BusinessContractsService, BusinessContractTemplatesService],
+  exports: [
+    BusinessContractsService,
+    BusinessContractTemplatesService,
+    MerchantAgreementProviderService,
+  ],
 })
 export class BusinessContractsModule {}

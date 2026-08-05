@@ -3,17 +3,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { MerchantAgreementProviderService } from '../business-contracts/merchant-agreement-provider.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   ACCOUNT_TYPE_LOCK_DAYS,
   BusinessAccountType,
+  getAccountTypePlansForCountry,
   getCommissionForBusinessAccountType,
 } from '../commissions/business-account-type';
 
 @Injectable()
 export class BusinessAccountTypeService {
   constructor(
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly agreementProvider: MerchantAgreementProviderService
   ) {}
 
   async getBusinessByUserId(userId: string) {
@@ -42,6 +45,14 @@ export class BusinessAccountTypeService {
     `;
     const result = await this.hasuraSystemService.executeQuery(query, { id: businessId });
     return result.businesses_by_pk ?? null;
+  }
+
+  async getCurrentForUser(userId: string) {
+    const business = await this.getBusinessByUserId(userId);
+    if (!business) {
+      throw new NotFoundException('Business not found for this user');
+    }
+    return this.buildResponse(business);
   }
 
   private async updateAccountType(
@@ -157,12 +168,26 @@ export class BusinessAccountTypeService {
     return this.buildResponse(updated);
   }
 
-  private buildResponse(business: { account_type: string; account_type_locked_until?: string | null }) {
-    const accountType = (business.account_type as BusinessAccountType) ?? BusinessAccountType.STANDARD;
+  private async buildResponse(business: {
+    id?: string;
+    account_type: string;
+    account_type_locked_until?: string | null;
+  }) {
+    const accountType =
+      (business.account_type as BusinessAccountType) ??
+      BusinessAccountType.STANDARD;
+    const countryCode = business.id
+      ? await this.agreementProvider.getBusinessCountryCode(business.id)
+      : null;
     return {
       accountType,
-      commissionPercentage: getCommissionForBusinessAccountType(accountType),
+      commissionPercentage: getCommissionForBusinessAccountType(
+        accountType,
+        countryCode
+      ),
       lockedUntil: business.account_type_locked_until ?? null,
+      countryCode,
+      plans: getAccountTypePlansForCountry(countryCode),
     };
   }
 }

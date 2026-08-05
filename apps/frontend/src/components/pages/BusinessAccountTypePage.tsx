@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessAccountType } from '../../hooks/useBusinessAccountType';
 import {
-  BUSINESS_ACCOUNT_TYPE_PLANS,
   getPlanById,
   type BusinessAccountTypeId,
   type BusinessAccountTypePlan,
@@ -33,6 +32,7 @@ const BusinessAccountTypePage: React.FC = () => {
   const {
     accountType,
     plan: currentPlan,
+    plans,
     isLocked,
     lockedMessage,
     loading,
@@ -67,7 +67,9 @@ const BusinessAccountTypePage: React.FC = () => {
     }
   };
 
-  const selectedPlan = selectedType ? getPlanById(selectedType) : null;
+  const selectedPlan = selectedType
+    ? plans.find((p) => p.id === selectedType) ?? getPlanById(selectedType)
+    : null;
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
@@ -121,7 +123,7 @@ const BusinessAccountTypePage: React.FC = () => {
           gap={2.5}
           alignItems="stretch"
         >
-          {BUSINESS_ACCOUNT_TYPE_PLANS.map((plan) => (
+          {plans.map((plan) => (
             <PlanCard
               key={plan.id}
               plan={plan}

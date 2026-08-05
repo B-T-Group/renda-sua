@@ -111,3 +111,17 @@ export function getPlanById(id?: string | null): BusinessAccountTypePlan {
     BUSINESS_ACCOUNT_TYPE_PLANS[0]
   );
 }
+
+/** Merge backend country-specific rates onto local plan metadata (labels/benefits). */
+export function mergePlansWithCommissionRates(
+  rates?: Array<{ id: string; commissionPercent: number }> | null
+): BusinessAccountTypePlan[] {
+  if (!rates?.length) return BUSINESS_ACCOUNT_TYPE_PLANS;
+  const rateMap = new Map(
+    rates.map((r) => [r.id as BusinessAccountTypeId, r.commissionPercent])
+  );
+  return BUSINESS_ACCOUNT_TYPE_PLANS.map((plan) => ({
+    ...plan,
+    commissionPercent: rateMap.get(plan.id) ?? plan.commissionPercent,
+  }));
+}

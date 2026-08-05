@@ -6,8 +6,13 @@ import {
 import * as fs from 'fs';
 import Mustache from 'mustache';
 import * as path from 'path';
-import { MERCHANT_AGREEMENT_VERSION } from '../agreements/merchant-agreement.constants';
+import {
+  MERCHANT_AGREEMENT_TEMPLATE,
+  MERCHANT_AGREEMENT_VERSION,
+} from '../agreements/merchant-agreement.constants';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
+import { MerchantAgreementProviderService } from '../business-contracts/merchant-agreement-provider.service';
+import { getCommissionMapForCountry } from '../commissions/business-account-type';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -49,7 +54,8 @@ export class BusinessVerificationService {
     private readonly stripeConnectService: StripeConnectService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly businessContractsService: BusinessContractsService,
-    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
+    private readonly agreementProvider: MerchantAgreementProviderService
   ) {}
 
   async getStatus() {
@@ -82,6 +88,10 @@ export class BusinessVerificationService {
   async getMerchantAgreementForUser() {
     const user = await this.requireBusinessUser();
     const lang = user.preferred_language?.startsWith('fr') ? 'fr' : 'en';
+    const countryCode = await this.agreementProvider.getBusinessCountryCode(
+      user.business!.id
+    );
+    const commissionMap = getCommissionMapForCountry(countryCode);
     const html = this.renderAgreementTemplate(lang, {
       businessName: user.business?.name ?? '',
       signerLegalName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
@@ -89,6 +99,9 @@ export class BusinessVerificationService {
       acceptedAt:
         lang === 'fr' ? 'À la signature électronique' : 'Upon electronic acceptance',
       agreementVersion: MERCHANT_AGREEMENT_VERSION,
+      standardCommission: commissionMap.STANDARD,
+      premiumCommission: commissionMap.PREMIUM,
+      eliteCommission: commissionMap.ELITE,
     });
     return {
       version: MERCHANT_AGREEMENT_VERSION,
@@ -102,13 +115,17 @@ export class BusinessVerificationService {
     ipAddress: string | undefined,
     userAgent: string | undefined
   ) {
-    if (this.businessContractsService.isBoldSignEnabled()) {
+    const user = await this.requireBusinessUser();
+    const business = user.business!;
+    const boldSignForBusiness =
+      await this.businessContractsService.isBoldSignEnabledForBusiness(
+        business.id
+      );
+    if (boldSignForBusiness) {
       throw new BadRequestException(
         'Agreement must be signed via email. Check your inbox for the BoldSign request.'
       );
     }
-    const user = await this.requireBusinessUser();
-    const business = user.business!;
     if (dto.agreementVersion !== MERCHANT_AGREEMENT_VERSION) {
       throw new BadRequestException('Agreement version is outdated. Please refresh and try again.');
     }
@@ -116,6 +133,9 @@ export class BusinessVerificationService {
     if (biz.merchant_agreement_version === MERCHANT_AGREEMENT_VERSION) {
       throw new BadRequestException('This agreement version is already accepted.');
     }
+    const countryCode = await this.agreementProvider.getBusinessCountryCode(
+      business.id
+    );
     const legalName = dto.legalName.trim();
     const acceptedAt = new Date().toISOString();
     const pdfUpload = await this.pdfService.generateMerchantAgreementPdf({
@@ -126,6 +146,7 @@ export class BusinessVerificationService {
       agreementVersion: MERCHANT_AGREEMENT_VERSION,
       acceptedAt,
       signatureBase64: dto.signatureBase64,
+      countryCode,
     });
     const acceptance = await this.insertAcceptance({
       businessId: business.id,
@@ -136,6 +157,7 @@ export class BusinessVerificationService {
       userAgent,
       pdfUploadId: pdfUpload.id,
       acceptedAt,
+      countryCode,
     });
     await this.notificationsService.sendMerchantAgreementCopyEmail({
       to: user.email ?? '',
@@ -163,7 +185,7 @@ export class BusinessVerificationService {
       __dirname,
       '..',
       'agreements',
-      `merchant-agreement-v1.${lang}.html`
+      `${MERCHANT_AGREEMENT_TEMPLATE}.${lang}.html`
     );
     return fs.readFileSync(file, 'utf8');
   }
@@ -177,6 +199,9 @@ export class BusinessVerificationService {
       acceptedAt: string;
       agreementVersion: string;
       signatureImageUrl?: string;
+      standardCommission: number;
+      premiumCommission: number;
+      eliteCommission: number;
     }
   ): string {
     const template = this.loadAgreementTemplate(lang);
@@ -278,19 +303,30 @@ export class BusinessVerificationService {
     const contract = await this.businessContractsService.getContractStatus(
       businessId
     );
+    // Already-signed BoldSign rows still count after a country switches to in-app.
+    if (contract.complete) {
+      return {
+        complete: true,
+        version: contract.version ?? business?.merchant_agreement_version ?? null,
+        acceptedAt:
+          contract.acceptedAt ?? business?.merchant_agreement_accepted_at ?? null,
+        status: contract.status,
+        contractId: contract.contractId,
+      };
+    }
     if (contract.boldSignEnabled) {
       return {
-        complete: contract.complete,
+        complete: false,
         version: contract.version,
         acceptedAt: contract.acceptedAt,
         status: contract.status,
         contractId: contract.contractId,
       };
     }
+    // In-app path: any recorded acceptance counts (avoid re-forcing on version bumps).
     const version = business?.merchant_agreement_version ?? null;
     const acceptedAt = business?.merchant_agreement_accepted_at ?? null;
-    const complete =
-      version === MERCHANT_AGREEMENT_VERSION && !!acceptedAt;
+    const complete = !!version && !!acceptedAt;
     return { complete, version, acceptedAt };
   }
 
@@ -355,6 +391,7 @@ export class BusinessVerificationService {
     userAgent?: string;
     pdfUploadId: string;
     acceptedAt: string;
+    countryCode: string | null;
   }) {
     const mutation = `
       mutation InsertAcceptance($row: business_merchant_agreement_acceptances_insert_input!) {
@@ -366,12 +403,15 @@ export class BusinessVerificationService {
     `;
     const row = {
       business_id: params.businessId,
+      user_id: params.user.id ?? null,
       agreement_version: MERCHANT_AGREEMENT_VERSION,
       signer_legal_name: params.legalName,
       signer_email: params.user.email ?? '',
       business_name: params.user.business.name,
       ip_address: params.ipAddress ?? null,
       user_agent: params.userAgent ?? null,
+      country_code: params.countryCode,
+      device_info: params.dto.deviceInfo ?? null,
       pdf_upload_id: params.pdfUploadId,
       accepted_at: params.acceptedAt,
     };
