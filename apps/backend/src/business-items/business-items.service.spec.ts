@@ -145,3 +145,97 @@ describe('BusinessItemsService CSV upload', () => {
     expect(itemAiReviewService.requestReview).toHaveBeenCalledWith('item-1');
   });
 });
+
+describe('BusinessItemsService quickPublishBusinessItem', () => {
+  const businessId = 'business-1';
+  const itemId = 'item-1';
+  const locationId = 'location-1';
+
+  function createQuickPublishService(moderationStatus: string) {
+    const updateInventoryItem = jest.fn();
+    const createInventoryItem = jest.fn().mockResolvedValue({ id: 'inv-new' });
+    const hasuraUserService = {
+      executeQuery: jest.fn(async (query: string) => {
+        if (query.includes('FindInventory') || query.includes('business_inventory')) {
+          return { business_inventory: [{ id: 'inv-existing' }] };
+        }
+        return {};
+      }),
+      executeMutation: jest.fn(),
+    };
+    const hasuraSystemService = {
+      executeQuery: jest.fn(async (query: string) => {
+        if (query.includes('items_by_pk') || query.includes('GET_ITEM')) {
+          return {
+            items_by_pk: {
+              id: itemId,
+              business_id: businessId,
+              price: 25,
+              moderation_status: moderationStatus,
+              name: 'Item',
+              description: null,
+              status: 'active',
+            },
+          };
+        }
+        return {};
+      }),
+      executeMutation: jest.fn(),
+      resolveBusinessCurrency: jest.fn().mockResolvedValue('CAD'),
+    };
+    const service = new BusinessItemsService(
+      hasuraUserService as any,
+      hasuraSystemService as any,
+      {} as any,
+      {} as any,
+      { updateItem: jest.fn() } as any,
+      { requestReview: jest.fn() } as any,
+      {} as any,
+      { recompute: jest.fn() } as any,
+      {} as any,
+      {} as any
+    );
+    (service as any).updateInventoryItem = updateInventoryItem;
+    (service as any).createInventoryItem = createInventoryItem;
+    return { service, updateInventoryItem, createInventoryItem };
+  }
+
+  it('does not overwrite existing inventory on already-submitted re-publish', async () => {
+    const { service, updateInventoryItem, createInventoryItem } =
+      createQuickPublishService('approved');
+
+    const result = await service.quickPublishBusinessItem(businessId, itemId, {
+      locationId,
+      quantity: 1,
+      sellingPrice: 9.99,
+    });
+
+    expect(result.inventory.id).toBe('inv-existing');
+    expect(updateInventoryItem).not.toHaveBeenCalled();
+    expect(createInventoryItem).not.toHaveBeenCalled();
+  });
+
+  it('creates inventory when missing on first draft publish', async () => {
+    const { service, updateInventoryItem, createInventoryItem, } =
+      createQuickPublishService('draft');
+    const hasuraUserService = (service as any).hasuraUserService;
+    hasuraUserService.executeQuery.mockResolvedValue({ business_inventory: [] });
+    const hasuraSystemService = (service as any).hasuraSystemService;
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_items: {
+        affected_rows: 1,
+        returning: [{ id: itemId, moderation_status: 'pending' }],
+      },
+    });
+
+    const result = await service.quickPublishBusinessItem(businessId, itemId, {
+      locationId,
+      quantity: 5,
+      sellingPrice: 20,
+    });
+
+    expect(result.inventory.id).toBe('inv-new');
+    expect(createInventoryItem).toHaveBeenCalled();
+    expect(updateInventoryItem).not.toHaveBeenCalled();
+  });
+});
