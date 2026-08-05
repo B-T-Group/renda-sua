@@ -1590,11 +1590,26 @@ export class OrdersService {
   private async applySwitchToPickup(order: Orders): Promise<void> {
     const baseFee = Number((order as any).base_delivery_fee ?? 0);
     const perKmFee = Number((order as any).per_km_delivery_fee ?? 0);
-    const newTotal = Math.max(0, Number(order.total_amount) - baseFee - perKmFee);
-    await this.hasuraSystemService.executeMutation(
+    const waived = baseFee + perKmFee;
+    const newTotal = Math.max(0, Number(order.total_amount) - waived);
+    await this.persistSwitchToPickupClaim(order.id, newTotal);
+    await this.clearWaivedDeliveryHold(order);
+  }
+
+  /** CAS: only switch while still unassigned delivery ready_for_pickup. */
+  private async persistSwitchToPickupClaim(
+    orderId: string,
+    total: number
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation(
       `mutation SwitchToPickup($id: uuid!, $total: numeric!) {
-        update_orders_by_pk(
-          pk_columns: { id: $id }
+        update_orders(
+          where: {
+            id: { _eq: $id }
+            current_status: { _eq: ready_for_pickup }
+            assigned_agent_id: { _is_null: true }
+            fulfillment_method: { _neq: pickup }
+          }
           _set: {
             fulfillment_method: pickup
             base_delivery_fee: 0
@@ -1605,10 +1620,77 @@ export class OrdersService {
             dispatch_exhausted_at: null
             updated_at: "now()"
           }
-        ) { id }
+        ) { affected_rows }
       }`,
-      { id: order.id, total: newTotal }
+      { id: orderId, total }
     );
+    if ((result?.update_orders?.affected_rows ?? 0) < 1) {
+      throw new HttpException(
+        'Order can no longer be switched to pickup',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  /**
+   * Prepaid (wallet/mobile) orders already held the delivery fee. Zero the hold
+   * and release it so settlement does not charge a waived fee.
+   */
+  private async clearWaivedDeliveryHold(order: Orders): Promise<void> {
+    const hold = await this.findOrderHold(order.id);
+    if (!hold) return;
+    const heldDelivery = Number(hold.delivery_fees || 0);
+    if (heldDelivery <= 0) return;
+    if ((order as any).payment_status === 'paid') {
+      await this.releaseClientDeliveryHold(order, heldDelivery);
+    }
+    await this.updateOrderHold(hold.id, { delivery_fees: 0 });
+  }
+
+  private async findOrderHold(
+    orderId: string
+  ): Promise<{ id: string; delivery_fees?: number | null } | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query FindOrderHold($orderId: uuid!) {
+        order_holds(where: { order_id: { _eq: $orderId } }, limit: 1) {
+          id
+          delivery_fees
+        }
+      }`,
+      { orderId }
+    );
+    return result?.order_holds?.[0] ?? null;
+  }
+
+  private async releaseClientDeliveryHold(
+    order: Orders,
+    amount: number
+  ): Promise<void> {
+    const clientUserId = order.client?.user_id;
+    if (!clientUserId || amount <= 0) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      clientUserId,
+      order.currency
+    );
+    if (!clientAccount) {
+      throw new HttpException(
+        'Client account not found to release waived delivery fee',
+        HttpStatus.NOT_FOUND
+      );
+    }
+    const release = await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount,
+      transactionType: 'release',
+      memo: `Delivery fee waived after switch to pickup for order ${order.order_number}`,
+      referenceId: `${order.id}:switch_to_pickup_delivery_release`,
+    });
+    if (!release?.success) {
+      throw new HttpException(
+        release?.error || 'Failed to release waived delivery fee hold',
+        HttpStatus.CONFLICT
+      );
+    }
   }
 
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */

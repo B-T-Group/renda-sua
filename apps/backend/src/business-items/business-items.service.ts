@@ -2149,12 +2149,7 @@ export class BusinessItemsService {
     );
     const existingId = existing.business_inventory?.[0]?.id;
     if (existingId) {
-      await this.updateInventoryItem(businessId, existingId, {
-        quantity,
-        selling_price: sellingPrice,
-        unit_cost: sellingPrice,
-        is_active: true,
-      });
+      // Idempotent re-publish (and retries) must not clobber live stock/pricing.
       return existingId;
     }
     const created = await this.createInventoryItem(businessId, {

@@ -192,7 +192,15 @@ describe('OrdersService', () => {
         { provide: PdfService, useValue: {} },
         { provide: OrderQueueService, useValue: {} },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
-        { provide: DeliveryPinService, useValue: {} },
+        {
+          provide: DeliveryPinService,
+          useValue: {
+            getPinForClient: jest.fn().mockResolvedValue('1234'),
+            generatePin: jest.fn().mockReturnValue('1234'),
+            hashPin: jest.fn().mockReturnValue('hash'),
+            setPinForClient: jest.fn(),
+          },
+        },
         {
           provide: DeliveryPinShareService,
           useValue: {
@@ -237,6 +245,7 @@ describe('OrdersService', () => {
             getPendingOfferForAgent: jest.fn(),
             getActiveOfferForAgent: jest.fn(),
             markOfferExpired: jest.fn(),
+            cancelAllOffers: jest.fn().mockResolvedValue(undefined),
           },
         },
         { provide: CancellationPolicyService, useValue: { getPolicy: jest.fn() } },
@@ -1632,6 +1641,112 @@ describe('OrdersService', () => {
         },
         status: HttpStatus.FORBIDDEN,
       });
+    });
+  });
+
+  describe('switchToPickup', () => {
+    const switchOrder = {
+      ...mockOrder,
+      current_status: 'ready_for_pickup',
+      fulfillment_method: 'delivery',
+      payment_status: 'paid',
+      payment_source: 'wallet',
+      payment_timing: 'pay_now',
+      base_delivery_fee: 10,
+      per_km_delivery_fee: 5,
+      total_amount: 55,
+      subtotal: 40,
+      dispatch_exhausted_at: '2026-08-01T12:00:00Z',
+      assigned_agent_id: null,
+      client: { user_id: 'client-456', id: 'client-123' },
+    };
+
+    it('releases prepaid delivery hold and zeros hold delivery_fees', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-client' });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder') || query.includes('orders_by_pk')) {
+          return { orders_by_pk: switchOrder };
+        }
+        if (query.includes('OrderItemsPickupEligibility')) {
+          return {
+            order_items: [
+              { business_inventory: { item: { pay_at_pickup_enabled: true } } },
+            ],
+          };
+        }
+        if (query.includes('FindOrderHold') || query.includes('order_holds')) {
+          return {
+            order_holds: [{ id: 'hold-1', delivery_fees: 15, client_hold_amount: 40 }],
+          };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('SwitchToPickup')) {
+          return { update_orders: { affected_rows: 1 } };
+        }
+        if (mutation.includes('UpdateOrderHold') || mutation.includes('order_holds')) {
+          return { update_order_holds_by_pk: { id: 'hold-1', delivery_fees: 0 } };
+        }
+        return {};
+      });
+
+      const result = await service.switchToPickup('order-123');
+
+      expect(result.success).toBe(true);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'acct-client',
+          amount: 15,
+          transactionType: 'release',
+        })
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('SwitchToPickup'),
+        expect.objectContaining({ id: 'order-123', total: 40 })
+      );
+    });
+
+    it('does not release a hold for authorized card orders without prepaid holds', async () => {
+      const authorizedOrder = {
+        ...switchOrder,
+        payment_status: 'authorized',
+        payment_source: 'credit_card',
+      };
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder') || query.includes('orders_by_pk')) {
+          return { orders_by_pk: authorizedOrder };
+        }
+        if (query.includes('OrderItemsPickupEligibility')) {
+          return {
+            order_items: [
+              { business_inventory: { item: { pay_at_pickup_enabled: true } } },
+            ],
+          };
+        }
+        if (query.includes('FindOrderHold') || query.includes('order_holds')) {
+          return { order_holds: [] };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1 },
+      });
+
+      await service.switchToPickup('order-123');
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
   });
 });
