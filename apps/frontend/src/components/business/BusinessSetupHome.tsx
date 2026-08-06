@@ -397,14 +397,10 @@ function buildStripeRailSteps(params: BuildParams): SetupStep[] {
 }
 
 function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
-  const { status, mainInterest, hasCatalogItem, t } = params;
+  const { status, t } = params;
   const next = status.nextAction;
   const identityRejected = status.steps.identity?.status === 'rejected';
   const identityReason = status.steps.identity?.rejectionReason?.trim() || '';
-  const requiredDone =
-    status.steps.agreement?.complete === true &&
-    status.steps.identity?.complete === true &&
-    status.steps.mobilePaymentPhone?.complete === true;
   return [
     {
       id: 'identity',
@@ -447,19 +443,6 @@ function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
       current: next === 'verify_mobile_payment_phone',
       to: '/business/locations',
       cta: t('mobilePaymentPhone.verifyCta', 'Verify mobile money number'),
-    },
-    {
-      id: 'catalog',
-      label: t('business.setup.stepCatalog', 'Add your first product'),
-      description: t(
-        'business.setup.stepCatalogDesc',
-        'Publish an approved product or rental to open your storefront.'
-      ),
-      done: hasCatalogItem,
-      // Soft guidance — MM nextAction never becomes publish_catalog.
-      current: requiredDone && !hasCatalogItem,
-      to: firstItemOnboardingPath(mainInterest),
-      cta: t('business.setup.ctaCatalog', 'Add product'),
     },
   ];
 }
