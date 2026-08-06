@@ -14,6 +14,16 @@ export interface WizardStepMeta {
 /** Ordered registry metadata — add future steps via new entries + isEnabled. */
 export const WIZARD_STEP_META: WizardStepMeta[] = [
   {
+    id: 'country',
+    labelKey: 'signupPage.steps.country',
+    labelDefault: 'Country',
+    subtitleKey: 'signupPage.countrySubtitle',
+    subtitleDefault:
+      'Your country determines payments, verification, and local options.',
+    fields: ['country'],
+    isEnabled: () => true,
+  },
+  {
     id: 'contact',
     labelKey: 'signupPage.steps.contact',
     labelDefault: 'Contact',
@@ -40,16 +50,6 @@ export const WIZARD_STEP_META: WizardStepMeta[] = [
       'business.mainInterest',
       'business.referralAgentCode',
     ],
-    isEnabled: () => true,
-  },
-  {
-    id: 'country',
-    labelKey: 'signupPage.steps.country',
-    labelDefault: 'Country',
-    subtitleKey: 'signupPage.countrySubtitle',
-    subtitleDefault:
-      'Your country determines payments, verification, and local options.',
-    fields: ['country'],
     isEnabled: () => true,
   },
   {

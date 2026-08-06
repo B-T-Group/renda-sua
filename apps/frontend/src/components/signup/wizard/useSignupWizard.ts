@@ -65,9 +65,12 @@ export function useSignupWizard({
     };
   }, [draft, signupIntent]);
 
-  const [activeStepId, setActiveStepId] = useState<WizardStepId>(
-    draft?.activeStepId ?? 'contact'
-  );
+  const [activeStepId, setActiveStepId] = useState<WizardStepId>(() => {
+    const restored = draft?.activeStepId ?? 'country';
+    const countryVal = (draft?.values?.country || '').trim();
+    if (!countryVal) return 'country';
+    return restored;
+  });
 
   const [postalCodeRequired, setPostalCodeRequired] = useState(false);
 

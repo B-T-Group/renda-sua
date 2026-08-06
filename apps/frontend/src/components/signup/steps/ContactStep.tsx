@@ -30,6 +30,7 @@ export const ContactStep: React.FC = () => {
   } = useFormContext<SignupFormValues>();
 
   const email = watch('contact.email');
+  const selectedCountry = (watch('country') || 'US').toUpperCase();
 
   useEffect(() => {
     if (!isValidEmailFormat(email || '')) {
@@ -153,6 +154,9 @@ export const ContactStep: React.FC = () => {
             error={Boolean(errors.contact?.phone)}
             required
             useDevPhoneDropdown
+            defaultCountry={selectedCountry}
+            country={selectedCountry}
+            disableCountrySelect
             startAdornment={
               <InputAdornment position="start">
                 <PhoneOutlinedIcon fontSize="small" color="action" />

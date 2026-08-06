@@ -10,6 +10,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FormProvider } from 'react-hook-form';
 import { Trans, useTranslation } from 'react-i18next';
@@ -79,6 +80,7 @@ export const SignupWizard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [postSignupEmail, setPostSignupEmail] = useState<string | null>(null);
+  const [postSignupPhone, setPostSignupPhone] = useState<string | null>(null);
   const [verifyRedirectLoading, setVerifyRedirectLoading] = useState(false);
   const [emailTakenConflict, setEmailTakenConflict] = useState(false);
 
@@ -93,33 +95,59 @@ export const SignupWizard: React.FC = () => {
   const primaryVerifyPersona = legacyUserTypeFromPersonas(personas);
 
   const redirectToAuthAfterSignup = useCallback(
-    async (emailNormalized: string) => {
+    async (loginHint: string, connection: 'email' | 'sms') => {
       try {
         await loginWithRedirect({
           authorizationParams: {
-            login_hint: emailNormalized,
-            connection: 'email',
+            login_hint: loginHint,
+            connection,
             screen_hint: 'signup',
           },
           appState: { returnTo: '/app' },
         });
       } catch (redirectErr: any) {
         console.error('loginWithRedirect failed:', redirectErr);
-        navigate('/auth/otp?flow=signup');
+        if (connection === 'sms' && postSignupEmail) {
+          try {
+            await loginWithRedirect({
+              authorizationParams: {
+                login_hint: postSignupEmail,
+                connection: 'email',
+                screen_hint: 'signup',
+              },
+              appState: { returnTo: '/app' },
+            });
+            return;
+          } catch (emailRedirectErr: any) {
+            console.error('email loginWithRedirect failed:', emailRedirectErr);
+          }
+        }
+        if (connection === 'email' || postSignupEmail) {
+          navigate('/auth/otp?flow=signup');
+          return;
+        }
+        setError(
+          t(
+            'signupPage.phoneAuthUnavailable',
+            'Phone verification is currently unavailable. Please try again or contact support.'
+          )
+        );
       }
     },
-    [loginWithRedirect, navigate]
+    [loginWithRedirect, navigate, t, postSignupEmail]
   );
 
   const handleVerifyEmailContinue = useCallback(async () => {
-    if (!postSignupEmail) return;
+    const useSms = Boolean(postSignupPhone);
+    const hint = useSms ? postSignupPhone : postSignupEmail;
+    if (!hint) return;
     setVerifyRedirectLoading(true);
     try {
-      await redirectToAuthAfterSignup(postSignupEmail);
+      await redirectToAuthAfterSignup(hint, useSms ? 'sms' : 'email');
     } finally {
       setVerifyRedirectLoading(false);
     }
-  }, [postSignupEmail, redirectToAuthAfterSignup]);
+  }, [postSignupEmail, postSignupPhone, redirectToAuthAfterSignup]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -188,10 +216,23 @@ export const SignupWizard: React.FC = () => {
       }>('/auth/signup/start', payload);
 
       const emailNormalized = data.user.email.trim().toLowerCase();
+      const phoneNormalized = (data.user.phone_number || values.contact.phone || '')
+        .trim();
+      const country = (values.country || '').toUpperCase();
+      const useSms =
+        Boolean(phoneNormalized) &&
+        isValidPhoneNumber(phoneNormalized) &&
+        (country === 'CM' || country === 'GA');
       sessionStorage.setItem('pendingSignupUserId', data.user.id);
       sessionStorage.setItem('pendingSignupEmail', emailNormalized);
+      if (useSms) {
+        sessionStorage.setItem('pendingSignupPhone', phoneNormalized);
+      } else {
+        sessionStorage.removeItem('pendingSignupPhone');
+      }
       clearSignupDraft();
       setPostSignupEmail(emailNormalized);
+      setPostSignupPhone(useSms ? phoneNormalized : null);
     } catch (err: any) {
       const apiError =
         err?.response?.data?.error ||
@@ -277,11 +318,20 @@ export const SignupWizard: React.FC = () => {
                     '& strong': { color: 'text.primary', fontWeight: 700 },
                   }}
                 >
-                  <Trans
-                    i18nKey="signupPage.accountCreatedBody"
-                    values={{ email: postSignupEmail ?? '' }}
-                    components={{ bold: <strong /> }}
-                  />
+                  {postSignupPhone ? (
+                    <Trans
+                      i18nKey="signupPage.accountCreatedBodyPhone"
+                      defaults="We will send a verification code by SMS to <bold>{{phone}}</bold>."
+                      values={{ phone: postSignupPhone }}
+                      components={{ bold: <strong /> }}
+                    />
+                  ) : (
+                    <Trans
+                      i18nKey="signupPage.accountCreatedBody"
+                      values={{ email: postSignupEmail ?? '' }}
+                      components={{ bold: <strong /> }}
+                    />
+                  )}
                 </Typography>
               </>
             ) : (
@@ -309,7 +359,7 @@ export const SignupWizard: React.FC = () => {
               </>
             )}
 
-            {error && !showAccountCreated && (
+            {error && (
               <Alert
                 severity="error"
                 sx={{ borderRadius: 0 }}

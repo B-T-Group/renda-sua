@@ -30,6 +30,7 @@ export const CountryStep: React.FC = () => {
 
   useEffect(() => {
     if (prevCountry.current && country && prevCountry.current !== country) {
+      setValue('contact.phone', '');
       setValue('storeLocation.street', '');
       setValue('storeLocation.city', '');
       setValue('storeLocation.region', '');
@@ -60,7 +61,7 @@ export const CountryStep: React.FC = () => {
         >
           {t(
             'signupPage.countryChangedReset',
-            'Store location fields were reset for the new country.'
+            'Phone and store location fields were reset for the new country.'
           )}
         </Alert>
       )}

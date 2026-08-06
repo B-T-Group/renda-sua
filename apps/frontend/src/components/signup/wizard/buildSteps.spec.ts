@@ -17,14 +17,15 @@ describe('buildSteps', () => {
     ({ personas, expectStore }) => {
       const steps = buildSteps({ personas, country: 'CA' });
       const ids = steps.map((s) => s.id);
-      expect(ids[0]).toBe('contact');
+      expect(ids[0]).toBe('country');
+      expect(ids.indexOf('country')).toBeLessThan(ids.indexOf('contact'));
       expect(ids).toContain('personas');
-      expect(ids).toContain('country');
+      expect(ids).toContain('contact');
       expect(ids).toContain('review');
       expect(ids.includes('storeLocation')).toBe(expectStore);
       if (expectStore) {
         expect(ids.indexOf('storeLocation')).toBeGreaterThan(
-          ids.indexOf('country')
+          ids.indexOf('personas')
         );
         expect(ids.indexOf('storeLocation')).toBeLessThan(ids.indexOf('review'));
       }
