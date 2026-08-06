@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import Mustache from 'mustache';
@@ -46,6 +47,8 @@ const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
 
 @Injectable()
 export class BusinessVerificationService {
+  private readonly logger = new Logger(BusinessVerificationService.name);
+
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
@@ -231,7 +234,16 @@ export class BusinessVerificationService {
       );
     const identityApproved = identity.status === 'approved';
     if (identityApproved && !adminVerified) {
-      await this.healVerifiedBusinessAfterIdApproval(user.business!.id);
+      try {
+        await this.healVerifiedBusinessAfterIdApproval(user.business!.id);
+      } catch (error: any) {
+        // Status must still return; MoMo sync on approve is the primary path.
+        this.logger.error(
+          `healVerifiedBusinessAfterIdApproval failed for ${user.business!.id}: ${
+            error?.message ?? String(error)
+          }`
+        );
+      }
     }
     const nextAction = this.resolveNextAction(
       adminVerified || identityApproved,
@@ -412,24 +424,14 @@ export class BusinessVerificationService {
     return 'pending_review';
   }
 
-  private async markBusinessVerifiedFromApprovedId(
-    businessId: string
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
-      `mutation SetBusinessVerified($businessId: uuid!) {
-        update_businesses_by_pk(
-          pk_columns: { id: $businessId }
-          _set: { is_verified: true }
-        ) { id }
-      }`,
-      { businessId }
-    );
-  }
-
+  /**
+   * businesses.is_verified is a generated column (lifecycle_status = 'active').
+   * Heal by verifying the MoMo payment account so lifecycle recompute can
+   * promote the business; never write is_verified directly.
+   */
   private async healVerifiedBusinessAfterIdApproval(
     businessId: string
   ): Promise<void> {
-    await this.markBusinessVerifiedFromApprovedId(businessId);
     await this.merchantLifecycleService.upsertPaymentAccount({
       businessId,
       provider: 'mobile_money',
