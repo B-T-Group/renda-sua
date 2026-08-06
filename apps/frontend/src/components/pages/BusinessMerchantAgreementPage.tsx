@@ -21,6 +21,9 @@ import {
 import type { MerchantContractStatus } from '../../hooks/useBusinessVerification';
 
 const SCROLL_END_THRESHOLD_PX = 24;
+const CONTRACT_DOC_TYPE = 'rendasua_contract_agreement';
+
+type ApiClient = NonNullable<ReturnType<typeof useApiClient>>;
 
 function buildWebDeviceInfo() {
   return {
@@ -31,6 +34,78 @@ function buildWebDeviceInfo() {
     appVersion: undefined,
     brand: undefined,
   };
+}
+
+async function fetchBoldSignPdfUrl(
+  apiClient: ApiClient,
+  contract: MerchantContractStatus | null
+): Promise<string | null> {
+  if (!contract?.canDownload || !contract.contractId) return null;
+  const bold = await apiClient.get<{
+    success: boolean;
+    data: { url?: string };
+  }>(`/business-contracts/${contract.contractId}/download`);
+  return bold.data.data?.url ?? null;
+}
+
+async function findLatestContractUploadId(
+  apiClient: ApiClient
+): Promise<string | null> {
+  const res = await apiClient.get<{
+    success: boolean;
+    data: {
+      uploads: Array<{
+        id: string;
+        created_at?: string;
+        document_type?: { name?: string };
+      }>;
+    };
+  }>('/uploads/me');
+  const matches = (res.data.data.uploads ?? []).filter(
+    (u) => u.document_type?.name === CONTRACT_DOC_TYPE
+  );
+  matches.sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  );
+  return matches[0]?.id ?? null;
+}
+
+async function fetchUploadContractPdfUrl(
+  apiClient: ApiClient
+): Promise<string | null> {
+  const uploadId = await findLatestContractUploadId(apiClient);
+  if (!uploadId) return null;
+  const view = await apiClient.get<{
+    success?: boolean;
+    presigned_url?: string;
+    data?: { presigned_url?: string; url?: string };
+  }>(`/uploads/${uploadId}/view`);
+  return (
+    view.data.presigned_url ||
+    view.data.data?.presigned_url ||
+    view.data.data?.url ||
+    null
+  );
+}
+
+function navigateToSignedPdf(popup: Window | null, url: string) {
+  if (popup) {
+    popup.location.href = url;
+    return;
+  }
+  window.location.assign(url);
+}
+
+async function resolveSignedPdfUrl(
+  apiClient: ApiClient,
+  contract: MerchantContractStatus | null
+): Promise<string | null> {
+  if (contract?.canDownload && contract.contractId) {
+    return fetchBoldSignPdfUrl(apiClient, contract);
+  }
+  // BoldSign rail without a downloadable PDF yet — do not open a stale upload.
+  if (contract?.boldSignEnabled) return null;
+  return fetchUploadContractPdfUrl(apiClient);
 }
 
 export const BusinessMerchantAgreementPage: React.FC = () => {
@@ -47,7 +122,13 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [contract, setContract] = useState<MerchantContractStatus | null>(null);
+  const [agreementComplete, setAgreementComplete] = useState(false);
+  const [stillOnboarding, setStillOnboarding] = useState(false);
+  const [paymentRail, setPaymentRail] = useState<'stripe' | 'mobile_money' | null>(
+    null
+  );
   const [statusLoading, setStatusLoading] = useState(true);
+  const [openingSigned, setOpeningSigned] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const defaultName = profile
@@ -78,10 +159,21 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
     try {
       const res = await apiClient.get<{
         success: boolean;
-        data: { contract?: MerchantContractStatus };
+        data: {
+          contract?: MerchantContractStatus;
+          steps?: { agreement?: { complete?: boolean } };
+          isOnboarding?: boolean;
+          paymentRail?: 'stripe' | 'mobile_money';
+        };
       }>('/business-verification/status');
       if (res.data.success) {
         setContract(res.data.data.contract ?? null);
+        setAgreementComplete(
+          res.data.data.contract?.complete === true ||
+            res.data.data.steps?.agreement?.complete === true
+        );
+        setStillOnboarding(res.data.data.isOnboarding === true);
+        setPaymentRail(res.data.data.paymentRail ?? null);
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load contract status');
@@ -118,10 +210,42 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   }, [loadStatus]);
 
   useEffect(() => {
-    if (!contract?.boldSignEnabled) {
+    if (!contract?.boldSignEnabled && !agreementComplete) {
       void loadAgreement();
     }
-  }, [contract?.boldSignEnabled, loadAgreement]);
+  }, [contract?.boldSignEnabled, agreementComplete, loadAgreement]);
+
+  const openSignedContract = useCallback(async () => {
+    if (!apiClient) return;
+    setOpeningSigned(true);
+    setError(null);
+    const popup = window.open('about:blank', '_blank');
+    try {
+      const url = await resolveSignedPdfUrl(apiClient, contract);
+      if (!url) {
+        popup?.close();
+        setError(
+          t(
+            'business.contract.signedPdfMissing',
+            'Signed contract not found in your documents yet.'
+          )
+        );
+        return;
+      }
+      navigateToSignedPdf(popup, url);
+    } catch (e: any) {
+      popup?.close();
+      setError(
+        e?.message ||
+          t(
+            'business.contract.openSignedFailed',
+            'Could not open the signed contract.'
+          )
+      );
+    } finally {
+      setOpeningSigned(false);
+    }
+  }, [apiClient, contract, t]);
 
   const resendContract = async () => {
     if (!apiClient) return;
@@ -186,23 +310,45 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
     );
   }
 
-  if (contract?.boldSignEnabled) {
-    if (contract.complete) {
-      return (
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {t(
-              'business.contract.signedSuccess',
-              'Your merchant agreement has been signed successfully.'
-            )}
+  if ((agreementComplete && !done) || (contract?.boldSignEnabled && contract.complete)) {
+    const continueTo = paymentRail === 'stripe' ? '/dashboard' : '/documents';
+    const continueLabel =
+      paymentRail === 'stripe'
+        ? t('business.setup.ctaPayouts', 'Set up payouts')
+        : t('business.verification.uploadId', 'Upload identification');
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {t(
+            'business.contract.signedBody',
+            'Your partnership agreement is on file. You can view the signed PDF anytime.'
+          )}
+        </Alert>
+        {error ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
           </Alert>
-          <Button variant="contained" onClick={() => navigate('/dashboard')}>
-            {t('business.verification.backToDashboard', 'Back to dashboard')}
+        ) : null}
+        <Button
+          variant="contained"
+          disabled={openingSigned}
+          onClick={() => void openSignedContract()}
+        >
+          {t('business.contract.viewSigned', 'View signed contract')}
+        </Button>
+        {stillOnboarding ? (
+          <Button sx={{ ml: 1 }} variant="outlined" onClick={() => navigate(continueTo)}>
+            {continueLabel}
           </Button>
-        </Container>
-      );
-    }
+        ) : null}
+        <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>
+          {t('business.verification.backToDashboard', 'Back to dashboard')}
+        </Button>
+      </Container>
+    );
+  }
 
+  if (contract?.boldSignEnabled) {
     const statusKey = contract.status ?? 'sent';
     const statusLabel = t(
       `business.contract.status.${statusKey}`,
@@ -260,7 +406,20 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         <Alert severity="success" sx={{ mb: 2 }}>
           {t('business.verification.agreementSuccess', 'Agreement accepted successfully.')}
         </Alert>
-        <Button variant="contained" onClick={() => navigate('/documents')}>
+        {error ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        ) : null}
+        <Button
+          variant="contained"
+          disabled={openingSigned}
+          onClick={() => void openSignedContract()}
+          sx={{ mr: 1 }}
+        >
+          {t('business.contract.viewSigned', 'View signed contract')}
+        </Button>
+        <Button variant="outlined" onClick={() => navigate('/documents')}>
           {t('business.verification.uploadId', 'Upload identification')}
         </Button>
         <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>

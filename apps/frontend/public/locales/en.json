@@ -1811,6 +1811,11 @@
       "resend": "Resend signing email",
       "resendFailed": "Failed to resend contract",
       "signedSuccess": "Your merchant agreement has been signed successfully.",
+      "signedTitle": "Merchant agreement signed",
+      "signedBody": "Your partnership agreement is on file. You can view the signed PDF anytime.",
+      "viewSigned": "View signed contract",
+      "signedPdfMissing": "Signed contract not found in your documents yet.",
+      "openSignedFailed": "Could not open the signed contract.",
       "viewStatus": "View signing status",
       "status": {
         "not_sent": "Not sent",

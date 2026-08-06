@@ -1554,6 +1554,11 @@
       "resend": "Renvoyer le courriel de signature",
       "resendFailed": "Échec du renvoi du contrat",
       "signedSuccess": "Votre contrat marchand a été signé avec succès.",
+      "signedTitle": "Contrat marchand signé",
+      "signedBody": "Votre contrat de partenariat est enregistré. Vous pouvez consulter le PDF signé à tout moment.",
+      "viewSigned": "Voir le contrat signé",
+      "signedPdfMissing": "Contrat signé introuvable dans vos documents pour le moment.",
+      "openSignedFailed": "Impossible d'ouvrir le contrat signé.",
       "viewStatus": "Voir le statut de signature",
       "status": {
         "not_sent": "Non envoyé",
