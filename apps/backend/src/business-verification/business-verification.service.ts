@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import Mustache from 'mustache';
@@ -41,6 +42,8 @@ const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
 
 @Injectable()
 export class BusinessVerificationService {
+  private readonly logger = new Logger(BusinessVerificationService.name);
+
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,

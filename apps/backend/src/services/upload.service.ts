@@ -664,8 +664,8 @@ export class UploadService {
         }
       }
 
-      // MoMo lifecycle becomes active when agreement is signed and ID is approved.
-      // Location order-readiness still requires a confirmed mobile payment phone.
+      // businesses.is_verified is generated from lifecycle_status; MoMo sync
+      // happens through lifecycle recompute, never a direct column write.
       void this.notifyBusinessIdApprovedIfNeeded(
         upload.user_id,
         upload.document_type.name
