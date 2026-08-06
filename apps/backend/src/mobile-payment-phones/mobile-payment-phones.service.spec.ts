@@ -262,6 +262,84 @@ describe('MobilePaymentPhonesService', () => {
     });
   });
 
+  describe('getVerificationMethod', () => {
+    it('defaults to question when config is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [],
+      });
+      await expect(service.getVerificationMethod()).resolves.toBe('question');
+    });
+
+    it('returns transaction when configured', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [{ string_value: 'transaction' }],
+      });
+      await expect(service.getVerificationMethod()).resolves.toBe('transaction');
+    });
+  });
+
+  describe('confirmVerification', () => {
+    it('marks the phone verified when method is question', async () => {
+      jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('question');
+      jest.spyOn(service, 'getByIdForUser')
+        .mockResolvedValueOnce(phoneRow)
+        .mockResolvedValueOnce({ ...phoneRow, is_verified: true });
+      jest.spyOn(service as any, 'assertMobileMoneyRail').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'markVerified').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'activateAfterVerification').mockResolvedValue(undefined);
+
+      const result = await service.confirmVerification('user-1', 'phone-1');
+
+      expect(service['markVerified']).toHaveBeenCalledWith('phone-1', null);
+      expect(service['activateAfterVerification']).toHaveBeenCalledWith('user-1');
+      expect(result.is_verified).toBe(true);
+    });
+
+    it('still returns verified phone when activation fails', async () => {
+      jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('question');
+      jest.spyOn(service, 'getByIdForUser')
+        .mockResolvedValueOnce(phoneRow)
+        .mockResolvedValueOnce({ ...phoneRow, is_verified: true });
+      jest.spyOn(service as any, 'assertMobileMoneyRail').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'markVerified').mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'activateAfterVerification')
+        .mockRejectedValue(new Error('agent lookup failed'));
+
+      const result = await service.confirmVerification('user-1', 'phone-1');
+
+      expect(service['markVerified']).toHaveBeenCalledWith('phone-1', null);
+      expect(result.is_verified).toBe(true);
+    });
+
+    it('rejects when method is transaction', async () => {
+      jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('transaction');
+      await expect(
+        service.confirmVerification('user-1', 'phone-1')
+      ).rejects.toThrow(/Question-based verification is not enabled/);
+    });
+
+    it('rejects when phone is already verified', async () => {
+      jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('question');
+      jest.spyOn(service, 'getByIdForUser').mockResolvedValue({
+        ...phoneRow,
+        is_verified: true,
+      });
+      await expect(
+        service.confirmVerification('user-1', 'phone-1')
+      ).rejects.toThrow(/already verified/);
+    });
+  });
+
+  describe('initiateVerification', () => {
+    it('rejects when method is question', async () => {
+      jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('question');
+      await expect(
+        service.initiateVerification('user-1', 'phone-1')
+      ).rejects.toThrow(/Transaction-based verification is not enabled/);
+    });
+  });
+
   describe('findRefundForVerification', () => {
     it('types entity_id and status as text, not enums', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({

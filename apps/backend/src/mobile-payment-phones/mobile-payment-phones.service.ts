@@ -17,6 +17,7 @@ import {
   normalizeToE164,
 } from './phone-e164.util';
 import type {
+  MobileMoneyVerificationMethod,
   MobilePaymentPhoneVerificationStatus,
   UserMobilePaymentPhoneRow,
 } from './mobile-payment-phones.types';
@@ -26,6 +27,8 @@ const XAF = 'XAF';
 const VERIFICATION_AMOUNT = 150;
 const VERIFICATION_PENDING_REUSE_MS = 15 * 60 * 1000;
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
+const VERIFICATION_METHOD_CONFIG_KEY = 'mobile_money_verification_method';
+const DEFAULT_VERIFICATION_METHOD: MobileMoneyVerificationMethod = 'question';
 
 @Injectable()
 export class MobilePaymentPhonesService {
@@ -73,6 +76,56 @@ export class MobilePaymentPhonesService {
       locationCount: row.business_locations_aggregate?.aggregate?.count ?? 0,
       linkedToAgent: (row.agents_aggregate?.aggregate?.count ?? 0) > 0,
     }));
+  }
+
+  async getVerificationMethod(): Promise<MobileMoneyVerificationMethod> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery(
+        `query MobileMoneyVerificationMethod($key: String!) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $key }
+              status: { _eq: "active" }
+            }
+            limit: 1
+          ) { string_value }
+        }`,
+        { key: VERIFICATION_METHOD_CONFIG_KEY }
+      );
+      const value = res.application_configurations?.[0]?.string_value?.trim();
+      if (value === 'transaction' || value === 'question') return value;
+    } catch (error: any) {
+      this.logger.warn(
+        `getVerificationMethod: ${error?.message ?? String(error)}`
+      );
+    }
+    return DEFAULT_VERIFICATION_METHOD;
+  }
+
+  async confirmVerification(
+    userId: string,
+    phoneId: string
+  ): Promise<UserMobilePaymentPhoneRow> {
+    const method = await this.getVerificationMethod();
+    if (method !== 'question') {
+      throw new BadRequestException(
+        'Question-based verification is not enabled'
+      );
+    }
+    const phone = await this.getByIdForUser(userId, phoneId);
+    if (phone.is_verified) {
+      throw new BadRequestException('Phone number is already verified');
+    }
+    await this.assertMobileMoneyRail(userId);
+    await this.markVerified(phoneId, null);
+    try {
+      await this.activateAfterVerification(userId);
+    } catch (error: any) {
+      this.logger.error(
+        `confirmVerification activateAfterVerification: ${error?.message ?? String(error)}`
+      );
+    }
+    return this.getByIdForUser(userId, phoneId);
   }
 
   async getByIdForUser(
@@ -229,6 +282,12 @@ export class MobilePaymentPhonesService {
     provider?: string;
     message?: string;
   }> {
+    const method = await this.getVerificationMethod();
+    if (method !== 'transaction') {
+      throw new BadRequestException(
+        'Transaction-based verification is not enabled'
+      );
+    }
     const phone = await this.getByIdForUser(userId, phoneId);
     if (phone.is_verified) {
       throw new BadRequestException('Phone number is already verified');

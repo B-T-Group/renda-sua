@@ -42,8 +42,11 @@ export class MobilePaymentPhonesController {
   @ApiOperation({ summary: 'List mobile payment phones for the current user' })
   async list(@ReqContext() ctx: RequestContext) {
     const userId = this.hasuraUserService.getUserId(ctx);
-    const phones = await this.mobilePaymentPhonesService.listForUser(userId);
-    return { success: true, data: { phones } };
+    const [phones, verificationMethod] = await Promise.all([
+      this.mobilePaymentPhonesService.listForUser(userId),
+      this.mobilePaymentPhonesService.getVerificationMethod(),
+    ]);
+    return { success: true, data: { phones, verificationMethod } };
   }
 
   @Post()
@@ -122,6 +125,27 @@ export class MobilePaymentPhonesController {
     const userId = this.hasuraUserService.getUserId(ctx);
     await this.mobilePaymentPhonesService.deleteForUser(userId, id);
     return { success: true };
+  }
+
+  @Post(':id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Confirm a mobile money number by attestation (question method only)',
+  })
+  @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Phone marked verified' })
+  @ApiResponse({
+    status: 400,
+    description: 'Question method disabled or phone already verified',
+  })
+  async confirm(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    const phone = await this.mobilePaymentPhonesService.confirmVerification(
+      userId,
+      id
+    );
+    return { success: true, data: { phone } };
   }
 
   @Post(':id/verify')

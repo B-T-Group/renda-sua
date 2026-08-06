@@ -1,3 +1,5 @@
+export type MobileMoneyVerificationMethod = 'question' | 'transaction';
+
 export interface UserMobilePaymentPhoneRow {
   id: string;
   user_id: string;

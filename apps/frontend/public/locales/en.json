@@ -6205,7 +6205,14 @@
   "mobilePaymentPhone": {
     "verifyCta": "Verify mobile money number",
     "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
-    "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts."
+    "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts.",
+    "questionWhy": "Confirm that this number is registered to receive Mobile Money so we can send your payouts there.",
+    "questionPrompt": "Can this number receive Mobile Money payments (MTN MoMo / Orange Money)?",
+    "questionHint": "Only confirm if this wallet is yours and can accept transfers.",
+    "questionYes": "Yes, it receives Mobile Money",
+    "questionNoDifferent": "No, use a different number",
+    "questionContinue": "Continue",
+    "questionSuccess": "Number confirmed. You can use it for Mobile Money payouts."
   },
   "businessOrderTiming": {
     "title": "Order confirmation timing",

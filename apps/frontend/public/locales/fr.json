@@ -6288,7 +6288,14 @@
   "mobilePaymentPhone": {
     "verifyCta": "Vérifier le numéro Mobile Money",
     "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
-    "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements."
+    "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements.",
+    "questionWhy": "Confirmez que ce numéro est enregistré pour recevoir du Mobile Money afin que nous puissions y envoyer vos paiements.",
+    "questionPrompt": "Ce numéro peut-il recevoir des paiements Mobile Money (MTN MoMo / Orange Money) ?",
+    "questionHint": "Confirmez uniquement si ce portefeuille est le vôtre et peut accepter des transferts.",
+    "questionYes": "Oui, il reçoit du Mobile Money",
+    "questionNoDifferent": "Non, utiliser un autre numéro",
+    "questionContinue": "Continuer",
+    "questionSuccess": "Numéro confirmé. Vous pouvez l’utiliser pour les paiements Mobile Money."
   },
   "businessOrderTiming": {
     "title": "Délais de confirmation",

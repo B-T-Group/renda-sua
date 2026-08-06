@@ -30,7 +30,7 @@ interface MobilePaymentPhoneVerifyModalProps {
   attachAgentOnSuccess?: boolean;
 }
 
-type Step = 'form' | 'waiting' | 'success' | 'error';
+type Step = 'form' | 'question' | 'waiting' | 'success' | 'error';
 
 export function MobilePaymentPhoneVerifyModal({
   open,
@@ -45,40 +45,46 @@ export function MobilePaymentPhoneVerifyModal({
     createPhone,
     updatePhone,
     startVerification,
+    confirmVerification,
     pollUntilVerified,
     attachAgentPhone,
     fetchPhones,
-  } = useMobilePaymentPhones(false);
+    verificationMethod,
+    loading: methodLoading,
+    error: loadError,
+  } = useMobilePaymentPhones(true);
+  const methodReady = verificationMethod !== null;
+  const isQuestion = verificationMethod === 'question';
 
   const initialParts = useMemo(
     () =>
-      initialPhone ? parseE164Parts(initialPhone.phone_e164) : { countryCode: '237', phoneNumber: '' },
+      initialPhone
+        ? parseE164Parts(initialPhone.phone_e164)
+        : { countryCode: '237', phoneNumber: '' },
     [initialPhone]
   );
 
   const [countryCode, setCountryCode] = useState(initialParts.countryCode);
-  const [phoneValue, setPhoneValue] = useState(
-    initialPhone?.phone_e164 ?? ''
+  const [phoneValue, setPhoneValue] = useState(initialPhone?.phone_e164 ?? '');
+  const [activePhone, setActivePhone] = useState<MobilePaymentPhone | null>(
+    initialPhone ?? null
   );
   const [step, setStep] = useState<Step>('form');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activePhoneId, setActivePhoneId] = useState<string | null>(
-    initialPhone?.id ?? null
-  );
 
   useEffect(() => {
-    if (!open) return;
-    setStep('form');
+    if (!open || !methodReady) return;
     setError(null);
     setBusy(false);
-    setActivePhoneId(initialPhone?.id ?? null);
+    setActivePhone(initialPhone ?? null);
     setPhoneValue(initialPhone?.phone_e164 ?? '');
     if (initialPhone) {
       const parts = parseE164Parts(initialPhone.phone_e164);
       setCountryCode(parts.countryCode);
     }
-  }, [open, initialPhone]);
+    setStep(mode === 'verify' && isQuestion ? 'question' : 'form');
+  }, [open, initialPhone, mode, isQuestion, methodReady]);
 
   const title =
     mode === 'edit'
@@ -87,35 +93,48 @@ export function MobilePaymentPhoneVerifyModal({
         ? t('mobilePaymentPhone.verifyTitle', 'Verify mobile money number')
         : t('mobilePaymentPhone.addTitle', 'Add mobile money number');
 
-  const handlePrimary = async () => {
+  const finishSuccess = async (verified: MobilePaymentPhone) => {
+    if (attachAgentOnSuccess) {
+      await attachAgentPhone(verified.id);
+    }
+    await fetchPhones();
+    setStep('success');
+    onCompleted?.(verified);
+  };
+
+  const resolvePhoneForForm = async (): Promise<MobilePaymentPhone> => {
+    const digits = phoneValue.replace(/\D/g, '');
+    const national = digits.startsWith(countryCode)
+      ? digits.slice(countryCode.length)
+      : digits.replace(/^237|^241/, '');
+    if (mode === 'edit' && initialPhone) {
+      return updatePhone(initialPhone.id, countryCode, national);
+    }
+    if (mode === 'add' && activePhone) {
+      return updatePhone(activePhone.id, countryCode, national);
+    }
+    if (mode === 'verify' && initialPhone) return initialPhone;
+    return createPhone(countryCode, national);
+  };
+
+  const runTransactionFlow = async (phone: MobilePaymentPhone) => {
+    await startVerification(phone.id);
+    setStep('waiting');
+    const verified = await pollUntilVerified(phone.id);
+    await finishSuccess(verified);
+  };
+
+  const handleFormContinue = async () => {
     setError(null);
     setBusy(true);
     try {
-      const digits = phoneValue.replace(/\D/g, '');
-      const national = digits.startsWith(countryCode)
-        ? digits.slice(countryCode.length)
-        : digits.replace(/^237|^241/, '');
-
-      let phone: MobilePaymentPhone;
-      if (mode === 'edit' && initialPhone) {
-        phone = await updatePhone(initialPhone.id, countryCode, national);
-      } else if (mode === 'verify' && initialPhone) {
-        phone = initialPhone;
-      } else {
-        phone = await createPhone(countryCode, national);
+      const phone = await resolvePhoneForForm();
+      setActivePhone(phone);
+      if (isQuestion) {
+        setStep('question');
+        return;
       }
-
-      setActivePhoneId(phone.id);
-      await startVerification(phone.id);
-      setStep('waiting');
-
-      const verified = await pollUntilVerified(phone.id);
-      if (attachAgentOnSuccess) {
-        await attachAgentPhone(verified.id);
-      }
-      await fetchPhones();
-      setStep('success');
-      onCompleted?.(verified);
+      await runTransactionFlow(phone);
     } catch (e: any) {
       setError(
         e?.response?.data?.message ||
@@ -128,70 +147,129 @@ export function MobilePaymentPhoneVerifyModal({
     }
   };
 
-  const handleVerifyOnly = async () => {
-    if (!initialPhone) return;
+  const handleConfirmYes = async () => {
+    const phone = activePhone ?? initialPhone;
+    if (!phone) return;
     setError(null);
     setBusy(true);
     try {
-      await startVerification(initialPhone.id);
-      setStep('waiting');
-      const verified = await pollUntilVerified(initialPhone.id);
-      if (attachAgentOnSuccess) {
-        await attachAgentPhone(verified.id);
-      }
-      setStep('success');
-      onCompleted?.(verified);
+      const verified = await confirmVerification(phone.id);
+      await finishSuccess(verified);
     } catch (e: any) {
-      setError(e?.message || t('mobilePaymentPhone.genericError', 'Something went wrong.'));
+      setError(
+        e?.response?.data?.message ||
+          e?.message ||
+          t('mobilePaymentPhone.genericError', 'Something went wrong.')
+      );
       setStep('error');
     } finally {
       setBusy(false);
     }
   };
 
+  const handleVerifyOnlyTransaction = async () => {
+    if (!initialPhone) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await runTransactionFlow(initialPhone);
+    } catch (e: any) {
+      setError(
+        e?.message || t('mobilePaymentPhone.genericError', 'Something went wrong.')
+      );
+      setStep('error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const displayNumber =
+    activePhone?.phone_e164 ?? initialPhone?.phone_e164 ?? phoneValue;
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
+        {!methodReady && loadError ? (
+          <Stack spacing={2} sx={{ py: 2 }} alignItems="center">
+            <Alert severity="error">{loadError}</Alert>
+            <Button variant="contained" onClick={() => void fetchPhones()}>
+              {t('common.retry', 'Retry')}
+            </Button>
+          </Stack>
+        ) : !methodReady || methodLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : (
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'mobilePaymentPhone.why',
-              'We verify your number with a small 150 XAF mobile-money request so payouts reach the right wallet.'
-            )}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'mobilePaymentPhone.procedure',
-              'You will receive a payment request for 150 XAF. Accept it with your PIN. We refund the full amount immediately after confirmation.'
-            )}
-          </Typography>
-          {mode === 'edit' ? (
-            <Alert severity="warning">
-              {t(
-                'mobilePaymentPhone.editWarning',
-                'Changing this number will clear verification. You must verify again before payouts and product visibility resume.'
-              )}
-            </Alert>
+          {step === 'form' ? (
+            <>
+              <Typography variant="body2" color="text.secondary">
+                {isQuestion
+                  ? t(
+                      'mobilePaymentPhone.questionWhy',
+                      'Confirm that this number is registered to receive Mobile Money so we can send your payouts there.'
+                    )
+                  : t(
+                      'mobilePaymentPhone.why',
+                      'We verify your number with a small 150 XAF mobile-money request so payouts reach the right wallet.'
+                    )}
+              </Typography>
+              {!isQuestion ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'mobilePaymentPhone.procedure',
+                    'You will receive a payment request for 150 XAF. Accept it with your PIN. We refund the full amount immediately after confirmation.'
+                  )}
+                </Typography>
+              ) : null}
+              {mode === 'edit' ? (
+                <Alert severity="warning">
+                  {t(
+                    'mobilePaymentPhone.editWarning',
+                    'Changing this number will clear verification. You must verify again before payouts and product visibility resume.'
+                  )}
+                </Alert>
+              ) : null}
+              {mode !== 'verify' ? (
+                <PhoneInput
+                  value={phoneValue}
+                  onChange={(v) => setPhoneValue(v ?? '')}
+                  onCountryChange={(iso2) => {
+                    if (iso2 === 'CM') setCountryCode('237');
+                    if (iso2 === 'GA') setCountryCode('241');
+                  }}
+                  onlyCountries={['CM', 'GA']}
+                  defaultCountry="CM"
+                  label={t('mobilePaymentPhone.phoneLabel', 'Mobile money number')}
+                  required
+                />
+              ) : null}
+              {mode === 'verify' && initialPhone ? (
+                <Typography variant="body1">{initialPhone.phone_e164}</Typography>
+              ) : null}
+            </>
           ) : null}
 
-          {step === 'form' && mode !== 'verify' ? (
-            <PhoneInput
-              value={phoneValue}
-              onChange={(v) => setPhoneValue(v ?? '')}
-              onCountryChange={(iso2) => {
-                if (iso2 === 'CM') setCountryCode('237');
-                if (iso2 === 'GA') setCountryCode('241');
-              }}
-              onlyCountries={['CM', 'GA']}
-              defaultCountry="CM"
-              label={t('mobilePaymentPhone.phoneLabel', 'Mobile money number')}
-              required
-            />
-          ) : null}
-
-          {step === 'form' && mode === 'verify' && initialPhone ? (
-            <Typography variant="body1">{initialPhone.phone_e164}</Typography>
+          {step === 'question' ? (
+            <Stack spacing={1.5} alignItems="center" sx={{ py: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                {displayNumber}
+              </Typography>
+              <Typography variant="body1" textAlign="center">
+                {t(
+                  'mobilePaymentPhone.questionPrompt',
+                  'Can this number receive Mobile Money payments (MTN MoMo / Orange Money)?'
+                )}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                {t(
+                  'mobilePaymentPhone.questionHint',
+                  'Only confirm if this wallet is yours and can accept transfers.'
+                )}
+              </Typography>
+            </Stack>
           ) : null}
 
           {step === 'waiting' ? (
@@ -200,7 +278,7 @@ export function MobilePaymentPhoneVerifyModal({
               <Typography variant="body2">
                 {t(
                   'mobilePaymentPhone.waiting',
-                  'Waiting for you to accept the request on your phoneÖ'
+                  'Waiting for you to accept the request on your phoneù'
                 )}
               </Typography>
             </Box>
@@ -208,37 +286,85 @@ export function MobilePaymentPhoneVerifyModal({
 
           {step === 'success' ? (
             <Alert severity="success">
-              {t(
-                'mobilePaymentPhone.success',
-                'Number verified. Refund of 150 XAF is on the way.'
-              )}
+              {isQuestion
+                ? t(
+                    'mobilePaymentPhone.questionSuccess',
+                    'Number confirmed. You can use it for Mobile Money payouts.'
+                  )
+                : t(
+                    'mobilePaymentPhone.success',
+                    'Number verified. Refund of 150 XAF is on the way.'
+                  )}
             </Alert>
           ) : null}
 
           {error ? <Alert severity="error">{error}</Alert> : null}
         </Stack>
+        )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={busy && step === 'waiting'}>
-          {step === 'success'
-            ? t('common.close', 'Close')
-            : t('common.cancel', 'Cancel')}
-        </Button>
-        {step === 'form' ? (
+      <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+        {!methodReady || methodLoading ? (
+          <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
+        ) : null}
+        {methodReady && !methodLoading && step === 'question' ? (
+          <>
+            <Button onClick={onClose} disabled={busy}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            {mode !== 'verify' ? (
+              <Button onClick={() => setStep('form')} disabled={busy}>
+                {t(
+                  'mobilePaymentPhone.questionNoDifferent',
+                  'No, use a different number'
+                )}
+              </Button>
+            ) : null}
+            <Button
+              variant="contained"
+              onClick={() => void handleConfirmYes()}
+              disabled={busy}
+            >
+              {t(
+                'mobilePaymentPhone.questionYes',
+                'Yes, it receives Mobile Money'
+              )}
+            </Button>
+          </>
+        ) : null}
+
+        {methodReady && !methodLoading && step !== 'question' ? (
+          <Button onClick={onClose} disabled={busy && step === 'waiting'}>
+            {step === 'success'
+              ? t('common.close', 'Close')
+              : t('common.cancel', 'Cancel')}
+          </Button>
+        ) : null}
+
+        {methodReady && !methodLoading && step === 'form' ? (
           <Button
             variant="contained"
             onClick={() =>
-              mode === 'verify' ? void handleVerifyOnly() : void handlePrimary()
+              void (mode === 'verify' && !isQuestion
+                ? handleVerifyOnlyTransaction()
+                : handleFormContinue())
             }
             disabled={busy || (mode !== 'verify' && !phoneValue.trim())}
           >
-            {mode === 'edit'
-              ? t('mobilePaymentPhone.saveAndVerify', 'Save and verify')
-              : t('mobilePaymentPhone.sendRequest', 'Send verification request')}
+            {isQuestion
+              ? t('mobilePaymentPhone.questionContinue', 'Continue')
+              : mode === 'edit'
+                ? t('mobilePaymentPhone.saveAndVerify', 'Save and verify')
+                : t('mobilePaymentPhone.sendRequest', 'Send verification request')}
           </Button>
         ) : null}
-        {step === 'error' ? (
-          <Button variant="contained" onClick={() => setStep('form')}>
+
+        {methodReady && !methodLoading && step === 'error' ? (
+          <Button
+            variant="contained"
+            onClick={() =>
+              setStep(isQuestion && mode === 'verify' ? 'question' : 'form')
+            }
+          >
             {t('common.retry', 'Retry')}
           </Button>
         ) : null}

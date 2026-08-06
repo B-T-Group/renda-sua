@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
+
+export type MobileMoneyVerificationMethod = 'question' | 'transaction';
 
 export interface MobilePaymentPhone {
   id: string;
@@ -38,6 +40,8 @@ export function parseE164Parts(phoneE164: string): {
 export function useMobilePaymentPhones(autoFetch = true) {
   const apiClient = useApiClient();
   const [phones, setPhones] = useState<MobilePaymentPhone[]>([]);
+  const [verificationMethod, setVerificationMethod] =
+    useState<MobileMoneyVerificationMethod | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,10 +50,18 @@ export function useMobilePaymentPhones(autoFetch = true) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get<{ success: boolean; data: { phones: MobilePaymentPhone[] } }>(
-        '/mobile-payment-phones'
-      );
+      const res = await apiClient.get<{
+        success: boolean;
+        data: {
+          phones: MobilePaymentPhone[];
+          verificationMethod?: MobileMoneyVerificationMethod;
+        };
+      }>('/mobile-payment-phones');
       setPhones(res.data?.data?.phones ?? []);
+      const method = res.data?.data?.verificationMethod;
+      setVerificationMethod(
+        method === 'transaction' || method === 'question' ? method : 'question'
+      );
     } catch (e: any) {
       setError(e?.message || 'Failed to load mobile payment phones');
     } finally {
@@ -113,6 +125,20 @@ export function useMobilePaymentPhones(autoFetch = true) {
     [apiClient]
   );
 
+  const confirmVerification = useCallback(
+    async (id: string) => {
+      if (!apiClient) throw new Error('API client not available');
+      const res = await apiClient.post<{
+        success: boolean;
+        data: { phone: MobilePaymentPhone };
+      }>(`/mobile-payment-phones/${id}/confirm`);
+      const phone = res.data.data.phone;
+      setPhones((prev) => prev.map((p) => (p.id === id ? phone : p)));
+      return phone;
+    },
+    [apiClient]
+  );
+
   const getStatus = useCallback(
     async (id: string) => {
       if (!apiClient) throw new Error('API client not available');
@@ -120,9 +146,7 @@ export function useMobilePaymentPhones(autoFetch = true) {
         `/mobile-payment-phones/${id}`
       );
       const status = res.data.data;
-      setPhones((prev) =>
-        prev.map((p) => (p.id === id ? status.phone : p))
-      );
+      setPhones((prev) => prev.map((p) => (p.id === id ? status.phone : p)));
       return status;
     },
     [apiClient]
@@ -158,6 +182,7 @@ export function useMobilePaymentPhones(autoFetch = true) {
 
   return {
     phones,
+    verificationMethod,
     loading,
     error,
     hasVerifiedPhone,
@@ -166,23 +191,9 @@ export function useMobilePaymentPhones(autoFetch = true) {
     updatePhone,
     deletePhone,
     startVerification,
+    confirmVerification,
     getStatus,
     attachAgentPhone,
     pollUntilVerified,
   };
-}
-
-export function useMobilePaymentPhonePoll(onVerified?: () => void) {
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPoll = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => stopPoll(), [stopPoll]);
-
-  return { stopPoll };
 }
