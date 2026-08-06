@@ -55,8 +55,9 @@ export function useBusinessDashboardModules({
     const pendingCashReconciliationCount =
       aggregates?.pendingCashReconciliationCount ?? 0;
 
-    const primaryOrderModules: BusinessDashboardModule[] = [
-      {
+    const primaryOrderModules: BusinessDashboardModule[] = [];
+    if (ordersTotalNonCancelled > 0) {
+      primaryOrderModules.push({
         title: t('common.orders'),
         description: t('business.dashboard.ordersDescription'),
         icon: <OrdersIcon sx={{ fontSize: 40 }} />,
@@ -64,8 +65,10 @@ export function useBusinessDashboardModules({
         color: '#1976d2',
         path: '/orders',
         orderCountByStatus,
-      },
-      {
+      });
+    }
+    if (pendingCashReconciliationCount > 0) {
+      primaryOrderModules.push({
         title: t(
           'business.dashboard.cashReconciliationTitle',
           'Cash reconciliation'
@@ -78,18 +81,20 @@ export function useBusinessDashboardModules({
         count: pendingCashReconciliationCount,
         color: '#ed6c02',
         path: '/orders?cashReconciliation=pending',
-        showBadge: pendingCashReconciliationCount > 0,
-      },
-      {
+        showBadge: true,
+      });
+    }
+    if (pendingFailedDeliveriesCount > 0) {
+      primaryOrderModules.push({
         title: t('business.dashboard.failedDeliveries'),
         description: t('business.dashboard.failedDeliveriesDescription'),
         icon: <ErrorIcon sx={{ fontSize: 40 }} />,
         count: pendingFailedDeliveriesCount,
         color: '#d32f2f',
         path: '/business/failed-deliveries',
-        showBadge: pendingFailedDeliveriesCount > 0,
-      },
-    ];
+        showBadge: true,
+      });
+    }
 
     const moreHubModule: BusinessDashboardModule = {
       title: t('common.more', 'More'),
