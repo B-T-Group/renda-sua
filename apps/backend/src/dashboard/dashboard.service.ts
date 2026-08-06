@@ -7,7 +7,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
-import { ID_DOCUMENT_TYPE_NAMES } from '../services/upload.service';
+import { ID_DOCUMENT_TYPE_NAMES, parseIdRejectionReason } from '../services/upload.service';
 import { isActivePersona } from '../users/persona.util';
 
 export interface TopViewedProductDto {
@@ -461,7 +461,7 @@ export class DashboardService {
       return { needsAction: false, status: 'approved' };
     }
     const latest = uploads[0];
-    if (latest?.note?.trim()) {
+    if (parseIdRejectionReason(latest?.note)) {
       return { needsAction: true, status: 'rejected' };
     }
     return { needsAction: false, status: 'pending' };

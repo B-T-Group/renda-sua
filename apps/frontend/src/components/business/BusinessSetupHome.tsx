@@ -1,5 +1,6 @@
 import {
   CheckCircleOutline,
+  ErrorOutline,
   RadioButtonUnchecked,
 } from '@mui/icons-material';
 import {
@@ -51,6 +52,7 @@ type SetupStep = {
   description: string;
   done: boolean;
   current: boolean;
+  error?: boolean;
   to?: string;
   cta?: string;
   embedStripe?: boolean;
@@ -250,6 +252,8 @@ function SetupStepRow({
   step: SetupStep;
   onPreviewClick: () => void;
 }) {
+  const errored = step.error === true && !step.done;
+  const highlighted = step.current && !step.done;
   return (
     <Box
       sx={{
@@ -259,17 +263,27 @@ function SetupStepRow({
         gap: 2,
         p: 1.5,
         borderRadius: 1,
-        bgcolor: step.current && !step.done ? 'action.hover' : 'transparent',
+        bgcolor: errored
+          ? 'action.hover'
+          : highlighted
+            ? 'action.hover'
+            : 'transparent',
         border: 1,
-        borderColor: step.current && !step.done ? 'primary.light' : 'divider',
+        borderColor: errored
+          ? 'error.main'
+          : highlighted
+            ? 'primary.light'
+            : 'divider',
       }}
     >
       <Box sx={{ display: 'flex', gap: 1, flex: 1, minWidth: 0 }}>
         {step.done ? (
           <CheckCircleOutline color="success" fontSize="small" sx={{ mt: 0.25 }} />
+        ) : errored ? (
+          <ErrorOutline color="error" fontSize="small" sx={{ mt: 0.25 }} />
         ) : (
           <RadioButtonUnchecked
-            color={step.current ? 'primary' : 'disabled'}
+            color={highlighted ? 'primary' : 'disabled'}
             fontSize="small"
             sx={{ mt: 0.25 }}
           />
@@ -277,7 +291,9 @@ function SetupStepRow({
         <Box>
           <Typography
             variant="subtitle2"
-            color={step.done ? 'text.secondary' : 'text.primary'}
+            color={
+              step.done ? 'text.secondary' : errored ? 'error.main' : 'text.primary'
+            }
             sx={{ textDecoration: step.done ? 'line-through' : 'none' }}
           >
             {step.label}
@@ -285,6 +301,15 @@ function SetupStepRow({
           <Typography variant="body2" color="text.secondary">
             {step.description}
           </Typography>
+          {step.pendingNote ? (
+            <Typography
+              variant="body2"
+              color={errored ? 'error.main' : 'text.secondary'}
+              sx={{ mt: 0.5 }}
+            >
+              {step.pendingNote}
+            </Typography>
+          ) : null}
         </Box>
       </Box>
       {!step.done && step.to && step.cta && !step.embedStripe ? (
@@ -292,7 +317,8 @@ function SetupStepRow({
           component={RouterLink}
           to={step.to}
           size="small"
-          variant={step.current ? 'contained' : 'outlined'}
+          variant={highlighted || errored ? 'contained' : 'outlined'}
+          color={errored ? 'error' : 'primary'}
           onClick={onPreviewClick}
           sx={{ flexShrink: 0 }}
         >
@@ -373,6 +399,8 @@ function buildStripeRailSteps(params: BuildParams): SetupStep[] {
 function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
   const { status, mainInterest, hasCatalogItem, t } = params;
   const next = status.nextAction;
+  const identityRejected = status.steps.identity?.status === 'rejected';
+  const identityReason = status.steps.identity?.rejectionReason?.trim() || '';
   const requiredDone =
     status.steps.agreement?.complete === true &&
     status.steps.identity?.complete === true &&
@@ -380,15 +408,33 @@ function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
   return [
     {
       id: 'identity',
-      label: t('business.setup.stepIdentity', 'Upload identification'),
-      description: t(
-        'business.setup.stepIdentityDesc',
-        "Upload a national ID, passport, or driver's license."
-      ),
-      done: status.steps.identity?.complete === true,
+      label: identityRejected
+        ? t('business.setup.stepIdentityRejected', 'Identification rejected')
+        : t('business.setup.stepIdentity', 'Upload identification'),
+      description: identityRejected
+        ? t(
+            'business.setup.stepIdentityRejectedDesc',
+            'Your ID was not approved. Please upload a clearer valid ID document.'
+          )
+        : t(
+            'business.setup.stepIdentityDesc',
+            "Upload a national ID, passport, or driver's license."
+          ),
+      done: status.steps.identity?.complete === true && !identityRejected,
       current: next === 'upload_id',
+      error: identityRejected,
+      pendingNote: identityRejected
+        ? identityReason
+          ? `${t('business.setup.identityRejectionReasonPrefix', 'Reason:')} ${identityReason}`
+          : t(
+              'business.setup.identityRejectedNoReason',
+              'Please upload a new identification document.'
+            )
+        : undefined,
       to: '/documents',
-      cta: t('business.setup.ctaIdentity', 'Upload ID'),
+      cta: identityRejected
+        ? t('business.setup.ctaReuploadIdentity', 'Reupload ID')
+        : t('business.setup.ctaIdentity', 'Upload ID'),
     },
     {
       id: 'mobileMoney',

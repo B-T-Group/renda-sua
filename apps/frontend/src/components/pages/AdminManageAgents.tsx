@@ -34,6 +34,10 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
+import {
+  displayIdRejectionNote,
+  isIdRejectionNote,
+} from '../../utils/idRejectionNote';
 import { AdminMessagePost } from '../common/AdminMessagePost';
 import AdminUserCard from '../common/AdminUserCard';
 
@@ -526,12 +530,13 @@ const AdminManageAgents: React.FC = () => {
                       primary={doc.file_name}
                       secondary={
                         <>
-                          {`${doc.document_type?.description || doc.document_type?.name} • ${doc.is_approved ? t('admin.uploads.approved', 'Approved') : t('admin.uploads.pending', 'Pending')}`}
-                          {doc.note && (
+                          {`${doc.document_type?.description || doc.document_type?.name} • ${doc.is_approved ? t('admin.uploads.approved', 'Approved') : isIdRejectionNote(doc.note) ? t('admin.uploads.rejected', 'Rejected') : t('admin.uploads.pending', 'Pending')}`}
+                          {isIdRejectionNote(doc.note) && (
                             <>
                               <br />
                               <Typography component="span" variant="caption" color="text.secondary">
-                                {t('admin.agents.rejectionNote', 'Rejection note (visible to user):')} {doc.note}
+                                {t('admin.agents.rejectionNote', 'Rejection note (visible to user):')}{' '}
+                                {displayIdRejectionNote(doc.note)}
                               </Typography>
                             </>
                           )}

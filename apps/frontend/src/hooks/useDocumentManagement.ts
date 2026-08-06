@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { useApiClient } from './useApiClient';
 import { useGraphQLClient } from './useGraphQLClient';
 
 export interface DocumentType {
@@ -39,6 +40,7 @@ export interface DocumentFilters {
 
 export const useDocumentManagement = () => {
   const { client } = useGraphQLClient();
+  const apiClient = useApiClient();
   const { profile: user } = useUserProfileContext();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
@@ -173,35 +175,25 @@ export const useDocumentManagement = () => {
   // Update document note
   const updateDocumentNote = useCallback(
     async (documentId: string, note: string) => {
-      if (!client) return false;
-
       try {
-        const mutation = `
-        mutation UpdateDocumentNote($id: uuid!, $note: String!) {
-          update_user_uploads_by_pk(
-            pk_columns: {id: $id}
-            _set: {note: $note}
-          ) {
-            id
-            note
-            updated_at
-          }
+        const response = await apiClient.patch<{
+          success: boolean;
+          data: { id: string; note: string; updated_at: string };
+        }>(`/uploads/${documentId}/note`, { note });
+        const body = response.data;
+
+        if (!body?.success || !body.data) {
+          setError('Failed to update document note');
+          return false;
         }
-      `;
 
-        const response = await client.request(mutation, {
-          id: documentId,
-          note,
-        });
-
-        // Update local state
         setDocuments((prev) =>
           prev.map((doc) =>
             doc.id === documentId
               ? {
                   ...doc,
-                  note: response.update_user_uploads_by_pk.note,
-                  updated_at: response.update_user_uploads_by_pk.updated_at,
+                  note: body.data.note,
+                  updated_at: body.data.updated_at,
                 }
               : doc
           )
@@ -214,7 +206,7 @@ export const useDocumentManagement = () => {
         return false;
       }
     },
-    [client]
+    [apiClient]
   );
 
   // Get document preview URL

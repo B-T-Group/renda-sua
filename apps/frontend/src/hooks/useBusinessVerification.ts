@@ -60,8 +60,9 @@ export interface BusinessVerificationStatus {
     };
     identity?: {
       complete: boolean;
-      status: 'missing' | 'pending' | 'approved';
+      status: 'missing' | 'pending' | 'approved' | 'rejected';
       uploadId?: string | null;
+      rejectionReason?: string | null;
     };
     stripeConnect?: {
       complete: boolean;

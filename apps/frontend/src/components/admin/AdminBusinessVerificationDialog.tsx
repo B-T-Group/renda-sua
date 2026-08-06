@@ -31,6 +31,10 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
+import {
+  displayIdRejectionNote,
+  isIdRejectionNote,
+} from '../../utils/idRejectionNote';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
 import { AdminBusinessVerificationSteps } from './AdminBusinessVerificationSteps';
 
@@ -503,7 +507,9 @@ export const AdminBusinessVerificationDialog: React.FC<
                     ? 'approved'
                     : details.identityDocuments.length === 0
                       ? 'missing'
-                      : details.identityDocuments.some((d) => d.note?.trim())
+                      : details.identityDocuments.some((d) =>
+                            isIdRejectionNote(d.note)
+                          )
                         ? 'rejected'
                         : 'pending',
                 }}
@@ -656,7 +662,7 @@ export const AdminBusinessVerificationDialog: React.FC<
                   <Stack spacing={2}>
                     {details.identityDocuments.map((doc) => {
                       const rejected =
-                        Boolean(doc.note?.trim()) && !doc.is_approved;
+                        isIdRejectionNote(doc.note) && !doc.is_approved;
                       const statusLabel = doc.is_approved
                         ? t('admin.uploads.approved', 'Approved')
                         : rejected
@@ -701,7 +707,7 @@ export const AdminBusinessVerificationDialog: React.FC<
                                   color="error"
                                   display="block"
                                 >
-                                  {doc.note}
+                                  {displayIdRejectionNote(doc.note)}
                                 </Typography>
                               ) : null}
                             </Box>

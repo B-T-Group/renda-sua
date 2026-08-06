@@ -22,6 +22,7 @@ import { StripeConnectService } from '../stripe-payments/stripe-connect.service'
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { AcceptMerchantAgreementDto } from './dto/accept-merchant-agreement.dto';
+import { parseIdRejectionReason } from '../services/upload.service';
 
 export type VerificationNextAction =
   | 'sign_agreement'
@@ -335,6 +336,7 @@ export class BusinessVerificationService {
       user_uploads: Array<{
         id: string;
         is_approved: boolean;
+        note: string | null;
         document_type: { name: string };
       }>;
     }>(
@@ -348,6 +350,7 @@ export class BusinessVerificationService {
         ) {
           id
           is_approved
+          note
           document_type { name }
         }
       }`,
@@ -355,16 +358,38 @@ export class BusinessVerificationService {
     );
     const uploads = rows.user_uploads ?? [];
     if (!uploads.length) {
-      return { complete: false, status: 'missing' as const, uploadId: null };
+      return {
+        complete: false,
+        status: 'missing' as const,
+        uploadId: null,
+        rejectionReason: null,
+      };
     }
     const approved = uploads.find((u) => u.is_approved);
     if (approved) {
-      return { complete: true, status: 'approved' as const, uploadId: approved.id };
+      return {
+        complete: true,
+        status: 'approved' as const,
+        uploadId: approved.id,
+        rejectionReason: null,
+      };
+    }
+    const latest = uploads[0];
+    // Admin rejections store note as `[REJECTED] …` (see formatIdRejectionNote).
+    const rejectionReason = parseIdRejectionReason(latest?.note);
+    if (rejectionReason) {
+      return {
+        complete: false,
+        status: 'rejected' as const,
+        uploadId: latest.id,
+        rejectionReason,
+      };
     }
     return {
       complete: true,
       status: 'pending' as const,
-      uploadId: uploads[0].id,
+      uploadId: latest.id,
+      rejectionReason: null,
     };
   }
 

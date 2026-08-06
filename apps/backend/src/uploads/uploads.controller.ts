@@ -230,6 +230,60 @@ export class UploadsController {
     }
   }
 
+  @Patch(':id/note')
+  @ApiOperation({
+    summary: 'Update a non-ID document note',
+    description:
+      'Updates the note on a user upload. ID documents cannot be updated here; use reject instead.',
+  })
+  @ApiParam({ name: 'id', description: 'Upload ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { note: { type: 'string' } },
+      required: ['note'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Note updated' })
+  async updateUploadNote(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') uploadId: string,
+    @Body('note') note: string
+  ) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      if (!user.id) {
+        throw new HttpException(
+          { success: false, error: 'Unauthorized' },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+      if (typeof note !== 'string') {
+        throw new HttpException(
+          { success: false, error: 'note is required' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const updated = await this.uploadService.updateUploadNote(
+        uploadId,
+        note,
+        user.id
+      );
+      return { success: true, data: updated };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update note',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   @Patch(':id/reject')
   @ApiOperation({
     summary: 'Reject a document (superuser)',

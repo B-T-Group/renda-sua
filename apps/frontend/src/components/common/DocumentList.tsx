@@ -50,6 +50,7 @@ import {
   UserDocument,
 } from '../../hooks/useDocumentManagement';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
+import { displayIdRejectionNote } from '../../utils/idRejectionNote';
 
 /** System-generated types with no review workflow; approval status is hidden. */
 const AUTO_APPROVED_TYPE_NAMES = [
@@ -480,7 +481,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                           noWrap
                           sx={{ maxWidth: 200 }}
                         >
-                          {document.note || '-'}
+                          {displayIdRejectionNote(document.note) || '-'}
                         </Typography>
                       </TableCell>
                       <TableCell align="center">

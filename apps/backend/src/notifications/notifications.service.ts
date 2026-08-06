@@ -3349,7 +3349,10 @@ export class NotificationsService {
         <p>Upload id: ${escapeHtmlForEmail(params.uploadId)}</p>
       `;
       const title = 'ID document needs review';
-      const body = `${displayName} uploaded ${formatIdDocumentTypeLabel(params.documentType)} for manual review.`;
+      const reasonSuffix = params.reason?.trim()
+        ? ` AI: ${params.reason.trim()}`
+        : '';
+      const body = `${displayName} uploaded ${formatIdDocumentTypeLabel(params.documentType)} for manual review.${reasonSuffix}`;
       for (const recipient of recipients) {
         if (recipient.email) {
           await this.sendSimpleLifecycleEmail({
@@ -3363,6 +3366,7 @@ export class NotificationsService {
           uploadId: params.uploadId,
           userId: params.userId,
           persona: params.persona,
+          reason: params.reason ?? '',
           url: adminUrl,
         });
       }
@@ -3427,14 +3431,25 @@ export class NotificationsService {
   }): Promise<void> {
     try {
       const u = await this.getUserRowForEmail(params.businessUserId);
+      const locale = normalizeLanguage(u?.preferred_language);
+      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
+      const title =
+        locale === 'fr' ? "Pièce d'identité approuvée" : 'ID document approved';
+      const body =
+        locale === 'fr'
+          ? `Votre ${docLabel} a été approuvée. Vous pouvez poursuivre la vérification dans l'application.`
+          : `Your ${docLabel} has been approved. You can continue verification in the app.`;
+      await this.sendPushNotificationByUserId(params.businessUserId, title, body, {
+        type: 'id_document_approved',
+        documentType: params.documentType,
+        url: '/documents',
+      });
       if (!u?.email) {
         this.logger.warn(
           'Business ID approved email skipped: missing recipient email'
         );
         return;
       }
-      const locale = normalizeLanguage(u.preferred_language);
-      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
       if (locale === 'fr') {
         await this.sendSimpleLifecycleEmail({
           to: u.email,
@@ -3470,15 +3485,28 @@ export class NotificationsService {
   }): Promise<void> {
     try {
       const u = await this.getUserRowForEmail(params.businessUserId);
+      const locale = normalizeLanguage(u?.preferred_language);
+      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
+      const reasonText = params.reason.trim();
+      const title =
+        locale === 'fr' ? "Pièce d'identité refusée" : 'ID document rejected';
+      const body =
+        locale === 'fr'
+          ? `Votre ${docLabel} a été refusée${reasonText ? ` : ${reasonText}` : ''}. Téléversez une nouvelle pièce dans Documents.`
+          : `Your ${docLabel} was rejected${reasonText ? `: ${reasonText}` : ''}. Upload a new ID in Documents.`;
+      await this.sendPushNotificationByUserId(params.businessUserId, title, body, {
+        type: 'id_document_rejected',
+        documentType: params.documentType,
+        reason: reasonText,
+        url: '/documents',
+      });
       if (!u?.email) {
         this.logger.warn(
           'Business ID rejected email skipped: missing recipient email'
         );
         return;
       }
-      const locale = normalizeLanguage(u.preferred_language);
-      const docLabel = formatIdDocumentTypeLabel(params.documentType, locale);
-      const reason = escapeHtmlForEmail(params.reason.trim());
+      const reason = escapeHtmlForEmail(reasonText);
       if (locale === 'fr') {
         await this.sendSimpleLifecycleEmail({
           to: u.email,

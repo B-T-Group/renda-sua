@@ -39,7 +39,6 @@ insert_permissions:
         - id
         - user_id
         - document_type_id
-        - note
         - content_type
         - key
         - file_name
@@ -56,7 +55,6 @@ insert_permissions:
         - id
         - user_id
         - document_type_id
-        - note
         - content_type
         - key
         - file_name
@@ -73,7 +71,6 @@ insert_permissions:
         - id
         - user_id
         - document_type_id
-        - note
         - content_type
         - key
         - file_name
@@ -135,37 +132,6 @@ select_permissions:
         user:
           id:
             _eq: X-Hasura-User-Id
-update_permissions:
-  - role: agent
-    permission:
-      columns:
-        - note
-        - updated_at
-      filter:
-        user:
-          id:
-            _eq: X-Hasura-User-Id
-      check: null
-  - role: business
-    permission:
-      columns:
-        - note
-        - updated_at
-      filter:
-        user:
-          id:
-            _eq: X-Hasura-User-Id
-      check: null
-  - role: client
-    permission:
-      columns:
-        - note
-        - updated_at
-      filter:
-        user:
-          id:
-            _eq: X-Hasura-User-Id
-      check: null
 delete_permissions:
   - role: agent
     permission:

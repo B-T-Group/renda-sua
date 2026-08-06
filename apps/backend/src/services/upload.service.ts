@@ -38,6 +38,31 @@ export const ID_DOCUMENT_TYPE_NAMES = [
   'driver_license',
 ];
 
+/** Prefix stored in user_uploads.note when an admin rejects an ID document. */
+export const ID_REJECTION_NOTE_PREFIX = '[REJECTED] ';
+
+export function formatIdRejectionNote(reason: string): string {
+  const trimmed = reason.trim();
+  if (trimmed.startsWith(ID_REJECTION_NOTE_PREFIX)) return trimmed;
+  return `${ID_REJECTION_NOTE_PREFIX}${trimmed}`;
+}
+
+/** Returns the visible rejection reason, or null if the note is not a rejection. */
+export function parseIdRejectionReason(
+  note: string | null | undefined
+): string | null {
+  const trimmed = note?.trim() || '';
+  if (!trimmed) return null;
+  if (trimmed.startsWith(ID_REJECTION_NOTE_PREFIX)) {
+    return (
+      trimmed.slice(ID_REJECTION_NOTE_PREFIX.length).trim() || trimmed
+    );
+  }
+  // Legacy admin rejections (pre-prefix). Safe because ID-doc notes are no
+  // longer writable by clients (Hasura + REST guards).
+  return trimmed;
+}
+
 /**
  * System-generated document types that never go through admin review and are
  * therefore inserted as approved. Client apps hide the approval status for
@@ -124,7 +149,7 @@ export class UploadService {
       return { hasIdDocument: true, idDocumentStatus: 'approved' };
     }
     const latest = uploads[0];
-    if (latest?.note?.trim()) {
+    if (parseIdRejectionReason(latest?.note)) {
       return { hasIdDocument: true, idDocumentStatus: 'rejected' };
     }
     return { hasIdDocument: true, idDocumentStatus: 'pending' };
@@ -296,6 +321,14 @@ export class UploadService {
         },
       });
 
+    // ID-doc notes are reserved for admin rejection reasons (see rejectUpload /
+    // hasIdDocument). Ignore any client-supplied note so a user memo cannot be
+    // misread as a rejection.
+    const isIdDocument =
+      !!documentTypeName &&
+      ID_DOCUMENT_TYPE_NAMES.includes(documentTypeName);
+    const storedNote = isIdDocument ? null : uploadData.note || null;
+
     // Save record in user_uploads table
     const insertMutation = `
       mutation InsertUserUpload(
@@ -338,7 +371,7 @@ export class UploadService {
       {
         user_id: ownerId,
         document_type_id: uploadData.document_type_id,
-        note: uploadData.note || null,
+        note: storedNote,
         content_type: uploadData.content_type,
         key: key,
         file_name: uploadData.file_name,
@@ -463,7 +496,53 @@ export class UploadService {
    * @param note New note text
    * @returns Promise<any> Updated upload record
    */
-  async updateUploadNote(uploadId: string, note: string): Promise<any> {
+  async updateUploadNote(
+    uploadId: string,
+    note: string,
+    ownerUserId?: string
+  ): Promise<any> {
+    const uploadMeta = await this.hasuraSystemService.executeQuery(
+      `query UploadDocType($uploadId: uuid!) {
+        user_uploads_by_pk(id: $uploadId) {
+          user_id
+          document_type { name }
+        }
+      }`,
+      { uploadId }
+    );
+    const upload = uploadMeta?.user_uploads_by_pk as
+      | {
+          user_id: string;
+          document_type: { name: string } | null;
+        }
+      | undefined;
+    if (!upload) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Upload record not found or could not be updated',
+        },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (ownerUserId && upload.user_id !== ownerUserId) {
+      throw new HttpException(
+        { success: false, error: 'Access denied' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const docName = upload.document_type?.name;
+    if (docName && ID_DOCUMENT_TYPE_NAMES.includes(docName)) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'ID document notes are set only when rejecting the document. Use the reject endpoint.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const updateMutation = `
       mutation UpdateUserUploadNote($uploadId: uuid!, $note: String!) {
         update_user_uploads_by_pk(pk_columns: {id: $uploadId}, _set: {note: $note}) {
@@ -713,7 +792,7 @@ export class UploadService {
 
     const result = await this.hasuraSystemService.executeMutation(
       rejectMutation,
-      { uploadId, note: message }
+      { uploadId, note: formatIdRejectionNote(message) }
     );
 
     if (!result.update_user_uploads_by_pk) {
