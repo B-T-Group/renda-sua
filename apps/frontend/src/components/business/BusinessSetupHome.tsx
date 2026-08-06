@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { BusinessVerificationStatus } from '../../hooks/useBusinessVerification';
 import {
-  firstItemOnboardingPath,
   isStorePreviewDone,
   markStorePreviewDone,
 } from '../../utils/businessSetup';
@@ -358,11 +357,8 @@ function buildAgreementStep(params: BuildParams): SetupStep {
 }
 
 function buildStripeRailSteps(params: BuildParams): SetupStep[] {
-  const { status, mainInterest, t } = params;
+  const { status, t } = params;
   const next = status.nextAction;
-  const catalogPending = Boolean(
-    status.steps.catalog?.hasPendingItem || status.steps.catalog?.hasPendingRental
-  );
   return [
     {
       id: 'payouts',
@@ -374,24 +370,6 @@ function buildStripeRailSteps(params: BuildParams): SetupStep[] {
       done: status.steps.stripeConnect?.complete === true,
       current: next === 'setup_stripe_connect',
       embedStripe: next === 'setup_stripe_connect',
-    },
-    {
-      id: 'catalog',
-      label: t('business.setup.stepCatalog', 'Add your first product'),
-      description: t(
-        'business.setup.stepCatalogDesc',
-        'Publish an approved product or rental to open your storefront.'
-      ),
-      done: status.steps.catalog?.complete === true,
-      current: next === 'publish_catalog',
-      to: firstItemOnboardingPath(mainInterest),
-      cta: t('business.setup.ctaCatalog', 'Add product'),
-      pendingNote: catalogPending
-        ? t(
-            'business.verification.catalogPendingNotice',
-            'Your product is awaiting review. Once approved, this step will complete.'
-          )
-        : undefined,
     },
   ];
 }

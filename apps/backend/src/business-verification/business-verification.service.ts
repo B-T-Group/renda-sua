@@ -39,7 +39,6 @@ const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
     'setup_stripe_connect',
     'upload_id',
     'verify_mobile_payment_phone',
-    'publish_catalog',
   ]);
 
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
@@ -253,23 +252,21 @@ export class BusinessVerificationService {
     user: any,
     agreement: { complete: boolean }
   ) {
-    const businessId = user.business!.id;
     const stripeConnect = await this.getStripeConnectStep(user.id);
-    const catalog = await this.merchantLifecycleService.getCatalogStep(businessId);
     const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
-      businessId
+      user.business!.id
     );
     const canAccept = lifecycle?.can_accept_orders === true;
     const nextAction = this.resolveStripeNextAction(
       agreement,
       stripeConnect,
-      catalog,
       canAccept
     );
     return {
-      is_verified: canAccept,
+      // Match mobile-money: setup complete once payouts are ready (not catalog).
+      is_verified: canAccept || stripeConnect.complete,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-      steps: { agreement, stripeConnect, catalog },
+      steps: { agreement, stripeConnect },
       nextAction,
       requiresMerchantAction: this.requiresMerchantAction(nextAction),
       paymentRail: 'stripe' as const,
@@ -294,13 +291,13 @@ export class BusinessVerificationService {
   private resolveStripeNextAction(
     agreement: { complete: boolean },
     stripeConnect: { complete: boolean },
-    catalog: { complete: boolean },
     canAcceptOrders: boolean
   ): VerificationNextAction {
-    if (canAcceptOrders) return 'complete';
+    if (canAcceptOrders || (agreement.complete && stripeConnect.complete)) {
+      return 'complete';
+    }
     if (!agreement.complete) return 'sign_agreement';
     if (!stripeConnect.complete) return 'setup_stripe_connect';
-    if (!catalog.complete) return 'publish_catalog';
     return 'pending_review';
   }
 

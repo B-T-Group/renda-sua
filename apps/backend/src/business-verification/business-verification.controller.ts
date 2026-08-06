@@ -64,7 +64,7 @@ export class BusinessVerificationController {
             requiresMerchantAction: {
               type: 'boolean',
               description:
-                'True when nextAction is a merchant setup step (agreement, payouts/ID, phone, or catalog)',
+                'True when nextAction is a merchant setup step (agreement, payouts/ID, or phone)',
             },
             paymentRail: {
               type: 'string',

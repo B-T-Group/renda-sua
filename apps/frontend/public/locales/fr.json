@@ -1587,7 +1587,7 @@
       "storeLiveNotice": "Les clients peuvent découvrir vos produits. Terminez la configuration des paiements pour accepter les commandes.",
       "paymentReviewPending": "Les informations de paiement ont été soumises. Nous vous informerons lorsque vous pourrez accepter des commandes.",
       "setupTitle": "Terminez la configuration de votre boutique",
-      "setupNotice": "Complétez votre profil, signez le contrat marchand et publiez au moins un produit ou une location pour être visible."
+      "setupNotice": "Signez le contrat marchand et connectez les paiements pour être en ligne.",
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",

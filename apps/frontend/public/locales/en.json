@@ -1844,7 +1844,7 @@
       "storeLiveNotice": "Customers can discover your products. Complete payment setup to start accepting orders.",
       "paymentReviewPending": "Payment details submitted. We will notify you when you can accept orders.",
       "setupTitle": "Finish setting up your store",
-      "setupNotice": "Complete your profile, sign the merchant agreement, and publish at least one product or rental to go live."
+      "setupNotice": "Sign the merchant agreement and connect payouts to go live."
     },
     "dashboard": {
       "welcome": "Welcome to your business dashboard",

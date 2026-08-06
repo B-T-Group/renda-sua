@@ -20,7 +20,6 @@ import {
   useBusinessVerification,
   type BusinessVerificationStatus,
 } from '../../hooks/useBusinessVerification';
-import { firstItemOnboardingPath } from '../../utils/businessSetup';
 import { suspendedReasonMessage } from '../../utils/suspendedReasonMessage';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
@@ -40,7 +39,6 @@ export const BusinessVerificationBanner: React.FC = () => {
   const { status, loading, refresh } = useBusinessVerification();
   const [refreshing, setRefreshing] = useState(false);
   const mainInterest = profile?.business?.main_interest ?? 'sell_items';
-  const catalogPath = firstItemOnboardingPath(mainInterest);
   const itemsListPath =
     mainInterest === 'rent_items'
       ? '/business/rentals/catalog'
@@ -189,7 +187,6 @@ export const BusinessVerificationBanner: React.FC = () => {
   const isStripe = status.paymentRail === 'stripe';
   const agreementDone = status.steps.agreement?.complete === true;
   const payoutsDone = status.steps.stripeConnect?.complete === true;
-  const catalogDone = status.steps.catalog?.complete === true;
   const identityDone = status.steps.identity?.complete === true;
   const phoneDone = status.steps.mobilePaymentPhone?.complete === true;
   const reviewDone =
@@ -219,7 +216,7 @@ export const BusinessVerificationBanner: React.FC = () => {
           {isStripe
             ? t(
                 'business.lifecycle.setupNotice',
-                'Complete your profile, sign the merchant agreement, and publish at least one product or rental to go live.'
+                'Sign the merchant agreement and connect payouts to go live.'
               )
             : t(
                 'business.lifecycle.setupNoticeMobileMoney',
@@ -239,13 +236,7 @@ export const BusinessVerificationBanner: React.FC = () => {
                 : t('business.verification.stepIdentity', 'ID document')}
             </StepLabel>
           </Step>
-          {isStripe ? (
-            <Step completed={catalogDone}>
-              <StepLabel icon={stepIcon(catalogDone)}>
-                {t('business.verification.stepCatalog', 'Product')}
-              </StepLabel>
-            </Step>
-          ) : (
+          {isStripe ? null : (
             <Step completed={phoneDone}>
               <StepLabel icon={stepIcon(phoneDone)}>
                 {t('business.verification.stepMobileMoney', 'Mobile money')}
@@ -293,15 +284,6 @@ export const BusinessVerificationBanner: React.FC = () => {
               {t('mobilePaymentPhone.verifyCta', 'Verify mobile money number')}
             </Button>
           ) : null}
-          {status.nextAction === 'publish_catalog' ? (
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={() => navigate(catalogPath)}
-            >
-              {t('business.verification.addProduct', 'Add a product')}
-            </Button>
-          ) : null}
           {status.steps.catalog?.hasPendingItem ||
           status.steps.catalog?.hasApprovedItem ||
           status.steps.catalog?.hasPendingRental ||
@@ -328,16 +310,6 @@ export const BusinessVerificationBanner: React.FC = () => {
             <StripeConnectOnboardingCard />
           </Box>
         ) : null}
-        {status.nextAction === 'publish_catalog' &&
-        (status.steps.catalog?.hasPendingItem ||
-          status.steps.catalog?.hasPendingRental) ? (
-          <Typography variant="body2" sx={{ mt: 2 }}>
-            {t(
-              'business.verification.catalogPendingNotice',
-              'Your product is awaiting review. Once approved, this step will complete.'
-            )}
-          </Typography>
-        ) : null}
       </Alert>
     </>
   );
@@ -350,8 +322,7 @@ function resolveActiveStep(
   if (isStripe) {
     if (status.nextAction === 'sign_agreement') return 0;
     if (status.nextAction === 'setup_stripe_connect') return 1;
-    if (status.nextAction === 'publish_catalog') return 2;
-    return 3;
+    return 2;
   }
   if (status.nextAction === 'sign_agreement') return 0;
   if (status.nextAction === 'upload_id') return 1;

@@ -615,9 +615,6 @@ export class AdminService {
     const blockers: AdminVerificationBlocker[] = [];
     if (!contractComplete) blockers.push('missing_signed_contract');
     if (!catalog.hasLocation) blockers.push('missing_active_location');
-    if (!catalog.hasApprovedItem && !catalog.hasApprovedRental) {
-      blockers.push('missing_approved_product');
-    }
     const provider = paymentProviderForRail(rail);
     const paymentCapability = aggregatePaymentCapabilityForProvider(
       accounts.map(
@@ -631,11 +628,7 @@ export class AdminService {
       ),
       provider
     );
-    if (
-      contractComplete &&
-      catalog.complete &&
-      paymentCapability !== 'VERIFIED'
-    ) {
+    if (contractComplete && paymentCapability !== 'VERIFIED') {
       blockers.push('missing_payment_verification');
     }
     return { blockers, rail, catalog };

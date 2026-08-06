@@ -213,16 +213,14 @@ export class MerchantLifecycleService {
   }
 
   private async isCatalogReady(businessId: string): Promise<boolean> {
-    const agreementSigned =
-      await this.businessContractsService.hasValidSignedContract(businessId);
-    if (!agreementSigned) return false;
-    const catalog = await this.getCatalogStep(businessId);
-    return catalog.complete;
+    // Agreement is the operational gate shared with mobile-money setup.
+    // An approved product/rental is not required to become lifecycle-active.
+    return this.businessContractsService.hasValidSignedContract(businessId);
   }
 
   /**
-   * Catalog readiness: active location plus approved sale inventory and/or
-   * approved rental listing. Agreement signing is checked separately.
+   * Catalog inventory snapshot for UI/admin (location + items/rentals).
+   * Not used as a hard gate for lifecycle activation.
    */
   async getCatalogStep(businessId: string): Promise<{
     complete: boolean;

@@ -9,7 +9,6 @@ const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
     'setup_stripe_connect',
     'upload_id',
     'verify_mobile_payment_phone',
-    'publish_catalog',
   ]);
 
 /** True when the merchant still has a setup step to complete. */
