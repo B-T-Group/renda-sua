@@ -198,11 +198,11 @@ export class AdminBroadcastAudienceService {
     if (filters?.lifecycleStatuses?.length) {
       where.lifecycle_status = { _in: filters.lifecycleStatuses };
     }
-    if (filters?.isStorefrontVisible !== undefined) {
-      where.is_storefront_visible = { _eq: filters.isStorefrontVisible };
-    }
     if (filters?.canAcceptOrders !== undefined) {
       where.can_accept_orders = { _eq: filters.canAcceptOrders };
+    } else if (filters?.isStorefrontVisible !== undefined) {
+      // Deprecated alias: storefront visibility now equals can_accept_orders.
+      where.can_accept_orders = { _eq: filters.isStorefrontVisible };
     }
     const addr = this.countryFilter(filters?.countries);
     if (addr) where.business_addresses = addr;

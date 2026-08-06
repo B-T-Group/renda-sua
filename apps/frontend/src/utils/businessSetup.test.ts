@@ -63,17 +63,30 @@ describe('isSetupMode', () => {
     ).toBe(false);
   });
 
-  it('is false when storefront is already visible', () => {
+  it('is false when active', () => {
     expect(
       isSetupMode(
         baseStatus({
-          nextAction: 'setup_stripe_connect',
-          requiresMerchantAction: true,
-          is_storefront_visible: true,
-          lifecycle_status: 'payment_setup_pending',
+          nextAction: 'complete',
+          isOnboarding: false,
+          can_accept_orders: true,
+          lifecycle_status: 'active',
         })
       )
     ).toBe(false);
+  });
+
+  it('stays in setup during pending review while onboarding', () => {
+    expect(
+      isSetupMode(
+        baseStatus({
+          nextAction: 'pending_review',
+          isOnboarding: true,
+          lifecycle_status: 'catalog_ready',
+          is_storefront_visible: true,
+        })
+      )
+    ).toBe(true);
   });
 
   it('is true for early merchant setup', () => {

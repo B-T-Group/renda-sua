@@ -40,13 +40,15 @@ export interface BusinessVerificationStatus {
     | 'suspended';
   is_storefront_visible?: boolean;
   can_accept_orders?: boolean;
+  /** True while lifecycle is not active and not suspended. */
+  isOnboarding?: boolean;
   suspension?: {
     code: 'reliability_missed_orders' | 'admin' | 'unknown';
     suspendedAt: string | null;
   } | null;
   accountFullName: string;
   nextAction: VerificationNextAction;
-  /** True when nextAction is a merchant setup step (agreement, payouts/ID, phone, or catalog). */
+  /** True when nextAction is a merchant setup step (agreement, payouts, or ID). */
   requiresMerchantAction?: boolean;
   paymentRail?: 'stripe' | 'mobile_money';
   contract?: MerchantContractStatus;
@@ -81,6 +83,7 @@ export interface BusinessVerificationStatus {
       complete: boolean;
       hasVerifiedPhone: boolean;
       locationCountNeedingPhone: number;
+      locationsWithItemsNeedingPhone?: number;
       totalActiveLocations?: number;
     };
   };

@@ -64,14 +64,23 @@ export class BusinessVerificationController {
             requiresMerchantAction: {
               type: 'boolean',
               description:
-                'True when nextAction is a merchant setup step (agreement, payouts/ID, or phone)',
+                'True when nextAction is a merchant setup step (agreement, payouts, or ID)',
+            },
+            isOnboarding: {
+              type: 'boolean',
+              description:
+                'True while lifecycle is not active and not suspended (focused setup UI)',
             },
             paymentRail: {
               type: 'string',
               enum: ['stripe', 'mobile_money'],
             },
             lifecycle_status: { type: 'string' },
-            is_storefront_visible: { type: 'boolean' },
+            is_storefront_visible: {
+              type: 'boolean',
+              description:
+                'Deprecated alias of can_accept_orders (active). Kept for older clients.',
+            },
             can_accept_orders: { type: 'boolean' },
             suspension: {
               type: 'object',

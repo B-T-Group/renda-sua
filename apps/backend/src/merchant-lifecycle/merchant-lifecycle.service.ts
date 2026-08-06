@@ -24,7 +24,6 @@ const BUSINESS_FIELDS = `
   id
   name
   lifecycle_status
-  is_storefront_visible
   can_accept_orders
   is_verified
   merchant_agreement_version
@@ -157,7 +156,12 @@ export class MerchantLifecycleService {
     const res = await this.hasuraSystemService.executeQuery(query, {
       id: businessId,
     });
-    return res.businesses_by_pk ?? null;
+    const row = res.businesses_by_pk;
+    if (!row) return null;
+    return {
+      ...row,
+      is_storefront_visible: row.can_accept_orders === true,
+    };
   }
 
   async getBusinessIdForUser(userId: string): Promise<string | null> {

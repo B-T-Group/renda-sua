@@ -1826,8 +1826,9 @@
     "lifecycle": {
       "active": "Active",
       "draft": "Draft",
-      "openingSoon": "Live · Opening soon",
-      "openingSoonBadge": "Opening Soon",
+      "openingSoon": "Onboarding",
+      "onboarding": "Onboarding",
+      "openingSoonBadge": "Onboarding",
       "verifyingPayments": "Verifying payments",
       "suspended": "Suspended",
       "suspendedTitle": "Store suspended",
@@ -6203,7 +6204,8 @@
     }
   },
   "mobilePaymentPhone": {
-    "verifyCta": "Verify mobile money number",
+    "verifyCta": "Confirm mobile money number",
+    "confirmCta": "Confirm mobile money number",
     "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
     "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts.",
     "questionWhy": "Confirm that this number is registered to receive Mobile Money so we can send your payouts there.",

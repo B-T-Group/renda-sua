@@ -23,7 +23,6 @@ import {
   SetupAgreementIllustration,
   SetupCatalogIllustration,
   SetupIdentityIllustration,
-  SetupMobileMoneyIllustration,
   SetupPayoutsIllustration,
 } from '../illustrations/BusinessSetupIllustrations';
 import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
@@ -41,7 +40,6 @@ type SetupStepId =
   | 'agreement'
   | 'payouts'
   | 'identity'
-  | 'mobileMoney'
   | 'catalog'
   | 'previewStore';
 
@@ -71,6 +69,7 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const isStripe = status.paymentRail === 'stripe';
   const catalog = status.steps.catalog;
+  const agreementSigned = status.steps.agreement?.complete === true;
   const hasCatalogItem =
     hasAnyItem ||
     Boolean(
@@ -125,6 +124,14 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
     mainInterest === 'rent_items'
       ? '/business/rentals/catalog'
       : '/business/items';
+  const addItemsPath =
+    mainInterest === 'rent_items'
+      ? '/business/onboarding/add-rental-item'
+      : '/business/onboarding/first-sale-item';
+  const addItemsLabel =
+    mainInterest === 'rent_items'
+      ? t('business.setup.ctaAddRental', 'Add rental')
+      : t('business.setup.ctaAddProduct', 'Add items');
   const viewItemsLabel =
     mainInterest === 'rent_items'
       ? t('business.setup.ctaViewRentals', 'View rentals')
@@ -202,7 +209,16 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
               {current.cta}
             </Button>
           ) : null}
-          {hasCatalogItem ? (
+          {agreementSigned ? (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(addItemsPath)}
+            >
+              {addItemsLabel}
+            </Button>
+          ) : null}
+          {agreementSigned ? (
             <Button
               variant="outlined"
               color="primary"
@@ -237,9 +253,6 @@ function StepIllustration({ stepId }: { stepId: SetupStepId }) {
   }
   if (stepId === 'identity') {
     return <SetupIdentityIllustration label={label} />;
-  }
-  if (stepId === 'mobileMoney') {
-    return <SetupMobileMoneyIllustration label={label} />;
   }
   return <SetupCatalogIllustration label={label} />;
 }
@@ -377,25 +390,35 @@ function buildStripeRailSteps(params: BuildParams): SetupStep[] {
 function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
   const { status, t } = params;
   const next = status.nextAction;
-  const identityRejected = status.steps.identity?.status === 'rejected';
-  const identityReason = status.steps.identity?.rejectionReason?.trim() || '';
+  const identity = status.steps.identity;
+  const identityRejected = identity?.status === 'rejected';
+  const identityPending = identity?.status === 'pending';
+  const identityApproved = identity?.status === 'approved';
+  const identityReason = identity?.rejectionReason?.trim() || '';
   return [
     {
       id: 'identity',
       label: identityRejected
         ? t('business.setup.stepIdentityRejected', 'Identification rejected')
-        : t('business.setup.stepIdentity', 'Upload identification'),
+        : identityPending
+          ? t('business.setup.stepIdentityPending', 'ID under review')
+          : t('business.setup.stepIdentity', 'Upload identification'),
       description: identityRejected
         ? t(
             'business.setup.stepIdentityRejectedDesc',
             'Your ID was not approved. Please upload a clearer valid ID document.'
           )
-        : t(
-            'business.setup.stepIdentityDesc',
-            "Upload a national ID, passport, or driver's license."
-          ),
-      done: status.steps.identity?.complete === true && !identityRejected,
-      current: next === 'upload_id',
+        : identityPending
+          ? t(
+              'business.setup.stepIdentityPendingDesc',
+              'We are reviewing your identification. You can add items while you wait.'
+            )
+          : t(
+              'business.setup.stepIdentityDesc',
+              "Upload a national ID, passport, or driver's license."
+            ),
+      done: identityApproved,
+      current: next === 'upload_id' || next === 'pending_review',
       error: identityRejected,
       pendingNote: identityRejected
         ? identityReason
@@ -404,23 +427,18 @@ function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
               'business.setup.identityRejectedNoReason',
               'Please upload a new identification document.'
             )
-        : undefined,
-      to: '/documents',
+        : identityPending
+          ? t(
+              'business.setup.identityPendingNote',
+              'Approval usually takes a short time. Refresh for updates.'
+            )
+          : undefined,
+      to: identityPending ? undefined : '/documents',
       cta: identityRejected
         ? t('business.setup.ctaReuploadIdentity', 'Reupload ID')
-        : t('business.setup.ctaIdentity', 'Upload ID'),
-    },
-    {
-      id: 'mobileMoney',
-      label: t('business.setup.stepMobileMoney', 'Verify mobile money number'),
-      description: t(
-        'business.setup.stepMobileMoneyDesc',
-        'Add and verify a payout number for your locations.'
-      ),
-      done: status.steps.mobilePaymentPhone?.complete === true,
-      current: next === 'verify_mobile_payment_phone',
-      to: '/business/locations',
-      cta: t('mobilePaymentPhone.verifyCta', 'Verify mobile money number'),
+        : identityPending
+          ? undefined
+          : t('business.setup.ctaIdentity', 'Upload ID'),
     },
   ];
 }

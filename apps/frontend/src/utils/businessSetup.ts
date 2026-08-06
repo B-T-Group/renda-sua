@@ -4,12 +4,7 @@ import type {
 } from '../hooks/useBusinessVerification';
 
 const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set([
-    'sign_agreement',
-    'setup_stripe_connect',
-    'upload_id',
-    'verify_mobile_payment_phone',
-  ]);
+  new Set(['sign_agreement', 'setup_stripe_connect', 'upload_id']);
 
 /** True when the merchant still has a setup step to complete. */
 export function requiresMerchantAction(
@@ -23,15 +18,19 @@ export function requiresMerchantAction(
 }
 
 /**
- * Focused setup UI: merchant still has steps AND store is not yet live/suspended.
- * Suspended and already-visible storefronts keep the full dashboard + banner.
+ * Focused setup UI while the business is still onboarding (not active / suspended).
  */
 export function isSetupMode(
   status: BusinessVerificationStatus | null | undefined
 ): boolean {
-  if (!requiresMerchantAction(status) || !status) return false;
+  if (!status) return false;
+  if (typeof status.isOnboarding === 'boolean') {
+    return status.isOnboarding;
+  }
   if (status.lifecycle_status === 'suspended') return false;
-  if (status.is_storefront_visible) return false;
+  if (status.lifecycle_status === 'active' || status.can_accept_orders) {
+    return false;
+  }
   return true;
 }
 

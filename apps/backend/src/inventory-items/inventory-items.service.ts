@@ -420,7 +420,6 @@ const CATALOG_INVENTORY_LIST_GQL = `
           id
           name
           is_verified
-          is_storefront_visible
           can_accept_orders
           accepting_orders
           reliability_tier
@@ -582,13 +581,25 @@ export class InventoryItemsService {
     items: InventoryItem[],
     stripeCountries: string[]
   ): InventoryItem[] {
-    return items.map((item) => ({
-      ...item,
-      payments_enabled: isLocationPaymentsEnabled(
-        item.business_location,
-        stripeCountries
-      ),
-    }));
+    return items.map((item) => {
+      const canAccept = item.business_location?.business?.can_accept_orders === true;
+      return {
+        ...item,
+        payments_enabled: isLocationPaymentsEnabled(
+          item.business_location,
+          stripeCountries
+        ),
+        business_location: item.business_location
+          ? {
+              ...item.business_location,
+              business: {
+                ...item.business_location.business,
+                is_storefront_visible: canAccept,
+              },
+            }
+          : item.business_location,
+      };
+    });
   }
 
   private async attachPaymentsEnabledToItemsAsync(
@@ -648,7 +659,7 @@ export class InventoryItemsService {
     });
     const businessFilter: Record<string, unknown> = {};
     if (!ownerPreview) {
-      businessFilter.is_storefront_visible = { _eq: true };
+      businessFilter.can_accept_orders = { _eq: true };
     }
     if (params.requireCanAcceptOrders) {
       businessFilter.can_accept_orders = { _eq: true };
@@ -1101,7 +1112,6 @@ export class InventoryItemsService {
           business {
             is_verified
             can_accept_orders
-            is_storefront_visible
             accepting_orders
             reliability_tier
           }
@@ -1123,7 +1133,6 @@ export class InventoryItemsService {
       business?: {
         is_verified?: boolean;
         can_accept_orders?: boolean;
-        is_storefront_visible?: boolean;
         accepting_orders?: boolean;
         reliability_tier?: string;
       } | null;
@@ -1144,7 +1153,7 @@ export class InventoryItemsService {
           is_active: loc.is_active === true,
           is_verified: loc.business?.is_verified === true,
           can_accept_orders: loc.business?.can_accept_orders === true,
-          is_storefront_visible: loc.business?.is_storefront_visible === true,
+          is_storefront_visible: loc.business?.can_accept_orders === true,
           reliability_tier: loc.business?.reliability_tier || 'ok',
           logo_url: loc.logo_url ?? null,
           latitude: loc.address?.latitude ?? null,
@@ -1237,7 +1246,7 @@ export class InventoryItemsService {
         item_count,
         is_verified: loc?.is_verified === true,
         can_accept_orders: loc?.can_accept_orders === true,
-        is_storefront_visible: loc?.is_storefront_visible === true,
+        is_storefront_visible: loc?.can_accept_orders === true,
         distance_meters:
           origin && distance_meters != null ? distance_meters : null,
       };
@@ -1337,7 +1346,7 @@ export class InventoryItemsService {
       loc.business_id,
       ownerPreviewRequested
     );
-    if (!ownerPreview && (!loc.is_active || !loc.is_storefront_visible)) {
+    if (!ownerPreview && (!loc.is_active || !loc.can_accept_orders)) {
       return null;
     }
 
@@ -1378,7 +1387,7 @@ export class InventoryItemsService {
       item_count,
       is_verified: loc.is_verified,
       can_accept_orders: loc.can_accept_orders,
-      is_storefront_visible: loc.is_storefront_visible,
+      is_storefront_visible: loc.can_accept_orders,
       distance_meters: origin ? distance_meters : null,
     };
   }
@@ -2169,7 +2178,6 @@ export class InventoryItemsService {
               id
               name
               is_verified
-              is_storefront_visible
               can_accept_orders
             }
             address {
@@ -2220,7 +2228,7 @@ export class InventoryItemsService {
           );
         }
 
-        if (item.business_location?.business?.is_storefront_visible !== true) {
+        if (item.business_location?.business?.can_accept_orders !== true) {
           throw new HttpException(
             'Inventory item not found',
             HttpStatus.NOT_FOUND
@@ -2467,7 +2475,7 @@ export class InventoryItemsService {
               is_primary
               logo_url
               mobile_payment_phone { is_verified }
-              business { id name is_verified is_storefront_visible can_accept_orders }
+              business { id name is_verified can_accept_orders }
               address {
                 id
                 address_line_1
@@ -2490,7 +2498,7 @@ export class InventoryItemsService {
           {
             business_location: {
               is_active: { _eq: true },
-              business: { is_storefront_visible: { _eq: true } },
+              business: { can_accept_orders: { _eq: true } },
             },
           },
           {

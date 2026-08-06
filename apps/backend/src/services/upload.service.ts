@@ -662,46 +662,12 @@ export class UploadService {
         }
       }
 
-      await this.markBusinessVerifiedIfNeeded(upload.user_id);
+      // MoMo payment capability follows approved ID; lifecycle recompute sets is_verified.
       void this.notifyBusinessIdApprovedIfNeeded(
         upload.user_id,
         upload.document_type.name
       );
       void this.syncMoMoBusinessPaymentAfterIdChange(upload.user_id);
-    }
-  }
-
-  /** One approved ID is enough to mark the merchant account verified. */
-  private async markBusinessVerifiedIfNeeded(userId: string): Promise<void> {
-    try {
-      const businessResult = await this.hasuraSystemService.executeQuery(
-        `query BusinessByUser($userId: uuid!) {
-          businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
-            id
-            is_verified
-          }
-        }`,
-        { userId }
-      );
-      const business = (
-        businessResult?.businesses as
-          | { id: string; is_verified: boolean }[]
-          | undefined
-      )?.[0];
-      if (!business || business.is_verified) return;
-      await this.hasuraSystemService.executeMutation(
-        `mutation SetBusinessVerified($businessId: uuid!) {
-          update_businesses_by_pk(
-            pk_columns: { id: $businessId }
-            _set: { is_verified: true }
-          ) { id is_verified }
-        }`,
-        { businessId: business.id }
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `markBusinessVerifiedIfNeeded: ${error?.message ?? String(error)}`
-      );
     }
   }
 

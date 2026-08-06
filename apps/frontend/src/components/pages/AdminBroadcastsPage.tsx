@@ -89,9 +89,6 @@ const AdminBroadcastsPage: React.FC = () => {
   );
   const [body, setBody] = useState(APP_UPGRADE_BODY_EN);
   const [lifecycleStatuses, setLifecycleStatuses] = useState<string[]>([]);
-  const [isStorefrontVisible, setIsStorefrontVisible] = useState<
-    boolean | null
-  >(null);
   const [canAcceptOrders, setCanAcceptOrders] = useState<boolean | null>(null);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [countries, setCountries] = useState('');
@@ -117,9 +114,6 @@ const AdminBroadcastsPage: React.FC = () => {
     }
     if (audienceType === 'business') {
       if (lifecycleStatuses.length) f.lifecycleStatuses = lifecycleStatuses;
-      if (isStorefrontVisible !== null) {
-        f.isStorefrontVisible = isStorefrontVisible;
-      }
       if (canAcceptOrders !== null) f.canAcceptOrders = canAcceptOrders;
     }
     if (audienceType === 'agent' && isAvailable !== null) {
@@ -134,7 +128,6 @@ const AdminBroadcastsPage: React.FC = () => {
   }, [
     audienceType,
     lifecycleStatuses,
-    isStorefrontVisible,
     canAcceptOrders,
     isAvailable,
     countries,
@@ -418,20 +411,6 @@ const AdminBroadcastsPage: React.FC = () => {
                 </Select>
               </FormControl>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={isStorefrontVisible === true}
-                      onChange={(_, checked) =>
-                        setIsStorefrontVisible(checked ? true : null)
-                      }
-                    />
-                  }
-                  label={t(
-                    'admin.broadcasts.storefrontVisible',
-                    'Storefront visible only'
-                  )}
-                />
                 <FormControlLabel
                   control={
                     <Switch

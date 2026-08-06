@@ -406,7 +406,6 @@ export class AdminService {
           name
           is_verified
           lifecycle_status
-          is_storefront_visible
           can_accept_orders
           ai_tokens
           withdrawal_pin_enabled
@@ -546,6 +545,7 @@ export class AdminService {
     const verificationSummary = await this.buildVerificationSummary(b);
     return {
       ...rest,
+      is_storefront_visible: rest.can_accept_orders === true,
       user: userRest,
       addresses: (business_addresses || []).map((x: any) => x.address),
       locations: business_locations || [],
@@ -863,7 +863,6 @@ export class AdminService {
           name
           is_verified
           lifecycle_status
-          is_storefront_visible
           can_accept_orders
           merchant_agreement_version
           merchant_agreement_accepted_at
@@ -926,7 +925,12 @@ export class AdminService {
       contractComplete
     );
     return {
-      business,
+      business: business
+        ? {
+            ...business,
+            is_storefront_visible: business.can_accept_orders === true,
+          }
+        : business,
       latestAcceptance: result.business_merchant_agreement_acceptances?.[0] ?? null,
       identityDocuments: result.user_uploads ?? [],
       paymentAccounts: business?.payment_accounts ?? [],

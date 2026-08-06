@@ -13,13 +13,13 @@ export type MerchantLifecycleStatus =
 interface MerchantStatusChipProps {
   lifecycleStatus?: MerchantLifecycleStatus | string | null;
   canAcceptOrders?: boolean;
+  /** @deprecated Alias of canAcceptOrders; ignored for display. */
   isStorefrontVisible?: boolean;
 }
 
 export const MerchantStatusChip: React.FC<MerchantStatusChipProps> = ({
   lifecycleStatus,
   canAcceptOrders,
-  isStorefrontVisible,
 }) => {
   const { t } = useTranslation();
 
@@ -43,31 +43,11 @@ export const MerchantStatusChip: React.FC<MerchantStatusChipProps> = ({
     );
   }
 
-  if (isStorefrontVisible && lifecycleStatus === 'payment_verification_pending') {
-    return (
-      <Chip
-        size="small"
-        color="warning"
-        label={t('business.lifecycle.verifyingPayments', 'Verifying payments')}
-      />
-    );
-  }
-
-  if (isStorefrontVisible) {
-    return (
-      <Chip
-        size="small"
-        color="info"
-        label={t('business.lifecycle.openingSoon', 'Live · Opening soon')}
-      />
-    );
-  }
-
   return (
     <Chip
       size="small"
       variant="outlined"
-      label={t('business.lifecycle.draft', 'Draft')}
+      label={t('business.lifecycle.onboarding', 'Onboarding')}
     />
   );
 };

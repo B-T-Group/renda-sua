@@ -490,7 +490,7 @@ const GET_AVAILABLE_ITEMS = `
         is_active: { _eq: true },
         status: { _eq: active },
         moderation_status: { _eq: approved },
-        business: { is_storefront_visible: { _eq: true } }
+        business: { can_accept_orders: { _eq: true } }
       }
       order_by: { name: asc }
     ) {

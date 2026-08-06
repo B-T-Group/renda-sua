@@ -442,32 +442,84 @@ export class MobilePaymentPhonesService {
   }
 
   async getBusinessPhoneVerificationStep(userId: string, businessId: string) {
-    const res = await this.hasuraSystemService.executeQuery(
-      `query LocPhones($businessId: uuid!) {
-        business_locations(
-          where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
-        ) {
-          id
-          mobile_payment_phone_id
-          mobile_payment_phone { is_verified }
-        }
-      }`,
-      { businessId }
+    const [res, stripeCountries] = await Promise.all([
+      this.hasuraSystemService.executeQuery(
+        `query LocPhones($businessId: uuid!) {
+          business_locations(
+            where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
+          ) {
+            id
+            mobile_payment_phone_id
+            mobile_payment_phone { is_verified }
+            address { country }
+            business_inventory_aggregate(
+              where: { is_active: { _eq: true } }
+            ) {
+              aggregate { count }
+            }
+            rental_location_listings_aggregate(
+              where: {
+                is_active: { _eq: true }
+                deleted_at: { _is_null: true }
+              }
+            ) {
+              aggregate { count }
+            }
+          }
+        }`,
+        { businessId }
+      ),
+      this.fetchStripeEnabledCountries(),
+    ]);
+    const locations = (res.business_locations ?? []) as Array<{
+      id: string;
+      mobile_payment_phone?: { is_verified?: boolean } | null;
+      address?: { country?: string | null } | null;
+      business_inventory_aggregate?: { aggregate?: { count?: number } | null };
+      rental_location_listings_aggregate?: {
+        aggregate?: { count?: number } | null;
+      };
+    }>;
+    const momoLocations = locations.filter((loc) => {
+      const country = loc.address?.country?.trim().toUpperCase();
+      return !country || !stripeCountries.includes(country);
+    });
+    const verifiedCount = momoLocations.filter(
+      (l) => l.mobile_payment_phone?.is_verified === true
+    ).length;
+    const needing = momoLocations.filter(
+      (l) => !l.mobile_payment_phone?.is_verified
     );
-    const locations = res.business_locations ?? [];
-    const verifiedCount = locations.filter(
-      (l: any) => l.mobile_payment_phone?.is_verified === true
-    ).length;
-    const needing = locations.filter(
-      (l: any) => !l.mobile_payment_phone?.is_verified
-    ).length;
+    const locationsWithItemsNeedingPhone = needing.filter((l) => {
+      const inventoryCount =
+        l.business_inventory_aggregate?.aggregate?.count ?? 0;
+      const rentalCount =
+        l.rental_location_listings_aggregate?.aggregate?.count ?? 0;
+      return inventoryCount > 0 || rentalCount > 0;
+    }).length;
     return {
-      // All active locations must have a verified linked phone.
-      complete: locations.length > 0 && needing === 0,
+      // All MoMo active locations must have a confirmed linked phone.
+      complete: momoLocations.length > 0 && needing.length === 0,
       hasVerifiedPhone: verifiedCount > 0,
-      locationCountNeedingPhone: needing,
-      totalActiveLocations: locations.length,
+      locationCountNeedingPhone: needing.length,
+      locationsWithItemsNeedingPhone,
+      totalActiveLocations: momoLocations.length,
     };
+  }
+
+  private async fetchStripeEnabledCountries(): Promise<string[]> {
+    const res = await this.hasuraSystemService.executeQuery(
+      `query StripeCountries {
+        supported_payment_systems(
+          where: { name: { _eq: "stripe" }, active: { _eq: true } }
+        ) { country }
+      }`
+    );
+    return (res.supported_payment_systems ?? [])
+      .map((row: { country?: string }) =>
+        String(row.country ?? '').trim().toUpperCase()
+      )
+      .filter(Boolean);
   }
 
   async completeVerificationFromTransaction(

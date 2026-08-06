@@ -1569,8 +1569,9 @@
     "lifecycle": {
       "active": "Actif",
       "draft": "Brouillon",
-      "openingSoon": "En ligne · Bientôt ouvert",
-      "openingSoonBadge": "Bientôt ouvert",
+      "openingSoon": "Configuration",
+      "onboarding": "Configuration",
+      "openingSoonBadge": "Configuration",
       "verifyingPayments": "Vérification des paiements",
       "suspended": "Suspendu",
       "suspendedTitle": "Boutique suspendue",
@@ -1587,7 +1588,7 @@
       "storeLiveNotice": "Les clients peuvent découvrir vos produits. Terminez la configuration des paiements pour accepter les commandes.",
       "paymentReviewPending": "Les informations de paiement ont été soumises. Nous vous informerons lorsque vous pourrez accepter des commandes.",
       "setupTitle": "Terminez la configuration de votre boutique",
-      "setupNotice": "Signez le contrat marchand et connectez les paiements pour être en ligne.",
+      "setupNotice": "Signez le contrat marchand et connectez les paiements pour être en ligne."
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",
@@ -6286,7 +6287,8 @@
     }
   },
   "mobilePaymentPhone": {
-    "verifyCta": "Vérifier le numéro Mobile Money",
+    "verifyCta": "Confirmer le numéro Mobile Money",
+    "confirmCta": "Confirmer le numéro Mobile Money",
     "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
     "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements.",
     "questionWhy": "Confirmez que ce numéro est enregistré pour recevoir du Mobile Money afin que nous puissions y envoyer vos paiements.",
