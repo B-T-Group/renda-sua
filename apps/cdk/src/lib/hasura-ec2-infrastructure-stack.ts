@@ -240,6 +240,10 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'server {',
       '  listen 80;',
       `  server_name ${props.domainName};`,
+      // Metadata apply (replace_metadata) posts ~150KB+ JSON; default nginx
+      // buffering/body limits behind the ALB return 500 for larger POSTs.
+      '  client_max_body_size 32m;',
+      '  client_body_buffer_size 1m;',
       '  location / {',
       '    proxy_pass http://127.0.0.1:8080;',
       '    proxy_http_version 1.1;',
@@ -250,6 +254,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       '    proxy_set_header Upgrade \\$http_upgrade;',
       '    proxy_set_header Connection \\$connection_upgrade;',
       '    proxy_read_timeout 86400;',
+      '    proxy_request_buffering off;',
       '  }',
       '}',
       'EOF',
