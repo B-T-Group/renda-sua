@@ -943,7 +943,7 @@ export default (): Configuration => {
     },
     metaConversions: {
       enabled: process.env.META_CAPI_ENABLED === 'true',
-      pixelId: process.env.META_PIXEL_ID || '2008683340063278',
+      pixelId: process.env.META_PIXEL_ID || '1417910037041468',
       accessToken: process.env.META_CAPI_ACCESS_TOKEN || '',
       apiVersion: process.env.META_CAPI_API_VERSION || 'v21.0',
       testEventCode: process.env.META_CAPI_TEST_EVENT_CODE || '',
