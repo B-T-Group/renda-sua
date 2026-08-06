@@ -42,6 +42,11 @@ describe('BusinessContractsService', () => {
   let db: jest.Mocked<BusinessContractsDatabaseService>;
   let boldsign: jest.Mocked<BoldsignClientService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
+  let agreementProvider: {
+    usesInAppAgreement: jest.Mock;
+    getProviderForBusiness: jest.Mock;
+    getBusinessCountryCode: jest.Mock;
+  };
 
   beforeEach(() => {
     db = buildDatabaseMock();
@@ -50,14 +55,14 @@ describe('BusinessContractsService', () => {
       executeQuery: jest.fn().mockResolvedValue(signerQueryResult),
     } as unknown as jest.Mocked<HasuraSystemService>;
 
-    const agreementProvider = {
+    agreementProvider = {
       usesInAppAgreement: jest.fn().mockResolvedValue(false),
       getProviderForBusiness: jest.fn().mockResolvedValue({
         provider: 'boldsign',
         countryCode: 'CA',
       }),
       getBusinessCountryCode: jest.fn().mockResolvedValue('CA'),
-    } as unknown as MerchantAgreementProviderService;
+    };
 
     service = new BusinessContractsService(
       db,
@@ -66,9 +71,82 @@ describe('BusinessContractsService', () => {
       hasuraSystemService,
       buildNotificationsMock(),
       buildConfigMock(),
-      agreementProvider,
+      agreementProvider as unknown as MerchantAgreementProviderService,
       buildMerchantLifecycleMock()
     );
+  });
+
+  it('disables BoldSign for businesses that use in-app agreements', async () => {
+    agreementProvider.usesInAppAgreement.mockResolvedValue(true);
+
+    await expect(
+      service.isBoldSignEnabledForBusiness(businessId)
+    ).resolves.toBe(false);
+  });
+
+  it('rejects BoldSign resend when the business uses in-app agreement', async () => {
+    agreementProvider.usesInAppAgreement.mockResolvedValue(true);
+
+    await expect(service.resendContract(businessId)).rejects.toThrow(
+      /in-app merchant agreement/i
+    );
+    expect(db.getLatestContract).not.toHaveBeenCalled();
+  });
+
+  it('revokes in-flight BoldSign contracts when country uses in-app agreement', async () => {
+    agreementProvider.usesInAppAgreement.mockResolvedValue(true);
+    const inFlight = makeContract({
+      id: 'contract-inflight',
+      boldsign_document_id: 'doc-inflight',
+      status: 'sent',
+    });
+    db.getInFlightContract.mockResolvedValue(inFlight);
+
+    await expect(
+      service.revokeInFlightIfInAppCountry(businessId)
+    ).resolves.toBe(true);
+    expect(boldsign.revokeDocument).toHaveBeenCalledWith(
+      'doc-inflight',
+      'Country uses in-app merchant agreement'
+    );
+    expect(db.updateContract).toHaveBeenCalledWith(
+      inFlight.id,
+      expect.objectContaining({
+        status: 'cancelled',
+        failure_reason: 'Country uses in-app merchant agreement',
+      })
+    );
+  });
+
+  it('skips BoldSign sync on refresh after revoking in-app-country contracts', async () => {
+    agreementProvider.usesInAppAgreement.mockResolvedValue(true);
+    const inFlight = makeContract({
+      id: 'contract-inflight',
+      boldsign_document_id: 'doc-inflight',
+      status: 'sent',
+    });
+    db.getInFlightContract.mockResolvedValue(inFlight);
+    db.hasValidSignedContract.mockResolvedValue(true);
+    db.getLatestContract.mockResolvedValue(
+      makeContract({
+        id: 'contract-inflight',
+        status: 'cancelled',
+        boldsign_document_id: 'doc-inflight',
+      })
+    );
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: {
+        merchant_agreement_accepted_at: '2026-08-01T00:00:00.000Z',
+      },
+    });
+
+    const status = await service.refreshContractForBusiness(businessId);
+
+    expect(boldsign.revokeDocument).toHaveBeenCalled();
+    expect(status.complete).toBe(true);
+    expect(status.boldSignEnabled).toBe(false);
+    expect(status.contractId).toBeNull();
+    expect(status.acceptedAt).toBe('2026-08-01T00:00:00.000Z');
   });
 
   it('resumes the existing in-flight contract when insert hits the uniqueness constraint', async () => {
@@ -179,6 +257,7 @@ function buildDatabaseMock(): jest.Mocked<BusinessContractsDatabaseService> {
     getTemplateById: jest.fn(),
     insertContract: jest.fn(),
     updateContract: jest.fn().mockResolvedValue(undefined),
+    hasValidSignedContract: jest.fn().mockResolvedValue(false),
   } as unknown as jest.Mocked<BusinessContractsDatabaseService>;
 }
 
@@ -187,6 +266,7 @@ function buildBoldsignMock(): jest.Mocked<BoldsignClientService> {
     isConfigured: jest.fn().mockReturnValue(true),
     sendUsingTemplate: jest.fn(),
     remindDocument: jest.fn(),
+    revokeDocument: jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<BoldsignClientService>;
 }
 
