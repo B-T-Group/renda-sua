@@ -229,14 +229,18 @@ export class BusinessVerificationService {
         user.id,
         user.business!.id
       );
+    const identityApproved = identity.status === 'approved';
+    if (identityApproved && !adminVerified) {
+      await this.healVerifiedBusinessAfterIdApproval(user.business!.id);
+    }
     const nextAction = this.resolveNextAction(
-      adminVerified,
+      adminVerified || identityApproved,
       agreement,
       identity,
       mobilePaymentPhone
     );
     return {
-      is_verified: adminVerified,
+      is_verified: adminVerified || identityApproved,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, identity, mobilePaymentPhone },
       nextAction,
@@ -394,17 +398,43 @@ export class BusinessVerificationService {
   }
 
   private resolveNextAction(
-    isVerified: boolean,
+    identitySatisfied: boolean,
     agreement: { complete: boolean },
     identity: { complete: boolean; status: string },
     mobilePaymentPhone: { complete: boolean }
   ): VerificationNextAction {
-    if (isVerified) return 'complete';
     if (!agreement.complete) return 'sign_agreement';
     if (!identity.complete) return 'upload_id';
     if (!mobilePaymentPhone.complete) return 'verify_mobile_payment_phone';
+    // One approved ID is enough — a rejected older upload does not block this.
+    if (identitySatisfied || identity.status === 'approved') return 'complete';
     if (identity.status === 'pending') return 'pending_review';
     return 'pending_review';
+  }
+
+  private async markBusinessVerifiedFromApprovedId(
+    businessId: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation SetBusinessVerified($businessId: uuid!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $businessId }
+          _set: { is_verified: true }
+        ) { id }
+      }`,
+      { businessId }
+    );
+  }
+
+  private async healVerifiedBusinessAfterIdApproval(
+    businessId: string
+  ): Promise<void> {
+    await this.markBusinessVerifiedFromApprovedId(businessId);
+    await this.merchantLifecycleService.upsertPaymentAccount({
+      businessId,
+      provider: 'mobile_money',
+      capabilityStatus: 'verified',
+    });
   }
 
   private async insertAcceptance(params: {

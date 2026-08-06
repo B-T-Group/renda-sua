@@ -193,7 +193,9 @@ export const BusinessVerificationBanner: React.FC = () => {
   const identityDone = status.steps.identity?.complete === true;
   const phoneDone = status.steps.mobilePaymentPhone?.complete === true;
   const reviewDone =
-    status.nextAction === 'complete' || status.is_verified === true;
+    status.nextAction === 'complete' ||
+    status.is_verified === true ||
+    status.steps.identity?.status === 'approved';
 
   const activeStep = resolveActiveStep(status, isStripe);
 
