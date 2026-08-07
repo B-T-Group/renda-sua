@@ -6191,63 +6191,276 @@
   "forBusiness": {
     "seo": {
       "title": "Vendre sur Rendasua — Ouvrir un compte professionnel",
-      "description": "Créez une vitrine en ligne, gérez l'inventaire et atteignez les clients de votre ville.",
+      "description": "Vendez à plus de clients locaux sans site web. Vitrine, paiements, fiches IA et livraison — prêts en moins de 5 minutes.",
       "keywords": "vendre en ligne, compte professionnel, vitrine locale, gestion des stocks, commandes en ligne, Rendasua entreprise"
     },
     "hero": {
       "eyebrow": "Pour les entreprises",
-      "headline": "Votre vitrine, en ligne en quelques minutes.",
-      "subheadline": "Rejoignez des centaines de commerces locaux qui vendent déjà sur Rendasua.",
-      "cta": "Créer un compte professionnel",
-      "rentalCta": "Ouvrir un compte de location"
-    },
-    "features": {
-      "title": "Tout ce dont vous avez besoin pour grandir",
-      "subtitle": "Une boîte à outils complète pour les entreprises locales.",
-      "storefront": {
-        "title": "Vitrine en ligne",
-        "desc": "Créez une vitrine professionnelle en quelques minutes."
-      },
-      "inventory": {
-        "title": "Gestion des stocks",
-        "desc": "Suivez les niveaux de stock sur plusieurs sites."
-      },
-      "ai": {
-        "title": "Descriptions IA",
-        "desc": "Générez des descriptions de produits convaincantes instantanément."
-      },
-      "delivery": {
-        "title": "Gestion des livraisons",
-        "desc": "Gérez les commandes et les livraisons depuis un tableau de bord."
-      },
-      "messaging": {
-        "title": "Messagerie clients",
-        "desc": "Chattez directement avec vos clients et agents de livraison."
-      },
-      "analytics": {
-        "title": "Analyses commerciales",
-        "desc": "Suivez les revenus, les commandes et les indicateurs de performance."
-      }
-    },
-    "steps": {
-      "title": "Commencez en 3 étapes",
-      "signup": {
-        "title": "Créez votre compte",
-        "desc": "Inscrivez-vous pour un compte professionnel gratuit."
-      },
-      "add": {
-        "title": "Ajoutez vos produits",
-        "desc": "Téléchargez des photos, fixez des prix et laissez l'IA rédiger vos descriptions."
-      },
-      "sell": {
-        "title": "Commencez à vendre",
-        "desc": "Votre vitrine est en ligne et les clients peuvent commencer à commander."
-      }
+      "headline": "Vendez à plus de clients locaux — sans créer de site web.",
+      "subheadline": "Rendasua vous offre une vitrine, des paiements sécurisés, des fiches produits par IA et des agents de livraison — prêts en moins de 5 minutes.",
+      "pill1": "Pas de site web requis",
+      "pill2": "Livraison gérée",
+      "pill3": "Paiements sécurisés",
+      "pill4": "Fiches par IA",
+      "rentalCta": "Ouvrir un compte de location",
+      "demoCta": "Voir une démonstration"
     },
     "cta": {
-      "title": "Prêt à développer votre activité?",
-      "subtitle": "Rejoignez le marché Rendasua aujourd'hui. Moins de 5 minutes pour configurer votre vitrine.",
-      "button": "Créer un compte professionnel"
+      "primary": "Créer ma boutique gratuitement",
+      "startToday": "Commencer aujourd'hui",
+      "sellOn": "Vendre sur Rendasua"
+    },
+    "metrics": {
+      "merchants": {
+        "value": "500+",
+        "label": "Commerçants"
+      },
+      "products": {
+        "value": "10k+",
+        "label": "Produits listés"
+      },
+      "cities": {
+        "value": "25+",
+        "label": "Villes desservies"
+      },
+      "orders": {
+        "value": "50k+",
+        "label": "Commandes réalisées"
+      },
+      "setup": {
+        "value": "<5 min",
+        "label": "Mise en route moyenne"
+      },
+      "payments": {
+        "value": "100%",
+        "label": "Paiements sécurisés"
+      }
+    },
+    "showcase": {
+      "title": "Votre boutique, tout en un seul endroit",
+      "subtitle": "Ventes, stocks, commandes et outils IA — conçus pour les commerçants sur mobile et ordinateur.",
+      "dashboard": "Tableau de bord",
+      "inventory": "Inventaire",
+      "orders": "Commandes",
+      "analytics": "Analyses",
+      "ai": "Fiches IA"
+    },
+    "ai": {
+      "title": "Une IA qui transforme une photo en fiche produit",
+      "subtitle": "Gagnez des heures de rédaction. Téléchargez une photo et mettez en ligne plus vite.",
+      "steps": {
+        "upload": "Téléverser une photo",
+        "clean": "L'IA nettoie l'image",
+        "describe": "L'IA rédige la description",
+        "publish": "Produit publié",
+        "discover": "Les clients le trouvent"
+      }
+    },
+    "benefits": {
+      "title": "Des résultats qui font grandir votre activité",
+      "subtitle": "Pas seulement des fonctionnalités — des bénéfices concrets pour les commerçants.",
+      "sales": {
+        "title": "Plus de ventes",
+        "desc": "Atteignez des acheteurs près de chez vous."
+      },
+      "customers": {
+        "title": "De nouveaux clients",
+        "desc": "Soyez découvert au-delà de vos contacts WhatsApp."
+      },
+      "time": {
+        "title": "Gagnez du temps",
+        "desc": "Fiches IA et un seul tableau de bord pour tout."
+      },
+      "storefront": {
+        "title": "Vitrine professionnelle",
+        "desc": "Paraissez établi — sans créer de site."
+      },
+      "delivery": {
+        "title": "Livraison intégrée",
+        "desc": "Des agents récupèrent et livrent pour vous."
+      },
+      "payments": {
+        "title": "Paiements sécurisés",
+        "desc": "Recevez Mobile Money ou cartes."
+      },
+      "inventory": {
+        "title": "Contrôle des stocks",
+        "desc": "Sachez ce qui est disponible sur chaque site."
+      }
+    },
+    "compare": {
+      "title": "Pourquoi les commerçants passent à Rendasua",
+      "subtitle": "Gardez le contact clients — ajoutez ce que la vente informelle n'offre pas.",
+      "facebook": "Facebook Marketplace",
+      "whatsapp": "WhatsApp",
+      "rendasua": "Rendasua",
+      "rows": {
+        "storefront": "Vitrine en ligne",
+        "inventory": "Gestion des stocks",
+        "delivery": "Livraison",
+        "payments": "Paiements sécurisés",
+        "analytics": "Analyses",
+        "ai": "Descriptions générées par IA",
+        "messaging": "Messagerie clients",
+        "profile": "Profil professionnel"
+      }
+    },
+    "journey": {
+      "title": "De l'inscription au paiement",
+      "subtitle": "Un parcours clair de votre première fiche jusqu'à l'argent sur votre compte.",
+      "steps": {
+        "account": "Créer un compte",
+        "products": "Ajouter des produits",
+        "ai": "L'IA améliore les fiches",
+        "live": "Produits en ligne",
+        "orders": "Les clients commandent",
+        "pickup": "Un agent récupère",
+        "paid": "Vous êtes payé"
+      }
+    },
+    "logos": {
+      "title": "La confiance des commerces locaux",
+      "subtitle": "Des commerçants dans plusieurs villes vendent déjà avec Rendasua.",
+      "item1": "Boutique Éclat",
+      "item2": "Marché Central",
+      "item3": "Tech Corner",
+      "item4": "Maison Verte",
+      "item5": "Style Urbain",
+      "item6": "Fresh Daily"
+    },
+    "testimonials": {
+      "title": "Des commerçants comme vous",
+      "subtitle": "Ce que disent les vendeurs après être passés à Rendasua.",
+      "item1": {
+        "quote": "Je perdais des commandes dans les discussions WhatsApp. Maintenant tout est organisé et les clients me trouvent seuls.",
+        "name": "Amina K.",
+        "business": "Boutique Éclat"
+      },
+      "item2": {
+        "quote": "L'IA m'a fait gagner des heures sur les descriptions. J'ai listé 20 articles le premier après-midi.",
+        "name": "Jean-Paul M.",
+        "business": "Tech Corner"
+      },
+      "item3": {
+        "quote": "La livraison était mon plus gros casse-tête. Les agents s'en occupent et je me concentre sur le stock.",
+        "name": "Fatou D.",
+        "business": "Fresh Daily"
+      }
+    },
+    "success": {
+      "title": "Avant et après Rendasua",
+      "subtitle": "La même activité — avec des outils qui évoluent.",
+      "before": {
+        "title": "Avant",
+        "item1": "Commandes uniquement via WhatsApp",
+        "item2": "Inventaire manuel dans des cahiers",
+        "item3": "Pas de partenaires de livraison",
+        "item4": "Aucune analyse des ventes"
+      },
+      "after": {
+        "title": "Après",
+        "item1": "Vitrine en ligne",
+        "item2": "Livraison intégrée",
+        "item3": "Paiements sécurisés",
+        "item4": "Des analyses pour décider",
+        "item5": "Plus de clients qui vous découvrent"
+      }
+    },
+    "local": {
+      "title": "Conçu pour les commerces locaux",
+      "subtitle": "Des outils adaptés à la façon dont le commerce marche déjà chez vous.",
+      "delivery": {
+        "title": "Livraison locale",
+        "desc": "Des agents qui connaissent les rues de votre ville."
+      },
+      "momo": {
+        "title": "Mobile Money",
+        "desc": "Paiements et encaissements comme vous vendez déjà."
+      },
+      "language": {
+        "title": "Support en français",
+        "desc": "Vendez et gérez votre boutique en français ou en anglais."
+      },
+      "local": {
+        "title": "Pensé pour le commerce de proximité",
+        "desc": "Pour les commerçants de quartier, pas seulement la grande distribution."
+      }
+    },
+    "plans": {
+      "title": "Des tarifs simples et transparents",
+      "subtitle": "Chaque entreprise commence gratuitement sur Standard et peut évoluer à tout moment. Pas d'abonnement — vous ne payez une commission que lorsque vous réalisez une vente.",
+      "popular": "Populaire",
+      "commission": "de commission par vente",
+      "note": "Tous les forfaits démarrent gratuitement. La commission n'est facturée que lorsque vous réalisez une vente. Vous pouvez changer de forfait à tout moment depuis votre tableau de bord.",
+      "badge": {
+        "noSub": "Pas d'abonnement",
+        "payOnSale": "Vous ne payez que lorsque vous vendez",
+        "noHidden": "Aucun frais caché"
+      }
+    },
+    "security": {
+      "title": "Sécurité et confiance",
+      "subtitle": "De la sérénité pour vous — et pour chaque client qui achète.",
+      "payments": {
+        "title": "Paiements sécurisés",
+        "desc": "Un paiement protégé pour vous et vos clients."
+      },
+      "data": {
+        "title": "Données clients protégées",
+        "desc": "Un traitement respectueux des informations acheteurs."
+      },
+      "delivery": {
+        "title": "Livraisons fiables",
+        "desc": "Remises vérifiées par PIN avec les agents."
+      },
+      "support": {
+        "title": "Support commerçant",
+        "desc": "De l'aide pour grandir ou résoudre un problème."
+      },
+      "verified": {
+        "title": "Plateforme de confiance",
+        "desc": "Un marché professionnel que les clients connaissent déjà."
+      }
+    },
+    "faq": {
+      "title": "Questions fréquentes",
+      "subtitle": "Des réponses claires avant de créer votre boutique.",
+      "cost": {
+        "q": "Combien ça coûte ?",
+        "a": "Il n'y a pas d'abonnement. Vous commencez gratuitement sur Standard et ne payez une commission que lorsque vous réalisez une vente."
+      },
+      "payouts": {
+        "q": "Comment je reçois les paiements ?",
+        "a": "Les paiements clients sont traités de façon sécurisée et vous sont versés selon votre méthode d'encaissement et votre forfait."
+      },
+      "momo": {
+        "q": "Puis-je utiliser le Mobile Money ?",
+        "a": "Oui. Le Mobile Money est pris en charge là où il est disponible, pour que vos clients paient comme d'habitude."
+      },
+      "delivery": {
+        "q": "Comment fonctionne la livraison ?",
+        "a": "Quand une commande est prête, un agent Rendasua peut récupérer chez vous et livrer au client."
+      },
+      "speed": {
+        "q": "En combien de temps puis-je commencer à vendre ?",
+        "a": "La plupart des commerçants créent un compte, ajoutent des produits et sont en ligne en moins de 5 minutes."
+      },
+      "stores": {
+        "q": "Puis-je gérer plusieurs magasins ?",
+        "a": "Oui. Vous pouvez gérer l'inventaire sur plusieurs emplacements depuis un seul compte."
+      },
+      "employees": {
+        "q": "Plusieurs employés peuvent-ils utiliser le compte ?",
+        "a": "Vous pouvez collaborer depuis un compte professionnel partagé. Contactez le support pour les options d'accès équipe selon votre forfait."
+      },
+      "ai": {
+        "q": "Comment l'IA m'aide-t-elle ?",
+        "a": "L'IA peut nettoyer les photos produits et générer des descriptions pour des fiches professionnelles avec moins d'effort."
+      }
+    },
+    "final": {
+      "title": "Prêt à développer votre activité ?",
+      "subtitle": "Rejoignez Rendasua dès aujourd'hui. Créez votre boutique gratuitement en moins de 5 minutes."
     }
   },
   "becomeAgent": {

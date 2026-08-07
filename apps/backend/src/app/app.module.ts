@@ -64,6 +64,7 @@ import { ImageThumbnailsModule } from '../image-thumbnails/image-thumbnails.modu
 import { RentalsModule } from '../rentals/rentals.module';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
+import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
 import { ServicesModule } from '../services/services.module';
@@ -155,6 +156,7 @@ import { AppService } from './app.service';
     ItemVariantsModule,
     ItemViewsModule,
     MetaConversionsModule,
+    MarketplacePublicModule,
     FacebookCatalogFeedModule,
     SiteEventsModule,
     AgentsModule,

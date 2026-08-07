@@ -6232,5 +6232,280 @@
     "saved": "Timing settings saved.",
     "saveFailed": "Could not save timing.",
     "invalid": "Enter valid timing values."
+  },
+  "forBusiness": {
+    "seo": {
+      "title": "Sell on Rendasua — Open a Business Account",
+      "description": "Sell to more local customers without a website. Storefront, payments, AI listings, and delivery — ready in under 5 minutes.",
+      "keywords": "sell online, business account, local storefront, inventory management, online orders, Rendasua business"
+    },
+    "hero": {
+      "eyebrow": "For businesses",
+      "headline": "Sell to more local customers — without building a website.",
+      "subheadline": "Rendasua gives you a storefront, secure payments, AI listings, and delivery agents — ready in under 5 minutes.",
+      "pill1": "No website required",
+      "pill2": "Delivery handled",
+      "pill3": "Secure payments",
+      "pill4": "AI listings",
+      "rentalCta": "Open Rental Account",
+      "demoCta": "See a demo"
+    },
+    "cta": {
+      "primary": "Create my store for free",
+      "startToday": "Start selling today",
+      "sellOn": "Sell on Rendasua"
+    },
+    "metrics": {
+      "merchants": {
+        "value": "500+",
+        "label": "Merchants"
+      },
+      "products": {
+        "value": "10k+",
+        "label": "Products listed"
+      },
+      "cities": {
+        "value": "25+",
+        "label": "Cities served"
+      },
+      "orders": {
+        "value": "50k+",
+        "label": "Orders completed"
+      },
+      "setup": {
+        "value": "<5 min",
+        "label": "Average setup"
+      },
+      "payments": {
+        "value": "100%",
+        "label": "Secure payments"
+      }
+    },
+    "showcase": {
+      "title": "Your store, managed in one place",
+      "subtitle": "See sales, stock, orders, and AI tools — built for merchants on mobile and desktop.",
+      "dashboard": "Dashboard",
+      "inventory": "Inventory",
+      "orders": "Orders",
+      "analytics": "Analytics",
+      "ai": "AI listings"
+    },
+    "ai": {
+      "title": "AI that turns a photo into a listing",
+      "subtitle": "Skip hours of writing. Upload a product photo and go live faster.",
+      "steps": {
+        "upload": "Upload photo",
+        "clean": "AI cleans image",
+        "describe": "AI writes description",
+        "publish": "Product published",
+        "discover": "Customers find it"
+      }
+    },
+    "benefits": {
+      "title": "Outcomes that grow your business",
+      "subtitle": "Not just features — results merchants care about.",
+      "sales": {
+        "title": "More sales",
+        "desc": "Reach shoppers already looking near you."
+      },
+      "customers": {
+        "title": "New customers",
+        "desc": "Get discovered beyond your WhatsApp contacts."
+      },
+      "time": {
+        "title": "Save time",
+        "desc": "AI listings and one dashboard for everything."
+      },
+      "storefront": {
+        "title": "Professional storefront",
+        "desc": "Look established — no website build needed."
+      },
+      "delivery": {
+        "title": "Integrated delivery",
+        "desc": "Agents pick up and deliver for you."
+      },
+      "payments": {
+        "title": "Secure payments",
+        "desc": "Get paid with Mobile Money or cards."
+      },
+      "inventory": {
+        "title": "Inventory control",
+        "desc": "Know what is in stock across locations."
+      }
+    },
+    "compare": {
+      "title": "Why merchants switch to Rendasua",
+      "subtitle": "Keep chatting with customers — add the tools informal selling lacks.",
+      "facebook": "Facebook Marketplace",
+      "whatsapp": "WhatsApp",
+      "rendasua": "Rendasua",
+      "rows": {
+        "storefront": "Online storefront",
+        "inventory": "Inventory management",
+        "delivery": "Delivery",
+        "payments": "Secure payments",
+        "analytics": "Analytics",
+        "ai": "AI-generated descriptions",
+        "messaging": "Customer messaging",
+        "profile": "Professional business profile"
+      }
+    },
+    "journey": {
+      "title": "From signup to payout",
+      "subtitle": "A clear path from your first listing to money in your account.",
+      "steps": {
+        "account": "Create account",
+        "products": "Add products",
+        "ai": "AI improves listings",
+        "live": "Products go live",
+        "orders": "Customers order",
+        "pickup": "Agent picks up",
+        "paid": "You get paid"
+      }
+    },
+    "logos": {
+      "title": "Trusted by local businesses",
+      "subtitle": "Merchants across cities already sell with Rendasua.",
+      "item1": "Boutique Éclat",
+      "item2": "Marché Central",
+      "item3": "Tech Corner",
+      "item4": "Maison Verte",
+      "item5": "Style Urbain",
+      "item6": "Fresh Daily"
+    },
+    "testimonials": {
+      "title": "Merchants like you",
+      "subtitle": "What sellers say after switching to Rendasua.",
+      "item1": {
+        "quote": "I used to lose orders in WhatsApp chats. Now everything is organized and customers find me on their own.",
+        "name": "Amina K.",
+        "business": "Boutique Éclat"
+      },
+      "item2": {
+        "quote": "AI saved me hours writing product descriptions. I listed 20 items the first afternoon.",
+        "name": "Jean-Paul M.",
+        "business": "Tech Corner"
+      },
+      "item3": {
+        "quote": "Delivery used to be my biggest headache. Agents handle pickups and I focus on stocking.",
+        "name": "Fatou D.",
+        "business": "Fresh Daily"
+      }
+    },
+    "success": {
+      "title": "Before vs after Rendasua",
+      "subtitle": "The same business — with tools that scale.",
+      "before": {
+        "title": "Before",
+        "item1": "Orders only through WhatsApp",
+        "item2": "Manual inventory in notebooks",
+        "item3": "No delivery partners",
+        "item4": "No sales analytics"
+      },
+      "after": {
+        "title": "After",
+        "item1": "Online storefront",
+        "item2": "Integrated delivery",
+        "item3": "Secure payments",
+        "item4": "Analytics that guide decisions",
+        "item5": "More customers discovering you"
+      }
+    },
+    "local": {
+      "title": "Built for local businesses",
+      "subtitle": "Tools that fit how commerce already works in your market.",
+      "delivery": {
+        "title": "Local delivery",
+        "desc": "Agents who know your city streets."
+      },
+      "momo": {
+        "title": "Mobile Money",
+        "desc": "Payouts and payments that match how you already sell."
+      },
+      "language": {
+        "title": "French support",
+        "desc": "Sell and manage your store in French or English."
+      },
+      "local": {
+        "title": "Built for local commerce",
+        "desc": "Designed for neighborhood merchants, not only big retail."
+      }
+    },
+    "plans": {
+      "title": "Simple, transparent pricing",
+      "subtitle": "Every business starts on Standard for free and can upgrade anytime as it grows. No subscriptions — you only pay a commission when you make a sale.",
+      "popular": "Popular",
+      "commission": "commission per sale",
+      "note": "All plans start free. Commission is only charged when you make a sale. You can change your plan anytime from your dashboard.",
+      "badge": {
+        "noSub": "No subscription",
+        "payOnSale": "You only pay when you make a sale",
+        "noHidden": "No hidden fees"
+      }
+    },
+    "security": {
+      "title": "Security & trust",
+      "subtitle": "Confidence for you — and for every customer who buys.",
+      "payments": {
+        "title": "Secure payments",
+        "desc": "Protected checkout for you and your customers."
+      },
+      "data": {
+        "title": "Protected customer data",
+        "desc": "Privacy-minded handling of shopper information."
+      },
+      "delivery": {
+        "title": "Reliable deliveries",
+        "desc": "PIN-verified handovers with delivery agents."
+      },
+      "support": {
+        "title": "Merchant support",
+        "desc": "Help when you need to grow or resolve issues."
+      },
+      "verified": {
+        "title": "Verified platform",
+        "desc": "A professional marketplace customers already trust."
+      }
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "subtitle": "Straight answers before you create your store.",
+      "cost": {
+        "q": "How much does it cost?",
+        "a": "There is no subscription. You start free on Standard and only pay a commission when you make a sale."
+      },
+      "payouts": {
+        "q": "How do I receive payments?",
+        "a": "Customer payments are processed securely and settled to you according to your payout method and plan."
+      },
+      "momo": {
+        "q": "Can I use Mobile Money?",
+        "a": "Yes. Mobile Money is supported in markets where it is available so customers can pay the way they already do."
+      },
+      "delivery": {
+        "q": "How does delivery work?",
+        "a": "When an order is ready, a Rendasua delivery agent can pick up from your location and deliver to the customer."
+      },
+      "speed": {
+        "q": "How quickly can I start selling?",
+        "a": "Most merchants create an account, add products, and go live in under 5 minutes."
+      },
+      "stores": {
+        "q": "Can I manage multiple stores?",
+        "a": "Yes. You can manage inventory across multiple business locations from one account."
+      },
+      "employees": {
+        "q": "Can multiple employees use the account?",
+        "a": "You can collaborate from a shared business account. Ask support about team access options for your plan."
+      },
+      "ai": {
+        "q": "How does AI help me?",
+        "a": "AI can clean product photos and generate descriptions so listings look professional with less effort."
+      }
+    },
+    "final": {
+      "title": "Ready to grow your business?",
+      "subtitle": "Join Rendasua today. Create your store for free in under 5 minutes."
+    }
   }
 }

@@ -1,0 +1,15 @@
+export { default as HeroSection } from './HeroSection';
+export { default as TrustMetrics } from './TrustMetrics';
+export { default as DashboardShowcase } from './DashboardShowcase';
+export { default as AIWorkflow } from './AIWorkflow';
+export { default as BenefitsGrid } from './BenefitsGrid';
+export { default as ComparisonTable } from './ComparisonTable';
+export { default as MerchantJourney } from './MerchantJourney';
+export { default as MerchantLogos } from './MerchantLogos';
+export { default as Testimonials } from './Testimonials';
+export { default as SuccessStory } from './SuccessStory';
+export { default as LocalContext } from './LocalContext';
+export { default as PricingSection } from './PricingSection';
+export { default as SecuritySection } from './SecuritySection';
+export { default as FAQ } from './FAQ';
+export { default as FinalCTA } from './FinalCTA';

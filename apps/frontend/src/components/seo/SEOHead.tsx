@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface SEOHeadProps {
   title?: string;
@@ -12,6 +13,17 @@ export interface SEOHeadProps {
   canonical?: string;
 }
 
+function seoLocaleFromLanguage(lng: string | undefined): {
+  language: string;
+  ogLocale: string;
+} {
+  const code = lng?.split(/[-_]/)[0]?.toLowerCase();
+  if (code === 'en') {
+    return { language: 'English', ogLocale: 'en_US' };
+  }
+  return { language: 'French', ogLocale: 'fr_FR' };
+}
+
 const SEOHead: React.FC<SEOHeadProps> = ({
   title = 'Rendasua - Your Trusted Business Platform',
   description = 'Rendasua is a comprehensive business platform connecting agents, businesses, and clients. Streamline your operations, manage inventory, and grow your business with our innovative solutions.',
@@ -23,14 +35,14 @@ const SEOHead: React.FC<SEOHeadProps> = ({
   noindex = false,
   canonical,
 }) => {
+  const { i18n } = useTranslation();
   const fullUrl = canonical || `${url}${window.location.pathname}`;
   const fullImageUrl = image.startsWith('http') ? image : `${url}${image}`;
+  const { language, ogLocale } = seoLocaleFromLanguage(i18n.language);
 
   useEffect(() => {
-    // Update document title
     document.title = title;
 
-    // Update or create meta tags
     const updateMetaTag = (name: string, content: string, property = false) => {
       const selector = property
         ? `meta[property="${name}"]`
@@ -50,30 +62,26 @@ const SEOHead: React.FC<SEOHeadProps> = ({
       meta.setAttribute('content', content);
     };
 
-    // Basic meta tags
     updateMetaTag('description', description);
     updateMetaTag('keywords', keywords);
     updateMetaTag('author', 'Rendasua');
     updateMetaTag('robots', noindex ? 'noindex, nofollow' : 'index, follow');
-    updateMetaTag('language', 'French');
+    updateMetaTag('language', language);
 
-    // Open Graph tags
     updateMetaTag('og:title', title, true);
     updateMetaTag('og:description', description, true);
     updateMetaTag('og:image', fullImageUrl, true);
     updateMetaTag('og:url', fullUrl, true);
     updateMetaTag('og:type', type, true);
     updateMetaTag('og:site_name', 'Rendasua', true);
-    updateMetaTag('og:locale', 'fr_FR', true);
+    updateMetaTag('og:locale', ogLocale, true);
 
-    // Twitter Card tags
     updateMetaTag('twitter:card', 'summary_large_image');
     updateMetaTag('twitter:title', title);
     updateMetaTag('twitter:description', description);
     updateMetaTag('twitter:image', fullImageUrl);
     updateMetaTag('twitter:url', fullUrl);
 
-    // Update canonical URL
     let canonicalLink = document.querySelector(
       'link[rel="canonical"]'
     ) as HTMLLinkElement;
@@ -84,9 +92,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     }
     canonicalLink.setAttribute('href', fullUrl);
 
-    // Add structured data if provided
     if (structuredData) {
-      // Remove existing structured data
       const existingScripts = document.querySelectorAll(
         'script[type="application/ld+json"]'
       );
@@ -96,17 +102,14 @@ const SEOHead: React.FC<SEOHeadProps> = ({
         }
       });
 
-      // Add new structured data
       const script = document.createElement('script');
       script.setAttribute('type', 'application/ld+json');
       script.textContent = JSON.stringify(structuredData);
       document.head.appendChild(script);
     }
 
-    // Cleanup function
     return () => {
-      // Optionally clean up meta tags on unmount
-      // This is optional as the next page will update them anyway
+      // Next page updates meta tags on mount.
     };
   }, [
     title,
@@ -117,9 +120,10 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     type,
     structuredData,
     noindex,
+    language,
+    ogLocale,
   ]);
 
-  // This component doesn't render anything visible
   return null;
 };
 
