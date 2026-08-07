@@ -217,8 +217,9 @@ export class MerchantLifecycleService {
   }
 
   private async isCatalogReady(businessId: string): Promise<boolean> {
-    // Agreement is the operational gate shared with mobile-money setup.
-    // An approved product/rental is not required to become lifecycle-active.
+    // Signed agreement is the shared readiness gate. MoMo also needs an
+    // approved ID (via resolveMoMoCapabilityFromIdentity). Products/rentals
+    // and confirmed location phones are not required for lifecycle-active.
     return this.businessContractsService.hasValidSignedContract(businessId);
   }
 
@@ -322,11 +323,10 @@ export class MerchantLifecycleService {
   private async resolvePaymentCapability(
     businessId: string
   ): Promise<PaymentCapabilityStatus> {
-    const accounts = await this.listPaymentAccounts(businessId);
-    if (!accounts.length) return 'NOT_STARTED';
-
     const userId = await this.getBusinessUserId(businessId);
     if (!userId) {
+      const accounts = await this.listPaymentAccounts(businessId);
+      if (!accounts.length) return 'NOT_STARTED';
       return aggregatePaymentCapability(
         accounts.map(
           (a: { capability_status: DbPaymentCapabilityStatus }) =>
@@ -336,8 +336,53 @@ export class MerchantLifecycleService {
     }
 
     const rail = await this.paymentRoutingService.resolveRailForUser(userId);
+    // MoMo account activation is identity-based (agreement + approved ID).
+    // Confirmed phones gate locations, not the business payment account row.
+    if (rail === 'mobile_money') {
+      return this.resolveMoMoCapabilityFromIdentity(userId);
+    }
+
+    const accounts = await this.listPaymentAccounts(businessId);
+    if (!accounts.length) return 'NOT_STARTED';
     const provider = paymentProviderForRail(rail);
     return aggregatePaymentCapabilityForProvider(accounts, provider);
+  }
+
+  /**
+   * Maps ID document review state to the payment-capability slot used by
+   * deriveLifecycleStatus. Location payout readiness is separate.
+   */
+  private async resolveMoMoCapabilityFromIdentity(
+    userId: string
+  ): Promise<PaymentCapabilityStatus> {
+    const idNames = ['id_card', 'passport', 'driver_license'];
+    const res = await this.hasuraSystemService.executeQuery(
+      `query MoMoIdCapability($userId: uuid!, $names: [String!]) {
+        user_uploads(
+          where: {
+            user_id: { _eq: $userId }
+            document_type: { name: { _in: $names } }
+          }
+          order_by: { created_at: desc }
+        ) {
+          is_approved
+          note
+        }
+      }`,
+      { userId, names: idNames }
+    );
+    const uploads = (res.user_uploads ?? []) as Array<{
+      is_approved: boolean;
+      note: string | null;
+    }>;
+    if (!uploads.length) return 'NOT_STARTED';
+    if (uploads.some((u) => u.is_approved)) return 'VERIFIED';
+    const latest = uploads[0];
+    const note = latest?.note?.trim() ?? '';
+    if (note.startsWith('[REJECTED]') || note.length > 0) {
+      return 'REJECTED';
+    }
+    return 'VERIFICATION_PENDING';
   }
 
   private async getBusinessUserId(businessId: string): Promise<string | null> {

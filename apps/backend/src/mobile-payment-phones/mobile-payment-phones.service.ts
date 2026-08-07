@@ -601,7 +601,7 @@ export class MobilePaymentPhonesService {
     const businessId =
       await this.merchantLifecycleService.getBusinessIdForUser(userId);
     if (businessId) {
-      // Business account verification is ID-based; phone verify only gates catalog per location.
+      // Business active = agreement + approved ID. Phone only enables location orders.
       return;
     }
     await this.maybeVerifyAgent(userId);

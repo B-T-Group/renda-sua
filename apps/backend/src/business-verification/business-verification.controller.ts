@@ -69,7 +69,7 @@ export class BusinessVerificationController {
             isOnboarding: {
               type: 'boolean',
               description:
-                'True while lifecycle is not active and not suspended (focused setup UI)',
+                'Focused setup UI. Stripe: until lifecycle is active/suspended. Mobile money: until agreement signed and an ID uploaded (pending/rejected review is handled on the dashboard).',
             },
             paymentRail: {
               type: 'string',

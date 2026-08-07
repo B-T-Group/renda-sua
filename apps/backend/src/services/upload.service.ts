@@ -5,7 +5,6 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { getActivePersonaOrThrow } from '../users/persona.util';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 
@@ -84,8 +83,7 @@ export class UploadService {
     private readonly awsService: AwsService,
     private readonly permissionService: PermissionService,
     private readonly notificationsService: NotificationsService,
-    private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly merchantLifecycleService: MerchantLifecycleService
   ) {}
 
   /**
@@ -380,6 +378,10 @@ export class UploadService {
       }
     );
 
+    if (isIdDocument) {
+      void this.recomputeBusinessLifecycleAfterIdChange(ownerId);
+    }
+
     return {
       upload_record: uploadRecord.insert_user_uploads_one,
       presigned_url: presignedUrlResponse.url,
@@ -662,17 +664,18 @@ export class UploadService {
         }
       }
 
-      // MoMo payment capability follows approved ID; lifecycle recompute sets is_verified.
+      // MoMo lifecycle becomes active when agreement is signed and ID is approved.
+      // Location order-readiness still requires a confirmed mobile payment phone.
       void this.notifyBusinessIdApprovedIfNeeded(
         upload.user_id,
         upload.document_type.name
       );
-      void this.syncMoMoBusinessPaymentAfterIdChange(upload.user_id);
+      void this.recomputeBusinessLifecycleAfterIdChange(upload.user_id);
     }
   }
 
-  /** MoMo business payment capability follows approved ID status (not location phone). */
-  private async syncMoMoBusinessPaymentAfterIdChange(
+  /** Recompute lifecycle after ID upload/approve/reject (MoMo active = agreement + ID). */
+  private async recomputeBusinessLifecycleAfterIdChange(
     userId: string
   ): Promise<void> {
     try {
@@ -686,40 +689,15 @@ export class UploadService {
         businessResult?.businesses as { id: string }[] | undefined
       )?.[0];
       if (!business) return;
-
-      const rail = await this.paymentRoutingService.resolveRailForBusiness(
-        business.id
+      await this.merchantLifecycleService.recompute(
+        business.id,
+        'id_document_change'
       );
-      if (rail !== 'mobile_money') return;
-
-      const hasApproved = await this.userHasApprovedIdDocument(userId);
-      await this.merchantLifecycleService.upsertPaymentAccount({
-        businessId: business.id,
-        provider: 'mobile_money',
-        capabilityStatus: hasApproved ? 'verified' : 'verification_pending',
-      });
     } catch (error: any) {
       this.logger.error(
-        `syncMoMoBusinessPaymentAfterIdChange: ${error?.message ?? String(error)}`
+        `recomputeBusinessLifecycleAfterIdChange: ${error?.message ?? String(error)}`
       );
     }
-  }
-
-  private async userHasApprovedIdDocument(userId: string): Promise<boolean> {
-    const res = await this.hasuraSystemService.executeQuery(
-      `query IdApproved($userId: uuid!, $names: [String!]) {
-        user_uploads(
-          where: {
-            user_id: { _eq: $userId }
-            is_approved: { _eq: true }
-            document_type: { name: { _in: $names } }
-          }
-          limit: 1
-        ) { id }
-      }`,
-      { userId, names: ID_DOCUMENT_TYPE_NAMES }
-    );
-    return (res.user_uploads?.length ?? 0) > 0;
   }
 
   private async shouldMarkAgentVerifiedOnIdApproval(
@@ -832,7 +810,7 @@ export class UploadService {
         upload.document_type.name,
         message
       );
-      void this.syncMoMoBusinessPaymentAfterIdChange(upload.user_id);
+      void this.recomputeBusinessLifecycleAfterIdChange(upload.user_id);
     }
   }
 

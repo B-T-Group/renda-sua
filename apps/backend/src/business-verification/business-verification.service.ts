@@ -78,7 +78,7 @@ export class BusinessVerificationService {
       // Alias for older clients: visibility now equals can_accept_orders (active).
       is_storefront_visible: canAcceptOrders,
       can_accept_orders: canAcceptOrders,
-      isOnboarding: this.isOnboarding(lifecycleStatus),
+      isOnboarding: this.resolveIsOnboarding(lifecycleStatus, base),
       suspension,
       contract: await this.businessContractsService.getContractStatus(businessId),
     };
@@ -222,15 +222,14 @@ export class BusinessVerificationService {
   ) {
     const adminVerified = user.business?.is_verified === true;
     const identity = await this.getIdentityStep(user.id);
-    const mobilePaymentPhone =
-      await this.mobilePaymentPhonesService.getBusinessPhoneVerificationStep(
+    const [mobilePaymentPhone, catalog] = await Promise.all([
+      this.mobilePaymentPhonesService.getBusinessPhoneVerificationStep(
         user.id,
         user.business!.id
-      );
+      ),
+      this.merchantLifecycleService.getCatalogStep(user.business!.id),
+    ]);
     const identityApproved = identity.status === 'approved';
-    if (identityApproved && !adminVerified) {
-      await this.healVerifiedBusinessAfterIdApproval(user.business!.id);
-    }
     const nextAction = this.resolveNextAction(
       adminVerified || identityApproved,
       agreement,
@@ -239,7 +238,7 @@ export class BusinessVerificationService {
     return {
       is_verified: adminVerified || identityApproved,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-      steps: { agreement, identity, mobilePaymentPhone },
+      steps: { agreement, identity, mobilePaymentPhone, catalog },
       nextAction,
       requiresMerchantAction: this.requiresMerchantAction(nextAction),
       paymentRail: 'mobile_money' as const,
@@ -405,19 +404,30 @@ export class BusinessVerificationService {
     return 'pending_review';
   }
 
-  private isOnboarding(lifecycleStatus: string): boolean {
-    return lifecycleStatus !== 'active' && lifecycleStatus !== 'suspended';
-  }
-
-  private async healVerifiedBusinessAfterIdApproval(
-    businessId: string
-  ): Promise<void> {
-    // is_verified is a generated column (= active); upsert payment + recompute.
-    await this.merchantLifecycleService.upsertPaymentAccount({
-      businessId,
-      provider: 'mobile_money',
-      capabilityStatus: 'verified',
-    });
+  /**
+   * Stripe: focused setup until lifecycle is active/suspended.
+   * Mobile money: setup ends once agreement is signed and an ID is uploaded
+   * (pending/rejected review happens on the dashboard).
+   */
+  private resolveIsOnboarding(
+    lifecycleStatus: string,
+    base: {
+      paymentRail?: 'stripe' | 'mobile_money';
+      steps?: {
+        agreement?: { complete?: boolean };
+        identity?: { status?: string };
+      };
+    }
+  ): boolean {
+    if (lifecycleStatus === 'active' || lifecycleStatus === 'suspended') {
+      return false;
+    }
+    if (base.paymentRail === 'mobile_money') {
+      const agreementDone = base.steps?.agreement?.complete === true;
+      const identityMissing = base.steps?.identity?.status === 'missing';
+      return !agreementDone || identityMissing;
+    }
+    return true;
   }
 
   private async insertAcceptance(params: {
