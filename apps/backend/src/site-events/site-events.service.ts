@@ -237,13 +237,36 @@ export class SiteEventsService {
     return out;
   }
 
-  private assertV1Subject(body: TrackSiteEventDto): void {
-    const ok =
+  private hasValidInventorySubject(body: TrackSiteEventDto): boolean {
+    return (
       body.subjectType === SITE_EVENT_SUBJECT_INVENTORY_ITEM &&
-      Boolean(body.subjectId);
-    if (!ok) {
+      Boolean(body.subjectId)
+    );
+  }
+
+  private requiresInventorySubject(eventType: string): boolean {
+    return (
+      eventType.startsWith('inventory.cta.') ||
+      eventType.startsWith('inventory.card.') ||
+      eventType.startsWith('inventory.checkout_dialog.')
+    );
+  }
+
+  private assertV1Subject(body: TrackSiteEventDto): void {
+    // Item-scoped inventory events require an inventory_item subject.
+    // Funnel / FTUE / market / discovery events may omit subject entirely.
+    if (this.requiresInventorySubject(body.eventType)) {
+      if (!this.hasValidInventorySubject(body)) {
+        throw new BadRequestException(
+          'subjectType must be inventory_item and subjectId required'
+        );
+      }
+      return;
+    }
+    if (body.subjectType == null && body.subjectId == null) return;
+    if (!this.hasValidInventorySubject(body)) {
       throw new BadRequestException(
-        'subjectType must be inventory_item and subjectId required'
+        'subjectType must be inventory_item and subjectId required when subject is set'
       );
     }
   }
