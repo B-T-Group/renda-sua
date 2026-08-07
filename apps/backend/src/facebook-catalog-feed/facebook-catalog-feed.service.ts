@@ -32,7 +32,6 @@ const FEED_INVENTORY_GQL = `
       item_variant {
         item_variant_images(order_by: { display_order: asc }) {
           image_url
-          display_url
           display_order
           is_primary
         }
@@ -48,7 +47,6 @@ const FEED_INVENTORY_GQL = `
           image_url
           image_type
           display_order
-          display_url
         }
         item_tags { tag { name } }
         item_sub_category {

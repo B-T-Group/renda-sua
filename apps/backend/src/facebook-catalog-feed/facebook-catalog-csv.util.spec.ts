@@ -126,6 +126,30 @@ describe('facebook-catalog-csv.util', () => {
     expect(rows[0].quantity_to_sell_on_facebook).toBe('2');
   });
 
+  it('uses image_url (full asset), not display_url/thumbnail', () => {
+    const { rows } = buildFacebookCatalogRowsFromInventories({
+      inventories: [
+        sampleInventory({
+          item: {
+            ...sampleInventory().item!,
+            item_images: [
+              {
+                image_url: '/uploads/full-primary.jpg',
+                display_url: '/uploads/thumb-primary.webp',
+                image_type: 'main',
+                display_order: 0,
+              },
+            ],
+          },
+        }),
+      ],
+      webOrigin: 'https://rendasua.com',
+    });
+    expect(rows[0].image_link).toBe(
+      'https://rendasua.com/uploads/full-primary.jpg'
+    );
+  });
+
   it('uses variant images when parent item_images are empty', () => {
     const { rows } = buildFacebookCatalogRowsFromInventories({
       inventories: [

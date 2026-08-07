@@ -142,8 +142,9 @@ function toAbsoluteUrl(origin: string, url: string | null | undefined): string {
   return `${base}${u.startsWith('/') ? '' : '/'}${u}`;
 }
 
+/** Full original/primary asset only — never thumbnail or display_url. */
 function imageSourceUrl(img: ItemImageLike): string {
-  return img.display_url?.trim() || img.image_url?.trim() || '';
+  return img.image_url?.trim() || '';
 }
 
 function pickMainOrFirstImageUrl(
