@@ -27,7 +27,12 @@ export const GET_LISTING_FOR_REQUEST = `
         business { id user_id is_verified can_accept_orders }
       }
       business_location_id
-      business_location { name is_active }
+      business_location {
+        name
+        is_active
+        mobile_payment_phone { is_verified }
+        address { country }
+      }
     }
   }
 `;
@@ -131,6 +136,7 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
         id
         name
         is_active
+        mobile_payment_phone { is_verified }
         address {
           id
           address_line_1
@@ -200,6 +206,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
         id
         name
         is_active
+        mobile_payment_phone { is_verified }
         address {
           id
           address_line_1
