@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ManagementClient } from 'auth0';
@@ -144,6 +144,12 @@ export class Auth0Service {
       });
     } catch (error: any) {
       const status = error?.statusCode || error?.response?.status;
+      if (status === 400) {
+        throw new HttpException(
+          { success: false, error: error?.message || 'Invalid user data' },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       if (status !== 409) {
         throw error;
       }
