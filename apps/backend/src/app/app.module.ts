@@ -34,6 +34,7 @@ import configuration from '../config/configuration';
 import { DatabaseModule } from '../database/database.module';
 import { DeliveryPinModule } from '../delivery-pin/delivery-pin.module';
 import { EmbeddingsModule } from '../embeddings/embeddings.module';
+import { FacebookCatalogFeedModule } from '../facebook-catalog-feed/facebook-catalog-feed.module';
 import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { DeliveryModule } from '../delivery/delivery.module';
@@ -154,6 +155,7 @@ import { AppService } from './app.service';
     ItemVariantsModule,
     ItemViewsModule,
     MetaConversionsModule,
+    FacebookCatalogFeedModule,
     SiteEventsModule,
     AgentsModule,
     ClientsModule,

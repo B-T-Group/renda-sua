@@ -414,6 +414,11 @@ export interface MetaConversionsConfig {
   testEventCode: string;
 }
 
+/** Token for Meta Commerce Manager scheduled catalog feed URL (`?token=`). Empty disables the endpoint. */
+export interface FacebookCatalogFeedConfig {
+  token: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -462,6 +467,7 @@ export interface Configuration {
   idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
   metaConversions: MetaConversionsConfig;
+  facebookCatalogFeed: FacebookCatalogFeedConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -947,6 +953,9 @@ export default (): Configuration => {
       accessToken: process.env.META_CAPI_ACCESS_TOKEN || '',
       apiVersion: process.env.META_CAPI_API_VERSION || 'v21.0',
       testEventCode: process.env.META_CAPI_TEST_EVENT_CODE || '',
+    },
+    facebookCatalogFeed: {
+      token: process.env.FACEBOOK_CATALOG_FEED_TOKEN || '',
     },
   };
 };
