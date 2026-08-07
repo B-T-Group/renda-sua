@@ -25,6 +25,10 @@ export type TrackViewMetaContext = {
   actionSource: MetaActionSource;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  fbc?: string;
+  fbp?: string;
+  eventSourceUrl?: string;
+  allowUserEnrichment?: boolean;
 };
 
 @Injectable()
@@ -76,6 +80,10 @@ export class ItemViewsService {
       externalId: viewerId,
       clientIpAddress: meta.clientIpAddress,
       clientUserAgent: meta.clientUserAgent,
+      fbc: meta.fbc,
+      fbp: meta.fbp,
+      eventSourceUrl: meta.eventSourceUrl,
+      allowUserEnrichment: meta.allowUserEnrichment === true,
     });
   }
 }

@@ -35,7 +35,7 @@ export class MetaConversionsTrackController {
     @Request() req: any,
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ) {
-    const { viewerId } = resolveTrackViewerFromRequest(req);
+    const { viewerId, jwtVerified } = resolveTrackViewerFromRequest(req);
     const ua = req.headers?.['user-agent'];
     void this.meta.trackAddToCartSafe({
       eventId: body.eventId?.trim() || randomUUID(),
@@ -49,6 +49,10 @@ export class MetaConversionsTrackController {
       externalId: viewerId,
       clientIpAddress: req.ip,
       clientUserAgent: typeof ua === 'string' ? ua : undefined,
+      fbc: body.fbc,
+      fbp: body.fbp,
+      eventSourceUrl: body.eventSourceUrl,
+      allowUserEnrichment: jwtVerified,
     });
     return { success: true };
   }

@@ -14,6 +14,7 @@ import {
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -87,7 +88,12 @@ async function bootstrap() {
   await loadSecrets();
   initSentry();
 
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
+  // Behind ALB/CloudFront: resolve the real client IP from X-Forwarded-For
+  // so Meta CAPI receives client_ip_address (Event Match Quality).
+  app.set('trust proxy', true);
   // Stripe webhooks require the raw, unparsed request body for signature
   // verification, so they must be registered BEFORE the global JSON parser.
   app.use('/api/stripe-payments/webhook', raw({ type: '*/*' }));

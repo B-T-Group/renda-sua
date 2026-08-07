@@ -10,6 +10,10 @@ export type MetaUserDataInput = {
   externalId?: string | null;
   clientIpAddress?: string | null;
   clientUserAgent?: string | null;
+  /** Meta click id cookie (`_fbc`); do not hash. */
+  fbc?: string | null;
+  /** Meta browser id cookie (`_fbp`); do not hash. */
+  fbp?: string | null;
 };
 
 export type MetaContentItem = {
@@ -55,7 +59,14 @@ export type MetaProductTrackInput = {
   lastName?: string | null;
   clientIpAddress?: string | null;
   clientUserAgent?: string | null;
+  fbc?: string | null;
+  fbp?: string | null;
   eventSourceUrl?: string;
+  /**
+   * When true, load hashed email/phone/name from Hasura for externalId.
+   * Must only be set when externalId came from a verified Bearer JWT.
+   */
+  allowUserEnrichment?: boolean;
 };
 
 export type MetaInitiateCheckoutInput = {
@@ -69,9 +80,15 @@ export type MetaInitiateCheckoutInput = {
   externalId?: string;
   email?: string | null;
   phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   clientIpAddress?: string | null;
   clientUserAgent?: string | null;
+  fbc?: string | null;
+  fbp?: string | null;
   eventSourceUrl?: string;
+  /** See MetaProductTrackInput.allowUserEnrichment. */
+  allowUserEnrichment?: boolean;
 };
 
 export type OrderPaidEvent = {

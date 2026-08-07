@@ -124,7 +124,14 @@ export class CheckoutPreflightService {
 
   async resolve(
     dto: CheckoutPreflightDto,
-    isAuthenticated: boolean
+    isAuthenticated: boolean,
+    meta?: {
+      externalId?: string;
+      clientIpAddress?: string;
+      clientUserAgent?: string;
+      actionSource?: 'website' | 'app' | 'other';
+      allowUserEnrichment?: boolean;
+    }
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
 
@@ -646,7 +653,7 @@ export class CheckoutPreflightService {
         : null;
 
     if (canProceed) {
-      this.scheduleInitiateCheckout(dto, groups);
+      this.scheduleInitiateCheckout(dto, groups, meta);
     }
 
     return {
@@ -676,7 +683,14 @@ export class CheckoutPreflightService {
 
   private scheduleInitiateCheckout(
     dto: CheckoutPreflightDto,
-    groups: CheckoutGroupDto[]
+    groups: CheckoutGroupDto[],
+    meta?: {
+      externalId?: string;
+      clientIpAddress?: string;
+      clientUserAgent?: string;
+      actionSource?: 'website' | 'app' | 'other';
+      allowUserEnrichment?: boolean;
+    }
   ): void {
     // Skip early/catalog preflights; require address, phone, or explicit eventId.
     const intentional =
@@ -691,7 +705,7 @@ export class CheckoutPreflightService {
     const numItems = dto.items.reduce((s, i) => s + (i.quantity || 0), 0);
     void this.metaConversionsService.trackInitiateCheckoutSafe({
       eventId: this.resolveCheckoutEventId(dto),
-      actionSource: 'website',
+      actionSource: meta?.actionSource ?? 'website',
       contentIds,
       contents: dto.items.map((i) => ({
         id: i.business_inventory_id,
@@ -700,6 +714,13 @@ export class CheckoutPreflightService {
       value: value > 0 ? value : undefined,
       currency,
       numItems,
+      externalId: meta?.externalId,
+      clientIpAddress: meta?.clientIpAddress,
+      clientUserAgent: meta?.clientUserAgent,
+      fbc: dto.fbc,
+      fbp: dto.fbp,
+      eventSourceUrl: dto.eventSourceUrl,
+      allowUserEnrichment: meta?.allowUserEnrichment === true,
     });
   }
 

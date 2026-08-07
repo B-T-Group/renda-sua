@@ -3,6 +3,8 @@ import { extractHasuraUserIdFromToken } from '../auth/request-context.util';
 export interface TrackViewerIdentity {
   viewerType: string;
   viewerId: string;
+  /** True when viewerId came from a verified Bearer JWT (safe for PII enrichment). */
+  jwtVerified: boolean;
 }
 
 type TrackRequestLike = {
@@ -33,7 +35,11 @@ export function resolveTrackViewerFromRequest(
     try {
       const hasuraUserId = extractHasuraUserIdFromToken(auth.slice(7));
       if (hasuraUserId?.trim()) {
-        return { viewerType: 'user', viewerId: hasuraUserId.trim() };
+        return {
+          viewerType: 'user',
+          viewerId: hasuraUserId.trim(),
+          jwtVerified: true,
+        };
       }
     } catch {
       // invalid/missing claims — fall through
@@ -46,13 +52,18 @@ export function resolveTrackViewerFromRequest(
   const ua = headerString(headers, 'user-agent') ?? 'unknown';
 
   if (userIdHeader || userSub) {
-    return { viewerType: 'user', viewerId: (userIdHeader || userSub)! };
+    return {
+      viewerType: 'user',
+      viewerId: (userIdHeader || userSub)!,
+      jwtVerified: false,
+    };
   }
   if (anonIdHeader) {
-    return { viewerType: 'anon', viewerId: anonIdHeader };
+    return { viewerType: 'anon', viewerId: anonIdHeader, jwtVerified: false };
   }
   return {
     viewerType: 'ip_ua',
     viewerId: `${req.ip || 'unknown'}|${ua}`,
+    jwtVerified: false,
   };
 }

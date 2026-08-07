@@ -44,4 +44,25 @@ export class TrackAddToCartDto {
   @IsOptional()
   @IsString()
   eventId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Meta _fbc cookie (Click ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Meta _fbp cookie (Browser ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Page URL where add-to-cart occurred (event_source_url)',
+  })
+  @IsOptional()
+  @IsString()
+  eventSourceUrl?: string;
 }

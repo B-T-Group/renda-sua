@@ -101,6 +101,27 @@ export class CheckoutPreflightDto {
   eventId?: string;
 
   @ApiPropertyOptional({
+    description: 'Meta _fbc cookie (Click ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Meta _fbp cookie (Browser ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Page URL for Meta event_source_url',
+  })
+  @IsOptional()
+  @IsString()
+  eventSourceUrl?: string;
+
+  @ApiPropertyOptional({
     default: false,
     description:
       'Set when the order will require a verified (internal) delivery agent, so availability is evaluated against the same agent pool as order creation.',

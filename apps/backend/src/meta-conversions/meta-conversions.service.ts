@@ -42,6 +42,20 @@ const ORDER_FOR_PURCHASE_QUERY = `
   }
 `;
 
+const USER_FOR_META_QUERY = `
+  query UserForMetaCapi($id: uuid!) {
+    users_by_pk(id: $id) {
+      email
+      phone_number
+      first_name
+      last_name
+    }
+  }
+`;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class MetaConversionsService {
   private readonly logger = new Logger(MetaConversionsService.name);
@@ -88,11 +102,15 @@ export class MetaConversionsService {
     input: MetaInitiateCheckoutInput
   ): Promise<void> {
     try {
+      const userData = await this.enrichUserData(
+        this.userFromTrack(input),
+        input.allowUserEnrichment === true
+      );
       await this.sendStandardEvent({
         eventName: 'InitiateCheckout',
         eventId: input.eventId,
         actionSource: input.actionSource,
-        userData: this.userFromTrack(input),
+        userData,
         customData: {
           content_type: 'product',
           content_ids: input.contentIds,
@@ -168,11 +186,15 @@ export class MetaConversionsService {
   ): Promise<void> {
     try {
       const qty = input.quantity ?? 1;
+      const userData = await this.enrichUserData(
+        this.userFromTrack(input),
+        input.allowUserEnrichment === true
+      );
       await this.sendStandardEvent({
         eventName,
         eventId: input.eventId,
         actionSource: input.actionSource,
-        userData: this.userFromTrack(input),
+        userData,
         customData: {
           content_type: 'product',
           content_ids: [input.inventoryItemId],
@@ -207,6 +229,8 @@ export class MetaConversionsService {
       | 'lastName'
       | 'clientIpAddress'
       | 'clientUserAgent'
+      | 'fbc'
+      | 'fbp'
     >
   ): MetaUserDataInput {
     return {
@@ -217,7 +241,58 @@ export class MetaConversionsService {
       lastName: input.lastName,
       clientIpAddress: input.clientIpAddress,
       clientUserAgent: input.clientUserAgent,
+      fbc: input.fbc,
+      fbp: input.fbp,
     };
+  }
+
+  /**
+   * When allowEnrichment is true and the viewer is a Hasura user UUID without
+   * client-supplied PII, load email/phone/name for Event Match Quality.
+   * allowEnrichment must only be set for JWT-verified identities.
+   */
+  private async enrichUserData(
+    input: MetaUserDataInput,
+    allowEnrichment: boolean
+  ): Promise<MetaUserDataInput> {
+    if (!allowEnrichment) return input;
+    const externalId = input.externalId?.trim();
+    if (input.email?.trim() || !this.isUuid(externalId)) {
+      return input;
+    }
+    const profile = await this.loadUserProfile(externalId);
+    if (!profile) return input;
+    return {
+      ...input,
+      email: input.email ?? profile.email,
+      phone: input.phone ?? profile.phone_number,
+      firstName: input.firstName ?? profile.first_name,
+      lastName: input.lastName ?? profile.last_name,
+    };
+  }
+
+  private isUuid(value?: string | null): value is string {
+    return !!value?.trim() && UUID_RE.test(value.trim());
+  }
+
+  private async loadUserProfile(userId: string): Promise<{
+    email?: string | null;
+    phone_number?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery(
+        USER_FOR_META_QUERY,
+        { id: userId }
+      );
+      return res.users_by_pk ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Meta CAPI user lookup failed: ${error?.message ?? String(error)}`
+      );
+      return null;
+    }
   }
 
   private buildUserData(
@@ -240,6 +315,8 @@ export class MetaConversionsService {
     if (input.clientUserAgent?.trim()) {
       out.client_user_agent = input.clientUserAgent.trim();
     }
+    if (input.fbc?.trim()) out.fbc = input.fbc.trim();
+    if (input.fbp?.trim()) out.fbp = input.fbp.trim();
     return out;
   }
 

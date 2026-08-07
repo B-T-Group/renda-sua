@@ -1,6 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
+import { getMetaBrowserContext } from '../utils/metaBrowserIds';
 import { useApiClient } from './useApiClient';
 import type { MetaPixelProductEventParams } from './useMetaPixel';
 import { useMetaPixel } from './useMetaPixel';
@@ -31,6 +32,7 @@ export function useMetaAddToCartTrack() {
       }
 
       const qty = params.contents?.[0]?.quantity ?? 1;
+      const browser = getMetaBrowserContext();
       void apiClient
         .post(
           '/track-add-to-cart',
@@ -42,6 +44,7 @@ export function useMetaAddToCartTrack() {
             contentName: params.content_name,
             contentCategory: params.content_category,
             eventId: eventID,
+            ...browser,
           },
           { headers }
         )

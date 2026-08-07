@@ -54,7 +54,8 @@ export class ItemViewsController {
     @Request() req: any,
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ) {
-    const { viewerType, viewerId } = resolveTrackViewerFromRequest(req);
+    const { viewerType, viewerId, jwtVerified } =
+      resolveTrackViewerFromRequest(req);
     const ua = req.headers?.['user-agent'];
     await this.itemViewsService.trackView(body.itemId, viewerType, viewerId, {
       eventId: body.eventId,
@@ -64,6 +65,10 @@ export class ItemViewsController {
       actionSource: resolveMetaActionSource(platform),
       clientIpAddress: req.ip,
       clientUserAgent: typeof ua === 'string' ? ua : undefined,
+      fbc: body.fbc,
+      fbp: body.fbp,
+      eventSourceUrl: body.eventSourceUrl,
+      allowUserEnrichment: jwtVerified,
     });
     return { success: true };
   }

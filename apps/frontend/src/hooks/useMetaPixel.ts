@@ -77,5 +77,17 @@ export function useMetaPixel() {
     [track]
   );
 
-  return { track, trackViewContent, trackAddToCart, trackPurchase };
+  const trackInitiateCheckout = useCallback(
+    (params: MetaPixelProductEventParams, options?: MetaPixelTrackOptions) =>
+      track('InitiateCheckout', params, options),
+    [track]
+  );
+
+  return {
+    track,
+    trackViewContent,
+    trackAddToCart,
+    trackPurchase,
+    trackInitiateCheckout,
+  };
 }

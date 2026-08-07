@@ -3,9 +3,13 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../contexts/CartContext';
+import { getMetaBrowserContext } from '../utils/metaBrowserIds';
 import { toOrderItemVariantId } from '../utils/shopperVariantSelection';
 import { useApiClient } from './useApiClient';
-import { metaPurchaseEventId } from '../utils/metaEventIds';
+import {
+  metaCheckoutEventId,
+  metaPurchaseEventId,
+} from '../utils/metaEventIds';
 import { useMetaPixel } from './useMetaPixel';
 
 interface CreateOrderRequest {
@@ -124,7 +128,7 @@ export const useCheckout = () => {
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { clearCart } = useCart();
-  const { trackPurchase } = useMetaPixel();
+  const { trackPurchase, trackInitiateCheckout } = useMetaPixel();
 
   const groupItemsByBusiness = useCallback((cartItems: CartItem[]) => {
     const itemsByBusiness = new Map<string, CartItem[]>();
@@ -167,21 +171,27 @@ export const useCheckout = () => {
       setError(null);
 
       try {
+        const preflightItems = cartItems.map((item) => {
+          const itemVariantId = toOrderItemVariantId(item.variantId);
+          return {
+            business_inventory_id: item.inventoryItemId,
+            quantity: item.quantity,
+            ...(itemVariantId && { item_variant_id: itemVariantId }),
+          };
+        });
+        const checkoutEventId = await metaCheckoutEventId(preflightItems);
+        const browser = getMetaBrowserContext();
+
         const preflightResponse = await apiClient.post('/orders/checkout/preflight', {
-          items: cartItems.map((item) => {
-            const itemVariantId = toOrderItemVariantId(item.variantId);
-            return {
-              business_inventory_id: item.inventoryItemId,
-              quantity: item.quantity,
-              ...(itemVariantId && { item_variant_id: itemVariantId }),
-            };
-          }),
+          items: preflightItems,
           ...(fulfillmentMethod === 'delivery' && deliveryAddressId
             ? { delivery_address_id: deliveryAddressId }
             : {}),
           fulfillment_method: fulfillmentMethod,
           phone_number: phoneNumber,
           payment_timing: paymentTiming,
+          eventId: checkoutEventId,
+          ...browser,
         });
 
         const preflight = preflightResponse.data;
@@ -209,6 +219,34 @@ export const useCheckout = () => {
             },
           });
         }
+
+        // Match CAPI: fire Pixel when preflight can_proceed (same gate as
+        // scheduleInitiateCheckout). Use preflight group totals for value.
+        const groups = preflight?.groups ?? [];
+        const checkoutValue =
+          groups.reduce(
+            (sum: number, g: { total?: number }) => sum + (g.total || 0),
+            0
+          ) ||
+          cartItems.reduce(
+            (sum, item) => sum + item.itemData.price * item.quantity,
+            0
+          );
+        trackInitiateCheckout(
+          {
+            content_type: 'product',
+            content_ids: cartItems.map((c) => c.inventoryItemId),
+            contents: cartItems.map((c) => ({
+              id: c.inventoryItemId,
+              quantity: c.quantity,
+              item_price: c.itemData.price,
+            })),
+            value: checkoutValue,
+            currency:
+              groups[0]?.currency ?? cartItems[0]?.itemData.currency ?? 'USD',
+          },
+          { eventID: checkoutEventId }
+        );
 
         if (
           fulfillmentMethod === 'delivery' &&
@@ -300,7 +338,7 @@ export const useCheckout = () => {
         setLoading(false);
       }
     },
-    [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t, trackPurchase]
+    [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t, trackPurchase, trackInitiateCheckout]
   );
 
   const createSingleOrder = useCallback(

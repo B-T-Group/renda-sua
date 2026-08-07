@@ -117,6 +117,57 @@ describe('MetaConversionsService', () => {
     expect(sendEvents).toHaveBeenCalled();
     expect(sendEvents.mock.calls[0][0].data[0].event_name).toBe('ViewContent');
   });
+
+  it('enriches ViewContent with hashed PII for UUID externalId', async () => {
+    executeQuery.mockResolvedValue({
+      users_by_pk: {
+        email: 'shopper@example.com',
+        phone_number: '+15551234567',
+        first_name: 'Sam',
+        last_name: 'Lee',
+      },
+    });
+    await service.trackViewContentSafe({
+      eventId: 'ev-2',
+      actionSource: 'website',
+      inventoryItemId: 'inv-1',
+      externalId: '11111111-1111-4111-8111-111111111111',
+      allowUserEnrichment: true,
+      fbc: 'fb.1.123.abc',
+      fbp: 'fb.1.123.xyz',
+      clientIpAddress: '203.0.113.10',
+      clientUserAgent: 'TestAgent',
+    });
+    expect(executeQuery).toHaveBeenCalled();
+    const userData = sendEvents.mock.calls[0][0].data[0].user_data;
+    expect(userData.em).toBeDefined();
+    expect(userData.ph).toBeDefined();
+    expect(userData.fbc).toBe('fb.1.123.abc');
+    expect(userData.fbp).toBe('fb.1.123.xyz');
+    expect(userData.client_ip_address).toBe('203.0.113.10');
+  });
+
+  it('skips user enrichment without allowUserEnrichment even for UUID', async () => {
+    await service.trackViewContentSafe({
+      eventId: 'ev-2b',
+      actionSource: 'website',
+      inventoryItemId: 'inv-1',
+      externalId: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('skips user enrichment for non-UUID externalId', async () => {
+    await service.trackViewContentSafe({
+      eventId: 'ev-3',
+      actionSource: 'app',
+      inventoryItemId: 'inv-1',
+      externalId: 'anon-abc',
+      allowUserEnrichment: true,
+    });
+    expect(executeQuery).not.toHaveBeenCalled();
+    expect(sendEvents).toHaveBeenCalled();
+  });
 });
 
 describe('ORDER_PAID_EVENT', () => {

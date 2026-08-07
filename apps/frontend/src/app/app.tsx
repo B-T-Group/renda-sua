@@ -33,6 +33,7 @@ import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
+import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 
@@ -60,6 +61,7 @@ function App() {
     isProfileComplete,
     loading: profileLoading,
   } = useUserProfileContext();
+  useMetaPixelAdvancedMatching();
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));

@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -28,6 +29,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
 import { QuickMessageService } from '../messaging/structured/quick-message.service';
+import { resolveMetaActionSource } from '../meta-conversions/resolve-meta-action-source.util';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import {
   CheckoutPreflightDto,
@@ -86,10 +88,21 @@ export class OrdersController {
   @ApiResponse({ status: 200, type: CheckoutPreflightResponseDto })
   async resolveCheckoutPreflight(
     @ReqContext() ctx: RequestContext,
-    @Body() dto: CheckoutPreflightDto
+    @Body() dto: CheckoutPreflightDto,
+    @Request() req: any,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ): Promise<CheckoutPreflightResponseDto> {
     const isAuthenticated = this.hasuraUserService.isConfigured(ctx);
-    return this.checkoutPreflightService.resolve(dto, isAuthenticated);
+    const ua = req.headers?.['user-agent'];
+    const jwtUserId =
+      ctx.userId && ctx.userId !== 'anonymous' ? ctx.userId : undefined;
+    return this.checkoutPreflightService.resolve(dto, isAuthenticated, {
+      externalId: jwtUserId,
+      clientIpAddress: req.ip,
+      clientUserAgent: typeof ua === 'string' ? ua : undefined,
+      actionSource: resolveMetaActionSource(platform),
+      allowUserEnrichment: isAuthenticated && !!jwtUserId,
+    });
   }
 
   @Get('discount-codes/validate')

@@ -1,6 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useRef } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
+import { getMetaBrowserContext } from '../utils/metaBrowserIds';
 import { useApiClient } from './useApiClient';
 
 export type TrackItemViewOptions = {
@@ -40,6 +41,8 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
         headers['X-Anonymous-Id'] = getOrCreateRsAnonymousId();
       }
 
+      const browser = wantsMeta ? getMetaBrowserContext() : {};
+
       try {
         await apiClient.post(
           '/track-view',
@@ -49,6 +52,7 @@ export const useTrackItemView = (inventoryItemId: string | null) => {
             ...(options?.value != null && { value: options.value }),
             ...(options?.currency && { currency: options.currency }),
             ...(options?.contentName && { contentName: options.contentName }),
+            ...browser,
           },
           { headers }
         );
