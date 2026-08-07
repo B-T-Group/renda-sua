@@ -101,6 +101,17 @@ def backfill_table(
     return n
 
 
+def embedding_to_float32(value) -> np.ndarray:
+    """pgvector may return Vector; coerce to a 1-d float32 array."""
+    if value is None:
+        raise ValueError("embedding is None")
+    if hasattr(value, "to_list"):
+        value = value.to_list()
+    elif hasattr(value, "tolist"):
+        value = value.tolist()
+    return np.asarray(value, dtype=np.float32)
+
+
 def load_taxonomy_matrix(cur, table: str) -> tuple[np.ndarray, np.ndarray]:
     cur.execute(
         f"""
@@ -117,7 +128,7 @@ def load_taxonomy_matrix(cur, table: str) -> tuple[np.ndarray, np.ndarray]:
             np.empty((0, EMBEDDING_DIM), dtype=np.float32),
         )
     ids = np.array([r[0] for r in rows], dtype=np.int64)
-    mat = np.stack([np.asarray(r[1], dtype=np.float32) for r in rows])
+    mat = np.stack([embedding_to_float32(r[1]) for r in rows])
     return ids, mat
 
 
