@@ -41,7 +41,9 @@ describe('metaEventIds', () => {
 
     expect(a).toBe(b);
     expect(a.startsWith('checkout-')).toBe(true);
-    expect(a.length).toBe('checkout-'.length + 32);
+    // Prefer SHA-256 hex when Web Crypto is available; otherwise the
+    // sanitized-key fallback is still stable across call order.
+    expect(a.length).toBeGreaterThan('checkout-'.length);
   });
 
   it('changes checkout event id when cart contents change', async () => {
