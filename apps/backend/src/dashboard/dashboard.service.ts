@@ -3,6 +3,7 @@ import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.serv
 import type { AiImageCleanupJobRow } from '../ai-image-cleanup/ai-image-cleanup.types';
 import { PermissionService } from '../auth/permission.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
+import { isDefaultOperatingHours } from '../common/operating-hours.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
@@ -35,6 +36,24 @@ export interface DashboardAggregatesDto {
   /** Product view events with last_viewed_at in the last 7 days. */
   productViewsLast7d: number;
   topViewedProducts: TopViewedProductDto[];
+  /** Approved sell items (moderation approved). */
+  approvedItemCount: number;
+  /** Approved active rental listings. */
+  approvedRentalCount: number;
+  /** Any active location has a non-empty logo_url. */
+  hasLogo: boolean;
+  /** Any active location has customized (non-default) operating hours. */
+  hasOperatingHours: boolean;
+  /** Latest catalog item/rental created_at for this business. */
+  lastCatalogItemAt: string | null;
+  /** Active items with images that have not been AI-cleaned. */
+  itemsNeedingAiCleanupCount: number;
+  pendingItemCount: number;
+  rejectedItemCount: number;
+  /** Top-viewed products with available stock <= 0. */
+  topViewedOutOfStockCount: number;
+  /** Merchant preference: engagement tips / push / digest (default true). */
+  tipsRemindersEnabled: boolean;
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;
@@ -101,6 +120,7 @@ export class DashboardService {
       uniqueClientCount,
       productViewStats,
       topViewedProducts,
+      readiness,
       adminAggregates,
     ] = await Promise.all([
       this.getOrdersByStatus(businessId),
@@ -113,12 +133,17 @@ export class DashboardService {
       this.getUniqueClientCount(businessId),
       this.getProductViewStats(businessId),
       this.getTopViewedProducts(businessId),
+      this.getStoreReadinessSignals(businessId),
       includePlatformStats
         ? this.getAdminAggregates()
         : Promise.resolve(null),
     ]);
 
     const ordersTotal = Object.values(ordersByStatus).reduce((a, b) => a + b, 0);
+    const topViewedOutOfStockCount = await this.countTopViewedOutOfStock(
+      businessId,
+      topViewedProducts
+    );
 
     const result: DashboardAggregatesDto = {
       ordersTotal,
@@ -133,6 +158,8 @@ export class DashboardService {
       totalProductViews: productViewStats.totalProductViews,
       productViewsLast7d: productViewStats.productViewsLast7d,
       topViewedProducts,
+      ...readiness,
+      topViewedOutOfStockCount,
     };
     if (adminAggregates) {
       result.clientCount = adminAggregates.clientCount;
@@ -775,6 +802,233 @@ export class DashboardService {
       imageUrl: img?.display_url ?? img?.image_url ?? null,
       viewsCount: Number(row.item_view_events_aggregate?.aggregate?.count ?? 0),
     };
+  }
+
+  private async getStoreReadinessSignals(businessId: string): Promise<{
+    approvedItemCount: number;
+    approvedRentalCount: number;
+    hasLogo: boolean;
+    hasOperatingHours: boolean;
+    lastCatalogItemAt: string | null;
+    itemsNeedingAiCleanupCount: number;
+    pendingItemCount: number;
+    rejectedItemCount: number;
+    tipsRemindersEnabled: boolean;
+  }> {
+    const [catalog, locations, cleanupCount, tipsRemindersEnabled] =
+      await Promise.all([
+        this.getCatalogModerationCounts(businessId),
+        this.getActiveLocationProfileSignals(businessId),
+        this.countItemsNeedingAiCleanup(businessId),
+        this.getTipsRemindersEnabled(businessId),
+      ]);
+    return {
+      ...catalog,
+      hasLogo: locations.hasLogo,
+      hasOperatingHours: locations.hasOperatingHours,
+      lastCatalogItemAt: catalog.lastCatalogItemAt,
+      itemsNeedingAiCleanupCount: cleanupCount,
+      tipsRemindersEnabled,
+    };
+  }
+
+  private async getTipsRemindersEnabled(businessId: string): Promise<boolean> {
+    const query = `
+      query BusinessTipsReminders($businessId: uuid!) {
+        businesses_by_pk(id: $businessId) { tips_reminders_enabled }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      businesses_by_pk: { tips_reminders_enabled?: boolean | null } | null;
+    }>(query, { businessId });
+    return res?.businesses_by_pk?.tips_reminders_enabled !== false;
+  }
+
+  private async getCatalogModerationCounts(businessId: string): Promise<{
+    approvedItemCount: number;
+    approvedRentalCount: number;
+    pendingItemCount: number;
+    rejectedItemCount: number;
+    lastCatalogItemAt: string | null;
+  }> {
+    const query = `
+      query DashboardCatalogReadiness($businessId: uuid!) {
+        approved: items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            is_active: { _eq: true }
+            moderation_status: { _eq: approved }
+          }
+        ) { aggregate { count } }
+        pending: items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            moderation_status: { _in: [pending, ai_reviewing, proposal_pending] }
+          }
+        ) { aggregate { count } }
+        rejected: items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            moderation_status: { _eq: rejected }
+          }
+        ) { aggregate { count } }
+        approved_rentals: rental_location_listings_aggregate(
+          where: {
+            is_active: { _eq: true }
+            deleted_at: { _is_null: true }
+            moderation_status: { _eq: approved }
+            business_location: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
+            rental_item: { is_active: { _eq: true }, deleted_at: { _is_null: true } }
+          }
+        ) { aggregate { count } }
+        pending_rentals: rental_location_listings_aggregate(
+          where: {
+            is_active: { _eq: true }
+            deleted_at: { _is_null: true }
+            moderation_status: { _in: [pending, ai_reviewing, proposal_pending] }
+            business_location: { business_id: { _eq: $businessId } }
+          }
+        ) { aggregate { count } }
+        rejected_rentals: rental_location_listings_aggregate(
+          where: {
+            deleted_at: { _is_null: true }
+            moderation_status: { _eq: rejected }
+            business_location: { business_id: { _eq: $businessId } }
+          }
+        ) { aggregate { count } }
+        latest_item: items(
+          where: { business_id: { _eq: $businessId } }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { created_at }
+        latest_rental: rental_items(
+          where: { business_id: { _eq: $businessId }, deleted_at: { _is_null: true } }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { created_at }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+    });
+    return this.mapCatalogModerationCounts(res);
+  }
+
+  private mapCatalogModerationCounts(res: any): {
+    approvedItemCount: number;
+    approvedRentalCount: number;
+    pendingItemCount: number;
+    rejectedItemCount: number;
+    lastCatalogItemAt: string | null;
+  } {
+    const itemAt = res?.latest_item?.[0]?.created_at as string | undefined;
+    const rentalAt = res?.latest_rental?.[0]?.created_at as string | undefined;
+    let lastCatalogItemAt: string | null = null;
+    if (itemAt && rentalAt) {
+      lastCatalogItemAt = itemAt > rentalAt ? itemAt : rentalAt;
+    } else {
+      lastCatalogItemAt = itemAt ?? rentalAt ?? null;
+    }
+    return {
+      approvedItemCount: Number(res?.approved?.aggregate?.count ?? 0),
+      approvedRentalCount: Number(res?.approved_rentals?.aggregate?.count ?? 0),
+      pendingItemCount:
+        Number(res?.pending?.aggregate?.count ?? 0) +
+        Number(res?.pending_rentals?.aggregate?.count ?? 0),
+      rejectedItemCount:
+        Number(res?.rejected?.aggregate?.count ?? 0) +
+        Number(res?.rejected_rentals?.aggregate?.count ?? 0),
+      lastCatalogItemAt,
+    };
+  }
+
+  private async getActiveLocationProfileSignals(businessId: string): Promise<{
+    hasLogo: boolean;
+    hasOperatingHours: boolean;
+  }> {
+    const query = `
+      query DashboardLocationProfile($businessId: uuid!) {
+        business_locations(
+          where: { business_id: { _eq: $businessId }, is_active: { _eq: true } }
+        ) {
+          logo_url
+          operating_hours
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      business_locations: Array<{
+        logo_url?: string | null;
+        operating_hours?: unknown;
+      }>;
+    }>(query, { businessId });
+    const locs = res?.business_locations ?? [];
+    const hasLogo = locs.some((l) => Boolean(l.logo_url?.trim()));
+    const hasOperatingHours = locs.some(
+      (l) => !isDefaultOperatingHours(l.operating_hours)
+    );
+    return { hasLogo, hasOperatingHours };
+  }
+
+  private async countItemsNeedingAiCleanup(businessId: string): Promise<number> {
+    const query = `
+      query DashboardItemsNeedingAiCleanup($businessId: uuid!) {
+        items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            is_active: { _eq: true }
+            item_images: { is_ai_cleaned: { _eq: false } }
+          }
+        ) { aggregate { count } }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+    });
+    return Number(res?.items_aggregate?.aggregate?.count ?? 0);
+  }
+
+  private async countTopViewedOutOfStock(
+    businessId: string,
+    topViewed: TopViewedProductDto[]
+  ): Promise<number> {
+    const itemIds = topViewed
+      .filter((p) => p.viewsCount > 0 && p.itemId)
+      .map((p) => p.itemId);
+    if (itemIds.length === 0) return 0;
+    const query = `
+      query DashboardTopViewedStock($businessId: uuid!, $itemIds: [uuid!]!) {
+        business_inventory(
+          where: {
+            is_active: { _eq: true }
+            item_id: { _in: $itemIds }
+            business_location: { business_id: { _eq: $businessId } }
+          }
+        ) {
+          item_id
+          computed_available_quantity
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery<{
+      business_inventory: Array<{
+        item_id: string;
+        computed_available_quantity?: number | null;
+      }>;
+    }>(query, { businessId, itemIds });
+    const qtyByItem = new Map<string, number>();
+    for (const row of res?.business_inventory ?? []) {
+      const prev = qtyByItem.get(row.item_id) ?? 0;
+      qtyByItem.set(
+        row.item_id,
+        prev + Number(row.computed_available_quantity ?? 0)
+      );
+    }
+    let count = 0;
+    for (const id of itemIds) {
+      if ((qtyByItem.get(id) ?? 0) <= 0) count += 1;
+    }
+    return count;
   }
 
   private async getAdminAggregates(): Promise<{

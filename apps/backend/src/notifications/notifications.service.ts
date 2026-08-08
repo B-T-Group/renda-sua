@@ -3187,6 +3187,30 @@ export class NotificationsService {
     }
   }
 
+  async sendMerchantEngagementHtmlEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<boolean> {
+    this.initializeResend();
+    if (!this.resendClient || !params.to) return false;
+    try {
+      const { error } = await this.resendClient.emails.send({
+        from: this.fromEmail,
+        to: [params.to],
+        subject: params.subject,
+        html: params.html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      return true;
+    } catch (error: any) {
+      this.logger.error(
+        `Merchant engagement email failed: ${error?.message ?? error}`
+      );
+      return false;
+    }
+  }
+
   async sendMerchantAgreementCopyEmail(params: {
     to: string;
     businessName: string;

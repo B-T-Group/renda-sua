@@ -45,6 +45,23 @@ export const DEFAULT_OPERATING_HOURS: OperatingHours = {
   sunday: { closed: true },
 };
 
+/** True when hours match the platform default Mon–Fri 08:00–20:00 schedule. */
+export function isDefaultOperatingHours(raw: unknown): boolean {
+  const normalized = normalizeOperatingHours(raw);
+  if (!normalized) return true;
+  for (const day of DAY_NAMES_BY_INDEX) {
+    const a = normalized[day];
+    const b = DEFAULT_OPERATING_HOURS[day];
+    if (!a || !b) return false;
+    if (Boolean(a.closed) !== Boolean(b.closed)) return false;
+    if (a.closed) continue;
+    if ((a.open ?? '') !== (b.open ?? '') || (a.close ?? '') !== (b.close ?? '')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Maps JS `Date.getDay()` (0 = Sunday) to a canonical day name. */
 export function getDayNameForIndex(dayIndex: number): DayName {
   return DAY_NAMES_BY_INDEX[((dayIndex % 7) + 7) % 7];

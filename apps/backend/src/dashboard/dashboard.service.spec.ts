@@ -312,6 +312,38 @@ describe('DashboardService', () => {
           if (query.includes('DashboardUniqueClientCount')) {
             return { clients_aggregate: { aggregate: { count: 2 } } };
           }
+          if (query.includes('DashboardCatalogReadiness')) {
+            return {
+              approved: { aggregate: { count: 3 } },
+              pending: { aggregate: { count: 1 } },
+              rejected: { aggregate: { count: 0 } },
+              approved_rentals: { aggregate: { count: 0 } },
+              pending_rentals: { aggregate: { count: 0 } },
+              rejected_rentals: { aggregate: { count: 0 } },
+              latest_item: [{ created_at: '2026-08-01T00:00:00.000Z' }],
+              latest_rental: [],
+            };
+          }
+          if (query.includes('DashboardLocationProfile')) {
+            return {
+              business_locations: [
+                { logo_url: 'https://img/logo.png', operating_hours: {} },
+              ],
+            };
+          }
+          if (query.includes('DashboardItemsNeedingAiCleanup')) {
+            return { items_aggregate: { aggregate: { count: 2 } } };
+          }
+          if (query.includes('BusinessTipsReminders')) {
+            return { businesses_by_pk: { tips_reminders_enabled: true } };
+          }
+          if (query.includes('DashboardTopViewedStock')) {
+            return {
+              business_inventory: [
+                { item_id: 'item-1', computed_available_quantity: 0 },
+              ],
+            };
+          }
           return {
             orders: [],
             orders_aggregate: { nodes: [], aggregate: { count: 0 } },
@@ -339,6 +371,11 @@ describe('DashboardService', () => {
         },
       ]);
       expect(result.uniqueClientCount).toBe(2);
+      expect(result.approvedItemCount).toBe(3);
+      expect(result.hasLogo).toBe(true);
+      expect(result.itemsNeedingAiCleanupCount).toBe(2);
+      expect(result.tipsRemindersEnabled).toBe(true);
+      expect(result.topViewedOutOfStockCount).toBe(1);
     });
   });
 });

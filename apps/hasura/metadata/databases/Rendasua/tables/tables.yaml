@@ -75,6 +75,7 @@
 - "!include public_message_threads.yaml"
 - "!include public_message_types.yaml"
 - "!include public_mobile_payment_transactions.yaml"
+- "!include public_merchant_engagement_sends.yaml"
 - "!include public_mobile_push_tokens.yaml"
 - "!include public_mtn_momo_payment_requests.yaml"
 - "!include public_orange_momo_payment_requests.yaml"

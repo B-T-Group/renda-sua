@@ -225,6 +225,7 @@ select_permissions:
         - can_accept_orders
         - ai_tokens
         - auto_enhance_enabled
+        - tips_reminders_enabled
         - merchant_agreement_version
         - merchant_agreement_accepted_at
         - referred_by_agent_id
@@ -279,6 +280,7 @@ update_permissions:
         - accepting_orders
         - paused_until
         - auto_enhance_enabled
+        - tips_reminders_enabled
       filter:
         user:
           id:

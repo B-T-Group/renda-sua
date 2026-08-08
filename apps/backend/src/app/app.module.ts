@@ -37,6 +37,7 @@ import { EmbeddingsModule } from '../embeddings/embeddings.module';
 import { FacebookCatalogFeedModule } from '../facebook-catalog-feed/facebook-catalog-feed.module';
 import { createWinstonConfig } from '../config/logging.config';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { MerchantEngagementModule } from '../merchant-engagement/merchant-engagement.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
@@ -182,6 +183,7 @@ import { AppService } from './app.service';
     SubcategoriesModule,
     AiModule,
     DashboardModule,
+    MerchantEngagementModule,
     DeliveryModule,
     SupportModule,
     TwilioVerifyModule,
