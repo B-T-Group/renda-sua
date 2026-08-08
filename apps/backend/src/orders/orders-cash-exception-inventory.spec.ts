@@ -40,7 +40,10 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 
 describe('OrdersService markPaidInCashException inventory', () => {
   let service: OrdersService;
-  let hasuraUserService: { getUser: jest.Mock };
+  let hasuraUserService: {
+    getUser: jest.Mock;
+    sessionPersonaContext: jest.Mock;
+  };
   let hasuraSystemService: {
     executeMutation: jest.Mock;
     executeQuery: jest.Mock;
@@ -68,7 +71,13 @@ describe('OrdersService markPaidInCashException inventory', () => {
   };
 
   beforeEach(async () => {
-    hasuraUserService = { getUser: jest.fn().mockResolvedValue(agentUser) };
+    hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue(agentUser),
+      sessionPersonaContext: jest.fn().mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      }),
+    };
     hasuraSystemService = {
       executeMutation: jest.fn().mockResolvedValue({
         update_orders: { affected_rows: 1 },
