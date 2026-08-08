@@ -26,6 +26,8 @@ export interface CreateCheckoutParams {
   automaticTax?: boolean;
   allowedShippingCountries?: string[];
   shippingName?: string;
+  /** Order fulfillment for success-page copy (pickup vs delivery charge timing). */
+  fulfillmentMethod?: 'delivery' | 'pickup';
 }
 
 export interface CreateCheckoutResult {
@@ -66,6 +68,10 @@ export class StripeCheckoutService {
       params.paymentEntity === 'order' && params.entityId
         ? `&order=${encodeURIComponent(params.entityId)}`
         : '';
+    const fulfillmentSuffix =
+      params.paymentEntity === 'order' && params.fulfillmentMethod === 'pickup'
+        ? '&fulfillment=pickup'
+        : '';
     const rentalSuffix =
       params.paymentEntity === 'rental_booking'
         ? [
@@ -77,7 +83,7 @@ export class StripeCheckoutService {
               : '',
           ].join('')
         : '';
-    return `${this.appBaseUrl}/payment/success?reference=${reference}${orderSuffix}${rentalSuffix}`;
+    return `${this.appBaseUrl}/payment/success?reference=${reference}${orderSuffix}${fulfillmentSuffix}${rentalSuffix}`;
   }
 
   private buildCancelUrl(params: CreateCheckoutParams, reference: string): string {

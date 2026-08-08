@@ -3448,6 +3448,8 @@ export class OrdersService {
       captureMethod,
       taxCheckoutParams,
       shippingName: customerDisplayName,
+      fulfillmentMethod:
+        (order as any).fulfillment_method === 'pickup' ? 'pickup' : 'delivery',
     });
     if (!checkout?.paymentUrl) {
       throw new HttpException(
@@ -8851,6 +8853,7 @@ export class OrdersService {
         captureMethod,
         taxCheckoutParams,
         shippingName: customerDisplayName,
+        fulfillmentMethod,
       });
       return {
         ...this.enrichOrderTaxClientFields(order, tax_status, pre_tax_total),
@@ -9121,6 +9124,7 @@ export class OrdersService {
     captureMethod?: 'automatic' | 'manual';
     taxCheckoutParams?: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
     shippingName?: string;
+    fulfillmentMethod?: 'delivery' | 'pickup';
   }): Promise<{
     transactionId: string;
     reference: string;
@@ -9137,6 +9141,7 @@ export class OrdersService {
         entityId: params.orderNumber,
         customerEmail: params.customerEmail,
         captureMethod: params.captureMethod,
+        fulfillmentMethod: params.fulfillmentMethod,
         ...(tax?.taxEnabled && tax.taxLineItems?.length
           ? {
               automaticTax: true,

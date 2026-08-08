@@ -5917,6 +5917,7 @@
     "success": {
       "title": "Carte autorisée",
       "body": "Votre carte a été autorisée. Le débit n'interviendra que lorsque le livreur récupérera votre commande chez le commerce.",
+      "bodyPickup": "Votre carte a été autorisée. Le débit n'interviendra que lorsque vous récupérerez votre commande en magasin.",
       "orderReference": "Commande #{{orderNumber}}",
       "viewOrder": "Voir la commande",
       "viewOrders": "Voir mes commandes",

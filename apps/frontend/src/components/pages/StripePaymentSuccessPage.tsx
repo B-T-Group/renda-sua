@@ -22,6 +22,7 @@ const StripePaymentSuccessPage: React.FC = () => {
   const orderNumber = searchParams.get('order') ?? '';
   const bookingId = searchParams.get('booking') ?? '';
   const bookingNumber = searchParams.get('bookingNumber') ?? '';
+  const isPickup = searchParams.get('fulfillment') === 'pickup';
   const isRental = Boolean(bookingId || bookingNumber);
 
   useEffect(() => {
@@ -37,6 +38,16 @@ const StripePaymentSuccessPage: React.FC = () => {
       : isRental
         ? '/rentals/requests'
         : '/orders';
+
+  const orderBody = isPickup
+    ? t(
+        'stripe.success.bodyPickup',
+        'Your card has been authorized. You will only be charged when you collect your order at the store.'
+      )
+    : t(
+        'stripe.success.body',
+        'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
+      );
 
   return (
     <Container maxWidth="sm" sx={{ py: 6 }}>
@@ -56,10 +67,7 @@ const StripePaymentSuccessPage: React.FC = () => {
                   'stripe.success.rentalBody',
                   'Your rental payment was received. Your booking will be confirmed shortly — you can view it below.'
                 )
-              : t(
-                  'stripe.success.body',
-                  'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
-                )}
+              : orderBody}
           </Typography>
 
           {orderNumber && !isRental ? (
