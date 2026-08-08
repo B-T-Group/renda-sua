@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { ORDER_PAID_EVENT } from './meta-conversions.constants';
+import {
+  metaUserTypeFromPersona,
+  ORDER_PAID_EVENT,
+} from './meta-conversions.constants';
 import { MetaConversionsClientService } from './meta-conversions-client.service';
 import { MetaConversionsService } from './meta-conversions.service';
 import { OrderPaidMetaListener } from './order-paid-meta.listener';
@@ -168,10 +171,37 @@ describe('MetaConversionsService', () => {
     expect(executeQuery).not.toHaveBeenCalled();
     expect(sendEvents).toHaveBeenCalled();
   });
+
+  it('trackCompleteRegistrationSafe sends CompleteRegistration with user_type', async () => {
+    await service.trackCompleteRegistrationSafe({
+      eventId: 'registration-user-1',
+      actionSource: 'app',
+      userType: 'delivery_agent',
+      externalId: 'user-1',
+      email: 'agent@example.com',
+      firstName: 'Ada',
+      lastName: 'Agent',
+    });
+    expect(sendEvents).toHaveBeenCalled();
+    const event = sendEvents.mock.calls[0][0].data[0];
+    expect(event.event_name).toBe('CompleteRegistration');
+    expect(event.custom_data.status).toBe(true);
+    expect(event.custom_data.user_type).toBe('delivery_agent');
+    expect(event.custom_data.content_name).toBe('delivery_agent');
+    expect(event.user_data.em).toBeDefined();
+  });
 });
 
 describe('ORDER_PAID_EVENT', () => {
   it('is order.paid', () => {
     expect(ORDER_PAID_EVENT).toBe('order.paid');
+  });
+});
+
+describe('metaUserTypeFromPersona', () => {
+  it('maps personas to Meta user_type values', () => {
+    expect(metaUserTypeFromPersona('client')).toBe('client');
+    expect(metaUserTypeFromPersona('agent')).toBe('delivery_agent');
+    expect(metaUserTypeFromPersona('business')).toBe('business');
   });
 });

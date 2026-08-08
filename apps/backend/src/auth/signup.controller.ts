@@ -2,14 +2,18 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Post,
   Query,
+  Request,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
+import { resolveMetaActionSource } from '../meta-conversions/resolve-meta-action-source.util';
 import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
 import { SignupCreatedUser, SignupService } from './signup.service';
@@ -57,9 +61,17 @@ export class SignupController {
   @ApiResponse({ status: 201, description: 'User created' })
   @ApiResponse({ status: 400, description: 'Invalid referral code' })
   async signupStart(
-    @Body() body: SignupStartDto
+    @Body() body: SignupStartDto,
+    @Request() req: { ip?: string; headers?: Record<string, unknown> },
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ): Promise<{ success: boolean; user: SignupCreatedUser }> {
-    const result = await this.signupService.startSignup(body);
+    const ua = req.headers?.['user-agent'];
+    const result = await this.signupService.startSignup({
+      ...body,
+      actionSource: resolveMetaActionSource(platform),
+      clientIpAddress: req.ip,
+      clientUserAgent: typeof ua === 'string' ? ua : undefined,
+    });
     return {
       success: true,
       user: result.user,

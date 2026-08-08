@@ -6,6 +6,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-payment-phone-seed.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthGuard } from './auth.guard';
@@ -29,6 +30,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     BusinessReferralsModule,
     BusinessContractsModule,
     MobilePaymentPhoneSeedModule,
+    MetaConversionsModule,
   ],
   controllers: [SignupController, LoginController],
   providers: [

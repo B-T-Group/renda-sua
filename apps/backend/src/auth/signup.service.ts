@@ -1,6 +1,12 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import {
+  metaRegistrationEventId,
+  metaUserTypeFromPersona,
+} from '../meta-conversions/meta-conversions.constants';
+import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
+import type { MetaActionSource } from '../meta-conversions/meta-conversions.types';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { Auth0Service } from './auth0.service';
@@ -42,6 +48,13 @@ interface SignupStartPayload {
     longitude?: number;
   };
   referral_agent_code?: string;
+  /** Optional Meta CAPI browser ids / source for CompleteRegistration. */
+  fbc?: string | null;
+  fbp?: string | null;
+  eventSourceUrl?: string;
+  actionSource?: MetaActionSource;
+  clientIpAddress?: string | null;
+  clientUserAgent?: string | null;
 }
 
 interface UpdateContactPayload {
@@ -77,7 +90,8 @@ export class SignupService {
     private readonly addressesService: AddressesService,
     private readonly userProvisioning: UserProvisioningService,
     private readonly businessProvisioning: BusinessProvisioningService,
-    private readonly referralProvisioning: ReferralProvisioningService
+    private readonly referralProvisioning: ReferralProvisioningService,
+    private readonly metaConversionsService: MetaConversionsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -258,7 +272,30 @@ export class SignupService {
       ownerName: `${payload.first_name} ${payload.last_name}`.trim(),
     });
 
+    this.emitCompleteRegistration(user, payload);
+
     return { user };
+  }
+
+  private emitCompleteRegistration(
+    user: SignupCreatedUser,
+    payload: SignupStartPayload
+  ): void {
+    void this.metaConversionsService.trackCompleteRegistrationSafe({
+      eventId: metaRegistrationEventId(user.id),
+      actionSource: payload.actionSource ?? 'website',
+      userType: metaUserTypeFromPersona(user.user_type_id),
+      externalId: user.id,
+      email: user.email,
+      phone: user.phone_number,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      clientIpAddress: payload.clientIpAddress,
+      clientUserAgent: payload.clientUserAgent,
+      fbc: payload.fbc,
+      fbp: payload.fbp,
+      eventSourceUrl: payload.eventSourceUrl,
+    });
   }
 
   private async seedLegacyAddresses(

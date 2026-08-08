@@ -178,4 +178,25 @@ export class SignupStartDto {
   @IsString()
   @MaxLength(6)
   referral_agent_code?: string;
+
+  @ApiPropertyOptional({
+    description: 'Meta _fbc cookie (Click ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Meta _fbp cookie (Browser ID); do not hash',
+  })
+  @IsOptional()
+  @IsString()
+  fbp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Page URL for Meta CompleteRegistration event_source_url',
+  })
+  @IsOptional()
+  @IsString()
+  eventSourceUrl?: string;
 }

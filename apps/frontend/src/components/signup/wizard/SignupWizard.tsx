@@ -18,6 +18,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
+import { getMetaBrowserContext } from '../../../utils/metaBrowserIds';
 import LoginMethodDialog from '../../auth/LoginMethodDialog';
 import Logo from '../../common/Logo';
 import SignupAccountCreatedAnimation from '../../onboarding/SignupAccountCreatedAnimation';
@@ -213,7 +214,12 @@ export const SignupWizard: React.FC = () => {
       const { data } = await apiClient.post<{
         success: boolean;
         user: SignupStartUser;
-      }>('/auth/signup/start', payload);
+      }>('/auth/signup/start', {
+        ...payload,
+        ...getMetaBrowserContext(),
+        eventSourceUrl:
+          typeof window !== 'undefined' ? window.location.href : undefined,
+      });
 
       const emailNormalized = data.user.email.trim().toLowerCase();
       const phoneNormalized = (data.user.phone_number || values.contact.phone || '')

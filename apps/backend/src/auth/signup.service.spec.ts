@@ -2,6 +2,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { Auth0Service } from './auth0.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
@@ -16,6 +17,7 @@ describe('SignupService', () => {
   let userProvisioning: jest.Mocked<UserProvisioningService>;
   let businessProvisioning: jest.Mocked<BusinessProvisioningService>;
   let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
+  let metaConversionsService: { trackCompleteRegistrationSafe: jest.Mock };
 
   const insertedUser = {
     id: 'user-123',
@@ -77,6 +79,12 @@ describe('SignupService', () => {
             runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: MetaConversionsService,
+          useValue: {
+            trackCompleteRegistrationSafe: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -87,6 +95,7 @@ describe('SignupService', () => {
     userProvisioning = module.get(UserProvisioningService);
     businessProvisioning = module.get(BusinessProvisioningService);
     referralProvisioning = module.get(ReferralProvisioningService);
+    metaConversionsService = module.get(MetaConversionsService);
   });
 
   describe('availability checks', () => {
@@ -190,6 +199,16 @@ describe('SignupService', () => {
       expect(referralProvisioning.runPostCommitEffects).toHaveBeenCalledWith(
         expect.objectContaining({
           country: 'CM',
+        })
+      );
+      expect(
+        metaConversionsService.trackCompleteRegistrationSafe
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventId: 'registration-user-123',
+          userType: 'client',
+          externalId: 'user-123',
+          phone: '+237600000001',
         })
       );
     });

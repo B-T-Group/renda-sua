@@ -32,6 +32,26 @@ export type MetaCustomDataInput = {
   content_category?: string;
   order_id?: string;
   num_items?: number;
+  /** CompleteRegistration: registration succeeded. */
+  status?: boolean | string;
+  /** CompleteRegistration: client | delivery_agent | business. */
+  user_type?: string;
+};
+
+export type MetaCompleteRegistrationInput = {
+  eventId: string;
+  actionSource: MetaActionSource;
+  userType: string;
+  externalId?: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  clientIpAddress?: string | null;
+  clientUserAgent?: string | null;
+  fbc?: string | null;
+  fbp?: string | null;
+  eventSourceUrl?: string;
 };
 
 export type MetaSendStandardEventInput = {

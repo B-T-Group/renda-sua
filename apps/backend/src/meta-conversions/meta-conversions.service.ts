@@ -10,6 +10,7 @@ import {
 } from './meta-conversions-hash.util';
 import type {
   MetaActionSource,
+  MetaCompleteRegistrationInput,
   MetaCustomDataInput,
   MetaInitiateCheckoutInput,
   MetaProductTrackInput,
@@ -134,6 +135,31 @@ export class MetaConversionsService {
     } catch (error: any) {
       this.logger.warn(
         `Meta CAPI Purchase failed for ${orderId}: ${
+          error?.message ?? String(error)
+        }`
+      );
+    }
+  }
+
+  async trackCompleteRegistrationSafe(
+    input: MetaCompleteRegistrationInput
+  ): Promise<void> {
+    try {
+      await this.sendStandardEvent({
+        eventName: 'CompleteRegistration',
+        eventId: input.eventId,
+        actionSource: input.actionSource,
+        userData: this.userFromTrack(input),
+        customData: {
+          status: true,
+          user_type: input.userType,
+          content_name: input.userType,
+        },
+        eventSourceUrl: input.eventSourceUrl,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Meta CAPI CompleteRegistration failed: ${
           error?.message ?? String(error)
         }`
       );
