@@ -1964,11 +1964,14 @@ export class BusinessItemsService {
       input as ItemsInsertInput
     );
     await this.assertOfflinePaymentAllowed(businessId, withDefaults);
-    const dto = withDefaults as CreateItemDto;
+    const taxCodeInput =
+      typeof withDefaults.stripe_tax_code_id === 'string'
+        ? withDefaults.stripe_tax_code_id
+        : undefined;
     let stripe_tax_code_id: string;
     try {
       stripe_tax_code_id = await this.stripeTaxCodesService.validateTaxCodeId(
-        dto.stripe_tax_code_id
+        taxCodeInput
       );
     } catch (error: any) {
       throw new HttpException(
