@@ -86,6 +86,7 @@ export default function AddItemDialog({
   const { lockedCurrency } = useBusinessLockedCurrency(businessId);
   const { isStripeRail, loading: stripeRailLoading, status: stripeRailStatus } =
     useIsStripeRail();
+  const defaultPayOnDelivery = !isStripeRail;
   const [tabValue, setTabValue] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [inventoryData, setInventoryData] = useState<
@@ -94,6 +95,7 @@ export default function AddItemDialog({
   const [newItemData, setNewItemData] = useState<Partial<CreateItemData>>({
     business_id: businessId,
     is_active: true,
+    // MM markets default on once rail resolves; Stripe stays off.
     pay_on_delivery_enabled: false,
     pay_at_pickup_enabled: true,
     min_order_quantity: 1,
@@ -101,6 +103,14 @@ export default function AddItemDialog({
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
     currency: 'XAF',
   });
+
+  useEffect(() => {
+    if (stripeRailLoading || stripeRailStatus == null) return;
+    setNewItemData((prev) => ({
+      ...prev,
+      pay_on_delivery_enabled: defaultPayOnDelivery,
+    }));
+  }, [defaultPayOnDelivery, stripeRailLoading, stripeRailStatus]);
   const [newBrandData, setNewBrandData] = useState<CreateBrandData>({
     name: '',
     description: '',
@@ -294,7 +304,7 @@ export default function AddItemDialog({
         setNewItemData({
           business_id: businessId,
           is_active: true,
-          pay_on_delivery_enabled: false,
+          pay_on_delivery_enabled: defaultPayOnDelivery,
           pay_at_pickup_enabled: true,
           min_order_quantity: 1,
         });
@@ -846,23 +856,25 @@ export default function AddItemDialog({
                 }
                 label={t('business.inventory.active')}
               />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newItemData.pay_on_delivery_enabled ?? false}
-                    onChange={(e) =>
-                      setNewItemData({
-                        ...newItemData,
-                        pay_on_delivery_enabled: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                label={t(
-                  'business.inventory.payOnDeliveryEnabled',
-                  'Allow payment at delivery'
-                )}
-              />
+              {!isStripeRail ? (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newItemData.pay_on_delivery_enabled ?? false}
+                      onChange={(e) =>
+                        setNewItemData({
+                          ...newItemData,
+                          pay_on_delivery_enabled: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  label={t(
+                    'business.inventory.payOnDeliveryEnabled',
+                    'Allow payment at delivery'
+                  )}
+                />
+              ) : null}
               <FormControlLabel
                 control={
                   <Switch

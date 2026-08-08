@@ -170,6 +170,14 @@ const ItemFormPage: React.FC = () => {
     );
   }, [lockedCurrency]);
 
+  useEffect(() => {
+    if (isEditMode || stripeRailLoading || stripeRailStatus == null) return;
+    setFormData((prev) => ({
+      ...prev,
+      pay_on_delivery_enabled: !isStripeRail,
+    }));
+  }, [isEditMode, isStripeRail, stripeRailLoading, stripeRailStatus]);
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
     null
   );
@@ -1446,24 +1454,26 @@ const ItemFormPage: React.FC = () => {
                     />
                   ) : null}
 
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formData.pay_on_delivery_enabled}
-                        onChange={(e) =>
-                          handleInputChange(
-                            'pay_on_delivery_enabled',
-                            e.target.checked
-                          )
-                        }
-                        disabled={loading}
-                      />
-                    }
-                    label={t(
-                      'business.items.payOnDeliveryEnabled',
-                      'Allow pay at delivery'
-                    )}
-                  />
+                  {!isStripeRail ? (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={formData.pay_on_delivery_enabled}
+                          onChange={(e) =>
+                            handleInputChange(
+                              'pay_on_delivery_enabled',
+                              e.target.checked
+                            )
+                          }
+                          disabled={loading}
+                        />
+                      }
+                      label={t(
+                        'business.items.payOnDeliveryEnabled',
+                        'Allow pay at delivery'
+                      )}
+                    />
+                  ) : null}
 
                   <FormControlLabel
                     control={

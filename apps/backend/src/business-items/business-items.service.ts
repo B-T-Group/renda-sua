@@ -22,6 +22,7 @@ import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
+import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -847,6 +848,24 @@ export class BusinessItemsService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  /** When create payload omits pay-at-delivery, default on for MM rails. */
+  private async withPayOnDeliveryDefault(
+    businessId: string,
+    input: ItemsInsertInput
+  ): Promise<ItemsInsertInput> {
+    const rail = await this.paymentRoutingService.resolveRailForBusiness(
+      businessId
+    );
+    const explicit = input.pay_on_delivery_enabled;
+    return {
+      ...input,
+      pay_on_delivery_enabled: resolvePayOnDeliveryDefault(
+        rail,
+        typeof explicit === 'boolean' ? explicit : undefined
+      ),
+    };
   }
 
   async getItems(
@@ -1940,8 +1959,12 @@ export class BusinessItemsService {
     businessId: string,
     input: ItemsInsertInput | CreateItemDto
   ): Promise<Record<string, unknown>> {
-    await this.assertOfflinePaymentAllowed(businessId, input);
-    const dto = input as CreateItemDto;
+    const withDefaults = await this.withPayOnDeliveryDefault(
+      businessId,
+      input as ItemsInsertInput
+    );
+    await this.assertOfflinePaymentAllowed(businessId, withDefaults);
+    const dto = withDefaults as CreateItemDto;
     let stripe_tax_code_id: string;
     try {
       stripe_tax_code_id = await this.stripeTaxCodesService.validateTaxCodeId(
@@ -1956,7 +1979,7 @@ export class BusinessItemsService {
     const currency =
       await this.hasuraSystemService.resolveBusinessCurrency(businessId);
     const created = await this.itemsService.createItem(businessId, {
-      ...(input as ItemsInsertInput),
+      ...withDefaults,
       currency,
       stripe_tax_code_id,
       // Starts as draft; publish submits for moderation. DB default is draft.
@@ -2438,14 +2461,16 @@ export class BusinessItemsService {
     rowOffset = 0
   ): Promise<CsvUploadResultDto> {
     this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length} rowOffset=${rowOffset}`);
-    const [items, locations, inventory, validSubCategoryIds, lockedCurrency] =
+    const [items, locations, inventory, validSubCategoryIds, lockedCurrency, rail] =
       await Promise.all([
         this.getItems(businessId),
         this.getBusinessLocations(businessId),
         this.getBusinessInventory(businessId),
         this.getItemSubCategoryIds(),
         this.hasuraSystemService.resolveBusinessCurrency(businessId),
+        this.paymentRoutingService.resolveRailForBusiness(businessId),
       ]);
+    const defaultPayOnDelivery = resolvePayOnDeliveryDefault(rail);
 
     const details: CsvUploadResultDto['details'] = {
       inserted: [],
@@ -2565,6 +2590,7 @@ export class BusinessItemsService {
             requires_special_handling: row.requires_special_handling,
             min_order_quantity: row.min_order_quantity,
             max_order_quantity: row.max_order_quantity,
+            pay_on_delivery_enabled: defaultPayOnDelivery,
             // New items start inactive until moderation approves them
             is_active: false,
             brand_id: row.brand_id,
@@ -2799,7 +2825,7 @@ export class BusinessItemsService {
       ? await this.ensureBrandId(brandName)
       : null;
 
-    const insertData = {
+    const insertData = await this.withPayOnDeliveryDefault(businessId, {
       business_id: businessId,
       name,
       description: generatedDescription,
@@ -2812,11 +2838,11 @@ export class BusinessItemsService {
       max_order_quantity: 10,
       is_active: false,
       ...(typeof dto.is_used === 'boolean' && { is_used: dto.is_used }),
-    };
+    });
 
     const newItem = await this.itemsService.createItem(
       businessId,
-      insertData as ItemsInsertInput
+      insertData
     );
     const newItemId = newItem.id as string;
     if (!newItemId) {

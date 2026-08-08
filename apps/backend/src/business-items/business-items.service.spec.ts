@@ -91,6 +91,9 @@ describe('BusinessItemsService CSV upload', () => {
       requestReview: jest.fn(),
       resubmitIfRejected: jest.fn(),
     };
+    const paymentRoutingService = {
+      resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
+    };
     const merchantLifecycleService = { recompute: jest.fn() };
 
     const service = new BusinessItemsService(
@@ -100,7 +103,7 @@ describe('BusinessItemsService CSV upload', () => {
       {} as any,
       itemsService as any,
       itemAiReviewService as any,
-      {} as any,
+      paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
       {} as any
