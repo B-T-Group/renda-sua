@@ -419,6 +419,12 @@ export interface FacebookCatalogFeedConfig {
   token: string;
 }
 
+/** WhatsApp Cloud API webhook (Meta dashboard verify token). */
+export interface WhatsAppConfig {
+  /** Shared secret entered in Meta "Verify token"; empty rejects verification. */
+  webhookVerifyToken: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -468,6 +474,7 @@ export interface Configuration {
   commerceIntegrations: CommerceIntegrationsConfig;
   metaConversions: MetaConversionsConfig;
   facebookCatalogFeed: FacebookCatalogFeedConfig;
+  whatsapp: WhatsAppConfig;
 }
 
 function parseImageValidationModerationProvider(
@@ -956,6 +963,9 @@ export default (): Configuration => {
     },
     facebookCatalogFeed: {
       token: process.env.FACEBOOK_CATALOG_FEED_TOKEN || '',
+    },
+    whatsapp: {
+      webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',
     },
   };
 };

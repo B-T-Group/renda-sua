@@ -68,6 +68,7 @@ import { ItemViewsModule } from '../item-views/item-views.module';
 import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { ServicesModule } from '../services/services.module';
 import { SmsModule } from '../sms/sms.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
@@ -159,6 +160,7 @@ import { AppService } from './app.service';
     MetaConversionsModule,
     MarketplacePublicModule,
     FacebookCatalogFeedModule,
+    WhatsAppModule,
     SiteEventsModule,
     AgentsModule,
     ClientsModule,
