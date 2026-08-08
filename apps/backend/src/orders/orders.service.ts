@@ -3619,7 +3619,7 @@ export class OrdersService {
 
   /**
    * Cash-exception fallback: agent marks the order paid in cash.
-   * This completes the order operationally but flags it for business reconciliation.
+   * Completes the order and adjusts inventory; reconciliation only settles money.
    */
   async markPaidInCashException(orderId: string, notes?: string) {
     const user = await this.hasuraUserService.getUser();
@@ -3629,38 +3629,81 @@ export class OrdersService {
       'Only agent users can mark cash exceptions'
     );
     const agent = this.requireAgentRecord(user);
+    const order = await this.requireCashExceptionOrder(orderId, agent.id);
+    if (order.alreadyRecorded) {
+      return { success: true, message: order.alreadyRecorded };
+    }
 
+    const claimed = await this.claimCashExceptionCompletion(
+      orderId,
+      agent.id,
+      notes
+    );
+    if (!claimed) {
+      return { success: true, message: 'Cash exception already recorded' };
+    }
+
+    await this.runCashExceptionCompletionEffects(
+      orderId,
+      order.orderItems,
+      user.id
+    );
+    return { success: true, message: 'Cash exception recorded' };
+  }
+
+  private async requireCashExceptionOrder(
+    orderId: string,
+    agentId: string
+  ): Promise<{ alreadyRecorded?: string; orderItems: Order_Items[] }> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.assigned_agent_id !== agent.id) {
-      throw new HttpException(
-        'Only the assigned agent can mark a cash exception',
-        HttpStatus.FORBIDDEN
-      );
-    }
-
-    const paymentTiming = (order as any).payment_timing as
-      | 'pay_now'
-      | 'pay_at_delivery'
-      | undefined;
-    if (paymentTiming !== 'pay_at_delivery') {
-      throw new HttpException(
-        'Cash exception is only available for pay-at-delivery orders',
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.assertCashExceptionAgentAndTiming(order, agentId);
+    const already = this.cashExceptionAlreadyRecordedMessage(order);
+    if (already) return { alreadyRecorded: already, orderItems: [] };
     if (order.current_status !== 'out_for_delivery') {
       throw new HttpException(
         'Cash exception can only be reported when order is out for delivery',
         HttpStatus.BAD_REQUEST
       );
     }
-    if ((order as any).reconciliation_status === 'reconciled') {
-      return { success: true, message: 'Order is already reconciled' };
-    }
+    return { orderItems: order.order_items || [] };
+  }
 
+  private assertCashExceptionAgentAndTiming(
+    order: Orders,
+    agentId: string
+  ): void {
+    if (order.assigned_agent_id !== agentId) {
+      throw new HttpException(
+        'Only the assigned agent can mark a cash exception',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if ((order as any).payment_timing !== 'pay_at_delivery') {
+      throw new HttpException(
+        'Cash exception is only available for pay-at-delivery orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private cashExceptionAlreadyRecordedMessage(order: Orders): string | null {
+    const rec = (order as any).reconciliation_status as string | undefined;
+    if (rec === 'reconciled') return 'Order is already reconciled';
+    if (rec === 'pending_manual_reconciliation' || order.current_status === 'complete') {
+      return 'Cash exception already recorded';
+    }
+    return null;
+  }
+
+  /** CAS: only the out_for_delivery → complete transition claims inventory adjustment. */
+  private async claimCashExceptionCompletion(
+    orderId: string,
+    agentId: string,
+    notes?: string
+  ): Promise<boolean> {
     const at = new Date().toISOString();
     const mutation = `
       mutation MarkCashException(
@@ -3669,8 +3712,11 @@ export class OrdersService {
         $at: timestamptz!
         $notes: String
       ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: out_for_delivery }
+          }
           _set: {
             reconciliation_status: pending_manual_reconciliation
             cash_exception_reported_by_agent_id: $agentId
@@ -3681,27 +3727,38 @@ export class OrdersService {
             updated_at: $at
           }
         ) {
-          id
-          current_status
-          reconciliation_status
+          affected_rows
         }
       }
     `;
-
-    await this.hasuraSystemService.executeMutation(mutation, {
+    const claim = await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
-      agentId: agent.id,
+      agentId,
       at,
       notes: notes?.trim() || null,
     });
+    return Number(claim?.update_orders?.affected_rows ?? 0) >= 1;
+  }
 
+  private async runCashExceptionCompletionEffects(
+    orderId: string,
+    orderItems: Order_Items[],
+    actorUserId: string
+  ): Promise<void> {
+    try {
+      await this.updateInventoryOnCompletion(orderItems);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update inventory after cash exception: ${error.message}`
+      );
+    }
     try {
       await this.createStatusHistoryEntry(
         orderId,
         'complete',
         'Completed with cash exception (manual reconciliation required)',
         'agent',
-        user.id
+        actorUserId
       );
     } catch (error: any) {
       this.logger.error(
@@ -3723,8 +3780,6 @@ export class OrdersService {
       );
     }
     await this.sendRateAgentPromptToClient(orderId);
-
-    return { success: true, message: 'Cash exception recorded' };
   }
 
   /**
