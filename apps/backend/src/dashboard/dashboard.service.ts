@@ -833,15 +833,20 @@ export class DashboardService {
   }
 
   private async getTipsRemindersEnabled(businessId: string): Promise<boolean> {
-    const query = `
-      query BusinessTipsReminders($businessId: uuid!) {
-        businesses_by_pk(id: $businessId) { tips_reminders_enabled }
-      }
-    `;
-    const res = await this.hasuraSystemService.executeQuery<{
-      businesses_by_pk: { tips_reminders_enabled?: boolean | null } | null;
-    }>(query, { businessId });
-    return res?.businesses_by_pk?.tips_reminders_enabled !== false;
+    try {
+      const query = `
+        query BusinessTipsReminders($businessId: uuid!) {
+          businesses_by_pk(id: $businessId) { tips_reminders_enabled }
+        }
+      `;
+      const res = await this.hasuraSystemService.executeQuery<{
+        businesses_by_pk: { tips_reminders_enabled?: boolean | null } | null;
+      }>(query, { businessId });
+      return res?.businesses_by_pk?.tips_reminders_enabled !== false;
+    } catch (error: any) {
+      // Prefer default-on when the column is unavailable (local DB / lagging migrate).
+      return true;
+    }
   }
 
   private async getCatalogModerationCounts(businessId: string): Promise<{
