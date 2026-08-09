@@ -104,64 +104,151 @@ export class SignupService {
     return String(phone || '').trim();
   }
 
+  /**
+   * True when a verified account already owns this email.
+   * Unverified pending signups do not block — they are reclaimable.
+   */
   async isEmailTaken(email: string): Promise<boolean> {
-    const normalized = this.normalizeEmail(email);
-    const query = `
-      query EmailTaken($email: String!) {
-        users(where: { email: { _eq: $email } }, limit: 1) {
-          id
-        }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery<{
-      users: Array<{ id: string }>;
-    }>(query, { email: normalized });
-    return (result.users?.length || 0) > 0;
+    return this.isVerifiedContactTaken('email', this.normalizeEmail(email));
   }
 
+  /**
+   * True when a verified account already owns this phone.
+   * Unverified pending signups do not block — they are reclaimable.
+   */
   async isPhoneTaken(phoneNumber: string): Promise<boolean> {
-    const phone = this.normalizePhone(phoneNumber);
-    const query = `
-      query PhoneTaken($phone: String!) {
-        users(where: { phone_number: { _eq: $phone } }, limit: 1) {
-          id
-        }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery<{
-      users: Array<{ id: string }>;
-    }>(query, { phone });
-    return (result.users?.length || 0) > 0;
+    return this.isVerifiedContactTaken(
+      'phone_number',
+      this.normalizePhone(phoneNumber)
+    );
   }
 
   async isEmailTakenByOther(email: string, excludeId: string): Promise<boolean> {
-    const normalized = this.normalizeEmail(email);
-    const query = `
-      query EmailTakenByOther($email: String!, $id: uuid!) {
-        users(where: { email: { _eq: $email }, id: { _neq: $id } }, limit: 1) {
-          id
-        }
-      }
-    `;
+    return this.isVerifiedContactTakenByOther(
+      'email',
+      this.normalizeEmail(email),
+      excludeId
+    );
+  }
+
+  async isPhoneTakenByOther(
+    phoneNumber: string,
+    excludeId: string
+  ): Promise<boolean> {
+    return this.isVerifiedContactTakenByOther(
+      'phone_number',
+      this.normalizePhone(phoneNumber),
+      excludeId
+    );
+  }
+
+  /**
+   * True when a real account owns this contact. Any completed verification
+   * (email or phone) means the row is not an abandoned signup stub.
+   */
+  private async isVerifiedContactTaken(
+    field: 'email' | 'phone_number',
+    value: string
+  ): Promise<boolean> {
+    if (!value) return false;
     const result = await this.hasuraSystemService.executeQuery<{
       users: Array<{ id: string }>;
-    }>(query, { email: normalized, id: excludeId });
+    }>(
+      `
+      query VerifiedContactTaken($value: String!) {
+        users(
+          where: {
+            ${field}: { _eq: $value }
+            _or: [
+              { email_verified: { _eq: true } }
+              { phone_number_verified: { _eq: true } }
+            ]
+          }
+          limit: 1
+        ) { id }
+      }
+    `,
+      { value }
+    );
     return (result.users?.length || 0) > 0;
   }
 
-  async isPhoneTakenByOther(phoneNumber: string, excludeId: string): Promise<boolean> {
-    const phone = this.normalizePhone(phoneNumber);
-    const query = `
-      query PhoneTakenByOther($phone: String!, $id: uuid!) {
-        users(where: { phone_number: { _eq: $phone }, id: { _neq: $id } }, limit: 1) {
-          id
-        }
-      }
-    `;
+  private async isVerifiedContactTakenByOther(
+    field: 'email' | 'phone_number',
+    value: string,
+    excludeId: string
+  ): Promise<boolean> {
+    if (!value) return false;
     const result = await this.hasuraSystemService.executeQuery<{
       users: Array<{ id: string }>;
-    }>(query, { phone, id: excludeId });
+    }>(
+      `
+      query VerifiedContactTakenByOther($value: String!, $id: uuid!) {
+        users(
+          where: {
+            ${field}: { _eq: $value }
+            id: { _neq: $id }
+            _or: [
+              { email_verified: { _eq: true } }
+              { phone_number_verified: { _eq: true } }
+            ]
+          }
+          limit: 1
+        ) { id }
+      }
+    `,
+      { value, id: excludeId }
+    );
     return (result.users?.length || 0) > 0;
+  }
+
+  /** Clear email/phone on abandoned unverified stubs so unique email can be reused. */
+  private async releaseUnverifiedContactHolders(input: {
+    email?: string;
+    phoneNumber?: string;
+    excludeId?: string;
+  }): Promise<void> {
+    if (input.email) {
+      await this.clearUnverifiedField('email', input.email, input.excludeId);
+    }
+    if (input.phoneNumber) {
+      await this.clearUnverifiedField(
+        'phone_number',
+        input.phoneNumber,
+        input.excludeId
+      );
+    }
+  }
+
+  private async clearUnverifiedField(
+    field: 'email' | 'phone_number',
+    value: string,
+    excludeId?: string
+  ): Promise<void> {
+    const idFilter = excludeId ? `id: { _neq: $excludeId }` : '';
+    const vars: Record<string, string> = { value };
+    const varDefs = ['$value: String!'];
+    if (excludeId) {
+      varDefs.push('$excludeId: uuid!');
+      vars.excludeId = excludeId;
+    }
+    // Only fully unverified stubs — never strip contact from a verified account.
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation ReleaseUnverifiedContact(${varDefs.join(', ')}) {
+        update_users(
+          where: {
+            ${field}: { _eq: $value }
+            email_verified: { _eq: false }
+            phone_number_verified: { _eq: false }
+            ${idFilter}
+          }
+          _set: { ${field}: null }
+        ) { affected_rows }
+      }
+    `,
+      vars
+    );
   }
 
   async startSignup(payload: SignupStartPayload): Promise<{ user: SignupCreatedUser }> {
@@ -188,6 +275,11 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
+
+    await this.releaseUnverifiedContactHolders({
+      email: email || undefined,
+      phoneNumber: phoneNumber || undefined,
+    });
 
     const personas = this.normalizeSignupPersonas(payload);
     if (
@@ -340,9 +432,19 @@ export class SignupService {
     this.assertContactUpdateHasValue(email, phoneNumber);
     await this.assertContactAvailable(email, phoneNumber, userId);
 
+    const nextEmail = hasEmailUpdate ? email || null : existing.email;
+    const nextPhone = hasPhoneUpdate
+      ? phoneNumber || null
+      : existing.phone_number;
+    await this.releaseUnverifiedContactHolders({
+      email: nextEmail || undefined,
+      phoneNumber: nextPhone || undefined,
+      excludeId: userId,
+    });
+
     return this.runUpdateContact(userId, {
-      email: hasEmailUpdate ? email || null : existing.email,
-      phone_number: hasPhoneUpdate ? phoneNumber || null : existing.phone_number,
+      email: nextEmail,
+      phone_number: nextPhone,
       first_name: body.first_name?.trim() || existing.first_name,
       last_name: body.last_name?.trim() || existing.last_name,
     });

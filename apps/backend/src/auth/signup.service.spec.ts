@@ -106,8 +106,8 @@ describe('SignupService', () => {
 
       expect(taken).toBe(true);
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('EmailTaken'),
-        { email: 'taken@example.com' }
+        expect.stringContaining('VerifiedContactTaken'),
+        { value: 'taken@example.com' }
       );
     });
 
@@ -118,9 +118,40 @@ describe('SignupService', () => {
 
       expect(taken).toBe(false);
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('PhoneTaken'),
-        { phone: '+237600000001' }
+        expect.stringContaining('VerifiedContactTaken'),
+        { value: '+237600000001' }
       );
+    });
+
+    it('treats unverified pending emails as available', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      await expect(service.isEmailTaken('pending@example.com')).resolves.toBe(
+        false
+      );
+    });
+  });
+
+  describe('reclaim unverified contacts on start', () => {
+    it('releases abandoned unverified email holders before creating', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-123', type: 'client' }],
+      });
+
+      await service.startSignup({
+        first_name: 'New',
+        last_name: 'User',
+        email: 'abandoned@example.com',
+        personas: ['client'],
+        profile: {},
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ReleaseUnverifiedContact'),
+        { value: 'abandoned@example.com' }
+      );
+      expect(userProvisioning.createPendingUser).toHaveBeenCalled();
     });
   });
 
@@ -468,15 +499,26 @@ describe('SignupService', () => {
     });
 
     it('preserves an omitted phone number when updating only email', async () => {
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
-        .mockResolvedValueOnce({ users: [] });
-      hasuraSystemService.executeMutation.mockResolvedValueOnce({
-        update_users_by_pk: {
-          ...insertedUser,
-          email: 'new@example.com',
-          phone_number: '+237600000001',
-        },
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetSignupUser')) {
+          return { users_by_pk: existingPendingUser };
+        }
+        if (query.includes('SignupBusiness')) {
+          return { users_by_pk: { business: null } };
+        }
+        return { users: [] };
+      });
+      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('UpdateSignupContact')) {
+          return {
+            update_users_by_pk: {
+              ...insertedUser,
+              email: 'new@example.com',
+              phone_number: '+237600000001',
+            },
+          };
+        }
+        return { update_users: { affected_rows: 1 } };
       });
 
       const result = await service.updateContact({
@@ -486,6 +528,10 @@ describe('SignupService', () => {
       });
 
       expect(result.user.email).toBe('new@example.com');
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ReleaseUnverifiedContact'),
+        expect.objectContaining({ value: 'new@example.com' })
+      );
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('UpdateSignupContact'),
         {
@@ -499,15 +545,23 @@ describe('SignupService', () => {
     });
 
     it('preserves an omitted email when updating only phone number', async () => {
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
-        .mockResolvedValueOnce({ users: [] });
-      hasuraSystemService.executeMutation.mockResolvedValueOnce({
-        update_users_by_pk: {
-          ...insertedUser,
-          email: 'old@example.com',
-          phone_number: '+237699999999',
-        },
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetSignupUser')) {
+          return { users_by_pk: existingPendingUser };
+        }
+        return { users: [] };
+      });
+      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('UpdateSignupContact')) {
+          return {
+            update_users_by_pk: {
+              ...insertedUser,
+              email: 'old@example.com',
+              phone_number: '+237699999999',
+            },
+          };
+        }
+        return { update_users: { affected_rows: 1 } };
       });
 
       await service.updateContact({

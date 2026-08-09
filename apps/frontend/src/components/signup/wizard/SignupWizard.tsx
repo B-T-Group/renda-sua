@@ -33,7 +33,7 @@ import { WizardChrome } from './WizardChrome';
 
 interface SignupStartUser {
   id: string;
-  email: string;
+  email: string | null;
   first_name: string;
   last_name: string;
   user_type_id: string;
@@ -84,6 +84,8 @@ export const SignupWizard: React.FC = () => {
   const [postSignupPhone, setPostSignupPhone] = useState<string | null>(null);
   const [verifyRedirectLoading, setVerifyRedirectLoading] = useState(false);
   const [emailTakenConflict, setEmailTakenConflict] = useState(false);
+  /** True only after user taps “Wrong email/phone?” on the post-create screen. */
+  const [editingPendingContact, setEditingPendingContact] = useState(false);
 
   const referralCode = wizard.form.watch('business.referralAgentCode') || '';
   const {
@@ -150,6 +152,127 @@ export const SignupWizard: React.FC = () => {
     }
   }, [postSignupEmail, postSignupPhone, redirectToAuthAfterSignup]);
 
+  const persistPendingSignupSession = (
+    user: SignupStartUser,
+    values: ReturnType<typeof wizard.form.getValues>
+  ) => {
+    const emailNormalized = (user.email || values.contact.email || '')
+      .trim()
+      .toLowerCase();
+    const phoneNormalized = (user.phone_number || values.contact.phone || '').trim();
+    const country = (values.country || '').toUpperCase();
+    const useSms =
+      Boolean(phoneNormalized) &&
+      isValidPhoneNumber(phoneNormalized) &&
+      (country === 'CM' || country === 'GA');
+    sessionStorage.setItem('pendingSignupUserId', user.id);
+    sessionStorage.setItem('pendingSignupEmail', emailNormalized);
+    if (useSms) {
+      sessionStorage.setItem('pendingSignupPhone', phoneNormalized);
+    } else {
+      sessionStorage.removeItem('pendingSignupPhone');
+    }
+    setPostSignupEmail(emailNormalized || null);
+    setPostSignupPhone(useSms ? phoneNormalized : null);
+  };
+
+  const updatePendingContact = async (
+    values: ReturnType<typeof wizard.form.getValues>
+  ) => {
+    const payload = buildSignupPayload(values);
+    const pendingUserId = sessionStorage.getItem('pendingSignupUserId');
+    if (!pendingUserId) {
+      throw new Error('Missing pending signup user');
+    }
+    const { data } = await apiClient.post<{
+      success: boolean;
+      user: SignupStartUser;
+    }>('/auth/signup/update-contact', {
+      user_id: pendingUserId,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+      email: payload.email ?? null,
+      phone_number: payload.phone_number ?? null,
+    });
+    return data.user;
+  };
+
+  const startPendingSignup = async (
+    values: ReturnType<typeof wizard.form.getValues>
+  ) => {
+    const payload = buildSignupPayload(values);
+    const { data } = await apiClient.post<{
+      success: boolean;
+      user: SignupStartUser;
+    }>('/auth/signup/start', {
+      ...payload,
+      ...getMetaBrowserContext(),
+      eventSourceUrl:
+        typeof window !== 'undefined' ? window.location.href : undefined,
+    });
+    return data.user;
+  };
+
+  const handleChangeContact = () => {
+    setError(null);
+    setEmailTakenConflict(false);
+    setPostSignupEmail(null);
+    setPostSignupPhone(null);
+    setEditingPendingContact(true);
+    wizard.setActiveStepId('contact');
+  };
+
+  const savePendingContactAndContinue = async () => {
+    setSaving(true);
+    setError(null);
+    setEmailTakenConflict(false);
+    try {
+      const contactOk = await wizard.form.trigger([
+        'contact.firstName',
+        'contact.lastName',
+        'contact.email',
+        'contact.phone',
+      ]);
+      if (!contactOk) return;
+      const values = wizard.form.getValues();
+      const user = await updatePendingContact(values);
+      persistPendingSignupSession(user, values);
+      setEditingPendingContact(false);
+    } catch (err: any) {
+      const apiError =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        t(
+          'signupPage.createAccountError',
+          'Unable to create account at this time.'
+        );
+      if (
+        err?.response?.status === 409 ||
+        String(apiError).toLowerCase().includes('already taken')
+      ) {
+        setEmailTakenConflict(true);
+        setError(
+          t(
+            'signupPage.emailTakenLogin',
+            'This email is already registered. Log in instead.'
+          )
+        );
+      } else {
+        setError(apiError);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleWizardNext = async () => {
+    if (editingPendingContact && wizard.activeStepId === 'contact') {
+      await savePendingContactAndContinue();
+      return;
+    }
+    await wizard.goNext();
+  };
+
   const handleCreate = async () => {
     setSaving(true);
     setError(null);
@@ -210,35 +333,12 @@ export const SignupWizard: React.FC = () => {
         return;
       }
 
-      const payload = buildSignupPayload(values);
-      const { data } = await apiClient.post<{
-        success: boolean;
-        user: SignupStartUser;
-      }>('/auth/signup/start', {
-        ...payload,
-        ...getMetaBrowserContext(),
-        eventSourceUrl:
-          typeof window !== 'undefined' ? window.location.href : undefined,
-      });
-
-      const emailNormalized = data.user.email.trim().toLowerCase();
-      const phoneNormalized = (data.user.phone_number || values.contact.phone || '')
-        .trim();
-      const country = (values.country || '').toUpperCase();
-      const useSms =
-        Boolean(phoneNormalized) &&
-        isValidPhoneNumber(phoneNormalized) &&
-        (country === 'CM' || country === 'GA');
-      sessionStorage.setItem('pendingSignupUserId', data.user.id);
-      sessionStorage.setItem('pendingSignupEmail', emailNormalized);
-      if (useSms) {
-        sessionStorage.setItem('pendingSignupPhone', phoneNormalized);
-      } else {
-        sessionStorage.removeItem('pendingSignupPhone');
-      }
+      const user = editingPendingContact
+        ? await updatePendingContact(values)
+        : await startPendingSignup(values);
+      persistPendingSignupSession(user, values);
+      setEditingPendingContact(false);
       clearSignupDraft();
-      setPostSignupEmail(emailNormalized);
-      setPostSignupPhone(useSms ? phoneNormalized : null);
     } catch (err: any) {
       const apiError =
         err?.response?.data?.error ||
@@ -339,6 +439,26 @@ export const SignupWizard: React.FC = () => {
                     />
                   )}
                 </Typography>
+                <Button
+                  color="inherit"
+                  onClick={handleChangeContact}
+                  disabled={saving || verifyRedirectLoading}
+                  sx={{
+                    alignSelf: 'center',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  {postSignupPhone
+                    ? t(
+                        'signupPage.changePhone',
+                        'Wrong phone number? Change it'
+                      )
+                    : t(
+                        'signupPage.changeEmail',
+                        'Wrong email? Change it'
+                      )}
+                </Button>
               </>
             ) : (
               <>
@@ -401,7 +521,7 @@ export const SignupWizard: React.FC = () => {
                   isLast={wizard.isLast}
                   saving={saving}
                   onBack={wizard.goBack}
-                  onNext={() => void wizard.goNext()}
+                  onNext={() => void handleWizardNext()}
                   onCreate={() => void handleCreate()}
                   hideProgress={showAccountCreated}
                   primaryOnly={

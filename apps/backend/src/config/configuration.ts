@@ -419,10 +419,16 @@ export interface FacebookCatalogFeedConfig {
   token: string;
 }
 
-/** WhatsApp Cloud API webhook (Meta dashboard verify token). */
+/** WhatsApp Cloud API (webhook verify + business-initiated messages). */
 export interface WhatsAppConfig {
   /** Shared secret entered in Meta "Verify token"; empty rejects verification. */
   webhookVerifyToken: string;
+  /** Permanent or system user access token for Graph API. */
+  accessToken: string;
+  /** WhatsApp Business phone number ID used in `/PHONE_NUMBER_ID/messages`. */
+  phoneNumberId: string;
+  /** Graph API version, e.g. v25.0. */
+  apiVersion: string;
 }
 
 export interface Configuration {
@@ -966,6 +972,9 @@ export default (): Configuration => {
     },
     whatsapp: {
       webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',
+      accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
+      phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+      apiVersion: process.env.WHATSAPP_API_VERSION || 'v25.0',
     },
   };
 };
