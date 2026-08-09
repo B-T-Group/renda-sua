@@ -369,6 +369,19 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Universal / deep-link landing (public) */}
+            <Route
+              path="/app/*"
+              element={<LazyPages.AppDeepLinkPage />}
+            />
+            <Route
+              path="/settings/notifications"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.NotificationPreferencesPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Smart dashboard route */}
             <Route

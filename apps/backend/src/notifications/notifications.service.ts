@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Expo } from 'expo-server-sdk';
 import { existsSync, readFileSync } from 'fs';
@@ -10,6 +10,9 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { SmsService } from '../sms/sms.service';
+import { DeepLinkService } from './deep-link.service';
+import { NotificationOrchestrator } from './orchestration/notification-orchestrator.service';
+import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildProximityVariables,
   buildResendTemplateVariables,
@@ -46,7 +49,6 @@ import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
-import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   buildPickupAtRiskAgentPushMessage,
   buildPickupAtRiskBusinessPushMessage,
@@ -209,7 +211,10 @@ export class NotificationsService {
     private readonly configService: ConfigService<Configuration>,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly smsService: SmsService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    @Inject(forwardRef(() => NotificationOrchestrator))
+    private readonly orchestrator: NotificationOrchestrator,
+    private readonly deepLinkService: DeepLinkService
   ) {
     this.loadResendTemplateIds();
   }
@@ -278,71 +283,16 @@ export class NotificationsService {
    * Send order creation notifications
    */
   async sendOrderCreatedNotifications(data: NotificationData): Promise<void> {
-    const clientLocale = this.languageForRecipient(data, 'client');
-    const businessLocale = this.languageForRecipient(data, 'business');
-    let sentAny = false;
-
-    const clientTo = data.clientEmail?.trim();
-    if (clientTo) {
-      try {
-        await this.sendEmail({
-          to: clientTo,
-          templateKey: this.mapKeyForLanguage(
-            'client_order_created',
-            clientLocale
-          ),
-          variables: buildResendTemplateVariables(data, 'client', clientLocale),
-        });
-        sentAny = true;
-      } catch (error: unknown) {
-        this.logger.warn(
-          `Order created: failed client email for ${data.orderNumber}: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
-    } else {
-      this.logger.warn(
-        `Order created: skipped client email for order ${data.orderNumber} (no email)`
-      );
-    }
-
-    const businessTo = data.businessEmail?.trim();
-    if (businessTo) {
-      try {
-        await this.sendEmail({
-          to: businessTo,
-          templateKey: this.mapKeyForLanguage(
-            'business_order_created',
-            businessLocale
-          ),
-          variables: buildResendTemplateVariables(
-            data,
-            'business',
-            businessLocale
-          ),
-        });
-        sentAny = true;
-      } catch (error: unknown) {
-        this.logger.warn(
-          `Order created: failed business email for ${data.orderNumber}: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
-    } else {
-      this.logger.warn(
-        `Order created: skipped business email for order ${data.orderNumber} (no email)`
-      );
-    }
-
-    await this.sendOrderCreatedBusinessPush(data);
-
-    if (sentAny) {
-      this.logger.log(
-        `Order creation notification(s) processed for order ${data.orderNumber}`
-      );
-    }
+    const clientWaOk = await this.orchestrateOrderCreatedClient(data);
+    const businessWaOk = await this.orchestrateOrderCreatedBusiness(data);
+    await this.sendOrderCreatedEmailsUnlessWhatsApp(
+      data,
+      clientWaOk,
+      businessWaOk
+    );
+    this.logger.log(
+      `Order creation notification(s) processed for order ${data.orderNumber}`
+    );
   }
 
   /**
@@ -922,6 +872,29 @@ export class NotificationsService {
     pickupDueAt?: string | null;
     preferredLanguage?: string | null;
   }): Promise<void> {
+    const agentUserId = params.agentUserId?.trim();
+    if (agentUserId) {
+      const links = this.deepLinkService.order(params.orderId);
+      void this.orchestrator.notify({
+        type: 'order.pickup.reminder',
+        category: 'actionable',
+        recipientUserId: agentUserId,
+        locale: normalizeLanguage(params.preferredLanguage),
+        preferenceCategory: 'reminders',
+        entityType: 'order',
+        entityId: params.orderId,
+        channels: {
+          whatsapp: {
+            templateKey: 'pickup_reminder',
+            ctaUrl: links.universal,
+            variables: {
+              orderNumber: params.orderNumber,
+              window: params.pickupDueAt || 'soon',
+            },
+          },
+        },
+      });
+    }
     await this.sendPickupPush(
       params.agentUserId,
       buildPickupReminderPushMessage(params),
@@ -1084,6 +1057,158 @@ export class NotificationsService {
     }
   }
 
+  private async orchestrateOrderCreatedClient(
+    data: NotificationData
+  ): Promise<boolean> {
+    const userId = data.clientUserId?.trim();
+    if (!userId) return false;
+    const links = this.deepLinkService.order(data.orderId);
+    const locale = this.languageForRecipient(data, 'client');
+    const result = await this.orchestrator.notify({
+      type: 'order.created',
+      category: 'actionable',
+      recipientUserId: userId,
+      locale,
+      preferenceCategory: 'order_updates',
+      entityType: 'order',
+      entityId: data.orderId,
+      dedupeKey: `order.created:client:${data.orderId}`,
+      channels: {
+        push: {
+          title: locale === 'fr' ? 'Commande reçue' : 'Order received',
+          body:
+            locale === 'fr'
+              ? `Commande ${data.orderNumber} enregistrée`
+              : `Order ${data.orderNumber} placed`,
+          data: {
+            url: links.path,
+            orderId: data.orderId,
+            orderNumber: data.orderNumber,
+            persona: 'client',
+          },
+        },
+        whatsapp: {
+          templateKey: 'order_status_client',
+          ctaUrl: links.universal,
+          phoneE164: data.clientPhone ?? undefined,
+          variables: {
+            orderNumber: data.orderNumber,
+            statusLabel: locale === 'fr' ? 'créée' : 'created',
+          },
+        },
+      },
+    });
+    return this.orchestrator.whatsAppSucceeded(result);
+  }
+
+  private async orchestrateOrderCreatedBusiness(
+    data: NotificationData
+  ): Promise<boolean> {
+    const businessUserId = data.businessUserId?.trim();
+    if (!businessUserId) return false;
+    if (data.acceptanceMode === 'scheduled') {
+      await this.sendOrderCreatedBusinessPush(data);
+      return false;
+    }
+    const links = this.deepLinkService.order(data.orderId);
+    const { title, body } = buildBusinessOrderCreatedPushMessage({
+      orderNumber: data.orderNumber,
+      clientName: data.clientName,
+      preferredLanguage: data.businessPreferredLanguage,
+      acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
+    });
+    const locale = this.languageForRecipient(data, 'business');
+    const result = await this.orchestrator.notify({
+      type: 'order.created',
+      category: 'actionable',
+      recipientUserId: businessUserId,
+      locale,
+      preferenceCategory: 'order_updates',
+      entityType: 'order',
+      entityId: data.orderId,
+      dedupeKey: `order.created:business:${data.orderId}`,
+      channels: {
+        push: {
+          title,
+          body,
+          data: {
+            url: links.path,
+            orderId: data.orderId,
+            orderNumber: data.orderNumber,
+            event: 'order_created',
+            persona: 'business',
+            acceptanceTimeoutSeconds:
+              data.acceptanceTimeoutSeconds != null
+                ? String(data.acceptanceTimeoutSeconds)
+                : undefined,
+          },
+        },
+        whatsapp: {
+          templateKey: 'order_created_business',
+          ctaUrl: links.universal,
+          variables: {
+            orderNumber: data.orderNumber,
+            customerName: data.clientName || 'Customer',
+            pickupWindow:
+              data.acceptanceTimeoutSeconds != null
+                ? `${Math.round(data.acceptanceTimeoutSeconds / 60)} min`
+                : 'soon',
+          },
+        },
+      },
+    });
+    return this.orchestrator.whatsAppSucceeded(result);
+  }
+
+  private async sendOrderCreatedEmailsUnlessWhatsApp(
+    data: NotificationData,
+    clientWaOk: boolean,
+    businessWaOk: boolean
+  ): Promise<void> {
+    const clientLocale = this.languageForRecipient(data, 'client');
+    const businessLocale = this.languageForRecipient(data, 'business');
+    if (!clientWaOk && data.clientEmail?.trim()) {
+      try {
+        await this.sendEmail({
+          to: data.clientEmail.trim(),
+          templateKey: this.mapKeyForLanguage(
+            'client_order_created',
+            clientLocale
+          ),
+          variables: buildResendTemplateVariables(data, 'client', clientLocale),
+        });
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Order created: failed client email for ${data.orderNumber}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+    if (!businessWaOk && data.businessEmail?.trim()) {
+      try {
+        await this.sendEmail({
+          to: data.businessEmail.trim(),
+          templateKey: this.mapKeyForLanguage(
+            'business_order_created',
+            businessLocale
+          ),
+          variables: buildResendTemplateVariables(
+            data,
+            'business',
+            businessLocale
+          ),
+        });
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Order created: failed business email for ${data.orderNumber}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+  }
+
   /**
    * Expo + web push when a business receives a new order (if push token registered).
    * Scheduled future orders use a soft event so the mobile interrupt is not shown.
@@ -1155,18 +1280,19 @@ export class NotificationsService {
       orderNumber: params.orderNumber,
       preferredLanguage: params.preferredLanguage,
     });
-
+    const persona =
+      params.commissionType === 'base_delivery_fee' ||
+      params.commissionType === 'per_km_delivery_fee'
+        ? 'agent'
+        : params.commissionType === 'item_sale' ||
+            params.commissionType === 'order_subtotal'
+          ? 'business'
+          : undefined;
+    const links = this.deepLinkService.wallet();
     try {
-      const persona =
-        params.commissionType === 'base_delivery_fee' ||
-        params.commissionType === 'per_km_delivery_fee'
-          ? 'agent'
-          : params.commissionType === 'item_sale' ||
-              params.commissionType === 'order_subtotal'
-            ? 'business'
-            : undefined;
+      // Transactional wallet credits always attempt push (not marketplace-gated).
       await this.sendPushNotificationByUserId(userId, title, body, {
-        url: '/accounts',
+        url: links.path,
         event: 'wallet_credit',
         orderId: params.orderId,
         orderNumber: params.orderNumber,
@@ -1449,21 +1575,42 @@ export class NotificationsService {
   }): Promise<void> {
     const uid = params.userId?.trim();
     if (!uid) return;
-    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     try {
       const r = (params.failureMessage || 'Payment failed').trim();
       const snip = r.length > 100 ? `${r.slice(0, 97)}...` : r;
-      await this.sendPushNotificationByUserId(
-        uid,
-        'Payment failed',
-        `Order ${params.orderNumber}: ${snip}`,
-        {
-          url: `/orders/${params.orderId}`,
-          orderId: params.orderId,
-          orderNumber: params.orderNumber,
-          event: 'payment_failed',
-        }
-      );
+      const links = this.deepLinkService.order(params.orderId);
+      const pushEnabled =
+        !!this.configService.get<Configuration['push']>('push')?.enabled;
+      void this.orchestrator.notify({
+        type: 'order.payment_failed',
+        category: 'actionable',
+        recipientUserId: uid,
+        preferenceCategory: 'order_updates',
+        allowSmsFallback: true,
+        entityType: 'order',
+        entityId: params.orderId,
+        channels: {
+          ...(pushEnabled
+            ? {
+                push: {
+                  title: 'Payment failed',
+                  body: `Order ${params.orderNumber}: ${snip}`,
+                  data: {
+                    url: links.path,
+                    orderId: params.orderId,
+                    orderNumber: params.orderNumber,
+                    event: 'payment_failed',
+                  },
+                },
+              }
+            : {}),
+          whatsapp: {
+            templateKey: 'payment_failed',
+            ctaUrl: links.universal,
+            variables: { orderNumber: params.orderNumber },
+          },
+        },
+      });
     } catch (error: any) {
       this.logger.warn(
         `sendOrderPaymentFailedPush failed: ${error?.message ?? String(error)}`
@@ -1763,21 +1910,46 @@ export class NotificationsService {
           'Rental booking request email skipped: missing business email'
         );
       }
-      if (this.configService.get<Configuration['push']>('push')?.enabled) {
+      {
         const msg = buildRentalBookingRequestPush({
           rentalItemName: payload.rentalItemName,
           preferredLanguage: u?.preferred_language,
         });
-        await this.sendPushNotificationByUserId(
-          payload.businessUserId,
-          msg.title,
-          msg.body,
-          {
-            type: 'rental_request_new',
-            rentalRequestId: payload.requestId,
-            url: `/business/rentals/requests`,
-          }
-        );
+        const links = this.deepLinkService.rentalRequest(payload.requestId);
+        const pushEnabled =
+          !!this.configService.get<Configuration['push']>('push')?.enabled;
+        await this.orchestrator.notify({
+          type: 'rental.request',
+          category: 'actionable',
+          recipientUserId: payload.businessUserId,
+          locale: normalizeLanguage(u?.preferred_language),
+          preferenceCategory: 'order_updates',
+          entityType: 'rental_request',
+          entityId: payload.requestId,
+          channels: {
+            ...(pushEnabled
+              ? {
+                  push: {
+                    title: msg.title,
+                    body: msg.body,
+                    data: {
+                      type: 'rental_request_new',
+                      rentalRequestId: payload.requestId,
+                      url: links.path,
+                    },
+                  },
+                }
+              : {}),
+            whatsapp: {
+              templateKey: 'rental_request_business',
+              ctaUrl: links.universal,
+              variables: {
+                itemName: payload.rentalItemName,
+                dates: `${payload.requestedStartAt} – ${payload.requestedEndAt}`,
+              },
+            },
+          },
+        });
       }
     } catch (error: any) {
       this.logger.error(
@@ -2094,6 +2266,13 @@ export class NotificationsService {
     );
   }
 
+  private async shouldUsePushOnlyForUser(
+    userId: string | undefined
+  ): Promise<boolean> {
+    if (!userId?.trim()) return false;
+    return this.userHasRegisteredPushDelivery(userId.trim());
+  }
+
   private async userHasValidExpoTokens(userId: string): Promise<boolean> {
     const q = `
       query PushTokensExist($userId: uuid!) {
@@ -2141,11 +2320,89 @@ export class NotificationsService {
     );
   }
 
-  private async shouldUsePushOnlyForUser(
-    userId: string | undefined
-  ): Promise<boolean> {
-    if (!userId?.trim()) return false;
-    return this.userHasRegisteredPushDelivery(userId.trim());
+  private async orchestrateOrderStatusWhatsApp(
+    data: NotificationData,
+    recipients: OrderStatusRecipient[],
+    actorUserId?: string | null
+  ): Promise<Set<string>> {
+    const ok = new Set<string>();
+    const links = this.deepLinkService.order(data.orderId);
+    const templateKey =
+      data.orderStatus === 'ready_for_pickup'
+        ? 'order_ready'
+        : 'order_status_client';
+    for (const recipient of recipients) {
+      // Client templates only — business/agent keep email/push paths.
+      if (recipient.type !== 'client') continue;
+      const userId = recipient.userId?.trim();
+      if (!userId || (actorUserId && userId === actorUserId)) continue;
+      const locale = this.languageForRecipient(data, 'client');
+      const statusLabel = this.whatsAppStatusLabel(data.orderStatus, locale);
+      const result = await this.orchestrator.notify({
+        type: 'order.status.changed',
+        category: 'actionable',
+        recipientUserId: userId,
+        locale,
+        actorUserId: actorUserId ?? undefined,
+        preferenceCategory: 'order_updates',
+        entityType: 'order',
+        entityId: data.orderId,
+        dedupeKey: `order.status:${data.orderId}:${data.orderStatus}:${userId}`,
+        channels: {
+          whatsapp: {
+            templateKey,
+            ctaUrl: links.universal,
+            phoneE164: data.clientPhone ?? undefined,
+            variables: {
+              orderNumber: data.orderNumber,
+              statusLabel,
+            },
+          },
+        },
+      });
+      if (this.orchestrator.whatsAppSucceeded(result)) {
+        ok.add(userId);
+      }
+    }
+    return ok;
+  }
+
+  private whatsAppStatusLabel(
+    status: string,
+    locale: ReturnType<typeof normalizeLanguage>
+  ): string {
+    const en: Record<string, string> = {
+      pending: 'pending',
+      confirmed: 'confirmed',
+      preparing: 'preparing',
+      ready_for_pickup: 'ready for pickup',
+      assigned: 'agent assigned',
+      picked_up: 'picked up',
+      in_transit: 'in transit',
+      out_for_delivery: 'out for delivery',
+      delivered: 'delivered',
+      complete: 'complete',
+      cancelled: 'cancelled',
+      failed: 'failed',
+      refunded: 'refunded',
+    };
+    const fr: Record<string, string> = {
+      pending: 'en attente',
+      confirmed: 'confirmée',
+      preparing: 'en préparation',
+      ready_for_pickup: 'prête pour retrait',
+      assigned: 'livreur assigné',
+      picked_up: 'récupérée',
+      in_transit: 'en transit',
+      out_for_delivery: 'en cours de livraison',
+      delivered: 'livrée',
+      complete: 'terminée',
+      cancelled: 'annulée',
+      failed: 'échouée',
+      refunded: 'remboursée',
+    };
+    const map = locale === 'fr' ? fr : en;
+    return map[status] || status.replace(/_/g, ' ');
   }
 
   /**
@@ -2166,7 +2423,16 @@ export class NotificationsService {
       const itemsVariant =
         templateKey === 'order_assigned' ? 'agentAssigned' : 'default';
 
+      const waOkByUser = await this.orchestrateOrderStatusWhatsApp(
+        data,
+        recipients,
+        options?.actorUserId
+      );
+
       for (const recipient of recipients) {
+        if (recipient.userId && waOkByUser.has(recipient.userId)) {
+          continue;
+        }
         if (recipient.type === 'client') {
           await this.notifyClientOrderStatusEmailOrSms(
             data,
@@ -2543,7 +2809,31 @@ export class NotificationsService {
     orderId: string;
     expiresAt: string;
     ttlSeconds?: number;
+    pickupArea?: string;
+    distanceKm?: string;
   }): Promise<{ webSent: number; expoSent: number }> {
+    const links = this.deepLinkService.delivery(params.orderId);
+    if (params.pickupArea?.trim() && params.distanceKm?.trim()) {
+      void this.orchestrator.notify({
+        type: 'order.offer',
+        category: 'actionable',
+        recipientUserId: params.userId,
+        preferenceCategory: 'order_updates',
+        entityType: 'order',
+        entityId: params.orderId,
+        dedupeKey: `order.offer:${params.orderId}:${params.userId}:${params.expiresAt}`,
+        channels: {
+          whatsapp: {
+            templateKey: 'order_offer_agent',
+            ctaUrl: links.universal,
+            variables: {
+              pickupArea: params.pickupArea.trim(),
+              distance: params.distanceKm.trim(),
+            },
+          },
+        },
+      });
+    }
     return this.sendPushNotificationByUserId(
       params.userId,
       params.title,
@@ -2553,6 +2843,7 @@ export class NotificationsService {
         orderId: params.orderId,
         expiresAt: params.expiresAt,
         persona: 'agent',
+        url: links.path,
       },
       {
         priority: 'high',
@@ -2648,13 +2939,38 @@ export class NotificationsService {
       itemName: params.itemName,
       preferredLanguage: u?.preferred_language,
     });
+    const links = this.deepLinkService.custom(
+      `items/${params.itemId}`,
+      `/business/items/${params.itemId}`
+    );
     await this.sendPushNotificationByUserId(
       params.userId,
       title,
       body,
-      { type: 'ai_item_proposal', itemId: params.itemId, persona: 'business' },
+      {
+        type: 'ai_item_proposal',
+        itemId: params.itemId,
+        persona: 'business',
+        url: links.path,
+      },
       { priority: 'high', sound: 'default', channelId: 'default' }
     );
+    void this.orchestrator.notify({
+      type: 'ai.proposal.ready',
+      category: 'actionable',
+      recipientUserId: params.userId,
+      locale: normalizeLanguage(u?.preferred_language),
+      preferenceCategory: 'marketplace',
+      entityType: 'item',
+      entityId: params.itemId,
+      channels: {
+        whatsapp: {
+          templateKey: 'ai_proposal_ready',
+          ctaUrl: links.universal,
+          variables: { itemName: params.itemName },
+        },
+      },
+    });
   }
 
   async sendRentalListingAiProposalPush(params: {
@@ -3463,10 +3779,11 @@ export class NotificationsService {
         locale === 'fr'
           ? `Votre ${docLabel} a été approuvée. Vous pouvez poursuivre la vérification dans l'application.`
           : `Your ${docLabel} has been approved. You can continue verification in the app.`;
+      const links = this.deepLinkService.verification();
       await this.sendPushNotificationByUserId(params.businessUserId, title, body, {
         type: 'id_document_approved',
         documentType: params.documentType,
-        url: '/documents',
+        url: links.path,
       });
       if (!u?.email) {
         this.logger.warn(
@@ -3518,12 +3835,36 @@ export class NotificationsService {
         locale === 'fr'
           ? `Votre ${docLabel} a été refusée${reasonText ? ` : ${reasonText}` : ''}. Téléversez une nouvelle pièce dans Documents.`
           : `Your ${docLabel} was rejected${reasonText ? `: ${reasonText}` : ''}. Upload a new ID in Documents.`;
-      await this.sendPushNotificationByUserId(params.businessUserId, title, body, {
-        type: 'id_document_rejected',
-        documentType: params.documentType,
-        reason: reasonText,
-        url: '/documents',
+      const links = this.deepLinkService.verification();
+      const waResult = await this.orchestrator.notify({
+        type: 'verification.rejected',
+        category: 'actionable',
+        recipientUserId: params.businessUserId,
+        locale,
+        preferenceCategory: 'order_updates',
+        channels: {
+          push: {
+            title,
+            body,
+            data: {
+              type: 'id_document_rejected',
+              documentType: params.documentType,
+              reason: reasonText,
+              url: links.path,
+            },
+          },
+          whatsapp: {
+            templateKey: 'verification_attention',
+            ctaUrl: links.universal,
+            variables: {
+              reason: reasonText || docLabel,
+            },
+          },
+        },
       });
+      if (this.orchestrator.whatsAppSucceeded(waResult)) {
+        return;
+      }
       if (!u?.email) {
         this.logger.warn(
           'Business ID rejected email skipped: missing recipient email'

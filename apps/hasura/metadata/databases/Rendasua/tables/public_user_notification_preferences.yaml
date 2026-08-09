@@ -1,0 +1,224 @@
+table:
+  name: user_notification_preferences
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_enabled
+        - whatsapp_opted_in_at
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_enabled
+        - whatsapp_opted_in_at
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_enabled
+        - whatsapp_opted_in_at
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_enabled
+        - whatsapp_opted_in_at
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+# WhatsApp opt-in columns are intentionally omitted from update/insert —
+# Nest PATCH /notifications/preferences enforces verified-phone eligibility.
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: business
+    permission:
+      columns:
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: client
+    permission:
+      columns:
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: user
+    permission:
+      columns:
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+insert_permissions:
+  - role: agent
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - user_id
+        - push_enabled
+        - email_enabled
+        - sms_enabled
+        - whatsapp_informational_enabled
+        - marketing_enabled
+        - order_updates
+        - chat
+        - marketplace
+        - reminders
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id

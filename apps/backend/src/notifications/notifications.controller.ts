@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Patch,
   Post,
   Query,
   Req,
@@ -27,6 +28,10 @@ import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { NotificationPreferenceService } from './orchestration/notification-preference.service';
+import type { PatchNotificationPreferencesDto } from './orchestration/notification.types';
+import { WhatsAppChannel } from './orchestration/channels/whatsapp.channel';
+import { WhatsAppTemplateService } from './orchestration/whatsapp-template.service';
 
 interface RequestWithUser extends Request {
   user?: { sub?: string; id?: string };
@@ -38,8 +43,58 @@ export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly preferenceService: NotificationPreferenceService,
+    private readonly whatsAppChannel: WhatsAppChannel,
+    private readonly whatsAppTemplateService: WhatsAppTemplateService
   ) {}
+
+  @Get('preferences')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get notification channel preferences for current user' })
+  @ApiResponse({ status: 200, description: 'Preferences returned' })
+  async getPreferences(@ReqContext() ctx: RequestContext) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    if (!userId || userId === 'anonymous') {
+      throw new UnauthorizedException();
+    }
+    return this.preferenceService.getPreferences(userId);
+  }
+
+  @Patch('preferences')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update notification channel preferences' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pushEnabled: { type: 'boolean' },
+        emailEnabled: { type: 'boolean' },
+        smsEnabled: { type: 'boolean' },
+        whatsappEnabled: { type: 'boolean' },
+        whatsappInformationalEnabled: { type: 'boolean' },
+        marketingEnabled: { type: 'boolean' },
+        orderUpdates: { type: 'boolean' },
+        chat: { type: 'boolean' },
+        marketplace: { type: 'boolean' },
+        reminders: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Preferences updated' })
+  @ApiResponse({ status: 400, description: 'WhatsApp opt-in requires verified phone' })
+  async patchPreferences(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: PatchNotificationPreferencesDto
+  ) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    if (!userId || userId === 'anonymous') {
+      throw new UnauthorizedException();
+    }
+    return this.preferenceService.patchPreferences(userId, body ?? {});
+  }
 
   @Get('vapid-public-key')
   @ApiOperation({ summary: 'Get VAPID public key for push subscription' })
@@ -298,5 +353,69 @@ export class NotificationsController {
       body?.body ?? '',
       body?.data
     );
+  }
+
+  @Public()
+  @Post('internal/whatsapp-template')
+  @ApiOperation({
+    summary: 'Internal: send WhatsApp template (ops / tests)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['to', 'templateKey'],
+      properties: {
+        to: { type: 'string' },
+        templateKey: { type: 'string' },
+        locale: { type: 'string' },
+        variables: { type: 'object', additionalProperties: { type: 'string' } },
+        ctaUrl: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'WhatsApp send attempted' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  async internalWhatsAppTemplate(
+    @Body()
+    body: {
+      to?: string;
+      templateKey?: string;
+      locale?: string;
+      variables?: Record<string, string>;
+      ctaUrl?: string;
+    },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ) {
+    this.assertInternalKey(internalKey);
+    return this.whatsAppChannel.send({
+      to: body?.to ?? '',
+      locale: body?.locale,
+      payload: {
+        templateKey: body?.templateKey ?? '',
+        variables: body?.variables ?? {},
+        ctaUrl: body?.ctaUrl,
+      },
+    });
+  }
+
+  @Get('whatsapp-templates')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List internal WhatsApp template catalog (dev/ops)' })
+  listWhatsAppTemplates() {
+    return {
+      templates: this.whatsAppTemplateService.listTemplateCatalog(),
+      configured: this.whatsAppChannel.isConfigured(),
+    };
+  }
+
+  private assertInternalKey(internalKey?: string): void {
+    const expected =
+      this.configService.get<Configuration['notificationsInternal']>(
+        'notificationsInternal'
+      )?.apiKey ?? '';
+    if (!expected || internalKey !== expected) {
+      throw new UnauthorizedException();
+    }
   }
 }

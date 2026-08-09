@@ -283,6 +283,12 @@ export const PlaceOrderPage = lazy(() =>
   import('../components/pages/PlaceOrderPage')
 );
 export const Profile = lazy(() => import('../components/pages/Profile'));
+export const NotificationPreferencesPage = lazy(
+  () => import('../components/pages/NotificationPreferencesPage')
+);
+export const AppDeepLinkPage = lazy(
+  () => import('../components/pages/AppDeepLinkPage')
+);
 export const ProfileDeleteRequestPage = lazy(() =>
   import('../components/pages/ProfileDeleteRequestPage')
 );

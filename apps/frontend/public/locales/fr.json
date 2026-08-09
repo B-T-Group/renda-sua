@@ -6532,5 +6532,30 @@
     "saved": "Paramètres enregistrés.",
     "saveFailed": "Impossible d'enregistrer les délais.",
     "invalid": "Saisissez des valeurs valides."
+  },
+  "notifications": {
+    "preferences": {
+      "title": "Préférences de notification",
+      "subtitle": "Choisissez comment Rendasua vous contacte pour les commandes, le chat et les mises à jour.",
+      "channels": "Canaux",
+      "categories": "Catégories",
+      "push": "Notifications push",
+      "email": "E-mail",
+      "sms": "SMS (secours)",
+      "whatsapp": "WhatsApp",
+      "whatsappInformational": "Astuces et digests WhatsApp (optionnel)",
+      "whatsappNeedsPhone": "Vérifiez votre numéro dans le Profil avant d’activer WhatsApp.",
+      "orderUpdates": "Mises à jour de commande",
+      "chat": "Chat et mentions",
+      "marketplace": "Marketplace",
+      "reminders": "Rappels",
+      "marketing": "Marketing"
+    }
+  },
+  "deepLink": {
+    "openingApp": "Ouverture de Rendasua…",
+    "helper": "Si l’application ne s’ouvre pas, téléchargez-la ou continuez dans le navigateur.",
+    "openApp": "Ouvrir l’application",
+    "continueWeb": "Continuer dans le navigateur"
   }
 }

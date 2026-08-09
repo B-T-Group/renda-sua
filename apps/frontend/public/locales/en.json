@@ -6511,5 +6511,30 @@
       "title": "Ready to grow your business?",
       "subtitle": "Join Rendasua today. Create your store for free in under 5 minutes."
     }
+  },
+  "notifications": {
+    "preferences": {
+      "title": "Notification preferences",
+      "subtitle": "Choose how Rendasua reaches you for orders, chat, and updates.",
+      "channels": "Channels",
+      "categories": "Categories",
+      "push": "Push notifications",
+      "email": "Email",
+      "sms": "SMS (fallback)",
+      "whatsapp": "WhatsApp",
+      "whatsappInformational": "WhatsApp tips & digests (optional)",
+      "whatsappNeedsPhone": "Verify your phone number in Profile before enabling WhatsApp.",
+      "orderUpdates": "Order updates",
+      "chat": "Chat & mentions",
+      "marketplace": "Marketplace",
+      "reminders": "Reminders",
+      "marketing": "Marketing"
+    }
+  },
+  "deepLink": {
+    "openingApp": "Opening Rendasua…",
+    "helper": "If the app does not open, download it or continue in the browser.",
+    "openApp": "Open app",
+    "continueWeb": "Continue in browser"
   }
 }

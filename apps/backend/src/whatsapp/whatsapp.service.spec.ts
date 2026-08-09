@@ -31,6 +31,8 @@ describe('WhatsAppService', () => {
         accessToken,
         phoneNumberId,
         apiVersion: 'v25.0',
+        appSecret: 'app-secret',
+        notificationsEnabled: true,
       }),
     } as unknown as ConfigService;
     service = new WhatsAppService(configService);

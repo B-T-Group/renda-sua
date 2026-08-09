@@ -7,6 +7,7 @@ import {
   Edit as EditIcon,
   ErrorOutline as ErrorOutlineIcon,
   LocationOn as LocationOnIcon,
+  Notifications as NotificationsIcon,
   PersonOff as PersonOffIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
@@ -868,6 +869,54 @@ const Profile: React.FC = () => {
             {agentCode ? (
               <AgentReferralCodeCard agentCode={agentCode} />
             ) : null}
+            <Card
+              component={RouterLink}
+              to="/settings/notifications"
+              variant="outlined"
+              sx={{
+                textDecoration: 'none',
+                color: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                p: 2,
+                transition: 'border-color 0.2s, background-color 0.2s',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  bgcolor: 'action.hover',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 1,
+                  bgcolor: 'action.selected',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 2,
+                }}
+              >
+                <NotificationsIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {t(
+                    'notifications.preferences.title',
+                    'Notification preferences'
+                  )}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'notifications.preferences.subtitle',
+                    'Choose how Rendasua reaches you for orders, chat, and updates.'
+                  )}
+                </Typography>
+              </Box>
+              <ChevronRightIcon sx={{ color: 'text.secondary', fontSize: 24 }} />
+            </Card>
+
             {/* Manage Documents */}
             <Card
               component={RouterLink}
