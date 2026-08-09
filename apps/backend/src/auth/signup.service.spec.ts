@@ -153,6 +153,57 @@ describe('SignupService', () => {
       );
       expect(userProvisioning.createPendingUser).toHaveBeenCalled();
     });
+
+    it('releases abandoned unverified phone holders before creating', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: { ...insertedUser, email: null, phone_number: '+237600000099' },
+        entities: [{ id: 'client-123', type: 'client' }],
+      });
+
+      await service.startSignup({
+        first_name: 'New',
+        last_name: 'User',
+        phone_number: ' +237600000099 ',
+        personas: ['client'],
+        profile: {},
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ReleaseUnverifiedContact'),
+        { value: '+237600000099' }
+      );
+      const releaseMutation = hasuraSystemService.executeMutation.mock.calls.find(
+        ([query]) => String(query).includes('ReleaseUnverifiedContact')
+      )?.[0] as string;
+      expect(releaseMutation).toContain('phone_number: { _eq: $value }');
+      expect(releaseMutation).toContain('email_verified: { _eq: false }');
+      expect(releaseMutation).toContain('phone_number_verified: { _eq: false }');
+      expect(userProvisioning.createPendingUser).toHaveBeenCalled();
+    });
+
+    it('does not reclaim when a verified account already owns the phone', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ id: 'verified-owner' }],
+      });
+
+      await expect(
+        service.startSignup({
+          first_name: 'New',
+          last_name: 'User',
+          phone_number: '+237600000001',
+          personas: ['client'],
+          profile: {},
+        })
+      ).rejects.toThrow(
+        new HttpException(
+          { success: false, error: 'Phone number is already taken' },
+          HttpStatus.CONFLICT
+        )
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
   });
 
   describe('startSignup', () => {
@@ -530,7 +581,10 @@ describe('SignupService', () => {
       expect(result.user.email).toBe('new@example.com');
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('ReleaseUnverifiedContact'),
-        expect.objectContaining({ value: 'new@example.com' })
+        expect.objectContaining({
+          value: 'new@example.com',
+          excludeId: 'user-123',
+        })
       );
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('UpdateSignupContact'),

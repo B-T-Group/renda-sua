@@ -32,6 +32,30 @@ describe('WhatsAppWebhookController', () => {
     ).toThrow(ForbiddenException);
   });
 
+  it('rejects when hub.mode is not subscribe', () => {
+    expect(() =>
+      controller.verifyWebhook('unsubscribe', verifyToken, '12345', res as any)
+    ).toThrow(ForbiddenException);
+    expect(res.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects when configured verify token is empty', () => {
+    const unconfigured = new WhatsAppWebhookController({
+      get: jest.fn().mockReturnValue({ webhookVerifyToken: '' }),
+    } as unknown as ConfigService);
+
+    expect(() =>
+      unconfigured.verifyWebhook('subscribe', '', '12345', res as any)
+    ).toThrow(ForbiddenException);
+    expect(res.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects missing challenge even with a valid token', () => {
+    expect(() =>
+      controller.verifyWebhook('subscribe', verifyToken, undefined, res as any)
+    ).toThrow(ForbiddenException);
+  });
+
   it('acknowledges POST events without processing', () => {
     expect(controller.handleWebhook({ object: 'whatsapp_business_account' })).toEqual(
       { received: true }
