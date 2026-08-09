@@ -56,13 +56,13 @@ describe('StripeCheckoutService success URL fulfillment', () => {
     expect(createTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         success_url:
-          'https://app.rendasua.test/payment/success?reference=ST00000123yf0u&order=ORD-1&fulfillment=pickup',
+          'https://app.rendasua.test/payment/success?reference=ST000001234fzz&order=ORD-1&fulfillment=pickup',
       })
     );
     expect(createCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({
         successUrl:
-          'https://app.rendasua.test/payment/success?reference=ST00000123yf0u&order=ORD-1&fulfillment=pickup',
+          'https://app.rendasua.test/payment/success?reference=ST000001234fzz&order=ORD-1&fulfillment=pickup',
       })
     );
   });
@@ -75,7 +75,7 @@ describe('StripeCheckoutService success URL fulfillment', () => {
 
     const { success_url: successUrl } = createTransaction.mock.calls[0][0];
     expect(successUrl).toBe(
-      'https://app.rendasua.test/payment/success?reference=ST00000123yf0u&order=ORD-1'
+      'https://app.rendasua.test/payment/success?reference=ST000001234fzz&order=ORD-1'
     );
     expect(successUrl).not.toContain('fulfillment=');
   });
