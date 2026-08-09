@@ -29,8 +29,12 @@ export class WhatsAppService {
   }
 
   isConfigured(): boolean {
-    const { accessToken, phoneNumberId } = this.config;
-    return !!accessToken?.trim() && !!phoneNumberId?.trim();
+    const { accessToken, phoneNumberId, appSecret } = this.config;
+    return (
+      !!accessToken?.trim() &&
+      !!phoneNumberId?.trim() &&
+      !!appSecret?.trim()
+    );
   }
 
   /**
@@ -48,7 +52,7 @@ export class WhatsAppService {
   private assertConfigured(): void {
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException(
-        'WhatsApp is not configured (access token / phone number id)'
+        'WhatsApp is not configured (access token / phone number id / app secret)'
       );
     }
   }

@@ -15,15 +15,20 @@ export class WhatsAppChannel {
     private readonly configService: ConfigService<Configuration>
   ) {}
 
+  /** True when Graph credentials + app secret are present. */
   isConfigured(): boolean {
-    return this.whatsAppService.isConfigured() && this.featureEnabled();
+    return this.whatsAppService.isConfigured();
   }
 
+  /**
+   * Product WhatsApp notifications are off unless the explicit flag is true
+   * and access token / phone number id / app secret are all set.
+   */
   featureEnabled(): boolean {
-    return (
+    const flagOn =
       this.configService.get<Configuration['whatsapp']>('whatsapp')
-        ?.notificationsEnabled !== false
-    );
+        ?.notificationsEnabled === true;
+    return flagOn && this.isConfigured();
   }
 
   async send(params: {
@@ -31,11 +36,11 @@ export class WhatsAppChannel {
     locale?: string;
     payload: WhatsAppChannelPayload;
   }): Promise<ChannelAttemptResult> {
-    if (!this.isConfigured()) {
+    if (!this.featureEnabled()) {
       return {
         channel: 'whatsapp',
         status: 'skipped',
-        skippedReason: 'whatsapp_not_configured',
+        skippedReason: 'whatsapp_disabled_or_not_configured',
       };
     }
     const templateName = this.templateService.resolveMetaName(

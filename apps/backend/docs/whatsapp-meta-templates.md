@@ -33,5 +33,5 @@ CTA button label: `Open Order` → dynamic URL suffix from DeepLinkService unive
 ## Ops notes
 
 1. After approval, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
-2. Keep `WHATSAPP_NOTIFICATIONS_ENABLED=false` until templates are approved; then flip to `true`.
+2. Keep `WHATSAPP_NOTIFICATIONS_ENABLED` unset or `false` until templates are approved; then set it to `true`. Notifications stay off automatically while token/phone id/app secret are empty.
 3. Users must explicitly opt in (`whatsapp_enabled`) with a verified phone.

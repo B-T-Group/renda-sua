@@ -41,8 +41,22 @@ describe('WhatsAppService', () => {
     post.mockReset();
   });
 
-  it('isConfigured when token and phone number id are set', () => {
+  it('isConfigured when token, phone number id, and app secret are set', () => {
     expect(service.isConfigured()).toBe(true);
+  });
+
+  it('is not configured when app secret is missing', () => {
+    const configService = {
+      get: jest.fn().mockReturnValue({
+        webhookVerifyToken: 'verify',
+        accessToken,
+        phoneNumberId,
+        apiVersion: 'v25.0',
+        appSecret: '',
+        notificationsEnabled: true,
+      }),
+    } as unknown as ConfigService;
+    expect(new WhatsAppService(configService).isConfigured()).toBe(false);
   });
 
   it('sends a template message via Graph API', async () => {
