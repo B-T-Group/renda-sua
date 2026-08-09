@@ -105,26 +105,30 @@ export class SignupService {
   }
 
   /**
-   * True when a verified account already owns this email.
-   * Unverified pending signups do not block — they are reclaimable.
+   * True when any user row already owns this email.
+   *
+   * Do not treat `email_verified` / `phone_number_verified` as proof of a real
+   * account: Auth0 Universal Login never flips those DB flags, so "unverified
+   * reclaim" would strip contacts from active users and rebind Auth0 email
+   * lookup to a new pending signup.
    */
   async isEmailTaken(email: string): Promise<boolean> {
-    return this.isVerifiedContactTaken('email', this.normalizeEmail(email));
+    return this.isContactTaken('email', this.normalizeEmail(email));
   }
 
   /**
-   * True when a verified account already owns this phone.
-   * Unverified pending signups do not block — they are reclaimable.
+   * True when any user row already owns this phone.
+   * Same safety rule as {@link isEmailTaken}.
    */
   async isPhoneTaken(phoneNumber: string): Promise<boolean> {
-    return this.isVerifiedContactTaken(
+    return this.isContactTaken(
       'phone_number',
       this.normalizePhone(phoneNumber)
     );
   }
 
   async isEmailTakenByOther(email: string, excludeId: string): Promise<boolean> {
-    return this.isVerifiedContactTakenByOther(
+    return this.isContactTakenByOther(
       'email',
       this.normalizeEmail(email),
       excludeId
@@ -135,18 +139,14 @@ export class SignupService {
     phoneNumber: string,
     excludeId: string
   ): Promise<boolean> {
-    return this.isVerifiedContactTakenByOther(
+    return this.isContactTakenByOther(
       'phone_number',
       this.normalizePhone(phoneNumber),
       excludeId
     );
   }
 
-  /**
-   * True when a real account owns this contact. Any completed verification
-   * (email or phone) means the row is not an abandoned signup stub.
-   */
-  private async isVerifiedContactTaken(
+  private async isContactTaken(
     field: 'email' | 'phone_number',
     value: string
   ): Promise<boolean> {
@@ -155,17 +155,8 @@ export class SignupService {
       users: Array<{ id: string }>;
     }>(
       `
-      query VerifiedContactTaken($value: String!) {
-        users(
-          where: {
-            ${field}: { _eq: $value }
-            _or: [
-              { email_verified: { _eq: true } }
-              { phone_number_verified: { _eq: true } }
-            ]
-          }
-          limit: 1
-        ) { id }
+      query ContactTaken($value: String!) {
+        users(where: { ${field}: { _eq: $value } }, limit: 1) { id }
       }
     `,
       { value }
@@ -173,7 +164,7 @@ export class SignupService {
     return (result.users?.length || 0) > 0;
   }
 
-  private async isVerifiedContactTakenByOther(
+  private async isContactTakenByOther(
     field: 'email' | 'phone_number',
     value: string,
     excludeId: string
@@ -183,16 +174,9 @@ export class SignupService {
       users: Array<{ id: string }>;
     }>(
       `
-      query VerifiedContactTakenByOther($value: String!, $id: uuid!) {
+      query ContactTakenByOther($value: String!, $id: uuid!) {
         users(
-          where: {
-            ${field}: { _eq: $value }
-            id: { _neq: $id }
-            _or: [
-              { email_verified: { _eq: true } }
-              { phone_number_verified: { _eq: true } }
-            ]
-          }
+          where: { ${field}: { _eq: $value }, id: { _neq: $id } }
           limit: 1
         ) { id }
       }
@@ -200,55 +184,6 @@ export class SignupService {
       { value, id: excludeId }
     );
     return (result.users?.length || 0) > 0;
-  }
-
-  /** Clear email/phone on abandoned unverified stubs so unique email can be reused. */
-  private async releaseUnverifiedContactHolders(input: {
-    email?: string;
-    phoneNumber?: string;
-    excludeId?: string;
-  }): Promise<void> {
-    if (input.email) {
-      await this.clearUnverifiedField('email', input.email, input.excludeId);
-    }
-    if (input.phoneNumber) {
-      await this.clearUnverifiedField(
-        'phone_number',
-        input.phoneNumber,
-        input.excludeId
-      );
-    }
-  }
-
-  private async clearUnverifiedField(
-    field: 'email' | 'phone_number',
-    value: string,
-    excludeId?: string
-  ): Promise<void> {
-    const idFilter = excludeId ? `id: { _neq: $excludeId }` : '';
-    const vars: Record<string, string> = { value };
-    const varDefs = ['$value: String!'];
-    if (excludeId) {
-      varDefs.push('$excludeId: uuid!');
-      vars.excludeId = excludeId;
-    }
-    // Only fully unverified stubs — never strip contact from a verified account.
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation ReleaseUnverifiedContact(${varDefs.join(', ')}) {
-        update_users(
-          where: {
-            ${field}: { _eq: $value }
-            email_verified: { _eq: false }
-            phone_number_verified: { _eq: false }
-            ${idFilter}
-          }
-          _set: { ${field}: null }
-        ) { affected_rows }
-      }
-    `,
-      vars
-    );
   }
 
   async startSignup(payload: SignupStartPayload): Promise<{ user: SignupCreatedUser }> {
@@ -275,11 +210,6 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
-
-    await this.releaseUnverifiedContactHolders({
-      email: email || undefined,
-      phoneNumber: phoneNumber || undefined,
-    });
 
     const personas = this.normalizeSignupPersonas(payload);
     if (
@@ -436,11 +366,6 @@ export class SignupService {
     const nextPhone = hasPhoneUpdate
       ? phoneNumber || null
       : existing.phone_number;
-    await this.releaseUnverifiedContactHolders({
-      email: nextEmail || undefined,
-      phoneNumber: nextPhone || undefined,
-      excludeId: userId,
-    });
 
     return this.runUpdateContact(userId, {
       email: nextEmail,
