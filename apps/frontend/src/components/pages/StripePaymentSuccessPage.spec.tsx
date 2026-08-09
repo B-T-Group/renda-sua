@@ -6,12 +6,14 @@ import StripePaymentSuccessPage from './StripePaymentSuccessPage';
 
 const mockNavigate = jest.fn();
 const mockCheckStatusByReference = jest.fn();
-let searchParams = new URLSearchParams();
+const mockSearchParamsHolder = {
+  current: new URLSearchParams(),
+};
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
-  useSearchParams: () => [searchParams],
+  useSearchParams: () => [mockSearchParamsHolder.current],
 }));
 
 jest.mock('../../hooks/useStripePayments', () => ({
@@ -23,7 +25,7 @@ jest.mock('../../hooks/useStripePayments', () => ({
 describe('StripePaymentSuccessPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    searchParams = new URLSearchParams(
+    mockSearchParamsHolder.current = new URLSearchParams(
       'reference=ST123&order=ORD-1&fulfillment=pickup'
     );
   });
@@ -39,13 +41,15 @@ describe('StripePaymentSuccessPage', () => {
       screen.getByText(
         /You will only be charged when you collect your order at the store/i
       )
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/delivery agent picks up/i)).not.toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.queryByText(/delivery agent picks up/i)).toBeNull();
     expect(mockCheckStatusByReference).toHaveBeenCalledWith('ST123');
   });
 
   it('shows delivery charge-timing copy when fulfillment is absent', () => {
-    searchParams = new URLSearchParams('reference=ST123&order=ORD-1');
+    mockSearchParamsHolder.current = new URLSearchParams(
+      'reference=ST123&order=ORD-1'
+    );
 
     render(
       <I18nextProvider i18n={i18n}>
@@ -57,14 +61,12 @@ describe('StripePaymentSuccessPage', () => {
       screen.getByText(
         /You will only be charged when the delivery agent picks up your order from the business/i
       )
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/collect your order at the store/i)
-    ).not.toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.queryByText(/collect your order at the store/i)).toBeNull();
   });
 
   it('keeps rental copy even if fulfillment=pickup is present', () => {
-    searchParams = new URLSearchParams(
+    mockSearchParamsHolder.current = new URLSearchParams(
       'reference=ST123&booking=bk-1&bookingNumber=RB-1&fulfillment=pickup'
     );
 
@@ -76,9 +78,7 @@ describe('StripePaymentSuccessPage', () => {
 
     expect(
       screen.getByText(/Your rental payment was received/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/collect your order at the store/i)
-    ).not.toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.queryByText(/collect your order at the store/i)).toBeNull();
   });
 });
