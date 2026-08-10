@@ -491,7 +491,7 @@ const GET_AVAILABLE_ITEMS = `
         is_active: { _eq: true },
         status: { _eq: active },
         moderation_status: { _eq: approved },
-        business: { can_accept_orders: { _eq: true } }
+        business: { is_storefront_visible: { _eq: true } }
       }
       order_by: { name: asc }
     ) {
@@ -1075,6 +1075,8 @@ export class BusinessItemsService {
       );
     }
     await this.hasuraSystemService.ensureAccountForBusinessLocation(location.id);
+    // Primary/location country can change the payment rail → storefront visibility.
+    this.triggerLifecycleRecompute(businessId);
     return location;
   }
 
@@ -1158,6 +1160,13 @@ export class BusinessItemsService {
       id: locationId,
       data: setInput,
     });
+    if (
+      data.is_primary !== undefined ||
+      data.is_active !== undefined
+    ) {
+      // Primary/active flips can change the resolved payment rail for visibility.
+      this.triggerLifecycleRecompute(businessId);
+    }
     return result?.update_business_locations_by_pk ?? null;
   }
 

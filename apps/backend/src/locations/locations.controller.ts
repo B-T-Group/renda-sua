@@ -665,7 +665,7 @@ export class LocationsController {
             deleted_at: { _is_null: true }
             rental_item: {
               deleted_at: { _is_null: true }
-              business: { can_accept_orders: { _eq: true } }
+              business: { is_storefront_visible: { _eq: true } }
             }
             business_location: {
               is_active: { _eq: true }
@@ -682,7 +682,7 @@ export class LocationsController {
             deleted_at: { _is_null: true }
             rental_item: {
               deleted_at: { _is_null: true }
-              business: { can_accept_orders: { _eq: true } }
+              business: { is_storefront_visible: { _eq: true } }
             }
             business_location: {
               is_active: { _eq: true }

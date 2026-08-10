@@ -210,6 +210,7 @@ select_permissions:
         - is_verified
         - lifecycle_status
         - can_accept_orders
+        - is_storefront_visible
         - accepting_orders
         - reliability_tier
         - ai_tokens
@@ -227,6 +228,7 @@ select_permissions:
         - is_verified
         - lifecycle_status
         - can_accept_orders
+        - is_storefront_visible
         - merchant_agreement_version
         - merchant_agreement_accepted_at
         - account_type
@@ -247,6 +249,7 @@ select_permissions:
         - is_verified
         - lifecycle_status
         - can_accept_orders
+        - is_storefront_visible
         - ai_tokens
         - auto_enhance_enabled
         - tips_reminders_enabled
@@ -288,6 +291,7 @@ select_permissions:
         - is_verified
         - lifecycle_status
         - can_accept_orders
+        - is_storefront_visible
         - account_type
         - accepting_orders
         - paused_until

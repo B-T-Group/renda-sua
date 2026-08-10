@@ -74,14 +74,14 @@ export class BusinessVerificationService {
         : null;
     const lifecycleStatus = lifecycle?.lifecycle_status ?? 'created';
     const canAcceptOrders = lifecycle?.can_accept_orders ?? false;
+    const storefrontVisible = lifecycle?.is_storefront_visible ?? false;
     const launchPromo = await this.launchPromoService.getSlotForBusiness(
       businessId
     );
     return {
       ...base,
       lifecycle_status: lifecycleStatus,
-      // Alias for older clients: visibility now equals can_accept_orders (active).
-      is_storefront_visible: canAcceptOrders,
+      is_storefront_visible: storefrontVisible,
       can_accept_orders: canAcceptOrders,
       isOnboarding: this.resolveIsOnboarding(lifecycleStatus, base),
       suspension,

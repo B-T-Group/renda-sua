@@ -4,9 +4,11 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import type { PersonaId } from '../users/persona.types';
 import {
   getActivePersonaOrThrow,
@@ -74,8 +76,34 @@ export class AddressesService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly googleDistanceService: GoogleDistanceService
+    private readonly googleDistanceService: GoogleDistanceService,
+    private readonly moduleRef: ModuleRef
   ) {}
+
+  /** Lazy resolve to avoid pulling MerchantLifecycle into the global AddressesModule graph. */
+  private async recomputeBusinessLifecycle(
+    businessId: string | null | undefined
+  ): Promise<void> {
+    if (!businessId) return;
+    try {
+      const lifecycle = this.moduleRef.get(MerchantLifecycleService, {
+        strict: false,
+      });
+      const snapshot = await lifecycle.recompute(
+        businessId,
+        'location_address_change'
+      );
+      if (!snapshot) {
+        this.logger.warn(
+          `Lifecycle recompute returned null for business ${businessId} after address change`
+        );
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Lifecycle recompute failed for business ${businessId} after address change: ${error?.message ?? error}`
+      );
+    }
+  }
 
   /**
    * Format address components into a single string for geocoding
@@ -732,6 +760,7 @@ export class AddressesService {
       if (locationId) {
         await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
         businessLocationId = locationId;
+        await this.recomputeBusinessLifecycle(entityId);
       }
     }
 
@@ -1227,6 +1256,20 @@ export class AddressesService {
         }
       );
 
+      const countryChanged =
+        addressData.country !== undefined &&
+        addressData.country !== existingAddress.country;
+      const primaryChanged =
+        addressData.is_primary !== undefined &&
+        addressData.is_primary !== existingAddress.is_primary;
+      if (
+        (countryChanged || primaryChanged) &&
+        (ownershipResult.business_addresses?.length ?? 0) > 0
+      ) {
+        const businessId = await this.getBusinessIdForAddress(addressId);
+        await this.recomputeBusinessLifecycle(businessId);
+      }
+
       return {
         success: true,
         address: result.update_addresses_by_pk,
@@ -1244,6 +1287,20 @@ export class AddressesService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private async getBusinessIdForAddress(
+    addressId: string
+  ): Promise<string | null> {
+    const res = await this.hasuraSystemService.executeQuery(
+      `query BizForAddress($addressId: uuid!) {
+        business_addresses(where: { address_id: { _eq: $addressId } }, limit: 1) {
+          business_id
+        }
+      }`,
+      { addressId }
+    );
+    return res.business_addresses?.[0]?.business_id ?? null;
   }
 
   /**
@@ -1588,6 +1645,7 @@ export class AddressesService {
       locationId,
       addressId: address.id,
     });
+    await this.recomputeBusinessLifecycle(location.business_id);
 
     return {
       success: true,
@@ -1810,6 +1868,8 @@ export class AddressesService {
         instructions: updateData.instructions ?? undefined,
       }
     );
+    // Country/primary location address drives payment rail → storefront visibility.
+    await this.recomputeBusinessLifecycle(businessId);
 
     return {
       success: true,

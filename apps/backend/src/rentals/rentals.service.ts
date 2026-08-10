@@ -737,7 +737,7 @@ export class RentalsService {
     if (row.business_location?.is_active !== true) {
       return null;
     }
-    if (row.rental_item?.business?.can_accept_orders !== true) {
+    if (row.rental_item?.business?.is_storefront_visible !== true) {
       return null;
     }
     if (
@@ -4003,7 +4003,7 @@ export class RentalsService {
         { rental_item: { deleted_at: { _is_null: true } } },
         {
           rental_item: {
-            business: { can_accept_orders: { _eq: true } },
+            business: { is_storefront_visible: { _eq: true } },
           },
         },
         {

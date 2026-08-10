@@ -50,7 +50,7 @@ export class MarketplacePublicService {
   private async fetchStats(): Promise<StatsQueryResult> {
     const query = `
       query MarketplacePublicStats($cityLimit: Int!, $logoLimit: Int!) {
-        businesses_aggregate(where: { can_accept_orders: { _eq: true } }) {
+        businesses_aggregate(where: { is_storefront_visible: { _eq: true } }) {
           aggregate { count }
         }
         business_inventory_aggregate(
@@ -59,7 +59,7 @@ export class MarketplacePublicService {
             item: { moderation_status: { _eq: "approved" } }
             business_location: {
               is_active: { _eq: true }
-              business: { can_accept_orders: { _eq: true } }
+              business: { is_storefront_visible: { _eq: true } }
             }
           }
         ) {
@@ -73,7 +73,7 @@ export class MarketplacePublicService {
         city_locations: business_locations(
           where: {
             is_active: { _eq: true }
-            business: { can_accept_orders: { _eq: true } }
+            business: { is_storefront_visible: { _eq: true } }
             address: { city: { _is_null: false, _neq: "" } }
           }
           limit: $cityLimit
@@ -85,7 +85,7 @@ export class MarketplacePublicService {
         logo_locations: business_locations(
           where: {
             is_active: { _eq: true }
-            business: { can_accept_orders: { _eq: true } }
+            business: { is_storefront_visible: { _eq: true } }
             logo_url: { _is_null: false, _neq: "" }
           }
           limit: $logoLimit

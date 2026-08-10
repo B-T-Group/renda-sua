@@ -39,7 +39,7 @@ export interface BusinessPaymentAccountRow {
 export interface BusinessLifecycleSnapshot {
   id: string;
   lifecycle_status: BusinessLifecycleStatus;
-  /** @deprecated Alias of can_accept_orders for older clients. */
+  /** Catalog visibility (rail-aware; independent of can_accept_orders). */
   is_storefront_visible: boolean;
   can_accept_orders: boolean;
   is_verified: boolean;

@@ -70,3 +70,19 @@ export function deriveLifecycleStatus(
       return 'catalog_ready';
   }
 }
+
+/**
+ * Catalog visibility is rail-aware and independent of order acceptance:
+ * - Stripe: visible once agreement is signed (not created/suspended)
+ * - Mobile money: visible only when lifecycle is active (agreement + approved ID)
+ */
+export function deriveStorefrontVisibility(
+  rail: 'stripe' | 'mobile_money',
+  lifecycleStatus: BusinessLifecycleStatus
+): boolean {
+  if (lifecycleStatus === 'created' || lifecycleStatus === 'suspended') {
+    return false;
+  }
+  if (rail === 'stripe') return true;
+  return lifecycleStatus === 'active';
+}

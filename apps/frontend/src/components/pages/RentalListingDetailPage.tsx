@@ -868,6 +868,11 @@ const RentalListingDetailPage: React.FC = () => {
                 <RentalListingRequestSection
                   listingId={listingId}
                   isAuthenticated={isAuthenticated}
+                  merchantCanAcceptOrders={
+                    row.rental_item.business.can_accept_orders ??
+                    row.rental_item.business.is_verified ??
+                    false
+                  }
                   minRentalHours={row.min_rental_hours}
                   maxRentalHours={row.max_rental_hours}
                   unitsAvailable={Number(row.units_available) || 1}

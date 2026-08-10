@@ -2,6 +2,7 @@ import {
   aggregatePaymentCapability,
   aggregatePaymentCapabilityForProvider,
   deriveLifecycleStatus,
+  deriveStorefrontVisibility,
 } from './merchant-lifecycle-status.util';
 
 describe('deriveLifecycleStatus', () => {
@@ -31,6 +32,42 @@ describe('deriveLifecycleStatus', () => {
 
   it('returns active when payment is verified', () => {
     expect(deriveLifecycleStatus(true, 'VERIFIED')).toBe('active');
+  });
+});
+
+describe('deriveStorefrontVisibility', () => {
+  it('hides created and suspended on both rails', () => {
+    expect(deriveStorefrontVisibility('stripe', 'created')).toBe(false);
+    expect(deriveStorefrontVisibility('mobile_money', 'created')).toBe(false);
+    expect(deriveStorefrontVisibility('stripe', 'suspended')).toBe(false);
+    expect(deriveStorefrontVisibility('mobile_money', 'suspended')).toBe(false);
+  });
+
+  it('shows Stripe merchants after agreement (non-created/suspended)', () => {
+    expect(deriveStorefrontVisibility('stripe', 'catalog_ready')).toBe(true);
+    expect(deriveStorefrontVisibility('stripe', 'payment_setup_pending')).toBe(
+      true
+    );
+    expect(
+      deriveStorefrontVisibility('stripe', 'payment_verification_pending')
+    ).toBe(true);
+    expect(deriveStorefrontVisibility('stripe', 'active')).toBe(true);
+  });
+
+  it('shows mobile money merchants only when active', () => {
+    expect(deriveStorefrontVisibility('mobile_money', 'catalog_ready')).toBe(
+      false
+    );
+    expect(
+      deriveStorefrontVisibility('mobile_money', 'payment_setup_pending')
+    ).toBe(false);
+    expect(
+      deriveStorefrontVisibility(
+        'mobile_money',
+        'payment_verification_pending'
+      )
+    ).toBe(false);
+    expect(deriveStorefrontVisibility('mobile_money', 'active')).toBe(true);
   });
 });
 

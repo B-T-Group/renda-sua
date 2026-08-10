@@ -35,7 +35,13 @@ export interface RentalListingRow {
     operation_mode: string;
     rental_category: { id: string; name: string };
     rental_item_images: Array<{ id: string; image_url: string; alt_text?: string }>;
-    business: { id: string; name: string; is_verified?: boolean };
+    business: {
+      id: string;
+      name: string;
+      is_verified?: boolean;
+      can_accept_orders?: boolean;
+      is_storefront_visible?: boolean;
+    };
   };
   business_location: {
     id: string;

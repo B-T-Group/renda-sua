@@ -8,6 +8,7 @@ import {
   aggregatePaymentCapability,
   aggregatePaymentCapabilityForProvider,
   deriveLifecycleStatus,
+  deriveStorefrontVisibility,
   paymentProviderForRail,
 } from './merchant-lifecycle-status.util';
 import {
@@ -26,6 +27,7 @@ const BUSINESS_FIELDS = `
   name
   lifecycle_status
   can_accept_orders
+  is_storefront_visible
   is_verified
   merchant_agreement_version
   merchant_agreement_accepted_at
@@ -101,7 +103,7 @@ export class MerchantLifecycleService {
       await this.isCatalogReady(businessId),
       await this.resolvePaymentCapability(businessId)
     );
-    await this.setLifecycleStatus(businessId, next);
+    await this.persistLifecycleState(businessId, next, true);
     await this.recordHistory({
       businessId,
       fromStatus: 'suspended',
@@ -165,7 +167,7 @@ export class MerchantLifecycleService {
     if (!row) return null;
     return {
       ...row,
-      is_storefront_visible: row.can_accept_orders === true,
+      is_storefront_visible: row.is_storefront_visible === true,
     };
   }
 
@@ -200,28 +202,40 @@ export class MerchantLifecycleService {
   ): Promise<BusinessLifecycleSnapshot | null> {
     const current = await this.getBusinessSnapshot(businessId);
     if (!current) return null;
-    if (current.lifecycle_status === 'suspended') return current;
+    if (current.lifecycle_status === 'suspended') {
+      await this.syncStorefrontVisibility(businessId, 'suspended');
+      return this.getBusinessSnapshot(businessId);
+    }
+    const next = deriveLifecycleStatus(
+      await this.isCatalogReady(businessId),
+      await this.resolvePaymentCapability(businessId)
+    );
+    const statusChanged = next !== current.lifecycle_status;
+    await this.persistLifecycleState(businessId, next, statusChanged);
+    if (statusChanged) {
+      await this.afterLifecycleTransition(current, next, reason, changedByUserId);
+    }
+    return this.getBusinessSnapshot(businessId);
+  }
 
-    const catalogReady = await this.isCatalogReady(businessId);
-    const paymentCapability = await this.resolvePaymentCapability(businessId);
-    const next = deriveLifecycleStatus(catalogReady, paymentCapability);
-
-    if (next === current.lifecycle_status) return current;
-
-    await this.setLifecycleStatus(businessId, next);
+  private async afterLifecycleTransition(
+    previous: BusinessLifecycleSnapshot,
+    next: BusinessLifecycleStatus,
+    reason: string,
+    changedByUserId?: string
+  ): Promise<void> {
     await this.recordHistory({
-      businessId,
-      fromStatus: current.lifecycle_status,
+      businessId: previous.id,
+      fromStatus: previous.lifecycle_status,
       toStatus: next,
       reason,
       changedByType: changedByUserId ? 'admin' : 'system',
       changedByUserId,
     });
     if (next === 'active') {
-      await this.launchPromoService.confirmSlot(businessId);
+      await this.launchPromoService.confirmSlot(previous.id);
     }
-    await this.dispatchTransitionNotifications(current, next);
-    return this.getBusinessSnapshot(businessId);
+    await this.dispatchTransitionNotifications(previous, next);
   }
 
   private async isCatalogReady(businessId: string): Promise<boolean> {
@@ -414,7 +428,7 @@ export class MerchantLifecycleService {
     const current = await this.getBusinessSnapshot(businessId);
     if (!current) return null;
     if (current.lifecycle_status === 'suspended') return current;
-    await this.setLifecycleStatus(businessId, 'suspended');
+    await this.persistLifecycleState(businessId, 'suspended', true);
     await this.recordHistory({
       businessId,
       fromStatus: current.lifecycle_status,
@@ -489,21 +503,64 @@ export class MerchantLifecycleService {
     };
   }
 
-  private async setLifecycleStatus(
+  /**
+   * Persist lifecycle status and storefront visibility in one mutation when
+   * the status changes, so a failed visibility write cannot leave them split.
+   */
+  private async persistLifecycleState(
     businessId: string,
-    status: BusinessLifecycleStatus
+    status: BusinessLifecycleStatus,
+    updateStatus: boolean
   ): Promise<void> {
+    const rail = await this.paymentRoutingService.resolveRailForBusiness(
+      businessId
+    );
+    const visible = deriveStorefrontVisibility(rail, status);
+    if (updateStatus) {
+      const mutation = `
+        mutation SetLifecycleAndVisibility(
+          $id: uuid!
+          $status: business_lifecycle_status_enum!
+          $visible: Boolean!
+        ) {
+          update_businesses_by_pk(
+            pk_columns: { id: $id }
+            _set: { lifecycle_status: $status, is_storefront_visible: $visible }
+          ) { id }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(mutation, {
+        id: businessId,
+        status,
+        visible,
+      });
+      return;
+    }
+    await this.syncStorefrontVisibility(businessId, status, visible);
+  }
+
+  private async syncStorefrontVisibility(
+    businessId: string,
+    lifecycleStatus: BusinessLifecycleStatus,
+    knownVisible?: boolean
+  ): Promise<void> {
+    const visible =
+      knownVisible ??
+      deriveStorefrontVisibility(
+        await this.paymentRoutingService.resolveRailForBusiness(businessId),
+        lifecycleStatus
+      );
     const mutation = `
-      mutation SetLifecycle($id: uuid!, $status: business_lifecycle_status_enum!) {
+      mutation SetStorefrontVisible($id: uuid!, $visible: Boolean!) {
         update_businesses_by_pk(
           pk_columns: { id: $id }
-          _set: { lifecycle_status: $status }
+          _set: { is_storefront_visible: $visible }
         ) { id }
       }
     `;
     await this.hasuraSystemService.executeMutation(mutation, {
       id: businessId,
-      status,
+      visible,
     });
   }
 

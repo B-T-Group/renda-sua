@@ -1136,7 +1136,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 onClick={() => onAddToCart(inventory, selectionId)}
                 size="small"
                 fullWidth
-                disabled={!paymentsEnabled}
+                disabled={!paymentsEnabled || !merchantCanAcceptOrders}
                 aria-label={
                   inCart
                     ? t('cart.inCartA11y', 'In cart, quantity {{count}}. Add more', {

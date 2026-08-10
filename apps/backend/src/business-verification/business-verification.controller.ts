@@ -79,7 +79,7 @@ export class BusinessVerificationController {
             is_storefront_visible: {
               type: 'boolean',
               description:
-                'Deprecated alias of can_accept_orders (active). Kept for older clients.',
+                'Catalog visibility. Stripe: agreement signed; mobile money: lifecycle active (agreement + approved ID). Independent of can_accept_orders.',
             },
             can_accept_orders: { type: 'boolean' },
             suspension: {

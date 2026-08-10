@@ -1350,7 +1350,11 @@ export default function ItemDetailPage() {
                         onClick={() => handleAddToCart(inventoryItem)}
                         size="medium"
                         fullWidth
-                        disabled={!variantSelectionReady || !paymentsEnabled}
+                        disabled={
+                          !variantSelectionReady ||
+                          !paymentsEnabled ||
+                          !merchantCanAcceptOrders
+                        }
                         aria-label={
                           inCart
                             ? t(
@@ -1364,7 +1368,7 @@ export default function ItemDetailPage() {
                         {addToCartLabel}
                       </Button>
                     )}
-                    {inCart ? (
+                    {inCart && merchantCanAcceptOrders ? (
                       <Chip
                         icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
                         label={inCartLabel}

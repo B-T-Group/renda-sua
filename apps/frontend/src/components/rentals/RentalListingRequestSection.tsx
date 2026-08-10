@@ -77,6 +77,8 @@ function formatMoney(amount: number, currency: string): string {
 export interface RentalListingRequestSectionProps {
   listingId: string;
   isAuthenticated: boolean;
+  /** When false, show notice instead of the request form. */
+  merchantCanAcceptOrders?: boolean;
   minRentalHours?: number;
   maxRentalHours?: number | null;
   unitsAvailable?: number;
@@ -89,6 +91,7 @@ export interface RentalListingRequestSectionProps {
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
   listingId,
   isAuthenticated,
+  merchantCanAcceptOrders = true,
   minRentalHours = 1,
   maxRentalHours = null,
   unitsAvailable = 1,
@@ -389,7 +392,14 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
               boxSizing: 'border-box',
             }}
           >
-            {isAuthenticated ? (
+            {!merchantCanAcceptOrders ? (
+              <Alert severity="info">
+                {t(
+                  'checkout.merchantNotAcceptingOrders',
+                  'This merchant is currently completing account setup and is not yet accepting orders.'
+                )}
+              </Alert>
+            ) : isAuthenticated ? (
               <Stack spacing={2.5} sx={{ width: '100%', maxWidth: '100%' }}>
                 <Box>
                   <Typography variant="h6" fontWeight={700}>
