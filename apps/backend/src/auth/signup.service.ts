@@ -610,31 +610,14 @@ export class SignupService {
         HttpStatus.NOT_FOUND
       );
     }
-    if (set.email) {
-      await this.ensureContractForSignupUser(userId);
-    }
     return { user: result.update_users_by_pk };
-  }
-
-  private async ensureContractForSignupUser(userId: string): Promise<void> {
-    const result = await this.hasuraSystemService.executeQuery<{
-      users_by_pk: { business?: { id: string } | null } | null;
-    }>(
-      `
-      query SignupBusiness($id: uuid!) {
-        users_by_pk(id: $id) { business { id } }
-      }
-    `,
-      { id: userId }
-    );
-    const businessId = result.users_by_pk?.business?.id;
-    if (businessId) this.businessProvisioning.scheduleEnsureContract(businessId);
   }
 
   async verifyOtp(body: {
     email?: string;
     phone_number?: string;
     otp: string;
+    userId?: string;
   }) {
     const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
     const phone = body.phone_number?.trim()
@@ -649,10 +632,53 @@ export class SignupService {
         HttpStatus.BAD_REQUEST
       );
     }
-    if (email) {
-      return this.resolveEmailVerification(email, body.otp);
+    const tokenData = email
+      ? await this.resolveEmailVerification(email, body.otp)
+      : await this.resolvePhoneVerification(phone, body.otp);
+    await this.scheduleContractAfterOtp(body.userId, email, phone);
+    return tokenData;
+  }
+
+  private async scheduleContractAfterOtp(
+    userId: string | undefined,
+    email: string,
+    phone: string
+  ): Promise<void> {
+    const resolvedId =
+      userId?.trim() ||
+      (email ? await this.findUserIdByEmail(email) : null) ||
+      (phone ? await this.findUserIdByPhone(phone) : null);
+    if (resolvedId) {
+      await this.businessProvisioning.scheduleEnsureContractForUser(resolvedId);
     }
-    return this.resolvePhoneVerification(phone, body.otp);
+  }
+
+  private async findUserIdByEmail(email: string): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(
+      `
+      query SignupUserByEmail($email: String!) {
+        users(where: { email: { _eq: $email } }, limit: 1) { id }
+      }
+    `,
+      { email }
+    );
+    return result.users?.[0]?.id ?? null;
+  }
+
+  private async findUserIdByPhone(phone: string): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: Array<{ id: string }>;
+    }>(
+      `
+      query SignupUserByPhone($phone: String!) {
+        users(where: { phone_number: { _eq: $phone } }, limit: 1) { id }
+      }
+    `,
+      { phone }
+    );
+    return result.users?.[0]?.id ?? null;
   }
 
   private isTestUser(identifier: string, isPhone: boolean): boolean {
@@ -726,16 +752,14 @@ export class SignupService {
           last_name
           user_type_id
           email_verified
-          business { id }
         }
       }
     `,
       { id: userId, email }
     );
     const user = update.update_users_by_pk;
-    const businessId = user?.business?.id;
-    if (businessId) {
-      this.businessProvisioning.scheduleEnsureContract(businessId);
+    if (user?.id) {
+      await this.businessProvisioning.scheduleEnsureContractForUser(user.id);
     }
     return { user };
   }

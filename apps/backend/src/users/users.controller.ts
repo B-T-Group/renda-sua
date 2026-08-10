@@ -158,10 +158,86 @@ export class UsersController {
       });
   }
 
+  /**
+   * After Auth0 Universal Login (email or SMS OTP), first authenticated /me for a
+   * still-unverified business sends BoldSign, then persists verification flags.
+   * Flags are written only after ensure succeeds so a failed send can retry.
+   */
+  private async syncVerificationAndContractAfterAuth(
+    user: {
+      id: string;
+      email?: string | null;
+      phone_number?: string | null;
+      email_verified?: boolean | null;
+      phone_number_verified?: boolean | null;
+      business?: { id?: string } | null;
+    },
+    auth0Sub?: string
+  ): Promise<boolean> {
+    const businessId = user.business?.id;
+    if (!businessId) return false;
+    if (user.email_verified === true || user.phone_number_verified === true) {
+      return false;
+    }
+    try {
+      await this.businessContractsService.ensureContractForBusiness(businessId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Contract after Auth0 login failed for ${businessId}: ${error?.message}`
+      );
+      return false;
+    }
+    return this.markSignupVerifiedInDb(user, auth0Sub);
+  }
+
+  private verifiedFlagsForAuthChannel(
+    user: { email?: string | null; phone_number?: string | null },
+    auth0Sub?: string
+  ): Record<string, boolean> {
+    const set: Record<string, boolean> = {};
+    const sub = auth0Sub || '';
+    if (sub.startsWith('sms|') && user.phone_number) {
+      set.phone_number_verified = true;
+      return set;
+    }
+    if (user.email) set.email_verified = true;
+    else if (user.phone_number) set.phone_number_verified = true;
+    return set;
+  }
+
+  private async markSignupVerifiedInDb(
+    user: { id: string; email?: string | null; phone_number?: string | null },
+    auth0Sub?: string
+  ): Promise<boolean> {
+    const set = this.verifiedFlagsForAuthChannel(user, auth0Sub);
+    if (!Object.keys(set).length) return false;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation MarkSignupVerified($id: uuid!, $set: users_set_input!) {
+          update_users_by_pk(pk_columns: { id: $id }, _set: $set) { id }
+        }
+      `,
+        { id: user.id, set }
+      );
+      return true;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to mark signup verified for ${user.id}: ${error?.message}`
+      );
+      return false;
+    }
+  }
+
   @Get('me')
   async getCurrentUser(@ReqContext() ctx: RequestContext, @CurrentUser() auth0User: any) {
     try {
       const user = await this.hasuraUserService.getUser(ctx);
+      const verifiedViaAuthSession =
+        await this.syncVerificationAndContractAfterAuth(user, auth0User?.sub);
+      const verifiedFlags = verifiedViaAuthSession
+        ? this.verifiedFlagsForAuthChannel(user, auth0User?.sub)
+        : {};
       const country = await this.resolveUserCountry(user);
       const currency = country
         ? await this.addressesService.resolveCurrencyFromCountry(country)
@@ -183,6 +259,14 @@ export class UsersController {
         active_persona: user.active_persona,
         user: {
           ...user,
+          email_verified:
+            verifiedFlags.email_verified === true
+              ? true
+              : user.email_verified,
+          phone_number_verified:
+            verifiedFlags.phone_number_verified === true
+              ? true
+              : user.phone_number_verified,
           personas: derivePersonas(user),
           country,
           currency,

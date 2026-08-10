@@ -71,6 +71,7 @@ describe('SignupService', () => {
               .fn()
               .mockResolvedValue({ launchPromo: null }),
             scheduleEnsureContract: jest.fn(),
+            scheduleEnsureContractForUser: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -424,6 +425,9 @@ describe('SignupService', () => {
         expect.stringContaining('CompleteSignup'),
         { id: 'user-123', email: 'new@example.com' }
       );
+      expect(
+        businessProvisioning.scheduleEnsureContractForUser
+      ).toHaveBeenCalledWith('user-123');
     });
   });
 
@@ -505,9 +509,6 @@ describe('SignupService', () => {
         if (query.includes('GetSignupUser')) {
           return { users_by_pk: existingPendingUser };
         }
-        if (query.includes('SignupBusiness')) {
-          return { users_by_pk: { business: null } };
-        }
         return { users: [] };
       });
       hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
@@ -530,6 +531,9 @@ describe('SignupService', () => {
       });
 
       expect(result.user.email).toBe('new@example.com');
+      expect(
+        businessProvisioning.scheduleEnsureContractForUser
+      ).not.toHaveBeenCalled();
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('ReleaseUnverifiedContact'),
         expect.objectContaining({ value: 'new@example.com' })
@@ -592,6 +596,9 @@ describe('SignupService', () => {
         expires_in: 3600,
       };
       auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ id: 'user-123' }],
+      });
 
       await expect(
         service.verifyOtp({ email: ' New@Example.COM ', otp: '123456' })
@@ -600,6 +607,28 @@ describe('SignupService', () => {
         'new@example.com',
         '123456'
       );
+      expect(
+        businessProvisioning.scheduleEnsureContractForUser
+      ).toHaveBeenCalledWith('user-123');
+    });
+
+    it('schedules merchant contract when userId is provided with OTP', async () => {
+      const auth0Token = {
+        access_token: 'token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      };
+      auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
+
+      await service.verifyOtp({
+        email: 'new@example.com',
+        otp: '123456',
+        userId: 'user-456',
+      });
+
+      expect(
+        businessProvisioning.scheduleEnsureContractForUser
+      ).toHaveBeenCalledWith('user-456');
     });
 
     it('delegates phone OTP verification to Auth0 SMS', async () => {

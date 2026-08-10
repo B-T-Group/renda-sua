@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { Auth0Service } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 
 interface Auth0IdTokenClaims {
   sub?: string;
@@ -21,7 +22,8 @@ interface TokenData {
 export class LoginService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly auth0Service: Auth0Service
+    private readonly auth0Service: Auth0Service,
+    private readonly businessProvisioning: BusinessProvisioningService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -253,7 +255,15 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    await this.markEmailVerifiedIfNeeded(user.id, user.email_verified !== true);
+    const needsEmailVerify = user.email_verified !== true;
+    if (needsEmailVerify) {
+      try {
+        await this.businessProvisioning.ensureContractForUser(user.id);
+      } catch {
+        return tokenData;
+      }
+      await this.markEmailVerifiedIfNeeded(user.id, true);
+    }
     return tokenData;
   }
 
@@ -273,10 +283,15 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    await this.markPhoneVerifiedIfNeeded(
-      user.id,
-      user.phone_number_verified !== true
-    );
+    const needsPhoneVerify = user.phone_number_verified !== true;
+    if (needsPhoneVerify) {
+      try {
+        await this.businessProvisioning.ensureContractForUser(user.id);
+      } catch {
+        return tokenData;
+      }
+      await this.markPhoneVerifiedIfNeeded(user.id, true);
+    }
     return tokenData;
   }
 

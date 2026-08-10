@@ -69,7 +69,7 @@ export class BusinessProvisioningService {
       );
     }
 
-    this.scheduleEnsureContract(business.id);
+    // Merchant agreement is sent after OTP confirmation, not at account creation.
 
     const country =
       input.countryCode ||
@@ -104,6 +104,41 @@ export class BusinessProvisioningService {
           `Contract creation after signup failed for ${businessId}: ${error?.message}`
         );
       });
+  }
+
+  /** Look up business id for a user; null when no business persona. */
+  private async findBusinessIdForUser(userId: string): Promise<string | null> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        users_by_pk: { business?: { id: string } | null } | null;
+      }>(
+        `
+        query BusinessForContract($id: uuid!) {
+          users_by_pk(id: $id) { business { id } }
+        }
+      `,
+        { id: userId }
+      );
+      return result.users_by_pk?.business?.id ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Contract lookup after OTP failed for user ${userId}: ${error?.message}`
+      );
+      return null;
+    }
+  }
+
+  /** Fire-and-forget BoldSign send when the user has a business persona. */
+  async scheduleEnsureContractForUser(userId: string): Promise<void> {
+    const businessId = await this.findBusinessIdForUser(userId);
+    if (businessId) this.scheduleEnsureContract(businessId);
+  }
+
+  /** Await BoldSign ensure; throws on failure so callers can retry. */
+  async ensureContractForUser(userId: string): Promise<void> {
+    const businessId = await this.findBusinessIdForUser(userId);
+    if (!businessId) return;
+    await this.businessContractsService.ensureContractForBusiness(businessId);
   }
 
   private async safeLinkBusinessAddress(
