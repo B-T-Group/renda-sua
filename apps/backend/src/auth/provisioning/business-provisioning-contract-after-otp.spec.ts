@@ -1,3 +1,19 @@
+jest.mock('../../business-contracts/business-contracts.service', () => ({
+  BusinessContractsService: class BusinessContractsService {},
+}));
+jest.mock('../../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+jest.mock('../../addresses/addresses.service', () => ({
+  AddressesService: class AddressesService {},
+}));
+jest.mock('../../launch-promo/launch-promo.service', () => ({
+  LaunchPromoService: class LaunchPromoService {},
+}));
+
 import { BusinessProvisioningService } from './business-provisioning.service';
 
 describe('BusinessProvisioningService contract after OTP', () => {
@@ -15,8 +31,6 @@ describe('BusinessProvisioningService contract after OTP', () => {
     };
     service = new BusinessProvisioningService(
       hasuraSystemService as never,
-      {} as never,
-      {} as never,
       {} as never,
       businessContractsService as never,
       {} as never,

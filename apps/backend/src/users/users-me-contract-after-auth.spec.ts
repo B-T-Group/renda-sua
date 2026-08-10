@@ -4,6 +4,21 @@ jest.mock('../addresses/addresses.service', () => ({
 jest.mock('../agents/agent-referrals.service', () => ({
   AgentReferralsService: jest.fn(),
 }));
+jest.mock('../business-referrals/business-referrals.service', () => ({
+  BusinessReferralsService: class BusinessReferralsService {},
+}));
+jest.mock('../business-contracts/business-contracts.service', () => ({
+  BusinessContractsService: class BusinessContractsService {},
+}));
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+jest.mock('../launch-promo/launch-promo.service', () => ({
+  LaunchPromoService: class LaunchPromoService {},
+}));
 jest.mock('../hasura/hasura-system.service', () => ({
   HasuraSystemService: jest.fn(),
 }));
