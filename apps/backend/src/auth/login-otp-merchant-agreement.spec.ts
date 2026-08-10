@@ -1,3 +1,19 @@
+jest.mock('./provisioning/business-provisioning.service', () => ({
+  BusinessProvisioningService: class BusinessProvisioningService {},
+}));
+jest.mock('../business-contracts/business-contracts.service', () => ({
+  BusinessContractsService: class BusinessContractsService {},
+}));
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: class AddressesService {},
+}));
+
 import { LoginService } from './login.service';
 
 function unsignedJwt(payload: Record<string, unknown>): string {
