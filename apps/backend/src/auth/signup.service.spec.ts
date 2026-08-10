@@ -1,5 +1,20 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+
+// Avoid loading provisioning deps → notifications circular graph under Jest.
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: jest.fn(),
+}));
+jest.mock('./provisioning/business-provisioning.service', () => ({
+  BusinessProvisioningService: jest.fn(),
+}));
+jest.mock('./provisioning/referral-provisioning.service', () => ({
+  ReferralProvisioningService: jest.fn(),
+}));
+jest.mock('./provisioning/user-provisioning.service', () => ({
+  UserProvisioningService: jest.fn(),
+}));
+
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
