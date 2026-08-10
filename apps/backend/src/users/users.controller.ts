@@ -31,6 +31,7 @@ import {
   ResolvedBusinessReferral,
 } from '../business-referrals/business-referrals.service';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
+import { LaunchPromoService } from '../launch-promo/launch-promo.service';
 import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { AccountDeletionService } from './account-deletion.service';
@@ -143,7 +144,8 @@ export class UsersController {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly businessContractsService: BusinessContractsService,
     private readonly rbacService: RbacService,
-    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
+    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService,
+    private readonly launchPromoService: LaunchPromoService
   ) {}
 
   private scheduleEnsureContract(businessId: string): void {
@@ -965,7 +967,7 @@ export class UsersController {
           );
         }
         if (inserted.business?.id && businessReferral) {
-          await this.businessReferralsService.notifyAgentOfBusinessReferral(
+          await this.businessReferralsService.notifyReferrerOfBusinessReferral(
             {
               businessId: inserted.business.id,
               countryCode: userData.address?.country,
@@ -980,6 +982,10 @@ export class UsersController {
         }
         if (inserted.business?.id) {
           this.scheduleEnsureContract(inserted.business.id);
+          await this.launchPromoService.claimSlotIfAvailable(
+            inserted.business.id,
+            userData.address?.country
+          );
         }
         return {
           success: true,
@@ -1154,11 +1160,16 @@ export class UsersController {
         this.businessReferralsService.getBusinessInsertReferralFields(
           businessReferral
         );
-      const hasReferral = Boolean(referralFields.business_referral_agent_id);
+      const hasAgentReferral = Boolean(
+        referralFields.business_referral_agent_id
+      );
+      const hasBusinessReferral = Boolean(
+        referralFields.business_referral_business_id
+      );
       const r = await this.hasuraSystemService.executeMutation<{
         insert_businesses_one: { id: string };
       }>(
-        hasReferral
+        hasAgentReferral
           ? `
         mutation AddBusiness(
           $userId: uuid!
@@ -1183,7 +1194,32 @@ export class UsersController {
           }
         }
       `
-          : `
+          : hasBusinessReferral
+            ? `
+        mutation AddBusiness(
+          $userId: uuid!
+          $name: String!
+          $mi: business_main_interest_enum!
+          $referrerBusinessId: uuid!
+          $referralCode: String!
+        ) {
+          insert_businesses_one(object: {
+            user_id: $userId
+            name: $name
+            main_interest: $mi
+            referred_by_business_id: $referrerBusinessId
+            referral_code_used: $referralCode
+          }) {
+            id
+            user_id
+            name
+            main_interest
+            created_at
+            updated_at
+          }
+        }
+      `
+            : `
         mutation AddBusiness($userId: uuid!, $name: String!, $mi: business_main_interest_enum!) {
           insert_businesses_one(object: { user_id: $userId, name: $name, main_interest: $mi }) {
             id
@@ -1195,7 +1231,7 @@ export class UsersController {
           }
         }
       `,
-        hasReferral
+        hasAgentReferral
           ? {
               userId: uid,
               name,
@@ -1203,7 +1239,16 @@ export class UsersController {
               agentId: referralFields.business_referral_agent_id,
               referralCode: referralFields.business_referral_code_used,
             }
-          : { userId: uid, name, mi }
+          : hasBusinessReferral
+            ? {
+                userId: uid,
+                name,
+                mi,
+                referrerBusinessId:
+                  referralFields.business_referral_business_id,
+                referralCode: referralFields.business_referral_code_used,
+              }
+            : { userId: uid, name, mi }
       );
       if (source) {
         const locationId = await this.seedAddressOrRollbackPersona(
@@ -1230,7 +1275,7 @@ export class UsersController {
       }
       const countryCode = await this.resolveUserCountry(user);
       if (businessReferral) {
-        await this.businessReferralsService.notifyAgentOfBusinessReferral(
+        await this.businessReferralsService.notifyReferrerOfBusinessReferral(
           {
             businessId: r.insert_businesses_one.id,
             countryCode: source?.country ?? countryCode ?? undefined,
@@ -1242,6 +1287,10 @@ export class UsersController {
         );
       }
       this.scheduleEnsureContract(r.insert_businesses_one.id);
+      await this.launchPromoService.claimSlotIfAvailable(
+        r.insert_businesses_one.id,
+        source?.country ?? countryCode
+      );
       return { success: true, business: r.insert_businesses_one };
     }
     throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);

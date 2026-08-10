@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { LaunchPromoService } from '../launch-promo/launch-promo.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { WalletCreditCommissionType } from '../notifications/wallet-credit-push.messages';
@@ -23,7 +24,8 @@ export class CommissionsService {
     private readonly giveChangePayoutService: GiveChangePayoutService,
     private readonly notificationsService: NotificationsService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly stripePayoutService: StripePayoutService
+    private readonly stripePayoutService: StripePayoutService,
+    private readonly launchPromoService: LaunchPromoService
   ) {}
 
   /**
@@ -164,10 +166,16 @@ export class CommissionsService {
    * Calculate commission breakdown for an order.
    * Uses business_location commission override when order has business_location_id.
    */
-  async calculateCommissions(order: any): Promise<CommissionBreakdown> {
+  async calculateCommissions(
+    order: any,
+    options?: { forceZeroItemCommission?: boolean }
+  ): Promise<CommissionBreakdown> {
     try {
       const businessLocationId = order.business_location_id ?? order.business_location?.id ?? null;
       const config = await this.getCommissionConfigs(businessLocationId);
+      if (options?.forceZeroItemCommission) {
+        config.rendasuaItemCommissionPercentage = 0;
+      }
 
       const partners = await this.getActivePartners();
 
@@ -214,7 +222,34 @@ export class CommissionsService {
    * Distribute item-side commissions and business subtotal (on agent pickup).
    */
   async distributeItemCommissions(order: any): Promise<void> {
-    const breakdown = await this.calculateCommissions(order);
+    const businessId = await this.resolveOrderBusinessId(order);
+    const orderId = order?.id as string | undefined;
+    const promoApplied =
+      businessId && orderId
+        ? await this.launchPromoService.consumePromoOrder(businessId, orderId)
+        : false;
+    if (promoApplied) {
+      this.logger.log(
+        `Launch promo 0% item commission applied for order ${order.order_number}`
+      );
+    }
+    try {
+      await this.settleItemCommissions(order, promoApplied);
+    } catch (error: any) {
+      if (promoApplied && businessId && orderId) {
+        await this.launchPromoService.restorePromoOrder(businessId, orderId);
+      }
+      throw error;
+    }
+  }
+
+  private async settleItemCommissions(
+    order: any,
+    forceZeroItemCommission: boolean
+  ): Promise<void> {
+    const breakdown = await this.calculateCommissions(order, {
+      forceZeroItemCommission,
+    });
     const rendasuaHQUser = await this.getRendasuaHQUser();
     if (!rendasuaHQUser) {
       throw new Error('RendaSua HQ user not found');
@@ -224,7 +259,8 @@ export class CommissionsService {
       order,
       breakdown.itemCommission,
       rendasuaHQUser,
-      partners
+      partners,
+      forceZeroItemCommission
     );
     await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
   }
@@ -639,11 +675,17 @@ export class CommissionsService {
     order: any,
     breakdown: { partner: number; rendasua: number },
     rendasuaHQUser: any,
-    partners: Partners[]
+    partners: Partners[],
+    forceZeroItemCommission = false
   ): Promise<void> {
-    const businessLocationId = order.business_location_id ?? order.business_location?.id ?? null;
+    if (forceZeroItemCommission) {
+      return;
+    }
+    const businessLocationId =
+      order.business_location_id ?? order.business_location?.id ?? null;
     const config = await this.getCommissionConfigs(businessLocationId);
-    const rendasuaItemAmount = (order.subtotal * config.rendasuaItemCommissionPercentage) / 100;
+    const rendasuaItemAmount =
+      (order.subtotal * config.rendasuaItemCommissionPercentage) / 100;
 
     for (const partner of partners) {
       const partnerAmount = (rendasuaItemAmount * partner.item_commission) / 100;
@@ -943,6 +985,27 @@ export class CommissionsService {
       auto_withdraw_commissions: Boolean(row.auto_withdraw_commissions),
       phone: registryPhone ?? row.user?.phone_number,
     };
+  }
+
+  private async resolveOrderBusinessId(order: any): Promise<string | null> {
+    if (order?.business_id) return String(order.business_id);
+    const locationId =
+      order?.business_location_id ?? order?.business_location?.id ?? null;
+    if (!locationId) return null;
+    try {
+      const result = await this.hasuraSystemService.executeQuery(
+        `query OrderBusinessId($id: uuid!) {
+          business_locations_by_pk(id: $id) { business_id }
+        }`,
+        { id: locationId }
+      );
+      return result?.business_locations_by_pk?.business_id ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to resolve business for location ${locationId}: ${error?.message}`
+      );
+      return null;
+    }
   }
 
   /**

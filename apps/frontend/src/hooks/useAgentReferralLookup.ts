@@ -5,6 +5,7 @@ export interface AgentReferralLookupResult {
   agentCode: string;
   fullName: string;
   firstName?: string;
+  kind?: 'agent' | 'business';
 }
 
 interface UseAgentReferralLookupState {
@@ -50,30 +51,65 @@ export const useAgentReferralLookup = (
       setResult(null);
 
       try {
-        const response = await apiClient.get<{
-          success: boolean;
-          agentCode: string;
-          fullName: string;
-          firstName?: string;
-        }>(`/agents/public/by-code/${trimmed}`);
+        const [agentOutcome, businessOutcome] = await Promise.all([
+          apiClient
+            .get<{
+              success: boolean;
+              agentCode: string;
+              fullName: string;
+              firstName?: string;
+            }>(`/agents/public/by-code/${trimmed}`)
+            .then((res) => ({ ok: true as const, data: res.data }))
+            .catch(() => ({ ok: false as const, data: null })),
+          apiClient
+            .get<{
+              success: boolean;
+              businessCode: string;
+              businessName: string;
+            }>(`/businesses/public/by-code/${trimmed}`)
+            .then((res) => ({ ok: true as const, data: res.data }))
+            .catch(() => ({ ok: false as const, data: null })),
+        ]);
 
         if (cancelled) return;
 
-        if (response.data.success) {
-          setResult({
-            agentCode: response.data.agentCode,
-            fullName: response.data.fullName,
-            firstName: response.data.firstName,
-          });
-        } else {
-          setError('No agent found for this code');
+        const agentHit = agentOutcome.ok && agentOutcome.data?.success;
+        const businessHit =
+          businessOutcome.ok && businessOutcome.data?.success;
+
+        // Match backend: reject legacy agent+business code collisions.
+        if (agentHit && businessHit) {
+          setError('This referral code is not currently active');
+          return;
         }
+
+        if (agentHit && agentOutcome.data) {
+          setResult({
+            agentCode: agentOutcome.data.agentCode,
+            fullName: agentOutcome.data.fullName,
+            firstName: agentOutcome.data.firstName,
+            kind: 'agent',
+          });
+          return;
+        }
+
+        if (businessHit && businessOutcome.data) {
+          setResult({
+            agentCode: businessOutcome.data.businessCode,
+            fullName: businessOutcome.data.businessName,
+            firstName: businessOutcome.data.businessName,
+            kind: 'business',
+          });
+          return;
+        }
+
+        setError('No referrer found for this code');
       } catch (err: any) {
         if (cancelled) return;
         const message =
           err?.response?.data?.error ||
           err?.message ||
-          'No agent found for this code';
+          'No referrer found for this code';
         setError(message);
       } finally {
         if (!cancelled) {
@@ -90,4 +126,3 @@ export const useAgentReferralLookup = (
 
   return { result, loading, error };
 };
-

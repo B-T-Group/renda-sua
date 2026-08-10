@@ -1,3 +1,7 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { BusinessReferralPayoutsService } from './business-referral-payouts.service';
 
 describe('BusinessReferralPayoutsService', () => {
@@ -21,6 +25,7 @@ describe('BusinessReferralPayoutsService', () => {
   };
 
   const business = {
+    kind: 'agent' as const,
     id: 'business-1',
     name: 'Demo Store',
     referred_by_agent_id: 'agent-1',
@@ -58,10 +63,13 @@ describe('BusinessReferralPayoutsService', () => {
     paymentRoutingService.getUserCountryCode.mockResolvedValue('CM');
     paymentRoutingService.resolveRailForUser.mockResolvedValue('mobile_money');
     hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-      if (query.includes('EligibleReferredBusinesses')) {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
         return { businesses: [business] };
       }
-      if (query.includes('GetAgentAccount')) {
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'account-1' }] };
       }
       return {};

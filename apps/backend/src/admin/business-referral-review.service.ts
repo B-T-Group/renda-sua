@@ -37,14 +37,28 @@ type ReviewRow = {
   item_marks?: Array<{ item_id: string; quality: string }>;
 };
 
+type BusinessReferrerSummary = {
+  id: string;
+  name: string | null;
+  business_code: string | null;
+  user: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    preferred_language?: string | null;
+  } | null;
+};
+
 type QueueBusinessRow = {
   id: string;
   name: string;
   created_at: string;
-  referred_by_agent_id: string;
+  referred_by_agent_id: string | null;
+  referred_by_business_id?: string | null;
   items_aggregate: { aggregate: { count: number } | null };
   business_referral_reviews: ReviewRow[];
   referring_agent: AgentSummary | null;
+  referring_business?: BusinessReferrerSummary | null;
 };
 
 export type ReferralReviewQueueItem = {
@@ -58,12 +72,20 @@ export type ReferralReviewQueueItem = {
   badItemCount: number;
   reviewedAt: string | null;
   isPaid: boolean;
+  referrerKind: 'agent' | 'business';
   agent: {
     agentId: string;
     agentCode: string | null;
     firstName: string;
     lastName: string;
   };
+  referringBusiness: {
+    businessId: string;
+    businessCode: string | null;
+    name: string;
+    firstName: string;
+    lastName: string;
+  } | null;
 };
 
 export type ReferralReviewItem = {
@@ -129,11 +151,13 @@ export class BusinessReferralReviewService {
     goodItemCount: number;
     badItemCount: number;
     reviewedAt: string | null;
+    referrerKind: 'agent' | 'business';
     agent: ReferralReviewQueueItem['agent'];
+    referringBusiness: ReferralReviewQueueItem['referringBusiness'];
     items: ReferralReviewItem[];
   }> {
     const business = await this.fetchDetailBusiness(businessId);
-    if (!business?.referred_by_agent_id || !business.referring_agent) {
+    if (!this.hasReferrer(business) || !business) {
       throw new NotFoundException('Referred business not found');
     }
     const review = business.business_referral_reviews?.[0] ?? null;
@@ -150,7 +174,11 @@ export class BusinessReferralReviewService {
       goodItemCount: review?.good_item_count ?? 0,
       badItemCount: review?.bad_item_count ?? 0,
       reviewedAt: review?.reviewed_at ?? null,
+      referrerKind: business.referred_by_business_id ? 'business' : 'agent',
       agent: this.toAgentSummary(business.referring_agent),
+      referringBusiness: this.toBusinessReferrerSummary(
+        business.referring_business ?? null
+      ),
       items: (business.items ?? []).map((item) =>
         this.toReviewItem(item, markByItem.get(item.id) ?? null)
       ),
@@ -175,7 +203,8 @@ export class BusinessReferralReviewService {
     }
     const reviewId = await this.submitReviewAtomic({
       businessId,
-      agentId: business!.referred_by_agent_id!,
+      agentId: business!.referred_by_agent_id ?? null,
+      referrerBusinessId: business!.referred_by_business_id ?? null,
       status,
       rejectionReason,
       goodItemCount,
@@ -342,7 +371,11 @@ export class BusinessReferralReviewService {
       badItemCount: review?.bad_item_count ?? 0,
       reviewedAt: review?.reviewed_at ?? null,
       isPaid: !unpaid,
+      referrerKind: row.referred_by_business_id ? 'business' : 'agent',
       agent: this.toAgentSummary(row.referring_agent),
+      referringBusiness: this.toBusinessReferrerSummary(
+        row.referring_business ?? null
+      ),
     };
   }
 
@@ -359,7 +392,8 @@ export class BusinessReferralReviewService {
       items_aggregate: { aggregate: { count: number } | null };
       business_referral_payouts: Array<{ id: string }>;
     };
-    agent: AgentSummary;
+    agent: AgentSummary | null;
+    referrer_business?: BusinessReferrerSummary | null;
   }): ReferralReviewQueueItem {
     return {
       businessId: row.business.id,
@@ -372,7 +406,11 @@ export class BusinessReferralReviewService {
       badItemCount: row.bad_item_count,
       reviewedAt: row.reviewed_at,
       isPaid: (row.business.business_referral_payouts?.length ?? 0) > 0,
+      referrerKind: row.referrer_business ? 'business' : 'agent',
       agent: this.toAgentSummary(row.agent),
+      referringBusiness: this.toBusinessReferrerSummary(
+        row.referrer_business ?? null
+      ),
     };
   }
 
@@ -385,6 +423,19 @@ export class BusinessReferralReviewService {
     };
   }
 
+  private toBusinessReferrerSummary(
+    business: BusinessReferrerSummary | null
+  ): ReferralReviewQueueItem['referringBusiness'] {
+    if (!business) return null;
+    return {
+      businessId: business.id,
+      businessCode: business.business_code,
+      name: business.name ?? '',
+      firstName: business.user?.first_name ?? '',
+      lastName: business.user?.last_name ?? '',
+    };
+  }
+
   private async fetchDetailBusiness(businessId: string) {
     const result = await this.hasuraSystemService.executeQuery<{
       businesses_by_pk: {
@@ -392,7 +443,9 @@ export class BusinessReferralReviewService {
         name: string;
         created_at: string;
         referred_by_agent_id: string | null;
+        referred_by_business_id: string | null;
         referring_agent: AgentSummary | null;
+        referring_business: BusinessReferrerSummary | null;
         business_referral_payouts: Array<{ id: string }>;
         business_referral_reviews: ReviewRow[];
         items: Array<{
@@ -422,20 +475,32 @@ export class BusinessReferralReviewService {
     return result?.businesses_by_pk ?? null;
   }
 
+  private hasReferrer(
+    business: Awaited<ReturnType<typeof this.fetchDetailBusiness>>
+  ): boolean {
+    if (!business) return false;
+    if (business.referred_by_agent_id && business.referring_agent) return true;
+    if (business.referred_by_business_id && business.referring_business) {
+      return true;
+    }
+    return false;
+  }
+
   private assertCanSubmit(
     business: Awaited<ReturnType<typeof this.fetchDetailBusiness>>
   ): void {
-    if (!business?.referred_by_agent_id || !business.referring_agent) {
+    if (!this.hasReferrer(business)) {
       throw new NotFoundException('Referred business not found');
     }
-    if ((business.business_referral_payouts?.length ?? 0) > 0) {
+    if ((business!.business_referral_payouts?.length ?? 0) > 0) {
       throw new ConflictException('Referral already paid; review is locked');
     }
   }
 
   private async submitReviewAtomic(params: {
     businessId: string;
-    agentId: string;
+    agentId: string | null;
+    referrerBusinessId: string | null;
     status: string;
     rejectionReason: string | null;
     goodItemCount: number;
@@ -447,6 +512,7 @@ export class BusinessReferralReviewService {
     const object: Record<string, unknown> = {
       business_id: params.businessId,
       agent_id: params.agentId,
+      referrer_business_id: params.referrerBusinessId,
       status: params.status,
       rejection_reason: params.rejectionReason,
       good_item_count: params.goodItemCount,
@@ -475,24 +541,41 @@ export class BusinessReferralReviewService {
     return id;
   }
 
+  private resolveReferrerUser(
+    business: NonNullable<Awaited<ReturnType<typeof this.fetchDetailBusiness>>>
+  ): { userId: string; preferredLanguage: string } | null {
+    const agentUser = business.referring_agent?.user;
+    if (agentUser?.id) {
+      return {
+        userId: agentUser.id,
+        preferredLanguage: agentUser.preferred_language ?? 'en',
+      };
+    }
+    const businessUser = business.referring_business?.user;
+    if (businessUser?.id) {
+      return {
+        userId: businessUser.id,
+        preferredLanguage: businessUser.preferred_language ?? 'en',
+      };
+    }
+    return null;
+  }
+
   private async notifyRejection(
     business: NonNullable<Awaited<ReturnType<typeof this.fetchDetailBusiness>>>,
     reviewId: string,
     reason: string
   ): Promise<void> {
-    const agent = business.referring_agent!;
-    const userId = agent.user?.id;
-    if (!userId) return;
-    const isFr = (agent.user?.preferred_language ?? 'en')
-      .toLowerCase()
-      .startsWith('fr');
+    const referrer = this.resolveReferrerUser(business);
+    if (!referrer) return;
+    const isFr = referrer.preferredLanguage.toLowerCase().startsWith('fr');
     const title = isFr ? 'Parrainage refusé' : 'Referral payout rejected';
     const body = isFr
       ? `Parrainage de ${business.name} refusé : ${reason}`
       : `Referral for ${business.name} was rejected: ${reason}`;
     try {
       await this.hasuraSystemService.executeMutation(Q.INSERT_REJECTION_MESSAGE, {
-        userId,
+        userId: referrer.userId,
         reviewId,
         message: body,
         payload: {
@@ -505,39 +588,51 @@ export class BusinessReferralReviewService {
       this.logger.warn(`Failed to insert rejection message: ${error.message}`);
     }
     try {
-      await this.notificationsService.sendInternalPushByUserId(userId, title, body, {
-        event: 'business_referral_review_rejected',
-        businessId: business.id,
-        businessName: business.name,
-        rejectionReason: reason,
-        reviewId,
-      });
+      await this.notificationsService.sendInternalPushByUserId(
+        referrer.userId,
+        title,
+        body,
+        {
+          event: 'business_referral_review_rejected',
+          businessId: business.id,
+          businessName: business.name,
+          rejectionReason: reason,
+          reviewId,
+        }
+      );
     } catch (error: any) {
-      this.logger.warn(`Rejection push failed for ${userId}: ${error.message}`);
+      this.logger.warn(
+        `Rejection push failed for ${referrer.userId}: ${error.message}`
+      );
     }
   }
 
   private async notifyApproval(
     business: NonNullable<Awaited<ReturnType<typeof this.fetchDetailBusiness>>>
   ): Promise<void> {
-    const userId = business.referring_agent?.user?.id;
-    if (!userId) return;
-    const isFr = (business.referring_agent?.user?.preferred_language ?? 'en')
-      .toLowerCase()
-      .startsWith('fr');
+    const referrer = this.resolveReferrerUser(business);
+    if (!referrer) return;
+    const isFr = referrer.preferredLanguage.toLowerCase().startsWith('fr');
     const title = isFr ? 'Parrainage approuvé' : 'Referral approved';
     const body = isFr
       ? `Parrainage de ${business.name} approuvé — crédit au prochain cycle.`
       : `Referral for ${business.name} approved — credit on next payout cycle.`;
     try {
-      await this.notificationsService.sendInternalPushByUserId(userId, title, body, {
-        event: 'business_referral_review_approved',
-        businessId: business.id,
-        businessName: business.name,
-        url: '/accounts',
-      });
+      await this.notificationsService.sendInternalPushByUserId(
+        referrer.userId,
+        title,
+        body,
+        {
+          event: 'business_referral_review_approved',
+          businessId: business.id,
+          businessName: business.name,
+          url: '/accounts',
+        }
+      );
     } catch (error: any) {
-      this.logger.warn(`Approval push failed for ${userId}: ${error.message}`);
+      this.logger.warn(
+        `Approval push failed for ${referrer.userId}: ${error.message}`
+      );
     }
   }
 

@@ -22,7 +22,9 @@ import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
 import { BusinessExcitementStats } from '../business/BusinessExcitementStats';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
 import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
+import BusinessReferralCodeCard from '../business/BusinessReferralCodeCard';
 import { BusinessGoLiveCelebration } from '../business/BusinessGoLiveCelebration';
+import LaunchPromoBanner from '../business/LaunchPromoBanner';
 import { BusinessSetupHome } from '../business/BusinessSetupHome';
 import { BusinessVerificationBanner } from '../business/BusinessVerificationBanner';
 import BusinessDashboardModuleCard, {
@@ -259,6 +261,14 @@ const BusinessDashboard: React.FC = () => {
       ) : !verificationLoading ? (
         <BusinessVerificationBanner />
       ) : null}
+
+      <Box sx={{ mb: 2 }}>
+        <LaunchPromoBanner />
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <BusinessReferralCodeCard />
+      </Box>
 
       <LocationTransferPendingCard
         pendingCount={incomingTransfers.length}

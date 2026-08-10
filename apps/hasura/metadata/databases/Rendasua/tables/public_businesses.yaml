@@ -8,9 +8,19 @@ object_relationships:
   - name: referring_agent
     using:
       foreign_key_constraint_on: referred_by_agent_id
+  - name: referring_business
+    using:
+      foreign_key_constraint_on: referred_by_business_id
   - name: user
     using:
       foreign_key_constraint_on: user_id
+  - name: launch_promo_slot
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: business_launch_promo_slots
+          schema: public
 array_relationships:
   - name: account_type_history
     using:
@@ -104,6 +114,13 @@ array_relationships:
         table:
           name: business_payment_accounts
           schema: public
+  - name: referred_businesses
+    using:
+      foreign_key_constraint_on:
+        column: referred_by_business_id
+        table:
+          name: businesses
+          schema: public
   - name: rental_bookings
     using:
       manual_configuration:
@@ -130,6 +147,13 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: rental_items
+          schema: public
+  - name: referral_payouts_earned
+    using:
+      foreign_key_constraint_on:
+        column: referrer_business_id
+        table:
+          name: business_referral_payouts
           schema: public
 insert_permissions:
   - role: agent
@@ -229,7 +253,9 @@ select_permissions:
         - merchant_agreement_version
         - merchant_agreement_accepted_at
         - referred_by_agent_id
+        - referred_by_business_id
         - referral_code_used
+        - business_code
         - account_type
         - account_type_locked_until
         - acceptance_timeout_seconds

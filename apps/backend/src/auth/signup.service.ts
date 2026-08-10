@@ -251,7 +251,16 @@ export class SignupService {
     );
   }
 
-  async startSignup(payload: SignupStartPayload): Promise<{ user: SignupCreatedUser }> {
+  async startSignup(payload: SignupStartPayload): Promise<{
+    user: SignupCreatedUser;
+    launchPromo: {
+      status: string;
+      ordersRemaining: number;
+      businessLimit: number | null;
+      zeroCommissionOrders: number | null;
+      identificationWindowDays: number | null;
+    } | null;
+  }> {
     const email = this.normalizeEmail(payload.email);
     const phoneNumber = this.normalizePhone(payload.phone_number);
 
@@ -346,13 +355,14 @@ export class SignupService {
       );
     }
 
-    await this.businessProvisioning.runPostCommitEffects({
+    const { launchPromo } = await this.businessProvisioning.runPostCommitEffects({
       userId: user.id,
       entities,
       businessLocation,
       storeAddress: nestStoreAddress ?? normalizedAddress,
       phoneNumber: phoneNumber || payload.phone_number,
       businessName,
+      countryCode: normalizedAddress?.country,
     });
 
     await this.referralProvisioning.runPostCommitEffects({
@@ -366,7 +376,18 @@ export class SignupService {
 
     this.emitCompleteRegistration(user, payload);
 
-    return { user };
+    return {
+      user,
+      launchPromo: launchPromo
+        ? {
+            status: launchPromo.status,
+            ordersRemaining: launchPromo.ordersRemaining,
+            businessLimit: launchPromo.businessLimit,
+            zeroCommissionOrders: launchPromo.zeroCommissionOrders,
+            identificationWindowDays: launchPromo.identificationWindowDays,
+          }
+        : null,
+    };
   }
 
   private emitCompleteRegistration(

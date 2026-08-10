@@ -64,7 +64,17 @@ export class SignupController {
     @Body() body: SignupStartDto,
     @Request() req: { ip?: string; headers?: Record<string, unknown> },
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
-  ): Promise<{ success: boolean; user: SignupCreatedUser }> {
+  ): Promise<{
+    success: boolean;
+    user: SignupCreatedUser;
+    launchPromo: {
+      status: string;
+      ordersRemaining: number;
+      businessLimit: number | null;
+      zeroCommissionOrders: number | null;
+      identificationWindowDays: number | null;
+    } | null;
+  }> {
     const ua = req.headers?.['user-agent'];
     const result = await this.signupService.startSignup({
       ...body,
@@ -75,6 +85,7 @@ export class SignupController {
     return {
       success: true,
       user: result.user,
+      launchPromo: result.launchPromo,
     };
   }
 

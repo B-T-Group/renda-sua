@@ -67,7 +67,9 @@ describe('SignupService', () => {
         {
           provide: BusinessProvisioningService,
           useValue: {
-            runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
+            runPostCommitEffects: jest
+              .fn()
+              .mockResolvedValue({ launchPromo: null }),
             scheduleEnsureContract: jest.fn(),
           },
         },

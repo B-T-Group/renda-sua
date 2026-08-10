@@ -19,6 +19,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeConnectService } from '../stripe-payments/stripe-connect.service';
+import { LaunchPromoService } from '../launch-promo/launch-promo.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { AcceptMerchantAgreementDto } from './dto/accept-merchant-agreement.dto';
@@ -50,7 +51,8 @@ export class BusinessVerificationService {
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly businessContractsService: BusinessContractsService,
     private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
-    private readonly agreementProvider: MerchantAgreementProviderService
+    private readonly agreementProvider: MerchantAgreementProviderService,
+    private readonly launchPromoService: LaunchPromoService
   ) {}
 
   async getStatus() {
@@ -72,6 +74,9 @@ export class BusinessVerificationService {
         : null;
     const lifecycleStatus = lifecycle?.lifecycle_status ?? 'created';
     const canAcceptOrders = lifecycle?.can_accept_orders ?? false;
+    const launchPromo = await this.launchPromoService.getSlotForBusiness(
+      businessId
+    );
     return {
       ...base,
       lifecycle_status: lifecycleStatus,
@@ -81,6 +86,17 @@ export class BusinessVerificationService {
       isOnboarding: this.resolveIsOnboarding(lifecycleStatus, base),
       suspension,
       contract: await this.businessContractsService.getContractStatus(businessId),
+      launchPromo: launchPromo
+        ? {
+            status: launchPromo.status,
+            ordersRemaining: launchPromo.ordersRemaining,
+            businessLimit: launchPromo.businessLimit,
+            zeroCommissionOrders: launchPromo.zeroCommissionOrders,
+            identificationWindowDays: launchPromo.identificationWindowDays,
+            claimedAt: launchPromo.claimedAt,
+            confirmedAt: launchPromo.confirmedAt,
+          }
+        : null,
     };
   }
 

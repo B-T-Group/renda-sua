@@ -902,6 +902,7 @@ export class HasuraSystemService {
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
     business_referral_agent_id?: string;
+    business_referral_business_id?: string;
     business_referral_code_used?: string;
   }): Promise<{
     user: any;
@@ -942,6 +943,7 @@ export class HasuraSystemService {
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
     business_referral_agent_id?: string;
+    business_referral_business_id?: string;
     business_referral_code_used?: string;
   }): { mutation: string; variables: Record<string, unknown> } {
     const { personas } = params;
@@ -1013,6 +1015,18 @@ export class HasuraSystemService {
         vars.referred_by_agent_id = params.business_referral_agent_id;
         vars.referral_code_used = params.business_referral_code_used;
         businessDataFields.push('referred_by_agent_id: $referred_by_agent_id');
+        businessDataFields.push('referral_code_used: $referral_code_used');
+      } else if (
+        params.business_referral_business_id &&
+        params.business_referral_code_used
+      ) {
+        varDecls.push('$referred_by_business_id: uuid!');
+        varDecls.push('$referral_code_used: String!');
+        vars.referred_by_business_id = params.business_referral_business_id;
+        vars.referral_code_used = params.business_referral_code_used;
+        businessDataFields.push(
+          'referred_by_business_id: $referred_by_business_id'
+        );
         businessDataFields.push('referral_code_used: $referral_code_used');
       }
       objectFields.push(

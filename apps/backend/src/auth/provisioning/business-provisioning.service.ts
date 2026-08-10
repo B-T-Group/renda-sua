@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AddressesService } from '../../addresses/addresses.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { BusinessContractsService } from '../../business-contracts/business-contracts.service';
+import { LaunchPromoService } from '../../launch-promo/launch-promo.service';
+import type { LaunchPromoSlot } from '../../launch-promo/launch-promo.types';
 import { MobilePaymentPhoneSeedService } from '../../mobile-payment-phones/mobile-payment-phone-seed.service';
 import { timezoneFromAddressCountryCode } from '../../users/user-timezone.util';
 import type {
@@ -18,6 +20,7 @@ export interface BusinessPostCommitInput {
   storeAddress?: NormalizedSignupAddress;
   phoneNumber?: string | null;
   businessName?: string;
+  countryCode?: string;
 }
 
 @Injectable()
@@ -28,16 +31,19 @@ export class BusinessProvisioningService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly addressesService: AddressesService,
     private readonly businessContractsService: BusinessContractsService,
-    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService
+    private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService,
+    private readonly launchPromoService: LaunchPromoService
   ) {}
 
   /**
    * Idempotent post-commit side effects after the atomic user+location insert.
    * Failures are logged and do not roll back the user row.
    */
-  async runPostCommitEffects(input: BusinessPostCommitInput): Promise<void> {
+  async runPostCommitEffects(
+    input: BusinessPostCommitInput
+  ): Promise<{ launchPromo: LaunchPromoSlot | null }> {
     const business = input.entities.find((e) => e.type === 'business');
-    if (!business) return;
+    if (!business) return { launchPromo: null };
 
     if (input.businessLocation) {
       await this.safeLinkBusinessAddress(
@@ -64,6 +70,30 @@ export class BusinessProvisioningService {
     }
 
     this.scheduleEnsureContract(business.id);
+
+    const country =
+      input.countryCode ||
+      input.businessLocation?.country ||
+      input.storeAddress?.country;
+    const launchPromo = await this.safeClaimLaunchPromo(business.id, country);
+    return { launchPromo };
+  }
+
+  private async safeClaimLaunchPromo(
+    businessId: string,
+    countryCode?: string | null
+  ): Promise<LaunchPromoSlot | null> {
+    try {
+      return await this.launchPromoService.claimSlotIfAvailable(
+        businessId,
+        countryCode
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Launch promo claim failed for ${businessId}: ${error?.message}`
+      );
+      return null;
+    }
   }
 
   scheduleEnsureContract(businessId: string): void {

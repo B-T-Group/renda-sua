@@ -15,6 +15,7 @@ describe('BusinessReferralReviewService', () => {
     name: 'Demo Store',
     created_at: '2026-05-01T00:00:00Z',
     referred_by_agent_id: 'agent-1',
+    referred_by_business_id: null as string | null,
     referring_agent: {
       id: 'agent-1',
       agent_code: 'ABC123',
@@ -25,6 +26,7 @@ describe('BusinessReferralReviewService', () => {
         preferred_language: 'en',
       },
     },
+    referring_business: null,
     business_referral_payouts: [] as Array<{ id: string }>,
     business_referral_reviews: [] as Array<Record<string, unknown>>,
     items: [

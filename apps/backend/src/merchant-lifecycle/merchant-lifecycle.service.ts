@@ -1,6 +1,7 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { LaunchPromoService } from '../launch-promo/launch-promo.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
@@ -41,7 +42,8 @@ export class MerchantLifecycleService {
     @Inject(forwardRef(() => PaymentRoutingService))
     private readonly paymentRoutingService: PaymentRoutingService,
     @Inject(forwardRef(() => BusinessContractsService))
-    private readonly businessContractsService: BusinessContractsService
+    private readonly businessContractsService: BusinessContractsService,
+    private readonly launchPromoService: LaunchPromoService
   ) {}
 
   async recompute(
@@ -108,6 +110,9 @@ export class MerchantLifecycleService {
       changedByType: 'admin',
       changedByUserId: adminUserId,
     });
+    if (next === 'active') {
+      await this.launchPromoService.confirmSlot(businessId);
+    }
     await this.dispatchTransitionNotifications(current, next);
     return this.getBusinessSnapshot(businessId);
   }
@@ -212,6 +217,9 @@ export class MerchantLifecycleService {
       changedByType: changedByUserId ? 'admin' : 'system',
       changedByUserId,
     });
+    if (next === 'active') {
+      await this.launchPromoService.confirmSlot(businessId);
+    }
     await this.dispatchTransitionNotifications(current, next);
     return this.getBusinessSnapshot(businessId);
   }

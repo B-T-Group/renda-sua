@@ -47,6 +47,7 @@ export interface UserProvisioningInput {
   business_name?: string;
   main_interest?: 'sell_items' | 'rent_items';
   business_referral_agent_id?: string;
+  business_referral_business_id?: string;
   business_referral_code_used?: string;
   storeAddress?: NormalizedSignupAddress;
 }
@@ -64,6 +65,7 @@ export class UserProvisioningService {
       business_name: input.business_name,
       main_interest: input.main_interest,
       business_referral_agent_id: input.business_referral_agent_id,
+      business_referral_business_id: input.business_referral_business_id,
       business_referral_code_used: input.business_referral_code_used,
       storeAddress: input.storeAddress,
     };

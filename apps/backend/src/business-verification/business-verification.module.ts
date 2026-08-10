@@ -4,6 +4,7 @@ import { BusinessContractsModule } from '../business-contracts/business-contract
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
@@ -18,6 +19,7 @@ import { BusinessVerificationService } from './business-verification.service';
     NotificationsModule,
     StripePaymentsModule,
     MerchantLifecycleModule,
+    LaunchPromoModule,
     MobilePaymentPhonesModule,
     forwardRef(() => BusinessContractsModule),
   ],

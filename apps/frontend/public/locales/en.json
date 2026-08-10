@@ -1733,9 +1733,25 @@
       "uploading": "Uploading..."
     },
     "referrals": {
-      "referralCodeLabel": "Agent referral code (optional)",
-      "referralCodeHelp": "Enter the code of the Rendasua agent helping you get started.",
-      "invalidCodeLength": "Agent referral code must be 6 characters."
+      "referralCodeLabel": "Referral code (optional)",
+      "referralCodeHelp": "Enter the code of the Rendasua agent or business helping you get started.",
+      "invalidCodeLength": "Referral code must be 6 characters.",
+      "sideCashTitle": "Earn on the side — refer businesses",
+      "sideCashBody": "Share your code. When a referred business is identified and adds at least {{minItems}} approved items, you earn {{amount}} {{currency}}.",
+      "yourCode": "Your business referral code",
+      "copyCode": "Copy code",
+      "copied": "Copied!",
+      "share": "Share",
+      "shareText": "Join Rendasua with my business code {{code}} and grow with us!"
+    },
+    "launchPromo": {
+      "illustrationLabel": "Launch promo celebration",
+      "congratsTitle": "You're one of our first {{limit}} businesses!",
+      "congratsBody": "As part of our launch, you get 0% commission on your first {{orders}} orders. Complete identification within {{days}} days to keep this benefit.",
+      "referralNudge": "Tip: share your business referral code with other merchants — when they get identified and add approved items, you can earn a cash bonus on the side.",
+      "bannerTitle": "0% commission launch promo",
+      "bannerBody": "You still have {{remaining}} of {{total}} orders with 0% item commission.",
+      "identifyReminder": "Complete identification within {{days}} days to keep this promo."
     },
     "goLive": {
       "title": "Your store is live!",

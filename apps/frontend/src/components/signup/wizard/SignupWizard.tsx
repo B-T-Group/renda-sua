@@ -20,6 +20,9 @@ import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
 import { getMetaBrowserContext } from '../../../utils/metaBrowserIds';
 import LoginMethodDialog from '../../auth/LoginMethodDialog';
+import LaunchPromoCongrats, {
+  LaunchPromoCongratsData,
+} from '../../business/LaunchPromoCongrats';
 import Logo from '../../common/Logo';
 import SignupAccountCreatedAnimation from '../../onboarding/SignupAccountCreatedAnimation';
 import { buildSignupPayload } from './buildSignupPayload';
@@ -82,6 +85,16 @@ export const SignupWizard: React.FC = () => {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [postSignupEmail, setPostSignupEmail] = useState<string | null>(null);
   const [postSignupPhone, setPostSignupPhone] = useState<string | null>(null);
+  const [launchPromo, setLaunchPromo] =
+    useState<LaunchPromoCongratsData | null>(() => {
+      try {
+        const raw = sessionStorage.getItem('pendingSignupLaunchPromo');
+        if (!raw) return null;
+        return JSON.parse(raw) as LaunchPromoCongratsData;
+      } catch {
+        return null;
+      }
+    });
   const [verifyRedirectLoading, setVerifyRedirectLoading] = useState(false);
   const [emailTakenConflict, setEmailTakenConflict] = useState(false);
   /** True only after user taps “Wrong email/phone?” on the post-create screen. */
@@ -204,12 +217,27 @@ export const SignupWizard: React.FC = () => {
     const { data } = await apiClient.post<{
       success: boolean;
       user: SignupStartUser;
+      launchPromo?: LaunchPromoCongratsData | null;
     }>('/auth/signup/start', {
       ...payload,
       ...getMetaBrowserContext(),
       eventSourceUrl:
         typeof window !== 'undefined' ? window.location.href : undefined,
     });
+    if (data.launchPromo) {
+      setLaunchPromo(data.launchPromo);
+      try {
+        sessionStorage.setItem(
+          'pendingSignupLaunchPromo',
+          JSON.stringify(data.launchPromo)
+        );
+      } catch {
+        // ignore storage failures
+      }
+    } else {
+      setLaunchPromo(null);
+      sessionStorage.removeItem('pendingSignupLaunchPromo');
+    }
     return data.user;
   };
 
@@ -404,15 +432,19 @@ export const SignupWizard: React.FC = () => {
                     'Account successfully created'
                   )}
                 </Typography>
-                <Stack
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ py: { xs: 0.5, sm: 1 } }}
-                  role="status"
-                  aria-live="polite"
-                >
-                  <SignupAccountCreatedAnimation />
-                </Stack>
+                {launchPromo ? (
+                  <LaunchPromoCongrats promo={launchPromo} />
+                ) : (
+                  <Stack
+                    spacing={2}
+                    alignItems="center"
+                    sx={{ py: { xs: 0.5, sm: 1 } }}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <SignupAccountCreatedAnimation />
+                  </Stack>
+                )}
                 <Typography
                   color="text.secondary"
                   variant="body2"

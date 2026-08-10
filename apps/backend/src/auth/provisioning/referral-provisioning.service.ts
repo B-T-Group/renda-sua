@@ -31,6 +31,7 @@ export class ReferralProvisioningService {
     referral: ResolvedBusinessReferral | null
   ): {
     business_referral_agent_id?: string;
+    business_referral_business_id?: string;
     business_referral_code_used?: string;
   } {
     return this.businessReferralsService.getBusinessInsertReferralFields(
@@ -49,7 +50,7 @@ export class ReferralProvisioningService {
     const business = input.entities.find((e) => e.type === 'business');
     if (business && input.referral) {
       try {
-        await this.businessReferralsService.notifyAgentOfBusinessReferral(
+        await this.businessReferralsService.notifyReferrerOfBusinessReferral(
           {
             businessId: business.id,
             countryCode: input.country,

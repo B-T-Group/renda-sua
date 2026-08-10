@@ -2,7 +2,10 @@ export const BUSINESS_CUTOFF_DATE = '2026-04-01';
 export const MIN_ITEM_COUNT = 10;
 
 const QUEUE_BASE_WHERE = `
-  referred_by_agent_id: { _is_null: false }
+  _or: [
+    { referred_by_agent_id: { _is_null: false } }
+    { referred_by_business_id: { _is_null: false } }
+  ]
   created_at: { _gte: $cutoff }
   items_aggregate: {
     count: {
@@ -45,6 +48,7 @@ export function buildQueueCandidatesQuery(excludeApproved: boolean): string {
       name
       created_at
       referred_by_agent_id
+      referred_by_business_id
       items_aggregate(
         where: {
           status: { _eq: active }
@@ -65,6 +69,12 @@ export function buildQueueCandidatesQuery(excludeApproved: boolean): string {
       referring_agent {
         id
         agent_code
+        user { id first_name last_name }
+      }
+      referring_business {
+        id
+        name
+        business_code
         user { id first_name last_name }
       }
     }
@@ -117,6 +127,12 @@ export const REVIEWS_BY_STATUS_QUERY = `
         agent_code
         user { id first_name last_name }
       }
+      referrer_business {
+        id
+        name
+        business_code
+        user { id first_name last_name }
+      }
     }
     business_referral_reviews_aggregate(where: { status: { _eq: $status } }) {
       aggregate { count }
@@ -131,9 +147,16 @@ export const REVIEW_DETAIL_QUERY = `
       name
       created_at
       referred_by_agent_id
+      referred_by_business_id
       referring_agent {
         id
         agent_code
+        user { id first_name last_name preferred_language }
+      }
+      referring_business {
+        id
+        name
+        business_code
         user { id first_name last_name preferred_language }
       }
       business_referral_payouts { id }
@@ -196,6 +219,7 @@ export const SUBMIT_REVIEW_MUTATION = `
         constraint: uq_business_referral_reviews_business_id
         update_columns: [
           agent_id
+          referrer_business_id
           status
           rejection_reason
           good_item_count

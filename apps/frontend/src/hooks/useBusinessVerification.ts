@@ -87,6 +87,15 @@ export interface BusinessVerificationStatus {
       totalActiveLocations?: number;
     };
   };
+  launchPromo?: {
+    status: 'claimed' | 'confirmed' | 'released';
+    ordersRemaining: number;
+    businessLimit: number | null;
+    zeroCommissionOrders: number | null;
+    identificationWindowDays: number | null;
+    claimedAt: string;
+    confirmedAt: string | null;
+  } | null;
 }
 
 export function useBusinessVerification(enabled = true) {

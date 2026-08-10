@@ -1,7 +1,12 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { BusinessReferralPayoutsService } from './business-referral-payouts.service';
 
 describe('BusinessReferralPayoutsService agent wallet lookup', () => {
   const eligibleBusiness = {
+    kind: 'agent' as const,
     id: 'biz-1',
     name: 'Acme Market',
     referred_by_agent_id: 'agent-1',
@@ -15,10 +20,13 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
 
   function buildService() {
     const executeQuery = jest.fn(async (query: string) => {
-      if (query.includes('EligibleReferredBusinesses')) {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
         return { businesses: [eligibleBusiness] };
       }
-      if (query.includes('GetAgentAccount')) {
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'acct-1' }] };
       }
       return {};
@@ -64,7 +72,7 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
 
     expect(summary.credited).toBe(1);
     const accountCall = executeQuery.mock.calls.find(([query]) =>
-      String(query).includes('GetAgentAccount')
+      String(query).includes('GetPersonalAccount')
     );
     expect(accountCall).toBeDefined();
     expect(String(accountCall?.[0])).toContain(

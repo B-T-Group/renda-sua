@@ -1,0 +1,26 @@
+table:
+  name: business_launch_promo_slots
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - country_code
+        - status
+        - orders_remaining
+        - claimed_at
+        - confirmed_at
+        - released_at
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

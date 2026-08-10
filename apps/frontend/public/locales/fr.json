@@ -1476,9 +1476,25 @@
       "uploading": "Téléversement en cours..."
     },
     "referrals": {
-      "referralCodeLabel": "Code agent de parrainage (optionnel)",
-      "referralCodeHelp": "Entrez le code de l'agent Rendasua qui vous accompagne pour démarrer.",
-      "invalidCodeLength": "Le code agent doit comporter 6 caractères."
+      "referralCodeLabel": "Code de parrainage (optionnel)",
+      "referralCodeHelp": "Entrez le code de l'agent ou du commerce Rendasua qui vous accompagne pour démarrer.",
+      "invalidCodeLength": "Le code de parrainage doit comporter 6 caractères.",
+      "sideCashTitle": "Gagnez en plus — parrainez des commerces",
+      "sideCashBody": "Partagez votre code. Lorsqu'un commerce parrainé est identifié et ajoute au moins {{minItems}} articles approuvés, vous gagnez {{amount}} {{currency}}.",
+      "yourCode": "Votre code de parrainage commerce",
+      "copyCode": "Copier le code",
+      "copied": "Copié !",
+      "share": "Partager",
+      "shareText": "Rejoignez Rendasua avec mon code commerce {{code}} et grandissez avec nous !"
+    },
+    "launchPromo": {
+      "illustrationLabel": "Célébration de la promo de lancement",
+      "congratsTitle": "Vous faites partie de nos {{limit}} premiers commerces !",
+      "congratsBody": "Dans le cadre de notre lancement, vous bénéficiez de 0 % de commission sur vos {{orders}} premières commandes. Finalisez votre identification sous {{days}} jours pour conserver cet avantage.",
+      "referralNudge": "Astuce : partagez votre code de parrainage avec d'autres commerçants — lorsqu'ils sont identifiés et ajoutent des articles approuvés, vous pouvez gagner un bonus.",
+      "bannerTitle": "Promo lancement : 0 % de commission",
+      "bannerBody": "Il vous reste {{remaining}} sur {{total}} commandes avec 0 % de commission article.",
+      "identifyReminder": "Finalisez votre identification sous {{days}} jours pour conserver cette promo."
     },
     "goLive": {
       "title": "Votre boutique est en ligne !",
