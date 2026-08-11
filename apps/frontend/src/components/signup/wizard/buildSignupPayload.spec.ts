@@ -61,4 +61,26 @@ describe('buildSignupPayload', () => {
     expect(payload.referral_agent_code).toBe('AB12CD');
     expect(payload.country).toBe('CA');
   });
+
+  it('includes referral for agent without store_location', () => {
+    const payload = buildSignupPayload({
+      ...DEFAULT_SIGNUP_VALUES,
+      contact: {
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.com',
+        phone: '+1234567890',
+      },
+      personas: ['agent'],
+      business: {
+        name: '',
+        mainInterest: 'sell_items',
+        referralAgentCode: 'zz12yy',
+      },
+      country: 'CM',
+    });
+    expect(payload.store_location).toBeUndefined();
+    expect(payload.referral_agent_code).toBe('ZZ12YY');
+    expect(payload.profile.vehicle_type_id).toBe('other');
+  });
 });

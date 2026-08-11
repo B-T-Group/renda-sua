@@ -904,6 +904,9 @@ export class HasuraSystemService {
     business_referral_agent_id?: string;
     business_referral_business_id?: string;
     business_referral_code_used?: string;
+    agent_referral_agent_id?: string;
+    agent_referral_business_id?: string;
+    agent_referral_code_used?: string;
   }): Promise<{
     user: any;
     client?: any;
@@ -945,6 +948,9 @@ export class HasuraSystemService {
     business_referral_agent_id?: string;
     business_referral_business_id?: string;
     business_referral_code_used?: string;
+    agent_referral_agent_id?: string;
+    agent_referral_business_id?: string;
+    agent_referral_code_used?: string;
   }): { mutation: string; variables: Record<string, unknown> } {
     const { personas } = params;
     const varDecls: string[] = [
@@ -990,9 +996,30 @@ export class HasuraSystemService {
     if (personas.includes('agent')) {
       varDecls.push('$vehicle_type_id: vehicle_types_enum!');
       vars.vehicle_type_id = params.vehicle_type_id || 'other';
-      objectFields.push(
-        'agent: { data: { vehicle_type_id: $vehicle_type_id } }'
-      );
+      const agentDataFields = ['vehicle_type_id: $vehicle_type_id'];
+      if (params.agent_referral_agent_id && params.agent_referral_code_used) {
+        varDecls.push('$agent_referred_by_agent_id: uuid!');
+        varDecls.push('$agent_referral_code_used: String!');
+        vars.agent_referred_by_agent_id = params.agent_referral_agent_id;
+        vars.agent_referral_code_used = params.agent_referral_code_used;
+        agentDataFields.push(
+          'referred_by_agent_id: $agent_referred_by_agent_id'
+        );
+        agentDataFields.push('referral_code_used: $agent_referral_code_used');
+      } else if (
+        params.agent_referral_business_id &&
+        params.agent_referral_code_used
+      ) {
+        varDecls.push('$agent_referred_by_business_id: uuid!');
+        varDecls.push('$agent_referral_code_used: String!');
+        vars.agent_referred_by_business_id = params.agent_referral_business_id;
+        vars.agent_referral_code_used = params.agent_referral_code_used;
+        agentDataFields.push(
+          'referred_by_business_id: $agent_referred_by_business_id'
+        );
+        agentDataFields.push('referral_code_used: $agent_referral_code_used');
+      }
+      objectFields.push(`agent: { data: { ${agentDataFields.join(', ')} } }`);
       returnSel.push(
         'agent { id user_id vehicle_type_id is_verified created_at updated_at }'
       );

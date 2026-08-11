@@ -622,4 +622,25 @@ export class AccountsService {
     });
     return result.account_transactions?.[0] ?? null;
   }
+
+  /** Find any deposit with this reference (account-agnostic idempotency). */
+  async findDepositByReferenceId(
+    referenceId: string
+  ): Promise<{ id: string; account_id: string } | null> {
+    const query = `
+      query FindDepositByReferenceId($referenceId: uuid!) {
+        account_transactions(
+          where: {
+            reference_id: { _eq: $referenceId }
+            transaction_type: { _eq: "deposit" }
+          }
+          limit: 1
+        ) { id account_id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      referenceId,
+    });
+    return result.account_transactions?.[0] ?? null;
+  }
 }

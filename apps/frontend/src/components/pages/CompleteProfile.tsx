@@ -43,7 +43,7 @@ import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
-import AgentReferralCodeField from '../common/AgentReferralCodeField';
+import ReferralCodeEntryButton from '../common/ReferralCodeEntryButton';
 import PhoneInput from '../common/PhoneInput';
 import {
   type SignupGoalId,
@@ -393,12 +393,14 @@ const CompleteProfile: React.FC = () => {
     try {
       const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);
       const trimmedReferral = (profileData.referral_agent_code || '').trim();
-      if (personas.includes('business') && trimmedReferral.length > 0) {
+      const needsReferralValidation =
+        personas.includes('business') || personas.includes('agent');
+      if (needsReferralValidation && trimmedReferral.length > 0) {
         if (trimmedReferral.length !== 6) {
           setError(
             t(
-              'business.referrals.invalidCodeLength',
-              'Agent referral code must be 6 characters.'
+              'referrals.invalidCodeLength',
+              'Referral code must be 6 characters.'
             )
           );
           setLoading(false);
@@ -1030,7 +1032,7 @@ const CompleteProfile: React.FC = () => {
 
             {(selectedPersonas.includes('agent') ||
               selectedPersonas.includes('business')) && (
-              <AgentReferralCodeField
+              <ReferralCodeEntryButton
                 value={profileData.referral_agent_code || ''}
                 onChange={(code) =>
                   setProfileData((prev) => ({
@@ -1038,33 +1040,10 @@ const CompleteProfile: React.FC = () => {
                     referral_agent_code: code,
                   }))
                 }
-                labelKey={
-                  selectedPersonas.includes('business') &&
-                  !selectedPersonas.includes('agent')
-                    ? 'business.referrals.referralCodeLabel'
-                    : 'agent.referrals.referralCodeLabel'
-                }
-                labelDefault={
-                  selectedPersonas.includes('business') &&
-                  !selectedPersonas.includes('agent')
-                    ? 'Agent referral code (optional)'
-                    : 'Referral code (optional)'
-                }
-                helpKey={
-                  selectedPersonas.includes('business') &&
-                  !selectedPersonas.includes('agent')
-                    ? 'business.referrals.referralCodeHelp'
-                    : 'agent.referrals.referralCodeHelp'
-                }
-                helpDefault={
-                  selectedPersonas.includes('business') &&
-                  !selectedPersonas.includes('agent')
-                    ? 'Enter the code of the Rendasua agent helping you get started.'
-                    : 'Enter the code of the agent who referred you (if any).'
-                }
-                lookupResult={referralLookup}
-                lookupLoading={referralLookupLoading}
-                lookupError={referralLookupError}
+                labelKey="referrals.referralCodeLabel"
+                labelDefault="Referral code (optional)"
+                helpKey="referrals.referralCodeHelp"
+                helpDefault="Enter the code of the person who referred you."
               />
             )}
           </Box>

@@ -1,0 +1,19 @@
+table:
+  name: referral_bonus_distributions
+  schema: public
+object_relationships:
+  - name: account
+    using:
+      foreign_key_constraint_on: account_id
+  - name: agent_referral
+    using:
+      foreign_key_constraint_on: agent_referral_id
+  - name: beneficiary_agent
+    using:
+      foreign_key_constraint_on: beneficiary_agent_id
+  - name: beneficiary_business
+    using:
+      foreign_key_constraint_on: beneficiary_business_id
+  - name: business_referral_payout
+    using:
+      foreign_key_constraint_on: business_referral_payout_id

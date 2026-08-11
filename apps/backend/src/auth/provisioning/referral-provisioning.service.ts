@@ -16,15 +16,25 @@ export class ReferralProvisioningService {
     private readonly agentReferralsService: AgentReferralsService
   ) {}
 
-  /** Fail-fast pre-insert resolution when business persona + code present. */
+  /** Fail-fast pre-insert resolution when agent or business persona + code present. */
+  async resolveSignupReferral(
+    personas: PersonaId[],
+    referralAgentCode?: string
+  ): Promise<ResolvedBusinessReferral | null> {
+    if (!personas.includes('business') && !personas.includes('agent')) {
+      return null;
+    }
+    return this.businessReferralsService.resolveBusinessReferralCode(
+      referralAgentCode
+    );
+  }
+
+  /** @deprecated use resolveSignupReferral */
   async resolveBusinessReferral(
     personas: PersonaId[],
     referralAgentCode?: string
   ): Promise<ResolvedBusinessReferral | null> {
-    if (!personas.includes('business')) return null;
-    return this.businessReferralsService.resolveBusinessReferralCode(
-      referralAgentCode
-    );
+    return this.resolveSignupReferral(personas, referralAgentCode);
   }
 
   getBusinessInsertReferralFields(
@@ -37,6 +47,14 @@ export class ReferralProvisioningService {
     return this.businessReferralsService.getBusinessInsertReferralFields(
       referral
     );
+  }
+
+  getAgentInsertReferralFields(referral: ResolvedBusinessReferral | null): {
+    agent_referral_agent_id?: string;
+    agent_referral_business_id?: string;
+    agent_referral_code_used?: string;
+  } {
+    return this.agentReferralsService.getAgentInsertReferralFields(referral);
   }
 
   async runPostCommitEffects(input: {
@@ -67,12 +85,13 @@ export class ReferralProvisioningService {
     }
 
     const agent = input.entities.find((e) => e.type === 'agent');
-    if (agent) {
+    if (agent && input.referral && input.country) {
       try {
-        await this.agentReferralsService.creditAgentReferralIfPresent(
+        await this.agentReferralsService.creditResolvedAgentReferral(
           agent.id,
-          input.referralAgentCode,
-          input.country
+          input.referral,
+          input.country,
+          input.ownerName || 'Agent'
         );
       } catch (error: any) {
         this.logger.warn(`Agent referral credit failed: ${error?.message}`);

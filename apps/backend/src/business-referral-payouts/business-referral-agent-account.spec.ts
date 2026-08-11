@@ -29,26 +29,31 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
       if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'acct-1' }] };
       }
+      if (query.includes('EarnerAgentName')) {
+        return {
+          agents_by_pk: { user: { first_name: 'Ada', last_name: 'Agent' } },
+        };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
       return {};
     });
     const executeMutation = jest.fn(async () => ({
       insert_business_referral_payouts_one: { id: 'payout-1' },
       update_business_referral_payouts: { affected_rows: 1 },
     }));
-    const registerTransaction = jest.fn(async () => ({
-      success: true,
-      transactionId: 'tx-1',
+    const distributeReferralBonus = jest.fn(async () => ({
+      credited: 1,
+      transactionIds: ['tx-1'],
     }));
-    const findDepositByReference = jest.fn(async () => null);
 
     const service = new BusinessReferralPayoutsService(
       { executeQuery, executeMutation } as never,
-      { registerTransaction, findDepositByReference } as never,
       {
         resolveRailForUser: jest.fn(async () => 'stripe'),
         getUserCountryCode: jest.fn(async () => 'CA'),
       } as never,
-      { sendInternalPushByUserId: jest.fn(async () => undefined) } as never,
       {
         getConfigurationByKey: jest.fn(async (key: string) => {
           if (key === 'business_referral_payout_enabled') {
@@ -59,14 +64,15 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
           }
           return null;
         }),
-      } as never
+      } as never,
+      { distributeReferralBonus } as never
     );
 
-    return { service, executeQuery, registerTransaction };
+    return { service, executeQuery, distributeReferralBonus };
   }
 
   it('looks up the agent personal wallet excluding business-location accounts', async () => {
-    const { service, executeQuery, registerTransaction } = buildService();
+    const { service, executeQuery, distributeReferralBonus } = buildService();
 
     const summary = await service.runWeeklyPayouts();
 
@@ -82,8 +88,11 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
       userId: 'user-1',
       currency: 'CAD',
     });
-    expect(registerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ accountId: 'acct-1', amount: 25 })
+    expect(distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        grossAmount: 25,
+        preferPersonalAccount: true,
+      })
     );
   });
 });

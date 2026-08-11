@@ -1,5 +1,10 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
@@ -77,8 +82,10 @@ describe('SignupService', () => {
         {
           provide: ReferralProvisioningService,
           useValue: {
+            resolveSignupReferral: jest.fn().mockResolvedValue(null),
             resolveBusinessReferral: jest.fn().mockResolvedValue(null),
             getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
+            getAgentInsertReferralFields: jest.fn().mockReturnValue({}),
             runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
           },
         },

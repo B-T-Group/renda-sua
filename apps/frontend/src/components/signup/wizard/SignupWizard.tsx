@@ -308,6 +308,8 @@ export const SignupWizard: React.FC = () => {
     try {
       const values = wizard.form.getValues();
       const hasBusiness = values.personas.includes('business');
+      const needsReferralValidation =
+        hasBusiness || values.personas.includes('agent');
       const trimmedReferral = values.business.referralAgentCode.trim();
 
       if (hasBusiness && wizard.postalCodeRequired) {
@@ -321,17 +323,21 @@ export const SignupWizard: React.FC = () => {
         }
       }
 
-      if (hasBusiness && trimmedReferral.length > 0 && trimmedReferral.length !== 6) {
+      if (
+        needsReferralValidation &&
+        trimmedReferral.length > 0 &&
+        trimmedReferral.length !== 6
+      ) {
         setError(
           t(
-            'business.referrals.invalidCodeLength',
-            'Agent referral code must be 6 characters.'
+            'referrals.invalidCodeLength',
+            'Referral code must be 6 characters.'
           )
         );
         setSaving(false);
         return;
       }
-      if (hasBusiness && trimmedReferral.length === 6) {
+      if (needsReferralValidation && trimmedReferral.length === 6) {
         if (referralLookupLoading) {
           setError(
             t(

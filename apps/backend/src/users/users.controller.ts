@@ -985,9 +985,9 @@ export class UsersController {
         if (mi !== 'sell_items' && mi !== 'rent_items') {
           throw new Error('main_interest must be sell_items or rent_items');
         }
-        let businessReferral: ResolvedBusinessReferral | null = null;
-        if (personas.includes('business')) {
-          businessReferral =
+        let signupReferral: ResolvedBusinessReferral | null = null;
+        if (personas.includes('business') || personas.includes('agent')) {
+          signupReferral =
             await this.businessReferralsService.resolveBusinessReferralCode(
               userData.referral_agent_code
             );
@@ -1005,7 +1005,10 @@ export class UsersController {
             `${userData.first_name}'s Business`,
           main_interest: mi,
           ...this.businessReferralsService.getBusinessInsertReferralFields(
-            businessReferral
+            signupReferral
+          ),
+          ...this.agentReferralsService.getAgentInsertReferralFields(
+            signupReferral
           ),
         });
         if (addressData) {
@@ -1043,14 +1046,15 @@ export class UsersController {
             }
           }
         }
-        if (inserted.agent?.id) {
-          await this.agentReferralsService.creditAgentReferralIfPresent(
+        if (inserted.agent?.id && signupReferral) {
+          await this.agentReferralsService.creditResolvedAgentReferral(
             inserted.agent.id,
-            userData.referral_agent_code,
-            userData.address?.country
+            signupReferral,
+            userData.address?.country ?? '',
+            `${userData.first_name} ${userData.last_name}`.trim() || 'Agent'
           );
         }
-        if (inserted.business?.id && businessReferral) {
+        if (inserted.business?.id && signupReferral) {
           await this.businessReferralsService.notifyReferrerOfBusinessReferral(
             {
               businessId: inserted.business.id,
@@ -1061,7 +1065,7 @@ export class UsersController {
               businessOwnerName:
                 `${userData.first_name} ${userData.last_name}`.trim(),
             },
-            businessReferral
+            signupReferral
           );
         }
         if (inserted.business?.id) {
@@ -1190,10 +1194,65 @@ export class UsersController {
           user
         );
       const vt = body.vehicle_type_id || 'other';
+      const agentReferral =
+        await this.businessReferralsService.resolveBusinessReferralCode(
+          body.referral_agent_code,
+          uid
+        );
+      const referralFields =
+        this.agentReferralsService.getAgentInsertReferralFields(agentReferral);
+      const hasAgentReferrer = Boolean(referralFields.agent_referral_agent_id);
+      const hasBusinessReferrer = Boolean(
+        referralFields.agent_referral_business_id
+      );
       const r = await this.hasuraSystemService.executeMutation<{
         insert_agents_one: { id: string };
       }>(
-        `
+        hasAgentReferrer
+          ? `
+        mutation AddAgent(
+          $userId: uuid!
+          $vt: vehicle_types_enum!
+          $agentId: uuid!
+          $referralCode: String!
+        ) {
+          insert_agents_one(object: {
+            user_id: $userId
+            vehicle_type_id: $vt
+            referred_by_agent_id: $agentId
+            referral_code_used: $referralCode
+          }) {
+            id
+            user_id
+            vehicle_type_id
+            created_at
+            updated_at
+          }
+        }
+      `
+          : hasBusinessReferrer
+            ? `
+        mutation AddAgent(
+          $userId: uuid!
+          $vt: vehicle_types_enum!
+          $referrerBusinessId: uuid!
+          $referralCode: String!
+        ) {
+          insert_agents_one(object: {
+            user_id: $userId
+            vehicle_type_id: $vt
+            referred_by_business_id: $referrerBusinessId
+            referral_code_used: $referralCode
+          }) {
+            id
+            user_id
+            vehicle_type_id
+            created_at
+            updated_at
+          }
+        }
+      `
+            : `
         mutation AddAgent($userId: uuid!, $vt: vehicle_types_enum!) {
           insert_agents_one(object: { user_id: $userId, vehicle_type_id: $vt }) {
             id
@@ -1204,7 +1263,21 @@ export class UsersController {
           }
         }
       `,
-        { userId: uid, vt }
+        hasAgentReferrer
+          ? {
+              userId: uid,
+              vt,
+              agentId: referralFields.agent_referral_agent_id,
+              referralCode: referralFields.agent_referral_code_used,
+            }
+          : hasBusinessReferrer
+            ? {
+                userId: uid,
+                vt,
+                referrerBusinessId: referralFields.agent_referral_business_id,
+                referralCode: referralFields.agent_referral_code_used,
+              }
+            : { userId: uid, vt }
       );
       if (source) {
         await this.seedAddressOrRollbackPersona(
@@ -1213,6 +1286,23 @@ export class UsersController {
           'agent',
           source
         );
+      }
+      if (agentReferral) {
+        const country =
+          source?.country ||
+          (await this.paymentRoutingService.getUserCountryCode(uid));
+        if (country) {
+          await this.agentReferralsService.creditResolvedAgentReferral(
+            r.insert_agents_one.id,
+            agentReferral,
+            country,
+            `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || 'Agent'
+          );
+        } else {
+          this.logger.warn(
+            `Agent referral credit skipped for ${r.insert_agents_one.id}: no country`
+          );
+        }
       }
       return { success: true, agent: r.insert_agents_one };
     }

@@ -11,6 +11,12 @@ object_relationships:
   - name: vehicle_type
     using:
       foreign_key_constraint_on: vehicle_type_id
+  - name: referring_agent
+    using:
+      foreign_key_constraint_on: referred_by_agent_id
+  - name: referring_business
+    using:
+      foreign_key_constraint_on: referred_by_business_id
 array_relationships:
   - name: agent_addresses
     using:

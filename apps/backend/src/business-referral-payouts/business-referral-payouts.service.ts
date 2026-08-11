@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AccountsService } from '../accounts/accounts.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 
 const BUSINESS_CUTOFF_DATE = '2026-04-01';
@@ -49,10 +48,9 @@ export class BusinessReferralPayoutsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly accountsService: AccountsService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly notificationsService: NotificationsService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly configurationsService: ConfigurationsService,
+    private readonly referralPyramidService: ReferralPyramidService
   ) {}
 
   async runWeeklyPayouts(): Promise<PayoutSummary & { skippedReason?: string }> {
@@ -90,8 +88,134 @@ export class BusinessReferralPayoutsService {
       }
     }
 
+    const retried = await this.retryIncompletePayoutClaims();
+    summary.processed += retried.processed;
+    summary.credited += retried.credited;
+    summary.skipped += retried.skipped;
+    summary.failures += retried.failures;
+
     this.logger.log(`Payouts complete: ${JSON.stringify(summary)}`);
     return summary;
+  }
+
+  private async retryIncompletePayoutClaims(): Promise<PayoutSummary> {
+    const summary: PayoutSummary = {
+      processed: 0,
+      credited: 0,
+      skipped: 0,
+      failures: 0,
+    };
+    const query = `
+      query IncompleteBusinessReferralPayouts {
+        business_referral_payouts(where: { transaction_id: { _is_null: true } }) {
+          id
+          business_id
+          agent_id
+          referrer_business_id
+          account_id
+          amount
+          currency
+          business { id name }
+          agent { id user_id user { first_name last_name } }
+          referrer_business { id name user_id }
+        }
+      }
+    `;
+    let rows: any[] = [];
+    try {
+      const result = await this.hasuraSystemService.executeQuery(query);
+      rows = result?.business_referral_payouts ?? [];
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to load incomplete referral payouts: ${error.message}`
+      );
+      return summary;
+    }
+
+    for (const row of rows) {
+      summary.processed++;
+      try {
+        const ok = await this.retryIncompletePayout(row);
+        ok ? summary.credited++ : summary.skipped++;
+      } catch (error: any) {
+        this.logger.error(
+          `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
+        );
+        summary.failures++;
+      }
+    }
+    return summary;
+  }
+
+  private async retryIncompletePayout(row: {
+    id: string;
+    business_id: string;
+    agent_id: string | null;
+    referrer_business_id: string | null;
+    amount: number;
+    currency: string;
+    business: { id: string; name: string };
+    agent?: {
+      id: string;
+      user_id: string;
+      user?: { first_name?: string; last_name?: string };
+    } | null;
+    referrer_business?: {
+      id: string;
+      name: string;
+      user_id: string;
+    } | null;
+  }): Promise<boolean> {
+    let earner: {
+      kind: 'agent' | 'business';
+      id: string;
+      userId: string;
+      name: string;
+    } | null = null;
+
+    if (row.agent_id && row.agent?.user_id) {
+      earner = {
+        kind: 'agent',
+        id: row.agent.id,
+        userId: row.agent.user_id,
+        name:
+          `${row.agent.user?.first_name ?? ''} ${row.agent.user?.last_name ?? ''}`.trim() ||
+          'Agent',
+      };
+    } else if (row.referrer_business_id && row.referrer_business?.user_id) {
+      earner = {
+        kind: 'business',
+        id: row.referrer_business.id,
+        userId: row.referrer_business.user_id,
+        name: row.referrer_business.name || 'Business',
+      };
+    }
+
+    if (!earner) {
+      this.logger.warn(
+        `Incomplete payout ${row.id} missing earner relation — skipping`
+      );
+      return false;
+    }
+
+    const result = await this.referralPyramidService.distributeReferralBonus({
+      grossAmount: Number(row.amount),
+      earner,
+      referred: {
+        kind: 'business',
+        id: row.business_id,
+        name: row.business?.name || 'Business',
+      },
+      preferPersonalAccount: earner.kind === 'agent',
+      currency: row.currency,
+      businessReferralPayoutId: row.id,
+    });
+    if (result.credited <= 0) return false;
+    const primaryTx = result.transactionIds[0];
+    if (primaryTx) {
+      await this.attachTransactionId(row.business_id, primaryTx);
+    }
+    return true;
   }
 
   private async isPayoutEnabled(): Promise<boolean> {
@@ -243,26 +367,24 @@ export class BusinessReferralPayoutsService {
     });
     if (!payout) return false;
 
-    const credited = await this.claimAndCredit({
+    return this.claimAndDistribute({
       businessId: business.id,
+      businessName: business.name,
       agentId: agent.id,
       referrerBusinessId: null,
+      earner: {
+        kind: 'agent',
+        id: agent.id,
+        userId: agent.user_id,
+        name: 'Agent',
+      },
       accountId: payout.accountId,
       amount: payout.amount,
       currency: payout.currency,
       rail: payout.rail,
       itemCount: business.items_aggregate.aggregate.count,
+      preferPersonalAccount: true,
     });
-    if (!credited) return false;
-
-    await this.sendPayoutNotification(
-      agent.user_id,
-      business.name,
-      payout.amount,
-      payout.currency,
-      agent.user.preferred_language
-    );
-    return true;
   }
 
   private async processBusinessReferralPayout(
@@ -285,40 +407,46 @@ export class BusinessReferralPayoutsService {
     });
     if (!payout) return false;
 
-    const credited = await this.claimAndCredit({
+    return this.claimAndDistribute({
       businessId: business.id,
+      businessName: business.name,
       agentId: null,
       referrerBusinessId: referrer.id,
+      earner: {
+        kind: 'business',
+        id: referrer.id,
+        userId: referrer.user_id,
+        name: 'Business',
+      },
       accountId: payout.accountId,
       amount: payout.amount,
       currency: payout.currency,
       rail: payout.rail,
       itemCount: business.items_aggregate.aggregate.count,
+      preferPersonalAccount: false,
     });
-    if (!credited) return false;
-
-    await this.sendPayoutNotification(
-      referrer.user_id,
-      business.name,
-      payout.amount,
-      payout.currency,
-      referrer.user.preferred_language
-    );
-    return true;
   }
 
-  private async claimAndCredit(params: {
+  private async claimAndDistribute(params: {
     businessId: string;
+    businessName: string;
     agentId: string | null;
     referrerBusinessId: string | null;
+    earner: {
+      kind: 'agent' | 'business';
+      id: string;
+      userId: string;
+      name: string;
+    };
     accountId: string;
     amount: number;
     currency: string;
     rail: string;
     itemCount: number;
+    preferPersonalAccount: boolean;
   }): Promise<boolean> {
-    const claimed = await this.claimPayoutRow(params);
-    if (!claimed) {
+    const payoutId = await this.claimPayoutRow(params);
+    if (!payoutId) {
       this.logger.warn(
         `Payout already claimed for business ${params.businessId} — skipping.`
       );
@@ -326,17 +454,67 @@ export class BusinessReferralPayoutsService {
     }
 
     try {
-      const transactionId = await this.creditReferrerAccount(
-        params.accountId,
-        params.amount,
-        params.businessId
-      );
-      await this.attachTransactionId(params.businessId, transactionId);
+      const earnerName = await this.resolveEarnerDisplayName(params.earner);
+      const result = await this.referralPyramidService.distributeReferralBonus({
+        grossAmount: params.amount,
+        earner: { ...params.earner, name: earnerName },
+        referred: {
+          kind: 'business',
+          id: params.businessId,
+          name: params.businessName,
+        },
+        preferPersonalAccount: params.preferPersonalAccount,
+        currency: params.currency,
+        businessReferralPayoutId: payoutId,
+      });
+      if (result.credited <= 0) {
+        await this.releasePayoutClaim(params.businessId);
+        return false;
+      }
+      const primaryTx = result.transactionIds[0];
+      if (primaryTx) {
+        await this.attachTransactionId(params.businessId, primaryTx);
+      }
       return true;
     } catch (error: any) {
-      await this.releasePayoutClaim(params.businessId);
+      // Keep the claim when any wallet credit may already exist so retries
+      // reuse the same payout id / stable deposit references.
+      this.logger.error(
+        `Pyramid distribute failed for business ${params.businessId}; claim retained for retry: ${error.message}`
+      );
       throw error;
     }
+  }
+
+  private async resolveEarnerDisplayName(earner: {
+    kind: 'agent' | 'business';
+    id: string;
+    name: string;
+  }): Promise<string> {
+    if (earner.kind === 'business') {
+      const query = `
+        query EarnerBusinessName($id: uuid!) {
+          businesses_by_pk(id: $id) { name }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        id: earner.id,
+      });
+      return result?.businesses_by_pk?.name || earner.name;
+    }
+    const query = `
+      query EarnerAgentName($id: uuid!) {
+        agents_by_pk(id: $id) {
+          user { first_name last_name }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      id: earner.id,
+    });
+    const user = result?.agents_by_pk?.user;
+    const name = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+    return name || earner.name;
   }
 
   private async resolveReferrerPayoutContext(params: {
@@ -381,35 +559,6 @@ export class BusinessReferralPayoutsService {
       params.referrerUserId
     );
     return { accountId, amount, currency, rail };
-  }
-
-  private async creditReferrerAccount(
-    accountId: string,
-    amount: number,
-    businessId: string
-  ): Promise<string> {
-    const existing = await this.accountsService.findDepositByReference(
-      accountId,
-      businessId
-    );
-    if (existing?.id) {
-      this.logger.warn(
-        `Reusing existing referral deposit ${existing.id} for business ${businessId}`
-      );
-      return existing.id;
-    }
-
-    const txResult = await this.accountsService.registerTransaction({
-      accountId,
-      amount,
-      transactionType: 'deposit',
-      memo: 'Business referral bonus',
-      referenceId: businessId,
-    });
-    if (!txResult.success || !txResult.transactionId) {
-      throw new Error(txResult.error || 'Failed to credit referral payout');
-    }
-    return txResult.transactionId;
   }
 
   private getCurrencyForCountry(countryCode: string | null): string {
@@ -527,14 +676,14 @@ export class BusinessReferralPayoutsService {
     currency: string;
     rail: string;
     itemCount: number;
-  }): Promise<boolean> {
+  }): Promise<string | null> {
     const mutation = `
       mutation ClaimBusinessReferralPayout($input: business_referral_payouts_insert_input!) {
         insert_business_referral_payouts_one(object: $input) { id }
       }
     `;
     try {
-      await this.hasuraSystemService.executeMutation(mutation, {
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
         input: {
           business_id: params.businessId,
           agent_id: params.agentId,
@@ -547,9 +696,9 @@ export class BusinessReferralPayoutsService {
           item_count: params.itemCount,
         },
       });
-      return true;
+      return result?.insert_business_referral_payouts_one?.id ?? null;
     } catch (error: any) {
-      if (this.isUniqueViolation(error)) return false;
+      if (this.isUniqueViolation(error)) return null;
       throw error;
     }
   }
@@ -598,32 +747,4 @@ export class BusinessReferralPayoutsService {
     );
   }
 
-  private async sendPayoutNotification(
-    userId: string,
-    businessName: string,
-    amount: number,
-    currency: string,
-    language: string
-  ): Promise<void> {
-    const isFr = (language ?? 'en').toLowerCase().startsWith('fr');
-    const title = isFr ? 'Crédit de parrainage' : 'Referral credit';
-    const body = isFr
-      ? `Crédit pour parrainage entreprise ${businessName} — ${amount} ${currency}`
-      : `Credit for business referral ${businessName} — ${amount} ${currency}`;
-    try {
-      await this.notificationsService.sendInternalPushByUserId(
-        userId,
-        title,
-        body,
-        {
-          url: '/accounts',
-          event: 'business_referral_credit',
-        }
-      );
-    } catch (error: any) {
-      this.logger.warn(
-        `Push notification failed for user ${userId}: ${error.message}`
-      );
-    }
-  }
 }

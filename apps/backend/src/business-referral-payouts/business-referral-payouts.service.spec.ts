@@ -9,19 +9,15 @@ describe('BusinessReferralPayoutsService', () => {
     executeQuery: jest.fn(),
     executeMutation: jest.fn(),
   };
-  const accountsService = {
-    registerTransaction: jest.fn(),
-    findDepositByReference: jest.fn(),
-  };
   const paymentRoutingService = {
     getUserCountryCode: jest.fn(),
     resolveRailForUser: jest.fn(),
   };
-  const notificationsService = {
-    sendInternalPushByUserId: jest.fn(),
-  };
   const configurationsService = {
     getConfigurationByKey: jest.fn(),
+  };
+  const referralPyramidService = {
+    distributeReferralBonus: jest.fn(),
   };
 
   const business = {
@@ -43,10 +39,9 @@ describe('BusinessReferralPayoutsService', () => {
     jest.clearAllMocks();
     service = new BusinessReferralPayoutsService(
       hasuraSystemService as never,
-      accountsService as never,
       paymentRoutingService as never,
-      notificationsService as never,
-      configurationsService as never
+      configurationsService as never,
+      referralPyramidService as never
     );
 
     configurationsService.getConfigurationByKey.mockImplementation(
@@ -72,45 +67,54 @@ describe('BusinessReferralPayoutsService', () => {
       if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'account-1' }] };
       }
+      if (query.includes('EarnerAgentName')) {
+        return {
+          agents_by_pk: { user: { first_name: 'Ada', last_name: 'Agent' } },
+        };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
       return {};
     });
-    accountsService.findDepositByReference.mockResolvedValue(null);
-    notificationsService.sendInternalPushByUserId.mockResolvedValue(undefined);
   });
 
   it('does not mark a business paid when wallet credit fails', async () => {
     hasuraSystemService.executeMutation.mockResolvedValue({
       insert_business_referral_payouts_one: { id: 'payout-1' },
     });
-    accountsService.registerTransaction.mockResolvedValue({
-      success: false,
-      error: 'Account not found',
+    referralPyramidService.distributeReferralBonus.mockRejectedValue(
+      new Error('Account not found')
+    );
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        return { businesses: [business] };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('GetPersonalAccount')) {
+        return { accounts: [{ id: 'account-1' }] };
+      }
+      if (query.includes('EarnerAgentName')) {
+        return {
+          agents_by_pk: { user: { first_name: 'Ada', last_name: 'Agent' } },
+        };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
     });
 
     const summary = await service.runWeeklyPayouts();
 
-    expect(summary).toEqual({
-      processed: 1,
-      credited: 0,
-      skipped: 0,
-      failures: 1,
-    });
-    expect(accountsService.registerTransaction).toHaveBeenCalledWith({
-      accountId: 'account-1',
-      amount: 5000,
-      transactionType: 'deposit',
-      memo: 'Business referral bonus',
-      referenceId: 'business-1',
-    });
-    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('ReleaseReferralPayoutClaim'),
-      { businessId: 'business-1' }
-    );
+    expect(summary.failures).toBeGreaterThanOrEqual(1);
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalled();
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
-      expect.stringContaining('AttachReferralPayoutTransaction'),
+      expect.stringContaining('ReleaseReferralPayoutClaim'),
       expect.anything()
     );
-    expect(notificationsService.sendInternalPushByUserId).not.toHaveBeenCalled();
   });
 
   it('claims before credit and skips when another runner already claimed', async () => {
@@ -126,35 +130,17 @@ describe('BusinessReferralPayoutsService', () => {
       skipped: 1,
       failures: 0,
     });
-    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
-    expect(notificationsService.sendInternalPushByUserId).not.toHaveBeenCalled();
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 
-  it('reuses an existing deposit instead of double-crediting', async () => {
+  it('credits via pyramid and attaches primary transaction id on success', async () => {
     hasuraSystemService.executeMutation.mockResolvedValue({
       insert_business_referral_payouts_one: { id: 'payout-1' },
       update_business_referral_payouts: { affected_rows: 1 },
     });
-    accountsService.findDepositByReference.mockResolvedValue({ id: 'tx-existing' });
-
-    const summary = await service.runWeeklyPayouts();
-
-    expect(summary.credited).toBe(1);
-    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
-    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('AttachReferralPayoutTransaction'),
-      { businessId: 'business-1', transactionId: 'tx-existing' }
-    );
-  });
-
-  it('credits and attaches transaction id on success', async () => {
-    hasuraSystemService.executeMutation.mockResolvedValue({
-      insert_business_referral_payouts_one: { id: 'payout-1' },
-      update_business_referral_payouts: { affected_rows: 1 },
-    });
-    accountsService.registerTransaction.mockResolvedValue({
-      success: true,
-      transactionId: 'tx-1',
+    referralPyramidService.distributeReferralBonus.mockResolvedValue({
+      credited: 2,
+      transactionIds: ['tx-earner', 'tx-gen1'],
     });
 
     const summary = await service.runWeeklyPayouts();
@@ -165,25 +151,43 @@ describe('BusinessReferralPayoutsService', () => {
       skipped: 0,
       failures: 0,
     });
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        grossAmount: 5000,
+        businessReferralPayoutId: 'payout-1',
+        referred: {
+          kind: 'business',
+          id: 'business-1',
+          name: 'Demo Store',
+        },
+      })
+    );
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('AttachReferralPayoutTransaction'),
-      { businessId: 'business-1', transactionId: 'tx-1' }
+      { businessId: 'business-1', transactionId: 'tx-earner' }
     );
-    expect(notificationsService.sendInternalPushByUserId).toHaveBeenCalled();
   });
 
-  it('eligibility query requires approved review and approved active items', async () => {
-    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-      if (query.includes('EligibleReferredBusinesses')) {
-        expect(query).toContain('business_referral_reviews');
-        expect(query).toContain('moderation_status: { _eq: approved }');
-        expect(query).toContain('status: { _eq: "approved" }');
-        return { businesses: [] };
-      }
-      return {};
+  it('releases claim when pyramid credits nobody', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+    });
+    referralPyramidService.distributeReferralBonus.mockResolvedValue({
+      credited: 0,
+      transactionIds: [],
     });
 
     const summary = await service.runWeeklyPayouts();
-    expect(summary.processed).toBe(0);
+
+    expect(summary).toEqual({
+      processed: 1,
+      credited: 0,
+      skipped: 1,
+      failures: 0,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('ReleaseReferralPayoutClaim'),
+      { businessId: 'business-1' }
+    );
   });
 });

@@ -54,6 +54,7 @@ import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import { BusinessAccountCard } from '../business/BusinessAccountCard';
 import AddressManager from '../common/AddressManager';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import ReferralCodeEntryButton from '../common/ReferralCodeEntryButton';
 import MissingEmailBanner from '../common/MissingEmailBanner';
 import MyRatingsSection from '../common/MyRatingsSection';
 import PhoneInput from '../common/PhoneInput';
@@ -193,6 +194,7 @@ const Profile: React.FC = () => {
   const [businessMainInterest, setBusinessMainInterest] = useState<
     'sell_items' | 'rent_items'
   >('sell_items');
+  const [personaReferralCode, setPersonaReferralCode] = useState('');
   const [personaConfirmTarget, setPersonaConfirmTarget] =
     useState<UserType | null>(null);
   const [missingEmailOpen, setMissingEmailOpen] = useState(false);
@@ -329,6 +331,7 @@ const Profile: React.FC = () => {
       setAgentDialogOpen(false);
       setBusinessDialogOpen(false);
       setBusinessName('');
+      setPersonaReferralCode('');
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { error?: string } } })?.response?.data
@@ -357,8 +360,15 @@ const Profile: React.FC = () => {
     setBusinessDialogOpen(true);
   };
 
-  const handleConfirmAgentPersona = () =>
-    postAddPersona('agent', { vehicle_type_id: vehicleTypeId || 'other' });
+  const handleConfirmAgentPersona = () => {
+    const trimmedReferral = personaReferralCode.trim();
+    postAddPersona('agent', {
+      vehicle_type_id: vehicleTypeId || 'other',
+      ...(trimmedReferral
+        ? { referral_agent_code: trimmedReferral.toUpperCase() }
+        : {}),
+    });
+  };
 
   const handleConfirmBusinessPersona = () => {
     const fallback =
@@ -366,9 +376,13 @@ const Profile: React.FC = () => {
         ? `${profile.first_name.trim()}'s Business`
         : t('profile.defaultBusinessName', 'My business');
     const name = businessName.trim() || fallback;
+    const trimmedReferral = personaReferralCode.trim();
     postAddPersona('business', {
       name,
       main_interest: businessMainInterest,
+      ...(trimmedReferral
+        ? { referral_agent_code: trimmedReferral.toUpperCase() }
+        : {}),
     });
   };
 
@@ -1192,6 +1206,12 @@ const Profile: React.FC = () => {
               'Upload ID documents from Manage Documents when you are ready.'
             )}
           </Typography>
+          <Box sx={{ mt: 2 }}>
+            <ReferralCodeEntryButton
+              value={personaReferralCode}
+              onChange={setPersonaReferralCode}
+            />
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAgentDialogOpen(false)} disabled={personaSubmitting}>
@@ -1242,6 +1262,10 @@ const Profile: React.FC = () => {
                 </MenuItem>
               </Select>
             </FormControl>
+            <ReferralCodeEntryButton
+              value={personaReferralCode}
+              onChange={setPersonaReferralCode}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { AgentHoldService } from './agent-hold.service';
 import { AgentReferralsService } from './agent-referrals.service';
 import { AgentsController } from './agents.controller';
 
 @Module({
-  imports: [HasuraModule, CommissionsModule],
+  imports: [HasuraModule, CommissionsModule, ReferralsModule],
   controllers: [AgentsController],
   providers: [AgentHoldService, AgentReferralsService],
   exports: [AgentHoldService, AgentReferralsService],

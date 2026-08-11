@@ -15,8 +15,7 @@ import React from 'react';
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { PERSONA_HEADER_COLORS } from '../../../constants/personaTheme';
-import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
-import AgentReferralCodeField from '../../common/AgentReferralCodeField';
+import ReferralCodeEntryButton from '../../common/ReferralCodeEntryButton';
 import { PersonaBenefitBullets } from '../../onboarding/PersonaBenefitBullets';
 import { PersonaPickIllustration } from '../../onboarding/PersonaPickIllustration';
 import type { PersonaId, SignupFormValues } from '../wizard/types';
@@ -51,13 +50,6 @@ export const PersonasStep: React.FC = () => {
     formState: { errors },
   } = useFormContext<SignupFormValues>();
   const personas = useWatch({ control, name: 'personas' }) ?? [];
-  const referralCode =
-    useWatch({ control, name: 'business.referralAgentCode' }) ?? '';
-  const {
-    result: referralLookup,
-    loading: referralLookupLoading,
-    error: referralLookupError,
-  } = useAgentReferralLookup(referralCode);
 
   const togglePersona = (id: PersonaId) => {
     // Signup allows exactly one persona; additional roles can be enrolled later.
@@ -66,6 +58,8 @@ export const PersonasStep: React.FC = () => {
   };
 
   const hasBusiness = personas.includes('business');
+  const showReferral =
+    personas.includes('business') || personas.includes('agent');
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
@@ -235,24 +229,23 @@ export const PersonasStep: React.FC = () => {
               </TextField>
             )}
           />
-          <Controller
-            name="business.referralAgentCode"
-            control={control}
-            render={({ field }) => (
-              <AgentReferralCodeField
-                value={field.value}
-                onChange={field.onChange}
-                labelKey="business.referrals.referralCodeLabel"
-                labelDefault="Agent referral code (optional)"
-                helpKey="business.referrals.referralCodeHelp"
-                helpDefault="Enter the code of the Rendasua agent helping you get started."
-                lookupResult={referralLookup}
-                lookupLoading={referralLookupLoading}
-                lookupError={referralLookupError}
-              />
-            )}
-          />
         </>
+      )}
+      {showReferral && (
+        <Controller
+          name="business.referralAgentCode"
+          control={control}
+          render={({ field }) => (
+            <ReferralCodeEntryButton
+              value={field.value}
+              onChange={field.onChange}
+              labelKey="referrals.referralCodeLabel"
+              labelDefault="Referral code (optional)"
+              helpKey="referrals.referralCodeHelp"
+              helpDefault="Enter the code of the person who referred you."
+            />
+          )}
+        />
       )}
     </Stack>
   );

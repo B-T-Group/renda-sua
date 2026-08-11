@@ -6,6 +6,12 @@ jest.mock('../addresses/addresses.service', () => ({
 jest.mock('../agents/agent-referrals.service', () => ({
   AgentReferralsService: jest.fn(),
 }));
+jest.mock('../business-referrals/business-referrals.service', () => ({
+  BusinessReferralsService: jest.fn(),
+}));
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
 jest.mock('../hasura/hasura-system.service', () => ({
   HasuraSystemService: jest.fn(),
 }));
@@ -80,7 +86,7 @@ describe('UsersController', () => {
       addressesService as any,
       {} as any,
       {} as any,
-      { creditAgentReferralIfPresent: jest.fn() } as any,
+      { creditAgentReferralIfPresent: jest.fn(), getAgentInsertReferralFields: jest.fn().mockReturnValue({}), creditResolvedAgentReferral: jest.fn() } as any,
       businessReferralsService as any,
       {} as any,
       {
@@ -94,7 +100,8 @@ describe('UsersController', () => {
         ensureAndLinkContactPhoneToLocation: jest
           .fn()
           .mockResolvedValue(undefined),
-      } as any
+      } as any,
+      {} as any
     );
   });
 

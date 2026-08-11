@@ -310,13 +310,15 @@ export class SignupService {
       address: payload.address,
     });
 
-    const businessReferral =
-      await this.referralProvisioning.resolveBusinessReferral(
+    const signupReferral =
+      await this.referralProvisioning.resolveSignupReferral(
         personas,
         payload.referral_agent_code
       );
-    const referralFields =
-      this.referralProvisioning.getBusinessInsertReferralFields(businessReferral);
+    const businessReferralFields =
+      this.referralProvisioning.getBusinessInsertReferralFields(signupReferral);
+    const agentReferralFields =
+      this.referralProvisioning.getAgentInsertReferralFields(signupReferral);
 
     const businessName =
       payload.profile?.name?.trim() || `${payload.first_name}'s Business`;
@@ -339,7 +341,8 @@ export class SignupService {
         vehicle_type_id: payload.profile?.vehicle_type_id,
         business_name: businessName,
         main_interest: payload.profile?.main_interest ?? 'sell_items',
-        ...referralFields,
+        ...businessReferralFields,
+        ...agentReferralFields,
         storeAddress: nestStoreAddress,
       });
 
@@ -367,7 +370,7 @@ export class SignupService {
 
     await this.referralProvisioning.runPostCommitEffects({
       entities,
-      referral: businessReferral,
+      referral: signupReferral,
       referralAgentCode: payload.referral_agent_code,
       country: normalizedAddress?.country,
       businessName,

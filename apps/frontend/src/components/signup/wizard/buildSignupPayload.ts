@@ -31,6 +31,8 @@ export function buildSignupPayload(
 ): SignupStartPayload {
   const personas = [...new Set(values.personas)];
   const hasBusiness = personas.includes('business');
+  const hasAgentOrBusiness =
+    hasBusiness || personas.includes('agent');
   const trimmedReferral = values.business.referralAgentCode.trim();
 
   const payload: SignupStartPayload = {
@@ -57,9 +59,10 @@ export function buildSignupPayload(
       latitude: values.storeLocation.latitude,
       longitude: values.storeLocation.longitude,
     };
-    if (trimmedReferral) {
-      payload.referral_agent_code = trimmedReferral.toUpperCase();
-    }
+  }
+
+  if (hasAgentOrBusiness && trimmedReferral) {
+    payload.referral_agent_code = trimmedReferral.toUpperCase();
   }
 
   return payload;

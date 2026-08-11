@@ -8,3 +8,14 @@ object_relationships:
   - name: referring_agent
     using:
       foreign_key_constraint_on: referring_agent_id
+  - name: referrer_business
+    using:
+      foreign_key_constraint_on: referrer_business_id
+array_relationships:
+  - name: referral_bonus_distributions
+    using:
+      foreign_key_constraint_on:
+        column: agent_referral_id
+        table:
+          name: referral_bonus_distributions
+          schema: public

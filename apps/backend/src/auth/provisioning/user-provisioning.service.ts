@@ -49,6 +49,9 @@ export interface UserProvisioningInput {
   business_referral_agent_id?: string;
   business_referral_business_id?: string;
   business_referral_code_used?: string;
+  agent_referral_agent_id?: string;
+  agent_referral_business_id?: string;
+  agent_referral_code_used?: string;
   storeAddress?: NormalizedSignupAddress;
 }
 
@@ -67,6 +70,9 @@ export class UserProvisioningService {
       business_referral_agent_id: input.business_referral_agent_id,
       business_referral_business_id: input.business_referral_business_id,
       business_referral_code_used: input.business_referral_code_used,
+      agent_referral_agent_id: input.agent_referral_agent_id,
+      agent_referral_business_id: input.agent_referral_business_id,
+      agent_referral_code_used: input.agent_referral_code_used,
       storeAddress: input.storeAddress,
     };
     const fragments = buildPersonaFragments(ctx);
