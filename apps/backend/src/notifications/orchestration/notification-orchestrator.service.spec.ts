@@ -1,3 +1,25 @@
+jest.mock('../notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('./notification-preference.service', () => ({
+  NotificationPreferenceService: class NotificationPreferenceService {},
+}));
+jest.mock('./notification-analytics.service', () => ({
+  NotificationAnalyticsService: class NotificationAnalyticsService {},
+}));
+jest.mock('./channels/email.channel', () => ({
+  EmailChannel: class EmailChannel {},
+}));
+jest.mock('./channels/push.channel', () => ({
+  PushChannel: class PushChannel {},
+}));
+jest.mock('./channels/sms.channel', () => ({
+  SmsChannel: class SmsChannel {},
+}));
+jest.mock('./channels/whatsapp.channel', () => ({
+  WhatsAppChannel: class WhatsAppChannel {},
+}));
+
 import { NotificationOrchestrator } from './notification-orchestrator.service';
 import { NotificationPolicyService } from './notification-policy.service';
 import type {

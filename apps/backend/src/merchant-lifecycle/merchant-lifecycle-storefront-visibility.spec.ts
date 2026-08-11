@@ -1,3 +1,16 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../business-contracts/business-contracts.service', () => ({
+  BusinessContractsService: class BusinessContractsService {},
+}));
+jest.mock('../stripe-payments/payment-routing.service', () => ({
+  PaymentRoutingService: class PaymentRoutingService {},
+}));
+jest.mock('../launch-promo/launch-promo.service', () => ({
+  LaunchPromoService: class LaunchPromoService {},
+}));
+
 import { MerchantLifecycleService } from './merchant-lifecycle.service';
 
 describe('MerchantLifecycleService storefront visibility persist', () => {
