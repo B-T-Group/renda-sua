@@ -1,3 +1,25 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../accounts/accounts.service', () => ({
+  AccountsService: class AccountsService {},
+}));
+jest.mock('../mobile-payments/give-change-payout.service', () => ({
+  GiveChangePayoutService: class GiveChangePayoutService {},
+}));
+jest.mock('../stripe-payments/payment-routing.service', () => ({
+  PaymentRoutingService: class PaymentRoutingService {},
+}));
+jest.mock('../stripe-payments/stripe-payout.service', () => ({
+  StripePayoutService: class StripePayoutService {},
+}));
+jest.mock('../launch-promo/launch-promo.service', () => ({
+  LaunchPromoService: class LaunchPromoService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+
 import { CommissionsService } from './commissions.service';
 
 describe('CommissionsService launch promo settle/restore', () => {
@@ -42,11 +64,11 @@ describe('CommissionsService launch promo settle/restore', () => {
     const { service, launchPromo } = createService();
     launchPromo.consumePromoOrder.mockResolvedValue(true);
     jest
-      .spyOn(service, 'getRendasuaHQUser')
-      .mockResolvedValue(null);
+      .spyOn(service as any, 'settleItemCommissions')
+      .mockRejectedValue(new Error('settle failed'));
 
     await expect(service.distributeItemCommissions(order)).rejects.toThrow(
-      'RendaSua HQ user not found'
+      'settle failed'
     );
 
     expect(launchPromo.consumePromoOrder).toHaveBeenCalledWith(
@@ -63,11 +85,11 @@ describe('CommissionsService launch promo settle/restore', () => {
     const { service, launchPromo } = createService();
     launchPromo.consumePromoOrder.mockResolvedValue(false);
     jest
-      .spyOn(service, 'getRendasuaHQUser')
-      .mockResolvedValue(null);
+      .spyOn(service as any, 'settleItemCommissions')
+      .mockRejectedValue(new Error('settle failed'));
 
     await expect(service.distributeItemCommissions(order)).rejects.toThrow(
-      'RendaSua HQ user not found'
+      'settle failed'
     );
 
     expect(launchPromo.consumePromoOrder).toHaveBeenCalledWith(
