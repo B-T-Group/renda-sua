@@ -875,17 +875,7 @@ export class CommissionsService {
     if (!eligibility) return;
 
     if (eligibility.rail === 'stripe') {
-      await this.stripePayoutService.executePayout(
-        {
-          amount: ctx.amount,
-          currency: ctx.currency,
-          accountId: ctx.accountId,
-          userId: ctx.recipientUserId,
-          description: `Comm order ${ctx.order.order_number}`,
-          withdrawalMemoPrefix: 'Auto payout',
-        },
-        { throwOnFailure: false }
-      );
+      await this.payoutStripeCommission(ctx);
       return;
     }
 
@@ -901,6 +891,31 @@ export class CommissionsService {
         withdrawalMemoPrefix: 'Auto payout',
       },
       { throwOnWithdrawalFailure: false }
+    );
+  }
+
+  private async payoutStripeCommission(ctx: {
+    order: any;
+    recipientUserId: string;
+    recipientType: string;
+    accountId: string;
+    amount: number;
+    currency: string;
+  }): Promise<void> {
+    const result = await this.stripePayoutService.executePayout(
+      {
+        amount: ctx.amount,
+        currency: ctx.currency,
+        accountId: ctx.accountId,
+        userId: ctx.recipientUserId,
+        description: `Comm order ${ctx.order.order_number}`,
+        withdrawalMemoPrefix: 'Auto payout',
+      },
+      { throwOnFailure: false }
+    );
+    if (result.success) return;
+    this.logger.error(
+      `stripe_auto_payout_failed order=${ctx.order.order_number} recipient=${ctx.recipientType} user=${ctx.recipientUserId} amount=${ctx.amount} ${ctx.currency} error=${result.error ?? 'unknown'}`
     );
   }
 

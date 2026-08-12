@@ -1,5 +1,18 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { StripePayoutService } from './stripe-payout.service';
+
+jest.mock('./stripe-connect.service', () => ({
+  StripeConnectService: class StripeConnectService {},
+}));
+jest.mock('./stripe.service', () => ({
+  StripeService: class StripeService {},
+}));
+jest.mock('./stripe-payments-database.service', () => ({
+  StripePaymentsDatabaseService: class StripePaymentsDatabaseService {},
+}));
+jest.mock('../accounts/accounts.service', () => ({
+  AccountsService: class AccountsService {},
+}));
 
 describe('StripePayoutService', () => {
   const databaseService = {
@@ -40,6 +53,10 @@ describe('StripePayoutService', () => {
     );
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('rejects payouts from accounts not owned by the user', async () => {
     accountsService.accountBelongsToUser.mockResolvedValue(false);
 
@@ -77,10 +94,56 @@ describe('StripePayoutService', () => {
     });
 
     expect(result.success).toBe(false);
+    expect(result.error).toBe('TRANSFER_FAILED');
     expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).toHaveBeenCalledWith(
       'stripe-tx-1',
-      expect.objectContaining({ error_code: 'TRANSFER_FAILED' })
+      expect.objectContaining({
+        error_code: 'TRANSFER_FAILED',
+        error_message: '[unknown] Insufficient funds',
+      })
+    );
+  });
+
+  it('logs stripe_transfer_failed with Stripe balance_insufficient details', async () => {
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    accountsService.accountBelongsToUser.mockResolvedValue(true);
+    accountsService.getAccountBalance.mockResolvedValue({ availableBalance: 100 });
+    connectService.isPayoutReady.mockResolvedValue(true);
+    connectService.getByUserId.mockResolvedValue({
+      stripe_account_id: 'acct_connect',
+    });
+    databaseService.createTransaction.mockResolvedValue({ id: 'stripe-tx-1' });
+    stripeService.createTransfer.mockRejectedValue(
+      Object.assign(
+        new Error('You have insufficient funds in your Stripe account.'),
+        {
+          code: 'balance_insufficient',
+          type: 'StripeInvalidRequestError',
+        }
+      )
+    );
+
+    const result = await service.executePayout(payoutParams, {
+      throwOnFailure: false,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('TRANSFER_FAILED');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /stripe_transfer_failed.*user=authenticated-user.*dest=acct_connect.*stripe_code=balance_insufficient/
+      )
+    );
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      'stripe-tx-1',
+      expect.objectContaining({
+        error_code: 'TRANSFER_FAILED',
+        error_message:
+          '[balance_insufficient] You have insufficient funds in your Stripe account.',
+      })
     );
   });
 

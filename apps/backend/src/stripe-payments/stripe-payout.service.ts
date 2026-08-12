@@ -15,10 +15,37 @@ export interface StripePayoutParams {
 
 export interface StripePayoutResult {
   success: boolean;
+  error?: string;
   data?: {
     transactionId: string;
     transferId?: string;
     message?: string;
+  };
+}
+
+type StripeErrorDetails = { code: string; type: string; message: string };
+
+function transferFailedBody(details: StripeErrorDetails): Record<string, unknown> {
+  return {
+    success: false,
+    message: 'Failed to process Stripe payout',
+    error: 'TRANSFER_FAILED',
+    stripe_code: details.code,
+    stripe_message: details.message,
+  };
+}
+
+function stripeErrorDetails(error: unknown): StripeErrorDetails {
+  const err = error as {
+    code?: string;
+    type?: string;
+    message?: string;
+    raw?: { code?: string; type?: string; message?: string };
+  };
+  return {
+    code: String(err?.code || err?.raw?.code || 'unknown'),
+    type: String(err?.type || err?.raw?.type || 'unknown'),
+    message: String(err?.raw?.message || err?.message || error),
   };
 }
 
@@ -148,21 +175,12 @@ export class StripePayoutService {
         description: params.description,
       });
       transferId = transfer.id;
-    } catch (error: any) {
-      await this.databaseService.updateTransaction(txId, {
-        status: 'failed',
-        error_message: String(error?.message || error),
-        error_code: 'TRANSFER_FAILED',
-      });
-      return this.handleFailure(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          body: {
-            success: false,
-            message: 'Failed to process Stripe payout',
-            error: 'TRANSFER_FAILED',
-          },
-        },
+    } catch (error: unknown) {
+      return this.recordTransferFailure(
+        txId,
+        params,
+        destinationAccountId,
+        error,
         options
       );
     }
@@ -224,6 +242,40 @@ export class StripePayoutService {
     };
   }
 
+  private async recordTransferFailure(
+    txId: string,
+    params: StripePayoutParams,
+    destinationAccountId: string,
+    error: unknown,
+    options: { throwOnFailure: boolean }
+  ): Promise<StripePayoutResult> {
+    const details = stripeErrorDetails(error);
+    this.logTransferFailure(txId, params, destinationAccountId, details);
+    await this.databaseService.updateTransaction(txId, {
+      status: 'failed',
+      error_message: `[${details.code}] ${details.message}`,
+      error_code: 'TRANSFER_FAILED',
+    });
+    return this.handleFailure(
+      {
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        body: transferFailedBody(details),
+      },
+      options
+    );
+  }
+
+  private logTransferFailure(
+    txId: string,
+    params: StripePayoutParams,
+    destinationAccountId: string,
+    details: StripeErrorDetails
+  ): void {
+    this.logger.error(
+      `stripe_transfer_failed tx=${txId} user=${params.userId} dest=${destinationAccountId} amount=${params.amount} ${params.currency} desc=${params.description} stripe_code=${details.code} stripe_type=${details.type} message=${details.message}`
+    );
+  }
+
   private async reverseTransferAfterWithdrawalFailure(
     transferId: string,
     txId: string,
@@ -254,7 +306,8 @@ export class StripePayoutService {
     if (options.throwOnFailure) {
       throw new HttpException(err.body, err.status);
     }
+    const error = String(err.body.error ?? 'PAYOUT_FAILED');
     this.logger.warn(`Stripe payout failed: ${JSON.stringify(err.body)}`);
-    return { success: false };
+    return { success: false, error };
   }
 }
