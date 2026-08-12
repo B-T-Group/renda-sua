@@ -8191,12 +8191,13 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail for the receiving business owner. Stripe-country
-    // orders are NOT pushed to mobile money; the client pays via hosted Checkout.
-    const businessOwnerUserId =
-      businessInventories[0]?.business_location?.business?.user?.id;
-    const paymentRail = businessOwnerUserId
-      ? await this.paymentRoutingService.resolveRailForUser(businessOwnerUserId)
+    // Resolve the payment rail from the receiving business market (location
+    // country, then owner users.country). Do not use the owner's buyer/persona
+    // address country — that can disagree with the store and misroute rails.
+    const paymentRail = merchantBusinessId
+      ? await this.paymentRoutingService.resolveRailForBusiness(
+          merchantBusinessId
+        )
       : 'mobile_money';
     const useStripeRail =
       paymentTiming === 'pay_now' &&

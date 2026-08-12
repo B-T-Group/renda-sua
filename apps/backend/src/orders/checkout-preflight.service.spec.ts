@@ -37,6 +37,7 @@ function makeInventoryRow(overrides: {
   businessId?: string;
   ownerUserId?: string;
   sellerCountry?: string;
+  ownerCountry?: string | null;
   businessName?: string;
   currency?: string;
   payOnDelivery?: boolean;
@@ -64,7 +65,13 @@ function makeInventoryRow(overrides: {
         id: overrides.businessId ?? 'biz-1',
         name: overrides.businessName ?? 'Test Business',
         can_accept_orders: overrides.canAcceptOrders ?? true,
-        user: { id: overrides.ownerUserId ?? 'owner-1' },
+        user: {
+          id: overrides.ownerUserId ?? 'owner-1',
+          country:
+            overrides.ownerCountry !== undefined
+              ? overrides.ownerCountry
+              : sellerCountry,
+        },
       },
       address: { country: sellerCountry },
       mobile_payment_phone: isStripeCountry
@@ -251,6 +258,35 @@ describe('CheckoutPreflightService', () => {
     expect(result.checkout_method).toBe(CheckoutMethod.MOBILE_MONEY);
     expect(result.verification_method).toBe(VerificationMethod.PHONE);
     expect(result.can_proceed).toBe(true);
+  });
+
+  it('uses location country for seller rail when owner users.country disagrees', async () => {
+    mockInventory([
+      makeInventoryRow({
+        ownerUserId: 'owner-cm',
+        sellerCountry: 'CM',
+        ownerCountry: 'CA',
+      }),
+    ]);
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockImplementation(
+      async (country: string) =>
+        country === 'CA' ? 'stripe' : 'mobile_money'
+    );
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(paymentRoutingService.resolveRailForCountry).toHaveBeenCalledWith(
+      'CM'
+    );
+    expect(result.checkout_method).toBe(CheckoutMethod.MOBILE_MONEY);
+    expect(result.groups[0].seller_country).toBe('CM');
+    expect(result.groups[0].payment_rail).toBe('mobile_money');
   });
 
   // -------------------------------------------------------------------------

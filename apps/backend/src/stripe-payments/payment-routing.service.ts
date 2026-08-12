@@ -72,10 +72,11 @@ export class PaymentRoutingService {
   }
 
   /**
-   * A business's ISO alpha-2 country is its owner's `users.country`, falling
-   * back to the primary active business location address for owners whose
-   * country has not been backfilled. Keep the fallback order aligned with
-   * CheckoutPreflightService (user country, then location address).
+   * A business's market country is its primary active location address.
+   * Fall back to the owner's `users.country` only when no location country
+   * exists (unbackfilled / no location yet). Location wins so a shopper
+   * delivery address written into `users.country` cannot flip merchant rail.
+   * Keep this order aligned with CheckoutPreflightService seller country.
    */
   async getBusinessCountryCode(businessId: string): Promise<string | null> {
     const query = `
@@ -97,8 +98,8 @@ export class PaymentRoutingService {
     });
     const business = response.businesses_by_pk;
     return (
-      business?.user?.country ??
       business?.business_locations?.[0]?.address?.country ??
+      business?.user?.country ??
       null
     );
   }

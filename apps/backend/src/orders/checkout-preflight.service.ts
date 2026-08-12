@@ -231,11 +231,11 @@ export class CheckoutPreflightService {
       const inv = inventoryById.get(line.business_inventory_id)!;
       const businessId: string = inv.business_location?.business_id;
       const ownerId: string = inv.business_location?.business?.user?.id ?? '';
-      // Seller country comes from the owner's users.country (canonical market
-      // source); fall back to the location address for unbackfilled users.
+      // Seller country follows the store location (merchant market). Fall back
+      // to owner users.country only when the location has no country set.
       const sellerCountry: string = (
-        inv.business_location?.business?.user?.country ??
         inv.business_location?.address?.country ??
+        inv.business_location?.business?.user?.country ??
         ''
       )
         .trim()

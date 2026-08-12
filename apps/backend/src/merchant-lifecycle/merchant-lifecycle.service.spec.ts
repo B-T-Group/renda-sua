@@ -97,7 +97,9 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     service = new MerchantLifecycleService(
       hasuraSystemService as any,
       notificationsService as any,
-      { resolveRailForUser: jest.fn().mockResolvedValue('mobile_money') } as any,
+      {
+        resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
+      } as any,
       contractsService as any,
       { confirmSlot: jest.fn() } as any
     );

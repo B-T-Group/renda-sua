@@ -403,7 +403,8 @@ export class MerchantLifecycleService {
       );
     }
 
-    const rail = await this.paymentRoutingService.resolveRailForUser(userId);
+    const rail =
+      await this.paymentRoutingService.resolveRailForBusiness(businessId);
     // MoMo account activation is identity-based (agreement + approved ID).
     // Confirmed phones gate locations, not the business payment account row.
     if (rail === 'mobile_money') {

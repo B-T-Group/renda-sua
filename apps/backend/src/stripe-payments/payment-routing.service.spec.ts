@@ -130,22 +130,22 @@ describe('PaymentRoutingService', () => {
     await expect(service.getUserCountryCode('user-1')).resolves.toBeNull();
   });
 
-  it('reads the business country from the owner users.country', async () => {
+  it('prefers the primary location address over a conflicting owner users.country', async () => {
     hasuraService.executeQuery.mockResolvedValueOnce({
       businesses_by_pk: {
-        user: { country: 'CM' },
-        business_locations: [{ address: { country: 'US' } }],
+        user: { country: 'CA' },
+        business_locations: [{ address: { country: 'CM' } }],
       },
     });
 
     await expect(service.getBusinessCountryCode('biz-1')).resolves.toBe('CM');
   });
 
-  it('falls back to the primary location address when the owner has no country', async () => {
+  it('falls back to owner users.country when the location has no country', async () => {
     hasuraService.executeQuery.mockResolvedValueOnce({
       businesses_by_pk: {
-        user: { country: null },
-        business_locations: [{ address: { country: 'US' } }],
+        user: { country: 'US' },
+        business_locations: [{ address: { country: null } }],
       },
     });
 
