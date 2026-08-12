@@ -22,6 +22,23 @@ export function mapDbCapabilityStatus(
   }
 }
 
+export function mapCapabilityStatusToDb(
+  status: PaymentCapabilityStatus
+): DbPaymentCapabilityStatus {
+  switch (status) {
+    case 'VERIFIED':
+      return 'verified';
+    case 'VERIFICATION_PENDING':
+      return 'verification_pending';
+    case 'REJECTED':
+      return 'rejected';
+    case 'IN_PROGRESS':
+      return 'in_progress';
+    default:
+      return 'not_started';
+  }
+}
+
 export function aggregatePaymentCapability(
   accounts: DbPaymentCapabilityStatus[]
 ): PaymentCapabilityStatus {
@@ -53,36 +70,19 @@ export function aggregatePaymentCapabilityForProvider(
 }
 
 export function deriveLifecycleStatus(
-  catalogReady: boolean,
+  contractSigned: boolean,
   paymentCapability: PaymentCapabilityStatus
 ): BusinessLifecycleStatus {
-  if (!catalogReady) return 'created';
-  switch (paymentCapability) {
-    case 'VERIFIED':
-      return 'active';
-    case 'VERIFICATION_PENDING':
-    case 'REJECTED':
-      return 'payment_verification_pending';
-    case 'IN_PROGRESS':
-      return 'payment_setup_pending';
-    case 'NOT_STARTED':
-    default:
-      return 'catalog_ready';
-  }
+  if (!contractSigned) return 'created';
+  return paymentCapability === 'VERIFIED' ? 'active' : 'contract_signed';
 }
 
 /**
- * Catalog visibility is rail-aware and independent of order acceptance:
- * - Stripe: visible once agreement is signed (not created/suspended)
- * - Mobile money: visible only when lifecycle is active (agreement + approved ID)
+ * Catalog visibility is status-based and independent of order acceptance:
+ * visible once the merchant agreement is signed (contract_signed or active).
  */
 export function deriveStorefrontVisibility(
-  rail: 'stripe' | 'mobile_money',
   lifecycleStatus: BusinessLifecycleStatus
 ): boolean {
-  if (lifecycleStatus === 'created' || lifecycleStatus === 'suspended') {
-    return false;
-  }
-  if (rail === 'stripe') return true;
-  return lifecycleStatus === 'active';
+  return lifecycleStatus === 'contract_signed' || lifecycleStatus === 'active';
 }

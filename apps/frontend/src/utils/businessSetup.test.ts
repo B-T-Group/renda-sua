@@ -82,7 +82,7 @@ describe('isSetupMode', () => {
         baseStatus({
           nextAction: 'pending_review',
           isOnboarding: true,
-          lifecycle_status: 'catalog_ready',
+          lifecycle_status: 'contract_signed',
           is_storefront_visible: true,
         })
       )

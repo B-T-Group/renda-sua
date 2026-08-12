@@ -31,13 +31,7 @@ export type MerchantContractStatus = {
 
 export interface BusinessVerificationStatus {
   is_verified: boolean;
-  lifecycle_status?:
-    | 'created'
-    | 'catalog_ready'
-    | 'payment_setup_pending'
-    | 'payment_verification_pending'
-    | 'active'
-    | 'suspended';
+  lifecycle_status?: 'created' | 'contract_signed' | 'active' | 'suspended';
   is_storefront_visible?: boolean;
   can_accept_orders?: boolean;
   /** True while lifecycle is not active and not suspended. */

@@ -37,9 +37,7 @@ export type BroadcastActionType = (typeof BROADCAST_ACTION_TYPES)[number];
 
 export const BUSINESS_LIFECYCLE_STATUSES = [
   'created',
-  'catalog_ready',
-  'payment_setup_pending',
-  'payment_verification_pending',
+  'contract_signed',
   'active',
   'suspended',
 ] as const;

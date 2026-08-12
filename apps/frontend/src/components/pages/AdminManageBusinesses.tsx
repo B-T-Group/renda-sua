@@ -41,9 +41,7 @@ import { PinCodeFields } from '../common/PinCodeFields';
 const LIFECYCLE_FILTERS: AdminBusinessLifecycleFilter[] = [
   '',
   'created',
-  'catalog_ready',
-  'payment_setup_pending',
-  'payment_verification_pending',
+  'contract_signed',
   'active',
   'suspended',
 ];
@@ -220,9 +218,7 @@ const AdminManageBusinesses: React.FC = () => {
     }
     const keyMap: Record<string, string> = {
       created: 'draft',
-      catalog_ready: 'catalogReady',
-      payment_setup_pending: 'paymentSetupPending',
-      payment_verification_pending: 'paymentVerificationPending',
+      contract_signed: 'contractSigned',
       active: 'active',
       suspended: 'suspended',
     };

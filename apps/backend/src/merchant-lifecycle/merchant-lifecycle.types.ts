@@ -1,8 +1,6 @@
 export type BusinessLifecycleStatus =
   | 'created'
-  | 'catalog_ready'
-  | 'payment_setup_pending'
-  | 'payment_verification_pending'
+  | 'contract_signed'
   | 'active'
   | 'suspended';
 
@@ -39,7 +37,7 @@ export interface BusinessPaymentAccountRow {
 export interface BusinessLifecycleSnapshot {
   id: string;
   lifecycle_status: BusinessLifecycleStatus;
-  /** Catalog visibility (rail-aware; independent of can_accept_orders). */
+  /** Catalog visibility (status-based; independent of can_accept_orders). */
   is_storefront_visible: boolean;
   can_accept_orders: boolean;
   is_verified: boolean;

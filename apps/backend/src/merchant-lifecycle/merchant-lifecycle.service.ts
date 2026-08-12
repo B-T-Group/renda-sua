@@ -9,6 +9,7 @@ import {
   aggregatePaymentCapabilityForProvider,
   deriveLifecycleStatus,
   deriveStorefrontVisibility,
+  mapCapabilityStatusToDb,
   paymentProviderForRail,
 } from './merchant-lifecycle-status.util';
 import {
@@ -100,7 +101,7 @@ export class MerchantLifecycleService {
       return current;
     }
     const next = deriveLifecycleStatus(
-      await this.isCatalogReady(businessId),
+      await this.hasSignedContract(businessId),
       await this.resolvePaymentCapability(businessId)
     );
     await this.persistLifecycleState(businessId, next, true);
@@ -120,6 +121,33 @@ export class MerchantLifecycleService {
   }
 
   async upsertPaymentAccount(params: {
+    businessId: string;
+    provider: BusinessPaymentProvider;
+    capabilityStatus: DbPaymentCapabilityStatus;
+    externalReference?: string | null;
+    rejectionReason?: string | null;
+  }): Promise<void> {
+    const previousStatus = await this.getPaymentAccountStatus(
+      params.businessId,
+      params.provider
+    );
+    await this.persistPaymentAccount(params);
+    await this.recompute(params.businessId, `payment_account_${params.provider}`);
+    const needsReviewEmail =
+      params.capabilityStatus !== previousStatus &&
+      (params.capabilityStatus === 'verification_pending' ||
+        params.capabilityStatus === 'rejected');
+    if (needsReviewEmail) {
+      await this.notifyCapabilityChange(params);
+    }
+  }
+
+  /**
+   * Writes the payment account row without recomputing lifecycle or sending
+   * emails. Shared by upsertPaymentAccount and the recompute-time MoMo sync
+   * so the sync cannot recurse back into recompute.
+   */
+  private async persistPaymentAccount(params: {
     businessId: string;
     provider: BusinessPaymentProvider;
     capabilityStatus: DbPaymentCapabilityStatus;
@@ -149,7 +177,25 @@ export class MerchantLifecycleService {
         verified_at: verifiedAt,
       },
     });
-    await this.recompute(params.businessId, `payment_account_${params.provider}`);
+  }
+
+  private async getPaymentAccountStatus(
+    businessId: string,
+    provider: BusinessPaymentProvider
+  ): Promise<DbPaymentCapabilityStatus | null> {
+    const query = `
+      query PaymentAccountStatus($businessId: uuid!, $provider: business_payment_provider_enum!) {
+        business_payment_accounts(
+          where: { business_id: { _eq: $businessId }, provider: { _eq: $provider } }
+          limit: 1
+        ) { capability_status }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+      provider,
+    });
+    return res.business_payment_accounts?.[0]?.capability_status ?? null;
   }
 
   async getBusinessSnapshot(
@@ -207,7 +253,7 @@ export class MerchantLifecycleService {
       return this.getBusinessSnapshot(businessId);
     }
     const next = deriveLifecycleStatus(
-      await this.isCatalogReady(businessId),
+      await this.hasSignedContract(businessId),
       await this.resolvePaymentCapability(businessId)
     );
     const statusChanged = next !== current.lifecycle_status;
@@ -238,7 +284,7 @@ export class MerchantLifecycleService {
     await this.dispatchTransitionNotifications(previous, next);
   }
 
-  private async isCatalogReady(businessId: string): Promise<boolean> {
+  private async hasSignedContract(businessId: string): Promise<boolean> {
     // Signed agreement is the shared readiness gate. MoMo also needs an
     // approved ID (via resolveMoMoCapabilityFromIdentity). Products/rentals
     // and confirmed location phones are not required for lifecycle-active.
@@ -361,7 +407,9 @@ export class MerchantLifecycleService {
     // MoMo account activation is identity-based (agreement + approved ID).
     // Confirmed phones gate locations, not the business payment account row.
     if (rail === 'mobile_money') {
-      return this.resolveMoMoCapabilityFromIdentity(userId);
+      const identity = await this.resolveMoMoCapabilityFromIdentity(userId);
+      await this.syncMoMoPaymentAccount(businessId, identity);
+      return identity.status;
     }
 
     const accounts = await this.listPaymentAccounts(businessId);
@@ -374,9 +422,10 @@ export class MerchantLifecycleService {
    * Maps ID document review state to the payment-capability slot used by
    * deriveLifecycleStatus. Location payout readiness is separate.
    */
-  private async resolveMoMoCapabilityFromIdentity(
-    userId: string
-  ): Promise<PaymentCapabilityStatus> {
+  private async resolveMoMoCapabilityFromIdentity(userId: string): Promise<{
+    status: PaymentCapabilityStatus;
+    rejectionReason: string | null;
+  }> {
     const idNames = ['id_card', 'passport', 'driver_license'];
     const res = await this.hasuraSystemService.executeQuery(
       `query MoMoIdCapability($userId: uuid!, $names: [String!]) {
@@ -397,14 +446,48 @@ export class MerchantLifecycleService {
       is_approved: boolean;
       note: string | null;
     }>;
-    if (!uploads.length) return 'NOT_STARTED';
-    if (uploads.some((u) => u.is_approved)) return 'VERIFIED';
-    const latest = uploads[0];
-    const note = latest?.note?.trim() ?? '';
-    if (note.startsWith('[REJECTED]') || note.length > 0) {
-      return 'REJECTED';
+    if (!uploads.length) return { status: 'NOT_STARTED', rejectionReason: null };
+    if (uploads.some((u) => u.is_approved)) {
+      return { status: 'VERIFIED', rejectionReason: null };
     }
-    return 'VERIFICATION_PENDING';
+    const note = uploads[0]?.note?.trim() ?? '';
+    if (note.startsWith('[REJECTED]') || note.length > 0) {
+      return {
+        status: 'REJECTED',
+        rejectionReason: note.replace(/^\[REJECTED\]\s*/, '') || null,
+      };
+    }
+    return { status: 'VERIFICATION_PENDING', rejectionReason: null };
+  }
+
+  /**
+   * Mirrors the identity-derived MoMo capability into the mobile_money
+   * payment account row and emails review-state changes exactly once per
+   * change. Writes via persistPaymentAccount (no recompute) — never recurses.
+   */
+  private async syncMoMoPaymentAccount(
+    businessId: string,
+    identity: { status: PaymentCapabilityStatus; rejectionReason: string | null }
+  ): Promise<void> {
+    const status = mapCapabilityStatusToDb(identity.status);
+    const previous = await this.getPaymentAccountStatus(
+      businessId,
+      'mobile_money'
+    );
+    if (previous === status || (!previous && status === 'not_started')) return;
+    await this.persistPaymentAccount({
+      businessId,
+      provider: 'mobile_money',
+      capabilityStatus: status,
+      rejectionReason: identity.rejectionReason,
+    });
+    if (status === 'verification_pending' || status === 'rejected') {
+      await this.notifyCapabilityChange({
+        businessId,
+        capabilityStatus: status,
+        rejectionReason: identity.rejectionReason,
+      });
+    }
   }
 
   private async getBusinessUserId(businessId: string): Promise<string | null> {
@@ -512,10 +595,7 @@ export class MerchantLifecycleService {
     status: BusinessLifecycleStatus,
     updateStatus: boolean
   ): Promise<void> {
-    const rail = await this.paymentRoutingService.resolveRailForBusiness(
-      businessId
-    );
-    const visible = deriveStorefrontVisibility(rail, status);
+    const visible = deriveStorefrontVisibility(status);
     if (updateStatus) {
       const mutation = `
         mutation SetLifecycleAndVisibility(
@@ -544,12 +624,7 @@ export class MerchantLifecycleService {
     lifecycleStatus: BusinessLifecycleStatus,
     knownVisible?: boolean
   ): Promise<void> {
-    const visible =
-      knownVisible ??
-      deriveStorefrontVisibility(
-        await this.paymentRoutingService.resolveRailForBusiness(businessId),
-        lifecycleStatus
-      );
+    const visible = knownVisible ?? deriveStorefrontVisibility(lifecycleStatus);
     const mutation = `
       mutation SetStorefrontVisible($id: uuid!, $visible: Boolean!) {
         update_businesses_by_pk(
@@ -602,33 +677,43 @@ export class MerchantLifecycleService {
         to: email,
         businessName: previous.name,
       });
+    }
+  }
+
+  /**
+   * Payment review emails are driven by capability changes (Stripe sync,
+   * admin review), not lifecycle transitions: the lifecycle no longer has a
+   * payment_verification_pending status.
+   */
+  private async notifyCapabilityChange(params: {
+    businessId: string;
+    capabilityStatus: DbPaymentCapabilityStatus;
+    rejectionReason?: string | null;
+  }): Promise<void> {
+    const snapshot = await this.getBusinessSnapshot(params.businessId);
+    const email = snapshot?.user?.email?.trim();
+    if (!snapshot || !email || snapshot.lifecycle_status === 'active') return;
+    // Review emails presuppose a signed contract: merchants still in
+    // `created` (nothing signed yet) must not receive payment-review emails.
+    if (!(await this.hasSignedContract(params.businessId))) return;
+
+    if (params.capabilityStatus === 'rejected') {
+      await this.notificationsService.sendMerchantPaymentVerificationFailedEmail(
+        {
+          to: email,
+          businessName: snapshot.name,
+          reason: params.rejectionReason,
+        }
+      );
       return;
     }
-
-    if (
-      next === 'payment_verification_pending' &&
-      previous.lifecycle_status !== 'payment_verification_pending'
-    ) {
-      const accounts = await this.listPaymentAccounts(previous.id);
-      const rejected = accounts.find(
-        (a: { capability_status: string }) => a.capability_status === 'rejected'
-      );
-      if (rejected) {
-        await this.notificationsService.sendMerchantPaymentVerificationFailedEmail({
-          to: email,
-          businessName: previous.name,
-          reason: rejected.rejection_reason,
-        });
-      } else {
-        await this.notificationsService.sendMerchantPaymentReviewPendingEmail({
-          to: email,
-          businessName: previous.name,
-        });
-        await this.notificationsService.sendAdminMerchantReviewPendingEmail({
-          businessName: previous.name,
-          businessId: previous.id,
-        });
-      }
-    }
+    await this.notificationsService.sendMerchantPaymentReviewPendingEmail({
+      to: email,
+      businessName: snapshot.name,
+    });
+    await this.notificationsService.sendAdminMerchantReviewPendingEmail({
+      businessName: snapshot.name,
+      businessId: snapshot.id,
+    });
   }
 }

@@ -21,9 +21,7 @@ export type AdminIdDocumentStatus =
 export type AdminBusinessLifecycleFilter =
   | ''
   | 'created'
-  | 'catalog_ready'
-  | 'payment_setup_pending'
-  | 'payment_verification_pending'
+  | 'contract_signed'
   | 'active'
   | 'suspended';
 

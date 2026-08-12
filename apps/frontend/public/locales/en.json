@@ -800,9 +800,7 @@
       },
       "lifecycle": {
         "draft": "Draft",
-        "catalogReady": "Catalog ready",
-        "paymentSetupPending": "Payment setup",
-        "paymentVerificationPending": "Payment verification",
+        "contractSigned": "Contract signed",
         "active": "Active",
         "suspended": "Suspended",
         "unknown": "Unknown"

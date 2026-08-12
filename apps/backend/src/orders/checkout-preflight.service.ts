@@ -66,7 +66,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           id
           name
           can_accept_orders
-          user { id }
+          user { id country }
         }
         address { country state latitude longitude }
       }
@@ -231,8 +231,15 @@ export class CheckoutPreflightService {
       const inv = inventoryById.get(line.business_inventory_id)!;
       const businessId: string = inv.business_location?.business_id;
       const ownerId: string = inv.business_location?.business?.user?.id ?? '';
-      const sellerCountry: string =
-        (inv.business_location?.address?.country ?? '').trim().toUpperCase();
+      // Seller country comes from the owner's users.country (canonical market
+      // source); fall back to the location address for unbackfilled users.
+      const sellerCountry: string = (
+        inv.business_location?.business?.user?.country ??
+        inv.business_location?.address?.country ??
+        ''
+      )
+        .trim()
+        .toUpperCase();
       const sellerState: string = (
         inv.business_location?.address?.state ?? ''
       ).trim();

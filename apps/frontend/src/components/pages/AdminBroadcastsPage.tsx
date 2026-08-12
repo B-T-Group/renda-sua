@@ -49,9 +49,7 @@ import SEOHead from '../seo/SEOHead';
 
 const LIFECYCLE_OPTIONS = [
   'created',
-  'catalog_ready',
-  'payment_setup_pending',
-  'payment_verification_pending',
+  'contract_signed',
   'active',
   'suspended',
 ] as const;
@@ -152,7 +150,7 @@ const AdminBroadcastsPage: React.FC = () => {
         );
         setBody(ACCOUNT_SETUP_BODY_EN);
         if (audience === 'business' && lifecycleStatuses.length === 0) {
-          setLifecycleStatuses(['catalog_ready']);
+          setLifecycleStatuses(['contract_signed']);
         }
         return;
       }

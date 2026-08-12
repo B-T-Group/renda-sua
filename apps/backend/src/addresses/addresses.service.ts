@@ -106,6 +106,30 @@ export class AddressesService {
   }
 
   /**
+   * `users.country` is the canonical payment-rail source; keep it aligned
+   * when a primary address country changes. Never clears an existing value.
+   */
+  private async syncUserCountry(
+    userId: string,
+    country: string | null | undefined
+  ): Promise<void> {
+    const code = country?.trim().toUpperCase();
+    if (!code) return;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation SyncUserCountry($id: uuid!, $country: String!) {
+          update_users_by_pk(pk_columns: { id: $id }, _set: { country: $country }) { id }
+        }`,
+        { id: userId, country: code }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to sync users.country for ${userId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
+  /**
    * Format address components into a single string for geocoding
    */
   private formatAddressForGoogle(addressData: {
@@ -549,6 +573,10 @@ export class AddressesService {
           junctionMutation,
           junctionVariables
         );
+      }
+
+      if (addressData.is_primary) {
+        await this.syncUserCountry(user.id, addressData.country);
       }
 
       if (addressCountBefore === 0) {
@@ -1262,6 +1290,15 @@ export class AddressesService {
       const primaryChanged =
         addressData.is_primary !== undefined &&
         addressData.is_primary !== existingAddress.is_primary;
+      const isPrimaryAfterUpdate =
+        addressData.is_primary ?? existingAddress.is_primary ?? false;
+      if (isPrimaryAfterUpdate && (countryChanged || primaryChanged)) {
+        // Sync before lifecycle recompute so rail resolution sees the new country.
+        await this.syncUserCountry(
+          user.id,
+          addressData.country ?? existingAddress.country
+        );
+      }
       if (
         (countryChanged || primaryChanged) &&
         (ownershipResult.business_addresses?.length ?? 0) > 0
@@ -1519,6 +1556,7 @@ export class AddressesService {
           id
           address_id
           business_id
+          is_primary
         }
       }
     `;
@@ -1645,6 +1683,9 @@ export class AddressesService {
       locationId,
       addressId: address.id,
     });
+    if (location.is_primary) {
+      await this.syncUserCountry(userId, address.country);
+    }
     await this.recomputeBusinessLifecycle(location.business_id);
 
     return {
@@ -1679,6 +1720,7 @@ export class AddressesService {
           id
           address_id
           business_id
+          is_primary
         }
       }
     `;
@@ -1869,6 +1911,12 @@ export class AddressesService {
       }
     );
     // Country/primary location address drives payment rail → storefront visibility.
+    if (businessLocation.is_primary) {
+      await this.syncUserCountry(
+        userId,
+        result.update_addresses_by_pk?.country
+      );
+    }
     await this.recomputeBusinessLifecycle(businessId);
 
     return {

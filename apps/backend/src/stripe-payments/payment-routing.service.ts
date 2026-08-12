@@ -59,26 +59,29 @@ export class PaymentRoutingService {
     }
   }
 
-  /** Resolve the rail for a user based on their derived country. */
+  /** Resolve the rail for a user based on their country. */
   async resolveRailForUser(userId: string): Promise<PaymentRail> {
     const countryCode = await this.getUserCountryCode(userId);
     return this.resolveRailForCountry(countryCode ?? undefined);
   }
 
-  /** Resolve the rail for a business based on its primary location country. */
+  /** Resolve the rail for a business based on its owner's country. */
   async resolveRailForBusiness(businessId: string): Promise<PaymentRail> {
     const countryCode = await this.getBusinessCountryCode(businessId);
     return this.resolveRailForCountry(countryCode ?? undefined);
   }
 
   /**
-   * Derive a business's ISO alpha-2 country code from its primary (or first
-   * active) business location address.
+   * A business's ISO alpha-2 country is its owner's `users.country`, falling
+   * back to the primary active business location address for owners whose
+   * country has not been backfilled. Keep the fallback order aligned with
+   * CheckoutPreflightService (user country, then location address).
    */
   async getBusinessCountryCode(businessId: string): Promise<string | null> {
     const query = `
       query GetBusinessCountry($businessId: uuid!) {
         businesses_by_pk(id: $businessId) {
+          user { country }
           business_locations(
             where: { is_active: { _eq: true } }
             order_by: { is_primary: desc }
@@ -92,20 +95,40 @@ export class PaymentRoutingService {
     const response = await this.hasuraService.executeQuery(query, {
       businessId,
     });
+    const business = response.businesses_by_pk;
     return (
-      response.businesses_by_pk?.business_locations?.[0]?.address?.country ??
+      business?.user?.country ??
+      business?.business_locations?.[0]?.address?.country ??
       null
     );
   }
 
   /**
-   * Derive a user's ISO alpha-2 country code from their primary business
-   * location address (for businesses) or their personal address (for
-   * agents/clients).
+   * A user's ISO alpha-2 country is the canonical `users.country` column,
+   * falling back to address-derived resolution for unbackfilled users.
    */
   async getUserCountryCode(userId: string): Promise<string | null> {
     const query = `
-      query GetUserCountryName($userId: uuid!) {
+      query GetUserCountry($userId: uuid!) {
+        users_by_pk(id: $userId) { country }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { userId });
+    return (
+      response.users_by_pk?.country ??
+      (await this.getUserAddressCountryCode(userId))
+    );
+  }
+
+  /**
+   * Legacy address-derived country: business primary location, then
+   * business/client/agent active addresses.
+   */
+  private async getUserAddressCountryCode(
+    userId: string
+  ): Promise<string | null> {
+    const query = `
+      query GetUserAddressCountry($userId: uuid!) {
         businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
           business_locations(
             where: { is_active: { _eq: true } }

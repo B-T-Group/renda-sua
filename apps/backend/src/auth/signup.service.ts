@@ -337,6 +337,7 @@ export class SignupService {
         last_name: payload.last_name,
         phone_number: phoneNumber || null,
         email_verified: false,
+        country: normalizedAddress?.country ?? null,
         personas,
         vehicle_type_id: payload.profile?.vehicle_type_id,
         business_name: businessName,

@@ -42,6 +42,8 @@ export interface UserProvisioningInput {
   last_name: string;
   phone_number?: string | null;
   email_verified?: boolean;
+  /** ISO 3166-1 alpha-2 country code persisted on the users row. */
+  country?: string | null;
   personas: PersonaId[];
   vehicle_type_id?: string;
   business_name?: string;
@@ -106,6 +108,7 @@ export class UserProvisioningService {
       '$last_name: String!',
       '$phone_number: String',
       '$email_verified: Boolean!',
+      '$country: String',
       '$user_type_id: user_types_enum!',
     ];
     const vars: Record<string, unknown> = {
@@ -114,6 +117,7 @@ export class UserProvisioningService {
       last_name: input.last_name,
       phone_number: input.phone_number ?? null,
       email_verified: input.email_verified ?? false,
+      country: input.country ?? null,
       user_type_id: legacyUserTypeIdForPersonas(input.personas),
     };
     const objectFields = [
@@ -122,6 +126,7 @@ export class UserProvisioningService {
       'last_name: $last_name',
       'phone_number: $phone_number',
       'email_verified: $email_verified',
+      'country: $country',
       'user_type_id: $user_type_id',
     ];
     const returnSel = [

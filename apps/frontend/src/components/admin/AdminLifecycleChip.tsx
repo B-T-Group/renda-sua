@@ -29,28 +29,13 @@ function chipProps(
         color: 'error',
         variant: 'filled',
       };
-    case 'catalog_ready':
+    case 'contract_signed':
       return {
-        label: t('admin.businesses.lifecycle.catalogReady', 'Catalog ready'),
+        label: t(
+          'admin.businesses.lifecycle.contractSigned',
+          'Contract signed'
+        ),
         color: 'info',
-        variant: 'filled',
-      };
-    case 'payment_setup_pending':
-      return {
-        label: t(
-          'admin.businesses.lifecycle.paymentSetupPending',
-          'Payment setup'
-        ),
-        color: 'warning',
-        variant: 'filled',
-      };
-    case 'payment_verification_pending':
-      return {
-        label: t(
-          'admin.businesses.lifecycle.paymentVerificationPending',
-          'Payment verification'
-        ),
-        color: 'warning',
         variant: 'filled',
       };
     case 'created':

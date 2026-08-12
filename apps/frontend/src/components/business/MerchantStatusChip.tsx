@@ -4,9 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 export type MerchantLifecycleStatus =
   | 'created'
-  | 'catalog_ready'
-  | 'payment_setup_pending'
-  | 'payment_verification_pending'
+  | 'contract_signed'
   | 'active'
   | 'suspended';
 

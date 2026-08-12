@@ -626,8 +626,7 @@ export class AdminController {
   @ApiQuery({
     name: 'lifecycleStatus',
     required: false,
-    description:
-      'created | catalog_ready | payment_setup_pending | payment_verification_pending | active | suspended',
+    description: 'created | contract_signed | active | suspended',
   })
   @ApiQuery({
     name: 'idDocumentStatus',
