@@ -111,6 +111,40 @@ function cooldown(
   return (now.getTime() - prev.getTime()) / DAY_MS >= days;
 }
 
+/**
+ * Exponential backoff: after N prior sends, wait min(maxDays, baseDays * 2^(N-1))
+ * days since the last send. First send (N=0) is due immediately.
+ */
+export function isExponentialBackoffDue(
+  lastSent: Date | undefined,
+  priorSendCount: number,
+  now: Date,
+  options?: { baseDays?: number; maxDays?: number }
+): boolean {
+  if (!lastSent || priorSendCount <= 0) return true;
+  const baseDays = options?.baseDays ?? 1;
+  const maxDays = options?.maxDays ?? 30;
+  const delayDays = Math.min(
+    maxDays,
+    baseDays * Math.pow(2, Math.max(0, priorSendCount - 1))
+  );
+  return (now.getTime() - lastSent.getTime()) / DAY_MS >= delayDays;
+}
+
+/** Eligible for the payment-setup nudge (views + incomplete payment setup). */
+export function isPaymentSetupNudgeDue(
+  c: MerchantEngagementCandidate,
+  now: Date,
+  lastSent: Date | undefined,
+  priorSendCount: number
+): boolean {
+  if (!c.tipsRemindersEnabled) return false;
+  if (c.lifecycleStatus === 'suspended') return false;
+  if (!c.needsPaymentSetupNudge) return false;
+  if ((c.paymentSetupViewCount ?? 0) < 1) return false;
+  return isExponentialBackoffDue(lastSent, priorSendCount, now);
+}
+
 function catalogStalled(
   c: MerchantEngagementCandidate,
   now: Date,

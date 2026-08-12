@@ -123,15 +123,15 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const paymentsEnabled = inventory.payments_enabled !== false;
   const isOpeningSoon =
     (business.is_storefront_visible ?? true) && !merchantCanAcceptOrders;
-  const merchantNotAcceptingLabel = t(
-    'checkout.merchantNotAcceptingOrders',
-    'This merchant is currently completing account setup and is not yet accepting orders.'
-  );
   const paymentsComingSoonLabel = t(
     'catalog.paymentsComingSoon',
     'Coming soon'
   );
-  const openingSoonLabel = t('business.lifecycle.openingSoonBadge', 'Opening Soon');
+  const openingSoonLabel = t(
+    'catalog.paymentsComingSoon',
+    'Coming soon'
+  );
+  const paymentSetupIncomplete = !paymentsEnabled || !merchantCanAcceptOrders;
 
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(inventory),
@@ -1085,13 +1085,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {clientsOnlyLabel}
             </Button>
-          ) : !paymentsEnabled ? (
+          ) : paymentSetupIncomplete ? (
             <Button variant="outlined" disabled size="small" sx={{ width: '75%' }}>
               {paymentsComingSoonLabel}
-            </Button>
-          ) : !merchantCanAcceptOrders ? (
-            <Button variant="outlined" disabled size="small" sx={{ width: '75%' }}>
-              {merchantNotAcceptingLabel}
             </Button>
           ) : isPublicView ? (
             <Button

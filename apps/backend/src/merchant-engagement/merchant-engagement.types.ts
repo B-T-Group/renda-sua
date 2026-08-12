@@ -10,6 +10,7 @@ export type MerchantEngagementPushId =
   | 'push_rejected_item'
   | 'push_restock_top_viewed'
   | 'push_share_store'
+  | 'push_payment_setup_nudge'
   | 'email_weekly_digest';
 
 export type MerchantEngagementChannel = 'push' | 'email';
@@ -34,6 +35,13 @@ export interface MerchantEngagementCandidate {
   hasOperatingHours: boolean;
   /** Present when payment rail is mobile money; omitted for Stripe. */
   mmPhoneComplete?: boolean;
+  /**
+   * True when shoppers are viewing a location that cannot take payment yet
+   * (Stripe Connect incomplete, or MoMo phone unconfirmed on a viewed location).
+   */
+  needsPaymentSetupNudge?: boolean;
+  /** Unique product views across locations that still need payment setup. */
+  paymentSetupViewCount?: number;
   lastCatalogItemAt: string | null;
   itemsNeedingAiCleanupCount: number;
   topViewedOutOfStockCount: number;

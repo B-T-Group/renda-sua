@@ -1,5 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { isDefaultOperatingHours } from '../common/operating-hours.util';
+import { StripeConfig } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -7,6 +9,7 @@ import { isActivePersona } from '../users/persona.util';
 import {
   approvedForInterest,
   CATALOG_TARGET,
+  isPaymentSetupNudgeDue,
   nextStepCopy,
   readinessPercent,
   resolveEngagementPushId,
@@ -20,13 +23,17 @@ import type {
   MerchantEngagementChannel,
   MerchantEngagementPushId,
 } from './merchant-engagement.types';
+import { resolvePaymentSetupNudge } from './payment-setup-nudge.util';
+
+const PAYMENT_SETUP_PUSH_ID = 'push_payment_setup_nudge' as const;
 
 @Injectable()
 export class MerchantEngagementService {
   constructor(
     private readonly hasuraSystem: HasuraSystemService,
     private readonly hasuraUser: HasuraUserService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly configService: ConfigService
   ) {}
 
   async getTipsRemindersPreference(): Promise<{ tips_reminders_enabled: boolean }> {
@@ -78,6 +85,22 @@ export class MerchantEngagementService {
     return sent;
   }
 
+  /**
+   * Nudge storefront-visible merchants who get product views but have not
+   * finished Stripe Connect or confirmed a MoMo phone on the viewed location.
+   * Uses exponential backoff (1 → 2 → 4 → … → 30 days).
+   */
+  async runPaymentSetupNudges(): Promise<number> {
+    let sent = 0;
+    const now = new Date();
+    const stripeCountries = await this.loadStripeCountries();
+    for await (const c of this.iteratePaymentSetupCandidates(stripeCountries)) {
+      const ok = await this.trySendPaymentSetupNudge(c, now);
+      if (ok) sent += 1;
+    }
+    return sent;
+  }
+
   private async trySendPushForCandidate(
     c: MerchantEngagementCandidate,
     now: Date
@@ -96,6 +119,55 @@ export class MerchantEngagementService {
     if (result.expoSent + result.webSent <= 0) return false;
     await this.logSend(c.businessId, pushId, 'push', {});
     return true;
+  }
+
+  private async trySendPaymentSetupNudge(
+    c: MerchantEngagementCandidate,
+    now: Date
+  ): Promise<boolean> {
+    if (await this.sentAnyToday(c.businessId, now)) return false;
+    const history = await this.loadPushSendHistory(c.businessId, PAYMENT_SETUP_PUSH_ID);
+    if (!isPaymentSetupNudgeDue(c, now, history.lastSent, history.count)) {
+      return false;
+    }
+    const msg = buildEngagementPushMessage(
+      PAYMENT_SETUP_PUSH_ID,
+      c.preferredLanguage
+    );
+    if (c.hasExpoPush) {
+      const result = await this.notifications.sendInternalPushByUserId(
+        c.userId,
+        msg.title,
+        msg.body,
+        msg.data
+      );
+      if (result.expoSent + result.webSent <= 0) return false;
+      await this.logSend(c.businessId, PAYMENT_SETUP_PUSH_ID, 'push', {
+        viewCount: c.paymentSetupViewCount ?? 0,
+      });
+      return true;
+    }
+    if (!c.email) return false;
+    const delivered = await this.sendPaymentSetupEmail(c, msg.title, msg.body);
+    if (!delivered) return false;
+    await this.logSend(c.businessId, PAYMENT_SETUP_PUSH_ID, 'email', {
+      viewCount: c.paymentSetupViewCount ?? 0,
+    });
+    return true;
+  }
+
+  private async sendPaymentSetupEmail(
+    c: MerchantEngagementCandidate,
+    title: string,
+    body: string
+  ): Promise<boolean> {
+    const name = (c.businessName || 'Store').replace(/[\r\n<>]/g, '');
+    const html = `<p>Hello,</p><p>Shoppers are viewing <strong>${name}</strong>.</p><p>${body}</p><p>— Rendasua</p>`;
+    return this.notifications.sendMerchantEngagementHtmlEmail({
+      to: c.email!,
+      subject: title.replace(/[\r\n<>]/g, ''),
+      html,
+    });
   }
 
   private async trySendDigestForCandidate(
@@ -165,6 +237,211 @@ export class MerchantEngagementService {
       since: start.toISOString(),
     });
     return Number(res?.merchant_engagement_sends_aggregate?.aggregate?.count ?? 0) > 0;
+  }
+
+  private async loadPushSendHistory(
+    businessId: string,
+    pushId: MerchantEngagementPushId
+  ): Promise<{ lastSent: Date | undefined; count: number }> {
+    const query = `
+      query PaymentSetupNudgeHistory($businessId: uuid!, $pushId: String!) {
+        merchant_engagement_sends(
+          where: {
+            business_id: { _eq: $businessId }
+            push_id: { _eq: $pushId }
+          }
+          order_by: { sent_at: desc }
+          limit: 1
+        ) { sent_at }
+        merchant_engagement_sends_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            push_id: { _eq: $pushId }
+          }
+        ) { aggregate { count } }
+      }
+    `;
+    const res = await this.hasuraSystem.executeQuery<{
+      merchant_engagement_sends: Array<{ sent_at: string }>;
+      merchant_engagement_sends_aggregate: {
+        aggregate?: { count?: number };
+      };
+    }>(query, { businessId, pushId });
+    const last = res.merchant_engagement_sends?.[0]?.sent_at;
+    return {
+      lastSent: last ? new Date(last) : undefined,
+      count: Number(
+        res.merchant_engagement_sends_aggregate?.aggregate?.count ?? 0
+      ),
+    };
+  }
+
+  private async loadStripeCountries(): Promise<string[]> {
+    const fromEnv =
+      this.configService.get<StripeConfig>('stripe')?.enabledCountries ?? [];
+    const query = `
+      query StripeCountries {
+        supported_payment_systems(
+          where: { name: { _eq: "stripe" }, active: { _eq: true } }
+        ) { country }
+      }
+    `;
+    try {
+      const res = await this.hasuraSystem.executeQuery<{
+        supported_payment_systems: Array<{ country?: string }>;
+      }>(query);
+      const fromDb = (res.supported_payment_systems ?? [])
+        .map((r) => String(r.country ?? '').trim().toUpperCase())
+        .filter(Boolean);
+      if (fromDb.length === 0) return fromEnv.map((c) => c.toUpperCase());
+      return fromDb.filter((c) =>
+        fromEnv.length === 0
+          ? true
+          : fromEnv.map((x) => x.toUpperCase()).includes(c)
+      );
+    } catch {
+      return fromEnv.map((c) => c.toUpperCase());
+    }
+  }
+
+  private async *iteratePaymentSetupCandidates(
+    stripeCountries: string[]
+  ): AsyncGenerator<MerchantEngagementCandidate> {
+    const pageSize = 100;
+    let offset = 0;
+    for (;;) {
+      const page = await this.loadPaymentSetupMerchantPage(pageSize, offset);
+      if (page.length === 0) return;
+      for (const b of page) {
+        yield await this.hydratePaymentSetupCandidate(b, stripeCountries);
+      }
+      if (page.length < pageSize) return;
+      offset += pageSize;
+    }
+  }
+
+  private async loadPaymentSetupMerchantPage(
+    limit: number,
+    offset: number
+  ): Promise<Array<Record<string, any>>> {
+    const query = `
+      query PaymentSetupMerchants($limit: Int!, $offset: Int!) {
+        businesses(
+          where: {
+            is_storefront_visible: { _eq: true }
+            lifecycle_status: { _neq: "suspended" }
+            tips_reminders_enabled: { _eq: true }
+          }
+          limit: $limit
+          offset: $offset
+          order_by: { id: asc }
+        ) {
+          id
+          name
+          main_interest
+          ai_tokens
+          tips_reminders_enabled
+          can_accept_orders
+          lifecycle_status
+          created_at
+          user_id
+          user {
+            email
+            preferred_language
+            country
+            mobile_push_tokens_aggregate { aggregate { count } }
+          }
+          business_payment_accounts(
+            where: { provider: { _eq: "stripe" } }
+            limit: 1
+          ) { capability_status }
+          business_locations(where: { is_active: { _eq: true } }) {
+            id
+            logo_url
+            operating_hours
+            mobile_payment_phone { is_verified }
+            business_inventory(
+              where: { is_active: { _eq: true } }
+            ) {
+              item_view_events_aggregate { aggregate { count } }
+            }
+          }
+        }
+      }
+    `;
+    const res = await this.hasuraSystem.executeQuery<{
+      businesses: Array<Record<string, any>>;
+    }>(query, { limit, offset });
+    return res.businesses ?? [];
+  }
+
+  private async hydratePaymentSetupCandidate(
+    b: Record<string, any>,
+    stripeCountries: string[]
+  ): Promise<MerchantEngagementCandidate> {
+    const country = String(b.user?.country ?? '').trim().toUpperCase();
+    const isStripeRail = !!country && stripeCountries.includes(country);
+    const locations = this.mapPaymentSetupLocations(b.business_locations ?? []);
+    const nudge = resolvePaymentSetupNudge({
+      isStripeRail,
+      stripeVerified:
+        b.business_payment_accounts?.[0]?.capability_status === 'verified',
+      locations,
+    });
+    return this.buildPaymentSetupCandidate(b, locations, nudge, isStripeRail);
+  }
+
+  private mapPaymentSetupLocations(
+    locs: Array<Record<string, any>>
+  ): Array<{ id: string; viewCount: number; phoneVerified: boolean }> {
+    return locs.map((loc) => ({
+      id: String(loc.id),
+      viewCount: ((loc.business_inventory ?? []) as Array<any>).reduce(
+        (sum: number, inv: any) =>
+          sum + Number(inv?.item_view_events_aggregate?.aggregate?.count ?? 0),
+        0
+      ),
+      phoneVerified: loc.mobile_payment_phone?.is_verified === true,
+    }));
+  }
+
+  private buildPaymentSetupCandidate(
+    b: Record<string, any>,
+    locations: Array<{ viewCount: number; phoneVerified: boolean }>,
+    nudge: { needsPaymentSetupNudge: boolean; paymentSetupViewCount: number },
+    isStripeRail: boolean
+  ): MerchantEngagementCandidate {
+    return {
+      businessId: b.id,
+      userId: b.user_id,
+      email: b.user?.email ?? null,
+      preferredLanguage: b.user?.preferred_language ?? null,
+      businessName: b.name ?? 'Store',
+      mainInterest: b.main_interest ?? 'sell_items',
+      aiTokens: Number(b.ai_tokens ?? 0),
+      tipsRemindersEnabled: b.tips_reminders_enabled !== false,
+      canAcceptOrders: b.can_accept_orders === true,
+      lifecycleStatus: b.lifecycle_status ?? null,
+      hasExpoPush:
+        Number(b.user?.mobile_push_tokens_aggregate?.aggregate?.count ?? 0) > 0,
+      hasLogo: false,
+      hasOperatingHours: false,
+      liveSince: b.created_at ?? null,
+      approvedItemCount: 0,
+      approvedRentalCount: 0,
+      pendingItemCount: 0,
+      rejectedItemCount: 0,
+      lastCatalogItemAt: null,
+      itemsNeedingAiCleanupCount: 0,
+      topViewedOutOfStockCount: 0,
+      totalProductViews: locations.reduce((s, l) => s + l.viewCount, 0),
+      ordersTotal: 0,
+      needsPaymentSetupNudge: nudge.needsPaymentSetupNudge,
+      paymentSetupViewCount: nudge.paymentSetupViewCount,
+      mmPhoneComplete: isStripeRail
+        ? undefined
+        : locations.every((l) => l.viewCount === 0 || l.phoneVerified),
+    };
   }
 
   private async loadLastSentMap(

@@ -1591,9 +1591,9 @@
     "lifecycle": {
       "active": "Actif",
       "draft": "Brouillon",
-      "openingSoon": "Configuration",
+      "openingSoon": "Bientôt disponible",
       "onboarding": "Configuration",
-      "openingSoonBadge": "Configuration",
+      "openingSoonBadge": "Bientôt disponible",
       "verifyingPayments": "Vérification des paiements",
       "suspended": "Suspendu",
       "suspendedTitle": "Boutique suspendue",
@@ -6571,5 +6571,9 @@
     "helper": "Si l’application ne s’ouvre pas, téléchargez-la ou continuez dans le navigateur.",
     "openApp": "Ouvrir l’application",
     "continueWeb": "Continuer dans le navigateur"
+  },
+  "catalog": {
+    "paymentsComingSoon": "Bientôt disponible",
+    "paymentsComingSoonDetail": "Les paiements pour ce marchand arrivent bientôt."
   }
 }

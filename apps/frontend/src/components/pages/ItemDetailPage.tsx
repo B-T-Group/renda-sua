@@ -1336,7 +1336,7 @@ export default function ItemDetailPage() {
                       ? t('items.outOfStock', 'Out of Stock')
                       : t('items.notAvailable', 'Not Available')}
                   </Button>
-                ) : !paymentsEnabled ? (
+                ) : !paymentsEnabled || !merchantCanAcceptOrders ? (
                   <Button variant="outlined" disabled size="medium" fullWidth>
                     {t('catalog.paymentsComingSoon', 'Coming soon')}
                   </Button>
@@ -1350,11 +1350,7 @@ export default function ItemDetailPage() {
                         onClick={() => handleAddToCart(inventoryItem)}
                         size="medium"
                         fullWidth
-                        disabled={
-                          !variantSelectionReady ||
-                          !paymentsEnabled ||
-                          !merchantCanAcceptOrders
-                        }
+                        disabled={!variantSelectionReady}
                         aria-label={
                           inCart
                             ? t(
@@ -1368,7 +1364,7 @@ export default function ItemDetailPage() {
                         {addToCartLabel}
                       </Button>
                     )}
-                    {inCart && merchantCanAcceptOrders ? (
+                    {inCart ? (
                       <Chip
                         icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
                         label={inCartLabel}
@@ -1378,14 +1374,7 @@ export default function ItemDetailPage() {
                         sx={{ alignSelf: 'flex-start', height: 24 }}
                       />
                     ) : null}
-                    {!merchantCanAcceptOrders ? (
-                      <Button variant="outlined" disabled size="medium" fullWidth>
-                        {t(
-                          'checkout.merchantNotAcceptingOrders',
-                          'This merchant is currently completing account setup and is not yet accepting orders.'
-                        )}
-                      </Button>
-                    ) : showInlineOrderNow ? (
+                    {showInlineOrderNow ? (
                       <Button
                         variant="contained"
                         startIcon={<MobileMoneyOrderIcon />}

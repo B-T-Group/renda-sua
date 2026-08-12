@@ -145,6 +145,18 @@ const COPY: Record<
       type: 'business_share_store',
     },
   },
+  push_payment_setup_nudge: {
+    en: {
+      title: 'Shoppers are viewing your store',
+      body: 'You’re getting attention — finish payment setup so customers can buy.',
+      type: 'business_payment_setup',
+    },
+    fr: {
+      title: 'Des clients consultent votre boutique',
+      body: 'Vous attirez l’attention — terminez la config. des paiements pour vendre.',
+      type: 'business_payment_setup',
+    },
+  },
   email_weekly_digest: {
     en: {
       title: 'Your weekly store update',

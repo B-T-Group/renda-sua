@@ -1848,9 +1848,9 @@
     "lifecycle": {
       "active": "Active",
       "draft": "Draft",
-      "openingSoon": "Onboarding",
+      "openingSoon": "Coming soon",
       "onboarding": "Onboarding",
-      "openingSoonBadge": "Onboarding",
+      "openingSoonBadge": "Coming soon",
       "verifyingPayments": "Verifying payments",
       "suspended": "Suspended",
       "suspendedTitle": "Store suspended",
@@ -6550,5 +6550,9 @@
     "helper": "If the app does not open, download it or continue in the browser.",
     "openApp": "Open app",
     "continueWeb": "Continue in browser"
+  },
+  "catalog": {
+    "paymentsComingSoon": "Coming soon",
+    "paymentsComingSoonDetail": "Payments for this merchant are coming soon."
   }
 }

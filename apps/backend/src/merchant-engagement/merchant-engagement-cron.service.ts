@@ -21,6 +21,16 @@ export class MerchantEngagementCronService {
     }
   }
 
+  @Cron(CronExpression.EVERY_DAY_AT_11AM)
+  async handlePaymentSetupNudges(): Promise<void> {
+    try {
+      const n = await this.engagement.runPaymentSetupNudges();
+      if (n > 0) this.logger.log(`Sent ${n} payment-setup nudge(s)`);
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async handleWeeklyDigestWindow(): Promise<void> {
     if (new Date().getDay() !== 1) return; // Monday in server-local time (matches cron TZ)
