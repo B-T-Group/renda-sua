@@ -1,3 +1,13 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../accounts/accounts.service', () => ({
+  AccountsService: class AccountsService {},
+}));
+jest.mock('../admin/configurations.service', () => ({
+  ConfigurationsService: class ConfigurationsService {},
+}));
+
 import { ReferralPyramidService } from './referral-pyramid.service';
 
 describe('ReferralPyramidService', () => {
