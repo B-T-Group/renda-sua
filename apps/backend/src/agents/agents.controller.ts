@@ -30,6 +30,7 @@ import {
   UpdateLocationTrackingConsentDto,
 } from './dto/update-location-tracking-consent.dto';
 import { UpdateAgentAvailabilityDto } from './dto/update-agent-availability.dto';
+import { UpdateAgentFocusDto } from './dto/update-agent-focus.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
@@ -402,6 +403,62 @@ export class AgentsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('me/referred-businesses')
+  @ApiOperation({
+    summary: 'List businesses referred by the current agent',
+    description:
+      'Follow-up list with owner contact, lifecycle, payment-setup status, and item counts.',
+  })
+  @ApiResponse({ status: 200, description: 'Referred businesses list' })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  async getReferredBusinesses(@ReqContext() ctx: RequestContext) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      const agentId = this.requireAgentActor(user, ctx);
+      const businesses =
+        await this.agentReferralsService.listReferredBusinesses(agentId);
+      return { success: true, businesses };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to load referred businesses',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Patch('me/focus')
+  @ApiOperation({ summary: 'Update the current agent focus' })
+  @ApiBody({ type: UpdateAgentFocusDto })
+  @ApiResponse({ status: 200, description: 'Focus updated' })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  async updateMyFocus(
+    @ReqContext() ctx: RequestContext,
+    @Body() dto: UpdateAgentFocusDto
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const agentId = this.requireAgentActor(user, ctx);
+    const focus = dto.focus;
+    if (focus !== 'delivery' && focus !== 'commercial' && focus !== 'both') {
+      throw new HttpException(
+        { success: false, error: 'Invalid focus' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const goOffline =
+      focus === 'commercial' &&
+      (await this.hasuraSystemService.countAgentActiveOrders(agentId)) === 0;
+    const agent = await this.hasuraSystemService.updateAgentFocus(
+      agentId,
+      focus,
+      goOffline
+    );
+    return { success: true, agent };
   }
 
   @Get('me/referred-businesses-summary')

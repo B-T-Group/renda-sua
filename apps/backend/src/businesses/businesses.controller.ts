@@ -82,6 +82,26 @@ export class BusinessesController {
     };
   }
 
+  @Get('me/referred-businesses')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List businesses referred by the current business',
+  })
+  @ApiResponse({ status: 200, description: 'Referred businesses list' })
+  async getMyReferredBusinesses(@ReqContext() ctx: RequestContext) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'Business profile required' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const businesses =
+      await this.businessReferralsService.listReferredBusinesses(businessId);
+    return { success: true, businesses };
+  }
+
   @Get('me/referrals-summary')
   @ApiBearerAuth()
   @ApiOperation({

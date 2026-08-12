@@ -35,6 +35,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
         status
         is_available
         agent_code
+        focus
         location_tracking_consent_ios
         location_tracking_consent_android
         location_tracking_consent_web

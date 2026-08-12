@@ -334,6 +334,7 @@ export class UsersController {
     @Body()
     body: {
       vehicle_type_id?: string;
+      agent_focus?: 'delivery' | 'commercial' | 'both';
       name?: string;
       main_interest?: 'sell_items' | 'rent_items';
       referral_agent_code?: string;
@@ -949,6 +950,7 @@ export class UsersController {
       personas?: PersonaId[];
       profile: {
         vehicle_type_id?: string;
+        agent_focus?: 'delivery' | 'commercial' | 'both';
         name?: string;
         main_interest?: 'sell_items' | 'rent_items';
       };
@@ -1000,6 +1002,7 @@ export class UsersController {
           email_verified: false,
           personas,
           vehicle_type_id: userData.profile?.vehicle_type_id,
+          agent_focus: userData.profile?.agent_focus,
           business_name:
             userData.profile?.name?.trim() ||
             `${userData.first_name}'s Business`,
@@ -1144,6 +1147,7 @@ export class UsersController {
     persona: PersonaId,
     body: {
       vehicle_type_id?: string;
+      agent_focus?: 'delivery' | 'commercial' | 'both';
       name?: string;
       main_interest?: 'sell_items' | 'rent_items';
       referral_agent_code?: string;
@@ -1194,6 +1198,12 @@ export class UsersController {
           user
         );
       const vt = body.vehicle_type_id || 'other';
+      const focus =
+        body.agent_focus === 'delivery' ||
+        body.agent_focus === 'commercial' ||
+        body.agent_focus === 'both'
+          ? body.agent_focus
+          : 'both';
       const agentReferral =
         await this.businessReferralsService.resolveBusinessReferralCode(
           body.referral_agent_code,
@@ -1213,18 +1223,21 @@ export class UsersController {
         mutation AddAgent(
           $userId: uuid!
           $vt: vehicle_types_enum!
+          $focus: agent_focus_enum!
           $agentId: uuid!
           $referralCode: String!
         ) {
           insert_agents_one(object: {
             user_id: $userId
             vehicle_type_id: $vt
+            focus: $focus
             referred_by_agent_id: $agentId
             referral_code_used: $referralCode
           }) {
             id
             user_id
             vehicle_type_id
+            focus
             created_at
             updated_at
           }
@@ -1235,29 +1248,41 @@ export class UsersController {
         mutation AddAgent(
           $userId: uuid!
           $vt: vehicle_types_enum!
+          $focus: agent_focus_enum!
           $referrerBusinessId: uuid!
           $referralCode: String!
         ) {
           insert_agents_one(object: {
             user_id: $userId
             vehicle_type_id: $vt
+            focus: $focus
             referred_by_business_id: $referrerBusinessId
             referral_code_used: $referralCode
           }) {
             id
             user_id
             vehicle_type_id
+            focus
             created_at
             updated_at
           }
         }
       `
             : `
-        mutation AddAgent($userId: uuid!, $vt: vehicle_types_enum!) {
-          insert_agents_one(object: { user_id: $userId, vehicle_type_id: $vt }) {
+        mutation AddAgent(
+          $userId: uuid!
+          $vt: vehicle_types_enum!
+          $focus: agent_focus_enum!
+        ) {
+          insert_agents_one(object: {
+            user_id: $userId
+            vehicle_type_id: $vt
+            focus: $focus
+          }) {
             id
             user_id
             vehicle_type_id
+            focus
             created_at
             updated_at
           }
@@ -1267,6 +1292,7 @@ export class UsersController {
           ? {
               userId: uid,
               vt,
+              focus,
               agentId: referralFields.agent_referral_agent_id,
               referralCode: referralFields.agent_referral_code_used,
             }
@@ -1274,10 +1300,11 @@ export class UsersController {
             ? {
                 userId: uid,
                 vt,
+                focus,
                 referrerBusinessId: referralFields.agent_referral_business_id,
                 referralCode: referralFields.agent_referral_code_used,
               }
-            : { userId: uid, vt }
+            : { userId: uid, vt, focus }
       );
       if (source) {
         await this.seedAddressOrRollbackPersona(

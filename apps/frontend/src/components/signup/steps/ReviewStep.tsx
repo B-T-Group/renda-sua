@@ -48,7 +48,18 @@ export const ReviewStep: React.FC = () => {
   );
 
   const personasLabel = (values.personas || [])
-    .map((p) => t(PERSONA_LABELS[p]?.key, PERSONA_LABELS[p]?.def || p))
+    .map((p) => {
+      if (p === 'agent') {
+        if (values.agentFocus === 'delivery') {
+          return t('persona.agentDeliveryTitle', 'Delivery agent');
+        }
+        if (values.agentFocus === 'commercial') {
+          return t('persona.agentCommercialTitle', 'Commercial agent');
+        }
+        return t('persona.agent', 'Agent');
+      }
+      return t(PERSONA_LABELS[p]?.key, PERSONA_LABELS[p]?.def || p);
+    })
     .join(', ');
 
   const hasBusiness = (values.personas || []).includes('business');

@@ -11,10 +11,14 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBusinessReferrals } from '../../hooks/useBusinessReferrals';
+import { useReferredBusinesses } from '../../hooks/useReferredBusinesses';
+import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 
 const BusinessReferralCodeCard: React.FC = () => {
   const { t } = useTranslation();
   const { summary, loading } = useBusinessReferrals();
+  const { businesses, loading: listLoading, error: listError } =
+    useReferredBusinesses('business');
   const [copied, setCopied] = useState(false);
 
   if (loading || !summary?.businessCode) {
@@ -113,6 +117,14 @@ const BusinessReferralCodeCard: React.FC = () => {
             </Tooltip>
           </Stack>
         </Box>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 2, mb: 1 }}>
+          {t('referrals.followUp.listTitle', 'Referred businesses')}
+        </Typography>
+        <ReferredBusinessesList
+          businesses={businesses}
+          loading={listLoading}
+          error={listError}
+        />
       </CardContent>
     </Card>
   );

@@ -29,7 +29,11 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
+  FormLabel,
   Grid,
+  Radio,
+  RadioGroup,
   IconButton,
   InputLabel,
   MenuItem,
@@ -54,6 +58,9 @@ import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import { BusinessAccountCard } from '../business/BusinessAccountCard';
 import AddressManager from '../common/AddressManager';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import { AgentFocusSettings } from '../profile/AgentFocusSettings';
+import { showsCommercialChrome } from '../../utils/agentFocus';
+import type { AgentFocus } from '../../utils/agentFocus';
 import ReferralCodeEntryButton from '../common/ReferralCodeEntryButton';
 import MissingEmailBanner from '../common/MissingEmailBanner';
 import MyRatingsSection from '../common/MyRatingsSection';
@@ -190,6 +197,7 @@ const Profile: React.FC = () => {
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [businessDialogOpen, setBusinessDialogOpen] = useState(false);
   const [vehicleTypeId, setVehicleTypeId] = useState('other');
+  const [agentFocus, setAgentFocus] = useState<AgentFocus>('both');
   const [businessName, setBusinessName] = useState('');
   const [businessMainInterest, setBusinessMainInterest] = useState<
     'sell_items' | 'rent_items'
@@ -364,6 +372,7 @@ const Profile: React.FC = () => {
     const trimmedReferral = personaReferralCode.trim();
     postAddPersona('agent', {
       vehicle_type_id: vehicleTypeId || 'other',
+      agent_focus: agentFocus,
       ...(trimmedReferral
         ? { referral_agent_code: trimmedReferral.toUpperCase() }
         : {}),
@@ -486,7 +495,7 @@ const Profile: React.FC = () => {
         open={phoneVerifyDialogOpen}
         phoneNumber={profile?.phone_number || ''}
         onClose={() => setPhoneVerifyDialogOpen(false)}
-        onVerified={() => void refreshUserProfile()}
+        onVerified={() => void refetch()}
       />
       <Dialog
         open={verifyComingSoonTarget !== null}
@@ -880,7 +889,8 @@ const Profile: React.FC = () => {
                 </Stack>
               </Card>
             )}
-            {agentCode ? (
+            {profile?.agent?.id ? <AgentFocusSettings /> : null}
+            {showsCommercialChrome(profile?.agent?.focus) && agentCode ? (
               <AgentReferralCodeCard agentCode={agentCode} />
             ) : null}
             <Card
@@ -1180,7 +1190,7 @@ const Profile: React.FC = () => {
         maxWidth="xs"
       >
         <DialogTitle>
-          {t('profile.addAgentDialogTitle', 'Delivery agent setup')}
+          {t('profile.addAgentDialogTitle', 'Agent setup')}
         </DialogTitle>
         <DialogContent>
           <FormControl fullWidth sx={{ mt: 1 }} size="small">
@@ -1199,6 +1209,31 @@ const Profile: React.FC = () => {
                 </MenuItem>
               ))}
             </Select>
+          </FormControl>
+          <FormControl sx={{ mt: 2 }} fullWidth>
+            <FormLabel>
+              {t('agent.focus.settingsTitle', 'Agent focus')}
+            </FormLabel>
+            <RadioGroup
+              value={agentFocus}
+              onChange={(e) => setAgentFocus(e.target.value as AgentFocus)}
+            >
+              <FormControlLabel
+                value="delivery"
+                control={<Radio />}
+                label={t('agent.focus.deliveryTitle', 'Delivery')}
+              />
+              <FormControlLabel
+                value="commercial"
+                control={<Radio />}
+                label={t('agent.focus.commercialTitle', 'Recruit businesses')}
+              />
+              <FormControlLabel
+                value="both"
+                control={<Radio />}
+                label={t('agent.focus.bothTitle', 'Both')}
+              />
+            </RadioGroup>
           </FormControl>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
             {t(

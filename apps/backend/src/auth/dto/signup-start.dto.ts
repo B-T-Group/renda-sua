@@ -16,6 +16,7 @@ import {
 
 const PERSONA_IDS = ['client', 'agent', 'business'] as const;
 const MAIN_INTERESTS = ['sell_items', 'rent_items'] as const;
+const AGENT_FOCUSES = ['delivery', 'commercial', 'both'] as const;
 
 class SignupStartProfileDto {
   @ApiPropertyOptional()
@@ -33,6 +34,11 @@ class SignupStartProfileDto {
   @IsOptional()
   @IsIn(MAIN_INTERESTS)
   main_interest?: 'sell_items' | 'rent_items';
+
+  @ApiPropertyOptional({ enum: AGENT_FOCUSES })
+  @IsOptional()
+  @IsIn(AGENT_FOCUSES)
+  agent_focus?: 'delivery' | 'commercial' | 'both';
 }
 
 /** @deprecated Prefer `country` + `store_location`. Kept for mobile / in-flight clients. */

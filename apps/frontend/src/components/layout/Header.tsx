@@ -55,6 +55,7 @@ import MobileBalanceChip from '../common/MobileBalanceChip';
 import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 import UserRatingSummary from '../common/UserRatingSummary';
+import { useAgentFocus } from '../../hooks/useAgentFocus';
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
@@ -69,13 +70,14 @@ const Header: React.FC = () => {
   } = useUserProfileContext();
   const { enqueueSnackbar } = useSnackbar();
   const { t } = useTranslation();
+  const { showDelivery } = useAgentFocus();
 
   const personaLabel = (p: UserType) => {
     switch (p) {
       case 'client':
         return t('persona.client', 'Client');
       case 'agent':
-        return t('persona.agent', 'Delivery agent');
+        return t('persona.agent', 'Agent');
       case 'business':
         return t('persona.business', 'Business');
       default:
@@ -194,11 +196,20 @@ const Header: React.FC = () => {
       ];
     }
 
-    // For agents, show Available Orders and Active Orders
     if (userType === 'agent') {
       return [
-        { label: t('agent.openOrders.title', 'Available Orders'), path: '/open-orders', icon: <Assignment /> },
-        { label: t('agent.activeOrders', 'Active Orders'), path: '/orders', icon: <Assignment /> },
+        {
+          label: showDelivery
+            ? t('agent.openOrders.title', 'Available Orders')
+            : t('common.dashboard', 'Dashboard'),
+          path: '/open-orders',
+          icon: showDelivery ? <Assignment /> : <Dashboard />,
+        },
+        {
+          label: t('agent.activeOrders', 'Active Orders'),
+          path: '/orders',
+          icon: <Assignment />,
+        },
       ];
     }
 

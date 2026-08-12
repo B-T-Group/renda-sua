@@ -5,6 +5,12 @@ import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import {
+  mapReferredBusinessRow,
+  REFERRED_BUSINESSES_LIST_SELECTION,
+  type ReferredBusinessFollowUp,
+  type ReferredBusinessRow,
+} from './referred-business-followup.util';
 
 export interface BusinessReferralParams {
   businessId: string;
@@ -260,6 +266,25 @@ export class BusinessReferralsService {
         `Failed to notify referring business ${resolved.businessId}: ${error.message}`
       );
     }
+  }
+
+  async listReferredBusinesses(
+    businessId: string
+  ): Promise<ReferredBusinessFollowUp[]> {
+    const query = `
+      query BusinessReferredBusinesses($businessId: uuid!) {
+        businesses(
+          where: { referred_by_business_id: { _eq: $businessId } }
+          order_by: { created_at: desc }
+        ) {
+          ${REFERRED_BUSINESSES_LIST_SELECTION}
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      businesses: ReferredBusinessRow[];
+    }>(query, { businessId });
+    return (result?.businesses ?? []).map(mapReferredBusinessRow);
   }
 
   async getReferralsSummary(businessId: string): Promise<{

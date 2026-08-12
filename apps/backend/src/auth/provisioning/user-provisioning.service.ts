@@ -46,6 +46,7 @@ export interface UserProvisioningInput {
   country?: string | null;
   personas: PersonaId[];
   vehicle_type_id?: string;
+  agent_focus?: 'delivery' | 'commercial' | 'both';
   business_name?: string;
   main_interest?: 'sell_items' | 'rent_items';
   business_referral_agent_id?: string;
@@ -67,6 +68,7 @@ export class UserProvisioningService {
     const ctx: PersonaInsertContext = {
       personas: input.personas,
       vehicle_type_id: input.vehicle_type_id,
+      agent_focus: input.agent_focus,
       business_name: input.business_name,
       main_interest: input.main_interest,
       business_referral_agent_id: input.business_referral_agent_id,

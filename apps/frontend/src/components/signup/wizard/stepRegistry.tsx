@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { ContactStep } from '../steps/ContactStep';
 import { PersonasStep } from '../steps/PersonasStep';
+import { AgentFocusStep } from '../steps/AgentFocusStep';
 import { CountryStep } from '../steps/CountryStep';
 import { StoreLocationStep } from '../steps/StoreLocationStep';
 import { ReviewStep } from '../steps/ReviewStep';
@@ -17,6 +18,7 @@ export interface WizardStepDefinition extends WizardStepMeta {
 const STEP_COMPONENTS: Record<WizardStepId, ComponentType> = {
   contact: ContactStep,
   personas: PersonasStep,
+  agentFocus: AgentFocusStep,
   country: CountryStep,
   storeLocation: StoreLocationStep,
   review: ReviewStep,

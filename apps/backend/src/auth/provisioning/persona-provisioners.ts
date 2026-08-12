@@ -4,6 +4,7 @@ import type { NormalizedSignupAddress } from './signup-address.normalize';
 export interface PersonaInsertContext {
   personas: PersonaId[];
   vehicle_type_id?: string;
+  agent_focus?: 'delivery' | 'commercial' | 'both';
   business_name?: string;
   main_interest?: 'sell_items' | 'rent_items';
   business_referral_agent_id?: string;
@@ -44,11 +45,18 @@ function buildAgentFragment(
 ): PersonaInsertFragment | null {
   if (!ctx.personas.includes('agent')) return null;
 
-  const varDecls = ['$vehicle_type_id: vehicle_types_enum!'];
+  const varDecls = [
+    '$vehicle_type_id: vehicle_types_enum!',
+    '$agent_focus: agent_focus_enum!',
+  ];
   const vars: Record<string, unknown> = {
     vehicle_type_id: ctx.vehicle_type_id || 'other',
+    agent_focus: ctx.agent_focus ?? 'both',
   };
-  const agentDataFields = ['vehicle_type_id: $vehicle_type_id'];
+  const agentDataFields = [
+    'vehicle_type_id: $vehicle_type_id',
+    'focus: $agent_focus',
+  ];
 
   if (ctx.agent_referral_agent_id && ctx.agent_referral_code_used) {
     varDecls.push('$agent_referred_by_agent_id: uuid!');
@@ -73,7 +81,7 @@ function buildAgentFragment(
     vars,
     objectField: `agent: { data: { ${agentDataFields.join(', ')} } }`,
     returnSel:
-      'agent { id user_id vehicle_type_id is_verified created_at updated_at }',
+      'agent { id user_id vehicle_type_id focus is_verified created_at updated_at }',
   };
 }
 

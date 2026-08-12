@@ -62,6 +62,7 @@ export function buildSignupSchema(opts: {
         mainInterest: z.enum(['sell_items', 'rent_items']),
         referralAgentCode: z.string(),
       }),
+      agentFocus: z.enum(['delivery', 'commercial', 'both', '']).optional(),
       country: z.string(),
       storeLocation: z.object({
         street: z.string(),
@@ -87,6 +88,20 @@ export function buildSignupSchema(opts: {
           message: 'Select at least one persona',
           path: ['personas'],
         });
+      }
+
+      if (personas.includes('agent')) {
+        if (
+          values.agentFocus !== 'delivery' &&
+          values.agentFocus !== 'commercial' &&
+          values.agentFocus !== 'both'
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Select a focus',
+            path: ['agentFocus'],
+          });
+        }
       }
 
       if (personas.includes('business')) {

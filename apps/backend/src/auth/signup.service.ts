@@ -27,6 +27,7 @@ interface SignupStartPayload {
     vehicle_type_id?: string;
     name?: string;
     main_interest?: 'sell_items' | 'rent_items';
+    agent_focus?: 'delivery' | 'commercial' | 'both';
   };
   country?: string;
   store_location?: {
@@ -340,6 +341,7 @@ export class SignupService {
         country: normalizedAddress?.country ?? null,
         personas,
         vehicle_type_id: payload.profile?.vehicle_type_id,
+        agent_focus: payload.profile?.agent_focus,
         business_name: businessName,
         main_interest: payload.profile?.main_interest ?? 'sell_items',
         ...businessReferralFields,

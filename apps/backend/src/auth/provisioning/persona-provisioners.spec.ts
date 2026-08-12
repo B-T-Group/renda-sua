@@ -10,6 +10,7 @@ describe('buildPersonaFragments', () => {
     expect(frags[0].objectField).toContain('client');
     expect(frags[1].objectField).toContain('agent');
     expect(frags[1].vars.vehicle_type_id).toBe('bike');
+    expect(frags[1].vars.agent_focus).toBe('both');
   });
 
   it('nests business_locations when store address is present', () => {

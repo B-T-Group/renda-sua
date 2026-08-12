@@ -1,16 +1,18 @@
-import { Assignment, LocalShipping } from '@mui/icons-material';
+import { Assignment, Dashboard, LocalShipping } from '@mui/icons-material';
 import { Badge, Box, Paper, useTheme, useMediaQuery } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAgentFocus } from '../../hooks/useAgentFocus';
 
 const AgentBottomNav: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { userType } = useUserProfileContext();
+  const { showDelivery } = useAgentFocus();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { summary } = useAgentEarningsSummary(userType === 'agent' && isMobile);
@@ -22,7 +24,7 @@ const AgentBottomNav: React.FC = () => {
     return null;
   }
 
-  const isAvailableOrdersActive = location.pathname === '/open-orders';
+  const isHomeActive = location.pathname === '/open-orders';
   // Active orders is active for /orders or /orders/:orderId (but not /orders/batch, /orders/confirmation, etc.)
   const isActiveOrdersActive =
     location.pathname === '/orders' ||
@@ -60,7 +62,6 @@ const AgentBottomNav: React.FC = () => {
           justifyContent: 'space-around',
         }}
       >
-        {/* Available Orders Tab */}
         <Box
           onClick={() => handleNavigate('/open-orders')}
           sx={{
@@ -72,9 +73,7 @@ const AgentBottomNav: React.FC = () => {
             gap: 0.5,
             cursor: 'pointer',
             minHeight: 48,
-            color: isAvailableOrdersActive
-              ? 'primary.main'
-              : 'text.secondary',
+            color: isHomeActive ? 'primary.main' : 'text.secondary',
             backgroundColor: 'transparent',
             transition: 'all 0.2s ease-in-out',
             '&:hover': {
@@ -85,24 +84,33 @@ const AgentBottomNav: React.FC = () => {
             },
           }}
         >
-          <LocalShipping
-            sx={{
-              fontSize: 24,
-              color: isAvailableOrdersActive
-                ? 'primary.main'
-                : 'text.secondary',
-            }}
-          />
+          {showDelivery ? (
+            <LocalShipping
+              sx={{
+                fontSize: 24,
+                color: isHomeActive ? 'primary.main' : 'text.secondary',
+              }}
+            />
+          ) : (
+            <Dashboard
+              sx={{
+                fontSize: 24,
+                color: isHomeActive ? 'primary.main' : 'text.secondary',
+              }}
+            />
+          )}
           <Box
             component="span"
             sx={{
               fontSize: '0.75rem',
-              fontWeight: isAvailableOrdersActive ? 600 : 400,
+              fontWeight: isHomeActive ? 600 : 400,
               textAlign: 'center',
               lineHeight: 1.2,
             }}
           >
-            {t('agent.openOrders.title', 'Available Orders')}
+            {showDelivery
+              ? t('agent.openOrders.title', 'Available Orders')
+              : t('common.dashboard', 'Dashboard')}
           </Box>
         </Box>
 

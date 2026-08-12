@@ -1,9 +1,12 @@
 export type PersonaId = 'client' | 'agent' | 'business';
 export type MainInterest = 'sell_items' | 'rent_items';
 
+export type AgentFocus = 'delivery' | 'commercial' | 'both';
+
 export type WizardStepId =
   | 'contact'
   | 'personas'
+  | 'agentFocus'
   | 'country'
   | 'storeLocation'
   | 'review';
@@ -33,6 +36,7 @@ export interface SignupStoreLocationValues {
 export interface SignupFormValues {
   contact: SignupContactValues;
   personas: PersonaId[];
+  agentFocus: AgentFocus | '';
   business: SignupBusinessValues;
   country: string;
   storeLocation: SignupStoreLocationValues;
@@ -63,6 +67,7 @@ export const DEFAULT_SIGNUP_VALUES: SignupFormValues = {
     phone: '',
   },
   personas: ['client'],
+  agentFocus: '',
   business: {
     name: '',
     mainInterest: 'sell_items',

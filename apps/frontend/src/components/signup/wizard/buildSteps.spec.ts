@@ -2,19 +2,27 @@ import { buildSteps } from './buildSteps';
 import type { PersonaId } from './types';
 
 describe('buildSteps', () => {
-  const cases: Array<{ personas: PersonaId[]; expectStore: boolean }> = [
+  const cases: Array<{
+    personas: PersonaId[];
+    expectStore: boolean;
+    expectFocus?: boolean;
+  }> = [
     { personas: ['client'], expectStore: false },
-    { personas: ['agent'], expectStore: false },
+    { personas: ['agent'], expectStore: false, expectFocus: true },
     { personas: ['business'], expectStore: true },
     { personas: ['client', 'business'], expectStore: true },
-    { personas: ['agent', 'business'], expectStore: true },
-    { personas: ['client', 'agent'], expectStore: false },
-    { personas: ['client', 'agent', 'business'], expectStore: true },
+    { personas: ['agent', 'business'], expectStore: true, expectFocus: true },
+    { personas: ['client', 'agent'], expectStore: false, expectFocus: true },
+    {
+      personas: ['client', 'agent', 'business'],
+      expectStore: true,
+      expectFocus: true,
+    },
   ];
 
   it.each(cases)(
     'personas $personas → storeLocation=$expectStore',
-    ({ personas, expectStore }) => {
+    ({ personas, expectStore, expectFocus }) => {
       const steps = buildSteps({ personas, country: 'CA' });
       const ids = steps.map((s) => s.id);
       expect(ids[0]).toBe('country');
@@ -23,6 +31,7 @@ describe('buildSteps', () => {
       expect(ids).toContain('contact');
       expect(ids).toContain('review');
       expect(ids.includes('storeLocation')).toBe(expectStore);
+      expect(ids.includes('agentFocus')).toBe(Boolean(expectFocus));
       if (expectStore) {
         expect(ids.indexOf('storeLocation')).toBeGreaterThan(
           ids.indexOf('personas')

@@ -962,7 +962,33 @@
       "empty": "Aucune commande assignée surveillée actuellement."
     }
   },
+  "referrals": {
+    "followUp": {
+      "listTitle": "Commerces parrainés",
+      "contractPending": "Contrat en attente",
+      "paymentSetupPending": "Configuration du paiement en attente",
+      "active": "Actif",
+      "suspended": "Suspendu",
+      "empty": "Aucun commerce parrainé pour le moment. Partagez votre code pour commencer.",
+      "loadError": "Impossible de charger les commerces parrainés. Réessayez.",
+      "itemCounts": "{{approved}} approuvés · {{pending}} en attente · {{rejected}} refusés",
+      "call": "Appeler",
+      "email": "E-mail"
+    }
+  },
   "agent": {
+    "focus": {
+      "deliveryTitle": "Livraison",
+      "deliveryBody": "Récupérez et livrez les commandes aux clients.",
+      "commercialTitle": "Recruter des commerces",
+      "commercialBody": "Aidez les commerces locaux à rejoindre Rendasua et accompagnez-les jusqu’à la mise en service.",
+      "bothTitle": "Les deux",
+      "bothBody": "Livrez des commandes et recrutez des commerces.",
+      "settingsTitle": "Orientation agent",
+      "settingsHint": "Choisissez si vous livrez, recrutez des commerces, ou les deux.",
+      "save": "Enregistrer l’orientation",
+      "saveError": "Impossible de mettre à jour l’orientation."
+    },
     "autoWithdrawCommissions": "Envoyer automatiquement les commissions sur mon téléphone",
     "autoWithdrawCommissionsHint": "Si activé, les frais de livraison sont envoyés sur le téléphone de votre profil après chaque crédit. Désactivé par défaut jusqu'à activation.",
     "autoWithdrawUpdateFailed": "Impossible de mettre à jour le paiement automatique. Réessayez.",
@@ -1155,6 +1181,7 @@
       "address": "Adresse",
       "review": "Vérification",
       "personas": "Personas",
+      "agentFocus": "Orientation agent",
       "country": "Pays",
       "storeLocation": "Emplacement du magasin"
     },
@@ -1231,6 +1258,9 @@
     },
     "businessIntentStrip": "Vous vous inscrivez en tant qu'entreprise — voici ce que vous obtenez :",
     "personasSubtitle": "Choisissez comment commencer. Vous pourrez ajouter d'autres modes plus tard.",
+    "agentFocusSubtitle": "Souhaitez-vous livrer, recruter des commerces, ou les deux ?",
+    "agentFocusTitle": "Sur quoi voulez-vous vous concentrer ?",
+    "agentFocusRequired": "Choisissez une orientation pour continuer.",
     "countrySubtitle": "Votre pays détermine les paiements, la vérification et les options locales.",
     "storeLocationSubtitle": "Ceci devient votre premier emplacement commercial. Vous pourrez en ajouter d’autres plus tard.",
     "countryStepTitle": "Votre pays",
@@ -4747,7 +4777,9 @@
   },
   "persona": {
     "client": "Client",
-    "agent": "Agent de livraison",
+    "agent": "Agent",
+    "agentDeliveryTitle": "Livreur",
+    "agentCommercialTitle": "Agent commercial",
     "business": "Entreprise",
     "switchTo": "Passer à {{label}}",
     "switchingTitle": "Changement d’espace de travail",
@@ -4765,7 +4797,7 @@
         "description": "Parcourez les articles, passez commande et suivez les livraisons jusqu’à votre porte."
       },
       "agent": {
-        "title": "Livreur",
+        "title": "Agent",
         "description": "Consultez les courses disponibles, effectuez les enlèvements et soyez rémunéré pour chaque livraison."
       },
       "business": {

@@ -146,6 +146,7 @@ select_permissions:
         - pickups_reassigned_count
         - pickup_issues_reported_count
         - pickup_reliability_score
+        - focus
       filter:
         user:
           id:
@@ -165,6 +166,7 @@ select_permissions:
         - status
         - is_available
         - auto_withdraw_commissions
+        - focus
       filter:
         user:
           id:
@@ -184,6 +186,7 @@ select_permissions:
         - status
         - is_available
         - auto_withdraw_commissions
+        - focus
       filter:
         user:
           id:
@@ -203,6 +206,7 @@ select_permissions:
         - status
         - is_available
         - auto_withdraw_commissions
+        - focus
       filter:
         user:
           id:

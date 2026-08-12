@@ -82,5 +82,22 @@ describe('buildSignupPayload', () => {
     expect(payload.store_location).toBeUndefined();
     expect(payload.referral_agent_code).toBe('ZZ12YY');
     expect(payload.profile.vehicle_type_id).toBe('other');
+    expect(payload.profile.agent_focus).toBe('both');
+  });
+
+  it('sends selected agent focus', () => {
+    const payload = buildSignupPayload({
+      ...DEFAULT_SIGNUP_VALUES,
+      contact: {
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.com',
+        phone: '+1234567890',
+      },
+      personas: ['agent'],
+      agentFocus: 'commercial',
+      country: 'CM',
+    });
+    expect(payload.profile.agent_focus).toBe('commercial');
   });
 });

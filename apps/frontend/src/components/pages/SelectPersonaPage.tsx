@@ -47,7 +47,7 @@ const SelectPersonaPage: React.FC = () => {
     p === 'client'
       ? t('persona.selectCard.client.title', 'Client')
       : p === 'agent'
-        ? t('persona.selectCard.agent.title', 'Delivery agent')
+        ? t('persona.selectCard.agent.title', 'Agent')
         : t('persona.selectCard.business.title', 'Business');
 
   if (loading) {

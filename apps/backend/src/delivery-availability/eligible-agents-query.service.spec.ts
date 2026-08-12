@@ -30,6 +30,7 @@ describe('EligibleAgentsQueryService', () => {
         is_available: overrides.is_available ?? true,
         is_verified: overrides.is_verified ?? true,
         is_internal: overrides.is_internal ?? false,
+        focus: (overrides.focus as string) ?? 'both',
         status: overrides.status ?? 'active',
         user: { id: `user-${agentId}` },
         agent_addresses: [
@@ -52,6 +53,7 @@ describe('EligibleAgentsQueryService', () => {
         agentRow('near', 4.01),
         agentRow('unavailable', 4.001, { is_available: false }),
         agentRow('unverified', 4.002, { is_verified: false }),
+        agentRow('commercial', 4.0015, { focus: 'commercial' }),
         agentRow('suspended', 4.003, { status: 'suspended' }),
         agentRow('wrong-region', 4.004, { country: 'SN', state: 'Dakar' }),
       ],

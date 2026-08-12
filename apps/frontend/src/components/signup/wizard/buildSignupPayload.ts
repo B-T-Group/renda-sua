@@ -12,6 +12,7 @@ export interface SignupStartPayload {
     name?: string;
     main_interest?: 'sell_items' | 'rent_items';
     vehicle_type_id?: string;
+    agent_focus?: 'delivery' | 'commercial' | 'both';
   };
   country: string;
   store_location?: {
@@ -46,6 +47,9 @@ export function buildSignupPayload(
       name: hasBusiness ? values.business.name.trim() : undefined,
       main_interest: hasBusiness ? values.business.mainInterest : undefined,
       vehicle_type_id: personas.includes('agent') ? 'other' : undefined,
+      agent_focus: personas.includes('agent')
+        ? values.agentFocus || 'both'
+        : undefined,
     },
     country: values.country.trim().toUpperCase(),
   };

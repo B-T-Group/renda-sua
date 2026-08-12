@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
+import {
+  mapReferredBusinessRow,
+  REFERRED_BUSINESSES_LIST_SELECTION,
+  type ReferredBusinessFollowUp,
+  type ReferredBusinessRow,
+} from '../business-referrals/referred-business-followup.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 
@@ -440,6 +446,25 @@ export class AgentReferralsService {
         `Failed to delete unpaid agent referral ${referralId}: ${error.message}`
       );
     }
+  }
+
+  async listReferredBusinesses(
+    agentId: string
+  ): Promise<ReferredBusinessFollowUp[]> {
+    const query = `
+      query AgentReferredBusinesses($agentId: uuid!) {
+        businesses(
+          where: { referred_by_agent_id: { _eq: $agentId } }
+          order_by: { created_at: desc }
+        ) {
+          ${REFERRED_BUSINESSES_LIST_SELECTION}
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      businesses: ReferredBusinessRow[];
+    }>(query, { agentId });
+    return (result?.businesses ?? []).map(mapReferredBusinessRow);
   }
 
   async getReferredBusinessCount(agentId: string): Promise<number> {

@@ -53,6 +53,15 @@ export const WIZARD_STEP_META: WizardStepMeta[] = [
     isEnabled: () => true,
   },
   {
+    id: 'agentFocus',
+    labelKey: 'signupPage.steps.agentFocus',
+    labelDefault: 'Agent focus',
+    subtitleKey: 'signupPage.agentFocusSubtitle',
+    subtitleDefault: 'Do you want to deliver, recruit businesses, or both?',
+    fields: ['agentFocus'],
+    isEnabled: (ctx) => ctx.personas.includes('agent'),
+  },
+  {
     id: 'storeLocation',
     labelKey: 'signupPage.steps.storeLocation',
     labelDefault: 'Store location',

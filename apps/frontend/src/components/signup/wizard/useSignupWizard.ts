@@ -134,7 +134,17 @@ export function useSignupWizard({
     const step = steps[activeIndex];
     if (!step) return false;
 
-    if (step.id === 'personas' && personas.includes('business')) {
+    if (step.id === 'agentFocus') {
+      const focus = form.getValues('agentFocus');
+      if (
+        focus !== 'delivery' &&
+        focus !== 'commercial' &&
+        focus !== 'both'
+      ) {
+        form.setError('agentFocus', { message: 'Select a focus' });
+        return false;
+      }
+    } else if (step.id === 'personas' && personas.includes('business')) {
       const ok = await form.trigger([
         'personas',
         'business.name',

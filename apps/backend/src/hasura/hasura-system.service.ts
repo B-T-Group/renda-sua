@@ -588,6 +588,31 @@ export class HasuraSystemService {
     return result.update_agents_by_pk;
   }
 
+  async updateAgentFocus(
+    agentId: string,
+    focus: string,
+    goOffline?: boolean
+  ): Promise<{ id: string; focus: string; is_available: boolean } | null> {
+    const mutation = `
+      mutation UpdateAgentFocus($id: uuid!, $set: agents_set_input!) {
+        update_agents_by_pk(pk_columns: { id: $id }, _set: $set) {
+          id
+          focus
+          is_available
+        }
+      }
+    `;
+    const set = goOffline ? { focus, is_available: false } : { focus };
+    const result = await this.executeMutation<{
+      update_agents_by_pk: {
+        id: string;
+        focus: string;
+        is_available: boolean;
+      } | null;
+    }>(mutation, { id: agentId, set });
+    return result.update_agents_by_pk;
+  }
+
   async updateAgentAvailability(
     agentId: string,
     available: boolean
@@ -899,6 +924,7 @@ export class HasuraSystemService {
     email_verified?: boolean;
     personas: PersonaId[];
     vehicle_type_id?: string;
+    agent_focus?: 'delivery' | 'commercial' | 'both';
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
     business_referral_agent_id?: string;
@@ -943,6 +969,7 @@ export class HasuraSystemService {
     email_verified?: boolean;
     personas: PersonaId[];
     vehicle_type_id?: string;
+    agent_focus?: 'delivery' | 'commercial' | 'both';
     business_name?: string;
     main_interest?: 'sell_items' | 'rent_items';
     business_referral_agent_id?: string;
@@ -995,8 +1022,13 @@ export class HasuraSystemService {
     }
     if (personas.includes('agent')) {
       varDecls.push('$vehicle_type_id: vehicle_types_enum!');
+      varDecls.push('$agent_focus: agent_focus_enum!');
       vars.vehicle_type_id = params.vehicle_type_id || 'other';
-      const agentDataFields = ['vehicle_type_id: $vehicle_type_id'];
+      vars.agent_focus = params.agent_focus ?? 'both';
+      const agentDataFields = [
+        'vehicle_type_id: $vehicle_type_id',
+        'focus: $agent_focus',
+      ];
       if (params.agent_referral_agent_id && params.agent_referral_code_used) {
         varDecls.push('$agent_referred_by_agent_id: uuid!');
         varDecls.push('$agent_referral_code_used: String!');
@@ -1021,7 +1053,7 @@ export class HasuraSystemService {
       }
       objectFields.push(`agent: { data: { ${agentDataFields.join(', ')} } }`);
       returnSel.push(
-        'agent { id user_id vehicle_type_id is_verified created_at updated_at }'
+        'agent { id user_id vehicle_type_id focus is_verified created_at updated_at }'
       );
     }
     if (personas.includes('business')) {

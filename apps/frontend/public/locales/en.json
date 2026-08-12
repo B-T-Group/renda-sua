@@ -1203,7 +1203,33 @@
       "empty": "No assigned orders currently monitored."
     }
   },
+  "referrals": {
+    "followUp": {
+      "listTitle": "Referred businesses",
+      "contractPending": "Contract pending",
+      "paymentSetupPending": "Payment setup pending",
+      "active": "Active",
+      "suspended": "Suspended",
+      "empty": "No referred businesses yet. Share your code to get started.",
+      "loadError": "Could not load referred businesses. Try again.",
+      "itemCounts": "{{approved}} approved · {{pending}} pending · {{rejected}} rejected",
+      "call": "Call",
+      "email": "Email"
+    }
+  },
   "agent": {
+    "focus": {
+      "deliveryTitle": "Delivery",
+      "deliveryBody": "Pick up and deliver orders to customers.",
+      "commercialTitle": "Recruit businesses",
+      "commercialBody": "Help local shops join Rendasua and follow them through setup.",
+      "bothTitle": "Both",
+      "bothBody": "Deliver orders and recruit businesses.",
+      "settingsTitle": "Agent focus",
+      "settingsHint": "Choose whether you deliver orders, recruit businesses, or both.",
+      "save": "Save focus",
+      "saveError": "Could not update focus."
+    },
     "autoWithdrawCommissions": "Auto-send commissions to my phone",
     "autoWithdrawCommissionsHint": "When on, delivery fees are sent to your profile phone after each credit. Off by default until you enable this.",
     "autoWithdrawUpdateFailed": "Could not update auto-payout. Try again.",
@@ -1407,6 +1433,7 @@
       "address": "Address",
       "review": "Review",
       "personas": "Personas",
+      "agentFocus": "Agent focus",
       "country": "Country",
       "storeLocation": "Store location"
     },
@@ -1483,6 +1510,9 @@
     },
     "businessIntentStrip": "You're signing up as a business — here's what you get:",
     "personasSubtitle": "Choose how you want to start. You can add other modes later.",
+    "agentFocusSubtitle": "Do you want to deliver, recruit businesses, or both?",
+    "agentFocusTitle": "What will you focus on?",
+    "agentFocusRequired": "Select a focus to continue.",
     "countrySubtitle": "Your country determines payments, verification, and local options.",
     "storeLocationSubtitle": "This becomes your first business location. You can add more locations later.",
     "countryStepTitle": "Your country",
@@ -5009,7 +5039,9 @@
   },
   "persona": {
     "client": "Client",
-    "agent": "Delivery agent",
+    "agent": "Agent",
+    "agentDeliveryTitle": "Delivery agent",
+    "agentCommercialTitle": "Commercial agent",
     "business": "Business",
     "switchTo": "Switch to {{label}}",
     "switchingTitle": "Switching workspace",
@@ -5027,7 +5059,7 @@
         "description": "Browse items, place orders, and track deliveries to your door."
       },
       "agent": {
-        "title": "Delivery agent",
+        "title": "Agent",
         "description": "See available runs, complete pickups, and get paid for each delivery."
       },
       "business": {

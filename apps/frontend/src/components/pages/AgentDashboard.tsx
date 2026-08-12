@@ -21,7 +21,10 @@ import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
+import { useAgentFocus } from '../../hooks/useAgentFocus';
+import { useReferredBusinesses } from '../../hooks/useReferredBusinesses';
 import OpenOrdersPage from './OpenOrdersPage';
 
 const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
@@ -57,8 +60,14 @@ const AgentDashboard: React.FC = () => {
   );
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const agentCode = profile?.agent?.agent_code || '';
+  const { showDelivery, showCommercial } = useAgentFocus();
   const { summary, loading, error } = useAgentEarningsSummary(true);
   const { orders, loading: ordersLoading } = useAgentOrders();
+  const {
+    businesses,
+    loading: referredLoading,
+    error: referredError,
+  } = useReferredBusinesses('agent', showCommercial);
 
   const orderCountByStatus = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -101,6 +110,7 @@ const AgentDashboard: React.FC = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentQuickStats summary={summary} loading={loading} error={error} />
           </Grid>
+          {showDelivery ? (
           <Grid size={{ xs: 12 }}>
             <Card
               variant="outlined"
@@ -149,11 +159,28 @@ const AgentDashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          {agentCode && (
+          ) : null}
+          {showCommercial && agentCode ? (
             <Grid size={{ xs: 12 }}>
               <AgentReferralCodeCard agentCode={agentCode} />
             </Grid>
-          )}
+          ) : null}
+          {showCommercial ? (
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                    {t('referrals.followUp.listTitle', 'Referred businesses')}
+                  </Typography>
+                  <ReferredBusinessesList
+                    businesses={businesses}
+                    loading={referredLoading}
+                    error={referredError}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : null}
         </Grid>
       </Container>
       <MobilePaymentPhoneVerifyModal
@@ -167,7 +194,7 @@ const AgentDashboard: React.FC = () => {
           setPhoneModalOpen(false);
         }}
       />
-      <OpenOrdersPage />
+      {showDelivery ? <OpenOrdersPage /> : null}
     </>
   );
 };

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { showsDeliveryChrome } from '../agents/agent-focus.util';
 import {
   agentMatchesRegion,
   haversineDistanceKm,
@@ -34,6 +35,7 @@ interface EligibleAgentRow {
     is_available: boolean;
     is_verified: boolean;
     is_internal: boolean;
+    focus?: string | null;
     status: string;
     user: { id: string } | null;
     agent_addresses: Array<{
@@ -56,6 +58,7 @@ const ELIGIBLE_AGENTS_QUERY = `
         is_available
         is_verified
         is_internal
+        focus
         status
         user {
           id
@@ -77,9 +80,9 @@ const ELIGIBLE_AGENTS_QUERY = `
  * point". Shared by the client nearby-agents badge, order offer fan-out, and
  * the delivery availability rules so eligibility filters never diverge.
  *
- * Eligibility: agent is available, verified, not suspended, and operates in
- * the target country/state (profile address, falling back to GPS
- * reverse-geocode).
+ * Eligibility: agent is available, verified, delivery-focused (not
+ * commercial-only), not suspended, and operates in the target country/state
+ * (profile address, falling back to GPS reverse-geocode).
  */
 @Injectable()
 export class EligibleAgentsQueryService {
@@ -107,6 +110,7 @@ export class EligibleAgentsQueryService {
       const agent = row.agent;
       if (!agent) continue;
       if (!agent.is_available || !agent.is_verified) continue;
+      if (!showsDeliveryChrome(agent.focus)) continue;
       if (agent.status === 'suspended') continue;
       if (params.internalOnly && !agent.is_internal) continue;
 
