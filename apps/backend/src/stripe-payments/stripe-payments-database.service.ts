@@ -193,10 +193,27 @@ export class StripePaymentsDatabaseService {
     return (response.stripe_payment_transactions || [])[0] || null;
   }
 
+  /**
+   * Latest non-failed transaction for an entity (e.g. order/booking number).
+   * Failed checkout retries share the same entity_id, so we must not return them.
+   */
   async getTransactionByEntityId(
     entityId: string
   ): Promise<StripePaymentTransaction | null> {
-    return this.getTransactionByField('entity_id', entityId);
+    const query = `
+      query GetStripeTransactionByEntityId($entityId: String!) {
+        stripe_payment_transactions(
+          where: {
+            entity_id: { _eq: $entityId }
+            status: { _neq: "failed" }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { ${TRANSACTION_FIELDS} }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { entityId });
+    return (response.stripe_payment_transactions || [])[0] || null;
   }
 
   /**
