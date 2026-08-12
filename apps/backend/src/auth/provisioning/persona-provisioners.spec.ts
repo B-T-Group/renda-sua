@@ -13,6 +13,17 @@ describe('buildPersonaFragments', () => {
     expect(frags[1].vars.agent_focus).toBe('both');
   });
 
+  it('persists an explicit agent focus on signup', () => {
+    const frags = buildPersonaFragments({
+      personas: ['agent'],
+      vehicle_type_id: 'bike',
+      agent_focus: 'commercial',
+    });
+    expect(frags).toHaveLength(1);
+    expect(frags[0].vars.agent_focus).toBe('commercial');
+    expect(frags[0].objectField).toContain('focus: $agent_focus');
+  });
+
   it('nests business_locations when store address is present', () => {
     const frags = buildPersonaFragments({
       personas: ['business'],
