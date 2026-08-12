@@ -12,14 +12,12 @@ export function normalizeAgentFocus(value: unknown): AgentFocus {
   return 'both';
 }
 
-export function showsDeliveryChrome(focus: AgentFocus | null | undefined): boolean {
+export function showsDeliveryChrome(focus: unknown): boolean {
   const f = normalizeAgentFocus(focus);
   return f === 'delivery' || f === 'both';
 }
 
-export function showsCommercialChrome(
-  focus: AgentFocus | null | undefined
-): boolean {
+export function showsCommercialChrome(focus: unknown): boolean {
   const f = normalizeAgentFocus(focus);
   return f === 'commercial' || f === 'both';
 }
