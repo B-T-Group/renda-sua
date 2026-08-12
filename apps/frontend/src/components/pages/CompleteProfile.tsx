@@ -1041,9 +1041,9 @@ const CompleteProfile: React.FC = () => {
                   }))
                 }
                 labelKey="referrals.referralCodeLabel"
-                labelDefault="Referral code (optional)"
+                labelDefault="Agent referral code (optional)"
                 helpKey="referrals.referralCodeHelp"
-                helpDefault="Enter the code of the person who referred you."
+                helpDefault="Enter the 6-character code of the Rendasua agent who referred you."
               />
             )}
           </Box>

@@ -240,9 +240,9 @@ export const PersonasStep: React.FC = () => {
               value={field.value}
               onChange={field.onChange}
               labelKey="referrals.referralCodeLabel"
-              labelDefault="Referral code (optional)"
+              labelDefault="Agent referral code (optional)"
               helpKey="referrals.referralCodeHelp"
-              helpDefault="Enter the code of the person who referred you."
+              helpDefault="Enter the 6-character code of the Rendasua agent who referred you."
             />
           )}
         />

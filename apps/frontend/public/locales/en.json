@@ -1204,6 +1204,12 @@
     }
   },
   "referrals": {
+    "haveCodeLink": "Enter the code of the agent who referred you to Rendasua",
+    "codeApplied": "Agent referral code: {{code}}",
+    "changeCode": "Change",
+    "enterCodeTitle": "Agent referral code",
+    "referralCodeLabel": "Agent referral code (optional)",
+    "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
     "followUp": {
       "listTitle": "Referred businesses",
       "contractPending": "Contract pending",
@@ -1317,8 +1323,8 @@
       "avgCommission": "Avg. commission (today)"
     },
     "referrals": {
-      "referralCodeLabel": "Referral code (optional)",
-      "referralCodeHelp": "Enter the code of the agent who referred you (if any).",
+      "referralCodeLabel": "Agent referral code (optional)",
+      "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
       "lookupLoading": "Looking up agent...",
       "lookupSuccess": "Referred by {{name}}",
       "lookupError": "No agent found for this code",
@@ -1761,8 +1767,8 @@
       "uploading": "Uploading..."
     },
     "referrals": {
-      "referralCodeLabel": "Referral code (optional)",
-      "referralCodeHelp": "Enter the code of the Rendasua agent or business helping you get started.",
+      "referralCodeLabel": "Agent referral code (optional)",
+      "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
       "invalidCodeLength": "Referral code must be 6 characters.",
       "sideCashTitle": "Earn on the side — refer businesses",
       "sideCashBody": "Share your code. When a referred business is identified and adds at least {{minItems}} approved items, you earn {{amount}} {{currency}}.",

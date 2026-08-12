@@ -60,7 +60,7 @@ const ReferralCodeEntryButton: React.FC<ReferralCodeEntryButtonProps> = ({
       {trimmed ? (
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
           <Box sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-            {t('referrals.codeApplied', 'Referral code: {{code}}', {
+            {t('referrals.codeApplied', 'Agent referral code: {{code}}', {
               code: trimmed,
             })}
           </Box>
@@ -82,7 +82,10 @@ const ReferralCodeEntryButton: React.FC<ReferralCodeEntryButtonProps> = ({
           onClick={handleOpen}
           underline="hover"
         >
-          {t('referrals.haveCodeLink', 'Have a referral code?')}
+          {t(
+            'referrals.haveCodeLink',
+            'Enter the code of the agent who referred you to Rendasua'
+          )}
         </Link>
       )}
 
@@ -93,7 +96,7 @@ const ReferralCodeEntryButton: React.FC<ReferralCodeEntryButtonProps> = ({
         maxWidth="xs"
       >
         <DialogTitle>
-          {t('referrals.enterCodeTitle', 'Enter referral code')}
+          {t('referrals.enterCodeTitle', 'Agent referral code')}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>

@@ -963,6 +963,12 @@
     }
   },
   "referrals": {
+    "haveCodeLink": "Saisir le code de l'agent qui vous a recommandé sur Rendasua",
+    "codeApplied": "Code de l'agent : {{code}}",
+    "changeCode": "Modifier",
+    "enterCodeTitle": "Code de l'agent qui vous a recommandé",
+    "referralCodeLabel": "Code de l'agent (optionnel)",
+    "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
     "followUp": {
       "listTitle": "Commerces parrainés",
       "contractPending": "Contrat en attente",
@@ -1504,8 +1510,8 @@
       "uploading": "Téléversement en cours..."
     },
     "referrals": {
-      "referralCodeLabel": "Code de parrainage (optionnel)",
-      "referralCodeHelp": "Entrez le code de l'agent ou du commerce Rendasua qui vous accompagne pour démarrer.",
+      "referralCodeLabel": "Code de l'agent (optionnel)",
+      "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
       "invalidCodeLength": "Le code de parrainage doit comporter 6 caractères.",
       "sideCashTitle": "Gagnez en plus — parrainez des commerces",
       "sideCashBody": "Partagez votre code. Lorsqu'un commerce parrainé est identifié et ajoute au moins {{minItems}} articles approuvés, vous gagnez {{amount}} {{currency}}.",
