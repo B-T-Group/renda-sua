@@ -10,6 +10,7 @@ export interface AdminBusinessUser {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  internal?: boolean;
 }
 
 export type AdminIdDocumentStatus =
@@ -197,6 +198,18 @@ export const useAdminBusinesses = () => {
     [apiClient, callWithLoading, ensureClient, fetchBusinesses]
   );
 
+  const setUserInternal = useCallback(
+    async (userId: string, internal: boolean) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () => client.patch(`/admin/users/${userId}/internal`, { internal }),
+        'admin.loading.updateBusiness'
+      );
+      await fetchBusinesses();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchBusinesses]
+  );
+
   const setSearchAndReset = useCallback((value: string) => {
     setPage(1);
     setSearch(value);
@@ -255,6 +268,7 @@ export const useAdminBusinesses = () => {
       changeBusinessAccountType,
       setWithdrawalPin,
       clearWithdrawalPin,
+      setUserInternal,
     }),
     [
       businesses,
@@ -277,6 +291,7 @@ export const useAdminBusinesses = () => {
       changeBusinessAccountType,
       setWithdrawalPin,
       clearWithdrawalPin,
+      setUserInternal,
     ]
   );
 };

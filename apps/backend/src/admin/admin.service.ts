@@ -305,7 +305,7 @@ export class AdminService {
         agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id vehicle_type_id is_verified is_internal created_at updated_at
           user {
-          id email first_name last_name phone_number
+          id email first_name last_name phone_number internal
             accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at }
             user_uploads(where: { document_type: { name: { _in: $idTypeNames } } }, order_by: { created_at: desc }) {
               id file_name content_type document_type_id is_approved note created_at updated_at
@@ -349,7 +349,7 @@ export class AdminService {
       query GetClients($where: clients_bool_exp, $limit: Int!, $offset: Int!) {
         clients(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id created_at updated_at
-          user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          user { id email first_name last_name phone_number internal accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           client_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         clients_aggregate(where: $where) { aggregate { count } }
@@ -419,6 +419,7 @@ export class AdminService {
             first_name
             last_name
             phone_number
+            internal
             accounts {
               id
               currency
@@ -722,6 +723,32 @@ export class AdminService {
   ) {
     const userId = await this.getUserIdByEntity('client', clientId);
     return this.updateUserProfile(userId, updates);
+  }
+
+  async setUserInternal(
+    userId: string,
+    internal: boolean
+  ): Promise<{ id: string; internal: boolean }> {
+    const mutation = `
+      mutation SetUserInternal($userId: uuid!, $internal: Boolean!) {
+        update_users_by_pk(
+          pk_columns: { id: $userId }
+          _set: { internal: $internal }
+        ) {
+          id
+          internal
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      userId,
+      internal,
+    });
+    const user = result?.update_users_by_pk;
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user;
   }
 
   private async updateBusinessRecord(

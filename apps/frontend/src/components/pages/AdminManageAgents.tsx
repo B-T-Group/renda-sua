@@ -33,6 +33,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import {
   displayIdRejectionNote,
@@ -68,10 +69,12 @@ const AdminManageAgents: React.FC = () => {
     fetchAgents,
     updateAgent,
     setAgentInternal,
+    setUserInternal,
   } = useAdminAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
   const { t } = useTranslation();
+  const { isSuperuser } = usePermissions();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -203,6 +206,7 @@ const AdminManageAgents: React.FC = () => {
       is_verified: target?.is_verified || false,
       vehicle_type_id: target?.vehicle_type_id || 'other',
       is_internal: target?.is_internal || false,
+      user_internal: target?.user.internal || false,
     });
     setEditingId(id);
   };
@@ -225,6 +229,15 @@ const AdminManageAgents: React.FC = () => {
         form.is_internal !== !!original.is_internal
       ) {
         await setAgentInternal(editingId, !!form.is_internal);
+      }
+
+      if (
+        isSuperuser &&
+        original?.user_id &&
+        typeof form.user_internal === 'boolean' &&
+        form.user_internal !== !!original.user.internal
+      ) {
+        await setUserInternal(original.user_id, !!form.user_internal);
       }
 
       setEditingId(null);
@@ -479,6 +492,25 @@ const AdminManageAgents: React.FC = () => {
                 {!form.is_verified ? ' - verify first' : ''}
               </Typography>
             </Box>
+            {isSuperuser ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Switch
+                  checked={!!form.user_internal}
+                  onChange={(e) =>
+                    setForm((f: any) => ({
+                      ...f,
+                      user_internal: e.target.checked,
+                    }))
+                  }
+                />
+                <Typography>
+                  {t(
+                    'admin.users.internalEmployee',
+                    'Internal Rendasua employee (referral commission)'
+                  )}
+                </Typography>
+              </Box>
+            ) : null}
           </Box>
         </DialogContent>
         <DialogActions>

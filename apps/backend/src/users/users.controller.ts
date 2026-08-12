@@ -13,6 +13,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -24,6 +25,7 @@ import {
 import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
+import { Public } from '../auth/public.decorator';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import {
@@ -229,6 +231,82 @@ export class UsersController {
     }
   }
 
+  @Public()
+  @Get('public/by-referral-code/:code')
+  @ApiOperation({
+    summary: 'Look up a user by referral code (public)',
+    description:
+      'Returns the display name for a user-level referral code. Falls back to legacy agent/business codes.',
+  })
+  @ApiParam({
+    name: 'code',
+    description: '6-character alphanumeric referral code',
+    example: 'AB12CD',
+  })
+  @ApiResponse({ status: 200, description: 'Referrer found' })
+  @ApiResponse({ status: 404, description: 'No referrer found' })
+  async getPublicByReferralCode(@Param('code') code: string) {
+    const normalized =
+      this.businessReferralsService.normalizeReferralCode(code);
+    if (!normalized) {
+      throw new HttpException(
+        { success: false, error: 'Invalid referral code format' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const user =
+      await this.businessReferralsService.findUserByReferralCode(normalized);
+    if (user) {
+      const canRefer = await this.businessReferralsService.userCanRefer(
+        user.userId
+      );
+      if (canRefer) {
+        const fullName =
+          `${user.userFirstName} ${user.userLastName}`.trim() ||
+          user.userFirstName;
+        return {
+          success: true,
+          referralCode: normalized,
+          fullName,
+          firstName: user.userFirstName,
+          kind: 'user' as const,
+        };
+      }
+    }
+
+    const agent =
+      await this.agentReferralsService.findAgentByCode(normalized);
+    if (agent?.status === 'active') {
+      const fullName =
+        `${agent.userFirstName} ${agent.userLastName}`.trim();
+      return {
+        success: true,
+        referralCode: normalized,
+        fullName,
+        firstName: agent.userFirstName,
+        kind: 'agent' as const,
+      };
+    }
+
+    const business =
+      await this.businessReferralsService.findBusinessByCode(normalized);
+    if (business && business.lifecycleStatus !== 'suspended') {
+      return {
+        success: true,
+        referralCode: normalized,
+        fullName: business.businessName,
+        firstName: business.userFirstName,
+        kind: 'business' as const,
+      };
+    }
+
+    throw new HttpException(
+      { success: false, error: 'No referrer found for this referral code' },
+      HttpStatus.NOT_FOUND
+    );
+  }
+
   @Get('me')
   async getCurrentUser(@ReqContext() ctx: RequestContext, @CurrentUser() auth0User: any) {
     try {
@@ -293,6 +371,67 @@ export class UsersController {
           error: error.message,
         },
         HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  @Get('me/referred-businesses')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List businesses referred by the current user (any persona)',
+  })
+  @ApiResponse({ status: 200, description: 'Referred businesses list' })
+  async getMyReferredBusinesses(@ReqContext() ctx: RequestContext) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      const businesses =
+        await this.businessReferralsService.listReferredBusinessesForUser({
+          agentId: user.agent?.id ?? null,
+          businessId: user.business?.id ?? null,
+        });
+      return { success: true, businesses };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to load referred businesses',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('me/referred-businesses-summary')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Referral summary for the current user (user-level code)',
+  })
+  @ApiResponse({ status: 200, description: 'Referral summary' })
+  async getMyReferredBusinessesSummary(@ReqContext() ctx: RequestContext) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      const summary =
+        await this.businessReferralsService.getUserReferralsSummary({
+          userId: user.id,
+          agentId: user.agent?.id ?? null,
+          businessId: user.business?.id ?? null,
+        });
+      return {
+        success: true,
+        ...summary,
+        referredBusinessCount: summary.referredCount,
+        agentCode: summary.referralCode,
+        businessCode: summary.referralCode,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to load referral summary',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

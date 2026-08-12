@@ -362,7 +362,6 @@ export class BusinessReferralPayoutsService {
     const payout = await this.resolveReferrerPayoutContext({
       businessId: business.id,
       referrerUserId: agent.user_id,
-      amountKey: 'business_referral_payout_amount',
       preferPersonalAccount: true,
     });
     if (!payout) return false;
@@ -401,7 +400,6 @@ export class BusinessReferralPayoutsService {
     const payout = await this.resolveReferrerPayoutContext({
       businessId: business.id,
       referrerUserId: referrer.user_id,
-      amountKey: 'business_to_business_referral_amount',
       preferPersonalAccount: false,
       referrerBusinessId: referrer.id,
     });
@@ -520,7 +518,6 @@ export class BusinessReferralPayoutsService {
   private async resolveReferrerPayoutContext(params: {
     businessId: string;
     referrerUserId: string;
-    amountKey: string;
     preferPersonalAccount: boolean;
     referrerBusinessId?: string;
   }): Promise<{
@@ -533,7 +530,11 @@ export class BusinessReferralPayoutsService {
       params.referrerUserId
     );
     const currency = this.getCurrencyForCountry(countryCode);
-    const amount = await this.getPayoutAmount(params.amountKey, countryCode);
+    const isInternal = await this.isInternalUser(params.referrerUserId);
+    const amountKey = isInternal
+      ? 'business_referral_payout_amount_internal'
+      : 'business_referral_payout_amount';
+    const amount = await this.getPayoutAmount(amountKey, countryCode);
     if (!amount || amount <= 0) {
       this.logger.warn(
         `No payout amount configured for country ${countryCode} — skipping business ${params.businessId}.`
@@ -559,6 +560,25 @@ export class BusinessReferralPayoutsService {
       params.referrerUserId
     );
     return { accountId, amount, currency, rail };
+  }
+
+  private async isInternalUser(userId: string): Promise<boolean> {
+    const query = `
+      query IsInternalUser($userId: uuid!) {
+        users_by_pk(id: $userId) { internal }
+      }
+    `;
+    try {
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        userId,
+      });
+      return result?.users_by_pk?.internal === true;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to read users.internal for ${userId}: ${error.message}`
+      );
+      return false;
+    }
   }
 
   private getCurrencyForCountry(countryCode: string | null): string {

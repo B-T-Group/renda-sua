@@ -485,14 +485,17 @@ export class AgentsController {
     try {
       const user = await this.hasuraUserService.getUser(ctx);
       const agentId = this.requireAgentActor(user, ctx);
-      const [referredBusinessCount, agentCode] = await Promise.all([
+      const [referredBusinessCount, legacyAgentCode] = await Promise.all([
         this.agentReferralsService.getReferredBusinessCount(agentId),
         this.agentReferralsService.getAgentCodeById(agentId),
       ]);
+      const agentCode =
+        (user as { referral_code?: string }).referral_code || legacyAgentCode;
       return {
         success: true,
         referredBusinessCount,
         agentCode,
+        referralCode: agentCode,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {

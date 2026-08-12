@@ -10,6 +10,7 @@ export interface AdminClientUser {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  internal?: boolean;
   accounts?: Array<{
     id: string;
     currency: string;
@@ -114,6 +115,18 @@ export const useAdminClients = () => {
     [apiClient, callWithLoading, ensureClient, fetchClients]
   );
 
+  const setUserInternal = useCallback(
+    async (userId: string, internal: boolean) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () => client.patch(`/admin/users/${userId}/internal`, { internal }),
+        'admin.loading.updateClient'
+      );
+      await fetchClients();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchClients]
+  );
+
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
@@ -132,6 +145,7 @@ export const useAdminClients = () => {
       error,
       fetchClients,
       updateClient,
+      setUserInternal,
     }),
     [
       clients,
@@ -143,6 +157,7 @@ export const useAdminClients = () => {
       error,
       fetchClients,
       updateClient,
+      setUserInternal,
     ]
   );
 };

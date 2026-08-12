@@ -17,6 +17,8 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
       profile_picture_url
       preferred_language
       timezone
+      referral_code
+      internal
       created_at
       updated_at
       client {

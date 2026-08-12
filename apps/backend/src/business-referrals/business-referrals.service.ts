@@ -80,6 +80,14 @@ export class BusinessReferralsService {
       this.throwReferralError('Invalid referral code format');
     }
 
+    const fromUser = await this.resolveFromUserReferralCode(
+      normalizedCode,
+      excludeUserId
+    );
+    if (fromUser) {
+      return fromUser;
+    }
+
     const agent = await this.agentReferralsService.findAgentByCode(normalizedCode);
     const business = await this.findBusinessByCode(normalizedCode);
 
@@ -124,6 +132,151 @@ export class BusinessReferralsService {
       userEmail: business.userEmail,
       userFirstName: business.userFirstName,
       preferredLanguage: business.preferredLanguage,
+    };
+  }
+
+  /**
+   * Prefer users.referral_code, then attribute to the user's agent persona
+   * (if active) else their business persona so existing FKs keep working.
+   */
+  private async resolveFromUserReferralCode(
+    normalizedCode: string,
+    excludeUserId?: string
+  ): Promise<ResolvedBusinessReferral | null> {
+    const user = await this.findUserByReferralCode(normalizedCode);
+    if (!user) return null;
+    if (excludeUserId && user.userId === excludeUserId) {
+      this.throwReferralError('You cannot use your own referral code');
+    }
+
+    const agent = await this.findActiveAgentForUser(user.userId);
+    if (agent) {
+      return {
+        kind: 'agent',
+        agentId: agent.agentId,
+        normalizedCode,
+        userEmail: user.userEmail,
+        userFirstName: user.userFirstName,
+        preferredLanguage: user.preferredLanguage,
+      };
+    }
+
+    const business = await this.findBusinessForUser(user.userId);
+    if (!business) {
+      this.throwReferralError('This referral code is not currently active');
+    }
+    if (business.lifecycleStatus === 'suspended') {
+      this.throwReferralError('This referral code is not currently active');
+    }
+    return {
+      kind: 'business',
+      businessId: business.businessId,
+      businessName: business.businessName,
+      normalizedCode,
+      userId: user.userId,
+      userEmail: user.userEmail,
+      userFirstName: user.userFirstName,
+      preferredLanguage: user.preferredLanguage,
+    };
+  }
+
+  async findUserByReferralCode(code: string): Promise<{
+    userId: string;
+    userEmail: string;
+    userFirstName: string;
+    userLastName: string;
+    preferredLanguage: string;
+    referralCode: string;
+    internal: boolean;
+  } | null> {
+    const normalizedCode = this.normalizeReferralCode(code);
+    if (!normalizedCode) return null;
+    const query = `
+      query FindUserByReferralCode($code: String!) {
+        users(where: { referral_code: { _eq: $code } }, limit: 1) {
+          id
+          email
+          first_name
+          last_name
+          preferred_language
+          referral_code
+          internal
+          account_status
+        }
+      }
+    `;
+    try {
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        code: normalizedCode,
+      });
+      const row = result?.users?.[0];
+      if (!row || row.account_status === 'deleted') return null;
+      return {
+        userId: row.id,
+        userEmail: row.email ?? '',
+        userFirstName: row.first_name ?? '',
+        userLastName: row.last_name ?? '',
+        preferredLanguage: row.preferred_language ?? 'en',
+        referralCode: row.referral_code,
+        internal: row.internal === true,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to find user by referral code ${normalizedCode}: ${error.message}`
+      );
+      return null;
+    }
+  }
+
+  /** True when the user can act as a referrer (active agent or non-suspended business). */
+  async userCanRefer(userId: string): Promise<boolean> {
+    const agent = await this.findActiveAgentForUser(userId);
+    if (agent) return true;
+    const business = await this.findBusinessForUser(userId);
+    return !!business && business.lifecycleStatus !== 'suspended';
+  }
+
+  private async findActiveAgentForUser(
+    userId: string
+  ): Promise<{ agentId: string } | null> {
+    const query = `
+      query ActiveAgentForUser($userId: uuid!) {
+        agents(
+          where: { user_id: { _eq: $userId }, status: { _eq: "active" } }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+    });
+    const agentId = result?.agents?.[0]?.id;
+    return agentId ? { agentId } : null;
+  }
+
+  private async findBusinessForUser(userId: string): Promise<{
+    businessId: string;
+    businessName: string;
+    lifecycleStatus: string;
+  } | null> {
+    const query = `
+      query BusinessForUser($userId: uuid!) {
+        businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          name
+          lifecycle_status
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+    });
+    const row = result?.businesses?.[0];
+    if (!row) return null;
+    return {
+      businessId: row.id,
+      businessName: row.name ?? '',
+      lifecycleStatus: row.lifecycle_status ?? 'created',
     };
   }
 
@@ -287,8 +440,132 @@ export class BusinessReferralsService {
     return (result?.businesses ?? []).map(mapReferredBusinessRow);
   }
 
+  async listReferredBusinessesForUser(params: {
+    agentId?: string | null;
+    businessId?: string | null;
+  }): Promise<ReferredBusinessFollowUp[]> {
+    const orFilters: Array<Record<string, unknown>> = [];
+    if (params.agentId) {
+      orFilters.push({ referred_by_agent_id: { _eq: params.agentId } });
+    }
+    if (params.businessId) {
+      orFilters.push({ referred_by_business_id: { _eq: params.businessId } });
+    }
+    if (orFilters.length === 0) return [];
+
+    const query = `
+      query UserReferredBusinesses($where: businesses_bool_exp!) {
+        businesses(where: $where, order_by: { created_at: desc }) {
+          ${REFERRED_BUSINESSES_LIST_SELECTION}
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      businesses: ReferredBusinessRow[];
+    }>(query, { where: { _or: orFilters } });
+    return (result?.businesses ?? []).map(mapReferredBusinessRow);
+  }
+
+  async getUserReferralsSummary(params: {
+    userId: string;
+    agentId?: string | null;
+    businessId?: string | null;
+  }): Promise<{
+    referralCode: string;
+    referralAmount: number;
+    currency: string;
+    countryCode: string | null;
+    minApprovedItems: number;
+    referredCount: number;
+    paidCount: number;
+    internal: boolean;
+  }> {
+    const userQuery = `
+      query UserReferralSummary($userId: uuid!) {
+        users_by_pk(id: $userId) {
+          referral_code
+          internal
+          country
+        }
+      }
+    `;
+    const userResult = await this.hasuraSystemService.executeQuery(userQuery, {
+      userId: params.userId,
+    });
+    const user = userResult?.users_by_pk;
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const orFilters: Array<Record<string, unknown>> = [];
+    if (params.agentId) {
+      orFilters.push({ referred_by_agent_id: { _eq: params.agentId } });
+    }
+    if (params.businessId) {
+      orFilters.push({ referred_by_business_id: { _eq: params.businessId } });
+    }
+
+    let referredCount = 0;
+    let paidCount = 0;
+    if (orFilters.length > 0) {
+      const referredWhere = { _or: orFilters };
+      const paidWhere = {
+        _and: [referredWhere, { business_referral_payouts: {} }],
+      };
+      const countResult = await this.hasuraSystemService.executeQuery(
+        `
+        query UserReferredCounts(
+          $referredWhere: businesses_bool_exp!
+          $paidWhere: businesses_bool_exp!
+        ) {
+          businesses_aggregate(where: $referredWhere) {
+            aggregate { count }
+          }
+          paid: businesses_aggregate(where: $paidWhere) {
+            aggregate { count }
+          }
+        }
+        `,
+        { referredWhere, paidWhere }
+      );
+      referredCount =
+        countResult?.businesses_aggregate?.aggregate?.count ?? 0;
+      paidCount = countResult?.paid?.aggregate?.count ?? 0;
+    }
+
+    let countryCode = user.country
+      ? String(user.country).toUpperCase()
+      : null;
+    if (!countryCode) {
+      const fromRouting =
+        await this.paymentRoutingService.getUserCountryCode(params.userId);
+      countryCode = fromRouting ? String(fromRouting).toUpperCase() : null;
+    }
+    const currency = this.getCurrencyForCountry(countryCode);
+    const internal = user.internal === true;
+    const referralAmount = await this.getReferralPayoutAmount(
+      countryCode,
+      internal
+    );
+
+    return {
+      referralCode: user.referral_code,
+      referralAmount,
+      currency,
+      countryCode,
+      minApprovedItems: 10,
+      referredCount,
+      paidCount,
+      internal,
+    };
+  }
+
   async getReferralsSummary(businessId: string): Promise<{
     businessCode: string;
+    referralCode: string;
     referralAmount: number;
     currency: string;
     countryCode: string | null;
@@ -301,6 +578,8 @@ export class BusinessReferralsService {
         businesses_by_pk(id: $businessId) {
           id
           business_code
+          user_id
+          user { referral_code internal country }
           referred_businesses_aggregate {
             aggregate { count }
           }
@@ -332,15 +611,23 @@ export class BusinessReferralsService {
     }
 
     let countryCode: string | null =
+      business.user?.country ??
       business.business_locations?.[0]?.address?.country ??
       business.business_addresses?.[0]?.address?.country ??
       null;
     countryCode = countryCode ? String(countryCode).toUpperCase() : null;
     const currency = this.getCurrencyForCountry(countryCode);
-    const referralAmount = await this.getB2bReferralAmount(countryCode);
+    const internal = business.user?.internal === true;
+    const referralAmount = await this.getReferralPayoutAmount(
+      countryCode,
+      internal
+    );
+    const referralCode =
+      business.user?.referral_code || business.business_code;
 
     return {
-      businessCode: business.business_code,
+      businessCode: referralCode,
+      referralCode,
       referralAmount,
       currency,
       countryCode,
@@ -350,11 +637,17 @@ export class BusinessReferralsService {
     };
   }
 
-  private async getB2bReferralAmount(countryCode: string | null): Promise<number> {
+  private async getReferralPayoutAmount(
+    countryCode: string | null,
+    isInternal: boolean
+  ): Promise<number> {
     if (!countryCode) return 0;
+    const key = isInternal
+      ? 'business_referral_payout_amount_internal'
+      : 'business_referral_payout_amount';
     try {
       const query = `
-        query B2bReferralAmount($key: String!, $country: String!) {
+        query ReferralPayoutAmount($key: String!, $country: String!) {
           application_configurations(
             where: {
               config_key: { _eq: $key }
@@ -366,7 +659,7 @@ export class BusinessReferralsService {
         }
       `;
       const result = await this.hasuraSystemService.executeQuery(query, {
-        key: 'business_to_business_referral_amount',
+        key,
         country: countryCode,
       });
       return Number(result?.application_configurations?.[0]?.number_value ?? 0);

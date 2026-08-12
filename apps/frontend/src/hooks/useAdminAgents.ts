@@ -10,6 +10,7 @@ export interface AdminAgentUser {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  internal?: boolean;
 }
 
 export interface AdminAgentIdDocument {
@@ -122,6 +123,18 @@ export const useAdminAgents = () => {
     [apiClient, callWithLoading, ensureClient, fetchAgents]
   );
 
+  const setUserInternal = useCallback(
+    async (userId: string, internal: boolean) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () => client.patch(`/admin/users/${userId}/internal`, { internal }),
+        'admin.loading.updateAgent'
+      );
+      await fetchAgents();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchAgents]
+  );
+
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
@@ -143,6 +156,7 @@ export const useAdminAgents = () => {
       fetchAgents,
       updateAgent,
       setAgentInternal,
+      setUserInternal,
     }),
     [
       agents,
@@ -156,6 +170,7 @@ export const useAdminAgents = () => {
       fetchAgents,
       updateAgent,
       setAgentInternal,
+      setUserInternal,
     ]
   );
 };

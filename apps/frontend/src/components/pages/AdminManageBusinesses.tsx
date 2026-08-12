@@ -32,7 +32,7 @@ import {
   type AdminIdDocumentStatus,
 } from '../../hooks/useAdminBusinesses';
 import { useAdminRbac } from '../../hooks/useAdminRbac';
-import { usePermission } from '../../hooks/usePermissions';
+import { usePermission, usePermissions } from '../../hooks/usePermissions';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { AdminBusinessOverviewCard } from '../admin/AdminBusinessOverviewCard';
 import { AdminBusinessVerificationDialog } from '../admin/AdminBusinessVerificationDialog';
@@ -77,6 +77,7 @@ const AdminManageBusinesses: React.FC = () => {
     updateBusiness,
     setWithdrawalPin,
     clearWithdrawalPin,
+    setUserInternal,
   } = useAdminBusinesses();
   const {
     roles: platformRoles,
@@ -84,6 +85,7 @@ const AdminManageBusinesses: React.FC = () => {
     setUserRoles,
   } = useAdminRbac();
   const canManageRbac = usePermission(PlatformPermissions.RBAC_MANAGE);
+  const { isSuperuser } = usePermissions();
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
@@ -110,6 +112,7 @@ const AdminManageBusinesses: React.FC = () => {
       name: target?.name || '',
       ai_tokens: target?.ai_tokens ?? 20,
       withdrawal_pin_enabled: target?.withdrawal_pin_enabled ?? false,
+      user_internal: target?.user.internal || false,
     });
     setSelectedRoleKeys([]);
     setPinDialogOpen(false);
@@ -130,11 +133,19 @@ const AdminManageBusinesses: React.FC = () => {
   const handleSave = async () => {
     if (!editingId) return;
     const target = businesses.find((b) => b.id === editingId);
-    const { is_admin: _ignored, ...payload } = form;
+    const { is_admin: _ignored, user_internal, ...payload } = form;
     void _ignored;
     await updateBusiness(editingId, payload);
     if (canManageRbac && target?.user_id) {
       await setUserRoles(target.user_id, selectedRoleKeys);
+    }
+    if (
+      isSuperuser &&
+      target?.user_id &&
+      typeof user_internal === 'boolean' &&
+      user_internal !== !!target.user.internal
+    ) {
+      await setUserInternal(target.user_id, !!user_internal);
     }
     setEditingId(null);
   };
@@ -653,6 +664,25 @@ const AdminManageBusinesses: React.FC = () => {
                     setForm((f: any) => ({ ...f, phone_number: e.target.value }))
                   }
                 />
+                {isSuperuser ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Switch
+                      checked={!!form.user_internal}
+                      onChange={(e) =>
+                        setForm((f: any) => ({
+                          ...f,
+                          user_internal: e.target.checked,
+                        }))
+                      }
+                    />
+                    <Typography>
+                      {t(
+                        'admin.users.internalEmployee',
+                        'Internal Rendasua employee (referral commission)'
+                      )}
+                    </Typography>
+                  </Box>
+                ) : null}
               </Box>
             </Box>
           </Box>

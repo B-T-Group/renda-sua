@@ -22,8 +22,11 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
-import { RequirePermissions } from '../rbac/permissions.decorator';
-import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
+import {
+  PlatformPermissions,
+  PlatformRoles,
+} from '../rbac/platform-permissions';
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
@@ -613,6 +616,79 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch clients',
+      };
+    }
+  }
+
+  @Patch('clients/:id')
+  @RequirePermissions(PlatformPermissions.MANAGE_CLIENTS)
+  @ApiOperation({ summary: 'Update a client user profile' })
+  async updateClient(@Param('id') clientId: string, @Body() body: any) {
+    try {
+      const { first_name, last_name, phone_number } = body || {};
+      const userUpdates: {
+        first_name?: string;
+        last_name?: string;
+        phone_number?: string;
+      } = {};
+      if (typeof first_name === 'string') userUpdates.first_name = first_name;
+      if (typeof last_name === 'string') userUpdates.last_name = last_name;
+      if (typeof phone_number === 'string')
+        userUpdates.phone_number = phone_number;
+      const user = await this.adminService.updateClientUser(
+        clientId,
+        userUpdates
+      );
+      return { success: true, user };
+    } catch (error: any) {
+      console.error('Error updating client:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update client',
+      };
+    }
+  }
+
+  @Patch('users/:id/internal')
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @ApiOperation({
+    summary: 'Set users.internal (Rendasua employee referral commission tier)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['internal'],
+      properties: { internal: { type: 'boolean' } },
+    },
+  })
+  async setUserInternal(
+    @Param('id') userId: string,
+    @Body() body: { internal?: boolean }
+  ) {
+    try {
+      if (typeof body?.internal !== 'boolean') {
+        throw new HttpException(
+          { success: false, error: 'Body must include internal (boolean)' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const user = await this.adminService.setUserInternal(
+        userId,
+        body.internal
+      );
+      return {
+        success: true,
+        user,
+        message: body.internal
+          ? 'User marked as internal employee'
+          : 'User unmarked as internal employee',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      console.error('Error updating user internal flag:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update user internal flag',
       };
     }
   }

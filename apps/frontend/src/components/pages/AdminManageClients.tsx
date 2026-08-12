@@ -13,12 +13,14 @@ import {
     InputLabel,
     MenuItem,
     Select,
+    Switch,
     TextField,
     Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminClients } from '../../hooks/useAdminClients';
+import { usePermissions } from '../../hooks/usePermissions';
 import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageClients: React.FC = () => {
@@ -35,8 +37,10 @@ const AdminManageClients: React.FC = () => {
     error,
     fetchClients,
     updateClient,
+    setUserInternal,
   } = useAdminClients();
   const { t } = useTranslation();
+  const { isSuperuser } = usePermissions();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -51,13 +55,27 @@ const AdminManageClients: React.FC = () => {
       first_name: target?.user.first_name || '',
       last_name: target?.user.last_name || '',
       phone_number: target?.user.phone_number || '',
+      user_internal: target?.user.internal || false,
     });
     setEditingId(id);
   };
 
   const handleSave = async () => {
     if (!editingId) return;
-    await updateClient(editingId, form);
+    const original = clients.find((c) => c.id === editingId);
+    await updateClient(editingId, {
+      first_name: form.first_name,
+      last_name: form.last_name,
+      phone_number: form.phone_number,
+    });
+    if (
+      isSuperuser &&
+      original?.user_id &&
+      typeof form.user_internal === 'boolean' &&
+      form.user_internal !== !!original.user.internal
+    ) {
+      await setUserInternal(original.user_id, !!form.user_internal);
+    }
     setEditingId(null);
   };
 
@@ -246,6 +264,25 @@ const AdminManageClients: React.FC = () => {
                 setForm((f: any) => ({ ...f, phone_number: e.target.value }))
               }
             />
+            {isSuperuser ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Switch
+                  checked={!!form.user_internal}
+                  onChange={(e) =>
+                    setForm((f: any) => ({
+                      ...f,
+                      user_internal: e.target.checked,
+                    }))
+                  }
+                />
+                <Typography>
+                  {t(
+                    'admin.users.internalEmployee',
+                    'Internal Rendasua employee (referral commission)'
+                  )}
+                </Typography>
+              </Box>
+            ) : null}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>

@@ -225,6 +225,8 @@ select_permissions:
         - preferred_language
         - timezone
         - country
+        - referral_code
+        - internal
         - last_login_at
         - created_at
         - updated_at
@@ -249,6 +251,8 @@ select_permissions:
         - preferred_language
         - timezone
         - country
+        - referral_code
+        - internal
         - last_login_at
         - created_at
         - updated_at
@@ -273,6 +277,8 @@ select_permissions:
         - preferred_language
         - timezone
         - country
+        - referral_code
+        - internal
         - last_login_at
         - created_at
         - updated_at
@@ -297,6 +303,8 @@ select_permissions:
         - preferred_language
         - timezone
         - country
+        - referral_code
+        - internal
         - last_login_at
         - created_at
         - updated_at
@@ -321,6 +329,8 @@ select_permissions:
         - preferred_language
         - timezone
         - country
+        - referral_code
+        - internal
         - last_login_at
         - created_at
         - updated_at
