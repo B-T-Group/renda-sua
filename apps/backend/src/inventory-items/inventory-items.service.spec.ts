@@ -1,3 +1,13 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: class AddressesService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+
 import { InventoryItemsService } from './inventory-items.service';
 
 describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
