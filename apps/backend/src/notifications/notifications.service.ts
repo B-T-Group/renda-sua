@@ -2433,6 +2433,12 @@ export class NotificationsService {
         options?.actorUserId
       );
 
+      // Push first so client milestones alert immediately; email is a fallback.
+      const { clientDelivered } = await this.sendPushForOrderStatus(
+        data,
+        options?.actorUserId
+      );
+
       for (const recipient of recipients) {
         if (recipient.userId && waOkByUser.has(recipient.userId)) {
           continue;
@@ -2441,7 +2447,8 @@ export class NotificationsService {
           await this.notifyClientOrderStatusEmailOrSms(
             data,
             templateKey,
-            itemsVariant
+            itemsVariant,
+            { deliveredViaPush: clientDelivered }
           );
           continue;
         }
@@ -2477,8 +2484,6 @@ export class NotificationsService {
         }
       }
 
-      await this.sendPushForOrderStatus(data, options?.actorUserId);
-
       this.logger.log(
         `Order status change notifications sent for order ${data.orderNumber} (${previousStatus} → ${data.orderStatus})`
       );
@@ -2499,9 +2504,9 @@ export class NotificationsService {
   private async sendPushForOrderStatus(
     data: NotificationData,
     actorUserId?: string | null
-  ): Promise<void> {
+  ): Promise<{ clientDelivered: boolean }> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
-    if (!pushConfig?.enabled) return;
+    if (!pushConfig?.enabled) return { clientDelivered: false };
 
     const status = data.orderStatus;
     const { title, body } = this.getPushMessageForOrderStatus(
@@ -2509,8 +2514,9 @@ export class NotificationsService {
       data.orderNumber,
       data
     );
-    if (!title || !body) return;
+    if (!title || !body) return { clientDelivered: false };
 
+    let clientDelivered = false;
     try {
       const recipients = excludeActorFromOrderStatusRecipients(
         this.getRecipientsForStatus(status, data),
@@ -2518,6 +2524,8 @@ export class NotificationsService {
       );
       for (const recipient of recipients) {
         const pushPayload = {
+          type: 'order_status',
+          status,
           url: `/orders/${data.orderId}`,
           orderId: data.orderId,
           orderNumber: data.orderNumber,
@@ -2528,14 +2536,18 @@ export class NotificationsService {
           recipient.type,
           data
         );
+        let webSent = 0;
+        let expoSent = 0;
         if (recipient.userId?.trim()) {
-          const { webSent, expoSent } = await this.sendPushNotificationByUserId(
+          const result = await this.sendPushNotificationByUserId(
             recipient.userId.trim(),
             title,
             body,
             pushPayload,
             pushOptions
           );
+          webSent = result.webSent;
+          expoSent = result.expoSent;
           if (
             webSent + expoSent === 0 &&
             recipient.email?.trim()
@@ -2556,34 +2568,38 @@ export class NotificationsService {
             pushPayload
           );
         }
+        if (recipient.type === 'client' && webSent + expoSent > 0) {
+          clientDelivered = true;
+        }
       }
     } catch (err) {
       this.logger.warn(
         `Push notification failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+    return { clientDelivered };
   }
 
   /**
    * Alerting (high-priority, audible) push options for the client on the
-   * order milestones they must act on or notice promptly: their order being
-   * confirmed and a store-pickup order becoming ready for pickup. Other
-   * recipients/statuses keep the default silent-banner delivery.
+   * order milestones they must act on or notice promptly: confirmed and
+   * ready_for_pickup. Uses the mobile `order_updates` Android channel
+   * (HIGH importance) so heads-up + sound work when backgrounded.
    */
   private getClientAlertPushOptions(
     status: string,
     recipientType: string,
-    data: NotificationData
+    _data: NotificationData
   ): ExpoPushOptions | undefined {
     if (recipientType !== 'client') return undefined;
-    const isConfirmed = status === 'confirmed';
-    const isReadyForStorePickup =
-      status === 'ready_for_pickup' && data.fulfillmentMethod === 'pickup';
-    if (!isConfirmed && !isReadyForStorePickup) return undefined;
-    // No channelId on purpose: Android 8+ drops pushes that target a channel
-    // the device has not registered, so we rely on Expo's auto-created
-    // fallback channel (sound enabled) that these pushes already use today.
-    return { priority: 'high', sound: 'default' };
+    if (status !== 'confirmed' && status !== 'ready_for_pickup') {
+      return undefined;
+    }
+    return {
+      priority: 'high',
+      sound: 'default',
+      channelId: 'order_updates',
+    };
   }
 
   /**
@@ -4301,12 +4317,25 @@ export class NotificationsService {
     }
   }
 
+  private isClientOrderAlertStatus(status: string): boolean {
+    return status === 'confirmed' || status === 'ready_for_pickup';
+  }
+
   private async notifyClientOrderStatusEmailOrSms(
     data: NotificationData,
     templateKey: string,
-    itemsVariant: 'default' | 'agentAssigned'
+    itemsVariant: 'default' | 'agentAssigned',
+    options?: { deliveredViaPush?: boolean }
   ): Promise<void> {
-    if (await this.shouldUsePushOnlyForUser(data.clientUserId)) {
+    if (options?.deliveredViaPush) {
+      return;
+    }
+    // For confirmed / ready_for_pickup, do not skip email just because a push
+    // token exists — only skip when push actually delivered (handled above).
+    if (
+      !this.isClientOrderAlertStatus(data.orderStatus) &&
+      (await this.shouldUsePushOnlyForUser(data.clientUserId))
+    ) {
       return;
     }
     const clientEmail = data.clientEmail?.trim();
