@@ -94,4 +94,37 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     const json = whereJson(built as { where: Record<string, unknown> });
     expect(hasCountryEq(json, 'CA')).toBe(false);
   });
+
+  it('uses lexical name/sku/brand match when searchTextQuery is set', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ searchTextQuery: 'phone' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"_ilike":"%phone%"');
+    expect(json).toContain('"name"');
+    expect(json).toContain('"sku"');
+    expect(json).not.toContain('"_in"');
+  });
+});
+
+describe('InventoryItemsService.resolveSemanticSearch', () => {
+  it('falls back instead of throwing when embeddings fail', async () => {
+    const itemEmbeddingService = {
+      normalizeSearchQuery: (q: string) => q.trim(),
+      embedSearchQuery: jest.fn().mockRejectedValue(new Error('OpenAI down')),
+    };
+    const service = new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      itemEmbeddingService as any,
+      {} as any
+    );
+
+    const result = await (service as any).resolveSemanticSearch('phone');
+    expect(result).toEqual({ fallback: true });
+  });
 });

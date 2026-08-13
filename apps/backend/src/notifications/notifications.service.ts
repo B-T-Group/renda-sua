@@ -1,6 +1,6 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Expo } from 'expo-server-sdk';
+import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { Resend } from 'resend';
@@ -13,6 +13,10 @@ import { SmsService } from '../sms/sms.service';
 import { DeepLinkService } from './deep-link.service';
 import { NotificationOrchestrator } from './orchestration/notification-orchestrator.service';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
+import {
+  isExpiredExpoPushError,
+  isExpiredWebPushError,
+} from './stale-push-subscription.util';
 import {
   buildProximityVariables,
   buildResendTemplateVariables,
@@ -2732,46 +2736,98 @@ export class NotificationsService {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     if (!pushConfig?.vapidPrivateKey || !pushConfig?.vapidPublicKey) return 0;
     this.initializeWebPush();
-    const subQuery = `
-      query GetPushSubscriptions($userId: uuid!) {
+    const subs = await this.loadWebPushSubscriptions(userId);
+    const payload = JSON.stringify({ title, body, ...data });
+    let sent = 0;
+    for (const sub of subs) {
+      if (await this.sendOneWebPush(sub, payload, userId, data)) sent += 1;
+    }
+    return sent;
+  }
+
+  private async loadWebPushSubscriptions(userId: string): Promise<
+    Array<{
+      id: string;
+      endpoint: string;
+      p256dh_key: string;
+      auth_key: string;
+    }>
+  > {
+    const subResult = await this.hasuraSystemService.executeQuery(
+      `query GetPushSubscriptions($userId: uuid!) {
         push_subscriptions(where: { user_id: { _eq: $userId } }) {
           id
           endpoint
           p256dh_key
           auth_key
         }
-      }
-    `;
-    const subResult = await this.hasuraSystemService.executeQuery(
-      subQuery,
+      }`,
       { userId }
     );
-    const subs = (subResult?.push_subscriptions as Array<{
-      endpoint: string;
-      p256dh_key: string;
-      auth_key: string;
-    }>) ?? [];
-    const payload = JSON.stringify({ title, body, ...data });
-    let sent = 0;
-    for (const sub of subs) {
-      try {
-        await webPush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh_key, auth: sub.auth_key },
-          },
-          payload,
-          { TTL: 86400 }
-        );
-        sent += 1;
-        this.logPushSent(userId, 'web', data);
-      } catch (sendErr) {
-        this.logger.warn(
-          `Push send failed for subscription ${sub.endpoint}: ${sendErr}`
-        );
-      }
+    return (
+      (subResult?.push_subscriptions as Array<{
+        id: string;
+        endpoint: string;
+        p256dh_key: string;
+        auth_key: string;
+      }>) ?? []
+    );
+  }
+
+  private async sendOneWebPush(
+    sub: { id: string; endpoint: string; p256dh_key: string; auth_key: string },
+    payload: string,
+    userId: string,
+    data?: Record<string, unknown>
+  ): Promise<boolean> {
+    try {
+      await webPush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh_key, auth: sub.auth_key },
+        },
+        payload,
+        { TTL: 86400 }
+      );
+      this.logPushSent(userId, 'web', data);
+      return true;
+    } catch (sendErr: any) {
+      await this.handleWebPushSendFailure(sub.id, sub.endpoint, sendErr);
+      return false;
     }
-    return sent;
+  }
+
+  private async handleWebPushSendFailure(
+    subscriptionId: string,
+    endpoint: string,
+    sendErr: unknown
+  ): Promise<void> {
+    if (isExpiredWebPushError(sendErr)) {
+      await this.deleteExpiredWebPushSubscription(subscriptionId, endpoint);
+      return;
+    }
+    this.logger.warn(`Push send failed for subscription ${endpoint}: ${sendErr}`);
+  }
+
+  private async deleteExpiredWebPushSubscription(
+    id: string,
+    endpoint: string
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation DeletePushSubscription($id: uuid!) {
+          delete_push_subscriptions_by_pk(id: $id) { id }
+        }`,
+        { id }
+      );
+      this.logger.warn(`Removed expired web push subscription ${endpoint}`);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to remove expired web push subscription ${endpoint}: ${
+          error?.message ?? error
+        }`
+      );
+    }
   }
 
   /**
@@ -3112,20 +3168,7 @@ export class NotificationsService {
       const chunks = expo.chunkPushNotifications(messages);
       let sent = 0;
       for (const chunk of chunks) {
-        try {
-          const res = await expo.sendPushNotificationsAsync(chunk);
-          if (res.length > 0 && res[0].status === 'error') {
-            this.logger.warn(
-              `Expo push chunk failed: ${res.map((e) => e.status).join(', ')}`
-            );
-          }
-          sent += chunk.length;
-          this.logPushSent(userId, 'expo', data, chunk.length);
-        } catch (sendErr) {
-          this.logger.warn(
-            `Expo push chunk failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`
-          );
-        }
+        sent += await this.sendExpoPushChunk(chunk, userId, data);
       }
       return sent;
     } catch (err) {
@@ -3133,6 +3176,80 @@ export class NotificationsService {
         `sendPushToExpoTokens failed: ${err instanceof Error ? err.message : String(err)}`
       );
       return 0;
+    }
+  }
+
+  private async sendExpoPushChunk(
+    chunk: ExpoPushMessage[],
+    userId: string,
+    data?: Record<string, unknown>
+  ): Promise<number> {
+    const expo = this.getExpoClient();
+    if (!expo) return 0;
+    try {
+      const tickets = await expo.sendPushNotificationsAsync(chunk);
+      return this.applyExpoPushTickets(chunk, tickets, userId, data);
+    } catch (sendErr: any) {
+      this.logger.warn(
+        `Expo push chunk failed: ${
+          sendErr instanceof Error ? sendErr.message : String(sendErr)
+        }`
+      );
+      return 0;
+    }
+  }
+
+  private async applyExpoPushTickets(
+    chunk: ExpoPushMessage[],
+    tickets: ExpoPushTicket[],
+    userId: string,
+    data?: Record<string, unknown>
+  ): Promise<number> {
+    let sent = 0;
+    for (let i = 0; i < tickets.length; i++) {
+      sent += await this.applyOneExpoTicket(this.expoTokenFromMessage(chunk[i]), tickets[i]);
+    }
+    if (sent > 0) this.logPushSent(userId, 'expo', data, sent);
+    return sent;
+  }
+
+  private expoTokenFromMessage(message?: ExpoPushMessage): string | undefined {
+    return typeof message?.to === 'string' ? message.to : undefined;
+  }
+
+  private async applyOneExpoTicket(
+    token: string | undefined,
+    ticket: ExpoPushTicket
+  ): Promise<number> {
+    if (ticket.status === 'ok') return 1;
+    const errorCode = ticket.status === 'error' ? ticket.details?.error : undefined;
+    if (token && isExpiredExpoPushError(errorCode)) {
+      await this.deleteExpiredExpoPushToken(token);
+      return 0;
+    }
+    this.logger.warn(
+      `Expo push failed for token ${token ?? 'unknown'}: ${errorCode ?? ticket.status}`
+    );
+    return 0;
+  }
+
+  private async deleteExpiredExpoPushToken(token: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation DeleteMobilePushToken($token: String!) {
+          delete_mobile_push_tokens(where: { expo_push_token: { _eq: $token } }) {
+            affected_rows
+          }
+        }`,
+        { token }
+      );
+      this.logger.warn(`Removed expired Expo push token ${token}`);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to remove expired Expo push token ${token}: ${
+          error?.message ?? error
+        }`
+      );
     }
   }
 

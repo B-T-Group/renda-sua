@@ -13,6 +13,7 @@ import {
   fetchStripeEnabledCountries,
   isLocationPaymentsEnabled,
 } from './inventory-catalog-eligibility.util';
+import { buildLexicalItemSearchOr } from './inventory-lexical-search.util';
 import {
   buildInventoryItemNotFoundShareHtml,
   buildInventoryItemShareHtml,
@@ -527,6 +528,7 @@ export class InventoryItemsService {
     search: string
   ): Promise<
     | { empty: true }
+    | { fallback: true }
     | { itemIds: string[]; scores: Map<string, number> }
   > {
     const q = this.itemEmbeddingService.normalizeSearchQuery(search);
@@ -534,44 +536,86 @@ export class InventoryItemsService {
       return { empty: true };
     }
     try {
-      const queryVector = await this.itemEmbeddingService.embedSearchQuery(q);
-      const matches = await this.itemEmbeddingService.findSimilarItemIds(
-        queryVector,
-        this.itemEmbeddingService.getMinSimilarity(),
-        this.itemEmbeddingService.getMatchLimit()
-      );
-      const scores = new Map<string, number>();
-      for (const m of matches) {
-        scores.set(m.item_id, m.similarity);
-      }
-      let itemIds = matches.map((m: ItemSimilarityMatch) => m.item_id);
-      if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
-        const skuIds = await this.itemEmbeddingService.findItemIdsByExactSku(q);
-        for (const id of skuIds) {
-          if (!scores.has(id)) {
-            scores.set(id, 1);
-            itemIds.push(id);
-          }
-        }
-        itemIds = [...new Set(itemIds)];
-      }
-      if (itemIds.length === 0) {
-        return { empty: true };
-      }
-      return { itemIds, scores };
+      return await this.runSemanticSearch(q);
     } catch (error: any) {
       this.logger.error(
         `Semantic search failed: ${error?.message ?? error}`,
         error?.stack
       );
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Search is temporarily unavailable',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
+      return { fallback: true };
     }
+  }
+
+  private async runSemanticSearch(
+    q: string
+  ): Promise<
+    | { empty: true }
+    | { itemIds: string[]; scores: Map<string, number> }
+  > {
+    const queryVector = await this.itemEmbeddingService.embedSearchQuery(q);
+    const matches = await this.itemEmbeddingService.findSimilarItemIds(
+      queryVector,
+      this.itemEmbeddingService.getMinSimilarity(),
+      this.itemEmbeddingService.getMatchLimit()
+    );
+    return this.assembleSemanticMatches(q, matches);
+  }
+
+  private async assembleSemanticMatches(
+    q: string,
+    matches: ItemSimilarityMatch[]
+  ): Promise<
+    | { empty: true }
+    | { itemIds: string[]; scores: Map<string, number> }
+  > {
+    const scores = new Map<string, number>();
+    for (const m of matches) {
+      scores.set(m.item_id, m.similarity);
+    }
+    let itemIds = matches.map((m: ItemSimilarityMatch) => m.item_id);
+    if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
+      itemIds = await this.mergeExactSkuMatches(q, itemIds, scores);
+    }
+    if (itemIds.length === 0) {
+      return { empty: true };
+    }
+    return { itemIds, scores };
+  }
+
+  private async mergeExactSkuMatches(
+    q: string,
+    itemIds: string[],
+    scores: Map<string, number>
+  ): Promise<string[]> {
+    const skuIds = await this.itemEmbeddingService.findItemIdsByExactSku(q);
+    for (const id of skuIds) {
+      if (!scores.has(id)) {
+        scores.set(id, 1);
+        itemIds.push(id);
+      }
+    }
+    return [...new Set(itemIds)];
+  }
+
+  private catalogSearchFromSemantic(
+    q: string,
+    semantic:
+      | { fallback: true }
+      | { itemIds: string[]; scores: Map<string, number> }
+  ): {
+    searchItemIds?: string[];
+    searchSkuQuery?: string;
+    searchTextQuery?: string;
+  } {
+    if ('fallback' in semantic) {
+      return { searchTextQuery: q };
+    }
+    return {
+      searchItemIds: semantic.itemIds,
+      searchSkuQuery: this.itemEmbeddingService.isSkuLikeQuery(q)
+        ? q
+        : undefined,
+    };
   }
 
   private async getStripeEnabledCountries(): Promise<string[]> {
@@ -616,6 +660,7 @@ export class InventoryItemsService {
     include_unavailable: boolean;
     searchItemIds?: string[];
     searchSkuQuery?: string;
+    searchTextQuery?: string;
     category?: string;
     subcategory?: string;
     location_name?: string;
@@ -638,6 +683,7 @@ export class InventoryItemsService {
       include_unavailable,
       searchItemIds,
       searchSkuQuery,
+      searchTextQuery,
       category,
       subcategory,
       location_name,
@@ -687,7 +733,9 @@ export class InventoryItemsService {
         business_location_id: { _eq: business_location_id.trim() },
       });
     }
-    if (searchItemIds !== undefined) {
+    if (searchTextQuery?.trim()) {
+      whereConditions.push(buildLexicalItemSearchOr(searchTextQuery.trim()));
+    } else if (searchItemIds !== undefined) {
       const orClause: Record<string, unknown>[] = [
         { item: { id: { _in: searchItemIds } } },
       ];
@@ -1437,8 +1485,11 @@ export class InventoryItemsService {
       : include_unavailable;
 
     let semanticScores: Map<string, number> | undefined;
-    let searchItemIds: string[] | undefined;
-    let searchSkuQuery: string | undefined;
+    let catalogSearch: {
+      searchItemIds?: string[];
+      searchSkuQuery?: string;
+      searchTextQuery?: string;
+    } = {};
     if (search?.trim()) {
       const semantic = await this.resolveSemanticSearch(search);
       if ('empty' in semantic) {
@@ -1450,19 +1501,17 @@ export class InventoryItemsService {
           totalPages: 0,
         };
       }
-      semanticScores = semantic.scores;
-      searchItemIds = semantic.itemIds;
       const q = this.itemEmbeddingService.normalizeSearchQuery(search);
-      if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
-        searchSkuQuery = q;
+      catalogSearch = this.catalogSearchFromSemantic(q, semantic);
+      if ('scores' in semantic) {
+        semanticScores = semantic.scores;
       }
     }
 
     const built = await this.buildInventoryCatalogWhere({
       is_active,
       include_unavailable: effectiveIncludeUnavailable,
-      searchItemIds,
-      searchSkuQuery,
+      ...catalogSearch,
       category,
       subcategory,
       location_name,
@@ -1847,16 +1896,10 @@ export class InventoryItemsService {
       state: query.state,
     });
 
-    let searchSkuQuery: string | undefined;
-    if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
-      searchSkuQuery = q;
-    }
-
     const built = await this.buildInventoryCatalogWhere({
       is_active: query.is_active !== undefined ? query.is_active : true,
       include_unavailable: query.include_unavailable ?? false,
-      searchItemIds: semantic.itemIds,
-      searchSkuQuery,
+      ...this.catalogSearchFromSemantic(q, semantic),
       business_location_id: query.business_location_id,
       country_code,
       state,
@@ -1902,11 +1945,14 @@ export class InventoryItemsService {
       limit: 20,
     });
     const rows = result?.business_inventory ?? [];
-    const sortedRows = [...rows].sort((a: { item_id: string }, b: { item_id: string }) => {
-      const sa = semantic.scores.get(a.item_id) ?? 0;
-      const sb = semantic.scores.get(b.item_id) ?? 0;
-      return sb - sa;
-    });
+    const sortedRows =
+      'scores' in semantic
+        ? [...rows].sort((a: { item_id: string }, b: { item_id: string }) => {
+            const sa = semantic.scores.get(a.item_id) ?? 0;
+            const sb = semantic.scores.get(b.item_id) ?? 0;
+            return sb - sa;
+          })
+        : rows;
     return this.buildSuggestionsFromRows(sortedRows, q);
   }
 
