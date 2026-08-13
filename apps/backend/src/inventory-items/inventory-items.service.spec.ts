@@ -94,4 +94,37 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     const json = whereJson(built as { where: Record<string, unknown> });
     expect(hasCountryEq(json, 'CA')).toBe(false);
   });
+
+  it('browses storefront-visible catalogs without requiring order acceptance', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ country_code: 'CM' });
+    const json = whereJson(built as { where: Record<string, unknown> });
+
+    expect(json).toContain('"is_storefront_visible":{"_eq":true}');
+    expect(json).not.toContain('"can_accept_orders"');
+  });
+
+  it('requires can_accept_orders for deals and top-rated sorts', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      country_code: 'CM',
+      requireCanAcceptOrders: true,
+    });
+    const json = whereJson(built as { where: Record<string, unknown> });
+
+    expect(json).toContain('"is_storefront_visible":{"_eq":true}');
+    expect(json).toContain('"can_accept_orders":{"_eq":true}');
+  });
+
+  it('skips storefront visibility for owner preview even when deals require acceptance', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      ownerPreview: true,
+      requireCanAcceptOrders: true,
+    });
+    const json = whereJson(built as { where: Record<string, unknown> });
+
+    expect(json).not.toContain('"is_storefront_visible"');
+    expect(json).toContain('"can_accept_orders":{"_eq":true}');
+  });
 });

@@ -196,4 +196,106 @@ describe('BusinessReferralPayoutsService', () => {
       { businessId: 'business-1' }
     );
   });
+
+  it('credits internal employees using the internal payout amount', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (key: string) => {
+        if (key === 'business_referral_payout_enabled') {
+          return { boolean_value: true, status: 'active' };
+        }
+        if (key === 'business_referral_payout_amount_internal') {
+          return { number_value: 15000 };
+        }
+        if (key === 'business_referral_payout_amount') {
+          return { number_value: 5000 };
+        }
+        return null;
+      }
+    );
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        return { businesses: [business] };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('IsInternalUser')) {
+        return { users_by_pk: { internal: true } };
+      }
+      if (query.includes('GetPersonalAccount')) {
+        return { accounts: [{ id: 'account-1' }] };
+      }
+      if (query.includes('EarnerAgentName')) {
+        return {
+          agents_by_pk: { user: { first_name: 'Ada', last_name: 'Agent' } },
+        };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+      update_business_referral_payouts: { affected_rows: 1 },
+    });
+    referralPyramidService.distributeReferralBonus.mockResolvedValue({
+      credited: 1,
+      transactionIds: ['tx-earner'],
+    });
+
+    await service.runWeeklyPayouts();
+
+    expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
+      'business_referral_payout_amount_internal',
+      'CM'
+    );
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({ grossAmount: 15000 })
+    );
+  });
+
+  it('falls back to the standard amount when users.internal cannot be read', async () => {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        return { businesses: [business] };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('IsInternalUser')) {
+        throw new Error('Hasura unavailable');
+      }
+      if (query.includes('GetPersonalAccount')) {
+        return { accounts: [{ id: 'account-1' }] };
+      }
+      if (query.includes('EarnerAgentName')) {
+        return {
+          agents_by_pk: { user: { first_name: 'Ada', last_name: 'Agent' } },
+        };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-1' },
+      update_business_referral_payouts: { affected_rows: 1 },
+    });
+    referralPyramidService.distributeReferralBonus.mockResolvedValue({
+      credited: 1,
+      transactionIds: ['tx-earner'],
+    });
+
+    await service.runWeeklyPayouts();
+
+    expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
+      'business_referral_payout_amount',
+      'CM'
+    );
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({ grossAmount: 5000 })
+    );
+  });
 });
