@@ -63,7 +63,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const { validateFiles, validating } = useImageValidation();
-  const { getPreference, setPreference } = useAiImageCleanup();
+  const { getPreference } = useAiImageCleanup();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>(() => initialFiles);
@@ -71,9 +71,8 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [validationResults, setValidationResults] = useState<ImageValidationResult[]>([]);
-  const [autoEnhanceEnabled, setAutoEnhanceEnabled] = useState(true);
+  const [autoEnhanceEnabled, setAutoEnhanceEnabled] = useState(false);
   const [preferenceLoading, setPreferenceLoading] = useState(false);
-  const [preferenceSaving, setPreferenceSaving] = useState(false);
   const [guidelinesOpen, setGuidelinesOpen] = useState(
     () => sessionStorage.getItem(GUIDELINES_DISMISSED_KEY) !== '1'
   );
@@ -90,7 +89,8 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     void getPreference()
       .then((pref) => {
         if (cancelled) return;
-        setAutoEnhanceEnabled(pref.auto_enhance_enabled);
+        // Session opt-in for enqueue only; do not mirror auto_enhance_enabled
+        // (that preference controls auto-apply after a job, not create-time enqueue).
         if (typeof pref.ai_tokens === 'number') {
           updateBusinessAiTokens(pref.ai_tokens);
         }
@@ -184,29 +184,9 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     onComplete([], files, asyncCleanupRequested);
   };
 
-  const handlePreferenceToggle = async (enabled: boolean) => {
-    setAutoEnhanceEnabled(enabled);
-    setPreferenceSaving(true);
-    try {
-      await setPreference(enabled);
-    } catch (e: any) {
-      setAutoEnhanceEnabled(!enabled);
-      enqueueSnackbar(
-        e?.message ||
-          t(
-            'business.aiImageCleanup.preferenceFailed',
-            'Could not update auto-enhance preference'
-          ),
-        { variant: 'error' }
-      );
-    } finally {
-      setPreferenceSaving(false);
-    }
-  };
-
   const handleContinue = async () => {
     if (files.length < minPhotos) return;
-    if (cleanupEnabled && (preferenceLoading || preferenceSaving)) return;
+    if (cleanupEnabled && preferenceLoading) return;
     setBusy(true);
     try {
       const validation = await validateFiles(files);
@@ -284,8 +264,8 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
               control={
                 <Switch
                   checked={autoEnhanceEnabled}
-                  disabled={preferenceLoading || preferenceSaving || busy}
-                  onChange={(_, checked) => void handlePreferenceToggle(checked)}
+                  disabled={preferenceLoading || busy || !canAfford}
+                  onChange={(_, checked) => setAutoEnhanceEnabled(checked)}
                 />
               }
               label={
@@ -556,7 +536,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
             busy ||
             validating ||
             files.length < minPhotos ||
-            (cleanupEnabled && (preferenceLoading || preferenceSaving))
+            (cleanupEnabled && preferenceLoading)
           }
           fullWidth={isNarrow}
           startIcon={

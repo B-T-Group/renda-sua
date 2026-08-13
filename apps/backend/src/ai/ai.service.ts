@@ -31,6 +31,8 @@ export interface CleanupProductImageInput {
   imageBase64?: string;
   mimeType?: string;
   issues?: CleanupProductImageIssue[];
+  /** OpenAI Images model override (e.g. gpt-image-1-mini). */
+  model?: string;
 }
 
 interface OpenAIImageEditResponse {
@@ -288,7 +290,8 @@ export class AiService {
         buffer,
         mimeType,
         filename,
-        this.buildCleanupPrompt(resolved.issues)
+        this.buildCleanupPrompt(resolved.issues),
+        resolved.model
       );
       this.logger.log('Sending image to OpenAI for cleanup');
       const editResponse = await axios.post<OpenAIImageEditResponse>(
@@ -324,15 +327,20 @@ export class AiService {
     buffer: Buffer,
     mimeType: string,
     filename: string,
-    prompt: string
+    prompt: string,
+    model?: string
   ): FormData {
     const form = new FormData();
     form.append('image', buffer, { filename, contentType: mimeType });
-    form.append('model', 'gpt-image-1.5');
+    form.append(
+      'model',
+      model?.trim() || 'gpt-image-1-mini'
+    );
     form.append('prompt', prompt);
     form.append('n', '1');
     form.append('size', '1024x1024');
-    form.append('output_format', 'png');
+    form.append('quality', 'medium');
+    form.append('output_format', 'jpeg');
     form.append('background', 'opaque');
     return form;
   }

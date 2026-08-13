@@ -2,7 +2,7 @@ import type { AiImageCleanupResultRow } from './ai-image-cleanup.types';
 import { calculateScore } from '../image-validation/utils/score-calculator.util';
 import { VALIDATION_CODES } from '../image-validation/types/image-validation.types';
 
-/** OpenAI image-edit size used by AiService.cleanupProductImage. */
+/** OpenAI image-edit size used by AiService.cleanupProductImage (JPEG). */
 export const AI_CLEANUP_OUTPUT_SIZE = 1024;
 
 /**

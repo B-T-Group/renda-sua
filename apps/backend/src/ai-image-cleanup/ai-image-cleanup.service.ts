@@ -38,6 +38,16 @@ import {
   buildRevertPatch,
   shouldSkipAutoApply,
 } from './image-versioning.helpers';
+import {
+  DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL,
+  extractValidationCodes,
+  OPENAI_IMAGE_CLEANUP_MODEL_CONFIG_KEY,
+  parseOpenAiImageCleanupModel,
+  routeCleanupModel,
+  type OpenAiImageCleanupModel,
+} from './cleanup-model-routing.util';
+import { analyzeLocalImageQuality } from './local-image-quality.util';
+import type { CleanupProductImageIssue } from '../ai/ai.service';
 
 @Injectable()
 export class AiImageCleanupService implements OnModuleInit {
@@ -139,6 +149,11 @@ export class AiImageCleanupService implements OnModuleInit {
           s3_key: image.original_s3_key || image.s3_key,
           content_hash: image.content_hash,
           source: 'item_image',
+          width: image.width,
+          height: image.height,
+          validation_warnings: image.validation_warnings,
+          validation_errors: image.validation_errors,
+          quality_score: image.quality_score,
         },
       ],
       source,
@@ -172,6 +187,11 @@ export class AiImageCleanupService implements OnModuleInit {
           s3_key: image.original_s3_key || image.s3_key,
           content_hash: image.content_hash,
           source: 'rental_image',
+          width: image.width,
+          height: image.height,
+          validation_warnings: image.validation_warnings,
+          validation_errors: image.validation_errors,
+          quality_score: image.quality_score,
         },
       ],
       source: 'rental',
@@ -189,38 +209,50 @@ export class AiImageCleanupService implements OnModuleInit {
     const { businessId, userId, itemId, itemVariantId, images, source } = args;
     const classified = await this.classifyByContentHash(businessId, images);
     if (!classified.toProcess.length && classified.reusable.length) {
-      const balanceAfter = await this.tokens.getBalance(businessId);
-      const mode = await this.resolveJobMode(businessId);
-      const job = await this.createJob({
+      return this.completeReuseOnlyJob({
         businessId,
-        itemId,
         userId,
-        tokensReserved: 0,
+        itemId,
         itemVariantId,
-        mode,
         source,
+        reusable: classified.reusable,
       });
-      await this.applyReusableEnhancements(job.id, classified.reusable);
-      const now = new Date().toISOString();
-      await this.hasura.executeMutation(Q.UPDATE_JOB, {
-        id: job.id,
-        _set: {
-          status: 'completed',
-          completed_at: now,
-          updated_at: now,
-        },
-      });
-      await this.trackEvent('enhancement_requested', job.id, {
-        source,
-        mode,
-        image_count: 0,
-        reused_count: classified.reusable.length,
-      });
-      const completed = await this.loadJob(job.id);
-      await this.maybeResumeModeration(completed);
-      return { job: completed, ai_tokens_remaining: balanceAfter };
     }
-    const toCharge = classified.toProcess;
+
+    const adminModel = await this.getAdminCleanupModel();
+    const needingEdit: CleanupEligibleImage[] = [];
+    const skippedIneligible: CleanupEligibleImage[] = [];
+    for (const img of classified.toProcess) {
+      const enriched = await this.ensureValidationForCleanup(img);
+      const decision = routeCleanupModel({
+        adminDefaultModel: adminModel,
+        issueCodes: extractValidationCodes(enriched.validation_warnings),
+        errorCodes: extractValidationCodes(enriched.validation_errors),
+        qualityScore: enriched.quality_score,
+        width: enriched.width,
+        height: enriched.height,
+        explicitRequest: true,
+      });
+      if (decision === 'skip') {
+        this.logger.log(
+          `Skipping AI cleanup for image ${img.id}: not eligible`
+        );
+        skippedIneligible.push(enriched);
+        continue;
+      }
+      needingEdit.push(enriched);
+    }
+
+    if (!needingEdit.length) {
+      // Explicit request rejected for every newly requested image (e.g. inappropriate).
+      // Do not mask this with hash-reuse completion.
+      throw new HttpException(
+        'Image is not eligible for AI cleanup',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const toCharge = needingEdit;
     const tokenCost = toCharge.length * CLEANUP_TOKEN_COST;
     const balanceAfter = await this.tokens.tryReserveTokens(
       businessId,
@@ -250,6 +282,9 @@ export class AiImageCleanupService implements OnModuleInit {
         source,
       });
       await this.createResults(job.id, toCharge);
+      if (skippedIneligible.length) {
+        await this.createIneligibleResults(job.id, skippedIneligible);
+      }
       await this.tokens.recordCleanupUsage({
         businessId,
         userId,
@@ -266,12 +301,53 @@ export class AiImageCleanupService implements OnModuleInit {
         mode,
         image_count: toCharge.length,
         reused_count: classified.reusable.length,
+        skipped_ineligible: skippedIneligible.length,
       });
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
       await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
       throw error;
     }
+  }
+
+  private async completeReuseOnlyJob(args: {
+    businessId: string;
+    userId: string;
+    itemId: string | null;
+    itemVariantId: string | null;
+    source: AiImageCleanupJobSource;
+    reusable: Array<{ img: CleanupEligibleImage; existing: VersionedImageRow }>;
+  }): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
+    const balanceAfter = await this.tokens.getBalance(args.businessId);
+    const mode = await this.resolveJobMode(args.businessId);
+    const job = await this.createJob({
+      businessId: args.businessId,
+      itemId: args.itemId,
+      userId: args.userId,
+      tokensReserved: 0,
+      itemVariantId: args.itemVariantId,
+      mode,
+      source: args.source,
+    });
+    await this.applyReusableEnhancements(job.id, args.reusable);
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(Q.UPDATE_JOB, {
+      id: job.id,
+      _set: {
+        status: 'completed',
+        completed_at: now,
+        updated_at: now,
+      },
+    });
+    await this.trackEvent('enhancement_requested', job.id, {
+      source: args.source,
+      mode,
+      image_count: 0,
+      reused_count: args.reusable.length,
+    });
+    const completed = await this.loadJob(job.id);
+    await this.maybeResumeModeration(completed);
+    return { job: completed, ai_tokens_remaining: balanceAfter };
   }
 
   private async applyReusableEnhancements(
@@ -790,10 +866,64 @@ export class AiImageCleanupService implements OnModuleInit {
     const claimed = await this.claimResult(result.id);
     if (!claimed) return 'skipped';
     try {
+      const source = await this.loadSourceImage(result);
+      const adminModel = await this.getAdminCleanupModel();
+      let warningCodes = extractValidationCodes(source?.validation_warnings);
+      const errorCodes = extractValidationCodes(source?.validation_errors);
+      let qualityScore = source?.quality_score;
+      let width = source?.width;
+      let height = source?.height;
+      if (!warningCodes.length && !errorCodes.length) {
+        try {
+          const buffer = await this.downloadImageBuffer(
+            result.original_image_url
+          );
+          const local = await analyzeLocalImageQuality(buffer);
+          warningCodes = local.issues.map((i) => i.code);
+          qualityScore = qualityScore ?? local.qualityScore;
+          width = width || local.width;
+          height = height || local.height;
+        } catch (error: any) {
+          this.logger.warn(
+            `Process-time local validation failed for ${result.id}: ${error?.message ?? error}`
+          );
+        }
+      }
+      let model = routeCleanupModel({
+        adminDefaultModel: adminModel,
+        issueCodes: warningCodes,
+        errorCodes,
+        qualityScore,
+        width,
+        height,
+        // Already queued from an explicit merchant request — keep editing
+        // unless content is inappropriate.
+        explicitRequest: true,
+      });
+      if (model === 'skip') {
+        const now = new Date().toISOString();
+        await this.hasura.executeMutation(Q.UPDATE_RESULT, {
+          id: result.id,
+          _set: {
+            status: 'failed',
+            error_message: 'Image is not eligible for AI cleanup',
+            completed_at: now,
+            updated_at: now,
+          },
+        });
+        await this.tokens.refundTokens(job.business_id, CLEANUP_TOKEN_COST);
+        await this.trackEvent('enhancement_failed', result.id, {
+          job_id: job.id,
+          error: 'skipped_not_eligible',
+        });
+        return 'failed';
+      }
+      const issues = this.issuesFromCodes(warningCodes);
       const uploaded = await this.cleanupAndUpload(
         job.business_id,
         job.item_id ?? 'library',
-        result.original_image_url
+        result.original_image_url,
+        { model, issues }
       );
       const assessment = await this.confidence.assess(
         result.original_image_url,
@@ -812,7 +942,7 @@ export class AiImageCleanupService implements OnModuleInit {
           confidence_signals: assessment.signals,
           changes: assessment.changes,
           provider: 'openai',
-          provider_model: 'gpt-image-1.5',
+          provider_model: model,
           completed_at: now,
           updated_at: now,
         },
@@ -822,6 +952,7 @@ export class AiImageCleanupService implements OnModuleInit {
         tier: assessment.tier,
         score: assessment.score,
         mode: job.mode,
+        model,
       });
 
       const refreshed = { ...result, cleaned_image_url: uploaded.url, cleaned_s3_key: uploaded.key, confidence_tier: assessment.tier };
@@ -1046,27 +1177,163 @@ export class AiImageCleanupService implements OnModuleInit {
   private async cleanupAndUpload(
     businessId: string,
     itemId: string,
-    imageUrl: string
+    imageUrl: string,
+    options: {
+      model: OpenAiImageCleanupModel;
+      issues?: CleanupProductImageIssue[];
+    }
   ): Promise<{ url: string; key: string }> {
-    const cleaned = await this.aiService.cleanupProductImage(imageUrl);
+    const cleaned = await this.aiService.cleanupProductImage({
+      imageUrl,
+      model: options.model,
+      issues: options.issues,
+    });
     const buffer = Buffer.from(cleaned.b64_json, 'base64');
     const bucket =
       this.awsService.getDefaultBucketName() ||
       process.env.S3_BUCKET_NAME ||
       'rendasua-uploads';
     const region = this.configService.get('aws')?.region || 'ca-central-1';
-    const key = `businesses/${businessId}/ai-cleanup/${itemId}/${Date.now()}.png`;
+    const key = `businesses/${businessId}/ai-cleanup/${itemId}/${Date.now()}.jpg`;
     await this.awsService.getS3Client().send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
         Body: buffer,
-        ContentType: 'image/png',
+        ContentType: 'image/jpeg',
       })
     );
     return {
       url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
       key,
+    };
+  }
+
+  private async getAdminCleanupModel(): Promise<OpenAiImageCleanupModel> {
+    try {
+      const res = await this.hasura.executeQuery<{
+        application_configurations: Array<{ string_value?: string | null }>;
+      }>(
+        `query OpenAiImageCleanupModel($key: String!) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $key }
+              status: { _eq: "active" }
+            }
+            limit: 1
+          ) { string_value }
+        }`,
+        { key: OPENAI_IMAGE_CLEANUP_MODEL_CONFIG_KEY }
+      );
+      return parseOpenAiImageCleanupModel(
+        res.application_configurations?.[0]?.string_value
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `getAdminCleanupModel: ${error?.message ?? String(error)}`
+      );
+      return DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL;
+    }
+  }
+
+  private async ensureValidationForCleanup(
+    img: CleanupEligibleImage
+  ): Promise<CleanupEligibleImage> {
+    const warningCodes = extractValidationCodes(img.validation_warnings);
+    const errorCodes = extractValidationCodes(img.validation_errors);
+    const hasStoredIssues = warningCodes.length > 0 || errorCodes.length > 0;
+    if (hasStoredIssues && img.quality_score != null) {
+      return img;
+    }
+    try {
+      const buffer = await this.downloadImageBuffer(img.image_url);
+      const local = await analyzeLocalImageQuality(buffer);
+      const next: CleanupEligibleImage = {
+        ...img,
+        width: local.width || img.width,
+        height: local.height || img.height,
+        validation_warnings:
+          warningCodes.length > 0 ? img.validation_warnings : local.issues,
+        quality_score: img.quality_score ?? local.qualityScore,
+      };
+      if (warningCodes.length === 0) {
+        await this.persistLocalValidation(
+          next,
+          local.issues,
+          local.qualityScore
+        );
+      }
+      return next;
+    } catch (error: any) {
+      this.logger.warn(
+        `Local validation failed for ${img.id}: ${error?.message ?? error}`
+      );
+      return img;
+    }
+  }
+
+  private async persistLocalValidation(
+    img: CleanupEligibleImage,
+    issues: CleanupProductImageIssue[],
+    qualityScore: number
+  ): Promise<void> {
+    // Variant images have no validation_* columns; keep routing data in-memory only.
+    if (img.source === 'variant_image') {
+      return;
+    }
+    const patch = {
+      validation_warnings: issues,
+      quality_score: qualityScore,
+      width: img.width,
+      height: img.height,
+      validated_at: new Date().toISOString(),
+    };
+    if (img.source === 'rental_image') {
+      await this.hasura.executeMutation(Q.UPDATE_RENTAL_IMAGE, {
+        id: img.id,
+        _set: patch,
+      });
+      return;
+    }
+    await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
+      id: img.id,
+      _set: patch,
+    });
+  }
+
+  private async downloadImageBuffer(url: string): Promise<Buffer> {
+    const { data, status } = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 25000,
+      maxContentLength: 10 * 1024 * 1024,
+      maxBodyLength: 10 * 1024 * 1024,
+      validateStatus: (s) => s === 200,
+    });
+    if (status !== 200 || !data) {
+      throw new Error('Could not download image for local validation');
+    }
+    return Buffer.from(data);
+  }
+
+  private issuesFromCodes(codes: string[]): CleanupProductImageIssue[] {
+    return codes.map((code) => ({ code }));
+  }
+
+  private mapVersionedToEligible(
+    img: VersionedImageRow,
+    source: CleanupEligibleImage['source']
+  ): CleanupEligibleImage {
+    return {
+      id: img.id,
+      image_url: img.original_image_url || img.image_url,
+      s3_key: img.original_s3_key || img.s3_key,
+      content_hash: img.content_hash,
+      source,
+      width: img.width,
+      height: img.height,
+      validation_warnings: img.validation_warnings,
+      validation_errors: img.validation_errors,
+      quality_score: img.quality_score,
     };
   }
 
@@ -1183,13 +1450,7 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.BAD_REQUEST
       );
     }
-    return images.map((img) => ({
-      id: img.id,
-      image_url: img.original_image_url || img.image_url,
-      s3_key: img.original_s3_key || img.s3_key,
-      content_hash: img.content_hash,
-      source: 'item_image' as const,
-    }));
+    return images.map((img) => this.mapVersionedToEligible(img, 'item_image'));
   }
 
   private async loadEligibleVariantImages(
@@ -1224,13 +1485,9 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     return {
       itemId: variant.item_id,
-      images: images.map((img) => ({
-        id: img.id,
-        image_url: img.original_image_url || img.image_url,
-        s3_key: img.original_s3_key || img.s3_key,
-        content_hash: img.content_hash,
-        source: 'variant_image' as const,
-      })),
+      images: images.map((img) =>
+        this.mapVersionedToEligible(img, 'variant_image')
+      ),
     };
   }
 
@@ -1273,6 +1530,28 @@ export class AiImageCleanupService implements OnModuleInit {
         original_image_url: img.image_url,
         original_s3_key: img.s3_key,
         status: 'queued',
+      })),
+    });
+  }
+
+  private async createIneligibleResults(
+    jobId: string,
+    images: CleanupEligibleImage[]
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(Q.INSERT_RESULTS, {
+      objects: images.map((img) => ({
+        job_id: jobId,
+        business_image_id: img.source === 'item_image' ? img.id : null,
+        item_variant_image_id: img.source === 'variant_image' ? img.id : null,
+        rental_item_image_id: img.source === 'rental_image' ? img.id : null,
+        original_image_url: img.image_url,
+        original_s3_key: img.s3_key,
+        status: 'failed',
+        error_message: 'Image is not eligible for AI cleanup',
+        provider: 'skip',
+        provider_model: 'ineligible',
+        completed_at: now,
       })),
     });
   }

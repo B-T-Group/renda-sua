@@ -79,6 +79,11 @@ export type CleanupEligibleImage = {
   s3_key: string | null;
   content_hash?: string | null;
   source: 'item_image' | 'variant_image' | 'rental_image';
+  width?: number | null;
+  height?: number | null;
+  validation_warnings?: unknown;
+  validation_errors?: unknown;
+  quality_score?: number | null;
 };
 
 export type VersionedImageRow = {
