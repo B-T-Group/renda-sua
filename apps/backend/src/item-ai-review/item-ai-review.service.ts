@@ -116,16 +116,12 @@ export class ItemAiReviewService {
   ): Promise<{
     success: boolean;
     skipped?: boolean;
-    retryLater?: boolean;
     error?: string;
   }> {
     if (!this.isEnabled()) return { success: true, skipped: true };
     try {
       const outcome = await this.executeReview(itemId, expectedVersion);
-      if (outcome === 'retry_later') {
-        return { success: false, retryLater: true };
-      }
-      return { success: true, skipped: outcome === 'deferred' };
+      return { success: true, skipped: outcome !== 'done' };
     } catch (error: any) {
       if (this.isStaleOrConflict(error)) {
         this.logger.warn(
@@ -181,8 +177,8 @@ export class ItemAiReviewService {
       this.assertReviewable(item, expectedVersion);
       const cleanupStatus = await this.getOpenCleanupJobStatus(item.id);
       if (cleanupStatus === 'queued' || cleanupStatus === 'processing') {
-        this.logger.log(
-          `Deferring AI review for item ${itemId}; cleanup still ${cleanupStatus}`
+        this.logger.warn(
+          `AI review deferred for item ${itemId}; cleanup still ${cleanupStatus}`
         );
         return 'retry_later';
       }

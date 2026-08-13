@@ -1,5 +1,14 @@
 import { ItemAiReviewService } from './item-ai-review.service';
 
+// These modules form circular import chains (notifications <-> orchestration);
+// mock them so the service module can load in isolation.
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: jest.fn(),
+}));
+
 describe('ItemAiReviewService cleanup deferral', () => {
   function buildService(overrides: {
     cleanupOpen?: boolean;
@@ -106,7 +115,7 @@ describe('ItemAiReviewService cleanup deferral', () => {
   it('defers review while a cleanup job is open', async () => {
     const { service, model } = buildService({ cleanupOpen: true });
     const result = await service.runReview('item-1', 3);
-    expect(result).toEqual({ success: false, retryLater: true });
+    expect(result).toEqual({ success: true, skipped: true });
     expect(model.reviewItem).not.toHaveBeenCalled();
   });
 
