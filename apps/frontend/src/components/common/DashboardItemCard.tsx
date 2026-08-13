@@ -52,6 +52,7 @@ import {
   shopperVariantOptions,
 } from '../../utils/shopperVariantSelection';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
+import ItemLikeButton from './ItemLikeButton';
 import { CatalogOptionChips } from './CatalogOptionChips';
 
 /** Strip HTML and collapse whitespace for card preview text. */
@@ -83,6 +84,7 @@ interface DashboardItemCardProps {
   canOrder?: boolean;
   showCartButtons?: boolean;
   viewsCount?: number;
+  onLikedChange?: (itemId: string, liked: boolean) => void;
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
@@ -102,6 +104,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   canOrder = true,
   showCartButtons = false,
   viewsCount,
+  onLikedChange,
 }) => {
   const navigate = useNavigate();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
@@ -304,8 +307,30 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           display: 'flex',
           flexDirection: 'column',
           bgcolor: 'grey.300',
+          position: 'relative',
         }}
       >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 3,
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <ItemLikeButton
+            itemId={inventory.item_id || inventory.item?.id}
+            initiallyLiked={inventory.liked === true}
+            overlay
+            onLikedChange={(liked) =>
+              onLikedChange?.(inventory.item_id || inventory.item?.id, liked)
+            }
+          />
+        </Box>
         <Tooltip
           title={t('items.itemCard.openDetails', {
             defaultValue: 'Open {{name}} details',

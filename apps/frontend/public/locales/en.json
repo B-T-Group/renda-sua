@@ -5041,7 +5041,18 @@
     },
     "appTrackingNote": "Track your order in real time — available in the Rendasua app.",
     "usedBadge": "Used",
-    "isUsed": "Used"
+    "isUsed": "Used",
+    "likes": {
+      "title": "Your favorites",
+      "subtitle": "Items you liked — revisit them anytime.",
+      "emptyTitle": "No favorites yet",
+      "emptyMessage": "Tap the heart on any product to save it here.",
+      "browseCta": "Browse items",
+      "like": "Save to favorites",
+      "unlike": "Remove from favorites",
+      "saveTitle": "Save your favorites",
+      "saveBenefits": "Create an account to keep your likes, get restock alerts, and personalized picks."
+    }
   },
   "persona": {
     "client": "Client",

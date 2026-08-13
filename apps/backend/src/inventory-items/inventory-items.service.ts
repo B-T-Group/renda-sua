@@ -66,6 +66,8 @@ export interface InventoryItem {
     selling_price: number;
   }> | null;
   viewsCount?: number;
+  likes_count?: number;
+  liked?: boolean;
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
@@ -317,6 +319,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         dimensions
         item_sub_category_id
         sku
+        likes_count
         brand {
           id
           name
@@ -1625,8 +1628,9 @@ export class InventoryItemsService {
         pageItems,
         parseOptionalLatLng(query.origin_lat, query.origin_lng)
       );
+      const withLikes = await this.attachLikeState(withGoogle);
       return {
-        items: withGoogle,
+        items: withLikes,
         total,
         page,
         limit,
@@ -1971,7 +1975,148 @@ export class InventoryItemsService {
     }));
     const { item_tags: _omitTags, item_collections: _omitCols, ...restItem } =
       inv.item;
-    return { ...inv, item: { ...restItem, tags, collections } };
+    const likes_count = Number(inv.item.likes_count ?? 0) || 0;
+    return {
+      ...inv,
+      likes_count,
+      liked: false,
+      item: { ...restItem, tags, collections },
+    };
+  }
+
+  /**
+   * Best sellable listing per catalog item id (for wishlist / likes list).
+   * Includes unavailable listings so liked OOS products still appear.
+   */
+  async getBestListingsForCatalogItemIds(
+    itemIds: string[]
+  ): Promise<InventoryItem[]> {
+    const uniqueIds = [...new Set(itemIds.filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
+
+    // Wishlist must resolve liked products across markets (no country/state filter).
+    const { clientId } = await this.resolveInventoryListGeo({});
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: true,
+      include_unavailable: true,
+      searchItemIds: uniqueIds,
+    });
+    if ('unsupported' in built) return [];
+
+    const rawItems = await this.fetchAllCatalogInventoryRows(built.where);
+    const items: InventoryItem[] = rawItems.map((inv: any) =>
+      this.mapItemTagsToTags(inv)
+    );
+    const itemsWithPayments = await this.attachPaymentsEnabledToItemsAsync(
+      items
+    );
+    return this.enrichWishlistListings(itemsWithPayments, clientId);
+  }
+
+  private async enrichWishlistListings(
+    items: InventoryItem[],
+    clientId: string | null
+  ): Promise<InventoryItem[]> {
+    const inventoryIds = items.map((i) => i.id);
+    const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
+    const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
+    const withViewsAndDeals = items.map((item) => {
+      const viewsCount = viewsMap[item.id] ?? 0;
+      const deal = dealsMap[item.id];
+      const originalPrice = item.selling_price;
+      if (!deal) {
+        return {
+          ...item,
+          viewsCount,
+          hasActiveDeal: false,
+          original_price: originalPrice,
+          discounted_price: originalPrice,
+        };
+      }
+      return {
+        ...item,
+        viewsCount,
+        hasActiveDeal: true,
+        original_price: originalPrice,
+        discounted_price: this.applyDealPrice(
+          originalPrice,
+          deal.discount_type,
+          deal.discount_value
+        ),
+        deal_discount_type: deal.discount_type,
+        deal_discount_value: deal.discount_value,
+        deal_end_at: deal.end_at,
+      };
+    });
+    const withRatings = await this.attachRatingAggregates(withViewsAndDeals);
+    const winners = await this.pickBestListingPerItem(
+      withRatings,
+      'relevance',
+      clientId,
+      await this.getRelevanceSignalsFromPastOrders(clientId)
+    );
+    return this.attachLikeState(winners);
+  }
+
+  private async attachLikeState(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    if (items.length === 0) return items;
+    let userId: string | null = null;
+    try {
+      userId = this.hasuraUserService.getUserId();
+      if (!userId || userId === 'anonymous') userId = null;
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      return items.map((item) => ({
+        ...item,
+        likes_count: item.likes_count ?? 0,
+        liked: false,
+      }));
+    }
+    const catalogIds = [
+      ...new Set(items.map((item) => item.item_id).filter(Boolean)),
+    ];
+    const likedIds = await this.getLikedItemIdsForUser(userId, catalogIds);
+    return items.map((item) => ({
+      ...item,
+      likes_count: item.likes_count ?? 0,
+      liked: likedIds.has(item.item_id),
+    }));
+  }
+
+  private async getLikedItemIdsForUser(
+    userId: string,
+    itemIds: string[]
+  ): Promise<Set<string>> {
+    if (itemIds.length === 0) return new Set();
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        user_item_likes: Array<{ item_id: string }>;
+      }>(
+        `
+        query LikedItemIds($userId: uuid!, $itemIds: [uuid!]!) {
+          user_item_likes(
+            where: {
+              user_id: { _eq: $userId }
+              item_id: { _in: $itemIds }
+            }
+          ) {
+            item_id
+          }
+        }
+      `,
+        { userId, itemIds }
+      );
+      return new Set((result.user_item_likes ?? []).map((r) => r.item_id));
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to load liked flags for user ${userId}: ${error?.message}`
+      );
+      return new Set();
+    }
   }
 
   /** Count sellable listings per collection slug for the given catalog where. */
@@ -2121,6 +2266,7 @@ export class InventoryItemsService {
             dimensions
             item_sub_category_id
             sku
+            likes_count
             brand {
               id
               name
@@ -2304,8 +2450,9 @@ export class InventoryItemsService {
       const dealsMap = await this.getActiveDealsByInventoryIds([item.id]);
       const deal = dealsMap[item.id];
       const originalPrice = item.selling_price;
+      let enriched: InventoryItem;
       if (!deal) {
-        return {
+        enriched = {
           ...item,
           viewsCount: viewsMap[item.id] ?? 0,
           hasActiveDeal: false,
@@ -2313,24 +2460,25 @@ export class InventoryItemsService {
           discounted_price: originalPrice,
           deal_end_at: undefined,
         };
+      } else {
+        const discounted = this.applyDealPrice(
+          originalPrice,
+          deal.discount_type,
+          deal.discount_value
+        );
+        enriched = {
+          ...item,
+          viewsCount: viewsMap[item.id] ?? 0,
+          hasActiveDeal: true,
+          original_price: originalPrice,
+          discounted_price: discounted,
+          deal_discount_type: deal.discount_type,
+          deal_discount_value: deal.discount_value,
+          deal_end_at: deal.end_at,
+        };
       }
-
-      const discounted = this.applyDealPrice(
-        originalPrice,
-        deal.discount_type,
-        deal.discount_value
-      );
-
-      return {
-        ...item,
-        viewsCount: viewsMap[item.id] ?? 0,
-        hasActiveDeal: true,
-        original_price: originalPrice,
-        discounted_price: discounted,
-        deal_discount_type: deal.discount_type,
-        deal_discount_value: deal.discount_value,
-        deal_end_at: deal.end_at,
-      };
+      const [withLike] = await this.attachLikeState([enriched]);
+      return withLike;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -2472,6 +2620,7 @@ export class InventoryItemsService {
               dimensions
               item_sub_category_id
               sku
+              likes_count
               brand { id name }
               model
               color
@@ -2576,7 +2725,7 @@ export class InventoryItemsService {
       const viewsMap = await this.getViewCountsByInventoryIds(ids);
       const dealsMap = await this.getActiveDealsByInventoryIds(ids);
 
-      return itemsWithPayments.map((item) => {
+      const mapped = itemsWithPayments.map((item) => {
         const viewsCount = viewsMap[item.id] ?? 0;
         const deal = dealsMap[item.id];
         const originalPrice = item.selling_price;
@@ -2606,6 +2755,7 @@ export class InventoryItemsService {
           deal_end_at: deal.end_at,
         };
       });
+      return this.attachLikeState(mapped);
     } catch (error: any) {
       this.logger.error(
         `Failed to fetch similar items for ${inventoryItemId}:`,

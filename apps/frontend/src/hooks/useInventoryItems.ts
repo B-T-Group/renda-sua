@@ -25,6 +25,8 @@ export interface InventoryItem {
     sponsored?: boolean;
   } | null;
   viewsCount?: number;
+  likes_count?: number;
+  liked?: boolean;
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;

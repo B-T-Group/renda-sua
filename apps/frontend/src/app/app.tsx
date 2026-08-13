@@ -33,6 +33,7 @@ import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
+import { useFlushPendingLike } from '../hooks/useFlushPendingLike';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
@@ -62,6 +63,7 @@ function App() {
     loading: profileLoading,
   } = useUserProfileContext();
   useMetaPixelAdvancedMatching();
+  useFlushPendingLike();
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -256,6 +258,14 @@ function App() {
               element={<LazyPages.RentalListingDetailPage />}
             />
             <Route path="/items" element={<LazyPages.ItemsPage />} />
+            <Route
+              path="/likes"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.LikesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/stores" element={<LazyPages.StoresIndexPage />} />
             <Route path="/store/:businessId" element={<LazyPages.StorePage />} />
             <Route path="/collections" element={<LazyPages.CollectionsIndexPage />} />

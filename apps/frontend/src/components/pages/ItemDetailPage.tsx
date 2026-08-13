@@ -78,6 +78,7 @@ import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import { MobileMoneyOrderIcon } from '../common/MobileMoneyOrderIcon';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import PageShareMenu from '../common/PageShareMenu';
+import ItemLikeButton from '../common/ItemLikeButton';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import VariantSelector from '../common/VariantSelector';
 import SEOHead from '../seo/SEOHead';
@@ -926,11 +927,18 @@ export default function ItemDetailPage() {
               </Button>
             )}
             {id ? (
-              <PageShareMenu
-                shareUrl={buildInventoryItemSeoShareUrl(id)}
-                shareTitle={item.name}
-                shareDescription={checkoutPriceText}
-              />
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <ItemLikeButton
+                  itemId={inventoryItem.item_id || item.id}
+                  initiallyLiked={inventoryItem.liked === true}
+                  size="medium"
+                />
+                <PageShareMenu
+                  shareUrl={buildInventoryItemSeoShareUrl(id)}
+                  shareTitle={item.name}
+                  shareDescription={checkoutPriceText}
+                />
+              </Stack>
             ) : null}
           </Stack>
           {!isMobile ? (

@@ -35,6 +35,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/pdf/shipping-labels',
     '/locations/',
     '/notifications/',
+    '/item-likes',
     '/ai/image-item-suggestions',
     '/ai/item-refinement-suggestions',
     '/business-items/create-from-image',

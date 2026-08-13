@@ -4779,7 +4779,18 @@
     },
     "appTrackingNote": "Suivez votre commande en temps réel — disponible dans l'application Rendasua.",
     "usedBadge": "Occasion",
-    "isUsed": "Occasion"
+    "isUsed": "Occasion",
+    "likes": {
+      "title": "Vos favoris",
+      "subtitle": "Articles que vous avez aimés — retrouvez-les à tout moment.",
+      "emptyTitle": "Aucun favori pour le moment",
+      "emptyMessage": "Appuyez sur le cœur d'un produit pour l'enregistrer ici.",
+      "browseCta": "Parcourir les articles",
+      "like": "Ajouter aux favoris",
+      "unlike": "Retirer des favoris",
+      "saveTitle": "Enregistrez vos favoris",
+      "saveBenefits": "Créez un compte pour conserver vos likes, recevoir des alertes de restock et des suggestions personnalisées."
+    }
   },
   "persona": {
     "client": "Client",

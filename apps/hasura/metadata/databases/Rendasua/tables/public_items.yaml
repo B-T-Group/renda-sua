@@ -155,6 +155,7 @@ select_permissions:
         - status
         - stripe_tax_code_id
         - moderation_status
+        - likes_count
         - created_at
         - updated_at
       filter:
@@ -191,6 +192,7 @@ select_permissions:
         - status
         - stripe_tax_code_id
         - moderation_status
+        - likes_count
         - created_at
         - updated_at
       filter:
@@ -232,6 +234,7 @@ select_permissions:
         - ai_reviewed_at
         - ai_review_version
         - moderation_source
+        - likes_count
         - created_at
         - updated_at
       filter:
@@ -270,6 +273,7 @@ select_permissions:
         - status
         - stripe_tax_code_id
         - moderation_status
+        - likes_count
         - created_at
         - updated_at
       filter:
@@ -306,6 +310,7 @@ select_permissions:
         - status
         - stripe_tax_code_id
         - moderation_status
+        - likes_count
         - created_at
         - updated_at
       filter:

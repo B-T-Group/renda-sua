@@ -3,6 +3,7 @@ import {
     Assignment,
     Dashboard,
     Description,
+    FavoriteBorder,
     Logout,
     Menu,
     MoreVert,
@@ -644,7 +645,23 @@ const Header: React.FC = () => {
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}
 
-              {/* Cart Icon - Only show for clients */}
+              {/* Favorites + Cart - clients */}
+              {isAuthenticated && userType === 'client' && (
+                <IconButton
+                  onClick={() => navigate('/likes')}
+                  size="small"
+                  aria-label={t('items.likes.title', 'Your favorites')}
+                  sx={{
+                    color: '#ffffff',
+                    padding: '6px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    },
+                  }}
+                >
+                  <FavoriteBorder />
+                </IconButton>
+              )}
               {isAuthenticated && userType === 'client' && (
                 <IconButton
                   onClick={() => navigate('/cart')}

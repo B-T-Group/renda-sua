@@ -16,6 +16,8 @@ export interface InventoryItem {
   created_at: string;
   updated_at: string;
   viewsCount?: number;
+  likes_count?: number;
+  liked?: boolean;
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
