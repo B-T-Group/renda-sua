@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { BedrockLunaService } from '../ai/bedrock-luna.service';
 import {
   buildAiReviewSystemPrompt,
   buildAiReviewUserPrompt,
@@ -14,88 +14,43 @@ import {
 
 @Injectable()
 export class ItemAiReviewModelService {
-  private static readonly OPENAI_URL =
-    'https://api.openai.com/v1/chat/completions';
-
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly bedrockLunaService: BedrockLunaService
+  ) {}
 
   async reviewItem(
     item: ItemForAiReview,
     opts?: { cleanupAlreadyQueued?: boolean }
   ): Promise<{ result: AiReviewModelResult; modelMeta: Record<string, unknown> }> {
-    const apiKey = this.configService.get<string>('openai.apiKey');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-    const model =
-      this.configService.get<string>('itemAiReview.model')?.trim() || 'gpt-4.1';
+    const model = this.bedrockLunaService.resolveModel(
+      this.configService.get<string>('itemAiReview.model')
+    );
     const started = Date.now();
     const content = await this.buildMultimodalContent(item, opts);
-    const data = await this.callWithRetry(apiKey, model, content);
-    const raw = data?.choices?.[0]?.message?.content;
-    if (!raw) throw new Error('Empty model response');
-    const parsed = this.parseResult(JSON.parse(raw));
+    const result = await this.bedrockLunaService.complete({
+      model,
+      messages: [
+        { role: 'system', content: buildAiReviewSystemPrompt() },
+        { role: 'user', content },
+      ],
+      maxTokens: 1200,
+      temperature: 0,
+      jsonObject: true,
+      reasoningEffort: 'low',
+      timeoutMs: 90000,
+    });
+    const parsed = this.parseResult(JSON.parse(result.text));
     return {
       result: parsed,
       modelMeta: {
-        provider: 'openai',
-        model,
+        provider: 'bedrock',
+        model: result.model,
         prompt_version: PROMPT_VERSION,
         latency_ms: Date.now() - started,
-        usage: data?.usage ?? null,
+        usage: result.usage,
       },
     };
-  }
-
-  private async callWithRetry(
-    apiKey: string,
-    model: string,
-    content: Array<{ type: string; text?: string; image_url?: object }>,
-    maxAttempts = 4
-  ): Promise<any> {
-    let attempt = 0;
-    while (true) {
-      try {
-        const { data } = await axios.post(
-          ItemAiReviewModelService.OPENAI_URL,
-          {
-            model,
-            messages: [
-              { role: 'system', content: buildAiReviewSystemPrompt() },
-              { role: 'user', content },
-            ],
-            max_tokens: 1200,
-            temperature: 0,
-            response_format: { type: 'json_object' },
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 90000,
-          }
-        );
-        return data;
-      } catch (error: any) {
-        attempt++;
-        const status = error?.response?.status;
-        const isRateLimit = status === 429;
-        const isServerError = status != null && status >= 500;
-        if ((isRateLimit || isServerError) && attempt < maxAttempts) {
-          const retryAfterSec = parseInt(
-            error?.response?.headers?.['retry-after'] ?? '0',
-            10
-          );
-          const backoffMs = retryAfterSec > 0
-            ? retryAfterSec * 1000
-            : Math.min(2000 * 2 ** (attempt - 1), 30000);
-          await new Promise((r) => setTimeout(r, backoffMs));
-          continue;
-        }
-        throw error;
-      }
-    }
   }
 
   private async buildMultimodalContent(

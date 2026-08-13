@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiGenerationModule } from '../ai/ai-generation.module';
 import { AwsModule } from '../aws/aws.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -8,7 +9,13 @@ import { IdDocumentAiReviewService } from './id-document-ai-review.service';
 import { IdDocumentAiReviewSweeperService } from './id-document-ai-review-sweeper.service';
 
 @Module({
-  imports: [HasuraModule, AwsModule, NotificationsModule, ServicesModule],
+  imports: [
+    HasuraModule,
+    AwsModule,
+    NotificationsModule,
+    ServicesModule,
+    AiGenerationModule,
+  ],
   providers: [
     IdDocumentAiReviewModelService,
     IdDocumentAiReviewService,

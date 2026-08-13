@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { BedrockLunaService } from '../ai/bedrock-luna.service';
 import {
   buildAiReviewSystemPrompt,
   buildAiReviewUserPrompt,
@@ -14,54 +14,40 @@ import {
 
 @Injectable()
 export class RentalListingAiReviewModelService {
-  private static readonly OPENAI_URL =
-    'https://api.openai.com/v1/chat/completions';
-
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly bedrockLunaService: BedrockLunaService
+  ) {}
 
   async reviewListing(
     listing: ListingForAiReview
   ): Promise<{ result: AiReviewModelResult; modelMeta: Record<string, unknown> }> {
-    const apiKey = this.configService.get<string>('openai.apiKey');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-    const model =
-      this.configService.get<string>('rentalAiReview.model')?.trim() ||
-      'gpt-4.1';
+    const model = this.bedrockLunaService.resolveModel(
+      this.configService.get<string>('rentalAiReview.model')
+    );
     const started = Date.now();
     const content = await this.buildMultimodalContent(listing);
-    const { data } = await axios.post(
-      RentalListingAiReviewModelService.OPENAI_URL,
-      {
-        model,
-        messages: [
-          { role: 'system', content: buildAiReviewSystemPrompt() },
-          { role: 'user', content },
-        ],
-        max_tokens: 1200,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 90000,
-      }
-    );
-    const raw = data?.choices?.[0]?.message?.content;
-    if (!raw) throw new Error('Empty model response');
-    const parsed = this.parseResult(JSON.parse(raw));
+    const result = await this.bedrockLunaService.complete({
+      model,
+      messages: [
+        { role: 'system', content: buildAiReviewSystemPrompt() },
+        { role: 'user', content },
+      ],
+      maxTokens: 1200,
+      temperature: 0,
+      jsonObject: true,
+      reasoningEffort: 'low',
+      timeoutMs: 90000,
+    });
+    const parsed = this.parseResult(JSON.parse(result.text));
     return {
       result: parsed,
       modelMeta: {
-        provider: 'openai',
-        model,
+        provider: 'bedrock',
+        model: result.model,
         prompt_version: PROMPT_VERSION,
         latency_ms: Date.now() - started,
-        usage: data?.usage ?? null,
+        usage: result.usage,
       },
     };
   }
@@ -112,7 +98,9 @@ export class RentalListingAiReviewModelService {
     return {
       decision: safeDecision,
       reason: String(raw.reason || 'No reason provided'),
-      issues: Array.isArray(raw.issues) ? (raw.issues as AiReviewModelResult['issues']) : [],
+      issues: Array.isArray(raw.issues)
+        ? (raw.issues as AiReviewModelResult['issues'])
+        : [],
       proposedTitle:
         raw.proposedTitle == null ? null : String(raw.proposedTitle),
       proposedDescription:

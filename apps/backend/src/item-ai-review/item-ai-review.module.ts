@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiGenerationModule } from '../ai/ai-generation.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
@@ -20,6 +21,7 @@ import { ItemAiReviewSweeperService } from './item-ai-review-sweeper.service';
     NotificationsModule,
     ImageValidationModule,
     MerchantLifecycleModule,
+    AiGenerationModule,
   ],
   controllers: [ItemAiReviewInternalController, ItemAiProposalController],
   providers: [

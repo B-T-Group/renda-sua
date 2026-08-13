@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { DeepseekService } from '../ai/deepseek.service';
+import { BedrockLunaService } from '../ai/bedrock-luna.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminBroadcastAudienceService } from './admin-broadcast-audience.service';
@@ -67,7 +67,7 @@ export class AdminBroadcastService {
     private readonly hasura: HasuraSystemService,
     private readonly audience: AdminBroadcastAudienceService,
     private readonly queue: AdminBroadcastQueueService,
-    private readonly deepseek: DeepseekService,
+    private readonly bedrockLuna: BedrockLunaService,
     private readonly notifications: NotificationsService
   ) {}
 
@@ -563,9 +563,9 @@ export class AdminBroadcastService {
     sourceLanguage: 'en' | 'fr'
   ): Promise<BilingualBroadcastCopy> {
     try {
-      const response = await this.deepseek.chatCompletions(
+      const response = await this.bedrockLuna.chatCompletions(
         {
-          model: this.deepseek.defaultChatModel,
+          model: this.bedrockLuna.getDefaultChatModel(),
           messages: [
             {
               role: 'system',
@@ -583,8 +583,10 @@ export class AdminBroadcastService {
           ],
           max_tokens: 500,
           temperature: 0.2,
+          response_format: { type: 'json_object' },
         },
-        30000
+        30000,
+        { reasoningEffort: 'none', jsonObject: true }
       );
       const raw = response.choices?.[0]?.message?.content;
       const parsed = this.parseTranslationJson(

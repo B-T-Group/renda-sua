@@ -2,11 +2,14 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import {
+  BedrockRuntimeClient,
+  InvokeModelCommand,
+} from '@aws-sdk/client-bedrock-runtime';
 import { DatabaseService } from '../database/database.service';
+import type { Configuration } from '../config/configuration';
 import {
   isSkuLikeQuery,
   normalizeSearchQuery,
@@ -23,27 +26,42 @@ export interface ItemSimilarityMatch {
   similarity: number;
 }
 
-interface OpenAiEmbeddingsResponse {
-  data: Array<{ embedding: number[]; index: number }>;
-}
-
 interface QueryCacheEntry {
   vector: number[];
   expiresAt: number;
 }
 
+interface TitanEmbedResponse {
+  embedding?: number[];
+}
+
 @Injectable()
 export class ItemEmbeddingService {
-  private readonly logger = new Logger(ItemEmbeddingService.name);
-  private static readonly OPENAI_EMBEDDINGS_URL =
-    'https://api.openai.com/v1/embeddings';
-
+  private readonly client: BedrockRuntimeClient;
   private readonly queryCache = new Map<string, QueryCacheEntry>();
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<Configuration>,
     private readonly databaseService: DatabaseService
-  ) {}
+  ) {
+    const bedrock = this.configService.get('bedrock', { infer: true });
+    const aws = this.configService.get('aws', { infer: true });
+    // Pin to bedrock.region (us-east-1) — never aws.region / ca-central-1.
+    this.client = new BedrockRuntimeClient({
+      region: bedrock?.region || 'us-east-1',
+      credentials: {
+        accessKeyId: aws?.accessKeyId || process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey:
+          aws?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY || '',
+      },
+    });
+  }
+
+  getBedrockRegion(): string {
+    return (
+      this.configService.get('bedrock', { infer: true })?.region || 'us-east-1'
+    );
+  }
 
   async embedSearchQuery(q: string): Promise<number[]> {
     const normalized = normalizeSearchQuery(q);
@@ -197,15 +215,37 @@ export class ItemEmbeddingService {
     return rows.map((r) => r.id);
   }
 
+  /** True when at least one catalog embedding exists (Titan backfill not empty). */
+  async hasAnyItemEmbeddings(): Promise<boolean> {
+    const rows = await this.databaseService.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM public.items
+         WHERE status IS DISTINCT FROM 'deleted'
+           AND (name_embedding IS NOT NULL OR description_embedding IS NOT NULL)
+         LIMIT 1
+       ) AS exists`
+    );
+    return rows[0]?.exists === true;
+  }
+
   getMinSimilarity(): number {
     return (
-      this.configService.get<number>('inventorySearch.minSimilarity') ?? 0.38
+      this.configService.get('inventorySearch', { infer: true })
+        ?.minSimilarity ?? 0.38
     );
   }
 
   getMatchLimit(): number {
     return (
-      this.configService.get<number>('inventorySearch.matchLimit') ?? 500
+      this.configService.get('inventorySearch', { infer: true })?.matchLimit ??
+      500
+    );
+  }
+
+  isEmbeddingsSearchEnabled(): boolean {
+    return (
+      this.configService.get('inventorySearch', { infer: true })
+        ?.embeddingsSearchEnabled === true
     );
   }
 
@@ -220,23 +260,33 @@ export class ItemEmbeddingService {
   async embedTexts(texts: string[]): Promise<number[][]> {
     const inputs = texts.map((t) => t.trim()).filter((t) => t.length > 0);
     if (inputs.length === 0) return [];
-    const apiKey = this.requireOpenAiApiKey();
     const model = this.getEmbeddingModel();
-    const response = await axios.post<OpenAiEmbeddingsResponse>(
-      ItemEmbeddingService.OPENAI_EMBEDDINGS_URL,
-      { model, input: inputs },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 60000,
-      }
+    const vectors: number[][] = [];
+    for (const text of inputs) {
+      vectors.push(await this.embedOne(text, model));
+    }
+    return vectors;
+  }
+
+  private async embedOne(text: string, model: string): Promise<number[]> {
+    const response = await this.client.send(
+      new InvokeModelCommand({
+        modelId: model,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({ inputText: text }),
+      })
     );
-    const sorted = [...(response.data?.data ?? [])].sort(
-      (a, b) => a.index - b.index
-    );
-    return sorted.map((d) => d.embedding);
+    const parsed = JSON.parse(
+      new TextDecoder().decode(response.body)
+    ) as TitanEmbedResponse;
+    if (!parsed.embedding?.length) {
+      throw new HttpException(
+        'AI temporarily unavailable. Please try again.',
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
+    }
+    return parsed.embedding;
   }
 
   private getCachedQueryVector(key: string): number[] | null {
@@ -251,27 +301,15 @@ export class ItemEmbeddingService {
 
   private setCachedQueryVector(key: string, vector: number[]): void {
     const ttl =
-      this.configService.get<number>('inventorySearch.queryCacheTtlMs') ??
-      300000;
+      this.configService.get('inventorySearch', { infer: true })
+        ?.queryCacheTtlMs ?? 300000;
     this.queryCache.set(key, { vector, expiresAt: Date.now() + ttl });
-  }
-
-  private requireOpenAiApiKey(): string {
-    const key = this.configService.get<string>('openai.apiKey')?.trim();
-    if (!key) {
-      this.logger.error('OPENAI_API_KEY not configured');
-      throw new HttpException(
-        'OpenAI API key not configured',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
-    }
-    return key;
   }
 
   private getEmbeddingModel(): string {
     return (
-      this.configService.get<string>('openai.embeddingModel')?.trim() ||
-      'text-embedding-3-small'
+      this.configService.get('bedrock', { infer: true })?.embeddingModel?.trim() ||
+      'amazon.titan-embed-text-v1'
     );
   }
 }

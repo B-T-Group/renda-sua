@@ -112,7 +112,9 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
   it('falls back instead of throwing when embeddings fail', async () => {
     const itemEmbeddingService = {
       normalizeSearchQuery: (q: string) => q.trim(),
+      isEmbeddingsSearchEnabled: () => true,
       embedSearchQuery: jest.fn().mockRejectedValue(new Error('OpenAI down')),
+      hasAnyItemEmbeddings: jest.fn().mockResolvedValue(true),
     };
     const service = new InventoryItemsService(
       {} as any,
@@ -126,5 +128,49 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
 
     const result = await (service as any).resolveSemanticSearch('phone');
     expect(result).toEqual({ fallback: true });
+  });
+
+  it('falls back to lexical search when no catalog embeddings exist', async () => {
+    const itemEmbeddingService = {
+      normalizeSearchQuery: (q: string) => q.trim(),
+      isEmbeddingsSearchEnabled: () => true,
+      hasAnyItemEmbeddings: jest.fn().mockResolvedValue(false),
+      embedSearchQuery: jest.fn(),
+    };
+    const service = new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      itemEmbeddingService as any,
+      {} as any
+    );
+
+    const result = await (service as any).resolveSemanticSearch('phone');
+    expect(result).toEqual({ fallback: true });
+    expect(itemEmbeddingService.embedSearchQuery).not.toHaveBeenCalled();
+  });
+
+  it('uses lexical search when embeddings search is disabled', async () => {
+    const itemEmbeddingService = {
+      normalizeSearchQuery: (q: string) => q.trim(),
+      isEmbeddingsSearchEnabled: () => false,
+      hasAnyItemEmbeddings: jest.fn(),
+      embedSearchQuery: jest.fn(),
+    };
+    const service = new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      itemEmbeddingService as any,
+      {} as any
+    );
+
+    const result = await (service as any).resolveSemanticSearch('phone');
+    expect(result).toEqual({ fallback: true });
+    expect(itemEmbeddingService.hasAnyItemEmbeddings).not.toHaveBeenCalled();
   });
 });

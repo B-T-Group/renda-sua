@@ -162,11 +162,20 @@ export interface GoogleCacheConfig {
 }
 
 export interface OpenAIConfig {
-  /** Used for image cleanup/edits (OpenAI Images API) and chat completions when provider is OpenAI. */
+  /** Used only for product image cleanup/edits (OpenAI Images API). */
   apiKey: string;
-  /** Vision-capable chat model for `generateImageItemSuggestions` when `provider` is `openai` (e.g. `gpt-4o-mini`). */
+}
+
+export interface BedrockConfig {
+  /**
+   * Region for Bedrock Mantle (chat) and Bedrock Runtime (embeddings).
+   * Must NEVER inherit AWS_REGION — Luna is not available in ca-central-1.
+   * Default: us-east-1.
+   */
+  region: string;
+  /** Default Mantle chat model ID (e.g. openai.gpt-5.6-luna). */
   chatModel: string;
-  /** OpenAI embeddings model for catalog semantic search (default `text-embedding-3-small`). */
+  /** Titan embeddings model ID (default amazon.titan-embed-text-v1, 1536d). */
   embeddingModel: string;
 }
 
@@ -174,6 +183,11 @@ export interface InventorySearchConfig {
   minSimilarity: number;
   matchLimit: number;
   queryCacheTtlMs: number;
+  /**
+   * When false, catalog search uses lexical fallback only (safe during Titan
+   * embedding backfill). Set true after `embed_items.py` finishes.
+   */
+  embeddingsSearchEnabled: boolean;
 }
 
 export type ImageValidationModerationProvider = 'none' | 'rekognition' | 'openai';
@@ -182,7 +196,7 @@ export type ImageValidationModerationProvider = 'none' | 'rekognition' | 'openai
 export interface ImageValidationConfig {
   /** Master switch for the pre-upload image validation check. Default off: the check is slow over the network, so it is skipped unless explicitly enabled. */
   enabled: boolean;
-  /** OpenAI vision for soft checks (product size, clutter, text). Default off for cost control. */
+  /** Bedrock vision for soft checks (product size, clutter, text). Default off for cost control. */
   enableVision: boolean;
   /** When true, fail validation if vision was required but unavailable. Default off. */
   requireVision: boolean;
@@ -191,15 +205,6 @@ export interface ImageValidationConfig {
   timeoutMs: number;
   /** Rekognition label confidence threshold (0–100). */
   rekognitionMinConfidence: number;
-}
-
-export interface DeepseekConfig {
-  apiKey: string;
-  /**
-   * Model for vision-style multimodal requests (OpenAI-compatible `image_url` parts).
-   * Defaults to `deepseek-chat`. Hosted DeepSeek may reject vision payloads; the service falls back to text-only.
-   */
-  visionModel: string;
 }
 
 export interface MyPVitConfig {
@@ -370,21 +375,21 @@ export interface BoldSignConfig {
 export interface RentalAiReviewConfig {
   /** Master switch for async AI auto-review of rental listings. */
   enabled: boolean;
-  /** OpenAI multimodal model for listing review (default gpt-4.1). */
+  /** Bedrock Mantle model for listing review (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
 export interface ItemAiReviewConfig {
   /** Master switch for async AI auto-review of sale items. */
   enabled: boolean;
-  /** OpenAI multimodal model for item review (default gpt-4.1). */
+  /** Bedrock Mantle model for item review (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
 export interface IdDocumentAiReviewConfig {
   /** Master switch for AI auto-approval of identity document uploads. */
   enabled: boolean;
-  /** OpenAI multimodal model for ID name matching (default gpt-4.1). */
+  /** Bedrock Mantle model for ID name matching (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
@@ -461,9 +466,9 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  bedrock: BedrockConfig;
   inventorySearch: InventorySearchConfig;
   imageValidation: ImageValidationConfig;
-  deepseek: DeepseekConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
   rating: RatingConfig;
@@ -795,9 +800,15 @@ export default (): Configuration => {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
-      chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
+    },
+    bedrock: {
+      // Never fall back to AWS_REGION (ca-central-1) — Luna is us-east-1 only.
+      region: process.env.BEDROCK_REGION?.trim() || 'us-east-1',
+      chatModel:
+        process.env.BEDROCK_CHAT_MODEL?.trim() || 'openai.gpt-5.6-luna',
       embeddingModel:
-        process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+        process.env.BEDROCK_EMBEDDING_MODEL?.trim() ||
+        'amazon.titan-embed-text-v1',
     },
     inventorySearch: {
       minSimilarity: parseFloat(
@@ -811,6 +822,9 @@ export default (): Configuration => {
         process.env.INVENTORY_SEARCH_QUERY_CACHE_TTL_MS || '300000',
         10
       ),
+      // Default off until Titan backfill completes post-deploy.
+      embeddingsSearchEnabled:
+        process.env.BEDROCK_EMBEDDINGS_SEARCH_ENABLED === 'true',
     },
     imageValidation: {
       enabled: process.env.IMAGE_VALIDATION_ENABLED === 'true',
@@ -826,10 +840,6 @@ export default (): Configuration => {
       rekognitionMinConfidence: parseFloat(
         process.env.IMAGE_VALIDATION_REKOGNITION_MIN_CONFIDENCE || '80'
       ),
-    },
-    deepseek: {
-      apiKey: process.env.DEEPSEEK_API_KEY || '',
-      visionModel: process.env.DEEPSEEK_VISION_MODEL || 'deepseek-chat',
     },
     notification: {
       orderStatusChangeEnabled:
@@ -935,15 +945,24 @@ export default (): Configuration => {
     },
     rentalAiReview: {
       enabled: process.env.RENTAL_AI_AUTO_REVIEW_ENABLED === 'true',
-      model: process.env.RENTAL_AI_REVIEW_MODEL || 'gpt-4.1',
+      model:
+        process.env.RENTAL_AI_REVIEW_MODEL?.trim() ||
+        process.env.BEDROCK_CHAT_MODEL?.trim() ||
+        'openai.gpt-5.6-luna',
     },
     itemAiReview: {
       enabled: process.env.ITEM_AI_AUTO_REVIEW_ENABLED === 'true',
-      model: process.env.ITEM_AI_REVIEW_MODEL || 'gpt-4.1',
+      model:
+        process.env.ITEM_AI_REVIEW_MODEL?.trim() ||
+        process.env.BEDROCK_CHAT_MODEL?.trim() ||
+        'openai.gpt-5.6-luna',
     },
     idDocumentAiReview: {
       enabled: process.env.ID_AI_REVIEW_ENABLED === 'true',
-      model: process.env.ID_AI_REVIEW_MODEL || 'gpt-4.1',
+      model:
+        process.env.ID_AI_REVIEW_MODEL?.trim() ||
+        process.env.BEDROCK_CHAT_MODEL?.trim() ||
+        'openai.gpt-5.6-luna',
     },
     commerceIntegrations: {
       tokenEncryptionKey: process.env.COMMERCE_TOKEN_ENCRYPTION_KEY || '',

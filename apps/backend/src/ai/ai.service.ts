@@ -7,7 +7,7 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
 } from './chat-completion.types';
-import { DeepseekService } from './deepseek.service';
+import { BedrockLunaService } from './bedrock-luna.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
 
 export interface GenerateDescriptionResponse {
@@ -105,21 +105,16 @@ export interface RentalImageSuggestionResult {
   currency?: string | null;
 }
 
-/** LLM backend for {@link AiService.generateImageItemSuggestions}. Default: `openai`. */
-export type ImageItemSuggestionsProvider = 'openai' | 'deepseek';
-
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
-  private static readonly OPENAI_CHAT_COMPLETIONS_URL =
-    'https://api.openai.com/v1/chat/completions';
   private static readonly IMAGE_ITEM_VISION_MAX_IMAGES = 10;
   private static readonly IMAGE_FETCH_MAX_BYTES = 10 * 1024 * 1024;
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly deepseekService: DeepseekService
+    private readonly bedrockLunaService: BedrockLunaService
   ) {}
 
   async generateProductDescription(
@@ -131,7 +126,7 @@ export class AiService {
       const prompt = this.buildPrompt(dto);
 
       const request: ChatCompletionRequest = {
-        model: this.deepseekService.defaultChatModel,
+        model: this.bedrockLunaService.getDefaultChatModel(),
         messages: [
           {
             role: 'system',
@@ -146,9 +141,10 @@ export class AiService {
         temperature: 0.7,
       };
 
-      const response = await this.deepseekService.chatCompletions(
+      const response = await this.bedrockLunaService.chatCompletions(
         request,
-        30000
+        30000,
+        { reasoningEffort: 'none' }
       );
 
       const rawDesc = response.choices?.[0]?.message?.content;
@@ -156,7 +152,7 @@ export class AiService {
         typeof rawDesc === 'string' ? rawDesc.trim() : undefined;
 
       if (!description) {
-        this.logger.error('No description generated from DeepSeek');
+        this.logger.error('No description generated from Bedrock');
         throw new HttpException(
           'No description generated',
           HttpStatus.INTERNAL_SERVER_ERROR
@@ -182,24 +178,6 @@ export class AiService {
         throw error;
       }
 
-      // Handle axios errors
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { status: number } };
-        if (axiosError.response?.status === 401) {
-          throw new HttpException(
-            'Invalid DeepSeek API key',
-            HttpStatus.UNAUTHORIZED
-          );
-        }
-
-        if (axiosError.response?.status === 429) {
-          throw new HttpException(
-            'DeepSeek API rate limit exceeded. Please try again later.',
-            HttpStatus.TOO_MANY_REQUESTS
-          );
-        }
-      }
-
       if (error && typeof error === 'object' && 'code' in error) {
         const timeoutError = error as { code?: string };
         if (timeoutError.code === 'ECONNABORTED') {
@@ -210,16 +188,14 @@ export class AiService {
         }
       }
 
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error occurred';
-
       throw new HttpException(
         {
           success: false,
-          message: 'Failed to generate product description',
-          error: errorMessage,
+          message: 'AI temporarily unavailable. Please try again.',
+          error:
+            error instanceof Error ? error.message : 'Unknown error occurred',
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.SERVICE_UNAVAILABLE
       );
     }
   }
@@ -439,13 +415,13 @@ export class AiService {
       }
       if (status === 401) {
         throw new HttpException(
-          'Invalid OpenAI API key',
-          HttpStatus.UNAUTHORIZED
+          'Image cleanup is temporarily unavailable. Please try again later.',
+          HttpStatus.SERVICE_UNAVAILABLE
         );
       }
       if (status === 429) {
         throw new HttpException(
-          'OpenAI API rate limit exceeded. Please try again later.',
+          'Image cleanup is temporarily unavailable. Please try again later.',
           HttpStatus.TOO_MANY_REQUESTS
         );
       }
@@ -453,7 +429,7 @@ export class AiService {
         throw new HttpException(
           {
             message: 'Failed to cleanup image',
-            error: apiMessage || 'OpenAI rejected the image edit request',
+            error: apiMessage || 'The image could not be cleaned up',
           },
           HttpStatus.BAD_REQUEST
         );
@@ -540,9 +516,8 @@ export class AiService {
   }
 
   /**
-   * Suggests catalog fields using multimodal vision: images are fetched server-side and sent
-   * as `image_url` parts (HTTPS or `data:` URLs). OpenAI uses high-detail vision; DeepSeek
-   * uses the same OpenAI-compatible shape and falls back to text-only if the API rejects it.
+   * Suggests catalog fields using multimodal vision via Bedrock Mantle.
+   * Images are fetched server-side and sent as vision parts.
    */
   async generateImageItemSuggestions(input: {
     imageUrls: string[];
@@ -555,8 +530,6 @@ export class AiService {
     country?: string | null;
     existingCatalogNames?: string[];
     existingBrandNames?: string[];
-    /** Defaults to `openai` (vision). */
-    provider?: ImageItemSuggestionsProvider;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
@@ -617,7 +590,6 @@ export class AiService {
       return emptyResult();
     }
 
-    const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
     const visionSystem = this.buildImageItemVisionSystemPrompt();
     const visionUserText = this.buildImageItemVisionUserText(
       defaultCurrency,
@@ -625,53 +597,31 @@ export class AiService {
       textContext,
       !!input.hint?.trim()
     );
-    const textOnlyUserText = this.buildImageItemTextOnlyUserText(
-      urls,
-      defaultCurrency,
-      languageLabel,
-      textContext
-    );
     const resolvedImages = await this.resolveVisionImageUrls(urls);
     const visionUserContent = this.buildVisionUserContentParts(
       visionUserText,
-      resolvedImages,
-      provider === 'openai'
+      resolvedImages
     );
 
     const visionRequest: ChatCompletionRequest = {
-      model:
-        provider === 'openai'
-          ? this.getOpenAiItemSuggestionsModel()
-          : this.getDeepSeekVisionModel(),
+      model: this.bedrockLunaService.getDefaultChatModel(),
       messages: [
         { role: 'system', content: visionSystem },
         { role: 'user', content: visionUserContent },
       ],
       max_tokens: 900,
       temperature: 0.1,
-    };
-
-    const textFallbackRequest: ChatCompletionRequest = {
-      model: this.deepseekService.defaultChatModel,
-      messages: [
-        {
-          role: 'system',
-          content: this.buildImageItemTextOnlySystemPrompt(),
-        },
-        { role: 'user', content: textOnlyUserText },
-      ],
-      max_tokens: 900,
-      temperature: 0.1,
+      response_format: { type: 'json_object' },
     };
 
     try {
       this.logger.log(
-        `Generating image item suggestions (vision, ${provider}) for ${urls.length} image(s)`
+        `Generating image item suggestions (Bedrock vision) for ${urls.length} image(s)`
       );
-      const response = await this.runImageItemSuggestionsLlm(
-        provider,
+      const response = await this.bedrockLunaService.chatCompletions(
         visionRequest,
-        textFallbackRequest
+        120000,
+        { reasoningEffort: 'none', jsonObject: true }
       );
 
       const rawContent = response.choices?.[0]?.message?.content;
@@ -866,21 +816,24 @@ export class AiService {
       input.itemSnapshot,
       languageLabel
     );
-    const imageUrlsText = input.imageUrls.length
-      ? `\n\nImage URLs:\n${input.imageUrls.map((u) => `- ${u}`).join('\n')}`
-      : '';
+    const resolvedImages = await this.resolveVisionImageUrls(input.imageUrls);
+    const userContent =
+      resolvedImages.length > 0
+        ? this.buildVisionUserContentParts(userText, resolvedImages)
+        : userText;
     const request: ChatCompletionRequest = {
-      model: this.deepseekService.defaultChatModel,
+      model: this.bedrockLunaService.getDefaultChatModel(),
       messages: [
         {
           role: 'system',
           content:
             'You refine e-commerce product listings using catalog data and product photos. Never invent a new price or currency.',
         },
-        { role: 'user', content: `${userText}${imageUrlsText}` },
+        { role: 'user', content: userContent },
       ],
       max_tokens: 700,
       temperature: 0.2,
+      response_format: { type: 'json_object' },
     };
     return this.runItemRefinementCompletion(request);
   }
@@ -939,9 +892,10 @@ Do not include any text outside the JSON.`;
     request: ChatCompletionRequest
   ): Promise<ItemRefinementSuggestionResult> {
     try {
-      const response = await this.deepseekService.chatCompletions(
+      const response = await this.bedrockLunaService.chatCompletions(
         request,
-        90000
+        90000,
+        { reasoningEffort: 'none', jsonObject: true }
       );
       const rawContent = response.choices?.[0]?.message?.content;
       const contentString = this.messageContentToString(rawContent);
@@ -966,10 +920,10 @@ Do not include any text outside the JSON.`;
       throw new HttpException(
         {
           success: false,
-          message: 'Failed to refine item with AI',
+          message: 'AI temporarily unavailable. Please try again.',
           error: error instanceof Error ? error.message : 'Unknown error',
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.SERVICE_UNAVAILABLE
       );
     }
   }
@@ -980,15 +934,6 @@ Do not include any text outside the JSON.`;
       'and returns a single JSON object. Do not invent fields you cannot read clearly; use null when uncertain. ' +
       'CRITICAL: Never use placeholder or demo product names (e.g. "Test product", "Test product API", "Sample product", "Dummy product"). ' +
       'If the real product name is not clearly readable on the image, set name to null (leave blank). Prefer null over guessing.'
-    );
-  }
-
-  private buildImageItemTextOnlySystemPrompt(): string {
-    return (
-      'You help extract structured e-commerce fields from text. ' +
-      'Do not invent names, prices, barcodes, or categories. Use only caption/alt text; use null for unknown fields. ' +
-      'Never use placeholder or demo product names (e.g. "Test product", "Test product API"); ' +
-      'if no real product name is present in the text, set name to null.'
     );
   }
 
@@ -1065,63 +1010,15 @@ Do not include any explanation outside of the JSON.
 The "description" field MUST be written in ${languageLabel}.`;
   }
 
-  private buildImageItemTextOnlyUserText(
-    urls: string[],
-    defaultCurrency: string,
-    languageLabel: string,
-    textContext: string
-  ): string {
-    return `
-This request has no image pixels—only URLs and optional captions. Do NOT fabricate OCR, barcodes, or prices; use null unless stated in the text context.
-
-Extract when possible from captions/alt text only:
-- Product name (only if stated in the text; otherwise null — never invent a name), category, subcategory, brand
-- Description in ${languageLabel}
-- Price, currency (default "${defaultCurrency}" if unknown)
-- Barcodes, weight, dimensions
-- isUsed: true only if the text clearly says used/second-hand/refurbished/open-box; false only if clearly new; otherwise null
-
-Name rules:
-- Do NOT use placeholders such as "Test product", "Test product API", "Sample product", "Dummy product", or "Product name".
-- If no real product name appears in the text context, set "name" to null (leave blank).
-
-Additional text context:
-${textContext || 'N/A'}
-
-Image URLs (reference only; you may not see image content):
-${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}
-
-Return ONLY a single JSON object with this exact shape:
-{
-  "name": string | null,
-  "categoryName": string | null,
-  "subCategoryName": string | null,
-  "brandName": string | null,
-  "description": string | null,
-  "price": number | null,
-  "currency": string | null,
-  "barcodeValues": string[] | null,
-  "weight": number | null,
-  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
-  "dimensions": string | null,
-  "isUsed": boolean | null
-}
-
-The "description" field MUST be written in ${languageLabel}.`;
-  }
-
   private buildVisionUserContentParts(
     textPrompt: string,
-    imageUrlsOrDataUrls: string[],
-    openAiHighDetail: boolean
+    imageUrlsOrDataUrls: string[]
   ): unknown[] {
     const parts: unknown[] = [{ type: 'text', text: textPrompt }];
     for (const u of imageUrlsOrDataUrls) {
       parts.push({
         type: 'image_url',
-        image_url: openAiHighDetail
-          ? { url: u, detail: 'high' as const }
-          : { url: u },
+        image_url: { url: u, detail: 'high' as const },
       });
     }
     return parts;
@@ -1164,83 +1061,18 @@ The "description" field MUST be written in ${languageLabel}.`;
     return out;
   }
 
-  private async runImageItemSuggestionsLlm(
-    provider: ImageItemSuggestionsProvider,
-    visionRequest: ChatCompletionRequest,
-    textFallbackRequest: ChatCompletionRequest
-  ): Promise<ChatCompletionResponse> {
-    if (provider === 'openai') {
-      return this.openAiChatCompletions(visionRequest, 120000);
-    }
-    try {
-      return await this.deepseekService.chatCompletions(visionRequest, 120000);
-    } catch (error: unknown) {
-      if (!axios.isAxiosError(error)) throw error;
-      const status = error.response?.status;
-      if (status !== 400 && status !== 422) throw error;
-      this.logger.warn(
-        `DeepSeek rejected multimodal vision (HTTP ${status}); retrying text-only`
-      );
-      return this.deepseekService.chatCompletions(textFallbackRequest, 60000);
-    }
-  }
-
-  private getDeepSeekVisionModel(): string {
-    return (
-      this.configService.get<string>('deepseek.visionModel')?.trim() ||
-      'deepseek-chat'
-    );
-  }
-
-  private getOpenAiItemSuggestionsModel(): string {
-    return (
-      this.configService.get<string>('openai.chatModel')?.trim() ||
-      'gpt-4o-mini'
-    );
-  }
-
-  private requireOpenAiApiKey(): string {
-    const key = this.configService.get<string>('openai.apiKey')?.trim();
-    if (!key) {
-      this.logger.error('OPENAI_API_KEY not configured');
-      throw new HttpException(
-        'OpenAI API key not configured',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-    return key;
-  }
-
-  private async openAiChatCompletions(
-    body: ChatCompletionRequest,
-    timeoutMs: number
-  ): Promise<ChatCompletionResponse> {
-    const apiKey = this.requireOpenAiApiKey();
-    const payload: ChatCompletionRequest = {
-      ...body,
-      model: body.model || this.getOpenAiItemSuggestionsModel(),
-    };
-    const { data } = await axios.post<ChatCompletionResponse>(
-      AiService.OPENAI_CHAT_COMPLETIONS_URL,
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        timeout: timeoutMs,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-      }
-    );
-    return data;
-  }
-
-  /** Public wrapper for enhancement confidence VLM self-check. */
-  async runOpenAiChatForConfidence(
+  /** Public wrapper for enhancement confidence VLM self-check (Bedrock). */
+  async runChatForConfidence(
     body: ChatCompletionRequest
   ): Promise<ChatCompletionResponse> {
-    return this.openAiChatCompletions(body, 60000);
+    return this.bedrockLunaService.chatCompletions(
+      {
+        ...body,
+        model: body.model || this.bedrockLunaService.getDefaultChatModel(),
+      },
+      60000,
+      { reasoningEffort: 'none', jsonObject: true }
+    );
   }
 
   private messageContentToString(raw: unknown): string {
@@ -1399,22 +1231,18 @@ The "description" field MUST be written in ${languageLabel}.`;
     altText?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
-    /** Defaults to `openai` (vision), same as sale-item fill. */
-    provider?: ImageItemSuggestionsProvider;
   }): Promise<RentalImageSuggestionResult> {
     const defaultCurrency = input.defaultCurrency || 'XAF';
     const descriptionLanguage = this.resolvePreferredLanguage(
       input.preferredLanguage
     );
     const textContext = this.buildRentalSuggestionTextContext(input);
-    const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
     try {
       return await this.requestRentalImageSuggestions(
         input.imageUrl,
         textContext,
         defaultCurrency,
-        descriptionLanguage,
-        provider
+        descriptionLanguage
       );
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -1470,28 +1298,11 @@ Return ONLY a JSON object with this exact shape:
 No markdown, no explanation outside JSON.`;
   }
 
-  private buildRentalSuggestionTextOnlyPrompt(
-    imageUrl: string,
-    textContext: string,
-    defaultCurrency: string,
-    descriptionLanguage: 'en' | 'fr'
-  ): string {
-    return `${this.buildRentalSuggestionUserPrompt(
-      textContext,
-      defaultCurrency,
-      descriptionLanguage
-    )}
-
-This fallback has no image pixels—only the URL and optional captions. Do not invent details not supported by the text context.
-Image URL (reference only): ${imageUrl}`;
-  }
-
   private async requestRentalImageSuggestions(
     imageUrl: string,
     textContext: string,
     defaultCurrency: string,
-    descriptionLanguage: 'en' | 'fr',
-    provider: ImageItemSuggestionsProvider
+    descriptionLanguage: 'en' | 'fr'
   ): Promise<RentalImageSuggestionResult> {
     const userText = this.buildRentalSuggestionUserPrompt(
       textContext,
@@ -1501,14 +1312,10 @@ Image URL (reference only): ${imageUrl}`;
     const resolvedImages = await this.resolveVisionImageUrls([imageUrl]);
     const visionUserContent = this.buildVisionUserContentParts(
       userText,
-      resolvedImages,
-      provider === 'openai'
+      resolvedImages
     );
     const visionRequest: ChatCompletionRequest = {
-      model:
-        provider === 'openai'
-          ? this.getOpenAiItemSuggestionsModel()
-          : this.getDeepSeekVisionModel(),
+      model: this.bedrockLunaService.getDefaultChatModel(),
       messages: [
         {
           role: 'system',
@@ -1519,35 +1326,15 @@ Image URL (reference only): ${imageUrl}`;
       ],
       max_tokens: 500,
       temperature: 0.2,
-    };
-    const textFallbackRequest: ChatCompletionRequest = {
-      model: this.deepseekService.defaultChatModel,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You extract structured rental catalog data from text context for a rentals marketplace.',
-        },
-        {
-          role: 'user',
-          content: this.buildRentalSuggestionTextOnlyPrompt(
-            imageUrl,
-            textContext,
-            defaultCurrency,
-            descriptionLanguage
-          ),
-        },
-      ],
-      max_tokens: 500,
-      temperature: 0.2,
+      response_format: { type: 'json_object' },
     };
     this.logger.log(
-      `Generating rental image suggestions (vision, ${provider}) for 1 image`
+      'Generating rental image suggestions (Bedrock vision) for 1 image'
     );
-    const response = await this.runImageItemSuggestionsLlm(
-      provider,
+    const response = await this.bedrockLunaService.chatCompletions(
       visionRequest,
-      textFallbackRequest
+      120000,
+      { reasoningEffort: 'none', jsonObject: true }
     );
     const rawContent = response.choices?.[0]?.message?.content;
     const contentString = this.messageContentToString(rawContent);
@@ -1726,7 +1513,7 @@ Use collectionId values exactly from the list.`;
       ? `\nImages:\n${input.imageUrls.map((u) => `- ${u}`).join('\n')}`
       : '';
     const request: ChatCompletionRequest = {
-      model: this.deepseekService.defaultChatModel,
+      model: this.bedrockLunaService.getDefaultChatModel(),
       messages: [
         {
           role: 'system',
@@ -1737,11 +1524,13 @@ Use collectionId values exactly from the list.`;
       ],
       max_tokens: 400,
       temperature: 0.2,
+      response_format: { type: 'json_object' },
     };
     try {
-      const response = await this.deepseekService.chatCompletions(
+      const response = await this.bedrockLunaService.chatCompletions(
         request,
-        60000
+        60000,
+        { reasoningEffort: 'none', jsonObject: true }
       );
       const rawContent = response.choices?.[0]?.message?.content;
       const contentString = this.messageContentToString(rawContent);

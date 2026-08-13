@@ -1,4 +1,4 @@
-/** OpenAI-compatible chat completion payload/response (used with DeepSeek API). */
+/** OpenAI-compatible chat completion payload/response (used with Bedrock Mantle adapter). */
 
 export interface ChatCompletionMessage {
   role: 'system' | 'user' | 'assistant';

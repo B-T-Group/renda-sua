@@ -19,7 +19,7 @@ Import global foundation modules once near the top of `AppModule`.
 2. **Payment callbacks use a handler registry.** `MobilePaymentCallbackProcessor` must not inject `OrdersService` or `RentalsService` in its constructor. Register `OrderPaymentCallbackHandler` / `RentalPaymentCallbackHandler` from domain modules; resolve them lazily via `PaymentCallbackRegistryService`.
 3. **Notifications stay transport-only.** Order-status internal webhooks live under `OrdersModule` (`OrderNotificationsInternalController`), not `NotificationsModule`.
 4. **Prefer `MobilePaymentsCoreModule` for payment services.** Domain services inject `MobilePaymentsService` / `MobilePaymentsDatabaseService` from the global core module. Orchestration (controllers, callback processor, `GiveChangePayoutService`) stays in `MobilePaymentsModule`.
-5. **AI generation is separate from AI HTTP.** `AiGenerationModule` exports `AiService` / `DeepseekService` without business imports. Business modules import `AiGenerationModule`; `AiModule` is the HTTP orchestration layer.
+5. **AI generation is separate from AI HTTP.** `AiGenerationModule` exports `AiService` / `BedrockLunaService` without business imports. Business modules import `AiGenerationModule`; `AiModule` is the HTTP orchestration layer. OpenAI Images API is used only for product image cleanup.
 6. **Avoid `forwardRef` unless a true cycle remains.** If you add one, document why in the PR.
 7. **Do not re-register shared providers** (e.g. `ConfigurationsService`) inside domain modules — import the owning module (`AdminModule`) instead.
 

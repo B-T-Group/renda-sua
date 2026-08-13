@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { BedrockLunaService } from '../../ai/bedrock-luna.service';
 import type {
   ValidatedImage,
   VisionImageAnalysis,
@@ -20,10 +19,8 @@ interface VisionBatchResult {
 @Injectable()
 export class VisionAnalysisService {
   private readonly logger = new Logger(VisionAnalysisService.name);
-  private static readonly OPENAI_URL =
-    'https://api.openai.com/v1/chat/completions';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly bedrockLunaService: BedrockLunaService) {}
 
   async analyzeBatch(
     images: ValidatedImage[],
@@ -31,8 +28,7 @@ export class VisionAnalysisService {
     options?: { includeModeration?: boolean }
   ): Promise<VisionImageAnalysis[]> {
     const includeModeration = options?.includeModeration ?? true;
-    const apiKey = this.configService.get<string>('openai.apiKey');
-    if (!apiKey || !images.length) return [];
+    if (!images.length) return [];
 
     const content: Array<{ type: string; text?: string; image_url?: object }> =
       [
@@ -54,72 +50,54 @@ export class VisionAnalysisService {
     }
 
     try {
-      const model =
-        this.configService.get<string>('openai.chatModel')?.trim() ||
-        'gpt-4o-mini';
-      const { data } = await axios.post(
-        VisionAnalysisService.OPENAI_URL,
-        {
-          model,
-          messages: [{ role: 'user', content }],
-          max_tokens: 800,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: timeoutMs,
-        }
-      );
-
-      const raw = data?.choices?.[0]?.message?.content;
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as VisionBatchResult;
-      return (parsed.images ?? []).map((r) => ({
-        clientIndex: r.index,
-        safe: r.safe,
-        moderationCategories: r.moderationCategories ?? [],
-        productFillPercent: r.productFillPercent ?? 50,
-        backgroundClutter: r.backgroundClutter ?? 'low',
-        promotionalTextLevel: r.promotionalTextLevel ?? 'none',
-      }));
+      const model = this.bedrockLunaService.getDefaultChatModel();
+      const result = await this.bedrockLunaService.complete({
+        model,
+        messages: [{ role: 'user', content }],
+        maxTokens: 800,
+        temperature: 0,
+        jsonObject: true,
+        reasoningEffort: 'none',
+        timeoutMs,
+      });
+      const parsed = JSON.parse(result.text) as VisionBatchResult;
+      return this.mapResults(parsed, images.length, includeModeration);
     } catch (error: any) {
       this.logger.warn(
-        `Vision analysis failed or timed out: ${error.message ?? 'unknown'}`
+        `Bedrock vision analysis failed: ${error?.message ?? 'unknown'}`
       );
       return [];
     }
   }
 
   private buildPrompt(count: number, includeModeration: boolean): string {
-    const moderationRules = includeModeration
-      ? `- safe=false if nudity, violence, hate symbols, illegal products, or clearly inappropriate content
-- moderationCategories: list violated categories when safe=false`
-      : `- safe: always true
-- moderationCategories: always []`;
+    return `Analyze ${count} product photo(s). Return JSON only:
+{"images":[{"index":0,"safe":true,"moderationCategories":[],"productFillPercent":60,"backgroundClutter":"low","promotionalTextLevel":"none"}]}
+Rules: index is 0-based. productFillPercent 0-100. backgroundClutter low|medium|high. promotionalTextLevel none|low|high.
+${includeModeration ? 'Set safe=false and list moderationCategories when content is adult/violent/hate.' : 'Ignore moderation; always safe=true and empty categories.'}`;
+  }
 
-    return `You are a marketplace product image reviewer. Analyze ${count} product image(s) in order (index 0 to ${
-      count - 1
-    }). Return JSON only:
-{
-  "images": [
-    {
-      "index": 0,
-      "safe": true,
-      "moderationCategories": [],
-      "productFillPercent": 70,
-      "backgroundClutter": "low",
-      "promotionalTextLevel": "none"
+  private mapResults(
+    parsed: VisionBatchResult,
+    expected: number,
+    includeModeration: boolean
+  ): VisionImageAnalysis[] {
+    const byIndex = new Map(
+      (parsed.images ?? []).map((img) => [img.index, img])
+    );
+    const out: VisionImageAnalysis[] = [];
+    for (let i = 0; i < expected; i++) {
+      const row = byIndex.get(i);
+      out.push({
+        clientIndex: i,
+        // When moderation is required, missing/undefined safe must not default to safe.
+        safe: includeModeration ? row?.safe === true : true,
+        moderationCategories: row?.moderationCategories ?? [],
+        productFillPercent: row?.productFillPercent ?? 50,
+        backgroundClutter: row?.backgroundClutter ?? 'medium',
+        promotionalTextLevel: row?.promotionalTextLevel ?? 'none',
+      });
     }
-  ]
-}
-Rules:
-${moderationRules}
-- productFillPercent: estimated % of frame occupied by main product (0-100)
-- backgroundClutter: low|medium|high
-- promotionalTextLevel: none|low|high (large promotional overlays)`;
+    return out;
   }
 }

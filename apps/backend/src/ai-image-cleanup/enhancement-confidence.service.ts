@@ -179,8 +179,9 @@ export class EnhancementConfidenceService {
     changes: string[];
   }> {
     try {
-      const openai = this.configService.get('openai');
-      const model = openai?.chatModel || 'gpt-4o-mini';
+      const model =
+        this.configService.get('bedrock', { infer: true })?.chatModel ||
+        'openai.gpt-5.6-luna';
       const request: ChatCompletionRequest = {
         model,
         temperature: 0,
@@ -204,7 +205,7 @@ export class EnhancementConfidenceService {
           },
         ],
       };
-      const response = await this.aiService.runOpenAiChatForConfidence(request);
+      const response = await this.aiService.runChatForConfidence(request);
       const content = response.choices?.[0]?.message?.content;
       const raw =
         typeof content === 'string' ? content : JSON.stringify(content ?? {});

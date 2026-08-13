@@ -1,9 +1,10 @@
 import { IdDocumentAiReviewModelService } from './id-document-ai-review-model.service';
 
 describe('IdDocumentAiReviewModelService', () => {
-  const service = new IdDocumentAiReviewModelService({
-    get: () => undefined,
-  } as any);
+  const service = new IdDocumentAiReviewModelService(
+    { get: () => undefined } as any,
+    {} as any
+  );
 
   it('parses a valid model payload', () => {
     const result = service.parseResult({

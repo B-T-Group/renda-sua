@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { AiService } from './ai.service';
-import { DeepseekService } from './deepseek.service';
+import { BedrockLunaService } from './bedrock-luna.service';
 
 @Module({
   imports: [ConfigModule, AuthModule],
-  providers: [DeepseekService, AiService],
-  exports: [AiService, DeepseekService],
+  providers: [BedrockLunaService, AiService],
+  exports: [AiService, BedrockLunaService],
 })
 export class AiGenerationModule {}

@@ -538,6 +538,9 @@ export class InventoryItemsService {
     if (q.length < 2) {
       return { empty: true };
     }
+    if (!this.itemEmbeddingService.isEmbeddingsSearchEnabled()) {
+      return { fallback: true };
+    }
     try {
       return await this.runSemanticSearch(q);
     } catch (error: any) {
@@ -553,8 +556,14 @@ export class InventoryItemsService {
     q: string
   ): Promise<
     | { empty: true }
+    | { fallback: true }
     | { itemIds: string[]; scores: Map<string, number> }
   > {
+    const hasEmbeddings =
+      await this.itemEmbeddingService.hasAnyItemEmbeddings();
+    if (!hasEmbeddings) {
+      return { fallback: true };
+    }
     const queryVector = await this.itemEmbeddingService.embedSearchQuery(q);
     const matches = await this.itemEmbeddingService.findSimilarItemIds(
       queryVector,
@@ -569,6 +578,7 @@ export class InventoryItemsService {
     matches: ItemSimilarityMatch[]
   ): Promise<
     | { empty: true }
+    | { fallback: true }
     | { itemIds: string[]; scores: Map<string, number> }
   > {
     const scores = new Map<string, number>();
@@ -579,8 +589,9 @@ export class InventoryItemsService {
     if (this.itemEmbeddingService.isSkuLikeQuery(q)) {
       itemIds = await this.mergeExactSkuMatches(q, itemIds, scores);
     }
+    // No vector hits (e.g. embeddings cleared for Titan backfill) → lexical search.
     if (itemIds.length === 0) {
-      return { empty: true };
+      return { fallback: true };
     }
     return { itemIds, scores };
   }
