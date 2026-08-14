@@ -808,7 +808,8 @@ export class UploadService {
       void this.notifyBusinessIdRejectedIfNeeded(
         upload.user_id,
         upload.document_type.name,
-        message
+        message,
+        uploadId
       );
       void this.recomputeBusinessLifecycleAfterIdChange(upload.user_id);
     }
@@ -817,7 +818,8 @@ export class UploadService {
   private async notifyBusinessIdRejectedIfNeeded(
     userId: string,
     documentType: string,
-    reason: string
+    reason: string,
+    uploadId: string
   ): Promise<void> {
     try {
       const businessQuery = `
@@ -835,6 +837,15 @@ export class UploadService {
         businessResult?.businesses as { id: string }[] | undefined
       )?.[0];
       if (!business) return;
+      try {
+        await this.insertIdRejectionInboxMessage(userId, uploadId, reason);
+      } catch (inboxError: any) {
+        this.logger.warn(
+          `ID rejection inbox message failed (continuing notify): ${
+            inboxError?.message ?? String(inboxError)
+          }`
+        );
+      }
       await this.notificationsService.sendBusinessIdDocumentRejectedEmail({
         businessUserId: userId,
         documentType,
@@ -843,6 +854,47 @@ export class UploadService {
     } catch (error: any) {
       this.logger.error(
         `notifyBusinessIdRejectedIfNeeded: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  /** Lands the refusal in Messages (Order & Document) without a second push. */
+  private async insertIdRejectionInboxMessage(
+    userId: string,
+    uploadId: string,
+    reason: string
+  ): Promise<void> {
+    const trimmed = reason.trim();
+    if (!trimmed) return;
+    const mutation = `
+      mutation InsertIdRejectionMessage(
+        $userId: uuid!
+        $uploadId: uuid!
+        $message: String!
+      ) {
+        insert_user_messages_one(
+          object: {
+            user_id: $userId
+            entity_type: document
+            entity_id: $uploadId
+            message: $message
+            message_type: TEXT
+          }
+        ) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeMutation<{
+      insert_user_messages_one: { id: string } | null;
+    }>(mutation, {
+      userId,
+      uploadId,
+      message: trimmed,
+    });
+    if (!result.insert_user_messages_one) {
+      this.logger.warn(
+        `insertIdRejectionInboxMessage failed for upload ${uploadId}`
       );
     }
   }
