@@ -49,6 +49,9 @@ export interface ReferredBusinessSummary {
   /** itemCount + 1 */
   score: number;
   createdAt: string;
+  payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
+  payoutReviewRejectionReason?: string | null;
+  isPaid?: boolean;
 }
 
 export interface TopAgentEntry {
@@ -64,6 +67,9 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
+  projectedPayoutAmount?: number;
+  projectedPayoutCurrency?: string;
+  isInternal?: boolean;
 }
 
 /** Target average sale items per referred business. */

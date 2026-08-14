@@ -109,13 +109,16 @@ export class AiImageCleanupService implements OnModuleInit {
   }
 
   /**
-   * Platform admin/superuser trigger from sale-item moderation.
+   * Platform admin/superuser trigger from sale-item moderation or catalog browser.
    * Does not require a business persona and does not charge merchant AI tokens.
    */
   async requestAdminItemCleanup(
     itemId: string,
     adminUserId: string,
-    imageIds?: string[]
+    opts?: {
+      imageIds?: string[];
+      selections?: Array<{ imageId: string; kind: 'rembg' | 'ai' }>;
+    }
   ): Promise<{
     job: AiImageCleanupJobRow;
     ai_tokens_remaining: number;
@@ -138,7 +141,10 @@ export class AiImageCleanupService implements OnModuleInit {
       const images = await this.loadEligibleItemImages(
         itemId,
         item.businessId,
-        normalizeCleanupSelections({ imageIds })
+        normalizeCleanupSelections({
+          imageIds: opts?.imageIds,
+          selections: opts?.selections,
+        })
       );
       const queued = await this.enqueueCleanupJob({
         businessId: item.businessId,

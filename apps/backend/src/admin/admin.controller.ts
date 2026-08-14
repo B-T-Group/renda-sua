@@ -382,10 +382,13 @@ export class AdminController {
 
   @Post('items/:itemId/ai-image-cleanup')
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
+  @RequirePermissions(
+    PlatformPermissions.MODERATE_ITEMS,
+    PlatformPermissions.CATALOG_CROSS_BUSINESS
+  )
   @ApiOperation({
     summary:
-      'Queue AI image cleanup for a sale item during moderation (no merchant token charge)',
+      'Queue rembg or AI image cleanup for a sale item (no merchant token charge)',
   })
   @ApiParam({ name: 'itemId', format: 'uuid' })
   @ApiBody({ type: RequestAiImageCleanupDto, required: false })
@@ -401,7 +404,10 @@ export class AdminController {
     const result = await this.aiImageCleanupService.requestAdminItemCleanup(
       itemId,
       request.user.id,
-      body?.imageIds
+      {
+        imageIds: body?.imageIds,
+        selections: body?.selections,
+      }
     );
     return {
       success: true,
