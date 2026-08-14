@@ -83,7 +83,9 @@ select_permissions:
         - is_ai_cleaned
         - original_image_url
         - enhanced_image_url
+        - rembg_image_url
         - active_version
+        - is_rembg_cleaned
         - thumbnail
         - thumbnail_status
         - display_url
@@ -112,6 +114,7 @@ select_permissions:
         - display_order
         - original_image_url
         - enhanced_image_url
+        - rembg_image_url
         - active_version
         - thumbnail
         - thumbnail_status
@@ -151,6 +154,7 @@ select_permissions:
         - tags
         - status
         - is_ai_cleaned
+        - is_rembg_cleaned
         - quality_score
         - perceptual_hash
         - validation_errors
@@ -160,6 +164,9 @@ select_permissions:
         - original_s3_key
         - enhanced_image_url
         - enhanced_s3_key
+        - rembg_image_url
+        - rembg_s3_key
+        - rembg_at
         - active_version
         - enhanced_at
         - reverted_at
@@ -188,6 +195,7 @@ select_permissions:
         - display_order
         - original_image_url
         - enhanced_image_url
+        - rembg_image_url
         - active_version
         - thumbnail
         - thumbnail_status
@@ -217,6 +225,7 @@ select_permissions:
         - display_order
         - original_image_url
         - enhanced_image_url
+        - rembg_image_url
         - active_version
         - thumbnail
         - thumbnail_status
@@ -255,6 +264,7 @@ update_permissions:
         - tags
         - status
         - is_ai_cleaned
+        - is_rembg_cleaned
         - quality_score
         - perceptual_hash
         - validation_errors
@@ -264,6 +274,9 @@ update_permissions:
         - original_s3_key
         - enhanced_image_url
         - enhanced_s3_key
+        - rembg_image_url
+        - rembg_s3_key
+        - rembg_at
         - active_version
         - enhanced_at
         - reverted_at

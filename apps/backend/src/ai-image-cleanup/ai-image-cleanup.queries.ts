@@ -21,6 +21,7 @@ export const RESULT_FIELDS = `
   business_image_id
   item_variant_image_id
   rental_item_image_id
+  kind
   original_image_url
   original_s3_key
   cleaned_image_url
@@ -49,9 +50,13 @@ export const VERSION_IMAGE_FIELDS = `
   original_s3_key
   enhanced_image_url
   enhanced_s3_key
+  rembg_image_url
+  rembg_s3_key
   active_version
   is_ai_cleaned
+  is_rembg_cleaned
   enhanced_at
+  rembg_at
   reverted_at
   content_hash
   width
@@ -77,6 +82,14 @@ export const INSERT_RESULTS = `
   }
 `;
 
+export const DELETE_RESULTS_BY_IDS = `
+  mutation DeleteAiImageCleanupResults($ids: [uuid!]!) {
+    delete_ai_image_cleanup_results(where: { id: { _in: $ids } }) {
+      affected_rows
+    }
+  }
+`;
+
 export const GET_JOB_WITH_RESULTS = `
   query GetAiImageCleanupJob($id: uuid!) {
     ai_image_cleanup_jobs_by_pk(id: $id) {
@@ -95,7 +108,7 @@ export const GET_PENDING_JOBS = `
     ai_image_cleanup_jobs(
       where: {
         business_id: { _eq: $businessId }
-        status: { _in: [ready_for_review, failed] }
+        status: { _in: [ready_for_review, failed, queued, processing] }
       }
       order_by: { created_at: desc }
     ) {
@@ -157,10 +170,33 @@ export const GET_OPEN_JOB_FOR_VARIANT = `
 `;
 
 export const GET_OPEN_JOB_FOR_ITEM_IMAGE = `
-  query GetOpenCleanupJobForItemImage($imageId: uuid!) {
+  query GetOpenCleanupJobForItemImage(
+    $imageId: uuid!
+    $kind: ai_image_cleanup_kind!
+  ) {
     ai_image_cleanup_results(
       where: {
         business_image_id: { _eq: $imageId }
+        kind: { _eq: $kind }
+        status: { _in: [queued, processing, ready] }
+        job: { status: { _in: [queued, processing, ready_for_review] } }
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
+export const GET_OPEN_JOB_FOR_VARIANT_IMAGE = `
+  query GetOpenCleanupJobForVariantImage(
+    $imageId: uuid!
+    $kind: ai_image_cleanup_kind!
+  ) {
+    ai_image_cleanup_results(
+      where: {
+        item_variant_image_id: { _eq: $imageId }
+        kind: { _eq: $kind }
         status: { _in: [queued, processing, ready] }
         job: { status: { _in: [queued, processing, ready_for_review] } }
       }
@@ -172,10 +208,14 @@ export const GET_OPEN_JOB_FOR_ITEM_IMAGE = `
 `;
 
 export const GET_OPEN_JOB_FOR_RENTAL_IMAGE = `
-  query GetOpenCleanupJobForRentalImage($imageId: uuid!) {
+  query GetOpenCleanupJobForRentalImage(
+    $imageId: uuid!
+    $kind: ai_image_cleanup_kind!
+  ) {
     ai_image_cleanup_results(
       where: {
         rental_item_image_id: { _eq: $imageId }
+        kind: { _eq: $kind }
         status: { _in: [queued, processing, ready] }
         job: { status: { _in: [queued, processing, ready_for_review] } }
       }
@@ -273,6 +313,22 @@ export const FIND_ENHANCED_BY_HASH = `
   }
 `;
 
+export const FIND_REMBG_BY_HASH = `
+  query FindRembgByContentHash($businessId: uuid!, $contentHash: String!) {
+    item_images(
+      where: {
+        business_id: { _eq: $businessId }
+        content_hash: { _eq: $contentHash }
+        rembg_image_url: { _is_null: false }
+        is_rembg_cleaned: { _eq: true }
+      }
+      limit: 1
+    ) {
+      ${VERSION_IMAGE_FIELDS}
+    }
+  }
+`;
+
 export const GET_BUSINESS_AUTO_ENHANCE = `
   query GetBusinessAutoEnhance($businessId: uuid!) {
     businesses_by_pk(id: $businessId) {
@@ -299,6 +355,21 @@ export const UPDATE_JOB = `
   mutation UpdateAiImageCleanupJob($id: uuid!, $_set: ai_image_cleanup_jobs_set_input!) {
     update_ai_image_cleanup_jobs_by_pk(pk_columns: { id: $id }, _set: $_set) {
       ${JOB_FIELDS}
+    }
+  }
+`;
+
+/** Finalize only if still processing — loses the race to append→queued safely. */
+export const FINALIZE_JOB_IF_PROCESSING = `
+  mutation FinalizeAiImageCleanupJobIfProcessing(
+    $id: uuid!
+    $_set: ai_image_cleanup_jobs_set_input!
+  ) {
+    update_ai_image_cleanup_jobs(
+      where: { id: { _eq: $id }, status: { _eq: processing } }
+      _set: $_set
+    ) {
+      affected_rows
     }
   }
 `;
@@ -405,6 +476,7 @@ export const FAIL_OPEN_RESULTS = `
       }
     ) {
       affected_rows
+      returning { id kind }
     }
   }
 `;

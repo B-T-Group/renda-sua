@@ -314,13 +314,24 @@ export class BusinessImagesController {
   @Post(':id/cleanup')
   @ApiOperation({
     summary:
-      'Enqueue async AI cleanup for a library/item image (1 token). Returns jobId immediately.',
+      'Enqueue async cleanup for a library/item image. Body.kind rembg|ai (default ai, 1 token).',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { kind: { type: 'string', enum: ['rembg', 'ai'] } },
+    },
+    required: false,
   })
   @ApiResponse({ status: 200, description: 'Cleanup job queued' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  @ApiResponse({ status: 400, description: 'Image was already cleaned with AI' })
+  @ApiResponse({ status: 400, description: 'Version already exists for kind' })
   @ApiResponse({ status: 404, description: 'Image not found' })
-  async cleanupImage(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+  async cleanupImage(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+    @Body() body?: { kind?: 'rembg' | 'ai' }
+  ) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!isActivePersona(user, 'business') || !businessId) {
@@ -329,11 +340,12 @@ export class BusinessImagesController {
         HttpStatus.FORBIDDEN
       );
     }
-    // Auth context is established by the guard; service re-reads the business user.
     void ctx;
+    const kind = body?.kind === 'rembg' ? 'rembg' : 'ai';
     const data = await this.aiImageCleanupService.requestLibraryImageCleanup(
       id,
-      'library'
+      'library',
+      kind
     );
     return {
       success: true,
@@ -343,6 +355,46 @@ export class BusinessImagesController {
       },
       ai_tokens_remaining: data.ai_tokens_remaining,
     };
+  }
+
+  @Patch(':id/active-version')
+  @ApiOperation({
+    summary:
+      'Set live image pointer to original, rembg, or enhanced (version must exist)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        version: {
+          type: 'string',
+          enum: ['original', 'rembg', 'enhanced'],
+        },
+      },
+      required: ['version'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Active version updated' })
+  async setActiveVersion(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+    @Body() body: { version: 'original' | 'rembg' | 'enhanced' }
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!isActivePersona(user, 'business') || !businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    void ctx;
+    const data = await this.aiImageCleanupService.setImageActiveVersion(
+      'item_image',
+      id,
+      body.version
+    );
+    return { success: true, data };
   }
 
   @Get('item-search')

@@ -23,6 +23,11 @@ export interface BusinessImage {
   tags: string[];
   status: string;
   is_ai_cleaned: boolean;
+  is_rembg_cleaned?: boolean;
+  original_image_url?: string | null;
+  enhanced_image_url?: string | null;
+  rembg_image_url?: string | null;
+  active_version?: string | null;
   quality_score?: number | null;
   thumbnail?: string | null;
   thumbnail_status?: string | null;
@@ -101,6 +106,11 @@ const LIBRARY_IMAGE_FIELDS = `
   tags
   status
   is_ai_cleaned
+  is_rembg_cleaned
+  original_image_url
+  enhanced_image_url
+  rembg_image_url
+  active_version
   quality_score
   thumbnail
   thumbnail_status

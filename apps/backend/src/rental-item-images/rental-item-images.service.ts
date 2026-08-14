@@ -42,6 +42,11 @@ export interface RentalItemImage {
   tags: string[];
   status: string;
   is_ai_cleaned: boolean;
+  is_rembg_cleaned?: boolean;
+  original_image_url?: string | null;
+  enhanced_image_url?: string | null;
+  rembg_image_url?: string | null;
+  active_version?: string | null;
   display_order: number;
   thumbnail?: string | null;
   thumbnail_status?: string | null;
@@ -99,6 +104,11 @@ const RENTAL_ITEM_IMAGE_FIELDS = `
   tags
   status
   is_ai_cleaned
+  is_rembg_cleaned
+  original_image_url
+  enhanced_image_url
+  rembg_image_url
+  active_version
   display_order
   thumbnail
   thumbnail_status
