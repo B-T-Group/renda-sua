@@ -34,6 +34,58 @@ describe('buildPersonaFragments', () => {
     expect(frags[0].vars.addr_postal).toBe('H2X1Y4');
   });
 
+  it('writes referred_by_business_id for B2B business referral', () => {
+    const frags = buildPersonaFragments({
+      personas: ['business'],
+      business_name: 'Acme',
+      business_referral_business_id: 'biz-ref-1',
+      business_referral_code_used: 'BIZCODE',
+    });
+    expect(frags[0].vars.referred_by_business_id).toBe('biz-ref-1');
+    expect(frags[0].vars.referral_code_used).toBe('BIZCODE');
+    expect(frags[0].objectField).toContain(
+      'referred_by_business_id: $referred_by_business_id'
+    );
+    expect(frags[0].objectField).not.toContain('referred_by_agent_id');
+  });
+
+  it('writes referred_by_agent_id for agent-referred businesses', () => {
+    const frags = buildPersonaFragments({
+      personas: ['business'],
+      business_name: 'Acme',
+      business_referral_agent_id: 'agent-1',
+      business_referral_code_used: 'AGTCODE',
+    });
+    expect(frags[0].vars.referred_by_agent_id).toBe('agent-1');
+    expect(frags[0].objectField).toContain(
+      'referred_by_agent_id: $referred_by_agent_id'
+    );
+  });
+
+  it('omits business referral fields when the code is missing', () => {
+    const frags = buildPersonaFragments({
+      personas: ['business'],
+      business_name: 'Acme',
+      business_referral_business_id: 'biz-ref-1',
+    });
+    expect(frags[0].vars.referred_by_business_id).toBeUndefined();
+    expect(frags[0].objectField).not.toContain('referred_by_business_id');
+  });
+
+  it('writes agent B2B referral fields onto the agent insert', () => {
+    const frags = buildPersonaFragments({
+      personas: ['agent'],
+      vehicle_type_id: 'bike',
+      agent_referral_business_id: 'biz-ref-1',
+      agent_referral_code_used: 'BIZCODE',
+    });
+    expect(frags[0].vars.agent_referred_by_business_id).toBe('biz-ref-1');
+    expect(frags[0].objectField).toContain(
+      'referred_by_business_id: $agent_referred_by_business_id'
+    );
+    expect(frags[0].objectField).not.toContain('referred_by_agent_id');
+  });
+
   it('skips nested location for country-only address', () => {
     const frags = buildPersonaFragments({
       personas: ['business'],
