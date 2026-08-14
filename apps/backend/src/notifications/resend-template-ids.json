@@ -92,5 +92,7 @@
   "business_sale_item_rejected": "a651f24c-49d4-4c86-9984-b39750d2118f",
   "business_sale_item_ai_proposal_fr": "3e0b369d-2a77-4163-a683-511108d981e2",
   "business_sale_item_approved_fr": "42f70302-c54b-4f87-9a4d-31de00efa713",
-  "business_sale_item_rejected_fr": "ebf74621-7a6d-4b5a-bd3e-4a058870bcc6"
+  "business_sale_item_rejected_fr": "ebf74621-7a6d-4b5a-bd3e-4a058870bcc6",
+  "location_delegation_invite": "720f2787-af32-4347-8201-b3de899302dc",
+  "location_delegation_invite_fr": "388e5bd8-6920-4024-9356-acf44bc268d8"
 }
