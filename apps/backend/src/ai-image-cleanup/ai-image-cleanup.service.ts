@@ -48,6 +48,7 @@ import {
 } from './cleanup-model-routing.util';
 import { analyzeLocalImageQuality } from './local-image-quality.util';
 import type { CleanupProductImageIssue } from '../ai/ai.service';
+import { RembgCleanupService } from './rembg-cleanup.service';
 
 @Injectable()
 export class AiImageCleanupService implements OnModuleInit {
@@ -65,7 +66,8 @@ export class AiImageCleanupService implements OnModuleInit {
     private readonly imageThumbnails: ImageThumbnailsService,
     private readonly confidence: EnhancementConfidenceService,
     private readonly itemAiReview: ItemAiReviewService,
-    private readonly rentalListingAiReview: RentalListingAiReviewService
+    private readonly rentalListingAiReview: RentalListingAiReviewService,
+    private readonly rembgCleanup: RembgCleanupService
   ) {}
 
   onModuleInit(): void {
@@ -919,7 +921,7 @@ export class AiImageCleanupService implements OnModuleInit {
         return 'failed';
       }
       const issues = this.issuesFromCodes(warningCodes);
-      const uploaded = await this.cleanupAndUpload(
+      const uploaded = await this.cleanupAndUploadWithRouting(
         job.business_id,
         job.item_id ?? 'library',
         result.original_image_url,
@@ -941,8 +943,9 @@ export class AiImageCleanupService implements OnModuleInit {
           confidence_tier: assessment.tier,
           confidence_signals: assessment.signals,
           changes: assessment.changes,
-          provider: 'openai',
-          provider_model: model,
+          provider: uploaded.provider,
+          provider_model:
+            uploaded.provider === 'rembg' ? 'birefnet-general' : model,
           completed_at: now,
           updated_at: now,
         },
@@ -1206,6 +1209,115 @@ export class AiImageCleanupService implements OnModuleInit {
     return {
       url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
       key,
+    };
+  }
+
+  /**
+   * Route cleanup request to REMBG or OpenAI based on feature flag.
+   * Automatically falls back to OpenAI if REMBG fails.
+   */
+  private async cleanupAndUploadWithRouting(
+    businessId: string,
+    itemId: string,
+    imageUrl: string,
+    options: {
+      model: OpenAiImageCleanupModel;
+      issues?: CleanupProductImageIssue[];
+    }
+  ): Promise<{ url: string; key: string; provider: 'rembg' | 'openai' }> {
+    const useRembg = await this.shouldUseRembg();
+
+    if (useRembg) {
+      try {
+        return await this.cleanupWithRembg(businessId, itemId, imageUrl);
+      } catch (error: any) {
+        this.logger.warn(
+          `REMBG cleanup failed, falling back to OpenAI: ${error?.message ?? error}`
+        );
+        // Fall through to OpenAI
+      }
+    }
+
+    const result = await this.cleanupAndUpload(
+      businessId,
+      itemId,
+      imageUrl,
+      options
+    );
+    return { ...result, provider: 'openai' };
+  }
+
+  /** Check feature flag to determine if REMBG should be used. */
+  private async shouldUseRembg(): Promise<boolean> {
+    try {
+      const res = await this.hasura.executeQuery<{
+        application_configurations: Array<{ boolean_value?: boolean }>;
+      }>(
+        `query {
+          application_configurations(
+            where: { config_key: { _eq: "use_rembg_cleanup" }, status: { _eq: "active" } }
+            limit: 1
+          ) { boolean_value }
+        }`,
+        {}
+      );
+      return res.application_configurations?.[0]?.boolean_value ?? false;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to check REMBG feature flag: ${error?.message ?? error}`
+      );
+      return false;
+    }
+  }
+
+  /** Process image cleanup using REMBG Lambda. */
+  private async cleanupWithRembg(
+    businessId: string,
+    itemId: string,
+    imageUrl: string
+  ): Promise<{ url: string; key: string; provider: 'rembg' }> {
+    // Download image
+    const { data } = await axios.get<ArrayBuffer>(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 25000,
+      maxContentLength: 10 * 1024 * 1024,
+      maxBodyLength: 10 * 1024 * 1024,
+    });
+
+    const imageBase64 = Buffer.from(data).toString('base64');
+
+    // Call REMBG Lambda
+    const result = await this.rembgCleanup.removeBackground({
+      imageBase64,
+      format: 'jpeg',
+    });
+
+    if (!result.success || !result.imageBase64) {
+      throw new Error(result.error || 'REMBG processing failed');
+    }
+
+    // Upload to S3
+    const buffer = Buffer.from(result.imageBase64, 'base64');
+    const bucket =
+      this.awsService.getDefaultBucketName() ||
+      process.env.S3_BUCKET_NAME ||
+      'rendasua-uploads';
+    const region = this.configService.get('aws')?.region || 'ca-central-1';
+    const key = `businesses/${businessId}/rembg-cleanup/${itemId}/${Date.now()}.jpg`;
+
+    await this.awsService.getS3Client().send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: 'image/jpeg',
+      })
+    );
+
+    return {
+      url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
+      key,
+      provider: 'rembg',
     };
   }
 
