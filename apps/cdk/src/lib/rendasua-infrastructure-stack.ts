@@ -333,8 +333,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         queueName: `ai-image-cleanup-dlq-${environment}.fifo`,
         fifo: true,
         retentionPeriod: cdk.Duration.days(14),
-        // CONFLICT retries while Nest /process still holds a fresh claim.
-        visibilityTimeout: cdk.Duration.minutes(5),
+        // Must be >= Lambda timeout (shared handler); fail path itself is fast.
+        visibilityTimeout: cdk.Duration.minutes(16),
       }
     );
 
