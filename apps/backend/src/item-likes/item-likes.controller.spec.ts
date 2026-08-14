@@ -1,3 +1,16 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: jest.fn(),
+}));
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: jest.fn(),
+}));
+jest.mock('../inventory-items/inventory-items.service', () => ({
+  InventoryItemsService: class InventoryItemsService {},
+}));
+
 import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { emptyRequestContext } from '../auth/request-context';
 import { ItemLikesController } from './item-likes.controller';

@@ -145,6 +145,7 @@ describe('ItemLikesService', () => {
 
     it('returns an empty page when the user has no likes', async () => {
       mockLikeIds([]);
+      inventoryItems.getBestListingsForCatalogItemIds.mockResolvedValueOnce([]);
 
       await expect(service.getUserLikes('user-1')).resolves.toEqual({
         items: [],
@@ -176,6 +177,7 @@ describe('ItemLikesService', () => {
 
     it('clamps invalid page and limit', async () => {
       mockLikeIds([]);
+      inventoryItems.getBestListingsForCatalogItemIds.mockResolvedValueOnce([]);
 
       const page = await service.getUserLikes('user-1', Number.NaN, 999);
 
