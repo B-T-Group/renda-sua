@@ -190,7 +190,7 @@ export class EnhancementConfidenceService {
           {
             role: 'system',
             content:
-              'You compare product photos. Decide if the product itself is identical after AI cleanup. Reply JSON only: {"verdict":"cosmetic_only"|"minor_ambiguity"|"altered","changes":["short phrases"]}. cosmetic_only = lighting/background/crop/sharpen only. altered = product shape, logo, color, or count changed.',
+              'You compare product photos. Decide if the product itself is identical after AI cleanup. Reply JSON only: {"verdict":"cosmetic_only"|"minor_ambiguity"|"altered","changes":["short phrases"]}. cosmetic_only = lighting/background/crop/sharpen only with the product unchanged. altered = product shape, logo, color, count, texture, wear, scratches, scuffs, dents, stains, or other condition details changed or removed.',
           },
           {
             role: 'user',

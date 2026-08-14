@@ -9,6 +9,7 @@ import type {
 } from './chat-completion.types';
 import { BedrockLunaService } from './bedrock-luna.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
+import { buildProductImageCleanupPrompt } from './product-image-cleanup-prompt';
 
 export interface GenerateDescriptionResponse {
   success: boolean;
@@ -266,7 +267,7 @@ export class AiService {
         buffer,
         mimeType,
         filename,
-        this.buildCleanupPrompt(resolved.issues),
+        buildProductImageCleanupPrompt(resolved.issues),
         resolved.model
       );
       this.logger.log('Sending image to OpenAI for cleanup');
@@ -456,45 +457,6 @@ export class AiService {
     if (!data || typeof data !== 'object') return null;
     const err = (data as { error?: { message?: string } }).error;
     return typeof err?.message === 'string' ? err.message : null;
-  }
-
-  private buildCleanupPrompt(issues?: CleanupProductImageIssue[]): string {
-    const base =
-      'Clean up the background of this product image for e-commerce. ' +
-      'IMPORTANT: Do NOT alter, replace, or reimagine the product itself — keep the exact same product, shape, color, and details. ' +
-      'Improve the background and lighting around the product. ' +
-      'Prefer a clean, uncluttered scene, but you MAY keep or lightly stylize a few background elements when they add useful context or meaning ' +
-      '(for example packaging, a related accessory, a natural setting that shows how the product is used, or scale cues). ' +
-      'Do not invent unrelated props; only keep or refine what helps the viewer understand the product. ' +
-      'Remove trash, clutter, people, unrelated objects, and anything that competes with the product. ' +
-      'Choose a background tone (light, dark, or mid-tone) that best complements and contrasts with the product colors — ' +
-      'for example a dark background for light-colored products, or a light background for dark products. ' +
-      'Output a square composition with the product centered and filling most of the frame, optimized for a 1:1 product card display.';
-    const hints: string[] = [];
-    const codes = new Set((issues ?? []).map((i) => i.code));
-    if (codes.has('IMAGE_BLURRY')) {
-      hints.push('Sharpen the image and reduce blur while keeping the product unchanged.');
-    }
-    if (codes.has('CLUTTERED_BACKGROUND') || codes.has('POOR_LIGHTING')) {
-      hints.push(
-        'Simplify a cluttered or poorly lit background into a clean, well-lit scene that complements the product. ' +
-          'You may retain a small number of contextual background elements if they clarify the product; remove everything else. Do not touch the product.'
-      );
-    }
-    if (codes.has('PRODUCT_TOO_SMALL')) {
-      hints.push(
-        'Crop tighter so the existing product fills most of the frame — do not change the product itself.'
-      );
-    }
-    if (codes.has('TOO_MUCH_TEXT')) {
-      hints.push('Remove promotional text overlays and watermarks from the background only.');
-    }
-    if (!hints.length) {
-      hints.push(
-        'Clean the background into a complementary scene. Prefer minimal surfaces, but optionally keep a few meaningful contextual elements. Keep the product completely unchanged.'
-      );
-    }
-    return `${base} ${hints.join(' ')}`;
   }
 
   private getSystemPrompt(language: string): string {
