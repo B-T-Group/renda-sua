@@ -363,6 +363,40 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `AiImageCleanupQueueUrl-${environment}`,
     });
 
+    // REMBG Lambda for cost-effective background removal
+    const rembgCleanupHandler = new lambda.Function(
+      this,
+      `RembgCleanupHandler-${environment}`,
+      {
+        functionName: `rembg-cleanup-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/rembg-cleanup-handler'),
+        timeout: cdk.Duration.seconds(120),
+        memorySize: 3008, // REMBG needs more memory for BiRefNet model
+        ephemeralStorageSize: cdk.Size.mebibytes(2048), // Model cache
+        environment: {
+          ENVIRONMENT: environment,
+        },
+      }
+    );
+
+    // Grant S3 access for direct image fetch if needed
+    rembgCleanupHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject'],
+        resources: [`arn:aws:s3:::rendasua-uploads/*`],
+      })
+    );
+
+    // Export Lambda ARN for backend to invoke
+    new cdk.CfnOutput(this, `RembgCleanupHandlerArn-${environment}`, {
+      value: rembgCleanupHandler.functionArn,
+      description: 'ARN of REMBG cleanup Lambda',
+      exportName: `RembgCleanupHandlerArn-${environment}`,
+    });
+
     // FIFO SQS + Lambda for async image thumbnail generation
     const imageThumbnailsDlq = new sqs.Queue(
       this,

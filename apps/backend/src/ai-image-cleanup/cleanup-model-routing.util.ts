@@ -77,10 +77,9 @@ function pickModel(
   adminDefaultModel: OpenAiImageCleanupModel,
   codes: string[]
 ): OpenAiImageCleanupModel {
+  // Only use expensive 1.5 model when explicitly set by admin
+  // Blurry images now use mini to reduce costs (1.5 is 3-4x more expensive)
   if (adminDefaultModel === 'gpt-image-1.5') {
-    return 'gpt-image-1.5';
-  }
-  if (codes.includes(VALIDATION_CODES.IMAGE_BLURRY)) {
     return 'gpt-image-1.5';
   }
   return 'gpt-image-1-mini';
