@@ -1,17 +1,27 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getTokenProvider } from '@aws/bedrock-token-generator';
-import axios from 'axios';
+import {
+  BedrockRuntimeClient,
+  ConverseCommand,
+  type ConverseCommandOutput,
+} from '@aws-sdk/client-bedrock-runtime';
 import type { Configuration } from '../config/configuration';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
 } from './chat-completion.types';
 import {
-  extractOutputText,
-  mapChatMessagesToResponses,
-  type BedrockReasoningEffort,
-} from './bedrock-responses.mapper';
+  extractConverseOutputText,
+  mapChatMessagesToConverse,
+} from './bedrock-converse.mapper';
+
+export type BedrockReasoningEffort =
+  | 'none'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 
 export type BedrockCompleteOptions = {
   messages: ChatCompletionRequest['messages'];
@@ -20,6 +30,7 @@ export type BedrockCompleteOptions = {
   maxTokens?: number;
   temperature?: number;
   jsonObject?: boolean;
+  /** Ignored for Nova Converse; kept for call-site compatibility. */
   reasoningEffort?: BedrockReasoningEffort;
   timeoutMs?: number;
 };
@@ -31,24 +42,29 @@ export type BedrockCompleteResult = {
   raw: unknown;
 };
 
-const DEFAULT_CHAT_MODEL = 'openai.gpt-5.6-luna';
+const DEFAULT_CHAT_MODEL = 'amazon.nova-lite-v1:0';
 const DEFAULT_BEDROCK_REGION = 'us-east-1';
 
+/**
+ * Bedrock chat/vision via Runtime Converse (default Amazon Nova Lite).
+ * Class name kept for Nest DI stability after the Luna → Nova cutover.
+ */
 @Injectable()
 export class BedrockLunaService {
   private readonly logger = new Logger(BedrockLunaService.name);
-  private readonly tokenProvider: () => Promise<string>;
+  private readonly client: BedrockRuntimeClient;
 
   constructor(private readonly configService: ConfigService<Configuration>) {
-    const region = this.getRegion();
     const aws = this.configService.get('aws', { infer: true });
-    this.tokenProvider = getTokenProvider({
-      region,
-      credentials: {
-        accessKeyId: aws?.accessKeyId || process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey:
-          aws?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY || '',
-      },
+    const accessKeyId =
+      aws?.accessKeyId || process.env.AWS_ACCESS_KEY_ID || '';
+    const secretAccessKey =
+      aws?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY || '';
+    this.client = new BedrockRuntimeClient({
+      region: this.getRegion(),
+      ...(accessKeyId && secretAccessKey
+        ? { credentials: { accessKeyId, secretAccessKey } }
+        : {}),
     });
   }
 
@@ -66,10 +82,6 @@ export class BedrockLunaService {
     return configured || DEFAULT_CHAT_MODEL;
   }
 
-  getResponsesBaseUrl(): string {
-    return `https://bedrock-mantle.${this.getRegion()}.api.aws/openai/v1`;
-  }
-
   resolveModel(override?: string | null): string {
     const trimmed = override?.trim();
     if (trimmed) return trimmed;
@@ -78,33 +90,35 @@ export class BedrockLunaService {
 
   async complete(options: BedrockCompleteOptions): Promise<BedrockCompleteResult> {
     const model = this.resolveModel(options.model);
-    const body = mapChatMessagesToResponses({
-      model,
-      messages: options.messages,
-      maxTokens: options.maxTokens,
-      temperature: options.temperature,
+    const mapped = await mapChatMessagesToConverse(options.messages, {
       jsonObject: options.jsonObject,
-      reasoningEffort: options.reasoningEffort ?? 'none',
     });
-    const raw = await this.postResponses(body, options.timeoutMs ?? 90000);
-    const text = extractOutputText(raw);
+    const raw = await this.converse(
+      {
+        modelId: model,
+        messages: mapped.messages,
+        ...(mapped.system ? { system: mapped.system } : {}),
+        inferenceConfig: {
+          ...(options.maxTokens != null
+            ? { maxTokens: Math.max(1, options.maxTokens) }
+            : {}),
+          ...(options.temperature != null
+            ? { temperature: options.temperature }
+            : {}),
+        },
+      },
+      options.timeoutMs ?? 90000
+    );
+    const text = extractConverseOutputText(raw.output);
     if (!text) {
       throw new HttpException(
         'AI temporarily unavailable. Please try again.',
         HttpStatus.SERVICE_UNAVAILABLE
       );
     }
-    const usage =
-      raw && typeof raw === 'object'
-        ? (raw as { usage?: unknown }).usage ?? null
-        : null;
-    return { text, usage, model, raw };
+    return { text, usage: raw.usage ?? null, model, raw };
   }
 
-  /**
-   * OpenAI-compatible adapter so existing callers can swap providers with
-   * minimal changes. Returns a ChatCompletionResponse-shaped object.
-   */
   async chatCompletions(
     request: ChatCompletionRequest,
     timeoutMs: number,
@@ -129,26 +143,15 @@ export class BedrockLunaService {
     };
   }
 
-  private async postResponses(
-    body: Record<string, unknown>,
+  private async converse(
+    input: ConstructorParameters<typeof ConverseCommand>[0],
     timeoutMs: number,
     maxAttempts = 4
-  ): Promise<unknown> {
-    const url = `${this.getResponsesBaseUrl()}/responses`;
+  ): Promise<ConverseCommandOutput> {
     let attempt = 0;
     while (true) {
       try {
-        const token = await this.tokenProvider();
-        const { data } = await axios.post(url, body, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: timeoutMs,
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-        });
-        return data;
+        return await this.sendWithTimeout(input, timeoutMs);
       } catch (error: any) {
         attempt++;
         if (!this.shouldRetry(error, attempt, maxAttempts)) {
@@ -159,19 +162,48 @@ export class BedrockLunaService {
     }
   }
 
+  private async sendWithTimeout(
+    input: ConstructorParameters<typeof ConverseCommand>[0],
+    timeoutMs: number
+  ): Promise<ConverseCommandOutput> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await this.client.send(new ConverseCommand(input), {
+        abortSignal: controller.signal,
+      });
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        const timeoutError: any = new Error('Bedrock Converse timed out');
+        timeoutError.code = 'ECONNABORTED';
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private shouldRetry(
     error: any,
     attempt: number,
     maxAttempts: number
   ): boolean {
     if (attempt >= maxAttempts) return false;
-    const status = error?.response?.status;
-    return status === 429 || (status != null && status >= 500);
+    const status = error?.$metadata?.httpStatusCode;
+    const name = String(error?.name || '');
+    return (
+      status === 429 ||
+      (status != null && status >= 500) ||
+      name === 'ThrottlingException' ||
+      name === 'ServiceUnavailableException' ||
+      name === 'ModelTimeoutException'
+    );
   }
 
   private backoffMs(error: any, attempt: number): number {
     const retryAfterSec = parseInt(
-      error?.response?.headers?.['retry-after'] ?? '0',
+      error?.$metadata?.httpHeaders?.['retry-after'] ?? '0',
       10
     );
     if (retryAfterSec > 0) return retryAfterSec * 1000;
@@ -183,13 +215,13 @@ export class BedrockLunaService {
   }
 
   private throwMappedError(error: any): never {
-    const status = error?.response?.status;
+    const status = error?.$metadata?.httpStatusCode;
     this.logger.error(
-      `Bedrock Responses API failed (HTTP ${status ?? 'n/a'}): ${
-        error?.message ?? 'unknown'
-      }`
+      `Bedrock Converse failed (HTTP ${status ?? 'n/a'}): ${
+        error?.name ?? 'Error'
+      }: ${error?.message ?? 'unknown'}`
     );
-    if (status === 429) {
+    if (status === 429 || error?.name === 'ThrottlingException') {
       throw new HttpException(
         'AI temporarily unavailable. Please try again later.',
         HttpStatus.TOO_MANY_REQUESTS

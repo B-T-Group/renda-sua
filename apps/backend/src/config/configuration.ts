@@ -168,12 +168,12 @@ export interface OpenAIConfig {
 
 export interface BedrockConfig {
   /**
-   * Region for Bedrock Mantle (chat) and Bedrock Runtime (embeddings).
-   * Must NEVER inherit AWS_REGION — Luna is not available in ca-central-1.
+   * Region for Bedrock Runtime Converse (chat/vision) and embeddings.
+   * Must NEVER inherit AWS_REGION — prefer us-east-1 for Nova.
    * Default: us-east-1.
    */
   region: string;
-  /** Default Mantle chat model ID (e.g. openai.gpt-5.6-luna). */
+  /** Default Converse chat/vision model ID (e.g. amazon.nova-lite-v1:0). */
   chatModel: string;
   /** Titan embeddings model ID (default amazon.titan-embed-text-v1, 1536d). */
   embeddingModel: string;
@@ -375,21 +375,21 @@ export interface BoldSignConfig {
 export interface RentalAiReviewConfig {
   /** Master switch for async AI auto-review of rental listings. */
   enabled: boolean;
-  /** Bedrock Mantle model for listing review (defaults to BEDROCK_CHAT_MODEL). */
+  /** Bedrock Converse model for listing review (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
 export interface ItemAiReviewConfig {
   /** Master switch for async AI auto-review of sale items. */
   enabled: boolean;
-  /** Bedrock Mantle model for item review (defaults to BEDROCK_CHAT_MODEL). */
+  /** Bedrock Converse model for item review (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
 export interface IdDocumentAiReviewConfig {
   /** Master switch for AI auto-approval of identity document uploads. */
   enabled: boolean;
-  /** Bedrock Mantle model for ID name matching (defaults to BEDROCK_CHAT_MODEL). */
+  /** Bedrock Converse model for ID name matching (defaults to BEDROCK_CHAT_MODEL). */
   model: string;
 }
 
@@ -805,7 +805,7 @@ export default (): Configuration => {
       // Never fall back to AWS_REGION (ca-central-1) — Luna is us-east-1 only.
       region: process.env.BEDROCK_REGION?.trim() || 'us-east-1',
       chatModel:
-        process.env.BEDROCK_CHAT_MODEL?.trim() || 'openai.gpt-5.6-luna',
+        process.env.BEDROCK_CHAT_MODEL?.trim() || 'amazon.nova-lite-v1:0',
       embeddingModel:
         process.env.BEDROCK_EMBEDDING_MODEL?.trim() ||
         'amazon.titan-embed-text-v1',
@@ -948,21 +948,21 @@ export default (): Configuration => {
       model:
         process.env.RENTAL_AI_REVIEW_MODEL?.trim() ||
         process.env.BEDROCK_CHAT_MODEL?.trim() ||
-        'openai.gpt-5.6-luna',
+        'amazon.nova-lite-v1:0',
     },
     itemAiReview: {
       enabled: process.env.ITEM_AI_AUTO_REVIEW_ENABLED === 'true',
       model:
         process.env.ITEM_AI_REVIEW_MODEL?.trim() ||
         process.env.BEDROCK_CHAT_MODEL?.trim() ||
-        'openai.gpt-5.6-luna',
+        'amazon.nova-lite-v1:0',
     },
     idDocumentAiReview: {
       enabled: process.env.ID_AI_REVIEW_ENABLED === 'true',
       model:
         process.env.ID_AI_REVIEW_MODEL?.trim() ||
         process.env.BEDROCK_CHAT_MODEL?.trim() ||
-        'openai.gpt-5.6-luna',
+        'amazon.nova-lite-v1:0',
     },
     commerceIntegrations: {
       tokenEncryptionKey: process.env.COMMERCE_TOKEN_ENCRYPTION_KEY || '',

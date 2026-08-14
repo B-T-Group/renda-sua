@@ -181,7 +181,7 @@ export class EnhancementConfidenceService {
     try {
       const model =
         this.configService.get('bedrock', { infer: true })?.chatModel ||
-        'openai.gpt-5.6-luna';
+        'amazon.nova-lite-v1:0';
       const request: ChatCompletionRequest = {
         model,
         temperature: 0,

@@ -516,7 +516,7 @@ export class AiService {
   }
 
   /**
-   * Suggests catalog fields using multimodal vision via Bedrock Mantle.
+   * Suggests catalog fields using multimodal vision via Bedrock Converse (Nova).
    * Images are fetched server-side and sent as vision parts.
    */
   async generateImageItemSuggestions(input: {

@@ -1,4 +1,4 @@
-/** OpenAI-compatible chat completion payload/response (used with Bedrock Mantle adapter). */
+/** OpenAI-compatible chat completion payload/response (mapped to Bedrock Converse). */
 
 export interface ChatCompletionMessage {
   role: 'system' | 'user' | 'assistant';
