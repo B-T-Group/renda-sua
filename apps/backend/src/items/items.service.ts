@@ -172,21 +172,29 @@ export class ItemsService {
     updates: UpdateItemDto | Record<string, unknown>
   ): Promise<Record<string, unknown> | null> {
     const item = await this.requireOwnedItem(businessId, itemId);
+    return this.applyItemUpdate(itemId, item, updates);
+  }
+
+  /** Platform admin update — system client, no business ownership check. */
+  async adminUpdateItem(
+    itemId: string,
+    updates: UpdateItemDto | Record<string, unknown>
+  ): Promise<Record<string, unknown> | null> {
+    const item = await this.requireItemById(itemId);
+    return this.applyItemUpdate(itemId, item, updates);
+  }
+
+  private async applyItemUpdate(
+    itemId: string,
+    item: {
+      name: string;
+      description: string;
+      moderation_status: string;
+    },
+    updates: UpdateItemDto | Record<string, unknown>
+  ): Promise<Record<string, unknown> | null> {
     const itemData = this.normalizeUpdatePayload(updates);
-    if (itemData.is_active === true) {
-      if (item.moderation_status !== 'approved') {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'ITEM_NOT_APPROVED',
-            message:
-              'Item must be approved by moderation before it can be activated.',
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      await this.activationValidation.assertItemCanActivate(itemId);
-    }
+    await this.assertActivationAllowed(item, itemData, itemId);
     const result = await this.hasuraSystemService.executeMutation<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });
@@ -202,6 +210,26 @@ export class ItemsService {
       previousDescription: item.description ?? '',
     });
     return updated;
+  }
+
+  private async assertActivationAllowed(
+    item: { moderation_status: string },
+    itemData: Record<string, unknown>,
+    itemId: string
+  ): Promise<void> {
+    if (itemData.is_active !== true) return;
+    if (item.moderation_status !== 'approved') {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'ITEM_NOT_APPROVED',
+          message:
+            'Item must be approved by moderation before it can be activated.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.activationValidation.assertItemCanActivate(itemId);
   }
 
   private async requireOwnedItem(
@@ -226,6 +254,29 @@ export class ItemsService {
       throw new HttpException(
         { success: false, error: 'Item not found or not owned by business' },
         HttpStatus.FORBIDDEN
+      );
+    }
+    return item;
+  }
+
+  private async requireItemById(itemId: string): Promise<{
+    name: string;
+    description: string;
+    moderation_status: string;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      items_by_pk: {
+        id: string;
+        name: string;
+        description: string;
+        moderation_status: string;
+      } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = result?.items_by_pk;
+    if (!item) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
       );
     }
     return item;

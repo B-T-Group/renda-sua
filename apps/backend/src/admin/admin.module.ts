@@ -36,6 +36,8 @@ import { AdminBroadcastInternalController } from './admin-broadcast-internal.con
 import { AdminBroadcastService } from './admin-broadcast.service';
 import { AdminBroadcastAudienceService } from './admin-broadcast-audience.service';
 import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
+import { AdminCatalogItemsController } from './admin-catalog-items.controller';
+import { AdminCatalogItemsService } from './admin-catalog-items.service';
 
 @Module({
   imports: [
@@ -58,6 +60,7 @@ import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
   ],
   controllers: [
     AdminController,
+    AdminCatalogItemsController,
     ConfigurationsController,
     AdminSiteEventsController,
     AdminPerformanceController,
@@ -74,6 +77,7 @@ import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
     ConfigurationsService,
     RentalListingModerationService,
     ItemModerationService,
+    AdminCatalogItemsService,
     ApplicationSetupService,
     CountryOnboardingService,
     WithdrawalPinService,

@@ -2221,15 +2221,49 @@ export class BusinessItemsService {
     itemId: string,
     updates: UpdateItemDto
   ) {
+    return this.applyItemUpdateWithGuards(businessId, itemId, updates, false);
+  }
+
+  /** Platform admin update — same business validations, system-scoped item write. */
+  async adminUpdateItem(itemId: string, updates: UpdateItemDto) {
+    const existing = await this.loadItemByIdForAdmin(itemId);
+    const { status: _ignoredStatus, ...safeUpdates } = updates as UpdateItemDto & {
+      status?: unknown;
+    };
+    return this.applyItemUpdateWithGuards(
+      existing.business_id,
+      itemId,
+      safeUpdates,
+      true
+    );
+  }
+
+  private async applyItemUpdateWithGuards(
+    businessId: string,
+    itemId: string,
+    updates: UpdateItemDto,
+    asAdmin: boolean
+  ) {
     await this.assertOfflinePaymentAllowed(businessId, updates);
     const existing = await this.loadItemModerationRow(businessId, itemId);
     const wasRejected = existing.moderation_status === 'rejected';
-    const {
-      categoryName,
-      subCategoryName,
-      brandName,
-      ...rest
-    } = updates;
+    const payload = await this.buildUpdatePayload(businessId, updates);
+    const updated = asAdmin
+      ? await this.itemsService.adminUpdateItem(itemId, payload)
+      : await this.itemsService.updateItem(businessId, itemId, payload);
+    const contentKeys = Object.keys(updates).filter((k) => k !== 'is_active');
+    if (wasRejected && contentKeys.length > 0) {
+      await this.resetRejectedItemToPendingModeration(itemId);
+    }
+    this.triggerLifecycleRecompute(businessId);
+    return updated;
+  }
+
+  private async buildUpdatePayload(
+    businessId: string,
+    updates: UpdateItemDto
+  ): Promise<UpdateItemDto> {
+    const { categoryName, subCategoryName, brandName, ...rest } = updates;
     const payload: UpdateItemDto = { ...rest };
     if (
       categoryName?.trim() &&
@@ -2249,29 +2283,46 @@ export class BusinessItemsService {
         await this.hasuraSystemService.resolveBusinessCurrency(businessId);
     }
     if (updates.stripe_tax_code_id !== undefined) {
-      try {
-        payload.stripe_tax_code_id =
-          await this.stripeTaxCodesService.validateTaxCodeId(
-            updates.stripe_tax_code_id
-          );
-      } catch (error: any) {
-        throw new HttpException(
-          { success: false, message: error?.message || 'Invalid tax category' },
-          HttpStatus.BAD_REQUEST
-        );
-      }
+      payload.stripe_tax_code_id = await this.validateStripeTaxCodeId(
+        updates.stripe_tax_code_id
+      );
     }
-    const updated = await this.itemsService.updateItem(
-      businessId,
-      itemId,
-      payload
-    );
-    const contentKeys = Object.keys(updates).filter((k) => k !== 'is_active');
-    if (wasRejected && contentKeys.length > 0) {
-      await this.resetRejectedItemToPendingModeration(itemId);
+    return payload;
+  }
+
+  private async validateStripeTaxCodeId(taxCodeId: string): Promise<string> {
+    try {
+      return await this.stripeTaxCodesService.validateTaxCodeId(taxCodeId);
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, message: error?.message || 'Invalid tax category' },
+        HttpStatus.BAD_REQUEST
+      );
     }
-    this.triggerLifecycleRecompute(businessId);
-    return updated;
+  }
+
+  private async loadItemByIdForAdmin(itemId: string): Promise<{
+    id: string;
+    business_id: string;
+    moderation_status: string;
+    status: string;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        moderation_status: string;
+        status: string;
+      } | null;
+    }>(GET_ITEM_MODERATION_ROW, { itemId });
+    const item = result.items_by_pk;
+    if (!item || item.status !== 'active') {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return item;
   }
 
   private async loadItemModerationRow(

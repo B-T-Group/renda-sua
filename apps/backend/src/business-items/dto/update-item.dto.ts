@@ -8,7 +8,7 @@ export class UpdateItemDto {
   weight?: number | null;
   weight_unit?: string | null;
   dimensions?: string | null;
-  price?: number;
+  price?: number | null;
   currency?: string;
   sku?: string | null;
   brand_id?: string | null;
