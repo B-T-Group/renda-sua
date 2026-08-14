@@ -2,35 +2,64 @@
 import base64
 import io
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 # Must be set before importing rembg/pymatting (numba cache on read-only FS fails).
 os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp")
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
 from PIL import Image
-# Cache model weights under U2NET_HOME (set in Dockerfile / Lambda env).
 from rembg import new_session, remove
 from rembg.sessions.u2net import U2netSession
 
-# rembg 2.0.57 has no birefnet sessions; use u2net (baked into the image).
 MODEL_NAME = "u2net"
-session = new_session(MODEL_NAME)
-if not isinstance(session, U2netSession):
-    raise RuntimeError(f"Expected U2netSession, got {type(session).__name__}")
+MAX_EDGE_PX = 1280
+_session: Optional[U2netSession] = None
+
+
+def get_session() -> U2netSession:
+    """Lazy-load model during invoke (avoids Lambda INIT phase timeouts)."""
+    global _session
+    if _session is None:
+        session = new_session(MODEL_NAME)
+        if not isinstance(session, U2netSession):
+            raise RuntimeError(f"Expected U2netSession, got {type(session).__name__}")
+        _session = session
+    return _session
+
+
+def downscale_jpeg(input_bytes: bytes) -> bytes:
+    """Shrink large product photos so inference stays under Lambda timeout."""
+    image = Image.open(io.BytesIO(input_bytes))
+    image = image.convert("RGB")
+    image.thumbnail((MAX_EDGE_PX, MAX_EDGE_PX), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=90, optimize=True)
+    return buf.getvalue()
+
+
+def to_output_bytes(output_bytes: bytes, input_format: str) -> bytes:
+    output_image = Image.open(io.BytesIO(output_bytes))
+    buf = io.BytesIO()
+    if input_format == "jpeg":
+        if output_image.mode == "RGBA":
+            rgb = Image.new("RGB", output_image.size, (255, 255, 255))
+            rgb.paste(output_image, mask=output_image.split()[3])
+            output_image = rgb
+        output_image.save(buf, format="JPEG", quality=92)
+    else:
+        output_image.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Remove background from product image using REMBG (u2net).
-    
+
     Input: { "imageBase64": "...", "format": "jpeg|png" }
     Output: { "success": true, "imageBase64": "...", "format": "jpeg", "model": "u2net" }
-    
-    On error: { "success": false, "error": "...", "errorType": "..." }
     """
     try:
-        # Extract and validate input
         input_b64 = event.get("imageBase64")
         if not input_b64:
             return {
@@ -43,49 +72,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if input_format not in ["jpeg", "png"]:
             input_format = "jpeg"
 
-        # Decode input image as bytes (rembg returns bytes for bytes input)
-        input_bytes = base64.b64decode(input_b64)
-
-        # Remove background using REMBG
-        # bgcolor creates a white opaque background for clean product photos
-        # post_process_mask smooths edges for better quality
-        output_bytes = remove(
-            input_bytes,
-            session=session,
-            bgcolor=(255, 255, 255, 255),  # White opaque background
-            post_process_mask=True,  # Smooth edges
+        prepared = downscale_jpeg(base64.b64decode(input_b64))
+        # Skip alpha matting post-process (pymatting/numba is slow on Lambda).
+        removed = remove(
+            prepared,
+            session=get_session(),
+            bgcolor=(255, 255, 255, 255),
+            post_process_mask=False,
         )
-        if not isinstance(output_bytes, (bytes, bytearray)):
+        if not isinstance(removed, (bytes, bytearray)):
             raise TypeError(
-                f"rembg.remove expected bytes output, got {type(output_bytes).__name__}"
+                f"rembg.remove expected bytes output, got {type(removed).__name__}"
             )
 
-        # Convert to target format
-        output_image = Image.open(io.BytesIO(output_bytes))
-        output_buffer = io.BytesIO()
-
-        if input_format == "jpeg":
-            # Convert RGBA to RGB for JPEG (JPEG doesn't support alpha channel)
-            if output_image.mode == "RGBA":
-                rgb_image = Image.new("RGB", output_image.size, (255, 255, 255))
-                rgb_image.paste(output_image, mask=output_image.split()[3])
-                output_image = rgb_image
-            output_image.save(output_buffer, format="JPEG", quality=95)
-        else:
-            output_image.save(output_buffer, format="PNG")
-
-        # Encode output to base64
-        output_b64 = base64.b64encode(output_buffer.getvalue()).decode("utf-8")
-
+        final_bytes = to_output_bytes(bytes(removed), input_format)
         return {
             "success": True,
-            "imageBase64": output_b64,
+            "imageBase64": base64.b64encode(final_bytes).decode("utf-8"),
             "format": input_format,
             "model": MODEL_NAME,
         }
-
     except Exception as e:
-        # Return error details for debugging while keeping Lambda invocation successful
         return {
             "success": False,
             "error": str(e),

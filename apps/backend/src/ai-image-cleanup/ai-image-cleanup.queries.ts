@@ -304,9 +304,22 @@ export const UPDATE_JOB = `
 `;
 
 export const CLAIM_JOB = `
-  mutation ClaimAiImageCleanupJob($id: uuid!, $updatedAt: timestamptz!) {
+  mutation ClaimAiImageCleanupJob(
+    $id: uuid!
+    $updatedAt: timestamptz!
+    $staleBefore: timestamptz!
+  ) {
     update_ai_image_cleanup_jobs(
-      where: { id: { _eq: $id }, status: { _eq: queued } }
+      where: {
+        id: { _eq: $id }
+        _or: [
+          { status: { _eq: queued } }
+          {
+            status: { _eq: processing }
+            updated_at: { _lt: $staleBefore }
+          }
+        ]
+      }
       _set: { status: processing, updated_at: $updatedAt }
     ) {
       affected_rows
@@ -315,9 +328,22 @@ export const CLAIM_JOB = `
 `;
 
 export const CLAIM_RESULT = `
-  mutation ClaimAiImageCleanupResult($id: uuid!, $updatedAt: timestamptz!) {
+  mutation ClaimAiImageCleanupResult(
+    $id: uuid!
+    $updatedAt: timestamptz!
+    $staleBefore: timestamptz!
+  ) {
     update_ai_image_cleanup_results(
-      where: { id: { _eq: $id }, status: { _eq: queued } }
+      where: {
+        id: { _eq: $id }
+        _or: [
+          { status: { _eq: queued } }
+          {
+            status: { _eq: processing }
+            updated_at: { _lt: $staleBefore }
+          }
+        ]
+      }
       _set: { status: processing, updated_at: $updatedAt }
     ) {
       affected_rows

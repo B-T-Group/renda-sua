@@ -270,6 +270,20 @@
     tslib "^2.6.2"
     uuid "^9.0.1"
 
+"@aws-sdk/client-lambda@^3.839.0":
+  version "3.1110.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/client-lambda/-/client-lambda-3.1110.0.tgz#2c16059cc7ae260d5a664d6a0b792c2dc4d929fc"
+  integrity sha512-1YI5iNhtJmTV0KAXAsUylPS1958o04a7sBlryMqJsdJUyRL6viot3aKRUMNbRgLdRReSiD5Cl5uVlT8dnpJe7g==
+  dependencies:
+    "@aws-sdk/core" "^3.977.7"
+    "@aws-sdk/credential-provider-node" "^3.972.79"
+    "@aws-sdk/types" "^3.974.3"
+    "@smithy/core" "^3.31.1"
+    "@smithy/fetch-http-handler" "^5.6.13"
+    "@smithy/node-http-handler" "^4.9.13"
+    "@smithy/types" "^4.16.1"
+    tslib "^2.6.2"
+
 "@aws-sdk/client-rekognition@^3.967.0":
   version "3.967.0"
   resolved "https://registry.npmjs.org/@aws-sdk/client-rekognition/-/client-rekognition-3.967.0.tgz"

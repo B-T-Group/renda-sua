@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { createHash } from 'crypto';
 import axios from 'axios';
+import sharp from 'sharp';
 import { AiService } from '../ai/ai.service';
 import { AwsService } from '../aws/aws.service';
 import { CLEANUP_TOKEN_COST } from '../business-tokens/business-tokens.packs';
@@ -944,7 +945,9 @@ export class AiImageCleanupService implements OnModuleInit {
       return { success: true };
     }
     const job = await this.loadJob(jobId);
-    const pending = (job.results ?? []).filter((r) => r.status === 'queued');
+    const pending = (job.results ?? []).filter((r) =>
+      this.isClaimableResultStatus(r.status, r.updated_at)
+    );
     const tokenUnit = this.tokenUnitForJob(job);
     let consumed = 0;
     let refunded = 0;
@@ -957,17 +960,38 @@ export class AiImageCleanupService implements OnModuleInit {
     return { success: true };
   }
 
+  private staleBeforeIso(): string {
+    return new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  }
+
+  private isClaimableResultStatus(
+    status: string,
+    updatedAt?: string | null
+  ): boolean {
+    if (status === 'queued') return true;
+    if (status !== 'processing' || !updatedAt) return false;
+    return new Date(updatedAt).getTime() < Date.now() - 10 * 60 * 1000;
+  }
+
   private async claimJob(jobId: string): Promise<boolean> {
     const data = await this.hasura.executeMutation<{
       update_ai_image_cleanup_jobs: { affected_rows: number };
-    }>(Q.CLAIM_JOB, { id: jobId, updatedAt: new Date().toISOString() });
+    }>(Q.CLAIM_JOB, {
+      id: jobId,
+      updatedAt: new Date().toISOString(),
+      staleBefore: this.staleBeforeIso(),
+    });
     return (data.update_ai_image_cleanup_jobs?.affected_rows ?? 0) > 0;
   }
 
   private async claimResult(resultId: string): Promise<boolean> {
     const data = await this.hasura.executeMutation<{
       update_ai_image_cleanup_results: { affected_rows: number };
-    }>(Q.CLAIM_RESULT, { id: resultId, updatedAt: new Date().toISOString() });
+    }>(Q.CLAIM_RESULT, {
+      id: resultId,
+      updatedAt: new Date().toISOString(),
+      staleBefore: this.staleBeforeIso(),
+    });
     return (data.update_ai_image_cleanup_results?.affected_rows ?? 0) > 0;
   }
 
@@ -1058,7 +1082,7 @@ export class AiImageCleanupService implements OnModuleInit {
           changes: assessment.changes,
           provider: uploaded.provider,
           provider_model:
-            uploaded.provider === 'rembg' ? 'birefnet-general' : model,
+            uploaded.provider === 'rembg' ? 'u2net' : model,
           completed_at: now,
           updated_at: now,
         },
@@ -1403,7 +1427,6 @@ export class AiImageCleanupService implements OnModuleInit {
     itemId: string,
     imageUrl: string
   ): Promise<{ url: string; key: string; provider: 'rembg' }> {
-    // Download image
     const { data } = await axios.get<ArrayBuffer>(imageUrl, {
       responseType: 'arraybuffer',
       timeout: 25000,
@@ -1411,11 +1434,15 @@ export class AiImageCleanupService implements OnModuleInit {
       maxBodyLength: 10 * 1024 * 1024,
     });
 
-    const imageBase64 = Buffer.from(data).toString('base64');
+    // Downscale before invoke: smaller payload + faster u2net inference.
+    const jpegBuffer = await sharp(Buffer.from(data))
+      .rotate()
+      .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
 
-    // Call REMBG Lambda
     const result = await this.rembgCleanup.removeBackground({
-      imageBase64,
+      imageBase64: jpegBuffer.toString('base64'),
       format: 'jpeg',
     });
 
@@ -1423,7 +1450,6 @@ export class AiImageCleanupService implements OnModuleInit {
       throw new Error(result.error || 'REMBG processing failed');
     }
 
-    // Upload to S3
     const buffer = Buffer.from(result.imageBase64, 'base64');
     const bucket =
       this.awsService.getDefaultBucketName() ||

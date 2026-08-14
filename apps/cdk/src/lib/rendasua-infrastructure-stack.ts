@@ -379,7 +379,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
             platform: ecr_assets.Platform.LINUX_AMD64,
           }
         ),
-        timeout: cdk.Duration.seconds(120),
+        // Cold start + u2net on a product photo can exceed 60s.
+        timeout: cdk.Duration.seconds(180),
         memorySize: 3008,
         ephemeralStorageSize: cdk.Size.mebibytes(2048),
         environment: {
