@@ -106,6 +106,20 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: location_delegation_invites_sent
+    using:
+      foreign_key_constraint_on:
+        column: invited_by_user_id
+        table:
+          name: location_delegation_invites
+          schema: public
+  - name: location_delegations
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: location_delegations
+          schema: public
   - name: user_messages
     using:
       manual_configuration:

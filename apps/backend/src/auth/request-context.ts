@@ -10,6 +10,8 @@ export interface RequestContext {
    * against JWT allowed roles + profile rows; otherwise JWT default role wins.
    */
   activePersona?: string;
+  /** Client-selected location grant (`X-Active-Delegation`). */
+  activeDelegation?: string;
   jwtDefaultRole?: PersonaId;
   jwtAllowedRoles?: PersonaId[];
   requestId?: string;

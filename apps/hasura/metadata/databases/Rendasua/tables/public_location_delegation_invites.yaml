@@ -1,0 +1,42 @@
+table:
+  name: location_delegation_invites
+  schema: public
+object_relationships:
+  - name: role
+    using:
+      foreign_key_constraint_on: role_id
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: invited_by
+    using:
+      foreign_key_constraint_on: invited_by_user_id
+array_relationships:
+  - name: events
+    using:
+      foreign_key_constraint_on:
+        column: invite_id
+        table:
+          name: location_delegation_events
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - email
+        - expires_at
+        - status
+        - role_id
+        - first_name
+        - last_name
+        - business_location_id
+        - invited_by_user_id
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

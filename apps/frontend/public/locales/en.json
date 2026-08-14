@@ -3664,7 +3664,11 @@
     "downloadFree": "Download Free",
     "appPromoTileLabel": "Download the Rendasua app",
     "accept": "Accept",
-    "reject": "Reject"
+    "reject": "Reject",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "pleaseWait": "Please wait",
+    "email": "Email"
   },
   "dashboard": {
     "client": {
@@ -6608,5 +6612,59 @@
   "catalog": {
     "paymentsComingSoon": "Coming soon",
     "paymentsComingSoonDetail": "Payments for this merchant are coming soon."
+  },
+  "delegation": {
+    "invite": {
+      "kicker": "Team invite",
+      "title": "Join {{business}}",
+      "subtitle": "{{inviter}} invited you as {{role}} at {{location}}.",
+      "someone": "Someone",
+      "accept": "Accept invite",
+      "accepting": "Accepting…",
+      "acceptFailed": "Could not accept this invite",
+      "nameRequired": "Please enter your first and last name",
+      "loading": "Loading invite",
+      "loadingSubtitle": "Please wait",
+      "invalid": "This invite is invalid or expired"
+    },
+    "context": {
+      "selectTitle": "Where do you want to work today?",
+      "selectSubtitle": "Choose a persona or a location you were invited to manage.",
+      "continue": "Continue at this location",
+      "switchTo": "Switch to {{location}}",
+      "accountLabel": "Location access"
+    },
+    "team": {
+      "title": "Team",
+      "subtitle": "Invite people to manage orders at a location.",
+      "dashboardDescription": "Invite teammates to manage orders at a location.",
+      "loading": "Loading team",
+      "invite": "Invite",
+      "inviteTitle": "Invite teammate",
+      "sendInvite": "Send invite",
+      "inviteSent": "Invite sent",
+      "inviteFailed": "Could not send invite",
+      "members": "Members",
+      "noMembers": "No active members yet",
+      "pendingInvites": "Pending invites",
+      "noInvites": "No pending invites",
+      "role": "Role",
+      "roleUpdated": "Role updated",
+      "resend": "Resend",
+      "resent": "Invite resent",
+      "resendFailed": "Resend failed",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke access?",
+      "revokeMessage": "This person will lose access to this location immediately.",
+      "revoked": "Access revoked",
+      "revokeFailed": "Could not revoke"
+    },
+    "orders": {
+      "title": "Location orders",
+      "loading": "Loading location orders",
+      "search": "Search by order number or client",
+      "empty": "No orders in this queue",
+      "noPermission": "You do not have permission to view orders for this location."
+    }
   }
 }

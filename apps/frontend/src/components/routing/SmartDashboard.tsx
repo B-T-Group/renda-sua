@@ -7,7 +7,7 @@ import BusinessDashboard from '../pages/BusinessDashboard';
 
 const SmartDashboard: React.FC = () => {
   const location = useLocation();
-  const { loading, userType } = useUserProfileContext();
+  const { loading, userType, isDelegationContext } = useUserProfileContext();
 
   if (loading) {
     return (
@@ -17,6 +17,10 @@ const SmartDashboard: React.FC = () => {
         showProgress={true}
       />
     );
+  }
+
+  if (isDelegationContext) {
+    return <Navigate to="/delegate/orders" replace />;
   }
 
   switch (userType) {

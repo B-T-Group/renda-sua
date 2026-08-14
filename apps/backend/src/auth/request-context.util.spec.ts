@@ -40,5 +40,23 @@ describe('request-context.util JWT extraction', () => {
     expect(ctx.jwtDefaultRole).toBe('business');
     expect(ctx.jwtAllowedRoles).toEqual(['business']);
     expect(ctx.activePersona).toBe('client');
+    expect(ctx.activeDelegation).toBeUndefined();
+  });
+
+  it('reads X-Active-Delegation', () => {
+    const token = makeToken({
+      'https://hasura.io/jwt/claims': {
+        'x-hasura-user-id': 'user-3',
+        'x-hasura-default-role': 'user',
+        'x-hasura-allowed-roles': ['user'],
+      },
+    });
+    const ctx = buildRequestContextFromHeaders({
+      authorization: `Bearer ${token}`,
+      'x-active-delegation': 'grant-1',
+    });
+    expect(ctx.userId).toBe('user-3');
+    expect(ctx.activeDelegation).toBe('grant-1');
+    expect(ctx.jwtDefaultRole).toBeUndefined();
   });
 });

@@ -297,6 +297,7 @@ export class NotificationsService {
     this.logger.log(
       `Order creation notification(s) processed for order ${data.orderNumber}`
     );
+    await this.fanOutOrderCreatedToDelegates(data);
   }
 
   /**
@@ -646,16 +647,44 @@ export class NotificationsService {
     }
   }
 
+  async sendLocationDelegationInviteEmail(params: {
+    to: string;
+    inviterName: string;
+    businessName: string;
+    locationName: string;
+    roleName: string;
+    acceptUrl: string;
+    expiresAt: string;
+  }): Promise<void> {
+    try {
+      await this.sendEmail({
+        to: params.to,
+        templateKey: 'location_delegation_invite',
+        variables: {
+          inviterName: params.inviterName,
+          businessName: params.businessName,
+          locationName: params.locationName,
+          roleName: params.roleName,
+          acceptUrl: params.acceptUrl,
+          expiresAt: params.expiresAt,
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendLocationDelegationInviteEmail failed: ${error?.message ?? error}`
+      );
+    }
+  }
+
   async sendOrderAcceptanceEscalationPush(params: {
     businessUserId?: string | null;
     orderId: string;
     orderNumber: string;
     preferredLanguage?: string | null;
     graceSeconds?: number | null;
+    businessLocationId?: string | null;
   }): Promise<void> {
     const userId = params.businessUserId?.trim();
-    if (!userId) return;
-    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     const graceSeconds =
       params.graceSeconds ??
       this.configService.get<Configuration['order']>('order')
@@ -665,20 +694,33 @@ export class NotificationsService {
       preferredLanguage: params.preferredLanguage,
       graceSeconds,
     });
-    try {
-      await this.sendPushNotificationByUserId(userId, title, body, {
+    if (userId) {
+      try {
+        await this.sendPushNotificationByUserId(userId, title, body, {
+          url: `/orders/${params.orderId}`,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          event: 'order_acceptance_escalation',
+          persona: 'business',
+          graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
+        });
+      } catch (error: any) {
+        this.logger.warn(
+          `sendOrderAcceptanceEscalationPush failed: ${error?.message ?? String(error)}`
+        );
+      }
+    }
+    await this.fanOutPushToOrderManagers(params.businessLocationId, {
+      title,
+      body,
+      data: {
         url: `/orders/${params.orderId}`,
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_escalation',
-        persona: 'business',
-        graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `sendOrderAcceptanceEscalationPush failed: ${error?.message ?? String(error)}`
-      );
-    }
+      },
+      excludeUserId: userId,
+    });
   }
 
   async sendOrderAutoDeclinedPush(params: {
@@ -839,33 +881,45 @@ export class NotificationsService {
     preferredLanguage?: string | null;
     acceptanceTimeoutSeconds?: number | null;
     clientName?: string | null;
+    businessLocationId?: string | null;
   }): Promise<void> {
     const userId = params.businessUserId?.trim();
-    if (!userId) return;
-    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     const { title, body } = buildBusinessOrderCreatedPushMessage({
       orderNumber: params.orderNumber,
       clientName: params.clientName || '',
       preferredLanguage: params.preferredLanguage,
       acceptanceTimeoutSeconds: params.acceptanceTimeoutSeconds,
     });
-    try {
-      await this.sendPushNotificationByUserId(userId, title, body, {
+    if (userId) {
+      try {
+        await this.sendPushNotificationByUserId(userId, title, body, {
+          url: `/orders/${params.orderId}`,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          event: 'order_acceptance_activate',
+          persona: 'business',
+          acceptanceTimeoutSeconds:
+            params.acceptanceTimeoutSeconds != null
+              ? String(params.acceptanceTimeoutSeconds)
+              : undefined,
+        });
+      } catch (error: any) {
+        this.logger.warn(
+          `sendOrderAcceptanceActivatePush failed: ${error?.message ?? String(error)}`
+        );
+      }
+    }
+    await this.fanOutPushToOrderManagers(params.businessLocationId, {
+      title,
+      body,
+      data: {
         url: `/orders/${params.orderId}`,
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_activate',
-        persona: 'business',
-        acceptanceTimeoutSeconds:
-          params.acceptanceTimeoutSeconds != null
-            ? String(params.acceptanceTimeoutSeconds)
-            : undefined,
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `sendOrderAcceptanceActivatePush failed: ${error?.message ?? String(error)}`
-      );
-    }
+      },
+      excludeUserId: userId,
+    });
   }
 
   async sendPickupReminderPush(params: {
@@ -2487,6 +2541,7 @@ export class NotificationsService {
       this.logger.log(
         `Order status change notifications sent for order ${data.orderNumber} (${previousStatus} → ${data.orderStatus})`
       );
+      await this.fanOutOrderStatusToDelegates(data, options?.actorUserId);
     } catch (error) {
       this.logger.error(
         `Failed to send order status change notifications: ${
@@ -4086,6 +4141,153 @@ export class NotificationsService {
     };
 
     return statusMap[status] || 'order_status_change';
+  }
+
+  private async fanOutOrderCreatedToDelegates(data: NotificationData) {
+    const delegates = await this.listOrderManagerDelegates(data.businessLocationId);
+    for (const delegate of delegates) {
+      if (delegate.userId === data.businessUserId) continue;
+      await this.sendPushNotificationByUserId(
+        delegate.userId,
+        `New order ${data.orderNumber}`,
+        data.clientName ? `From ${data.clientName}` : 'A customer placed an order',
+        {
+          url: `/delegate/orders/${data.orderId}`,
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          event: 'order_created',
+          locationId: data.businessLocationId,
+        }
+      ).catch((error: any) => {
+        this.logger.warn(`Delegate order-created push failed: ${error?.message}`);
+      });
+    }
+  }
+
+  private async fanOutOrderStatusToDelegates(
+    data: NotificationData,
+    actorUserId?: string | null
+  ) {
+    const delegates = await this.listOrderManagerDelegates(data.businessLocationId);
+    for (const delegate of delegates) {
+      if (delegate.userId === data.businessUserId) continue;
+      if (actorUserId && delegate.userId === actorUserId) continue;
+      await this.sendPushNotificationByUserId(
+        delegate.userId,
+        `Order ${data.orderNumber}`,
+        `Status: ${data.orderStatus}`,
+        {
+          url: `/delegate/orders/${data.orderId}`,
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          event: 'order_status',
+          locationId: data.businessLocationId,
+        }
+      ).catch((error: any) => {
+        this.logger.warn(`Delegate order-status push failed: ${error?.message}`);
+      });
+    }
+  }
+
+  private async fanOutPushToOrderManagers(
+    locationId: string | null | undefined,
+    payload: {
+      title: string;
+      body: string;
+      data: Record<string, string | undefined>;
+      excludeUserId?: string;
+    }
+  ) {
+    const delegates = await this.listOrderManagerDelegates(locationId);
+    const orderId = payload.data.orderId;
+    const data = {
+      ...payload.data,
+      url: orderId ? `/delegate/orders/${orderId}` : payload.data.url,
+      locationId: locationId ?? payload.data.locationId,
+    };
+    for (const delegate of delegates) {
+      if (payload.excludeUserId && delegate.userId === payload.excludeUserId) {
+        continue;
+      }
+      await this.sendPushNotificationByUserId(
+        delegate.userId,
+        payload.title,
+        payload.body,
+        data
+      ).catch((error: any) => {
+        this.logger.warn(`Delegate fan-out push failed: ${error?.message}`);
+      });
+    }
+  }
+
+  private async listOrderManagerDelegates(
+    locationId?: string | null
+  ): Promise<Array<{ userId: string }>> {
+    if (!locationId || !(await this.isLocationDelegationsEnabled())) return [];
+    try {
+      const rows = await this.queryActiveLocationDelegates(locationId);
+      return rows
+        .filter((row) => this.roleHasOrdersManage(row.role))
+        .map((row) => ({ userId: row.user_id }));
+    } catch (error: any) {
+      this.logger.warn(`listOrderManagerDelegates failed: ${error?.message}`);
+      return [];
+    }
+  }
+
+  private async queryActiveLocationDelegates(locationId: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      location_delegations: Array<{
+        user_id: string;
+        role?: {
+          role_permissions?: Array<{ permission?: { key?: string } | null }>;
+        } | null;
+      }>;
+    }>(
+      `
+      query OrderManagerDelegates($locationId: uuid!) {
+        location_delegations(
+          where: {
+            business_location_id: { _eq: $locationId }
+            status: { _eq: "active" }
+          }
+        ) {
+          user_id
+          role { role_permissions { permission { key } } }
+        }
+      }
+    `,
+      { locationId }
+    );
+    return result.location_delegations ?? [];
+  }
+
+  private roleHasOrdersManage(role?: {
+    role_permissions?: Array<{ permission?: { key?: string } | null }>;
+  } | null): boolean {
+    return (role?.role_permissions ?? []).some(
+      (rp) => rp.permission?.key === 'delegation.orders.manage'
+    );
+  }
+
+  private async isLocationDelegationsEnabled(): Promise<boolean> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        application_configurations: Array<{ boolean_value?: boolean | null }>;
+      }>(
+        `
+        query LocationDelegationsFlag {
+          application_configurations(
+            where: { config_key: { _eq: "location_delegations" }, status: { _eq: "active" } }
+            limit: 1
+          ) { boolean_value }
+        }
+      `
+      );
+      return result.application_configurations?.[0]?.boolean_value === true;
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -1,0 +1,21 @@
+table:
+  name: location_delegation_permissions
+  schema: public
+array_relationships:
+  - name: role_permissions
+    using:
+      foreign_key_constraint_on:
+        column: permission_id
+        table:
+          name: location_delegation_role_permissions
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - key
+        - description
+        - category
+        - created_at
+      filter: {}

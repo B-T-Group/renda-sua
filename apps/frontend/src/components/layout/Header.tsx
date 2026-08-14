@@ -66,8 +66,12 @@ const Header: React.FC = () => {
     profile,
     personas,
     setActivePersona,
+    setActiveContext,
     refetch,
     refetchAccounts,
+    isDelegationContext,
+    activeDelegation,
+    delegations,
   } = useUserProfileContext();
   const { enqueueSnackbar } = useSnackbar();
   const { t } = useTranslation();
@@ -96,6 +100,12 @@ const Header: React.FC = () => {
   const isMobile = useMediaQuery(isAuthenticated ? authMobileBreakpoint : guestMobileBreakpoint);
 
   const personaHeader = useMemo(() => {
+    if (isAuthenticated && isDelegationContext) {
+      return {
+        backgroundColor: '#0f766e',
+        navActiveUnderline: '#99f6e4',
+      };
+    }
     if (!isAuthenticated || userType == null) {
       return {
         backgroundColor: theme.palette.primary.dark,
@@ -118,7 +128,7 @@ const Header: React.FC = () => {
           navActiveUnderline: '#93c5fd',
         };
     }
-  }, [isAuthenticated, userType, theme.palette.primary.dark]);
+  }, [isAuthenticated, userType, theme.palette.primary.dark, isDelegationContext]);
 
   // State for mobile drawer, user menu, and submenu
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -151,6 +161,29 @@ const Header: React.FC = () => {
       }
     },
     [setActivePersona, refetch, refetchAccounts, enqueueSnackbar, t]
+  );
+
+  const handleDelegationSwitch = useCallback(
+    async (delegationId: string, label: string) => {
+      setSwitchingToLabel(label);
+      setPersonaSwitching(true);
+      try {
+        await setActiveContext({ kind: 'delegation', delegationId });
+        await refetch();
+        window.location.assign(`${window.location.origin}/delegate/orders`);
+      } catch (error: unknown) {
+        console.error('Delegation switch failed:', error);
+        enqueueSnackbar(
+          t(
+            'persona.switchError',
+            'Could not switch persona. Please try again.'
+          ),
+          { variant: 'error' }
+        );
+        setPersonaSwitching(false);
+      }
+    },
+    [setActiveContext, refetch, enqueueSnackbar, t]
   );
 
   const handleDrawerToggle = () => {
@@ -188,6 +221,16 @@ const Header: React.FC = () => {
       ];
     }
 
+    if (isDelegationContext) {
+      return [
+        {
+          label: t('common.orders', 'Orders'),
+          path: '/delegate/orders',
+          icon: <Assignment />,
+        },
+      ];
+    }
+
     // For authenticated users, show different navigation based on user type
     if (userType === 'client') {
       return [
@@ -222,7 +265,7 @@ const Header: React.FC = () => {
   };
 
   const getSubmenuItems = () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isDelegationContext) {
       return [];
     }
 
@@ -245,6 +288,11 @@ const Header: React.FC = () => {
         {
           label: t('common.locations', 'Locations'),
           path: '/business/locations',
+          icon: <Assignment />,
+        },
+        {
+          label: t('delegation.team.title', 'Team'),
+          path: '/business/team',
           icon: <Assignment />,
         },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
@@ -289,6 +337,9 @@ const Header: React.FC = () => {
   };
 
   const getUserDisplayName = () => {
+    if (isDelegationContext && activeDelegation) {
+      return `${activeDelegation.locationName} · ${activeDelegation.businessName}`;
+    }
     if (profile?.business?.name) {
       return profile.business.name;
     }
@@ -468,14 +519,18 @@ const Header: React.FC = () => {
                   color="text.secondary"
                   sx={{ mb: 1 }}
                 >
-                  {userType === 'business'
-                    ? 'Business Account'
-                    : userType === 'client'
-                    ? 'Client Account'
-                    : 'User Account'}
+                  {isDelegationContext
+                    ? t('delegation.context.accountLabel', 'Location access')
+                    : userType === 'business'
+                      ? 'Business Account'
+                      : userType === 'client'
+                        ? 'Client Account'
+                        : 'User Account'}
                 </Typography>
                 {/* User Balance for Mobile */}
-                <UserBalanceSummary compact={true} showIcon={true} />
+                {!isDelegationContext && (
+                  <UserBalanceSummary compact={true} showIcon={true} />
+                )}
               </Box>
             </ListItem>
             <Divider sx={{ my: 1 }} />
@@ -502,10 +557,9 @@ const Header: React.FC = () => {
                 <ListItemText primary={t('auth.profile', 'Profile')} />
               </ListItemButton>
             </ListItem>
-            {personas.length > 1 &&
-              personas
-                .filter((p) => p !== userType)
-                .map((p) => (
+            {personas
+              .filter((p) => p !== userType || isDelegationContext)
+              .map((p) => (
                   <ListItem key={p} disablePadding>
                     <ListItemButton
                       onClick={() => {
@@ -525,6 +579,36 @@ const Header: React.FC = () => {
                     </ListItemButton>
                   </ListItem>
                 ))}
+            {delegations
+              .filter(
+                (d) =>
+                  !(isDelegationContext && activeDelegation?.id === d.id)
+              )
+              .map((d) => (
+                <ListItem key={d.id} disablePadding>
+                  <ListItemButton
+                    onClick={() => {
+                      handleDrawerToggle();
+                      void handleDelegationSwitch(
+                        d.id,
+                        `${d.locationName} · ${d.businessName}`
+                      );
+                    }}
+                    sx={{ borderRadius: 1, mx: 1 }}
+                  >
+                    <ListItemIcon>
+                      <SwapHoriz />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={t(
+                        'delegation.context.switchTo',
+                        'Switch to {{location}}',
+                        { location: d.locationName }
+                      )}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
             <ListItem disablePadding>
               <ListItemButton
                 onClick={() => {
@@ -777,11 +861,13 @@ const Header: React.FC = () => {
                         )}
                       </Box>
                       <Typography variant="caption" color="text.secondary">
-                        {userType === 'business'
-                          ? 'Business Account'
-                          : userType === 'client'
-                          ? 'Client Account'
-                          : 'User Account'}
+                        {isDelegationContext
+                          ? t('delegation.context.accountLabel', 'Location access')
+                          : userType === 'business'
+                            ? 'Business Account'
+                            : userType === 'client'
+                              ? 'Client Account'
+                              : 'User Account'}
                       </Typography>
                       {userType === 'agent' && profile?.agent?.id && (
                         <Box sx={{ mt: 0.5 }}>
@@ -827,7 +913,7 @@ const Header: React.FC = () => {
 
                     {personas.length > 1 &&
                       personas
-                        .filter((p) => p !== userType)
+                        .filter((p) => p !== userType || isDelegationContext)
                         .map((p) => (
                           <MenuItem
                             key={p}
@@ -845,6 +931,37 @@ const Header: React.FC = () => {
                             })}
                           </MenuItem>
                         ))}
+
+                    {delegations
+                      .filter(
+                        (d) =>
+                          !(
+                            isDelegationContext &&
+                            activeDelegation?.id === d.id
+                          )
+                      )
+                      .map((d) => (
+                        <MenuItem
+                          key={d.id}
+                          onClick={() => {
+                            handleUserMenuClose();
+                            void handleDelegationSwitch(
+                              d.id,
+                              `${d.locationName} · ${d.businessName}`
+                            );
+                          }}
+                          sx={{ py: 1.5 }}
+                        >
+                          <ListItemIcon>
+                            <SwapHoriz fontSize="small" />
+                          </ListItemIcon>
+                          {t(
+                            'delegation.context.switchTo',
+                            'Switch to {{location}}',
+                            { location: d.locationName }
+                          )}
+                        </MenuItem>
+                      ))}
 
                     <Divider />
 

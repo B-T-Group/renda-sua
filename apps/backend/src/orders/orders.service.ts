@@ -77,6 +77,7 @@ import {
   resolveShopperVariant,
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
+import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -417,6 +418,39 @@ export class OrdersService {
       userId,
       PlatformPermissions.ORDERS_CROSS_BUSINESS
     );
+  }
+
+  private async requireBusinessOrderAccess(
+    orderId: string,
+    personaMessage: string,
+    unauthorizedMessage: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<string> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (actor) {
+      this.assertActorOwnsOrder(order, actor, unauthorizedMessage);
+      return actor.userId;
+    }
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'business', personaMessage);
+    if (order.business.user_id !== user.id) {
+      throw new HttpException(unauthorizedMessage, HttpStatus.FORBIDDEN);
+    }
+    return user.id;
+  }
+
+  private assertActorOwnsOrder(
+    order: { business_id?: string; business_location_id?: string },
+    actor: AuthorizedBusinessActor,
+    message: string
+  ): void {
+    if (
+      order.business_id !== actor.businessId ||
+      order.business_location_id !== actor.locationId
+    ) {
+      throw new HttpException(message, HttpStatus.FORBIDDEN);
+    }
   }
 
   private requireActivePersona(
@@ -1217,21 +1251,19 @@ export class OrdersService {
     });
   }
 
-  async confirmOrder(request: ConfirmOrderRequest) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only business users can confirm orders'
+  async confirmOrder(
+    request: ConfirmOrderRequest,
+    actor?: AuthorizedBusinessActor
+  ) {
+    const userId = await this.requireBusinessOrderAccess(
+      request.orderId,
+      'Only business users can confirm orders',
+      'Unauthorized to confirm this order',
+      actor
     );
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.business.user_id !== user.id)
-      throw new HttpException(
-        'Unauthorized to confirm this order',
-        HttpStatus.FORBIDDEN
-      );
     this.orderAcceptanceService.assertConfirmableAcceptance(order as any);
 
     // Validate that delivery/pickup window is provided
@@ -1272,14 +1304,14 @@ export class OrdersService {
       confirmedWindowId = await this.confirmExistingDeliveryWindow(
         request.delivery_time_window_id,
         request.orderId,
-        user.id,
+        userId,
         deliveryTimezone
       );
     } else if (request.delivery_window_details) {
       confirmedWindowId = await this.createConfirmedDeliveryWindow(
         request.delivery_window_details,
         request.orderId,
-        user.id,
+        userId,
         deliveryTimezone
       );
     } else {
@@ -1294,7 +1326,8 @@ export class OrdersService {
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      'confirmed'
+      'confirmed',
+      actor
     );
 
     try {
@@ -1316,7 +1349,7 @@ export class OrdersService {
         ? 'Order confirmed by business with pickup slot'
         : 'Order confirmed by business',
       'business',
-      user.id,
+      userId,
       request.notes
     );
     return {
@@ -1326,21 +1359,19 @@ export class OrdersService {
     };
   }
 
-  async completePreparation(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only business users can complete order preparation'
+  async completePreparation(
+    request: OrderStatusChangeRequest,
+    actor?: AuthorizedBusinessActor
+  ) {
+    const userId = await this.requireBusinessOrderAccess(
+      request.orderId,
+      'Only business users can complete order preparation',
+      'Unauthorized to complete preparation for this order',
+      actor
     );
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.business.user_id !== user.id)
-      throw new HttpException(
-        'Unauthorized to complete preparation for this order',
-        HttpStatus.FORBIDDEN
-      );
     if (!['confirmed', 'preparing'].includes(order.current_status))
       throw new HttpException(
         `Cannot complete preparation for order in ${order.current_status} status`,
@@ -1355,14 +1386,15 @@ export class OrdersService {
     const dispatchSchedule = await this.scheduleAgentDispatchGate(order);
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      'ready_for_pickup'
+      'ready_for_pickup',
+      actor
     );
     await this.createStatusHistoryEntry(
       request.orderId,
       'ready_for_pickup',
       'Order preparation completed, ready for pickup',
       'business',
-      user.id,
+      userId,
       request.notes
     );
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
@@ -1492,10 +1524,11 @@ export class OrdersService {
   }
 
   async completePreparationBatch(
-    request: BatchOrderStatusChangeRequest
+    request: BatchOrderStatusChangeRequest,
+    actor?: AuthorizedBusinessActor
   ): Promise<BatchOrderStatusChangeResult> {
     return this.processBatch(request, (orderId) =>
-      this.completePreparation({ orderId, notes: request.notes })
+      this.completePreparation({ orderId, notes: request.notes }, actor)
     );
   }
 
@@ -1636,25 +1669,35 @@ export class OrdersService {
   async confirmClientPickup(
     orderId: string,
     pin: string,
-    options?: { useLatestSharedPin?: boolean; pinMessageId?: string }
+    options?: {
+      useLatestSharedPin?: boolean;
+      pinMessageId?: string;
+      actor?: AuthorizedBusinessActor;
+    }
   ) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only business users can confirm client pickup'
+    const actor = options?.actor;
+    const userId = await this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can confirm client pickup',
+      'Unauthorized to confirm this pickup',
+      actor
     );
     const order = await this.getOrderDetails(orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    this.assertConfirmClientPickupAllowed(order, user.id);
+    this.assertConfirmClientPickupAllowed(
+      order,
+      actor ? order.business.user_id : userId
+    );
 
     let pinTrimmed = pin?.trim() ?? '';
     let pinMessageId = options?.pinMessageId;
     if (!pinTrimmed && (options?.useLatestSharedPin || options?.pinMessageId)) {
+      // Shared pickup PINs are stored against the business owner user id.
+      const pinOwnerUserId = actor ? order.business.user_id : userId;
       const resolved = await this.deliveryPinShareService.resolvePinForCompletion(
         orderId,
-        user.id,
+        pinOwnerUserId,
         {
           pinMessageId: options?.pinMessageId,
           useLatestSharedPin: options?.useLatestSharedPin,
@@ -3177,25 +3220,25 @@ export class OrdersService {
    */
   async initiatePayAtPickupPayment(
     orderId: string,
-    phoneNumberOverride?: string
+    phoneNumberOverride?: string,
+    actor?: AuthorizedBusinessActor
   ) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only business users can initiate pickup payments'
+    const userId = await this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can initiate pickup payments',
+      'You are not authorized to initiate payment for this order',
+      actor
     );
-    const business = this.requireBusinessRecord(user);
+    const user = actor
+      ? ({ id: userId, business: { id: actor.businessId } } as any)
+      : await this.hasuraUserService.getUser();
+    if (!actor) {
+      this.requireBusinessRecord(user);
+    }
 
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    }
-    if (order.business_id !== business.id) {
-      throw new HttpException(
-        'You are not authorized to initiate payment for this order',
-        HttpStatus.FORBIDDEN
-      );
     }
 
     const paymentTiming = (order as any).payment_timing as
@@ -4147,8 +4190,25 @@ export class OrdersService {
     return this.businessMayCancelDeferredUncollectedOrder(order);
   }
 
-  async cancelOrder(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
+  async cancelOrder(
+    request: OrderStatusChangeRequest,
+    actor?: AuthorizedBusinessActor
+  ) {
+    if (actor) {
+      await this.requireBusinessOrderAccess(
+        request.orderId,
+        'Only business users can cancel orders',
+        'Unauthorized to cancel this order',
+        actor
+      );
+    }
+    const user = actor
+      ? ({
+          id: actor.userId,
+          business: { id: actor.businessId, user_id: actor.userId },
+          active_persona: 'business',
+        } as any)
+      : await this.hasuraUserService.getUser();
 
     // Allow both business users and clients to cancel orders
     if (!isActivePersona(user, 'business') && !isActivePersona(user, 'client'))
@@ -4162,8 +4222,9 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
 
     // Check authorization - business can cancel their orders, client can cancel their own orders
-    const isBusinessOwner =
-      isActivePersona(user, 'business') && order.business.user_id === user.id;
+    const isBusinessOwner = actor
+      ? true
+      : isActivePersona(user, 'business') && order.business.user_id === user.id;
     const isOrderOwner =
       isActivePersona(user, 'client') &&
       order.client?.user_id === user.id;
@@ -4212,7 +4273,8 @@ export class OrdersService {
     // Update order status to cancelled
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      'cancelled'
+      'cancelled',
+      actor
     );
 
     // Persist cancellation metadata on the orders row
@@ -4289,8 +4351,25 @@ export class OrdersService {
     };
   }
 
-  async getCancellationPreview(orderId: string): Promise<CancellationPolicy> {
-    const user = await this.hasuraUserService.getUser();
+  async getCancellationPreview(
+    orderId: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<CancellationPolicy> {
+    if (actor) {
+      await this.requireBusinessOrderAccess(
+        orderId,
+        'Only business users can preview cancellation',
+        'Unauthorized to view cancellation preview for this order',
+        actor
+      );
+    }
+    const user = actor
+      ? ({
+          id: actor.userId,
+          business: { id: actor.businessId },
+          active_persona: 'business',
+        } as any)
+      : await this.hasuraUserService.getUser();
 
     if (!isActivePersona(user, 'client') && !isActivePersona(user, 'business'))
       throw new HttpException(
@@ -4302,8 +4381,9 @@ export class OrdersService {
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
 
-    const isBusinessOwner =
-      isActivePersona(user, 'business') && order.business.user_id === user.id;
+    const isBusinessOwner = actor
+      ? true
+      : isActivePersona(user, 'business') && order.business.user_id === user.id;
     const isOrderOwner =
       isActivePersona(user, 'client') && order.client?.user_id === user.id;
 
@@ -5088,8 +5168,25 @@ export class OrdersService {
    * - Client that made the order (order.client_id)
    * - Agent assigned to the order (order.assigned_agent_id)
    */
-  async getOrderById(orderId: string): Promise<OrderWithDetails> {
-    const user = await this.hasuraUserService.getUser();
+  async getOrderById(
+    orderId: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<OrderWithDetails> {
+    if (actor) {
+      await this.requireBusinessOrderAccess(
+        orderId,
+        'Unauthorized',
+        'Unauthorized',
+        actor
+      );
+    }
+    const user = actor
+      ? ({
+          id: actor.userId,
+          business: { id: actor.businessId },
+          active_persona: 'business',
+        } as any)
+      : await this.hasuraUserService.getUser();
 
     // First, get the order to check ownership
     const order = await this.getOrderDetails(orderId);
@@ -6915,6 +7012,7 @@ export class OrdersService {
           ?.preferred_language,
         businessName: order.business_location.business.name,
         businessLocationName: order.business_location?.name || undefined,
+        businessLocationId: order.business_location_id || order.business_location?.id,
         businessEmail: order.business_location.business.user.email,
         businessPreferredLanguage: (
           order.business_location.business.user as { preferred_language?: string }
@@ -9464,23 +9562,22 @@ export class OrdersService {
     return result;
   }
 
-  async markPickupNotReady(orderId: string, extraMinutes?: number) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only businesses can mark pickup not ready'
+  async markPickupNotReady(
+    orderId: string,
+    extraMinutes?: number,
+    actor?: AuthorizedBusinessActor
+  ) {
+    const userId = await this.requireBusinessOrderAccess(
+      orderId,
+      'Only businesses can mark pickup not ready',
+      'Unauthorized',
+      actor
     );
-    const order = await this.getOrderDetails(orderId);
-    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.business?.user_id !== user.id) {
-      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
-    }
     return this.orderPickupMonitorService.pausePickup(
       orderId,
       'merchant_delay',
       'business',
-      user.id,
+      userId,
       extraMinutes
     );
   }
@@ -9502,7 +9599,23 @@ export class OrdersService {
     );
   }
 
-  async resumePickupMonitoring(orderId: string) {
+  async resumePickupMonitoring(
+    orderId: string,
+    actor?: AuthorizedBusinessActor
+  ) {
+    if (actor) {
+      const userId = await this.requireBusinessOrderAccess(
+        orderId,
+        'Only businesses or support can resume pickup monitoring',
+        'Unauthorized',
+        actor
+      );
+      return this.orderPickupMonitorService.resumePickup(
+        orderId,
+        'business',
+        userId
+      );
+    }
     const user = await this.hasuraUserService.getUser();
     const canAccess = await this.canAccessAnyOrder(user.id);
     if (canAccess) {
@@ -9537,11 +9650,20 @@ export class OrdersService {
     );
   }
 
-  async getOrderEvents(orderId: string) {
-    const user = await this.hasuraUserService.getUser();
-    const order = await this.getOrderDetails(orderId);
-    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    await this.assertCanViewOrder(user, order);
+  async getOrderEvents(orderId: string, actor?: AuthorizedBusinessActor) {
+    if (actor) {
+      await this.requireBusinessOrderAccess(
+        orderId,
+        'Unauthorized',
+        'Unauthorized',
+        actor
+      );
+    } else {
+      const user = await this.hasuraUserService.getUser();
+      const order = await this.getOrderDetails(orderId);
+      if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      await this.assertCanViewOrder(user, order);
+    }
     const events = await this.orderEventsService.listForOrder(orderId);
     return { success: true, events };
   }

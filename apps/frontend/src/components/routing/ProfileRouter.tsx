@@ -14,7 +14,10 @@ const ProfileRouter: React.FC = () => {
     userType,
     isProfileComplete,
     refetch,
-    needsPersonaSelection,
+    needsContextSelection,
+    isDelegationContext,
+    delegations,
+    personas,
   } = useUserProfileContext();
 
   useEffect(() => {
@@ -24,41 +27,50 @@ const ProfileRouter: React.FC = () => {
     }
 
     if (!loading) {
-      // Check if user is not found (404) or profile is incomplete
       const isUserNotFound = error === 'Profile not found';
-      const shouldCompleteProfile = isUserNotFound || !isProfileComplete;
+      const hasDelegationsOnly =
+        personas.length === 0 && delegations.length > 0;
 
-      if (shouldCompleteProfile) {
-        // User not found or profile incomplete, redirect to complete profile
+      if (isUserNotFound && !hasDelegationsOnly) {
         navigate('/complete-profile');
         return;
       }
 
-      if (needsPersonaSelection) {
+      if (!isProfileComplete && !hasDelegationsOnly) {
+        navigate('/complete-profile');
+        return;
+      }
+
+      if (needsContextSelection) {
         navigate('/select-persona');
         return;
       }
 
-      // Profile is complete, route based on user type
+      if (isDelegationContext) {
+        navigate('/delegate/orders');
+        return;
+      }
+
       switch (userType) {
-        case 'client':
-          // Check if it's the first login
+        case 'client': {
           const firstLogin = user?.['https://groupe-bt.com/first_login'];
-          // If it's NOT the first login, redirect to items page
           if (firstLogin === false || firstLogin === undefined) {
             navigate('/items');
           } else {
-            // First login, redirect to dashboard
             navigate('/dashboard');
           }
           break;
+        }
         case 'agent':
         case 'business':
           navigate('/dashboard');
           break;
         default:
-          // Unknown user type, redirect to complete profile
-          navigate('/complete-profile');
+          if (delegations.length > 0) {
+            navigate('/select-persona');
+          } else {
+            navigate('/complete-profile');
+          }
           break;
       }
     }
@@ -68,12 +80,14 @@ const ProfileRouter: React.FC = () => {
     error,
     userType,
     isProfileComplete,
-    needsPersonaSelection,
+    needsContextSelection,
+    isDelegationContext,
+    delegations,
+    personas,
     navigate,
     user,
   ]);
 
-  // Show loading while checking profile
   if (loading) {
     return (
       <LoadingPage
@@ -84,12 +98,10 @@ const ProfileRouter: React.FC = () => {
     );
   }
 
-  // Show error page if there's an error (but not for 404/user not found)
   if (error && error !== 'Profile not found') {
     return <ErrorPage error={error} onRetry={refetch} />;
   }
 
-  // This should not be reached, but just in case
   return (
     <LoadingPage message="Loading" subtitle="Please wait" showProgress={true} />
   );

@@ -8,6 +8,9 @@ import DeliveryOrderCard from './delivery/DeliveryOrderCard';
 export interface PersonaOrderCardProps {
   order: OrderData | Record<string, unknown>;
   onActionComplete?: () => void;
+  /** When set, forces business card (e.g. location delegate) */
+  forcePersona?: 'business' | 'client' | 'agent';
+  detailBasePath?: string;
 }
 
 /**
@@ -17,13 +20,24 @@ export interface PersonaOrderCardProps {
 export const PersonaOrderCard: React.FC<PersonaOrderCardProps> = ({
   order,
   onActionComplete,
+  forcePersona,
+  detailBasePath,
 }) => {
-  const { userType, profile } = useUserProfileContext();
-  const persona = userType || profile?.user_type_id || 'client';
+  const { userType, profile, isDelegationContext } = useUserProfileContext();
+  const persona =
+    forcePersona ||
+    (isDelegationContext ? 'business' : null) ||
+    userType ||
+    profile?.user_type_id ||
+    'client';
 
   if (persona === 'business') {
     return (
-      <BusinessOrderCard order={order} onActionComplete={onActionComplete} />
+      <BusinessOrderCard
+        order={order}
+        onActionComplete={onActionComplete}
+        detailBasePath={detailBasePath}
+      />
     );
   }
   if (persona === 'agent') {

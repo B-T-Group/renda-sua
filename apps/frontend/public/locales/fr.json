@@ -3407,7 +3407,11 @@
     "downloadFree": "Télécharger gratuitement",
     "appPromoTileLabel": "Télécharger l'application Rendasua",
     "accept": "Accepter",
-    "reject": "Rejeter"
+    "reject": "Rejeter",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "pleaseWait": "Veuillez patienter",
+    "email": "E-mail"
   },
   "dashboard": {
     "client": {
@@ -6629,5 +6633,59 @@
   "catalog": {
     "paymentsComingSoon": "Bientôt disponible",
     "paymentsComingSoonDetail": "Les paiements pour ce marchand arrivent bientôt."
+  },
+  "delegation": {
+    "invite": {
+      "kicker": "Invitation d'équipe",
+      "title": "Rejoindre {{business}}",
+      "subtitle": "{{inviter}} vous a invité en tant que {{role}} à {{location}}.",
+      "someone": "Quelqu'un",
+      "accept": "Accepter l'invitation",
+      "accepting": "Acceptation…",
+      "acceptFailed": "Impossible d'accepter cette invitation",
+      "nameRequired": "Veuillez saisir votre prénom et votre nom",
+      "loading": "Chargement de l'invitation",
+      "loadingSubtitle": "Veuillez patienter",
+      "invalid": "Cette invitation est invalide ou a expiré"
+    },
+    "context": {
+      "selectTitle": "Où voulez-vous travailler aujourd'hui ?",
+      "selectSubtitle": "Choisissez une persona ou un emplacement que l'on vous a invité à gérer.",
+      "continue": "Continuer à cet emplacement",
+      "switchTo": "Passer à {{location}}",
+      "accountLabel": "Accès emplacement"
+    },
+    "team": {
+      "title": "Équipe",
+      "subtitle": "Invitez des personnes à gérer les commandes d'un emplacement.",
+      "dashboardDescription": "Invitez des coéquipiers à gérer les commandes d'un emplacement.",
+      "loading": "Chargement de l'équipe",
+      "invite": "Inviter",
+      "inviteTitle": "Inviter un coéquipier",
+      "sendInvite": "Envoyer l'invitation",
+      "inviteSent": "Invitation envoyée",
+      "inviteFailed": "Impossible d'envoyer l'invitation",
+      "members": "Membres",
+      "noMembers": "Aucun membre actif pour le moment",
+      "pendingInvites": "Invitations en attente",
+      "noInvites": "Aucune invitation en attente",
+      "role": "Rôle",
+      "roleUpdated": "Rôle mis à jour",
+      "resend": "Renvoyer",
+      "resent": "Invitation renvoyée",
+      "resendFailed": "Échec du renvoi",
+      "revoke": "Révoquer",
+      "revokeTitle": "Révoquer l'accès ?",
+      "revokeMessage": "Cette personne perdra immédiatement l'accès à cet emplacement.",
+      "revoked": "Accès révoqué",
+      "revokeFailed": "Impossible de révoquer"
+    },
+    "orders": {
+      "title": "Commandes de l'emplacement",
+      "loading": "Chargement des commandes",
+      "search": "Rechercher par numéro de commande ou client",
+      "empty": "Aucune commande dans cette file",
+      "noPermission": "Vous n'avez pas la permission de voir les commandes de cet emplacement."
+    }
   }
 }

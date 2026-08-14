@@ -5,6 +5,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from './orders.service';
 import { isActivePersona } from '../users/persona.util';
+import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
 export interface ResolutionRequest {
   resolution_type: 'agent_fault' | 'client_fault' | 'item_fault';
@@ -61,29 +62,48 @@ export class FailedDeliveriesService {
   /**
    * Get failed deliveries for a business
    */
+  async getFailedDeliveriesForLocation(
+    businessId: string,
+    locationId: string,
+    filters?: {
+      status?: 'pending' | 'completed';
+      resolution_type?: string;
+    }
+  ) {
+    return this.getFailedDeliveries(businessId, filters as any, {
+      skipAuth: true,
+      locationId,
+    });
+  }
+
   async getFailedDeliveries(
     businessId: string,
     filters?: {
       status?: 'pending' | 'completed';
       resolution_type?: 'agent_fault' | 'client_fault' | 'item_fault';
-    }
+    },
+    options?: { skipAuth?: boolean; locationId?: string }
   ) {
-    const user = await this.hasuraUserService.getUser();
-    if (
-      !isActivePersona(user, 'business') ||
-      !user.business ||
-      user.business.id !== businessId
-    ) {
-      throw new HttpException(
-        'Access denied. You can only view failed deliveries for your own business.',
-        HttpStatus.FORBIDDEN
-      );
+    if (!options?.skipAuth) {
+      const user = await this.hasuraUserService.getUser();
+      if (
+        !isActivePersona(user, 'business') ||
+        !user.business ||
+        user.business.id !== businessId
+      ) {
+        throw new HttpException(
+          'Access denied. You can only view failed deliveries for your own business.',
+          HttpStatus.FORBIDDEN
+        );
+      }
     }
 
     const variables: any = { businessId };
-    const whereConditions: string[] = [
-      `order: {business_id: {_eq: $businessId}}`,
-    ];
+    const orderFilter = options?.locationId
+      ? `order: {business_id: {_eq: $businessId}, business_location_id: {_eq: $locationId}}`
+      : `order: {business_id: {_eq: $businessId}}`;
+    if (options?.locationId) variables.locationId = options.locationId;
+    const whereConditions: string[] = [orderFilter];
 
     if (filters?.status) {
       whereConditions.push(`status: {_eq: $status}`);
@@ -98,7 +118,7 @@ export class FailedDeliveriesService {
     const whereClause = `{${whereConditions.join(', ')}}`;
 
     const query = `
-      query GetFailedDeliveries($businessId: uuid!, $status: failed_delivery_status_enum, $resolutionType: failed_delivery_resolution_type_enum) {
+      query GetFailedDeliveries($businessId: uuid!, $locationId: uuid, $status: failed_delivery_status_enum, $resolutionType: failed_delivery_resolution_type_enum) {
         failed_deliveries(
           where: ${whereClause}
           order_by: { created_at: desc }
@@ -176,7 +196,7 @@ export class FailedDeliveriesService {
   /**
    * Get a specific failed delivery by order ID
    */
-  async getFailedDelivery(orderId: string) {
+  async getFailedDelivery(orderId: string, options?: { skipAuth?: boolean }) {
     const query = `
       query GetFailedDelivery($orderId: uuid!) {
         failed_deliveries(where: { order_id: { _eq: $orderId } }) {
@@ -198,6 +218,7 @@ export class FailedDeliveriesService {
             total_amount
             currency
             business_id
+            business_location_id
             created_at
             client {
               id
@@ -261,17 +282,18 @@ export class FailedDeliveriesService {
 
     const failedDelivery = result.failed_deliveries[0];
 
-    // Verify business ownership
-    const user = await this.hasuraUserService.getUser();
-    if (
-      !isActivePersona(user, 'business') ||
-      !user.business ||
-      failedDelivery.order.business_id !== user.business.id
-    ) {
-      throw new HttpException(
-        'Access denied. You can only view failed deliveries for your own business.',
-        HttpStatus.FORBIDDEN
-      );
+    if (!options?.skipAuth) {
+      const user = await this.hasuraUserService.getUser();
+      if (
+        !isActivePersona(user, 'business') ||
+        !user.business ||
+        failedDelivery.order.business_id !== user.business.id
+      ) {
+        throw new HttpException(
+          'Access denied. You can only view failed deliveries for your own business.',
+          HttpStatus.FORBIDDEN
+        );
+      }
     }
 
     return failedDelivery;
@@ -280,17 +302,54 @@ export class FailedDeliveriesService {
   /**
    * Resolve a failed delivery
    */
-  async resolveFailedDelivery(orderId: string, resolution: ResolutionRequest) {
-    const user = await this.hasuraUserService.getUser();
-    if (!isActivePersona(user, 'business') || !user.business) {
-      throw new HttpException(
-        'Only business users can resolve failed deliveries',
-        HttpStatus.FORBIDDEN
-      );
+  async resolveFailedDeliveryForActor(
+    orderId: string,
+    resolution: ResolutionRequest,
+    actor: AuthorizedBusinessActor
+  ) {
+    return this.resolveFailedDelivery(orderId, resolution, actor);
+  }
+
+  async resolveFailedDelivery(
+    orderId: string,
+    resolution: ResolutionRequest,
+    actor?: AuthorizedBusinessActor
+  ) {
+    let resolvedBy = actor?.userId;
+    if (!actor) {
+      const user = await this.hasuraUserService.getUser();
+      if (!isActivePersona(user, 'business') || !user.business) {
+        throw new HttpException(
+          'Only business users can resolve failed deliveries',
+          HttpStatus.FORBIDDEN
+        );
+      }
+      resolvedBy = user.id;
     }
 
     // Get failed delivery and order details
-    const failedDelivery = await this.getFailedDelivery(orderId);
+    const failedDelivery = await this.getFailedDelivery(orderId, {
+      skipAuth: !!actor,
+    });
+
+    if (actor) {
+      const scopedOrder = failedDelivery.order;
+      if (scopedOrder.business_id !== actor.businessId) {
+        throw new HttpException(
+          'Access denied. You can only resolve failed deliveries for your own business.',
+          HttpStatus.FORBIDDEN
+        );
+      }
+      if (
+        actor.locationId &&
+        scopedOrder.business_location_id !== actor.locationId
+      ) {
+        throw new HttpException(
+          'Access denied. You can only resolve failed deliveries for your assigned location.',
+          HttpStatus.FORBIDDEN
+        );
+      }
+    }
 
     if (failedDelivery.status === 'completed') {
       throw new HttpException(
@@ -367,7 +426,7 @@ export class FailedDeliveriesService {
         status: 'completed',
         resolution_type: resolution.resolution_type,
         outcome: resolution.outcome,
-        resolved_by: user.id,
+        resolved_by: resolvedBy,
         resolved_at: new Date().toISOString(),
       },
     });

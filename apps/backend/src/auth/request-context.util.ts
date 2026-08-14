@@ -107,6 +107,13 @@ export function extractActivePersonaHeader(
   return headerValue(headers, 'x-active-persona');
 }
 
+/** Optional location-delegation grant from `X-Active-Delegation`. */
+export function extractActiveDelegationHeader(
+  headers: Record<string, unknown> | undefined
+): string | undefined {
+  return headerValue(headers, 'x-active-delegation');
+}
+
 /** Build RequestContext from an HTTP-like request (headers bag). */
 export function buildRequestContextFromHeaders(
   headers: Record<string, unknown> | undefined,
@@ -130,6 +137,7 @@ export function buildRequestContextFromHeaders(
     userId,
     authToken,
     activePersona: extractActivePersonaHeader(headers),
+    activeDelegation: extractActiveDelegationHeader(headers),
     jwtDefaultRole,
     jwtAllowedRoles,
     requestId: requestId || headerValue(headers, 'x-request-id') || randomUUID(),

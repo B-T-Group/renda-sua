@@ -176,6 +176,18 @@ export const CompleteProfile = lazy(() =>
 export const SelectPersonaPage = lazy(() =>
   import('../components/pages/SelectPersonaPage')
 );
+export const InviteAcceptPage = lazy(() =>
+  import('../components/pages/InviteAcceptPage')
+);
+export const BusinessTeamPage = lazy(() =>
+  import('../components/pages/BusinessTeamPage')
+);
+export const DelegateOrdersPage = lazy(() =>
+  import('../components/pages/DelegateOrdersPage')
+);
+export const DelegateManageOrderPage = lazy(() =>
+  import('../components/pages/DelegateManageOrderPage')
+);
 export const DocumentManagementPage = lazy(() =>
   import('../components/pages/DocumentManagementPage').then((m) => ({
     default: m.DocumentManagementPage,

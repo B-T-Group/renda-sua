@@ -112,6 +112,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPickupMonitorService,
     OrderReassignmentService,
     OrderPickupAnalyticsService,
+    FailedDeliveriesService,
   ],
 })
 export class OrdersModule {}

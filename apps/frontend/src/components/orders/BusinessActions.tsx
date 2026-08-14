@@ -26,6 +26,8 @@ import {
 } from 'react-phone-number-input';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useOrdersApiPrefix } from '../../contexts/OrdersApiPrefixContext';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   ConfirmOrderData,
   useBackendOrders,
@@ -122,6 +124,10 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const ordersPrefix = useOrdersApiPrefix();
+  const { isDelegationContext } = useUserProfileContext();
+  const isDelegate =
+    isDelegationContext || ordersPrefix === '/delegate';
   const {
     confirmOrder,
     completePreparation,
@@ -413,7 +419,11 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       isPrintLabel?: boolean;
     }> = [];
 
-    if (order.reconciliation_status === 'pending_manual_reconciliation') {
+    // Owner-only: no /delegate equivalents (matches mobile DELEGATE_HIDDEN_ACTIONS)
+    if (
+      !isDelegate &&
+      order.reconciliation_status === 'pending_manual_reconciliation'
+    ) {
       actions.push({
         label: t('orders.reconciliation.button', 'Reconcile cash exception'),
         action: () => setReconcileDialogOpen(true),
@@ -469,12 +479,14 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'out_for_delivery':
-        actions.push({
-          label: t('orders.overwriteCode.button', 'Generate overwrite code'),
-          action: handleGenerateOverwriteCode,
-          color: 'primary' as const,
-          icon: <CheckCircle />,
-        });
+        if (!isDelegate) {
+          actions.push({
+            label: t('orders.overwriteCode.button', 'Generate overwrite code'),
+            action: handleGenerateOverwriteCode,
+            color: 'primary' as const,
+            icon: <CheckCircle />,
+          });
+        }
         break;
 
       case 'ready_for_pickup':
@@ -509,24 +521,31 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'delivered':
-        actions.push({
-          label: t('orders.actions.completeOrder', 'Complete Order'),
-          action: handleCompleteOrder,
-          color: 'success' as const,
-          icon: <CheckCircle />,
-        });
+        if (!isDelegate) {
+          actions.push({
+            label: t('orders.actions.completeOrder', 'Complete Order'),
+            action: handleCompleteOrder,
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+        }
         break;
 
       case 'complete':
         break;
 
       case 'refund_requested':
-        actions.push({
-          label: t('orders.refunds.manageInDashboard', 'Manage refund request'),
-          action: () => navigate('/business/refunds'),
-          color: 'warning' as const,
-          icon: <RefundIcon />,
-        });
+        if (!isDelegate) {
+          actions.push({
+            label: t(
+              'orders.refunds.manageInDashboard',
+              'Manage refund request'
+            ),
+            action: () => navigate('/business/refunds'),
+            color: 'warning' as const,
+            icon: <RefundIcon />,
+          });
+        }
         break;
 
       case 'refund_approved_full':
@@ -557,7 +576,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       });
     }
 
-    if (canPrintLabel) {
+    if (!isDelegate && canPrintLabel) {
       actions.push({
         label: t('orderActions.printLabel', 'Print label'),
         action: handlePrintLabel,

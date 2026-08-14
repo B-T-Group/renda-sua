@@ -19,11 +19,14 @@ import BusinessOrderActions from './BusinessOrderActions';
 export interface BusinessOrderCardProps {
   order: OrderData | Record<string, unknown>;
   onActionComplete?: () => void;
+  /** Defaults to `/orders` — use `/delegate/orders` in delegation shell */
+  detailBasePath?: string;
 }
 
 export const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   order,
   onActionComplete,
+  detailBasePath = '/orders',
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -102,7 +105,7 @@ export const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             <Button
               size="small"
               endIcon={<ArrowForward />}
-              onClick={() => navigate(`/orders/${vm.orderId}`)}
+              onClick={() => navigate(`${detailBasePath}/${vm.orderId}`)}
             >
               {t('orders.viewDetails', 'View details')}
             </Button>

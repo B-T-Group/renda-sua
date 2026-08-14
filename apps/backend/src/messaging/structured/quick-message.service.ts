@@ -26,6 +26,7 @@ import {
   resolveTemplateTagPersonas,
   type QuickMessageTemplate,
 } from './quick-message.catalog';
+import type { AuthorizedBusinessActor } from '../../orders/authorized-business-actor';
 import type { QuickMessagePayloadV1 } from './structured-message.types';
 
 export interface QuickMessageTemplateDto {
@@ -56,8 +57,21 @@ export class QuickMessageService {
     private readonly configService: ConfigService<Configuration>
   ) {}
 
-  async listEligibleTemplates(orderId: string): Promise<QuickMessageTemplateDto[]> {
-    const user = await this.hasuraUserService.getUser();
+  async listEligibleTemplatesForActor(
+    orderId: string,
+    actor: AuthorizedBusinessActor
+  ): Promise<QuickMessageTemplateDto[]> {
+    return this.listEligibleTemplates(
+      orderId,
+      this.messagingService.actorAsBusinessUser(actor) as AuthenticatedUser
+    );
+  }
+
+  async listEligibleTemplates(
+    orderId: string,
+    viewer?: AuthenticatedUser
+  ): Promise<QuickMessageTemplateDto[]> {
+    const user = viewer ?? (await this.hasuraUserService.getUser());
     const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
     await this.messagingService.assertMessagingAccess(user, order);
     const senderPersona = this.resolveSenderPersona(user, order);
@@ -77,11 +91,24 @@ export class QuickMessageService {
       }));
   }
 
+  async sendQuickMessageForActor(
+    orderId: string,
+    templateId: string,
+    actor: AuthorizedBusinessActor
+  ): Promise<OrderMessage> {
+    return this.sendQuickMessage(
+      orderId,
+      templateId,
+      this.messagingService.actorAsBusinessUser(actor) as AuthenticatedUser
+    );
+  }
+
   async sendQuickMessage(
     orderId: string,
-    templateId: string
+    templateId: string,
+    viewer?: AuthenticatedUser
   ): Promise<OrderMessage> {
-    const user = await this.hasuraUserService.getUser();
+    const user = viewer ?? (await this.hasuraUserService.getUser());
     const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
     await this.messagingService.assertMessagingAccess(user, order);
 

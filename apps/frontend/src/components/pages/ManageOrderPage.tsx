@@ -18,7 +18,8 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useOrdersApiPrefix } from '../../contexts/OrdersApiPrefixContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -75,14 +76,37 @@ function resolvePersona(activePersona?: string | null): OrderPersona {
   return 'client';
 }
 
+/** Redirect delegates off owner /orders/:id so hooks never call owner APIs. */
 const ManageOrderPage: React.FC = () => {
+  const { orderId } = useParams<{ orderId: string }>();
+  const location = useLocation();
+  const ordersApiPrefix = useOrdersApiPrefix();
+  const { isDelegationContext } = useUserProfileContext();
+
+  if (isDelegationContext && ordersApiPrefix !== '/delegate' && orderId) {
+    return (
+      <Navigate
+        to={`/delegate/orders/${orderId}${location.search}`}
+        replace
+      />
+    );
+  }
+
+  return <ManageOrderPageContent />;
+};
+
+const ManageOrderPageContent: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { orderId } = useParams<{ orderId: string }>();
-  const { profile, userType: activePersona } = useUserProfileContext();
-  const persona = resolvePersona(activePersona);
+  const { profile, userType: activePersona, isDelegationContext } =
+    useUserProfileContext();
+  const persona = isDelegationContext
+    ? 'business'
+    : resolvePersona(activePersona);
+  const ordersListPath = isDelegationContext ? '/delegate/orders' : '/orders';
   const api = useApiClient();
   const { accounts } = useAccountInfo();
   const { enqueueSnackbar } = useSnackbar();
@@ -193,7 +217,7 @@ const ManageOrderPage: React.FC = () => {
         <Alert severity="error">
           {error || t('orders.notFound', 'Order not found')}
         </Alert>
-        <Button sx={{ mt: 2 }} onClick={() => navigate('/orders')}>
+        <Button sx={{ mt: 2 }} onClick={() => navigate(ordersListPath)}>
           {t('common.back', 'Back')}
         </Button>
       </Container>
@@ -486,7 +510,7 @@ const ManageOrderPage: React.FC = () => {
       <Box sx={{ pb: isMobile ? 'calc(64px + min(45vh, 280px))' : 0 }}>
         <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <IconButton onClick={() => navigate('/orders')} aria-label="back">
+            <IconButton onClick={() => navigate(ordersListPath)} aria-label="back">
               <ArrowBackIcon />
             </IconButton>
             <Typography variant="body2" color="text.secondary">

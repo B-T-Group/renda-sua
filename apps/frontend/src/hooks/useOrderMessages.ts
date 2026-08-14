@@ -1,4 +1,8 @@
 import { useCallback, useState } from 'react';
+import {
+  useOrdersApiPrefix,
+  withOrdersApiPrefix,
+} from '../contexts/OrdersApiPrefixContext';
 import { useApiClient } from './useApiClient';
 
 export type PersonaId = 'client' | 'agent' | 'business';
@@ -96,6 +100,7 @@ export interface UseOrderMessagesReturn {
 
 export const useOrderMessages = (): UseOrderMessagesReturn => {
   const apiClient = useApiClient();
+  const ordersPrefix = useOrdersApiPrefix();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +117,7 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
 
       try {
         const response = await apiClient.get<OrderMessagesResponse>(
-          `/orders/${orderId}/messages`
+          withOrdersApiPrefix(ordersPrefix, `/orders/${orderId}/messages`)
         );
 
         if (response.data.success) {
@@ -132,7 +137,7 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, ordersPrefix]
   );
 
   const sendMessage = useCallback(
@@ -158,7 +163,7 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
         }
 
         const response = await apiClient.post<CreateOrderMessageResponse>(
-          `/orders/${orderId}/messages`,
+          withOrdersApiPrefix(ordersPrefix, `/orders/${orderId}/messages`),
           payload
         );
 
@@ -180,7 +185,7 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, ordersPrefix]
   );
 
   const refetch = useCallback(
@@ -194,14 +199,14 @@ export const useOrderMessages = (): UseOrderMessagesReturn => {
     async (orderId: string, lastReadMessageId: string): Promise<void> => {
       if (!apiClient || !orderId || !lastReadMessageId) return;
       try {
-        await apiClient.post(`/orders/${orderId}/messages/read`, {
+        await apiClient.post(withOrdersApiPrefix(ordersPrefix, `/orders/${orderId}/messages/read`), {
           lastReadMessageId,
         });
       } catch {
         // Best-effort — do not surface read-receipt failures
       }
     },
-    [apiClient]
+    [apiClient, ordersPrefix]
   );
 
   return {
