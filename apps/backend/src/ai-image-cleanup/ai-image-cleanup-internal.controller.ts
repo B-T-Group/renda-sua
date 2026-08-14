@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Headers,
   Param,
@@ -31,6 +32,27 @@ export class AiImageCleanupInternalController {
   ) {
     this.assertInternalKey(internalKey);
     return this.cleanupService.processJob(jobId);
+  }
+
+  @Public()
+  @Post('jobs/:jobId/fail')
+  @ApiOperation({
+    summary: 'Internal: mark cleanup job failed after SQS retries exhausted',
+  })
+  @ApiParam({ name: 'jobId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Job marked failed' })
+  @ApiResponse({ status: 401, description: 'Invalid internal key' })
+  @ApiResponse({ status: 409, description: 'Job still processing' })
+  async fail(
+    @Param('jobId') jobId: string,
+    @Body() body: { timestamp?: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ) {
+    this.assertInternalKey(internalKey);
+    return this.cleanupService.failJobAfterQueueExhaustion(
+      jobId,
+      body?.timestamp
+    );
   }
 
   private assertInternalKey(internalKey?: string): void {

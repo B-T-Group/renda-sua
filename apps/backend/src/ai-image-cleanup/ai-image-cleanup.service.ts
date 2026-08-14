@@ -960,6 +960,116 @@ export class AiImageCleanupService implements OnModuleInit {
     return { success: true };
   }
 
+  /** Called when SQS moves a cleanup message to the DLQ after maxReceiveCount. */
+  async failJobAfterQueueExhaustion(
+    jobId: string,
+    messageTimestamp?: string
+  ): Promise<{ success: boolean }> {
+    const job = await this.loadJobOrIgnore(jobId);
+    if (!job) return { success: true };
+    if (job.status !== 'queued' && job.status !== 'processing') {
+      return { success: true };
+    }
+    if (this.isSupersededEnqueue(job, messageTimestamp)) {
+      return { success: true };
+    }
+    await this.assertExclusiveForExhaustion(job);
+    if (await this.hasFreshProcessingResults(jobId)) {
+      throw new HttpException(
+        'Cleanup results still processing',
+        HttpStatus.CONFLICT
+      );
+    }
+    const refunded = await this.failPendingResults(job);
+    await this.finalizeJobAfterProcess(job, 0, refunded);
+    return { success: true };
+  }
+
+  private async loadJobOrIgnore(
+    jobId: string
+  ): Promise<AiImageCleanupJobRow | null> {
+    try {
+      return await this.loadJob(jobId);
+    } catch (error: any) {
+      if (error instanceof HttpException && error.getStatus() === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** Stale DLQ must not fail a job re-queued after the original message. */
+  private isSupersededEnqueue(
+    job: AiImageCleanupJobRow,
+    messageTimestamp?: string
+  ): boolean {
+    if (job.status !== 'queued' || !messageTimestamp || !job.updated_at) {
+      return false;
+    }
+    return Date.parse(messageTimestamp) < Date.parse(job.updated_at);
+  }
+
+  private async assertExclusiveForExhaustion(
+    job: AiImageCleanupJobRow
+  ): Promise<void> {
+    if (job.status === 'queued') return;
+    const claimed = await this.claimStaleProcessingJob(job.id);
+    if (!claimed) {
+      throw new HttpException(
+        'Cleanup job still processing',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async claimStaleProcessingJob(jobId: string): Promise<boolean> {
+    const data = await this.hasura.executeMutation<{
+      update_ai_image_cleanup_jobs: { affected_rows: number };
+    }>(Q.CLAIM_STALE_PROCESSING_JOB, {
+      id: jobId,
+      updatedAt: new Date().toISOString(),
+      staleBefore: this.exhaustionStaleBeforeIso(),
+    });
+    return (data.update_ai_image_cleanup_jobs?.affected_rows ?? 0) > 0;
+  }
+
+  /**
+   * Longer than Lambda/SQS attempt budget so in-flight Nest /process
+   * (which outlives the SQS client timeout) is not failed mid-flight.
+   */
+  private exhaustionStaleBeforeIso(): string {
+    return new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  }
+
+  private async hasFreshProcessingResults(jobId: string): Promise<boolean> {
+    const job = await this.loadJob(jobId);
+    const staleBefore = Date.parse(this.exhaustionStaleBeforeIso());
+    return (job.results ?? []).some((r) => {
+      if (r.status !== 'processing') return false;
+      if (!r.updated_at) return true;
+      return Date.parse(r.updated_at) >= staleBefore;
+    });
+  }
+
+  private async failPendingResults(job: AiImageCleanupJobRow): Promise<number> {
+    const now = new Date().toISOString();
+    const data = await this.hasura.executeMutation<{
+      update_ai_image_cleanup_results: { affected_rows: number };
+    }>(Q.FAIL_OPEN_RESULTS, {
+      jobId: job.id,
+      updatedAt: now,
+      completedAt: now,
+      staleBefore: this.exhaustionStaleBeforeIso(),
+      errorMessage: 'Cleanup failed after queue retries',
+    });
+    const failedCount = data.update_ai_image_cleanup_results?.affected_rows ?? 0;
+    const tokenUnit = this.tokenUnitForJob(job);
+    if (failedCount <= 0 || tokenUnit <= 0) return 0;
+    const refunded = failedCount * tokenUnit;
+    await this.tokens.refundTokens(job.business_id, refunded);
+    return refunded;
+  }
+
   private staleBeforeIso(): string {
     return new Date(Date.now() - 10 * 60 * 1000).toISOString();
   }

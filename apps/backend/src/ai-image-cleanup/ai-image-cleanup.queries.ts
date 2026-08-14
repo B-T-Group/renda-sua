@@ -327,6 +327,25 @@ export const CLAIM_JOB = `
   }
 `;
 
+export const CLAIM_STALE_PROCESSING_JOB = `
+  mutation ClaimStaleProcessingAiImageCleanupJob(
+    $id: uuid!
+    $updatedAt: timestamptz!
+    $staleBefore: timestamptz!
+  ) {
+    update_ai_image_cleanup_jobs(
+      where: {
+        id: { _eq: $id }
+        status: { _eq: processing }
+        updated_at: { _lt: $staleBefore }
+      }
+      _set: { status: processing, updated_at: $updatedAt }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const CLAIM_RESULT = `
   mutation ClaimAiImageCleanupResult(
     $id: uuid!
@@ -355,6 +374,37 @@ export const UPDATE_RESULT = `
   mutation UpdateAiImageCleanupResult($id: uuid!, $_set: ai_image_cleanup_results_set_input!) {
     update_ai_image_cleanup_results_by_pk(pk_columns: { id: $id }, _set: $_set) {
       ${RESULT_FIELDS}
+    }
+  }
+`;
+
+export const FAIL_OPEN_RESULTS = `
+  mutation FailOpenAiImageCleanupResults(
+    $jobId: uuid!
+    $updatedAt: timestamptz!
+    $completedAt: timestamptz!
+    $staleBefore: timestamptz!
+    $errorMessage: String!
+  ) {
+    update_ai_image_cleanup_results(
+      where: {
+        job_id: { _eq: $jobId }
+        _or: [
+          { status: { _eq: queued } }
+          {
+            status: { _eq: processing }
+            updated_at: { _lt: $staleBefore }
+          }
+        ]
+      }
+      _set: {
+        status: failed
+        error_message: $errorMessage
+        updated_at: $updatedAt
+        completed_at: $completedAt
+      }
+    ) {
+      affected_rows
     }
   }
 `;
