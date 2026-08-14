@@ -3,7 +3,7 @@ import { VALIDATION_CODES } from '../image-validation/types/image-validation.typ
 export const OPENAI_IMAGE_CLEANUP_MODEL_CONFIG_KEY =
   'openai_image_cleanup_model';
 
-export const DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL = 'gpt-image-1-mini' as const;
+export const DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL = 'gpt-image-1.5' as const;
 
 export type OpenAiImageCleanupModel = 'gpt-image-1-mini' | 'gpt-image-1.5';
 
@@ -23,6 +23,7 @@ export function parseOpenAiImageCleanupModel(
   value: string | null | undefined
 ): OpenAiImageCleanupModel {
   const trimmed = value?.trim();
+  if (trimmed === 'gpt-image-1-mini') return 'gpt-image-1-mini';
   if (trimmed === 'gpt-image-1.5') return 'gpt-image-1.5';
   return DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL;
 }
@@ -41,7 +42,7 @@ export function extractValidationCodes(raw: unknown): string[] {
 
 /**
  * Decide whether to skip cleanup or which Images model to use.
- * Admin `gpt-image-1.5` forces that model for all edits; mini may upgrade blurry shots.
+ * Uses the admin-configured model (default gpt-image-1.5).
  * When `explicitRequest` is true (merchant opted in / tapped Enhance), catalog-ready
  * skip is disabled because local validators cannot detect clutter/text/size issues.
  */
@@ -75,12 +76,8 @@ export function routeCleanupModel(input: {
 
 function pickModel(
   adminDefaultModel: OpenAiImageCleanupModel,
-  codes: string[]
+  _codes: string[]
 ): OpenAiImageCleanupModel {
-  // Only use expensive 1.5 model when explicitly set by admin
-  // Blurry images now use mini to reduce costs (1.5 is 3-4x more expensive)
-  if (adminDefaultModel === 'gpt-image-1.5') {
-    return 'gpt-image-1.5';
-  }
-  return 'gpt-image-1-mini';
+  // Paid AI cleanup uses the admin-configured model (default gpt-image-1.5).
+  return adminDefaultModel;
 }
