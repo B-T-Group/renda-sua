@@ -26,6 +26,7 @@ import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
+import { AiImageCleanupModule } from '../ai-image-cleanup/ai-image-cleanup.module';
 import { WithdrawalPinService } from './withdrawal-pin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { AdminAuthModule } from './admin-auth.module';
@@ -52,6 +53,7 @@ import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
     RentalListingAiReviewModule,
     ItemAiReviewModule,
     ImageValidationModule,
+    AiImageCleanupModule,
     ThreadsModule,
   ],
   controllers: [

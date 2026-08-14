@@ -95,6 +95,47 @@ export function useItemModeration() {
     [apiClient]
   );
 
+  const requestAiImageCleanup = useCallback(
+    async (itemId: string) => {
+      if (!apiClient) {
+        return { success: false as const, error: 'Not authenticated' };
+      }
+      try {
+        const { data } = await apiClient.post<{
+          success: boolean;
+          jobId?: string;
+          status?: string;
+          appliedExistingReview?: boolean;
+          error?: string;
+          message?: string;
+        }>(`/admin/items/${itemId}/ai-image-cleanup`, {});
+        if (!data.success) {
+          return {
+            success: false as const,
+            error: data.error || data.message || 'Request failed',
+          };
+        }
+        return {
+          success: true as const,
+          jobId: data.jobId,
+          status: data.status,
+          appliedExistingReview: !!data.appliedExistingReview,
+        };
+      } catch (e: unknown) {
+        const axiosErr = e as {
+          response?: { data?: { error?: string; message?: string } };
+          message?: string;
+        };
+        const msg =
+          axiosErr.response?.data?.error ||
+          axiosErr.response?.data?.message ||
+          (e instanceof Error ? e.message : 'Request failed');
+        return { success: false as const, error: String(msg) };
+      }
+    },
+    [apiClient]
+  );
+
   return {
     items,
     pagination,
@@ -103,5 +144,6 @@ export function useItemModeration() {
     fetchQueue,
     approveItem,
     rejectItem,
+    requestAiImageCleanup,
   };
 }

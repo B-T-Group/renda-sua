@@ -23,7 +23,8 @@ export type AiImageCleanupJobSource =
   | 'library'
   | 'item_detail'
   | 'variant'
-  | 'rental';
+  | 'rental'
+  | 'admin_moderation';
 
 export type ImageActiveVersion = 'original' | 'enhanced';
 

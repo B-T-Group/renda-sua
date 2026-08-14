@@ -96,6 +96,95 @@ export class AiImageCleanupService implements OnModuleInit {
     });
   }
 
+  /**
+   * Platform admin/superuser trigger from sale-item moderation.
+   * Does not require a business persona and does not charge merchant AI tokens.
+   */
+  async requestAdminItemCleanup(
+    itemId: string,
+    adminUserId: string,
+    imageIds?: string[]
+  ): Promise<{
+    job: AiImageCleanupJobRow;
+    ai_tokens_remaining: number;
+    appliedExistingReview: boolean;
+  }> {
+    const item = await this.loadItemBusiness(itemId);
+    const open = await this.findOpenJobForItem(itemId);
+    if (open?.status === 'queued' || open?.status === 'processing') {
+      throw new HttpException(
+        'An AI cleanup job is already in progress for this item',
+        HttpStatus.CONFLICT
+      );
+    }
+    const appliedOpenJobId =
+      open?.status === 'ready_for_review' ? open.id : null;
+    if (appliedOpenJobId) {
+      await this.adminForceApplyOpenJob(appliedOpenJobId);
+    }
+    try {
+      const images = await this.loadEligibleItemImages(
+        itemId,
+        item.businessId,
+        imageIds
+      );
+      const queued = await this.enqueueCleanupJob({
+        businessId: item.businessId,
+        userId: adminUserId,
+        itemId,
+        itemVariantId: null,
+        images,
+        source: 'admin_moderation',
+        chargeTokens: false,
+      });
+      return { ...queued, appliedExistingReview: !!appliedOpenJobId };
+    } catch (error: any) {
+      if (appliedOpenJobId) {
+        // Prior review job was closed; always resume if we did not queue a replacement.
+        await this.maybeResumeModeration(await this.loadJob(appliedOpenJobId));
+      }
+      if (
+        appliedOpenJobId &&
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.BAD_REQUEST &&
+        String(error.message).includes('No eligible images')
+      ) {
+        const balance = await this.tokens.getBalance(item.businessId);
+        return {
+          job: await this.loadJob(appliedOpenJobId),
+          ai_tokens_remaining: balance,
+          appliedExistingReview: true,
+        };
+      }
+      throw error;
+    }
+  }
+
+  /** Apply pending review results so a new admin cleanup (or review resume) can proceed. */
+  private async adminForceApplyOpenJob(jobId: string): Promise<void> {
+    const job = await this.loadJob(jobId);
+    const ready = (job.results ?? []).filter((r) => r.status === 'ready');
+    for (const result of ready) {
+      const applied = await this.applyEnhancement(result, { force: true });
+      if (applied) {
+        await this.markResult(result.id, 'accepted', {
+          applied_at: new Date().toISOString(),
+        });
+      } else {
+        await this.markResult(result.id, 'rejected');
+      }
+    }
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(Q.UPDATE_JOB, {
+      id: jobId,
+      _set: {
+        status: 'completed',
+        completed_at: now,
+        updated_at: now,
+      },
+    });
+  }
+
   async requestVariantCleanup(
     variantId: string,
     imageIds?: string[]
@@ -205,8 +294,18 @@ export class AiImageCleanupService implements OnModuleInit {
     itemVariantId: string | null;
     images: CleanupEligibleImage[];
     source: AiImageCleanupJobSource;
+    /** When false (admin moderation), skip merchant token reservation. Default true. */
+    chargeTokens?: boolean;
   }): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
-    const { businessId, userId, itemId, itemVariantId, images, source } = args;
+    const {
+      businessId,
+      userId,
+      itemId,
+      itemVariantId,
+      images,
+      source,
+      chargeTokens = true,
+    } = args;
     const classified = await this.classifyByContentHash(businessId, images);
     if (!classified.toProcess.length && classified.reusable.length) {
       return this.completeReuseOnlyJob({
@@ -253,25 +352,32 @@ export class AiImageCleanupService implements OnModuleInit {
     }
 
     const toCharge = needingEdit;
-    const tokenCost = toCharge.length * CLEANUP_TOKEN_COST;
-    const balanceAfter = await this.tokens.tryReserveTokens(
-      businessId,
-      tokenCost
-    );
-    if (balanceAfter === null) {
-      throw new HttpException(
-        {
-          success: false,
-          error:
-            'No AI tokens remaining. Purchase more tokens to use image cleanup.',
-          code: 'INSUFFICIENT_AI_TOKENS',
-        },
-        HttpStatus.PAYMENT_REQUIRED
+    const tokenCost = chargeTokens ? toCharge.length * CLEANUP_TOKEN_COST : 0;
+    let balanceAfter = await this.tokens.getBalance(businessId);
+    if (chargeTokens) {
+      const reserved = await this.tokens.tryReserveTokens(
+        businessId,
+        tokenCost
       );
+      if (reserved === null) {
+        throw new HttpException(
+          {
+            success: false,
+            error:
+              'No AI tokens remaining. Purchase more tokens to use image cleanup.',
+            code: 'INSUFFICIENT_AI_TOKENS',
+          },
+          HttpStatus.PAYMENT_REQUIRED
+        );
+      }
+      balanceAfter = reserved;
     }
     let job: AiImageCleanupJobRow | null = null;
     try {
-      const mode = await this.resolveJobMode(businessId);
+      const mode =
+        source === 'admin_moderation'
+          ? 'auto_apply'
+          : await this.resolveJobMode(businessId);
       job = await this.createJob({
         businessId,
         itemId,
@@ -285,13 +391,15 @@ export class AiImageCleanupService implements OnModuleInit {
       if (skippedIneligible.length) {
         await this.createIneligibleResults(job.id, skippedIneligible);
       }
-      await this.tokens.recordCleanupUsage({
-        businessId,
-        userId,
-        subjectType: 'ai_image_cleanup',
-        subjectId: job.id,
-        tokensConsumed: tokenCost,
-      });
+      if (tokenCost > 0) {
+        await this.tokens.recordCleanupUsage({
+          businessId,
+          userId,
+          subjectType: 'ai_image_cleanup',
+          subjectId: job.id,
+          tokensConsumed: tokenCost,
+        });
+      }
       await this.queue.enqueueJob(job.id);
       if (classified.reusable.length) {
         await this.applyReusableEnhancements(job.id, classified.reusable);
@@ -302,6 +410,7 @@ export class AiImageCleanupService implements OnModuleInit {
         image_count: toCharge.length,
         reused_count: classified.reusable.length,
         skipped_ineligible: skippedIneligible.length,
+        charge_tokens: chargeTokens,
       });
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
@@ -834,12 +943,13 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     const job = await this.loadJob(jobId);
     const pending = (job.results ?? []).filter((r) => r.status === 'queued');
+    const tokenUnit = this.tokenUnitForJob(job);
     let consumed = 0;
     let refunded = 0;
     for (const result of pending) {
-      const outcome = await this.processOneResult(job, result);
-      if (outcome === 'ready') consumed += CLEANUP_TOKEN_COST;
-      if (outcome === 'failed') refunded += CLEANUP_TOKEN_COST;
+      const outcome = await this.processOneResult(job, result, tokenUnit);
+      if (outcome === 'ready') consumed += tokenUnit;
+      if (outcome === 'failed') refunded += tokenUnit;
     }
     await this.finalizeJobAfterProcess(job, consumed, refunded);
     return { success: true };
@@ -861,7 +971,8 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private async processOneResult(
     job: AiImageCleanupJobRow,
-    result: AiImageCleanupResultRow
+    result: AiImageCleanupResultRow,
+    tokenUnit: number
   ): Promise<'ready' | 'failed' | 'skipped'> {
     const claimed = await this.claimResult(result.id);
     if (!claimed) return 'skipped';
@@ -911,7 +1022,9 @@ export class AiImageCleanupService implements OnModuleInit {
             updated_at: now,
           },
         });
-        await this.tokens.refundTokens(job.business_id, CLEANUP_TOKEN_COST);
+        if (tokenUnit > 0) {
+          await this.tokens.refundTokens(job.business_id, tokenUnit);
+        }
         await this.trackEvent('enhancement_failed', result.id, {
           job_id: job.id,
           error: 'skipped_not_eligible',
@@ -996,13 +1109,20 @@ export class AiImageCleanupService implements OnModuleInit {
           updated_at: new Date().toISOString(),
         },
       });
-      await this.tokens.refundTokens(job.business_id, CLEANUP_TOKEN_COST);
+      if (tokenUnit > 0) {
+        await this.tokens.refundTokens(job.business_id, tokenUnit);
+      }
       await this.trackEvent('enhancement_failed', result.id, {
         job_id: job.id,
         error: error?.message,
       });
       return 'failed';
     }
+  }
+
+  /** Per-image token accounting; 0 for admin jobs that never reserved tokens. */
+  private tokenUnitForJob(job: AiImageCleanupJobRow): number {
+    return (job.tokens_reserved ?? 0) > 0 ? CLEANUP_TOKEN_COST : 0;
   }
 
   private async finalizeJobAfterProcess(
@@ -1151,9 +1271,16 @@ export class AiImageCleanupService implements OnModuleInit {
       title = isFr
         ? 'Échec du nettoyage des photos'
         : 'Photo cleanup failed';
-      body = isFr
-        ? `Le nettoyage IA a échoué pour « ${itemName} ». Vos jetons ont été remboursés.`
-        : `AI cleanup failed for “${itemName}”. Your tokens were refunded.`;
+      const refundedAny = (job.tokens_refunded ?? 0) > 0;
+      if (refundedAny) {
+        body = isFr
+          ? `Le nettoyage IA a échoué pour « ${itemName} ». Vos jetons ont été remboursés.`
+          : `AI cleanup failed for “${itemName}”. Your tokens were refunded.`;
+      } else {
+        body = isFr
+          ? `Le nettoyage IA a échoué pour « ${itemName} ».`
+          : `AI cleanup failed for “${itemName}”.`;
+      }
       type = 'ai_image_cleanup_ready';
     }
     try {
@@ -1349,6 +1476,21 @@ export class AiImageCleanupService implements OnModuleInit {
       );
     }
     return { businessId: user.business.id, userId: user.id };
+  }
+
+  private async loadItemBusiness(
+    itemId: string
+  ): Promise<{ businessId: string }> {
+    const data = await this.hasura.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(
+      `query($id: uuid!) { items_by_pk(id: $id) { id business_id } }`,
+      { id: itemId }
+    );
+    if (!data.items_by_pk?.business_id) {
+      throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
+    }
+    return { businessId: data.items_by_pk.business_id };
   }
 
   private async assertNoOpenJobForItem(itemId: string): Promise<void> {

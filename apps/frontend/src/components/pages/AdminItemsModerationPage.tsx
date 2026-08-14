@@ -1,4 +1,4 @@
-import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon, AutoFixHigh as CleanupIcon } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -25,7 +25,7 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useSnackbar } from 'notistack';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { usePermission } from '../../hooks/usePermissions';
 import {
@@ -36,7 +36,7 @@ import ItemModerationStatusChip from '../business/ItemModerationStatusChip';
 
 const AdminItemsModerationPage: React.FC = () => {
   const { t } = useTranslation();
-  const { profile } = useUserProfileContext();
+  const { enqueueSnackbar } = useSnackbar();
   const isAdmin = usePermission(PlatformPermissions.MODERATE_ITEMS);
   const {
     items,
@@ -46,12 +46,14 @@ const AdminItemsModerationPage: React.FC = () => {
     fetchQueue,
     approveItem,
     rejectItem,
+    requestAiImageCleanup,
   } = useItemModeration();
   const [status, setStatus] = useState<ItemModerationQueueStatus>('pending');
   const [page, setPage] = useState(1);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
+  const [cleanupBusyId, setCleanupBusyId] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     void fetchQueue(status, page, 20);
@@ -68,6 +70,40 @@ const AdminItemsModerationPage: React.FC = () => {
       if (ok) reload();
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const onTriggerCleanup = async (id: string) => {
+    setCleanupBusyId(id);
+    try {
+      const result = await requestAiImageCleanup(id);
+      if (result.success) {
+        const message = result.appliedExistingReview
+          ? result.status === 'completed'
+            ? t(
+                'admin.itemModeration.cleanupAppliedExisting',
+                'Pending cleaned photos were applied. AI review can continue.'
+              )
+            : t(
+                'admin.itemModeration.cleanupAppliedAndQueued',
+                'Pending cleaned photos were applied, and a new AI cleanup was queued.'
+              )
+          : t(
+              'admin.itemModeration.cleanupStarted',
+              'AI photo cleanup queued for this item.'
+            );
+        enqueueSnackbar(message, { variant: 'success' });
+      } else {
+        enqueueSnackbar(
+          `${t(
+            'admin.itemModeration.cleanupFailed',
+            'Could not start AI photo cleanup'
+          )}: ${result.error}`,
+          { variant: 'error' }
+        );
+      }
+    } finally {
+      setCleanupBusyId(null);
     }
   };
 
@@ -217,8 +253,23 @@ const AdminItemsModerationPage: React.FC = () => {
                             display: 'flex',
                             gap: 1,
                             justifyContent: 'flex-end',
+                            flexWrap: 'wrap',
                           }}
                         >
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<CleanupIcon />}
+                            disabled={actionBusy || cleanupBusyId === row.id}
+                            onClick={() => void onTriggerCleanup(row.id)}
+                          >
+                            {cleanupBusyId === row.id
+                              ? t('common.loading', 'Loading...')
+                              : t(
+                                  'admin.itemModeration.triggerCleanup',
+                                  'Clean photos'
+                                )}
+                          </Button>
                           <Button
                             size="small"
                             variant="contained"

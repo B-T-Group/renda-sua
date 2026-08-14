@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Param,
@@ -54,6 +55,8 @@ import {
 } from '../item-ai-review/dto/item-ai-review.dto';
 import { BusinessAccountTypeService } from '../business-items/business-account-type.service';
 import { AdminChangeAccountTypeDto } from '../business-items/dto/change-account-type.dto';
+import { AiImageCleanupService } from '../ai-image-cleanup/ai-image-cleanup.service';
+import { RequestAiImageCleanupDto } from '../ai-image-cleanup/dto/request-ai-image-cleanup.dto';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -87,7 +90,8 @@ export class AdminController {
     private readonly countryOnboardingService: CountryOnboardingService,
     private readonly transferService: BusinessLocationTransferService,
     private readonly threadsService: ThreadsService,
-    private readonly businessAccountTypeService: BusinessAccountTypeService
+    private readonly businessAccountTypeService: BusinessAccountTypeService,
+    private readonly aiImageCleanupService: AiImageCleanupService
   ) {}
 
   @Post('message')
@@ -374,6 +378,38 @@ export class AdminController {
       reason
     );
     return { success: true };
+  }
+
+  @Post('items/:itemId/ai-image-cleanup')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
+  @ApiOperation({
+    summary:
+      'Queue AI image cleanup for a sale item during moderation (no merchant token charge)',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiBody({ type: RequestAiImageCleanupDto, required: false })
+  @ApiResponse({ status: 201, description: 'Cleanup job queued' })
+  @ApiResponse({ status: 400, description: 'No eligible images' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  @ApiResponse({ status: 409, description: 'Cleanup already in progress' })
+  async requestSaleItemAiImageCleanup(
+    @Param('itemId') itemId: string,
+    @Body() body: RequestAiImageCleanupDto,
+    @Req() request: RequestWithUser
+  ) {
+    const result = await this.aiImageCleanupService.requestAdminItemCleanup(
+      itemId,
+      request.user.id,
+      body?.imageIds
+    );
+    return {
+      success: true,
+      jobId: result.job.id,
+      status: result.job.status,
+      appliedExistingReview: result.appliedExistingReview,
+      ai_tokens_remaining: result.ai_tokens_remaining,
+    };
   }
 
   @Post('items/:itemId/message')
