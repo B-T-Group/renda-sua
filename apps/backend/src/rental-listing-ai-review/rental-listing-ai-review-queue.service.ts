@@ -61,7 +61,7 @@ export class RentalListingAiReviewQueueService {
       const input: SendMessageCommandInput = {
         QueueUrl: this.queueUrl,
         MessageBody: JSON.stringify(message),
-        MessageGroupId: 'rental-listing-ai-review',
+        MessageGroupId: String(message.listingId || 'rental-listing-ai-review'),
       };
       const response = await this.sqsClient.send(new SendMessageCommand(input));
       this.logger.log(

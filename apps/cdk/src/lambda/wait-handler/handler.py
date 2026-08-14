@@ -64,7 +64,7 @@ def _send_order_cancelled_sqs(
         sqs.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(msg),
-            MessageGroupId="order-status-events",
+            MessageGroupId=order_id,
         )
         log_info("Sent order.cancelled to SQS", order_id=order_id)
         return True
