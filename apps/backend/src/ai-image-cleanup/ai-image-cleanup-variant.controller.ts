@@ -19,20 +19,24 @@ export class AiImageCleanupVariantController {
   @Post(':variantId/ai-image-cleanup')
   @ApiOperation({
     summary:
-      'Request async AI cleanup for variant images (consumes 1 token each)',
+      'Request async cleanup for variant images. selections[].kind rembg|ai; bare imageIds default to ai.',
   })
   @ApiParam({ name: 'variantId', format: 'uuid' })
   @ApiBody({ type: RequestAiImageCleanupDto })
   @ApiResponse({ status: 201, description: 'Cleanup job queued' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  @ApiResponse({ status: 409, description: 'Job already open for variant' })
+  @ApiResponse({
+    status: 409,
+    description: 'Open rembg/ai result already exists for an image',
+  })
   async requestVariantCleanup(
     @Param('variantId') variantId: string,
     @Body() body: RequestAiImageCleanupDto
   ) {
     const data = await this.cleanupService.requestVariantCleanup(
       variantId,
-      body?.imageIds
+      body?.imageIds,
+      body?.selections
     );
     return { success: true, data };
   }

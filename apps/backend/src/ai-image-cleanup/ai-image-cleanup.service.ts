@@ -29,16 +29,25 @@ import type {
   AiImageCleanupJobMode,
   AiImageCleanupJobRow,
   AiImageCleanupJobSource,
+  AiImageCleanupKind,
   AiImageCleanupResultRow,
   CleanupEligibleImage,
+  CleanupImageSelection,
+  ImageActiveVersion,
   VersionedImageRow,
 } from './ai-image-cleanup.types';
 import { EnhancementConfidenceService } from './enhancement-confidence.service';
 import {
   buildApplyPatch,
   buildRevertPatch,
+  buildSelectVersionPatch,
+  hasExistingVersion,
   shouldSkipAutoApply,
 } from './image-versioning.helpers';
+import {
+  countAiSelections,
+  normalizeCleanupSelections,
+} from './cleanup-selection.util';
 import {
   DEFAULT_OPENAI_IMAGE_CLEANUP_MODEL,
   extractValidationCodes,
@@ -80,14 +89,14 @@ export class AiImageCleanupService implements OnModuleInit {
   async requestCleanup(
     itemId: string,
     imageIds?: string[],
-    source: AiImageCleanupJobSource = 'creation'
+    source: AiImageCleanupJobSource = 'creation',
+    selections?: CleanupImageSelection[]
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
-    await this.assertNoOpenJobForItem(itemId);
     const images = await this.loadEligibleItemImages(
       itemId,
       businessId,
-      imageIds
+      normalizeCleanupSelections({ imageIds, selections })
     );
     return this.enqueueCleanupJob({
       businessId,
@@ -129,7 +138,7 @@ export class AiImageCleanupService implements OnModuleInit {
       const images = await this.loadEligibleItemImages(
         itemId,
         item.businessId,
-        imageIds
+        normalizeCleanupSelections({ imageIds })
       );
       const queued = await this.enqueueCleanupJob({
         businessId: item.businessId,
@@ -190,14 +199,14 @@ export class AiImageCleanupService implements OnModuleInit {
 
   async requestVariantCleanup(
     variantId: string,
-    imageIds?: string[]
+    imageIds?: string[],
+    selections?: CleanupImageSelection[]
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
-    await this.assertNoOpenJobForVariant(variantId);
     const { itemId, images } = await this.loadEligibleVariantImages(
       variantId,
       businessId,
-      imageIds
+      normalizeCleanupSelections({ imageIds, selections })
     );
     return this.enqueueCleanupJob({
       businessId,
@@ -212,23 +221,23 @@ export class AiImageCleanupService implements OnModuleInit {
   /** Enqueue async cleanup for a single library/item image (replaces sync 180s path). */
   async requestLibraryImageCleanup(
     imageId: string,
-    source: AiImageCleanupJobSource = 'library'
+    source: AiImageCleanupJobSource = 'library',
+    kind: AiImageCleanupKind = 'ai'
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
     const image = await this.loadItemImageRow(imageId);
     if (!image || image.business_id !== businessId) {
       throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
     }
-    if (image.is_ai_cleaned && image.active_version === 'enhanced') {
+    if (hasExistingVersion(image, kind)) {
       throw new HttpException(
-        'Image was already cleaned with AI',
+        kind === 'rembg'
+          ? 'Image already has a background-removed version'
+          : 'Image was already cleaned with AI',
         HttpStatus.BAD_REQUEST
       );
     }
-    await this.assertNoOpenJobForImage('item_image', imageId);
-    if (image.item_id) {
-      await this.assertNoOpenJobForItem(image.item_id);
-    }
+    await this.assertNoOpenJobForImage('item_image', imageId, kind);
     return this.enqueueCleanupJob({
       businessId,
       userId,
@@ -241,6 +250,7 @@ export class AiImageCleanupService implements OnModuleInit {
           s3_key: image.original_s3_key || image.s3_key,
           content_hash: image.content_hash,
           source: 'item_image',
+          kind,
           width: image.width,
           height: image.height,
           validation_warnings: image.validation_warnings,
@@ -253,20 +263,23 @@ export class AiImageCleanupService implements OnModuleInit {
   }
 
   async requestRentalImageCleanup(
-    imageId: string
+    imageId: string,
+    kind: AiImageCleanupKind = 'ai'
   ): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const { businessId, userId } = await this.requireBusinessContext();
     const image = await this.loadRentalImageRow(imageId);
     if (!image || image.business_id !== businessId) {
       throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
     }
-    if (image.is_ai_cleaned && image.active_version === 'enhanced') {
+    if (hasExistingVersion(image, kind)) {
       throw new HttpException(
-        'Image was already cleaned with AI',
+        kind === 'rembg'
+          ? 'Image already has a background-removed version'
+          : 'Image was already cleaned with AI',
         HttpStatus.BAD_REQUEST
       );
     }
-    await this.assertNoOpenJobForImage('rental_image', imageId);
+    await this.assertNoOpenJobForImage('rental_image', imageId, kind);
     return this.enqueueCleanupJob({
       businessId,
       userId,
@@ -279,6 +292,7 @@ export class AiImageCleanupService implements OnModuleInit {
           s3_key: image.original_s3_key || image.s3_key,
           content_hash: image.content_hash,
           source: 'rental_image',
+          kind,
           width: image.width,
           height: image.height,
           validation_warnings: image.validation_warnings,
@@ -309,6 +323,7 @@ export class AiImageCleanupService implements OnModuleInit {
       source,
       chargeTokens = true,
     } = args;
+    await this.assertNoOpenKindLocks(images);
     const classified = await this.classifyByContentHash(businessId, images);
     if (!classified.toProcess.length && classified.reusable.length) {
       return this.completeReuseOnlyJob({
@@ -325,6 +340,10 @@ export class AiImageCleanupService implements OnModuleInit {
     const needingEdit: CleanupEligibleImage[] = [];
     const skippedIneligible: CleanupEligibleImage[] = [];
     for (const img of classified.toProcess) {
+      if (img.kind === 'rembg') {
+        needingEdit.push(img);
+        continue;
+      }
       const enriched = await this.ensureValidationForCleanup(img);
       const decision = routeCleanupModel({
         adminDefaultModel: adminModel,
@@ -346,18 +365,19 @@ export class AiImageCleanupService implements OnModuleInit {
     }
 
     if (!needingEdit.length) {
-      // Explicit request rejected for every newly requested image (e.g. inappropriate).
-      // Do not mask this with hash-reuse completion.
       throw new HttpException(
         'Image is not eligible for AI cleanup',
         HttpStatus.BAD_REQUEST
       );
     }
 
-    const toCharge = needingEdit;
-    const tokenCost = chargeTokens ? toCharge.length * CLEANUP_TOKEN_COST : 0;
+    const aiCount = countAiSelections(needingEdit);
+    const tokenCost =
+      chargeTokens && source !== 'admin_moderation'
+        ? aiCount * CLEANUP_TOKEN_COST
+        : 0;
     let balanceAfter = await this.tokens.getBalance(businessId);
-    if (chargeTokens) {
+    if (tokenCost > 0) {
       const reserved = await this.tokens.tryReserveTokens(
         businessId,
         tokenCost
@@ -376,48 +396,167 @@ export class AiImageCleanupService implements OnModuleInit {
       balanceAfter = reserved;
     }
     let job: AiImageCleanupJobRow | null = null;
+    /** Only cancel on rollback when this request created the job (not an append). */
+    let createdNewJob = false;
+    let appendCompleted = false;
     try {
       const mode =
-        source === 'admin_moderation'
-          ? 'auto_apply'
-          : await this.resolveJobMode(businessId);
-      job = await this.createJob({
-        businessId,
-        itemId,
-        userId,
-        tokensReserved: tokenCost,
-        itemVariantId,
-        mode,
-        source,
-      });
-      await this.createResults(job.id, toCharge);
-      if (skippedIneligible.length) {
-        await this.createIneligibleResults(job.id, skippedIneligible);
-      }
-      if (tokenCost > 0) {
-        await this.tokens.recordCleanupUsage({
+        source === 'admin_moderation' ? 'auto_apply' : 'review_all';
+      const openJob = await this.findAppendableOpenJob(itemId, itemVariantId);
+      if (openJob) {
+        job = await this.appendResultsToOpenJob({
+          openJob,
+          images: needingEdit,
+          skippedIneligible,
+          tokenCost,
           businessId,
           userId,
-          subjectType: 'ai_image_cleanup',
-          subjectId: job.id,
-          tokensConsumed: tokenCost,
+          chargeTokens: tokenCost > 0,
         });
+        appendCompleted = true;
+      } else {
+        // Re-check open job to reduce duplicate-job races under concurrency.
+        const raced = await this.findAppendableOpenJob(itemId, itemVariantId);
+        if (raced) {
+          job = await this.appendResultsToOpenJob({
+            openJob: raced,
+            images: needingEdit,
+            skippedIneligible,
+            tokenCost,
+            businessId,
+            userId,
+            chargeTokens: tokenCost > 0,
+          });
+          appendCompleted = true;
+        } else {
+          createdNewJob = true;
+          job = await this.createJob({
+            businessId,
+            itemId,
+            userId,
+            tokensReserved: tokenCost,
+            itemVariantId,
+            mode,
+            source,
+          });
+          await this.createResults(job.id, needingEdit);
+          if (skippedIneligible.length) {
+            await this.createIneligibleResults(job.id, skippedIneligible);
+          }
+          if (tokenCost > 0) {
+            await this.tokens.recordCleanupUsage({
+              businessId,
+              userId,
+              subjectType: 'ai_image_cleanup',
+              subjectId: job.id,
+              tokensConsumed: tokenCost,
+            });
+          }
+          await this.queue.enqueueJob(job.id);
+        }
       }
-      await this.queue.enqueueJob(job.id);
       if (classified.reusable.length) {
-        await this.applyReusableEnhancements(job.id, classified.reusable);
+        try {
+          await this.applyReusableEnhancements(job.id, classified.reusable);
+        } catch (reuseError: any) {
+          this.logger.warn(
+            `Hash-reuse apply failed for job ${job.id}: ${reuseError?.message ?? reuseError}`
+          );
+        }
       }
       await this.trackEvent('enhancement_requested', job.id, {
         source,
-        mode,
-        image_count: toCharge.length,
+        mode: job.mode ?? mode,
+        image_count: needingEdit.length,
+        ai_count: aiCount,
+        rembg_count: needingEdit.length - aiCount,
         reused_count: classified.reusable.length,
         skipped_ineligible: skippedIneligible.length,
         charge_tokens: chargeTokens,
       });
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
-      await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
+      if (createdNewJob) {
+        await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
+      } else if (!appendCompleted) {
+        // Append cleaned up its own partial inserts; refund reservation only.
+        await this.rollbackFailedRequest(businessId, tokenCost);
+      }
+      // Append succeeded then a later step failed: keep results + tokens.
+      throw error;
+    }
+  }
+
+  private async findAppendableOpenJob(
+    itemId: string | null,
+    itemVariantId: string | null
+  ): Promise<{ id: string; status: string } | null> {
+    if (itemVariantId) {
+      const data = await this.hasura.executeQuery<{
+        ai_image_cleanup_jobs: { id: string; status: string }[];
+      }>(Q.GET_OPEN_JOB_FOR_VARIANT, { variantId: itemVariantId });
+      return data.ai_image_cleanup_jobs?.[0] ?? null;
+    }
+    if (itemId) {
+      return this.findOpenJobForItem(itemId);
+    }
+    return null;
+  }
+
+  private async appendResultsToOpenJob(args: {
+    openJob: { id: string; status: string };
+    images: CleanupEligibleImage[];
+    skippedIneligible: CleanupEligibleImage[];
+    tokenCost: number;
+    businessId: string;
+    userId: string;
+    chargeTokens: boolean;
+  }): Promise<AiImageCleanupJobRow> {
+    let createdIds: string[] = [];
+    let tokensBumped = false;
+    try {
+      createdIds = await this.createResults(args.openJob.id, args.images);
+      if (args.skippedIneligible.length) {
+        const ineligibleIds = await this.createIneligibleResults(
+          args.openJob.id,
+          args.skippedIneligible
+        );
+        createdIds = createdIds.concat(ineligibleIds);
+      }
+      if (args.chargeTokens && args.tokenCost > 0) {
+        await this.bumpJobTokens(args.openJob.id, args.tokenCost);
+        tokensBumped = true;
+        await this.tokens.recordCleanupUsage({
+          businessId: args.businessId,
+          userId: args.userId,
+          subjectType: 'ai_image_cleanup',
+          subjectId: args.openJob.id,
+          tokensConsumed: args.tokenCost,
+        });
+      }
+      // Always return to queued so newly appended results are claimable, even if
+      // an in-flight worker still holds processing (finalize re-checks queued).
+      // listPending still surfaces jobs with ready results while status is queued.
+      if (
+        args.openJob.status === 'ready_for_review' ||
+        args.openJob.status === 'queued' ||
+        args.openJob.status === 'processing'
+      ) {
+        await this.setJobStatus(args.openJob.id, 'queued');
+        await this.queue.enqueueJob(args.openJob.id);
+      }
+      return this.loadJob(args.openJob.id);
+    } catch (error: any) {
+      if (createdIds.length) {
+        await this.hasura
+          .executeMutation(Q.DELETE_RESULTS_BY_IDS, { ids: createdIds })
+          .catch(() => undefined);
+      }
+      if (tokensBumped) {
+        await this.bumpJobTokens(args.openJob.id, -args.tokenCost).catch(
+          () => undefined
+        );
+      }
       throw error;
     }
   }
@@ -431,7 +570,8 @@ export class AiImageCleanupService implements OnModuleInit {
     reusable: Array<{ img: CleanupEligibleImage; existing: VersionedImageRow }>;
   }): Promise<{ job: AiImageCleanupJobRow; ai_tokens_remaining: number }> {
     const balanceAfter = await this.tokens.getBalance(args.businessId);
-    const mode = await this.resolveJobMode(args.businessId);
+    const mode =
+      args.source === 'admin_moderation' ? 'auto_apply' : 'review_all';
     const job = await this.createJob({
       businessId: args.businessId,
       itemId: args.itemId,
@@ -480,12 +620,23 @@ export class AiImageCleanupService implements OnModuleInit {
               entry.img.source === 'rental_image' ? entry.img.id : null,
             original_image_url: entry.img.image_url,
             original_s3_key: entry.img.s3_key,
-            cleaned_image_url: entry.existing.enhanced_image_url,
-            cleaned_s3_key: entry.existing.enhanced_s3_key,
+            kind: entry.img.kind,
+            cleaned_image_url:
+              entry.img.kind === 'rembg'
+                ? entry.existing.rembg_image_url
+                : entry.existing.enhanced_image_url,
+            cleaned_s3_key:
+              entry.img.kind === 'rembg'
+                ? entry.existing.rembg_s3_key
+                : entry.existing.enhanced_s3_key,
             status: 'accepted',
             confidence_tier: 'high',
             confidence_score: 1,
-            changes: ['Reused identical prior enhancement'],
+            changes: [
+              entry.img.kind === 'rembg'
+                ? 'Reused identical prior background removal'
+                : 'Reused identical prior enhancement',
+            ],
             applied_at: now,
             completed_at: now,
             provider: 'dedupe',
@@ -515,8 +666,16 @@ export class AiImageCleanupService implements OnModuleInit {
         (await this.computeContentHash(img.image_url).catch(() => null));
       if (hash) {
         img.content_hash = hash;
-        const existing = await this.findEnhancedByHash(businessId, hash);
-        if (existing?.enhanced_image_url) {
+        const existing = await this.findVersionByHash(
+          businessId,
+          hash,
+          img.kind
+        );
+        const hasReuse =
+          img.kind === 'rembg'
+            ? !!existing?.rembg_image_url
+            : !!existing?.enhanced_image_url;
+        if (hasReuse && existing) {
           reusable.push({ img, existing });
           continue;
         }
@@ -531,19 +690,47 @@ export class AiImageCleanupService implements OnModuleInit {
     existing: VersionedImageRow
   ): Promise<void> {
     const now = new Date().toISOString();
-    const patch = {
-      original_image_url: img.image_url,
-      original_s3_key: img.s3_key,
-      enhanced_image_url: existing.enhanced_image_url,
-      enhanced_s3_key: existing.enhanced_s3_key,
-      image_url: existing.enhanced_image_url,
-      s3_key: existing.enhanced_s3_key,
-      active_version: 'enhanced',
-      is_ai_cleaned: true,
-      enhanced_at: now,
-      reverted_at: null,
-      content_hash: img.content_hash,
-    };
+    const rembgUrl = existing.rembg_image_url;
+    let rembgDims: { width?: number; height?: number } = {};
+    if (img.kind === 'rembg' && rembgUrl) {
+      if (existing.width && existing.height && existing.active_version === 'rembg') {
+        rembgDims = { width: existing.width, height: existing.height };
+      } else {
+        const probed = await this.probeImageDimensions(rembgUrl);
+        if (probed) rembgDims = probed;
+      }
+    }
+    const patch =
+      img.kind === 'rembg'
+        ? {
+            original_image_url: img.image_url,
+            original_s3_key: img.s3_key,
+            rembg_image_url: rembgUrl,
+            rembg_s3_key: existing.rembg_s3_key,
+            image_url: rembgUrl,
+            s3_key: existing.rembg_s3_key,
+            active_version: 'rembg' as const,
+            is_rembg_cleaned: true,
+            rembg_at: now,
+            reverted_at: null,
+            content_hash: img.content_hash,
+            ...rembgDims,
+          }
+        : {
+            original_image_url: img.image_url,
+            original_s3_key: img.s3_key,
+            enhanced_image_url: existing.enhanced_image_url,
+            enhanced_s3_key: existing.enhanced_s3_key,
+            image_url: existing.enhanced_image_url,
+            s3_key: existing.enhanced_s3_key,
+            active_version: 'enhanced' as const,
+            is_ai_cleaned: true,
+            enhanced_at: now,
+            reverted_at: null,
+            content_hash: img.content_hash,
+            width: 1024,
+            height: 1024,
+          };
     if (img.source === 'item_image') {
       await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
         id: img.id,
@@ -563,22 +750,6 @@ export class AiImageCleanupService implements OnModuleInit {
       });
       void this.imageThumbnails.regenerate('rental_item_image', img.id);
     }
-  }
-
-  private async resolveJobMode(
-    businessId: string
-  ): Promise<AiImageCleanupJobMode> {
-    const forceReview = process.env.AI_ENHANCEMENT_FORCE_REVIEW_ALL === 'true';
-    if (forceReview) return 'review_all';
-    const shadowOnly = process.env.AI_ENHANCEMENT_SHADOW_ONLY === 'true';
-    if (shadowOnly) return 'review_all';
-    const data = await this.hasura.executeQuery<{
-      businesses_by_pk: { auto_enhance_enabled: boolean } | null;
-    }>(Q.GET_BUSINESS_AUTO_ENHANCE, { businessId });
-    // Default: auto_apply when preference is on (Phase 3+)
-    return data.businesses_by_pk?.auto_enhance_enabled === false
-      ? 'review_all'
-      : 'auto_apply';
   }
 
   private async rollbackFailedRequest(
@@ -781,7 +952,15 @@ export class AiImageCleanupService implements OnModuleInit {
       row,
       contentHash: row.content_hash,
       now: new Date().toISOString(),
+      kind: result.kind ?? 'ai',
     });
+    if ((result.kind ?? 'ai') === 'rembg' && result.cleaned_image_url) {
+      const dims = await this.probeImageDimensions(result.cleaned_image_url);
+      if (dims) {
+        (patch as { width?: number; height?: number }).width = dims.width;
+        (patch as { height?: number }).height = dims.height;
+      }
+    }
     if (!patch.content_hash && result.original_image_url) {
       const hash = await this.computeContentHash(result.original_image_url).catch(
         () => null
@@ -821,21 +1000,28 @@ export class AiImageCleanupService implements OnModuleInit {
     result: AiImageCleanupResultRow
   ): Promise<void> {
     const row = await this.loadSourceImage(result);
-    if (!row?.enhanced_image_url && !result.cleaned_image_url) {
-      throw new HttpException('Enhanced image missing', HttpStatus.CONFLICT);
+    const kind = result.kind ?? 'ai';
+    if (kind === 'rembg') {
+      if (!row?.rembg_image_url && !result.cleaned_image_url) {
+        throw new HttpException('Rembg image missing', HttpStatus.CONFLICT);
+      }
+      await this.updateSourceImage(result, {
+        image_url: row?.rembg_image_url || result.cleaned_image_url,
+        s3_key: row?.rembg_s3_key ?? result.cleaned_s3_key ?? null,
+        active_version: 'rembg',
+        reverted_at: null,
+      });
+    } else {
+      if (!row?.enhanced_image_url && !result.cleaned_image_url) {
+        throw new HttpException('Enhanced image missing', HttpStatus.CONFLICT);
+      }
+      await this.updateSourceImage(result, {
+        image_url: row?.enhanced_image_url || result.cleaned_image_url,
+        s3_key: row?.enhanced_s3_key ?? result.cleaned_s3_key ?? null,
+        active_version: 'enhanced',
+        reverted_at: null,
+      });
     }
-    const enhancedUrl = row?.enhanced_image_url || result.cleaned_image_url;
-    const enhancedKey =
-      row?.enhanced_s3_key ?? result.cleaned_s3_key ?? null;
-    const now = new Date().toISOString();
-    await this.updateSourceImage(result, {
-      image_url: enhancedUrl,
-      s3_key: enhancedKey,
-      active_version: 'enhanced',
-      is_ai_cleaned: true,
-      enhanced_at: now,
-      reverted_at: null,
-    });
     this.regenerateThumb(result);
   }
 
@@ -904,33 +1090,41 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.BAD_REQUEST
       );
     }
-    const balanceAfter = await this.tokens.tryReserveTokens(
-      businessId,
-      CLEANUP_TOKEN_COST
-    );
-    if (balanceAfter === null) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'No AI tokens remaining.',
-          code: 'INSUFFICIENT_AI_TOKENS',
-        },
-        HttpStatus.PAYMENT_REQUIRED
+    const kind = result.kind ?? 'ai';
+    const tokenCost = kind === 'ai' ? CLEANUP_TOKEN_COST : 0;
+    let balanceAfter = await this.tokens.getBalance(businessId);
+    if (tokenCost > 0) {
+      const reserved = await this.tokens.tryReserveTokens(
+        businessId,
+        tokenCost
       );
+      if (reserved === null) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'No AI tokens remaining.',
+            code: 'INSUFFICIENT_AI_TOKENS',
+          },
+          HttpStatus.PAYMENT_REQUIRED
+        );
+      }
+      balanceAfter = reserved;
     }
     const inserted = await this.insertRetryResult(result);
     if (result.status === 'failed' || result.status === 'rejected') {
       await this.markResult(result.id, 'rejected');
     }
-    await this.tokens.recordCleanupUsage({
-      businessId,
-      userId,
-      subjectType: 'ai_image_cleanup',
-      subjectId: inserted.id,
-      tokensConsumed: CLEANUP_TOKEN_COST,
-      imageUrl: result.original_image_url,
-    });
-    await this.bumpJobTokens(result.job_id, CLEANUP_TOKEN_COST);
+    if (tokenCost > 0) {
+      await this.tokens.recordCleanupUsage({
+        businessId,
+        userId,
+        subjectType: 'ai_image_cleanup',
+        subjectId: inserted.id,
+        tokensConsumed: tokenCost,
+        imageUrl: result.original_image_url,
+      });
+      await this.bumpJobTokens(result.job_id, tokenCost);
+    }
     await this.setJobStatus(result.job_id, 'queued');
     await this.queue.enqueueJob(result.job_id);
     return { success: true, result: inserted, ai_tokens_remaining: balanceAfter };
@@ -948,10 +1142,10 @@ export class AiImageCleanupService implements OnModuleInit {
     const pending = (job.results ?? []).filter((r) =>
       this.isClaimableResultStatus(r.status, r.updated_at)
     );
-    const tokenUnit = this.tokenUnitForJob(job);
     let consumed = 0;
     let refunded = 0;
     for (const result of pending) {
+      const tokenUnit = this.tokenUnitForResult(job, result);
       const outcome = await this.processOneResult(job, result, tokenUnit);
       if (outcome === 'ready') consumed += tokenUnit;
       if (outcome === 'failed') refunded += tokenUnit;
@@ -1054,7 +1248,10 @@ export class AiImageCleanupService implements OnModuleInit {
   private async failPendingResults(job: AiImageCleanupJobRow): Promise<number> {
     const now = new Date().toISOString();
     const data = await this.hasura.executeMutation<{
-      update_ai_image_cleanup_results: { affected_rows: number };
+      update_ai_image_cleanup_results: {
+        affected_rows: number;
+        returning: Array<{ id: string; kind?: string | null }>;
+      };
     }>(Q.FAIL_OPEN_RESULTS, {
       jobId: job.id,
       updatedAt: now,
@@ -1062,10 +1259,12 @@ export class AiImageCleanupService implements OnModuleInit {
       staleBefore: this.exhaustionStaleBeforeIso(),
       errorMessage: 'Cleanup failed after queue retries',
     });
-    const failedCount = data.update_ai_image_cleanup_results?.affected_rows ?? 0;
-    const tokenUnit = this.tokenUnitForJob(job);
-    if (failedCount <= 0 || tokenUnit <= 0) return 0;
-    const refunded = failedCount * tokenUnit;
+    const justFailed =
+      data.update_ai_image_cleanup_results?.returning ?? [];
+    if (!justFailed.length || (job.tokens_reserved ?? 0) <= 0) return 0;
+    const aiFailed = justFailed.filter((r) => (r.kind ?? 'ai') === 'ai').length;
+    const refunded = aiFailed * CLEANUP_TOKEN_COST;
+    if (refunded <= 0) return 0;
     await this.tokens.refundTokens(job.business_id, refunded);
     return refunded;
   }
@@ -1112,68 +1311,16 @@ export class AiImageCleanupService implements OnModuleInit {
   ): Promise<'ready' | 'failed' | 'skipped'> {
     const claimed = await this.claimResult(result.id);
     if (!claimed) return 'skipped';
+    const kind = result.kind ?? 'ai';
     try {
-      const source = await this.loadSourceImage(result);
-      const adminModel = await this.getAdminCleanupModel();
-      let warningCodes = extractValidationCodes(source?.validation_warnings);
-      const errorCodes = extractValidationCodes(source?.validation_errors);
-      let qualityScore = source?.quality_score;
-      let width = source?.width;
-      let height = source?.height;
-      if (!warningCodes.length && !errorCodes.length) {
-        try {
-          const buffer = await this.downloadImageBuffer(
-            result.original_image_url
-          );
-          const local = await analyzeLocalImageQuality(buffer);
-          warningCodes = local.issues.map((i) => i.code);
-          qualityScore = qualityScore ?? local.qualityScore;
-          width = width || local.width;
-          height = height || local.height;
-        } catch (error: any) {
-          this.logger.warn(
-            `Process-time local validation failed for ${result.id}: ${error?.message ?? error}`
-          );
-        }
-      }
-      let model = routeCleanupModel({
-        adminDefaultModel: adminModel,
-        issueCodes: warningCodes,
-        errorCodes,
-        qualityScore,
-        width,
-        height,
-        // Already queued from an explicit merchant request — keep editing
-        // unless content is inappropriate.
-        explicitRequest: true,
-      });
-      if (model === 'skip') {
-        const now = new Date().toISOString();
-        await this.hasura.executeMutation(Q.UPDATE_RESULT, {
-          id: result.id,
-          _set: {
-            status: 'failed',
-            error_message: 'Image is not eligible for AI cleanup',
-            completed_at: now,
-            updated_at: now,
-          },
-        });
-        if (tokenUnit > 0) {
-          await this.tokens.refundTokens(job.business_id, tokenUnit);
-        }
-        await this.trackEvent('enhancement_failed', result.id, {
-          job_id: job.id,
-          error: 'skipped_not_eligible',
-        });
-        return 'failed';
-      }
-      const issues = this.issuesFromCodes(warningCodes);
-      const uploaded = await this.cleanupAndUploadWithRouting(
-        job.business_id,
-        job.item_id ?? 'library',
-        result.original_image_url,
-        { model, issues }
-      );
+      const uploaded =
+        kind === 'rembg'
+          ? await this.cleanupWithRembg(
+              job.business_id,
+              job.item_id ?? 'library',
+              result.original_image_url
+            )
+          : await this.cleanupWithOpenAi(job, result);
       const assessment = await this.confidence.assess(
         result.original_image_url,
         uploaded.url
@@ -1192,7 +1339,7 @@ export class AiImageCleanupService implements OnModuleInit {
           changes: assessment.changes,
           provider: uploaded.provider,
           provider_model:
-            uploaded.provider === 'rembg' ? 'u2net' : model,
+            uploaded.provider === 'rembg' ? 'u2net' : uploaded.model,
           completed_at: now,
           updated_at: now,
         },
@@ -1202,10 +1349,17 @@ export class AiImageCleanupService implements OnModuleInit {
         tier: assessment.tier,
         score: assessment.score,
         mode: job.mode,
-        model,
+        kind,
+        model: uploaded.model,
       });
 
-      const refreshed = { ...result, cleaned_image_url: uploaded.url, cleaned_s3_key: uploaded.key, confidence_tier: assessment.tier };
+      const refreshed = {
+        ...result,
+        kind,
+        cleaned_image_url: uploaded.url,
+        cleaned_s3_key: uploaded.key,
+        confidence_tier: assessment.tier,
+      };
       if (
         job.mode === 'auto_apply' &&
         (assessment.tier === 'high' || assessment.tier === 'medium')
@@ -1218,18 +1372,21 @@ export class AiImageCleanupService implements OnModuleInit {
           await this.trackEvent('enhancement_auto_applied', result.id, {
             job_id: job.id,
             tier: assessment.tier,
+            kind,
           });
         } else {
           await this.trackEvent('enhancement_held_for_review', result.id, {
             job_id: job.id,
             tier: assessment.tier,
             reason: 'apply_skipped',
+            kind,
           });
         }
       } else if (assessment.tier === 'low' || job.mode === 'review_all') {
         await this.trackEvent('enhancement_held_for_review', result.id, {
           job_id: job.id,
           tier: assessment.tier,
+          kind,
         });
       }
       return 'ready';
@@ -1252,14 +1409,74 @@ export class AiImageCleanupService implements OnModuleInit {
       await this.trackEvent('enhancement_failed', result.id, {
         job_id: job.id,
         error: error?.message,
+        kind,
       });
       return 'failed';
     }
   }
 
-  /** Per-image token accounting; 0 for admin jobs that never reserved tokens. */
-  private tokenUnitForJob(job: AiImageCleanupJobRow): number {
-    return (job.tokens_reserved ?? 0) > 0 ? CLEANUP_TOKEN_COST : 0;
+  private async cleanupWithOpenAi(
+    job: AiImageCleanupJobRow,
+    result: AiImageCleanupResultRow
+  ): Promise<{
+    url: string;
+    key: string;
+    provider: 'openai';
+    model: OpenAiImageCleanupModel;
+  }> {
+    const source = await this.loadSourceImage(result);
+    const adminModel = await this.getAdminCleanupModel();
+    let warningCodes = extractValidationCodes(source?.validation_warnings);
+    const errorCodes = extractValidationCodes(source?.validation_errors);
+    let qualityScore = source?.quality_score;
+    let width = source?.width;
+    let height = source?.height;
+    if (!warningCodes.length && !errorCodes.length) {
+      try {
+        const buffer = await this.downloadImageBuffer(
+          result.original_image_url
+        );
+        const local = await analyzeLocalImageQuality(buffer);
+        warningCodes = local.issues.map((i) => i.code);
+        qualityScore = qualityScore ?? local.qualityScore;
+        width = width || local.width;
+        height = height || local.height;
+      } catch (error: any) {
+        this.logger.warn(
+          `Process-time local validation failed for ${result.id}: ${error?.message ?? error}`
+        );
+      }
+    }
+    const model = routeCleanupModel({
+      adminDefaultModel: adminModel,
+      issueCodes: warningCodes,
+      errorCodes,
+      qualityScore,
+      width,
+      height,
+      explicitRequest: true,
+    });
+    if (model === 'skip') {
+      throw new Error('Image is not eligible for AI cleanup');
+    }
+    const issues = this.issuesFromCodes(warningCodes);
+    const uploaded = await this.cleanupAndUpload(
+      job.business_id,
+      job.item_id ?? 'library',
+      result.original_image_url,
+      { model, issues }
+    );
+    return { ...uploaded, provider: 'openai', model };
+  }
+
+  /** Per-result token accounting; rembg and uncharged admin jobs are 0. */
+  private tokenUnitForResult(
+    job: AiImageCleanupJobRow,
+    result: AiImageCleanupResultRow
+  ): number {
+    if ((job.tokens_reserved ?? 0) <= 0) return 0;
+    if ((result.kind ?? 'ai') === 'rembg') return 0;
+    return CLEANUP_TOKEN_COST;
   }
 
   private async finalizeJobAfterProcess(
@@ -1268,6 +1485,23 @@ export class AiImageCleanupService implements OnModuleInit {
     refunded: number
   ): Promise<void> {
     const refreshed = await this.loadJob(job.id);
+    const stillPending = (refreshed.results ?? []).some((r) =>
+      this.isClaimableResultStatus(r.status, r.updated_at)
+    );
+    const tokenPatch = {
+      tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
+      tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
+      updated_at: new Date().toISOString(),
+    };
+    // Results appended while this run was in-flight — re-queue instead of closing.
+    if (stillPending) {
+      await this.hasura.executeMutation(Q.UPDATE_JOB, {
+        id: job.id,
+        _set: { ...tokenPatch, status: 'queued' },
+      });
+      await this.queue.enqueueJob(job.id);
+      return;
+    }
     const readyForReview = (refreshed.results ?? []).filter(
       (r) => r.status === 'ready'
     );
@@ -1287,19 +1521,37 @@ export class AiImageCleanupService implements OnModuleInit {
     } else {
       status = 'completed';
     }
-    const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.UPDATE_JOB, {
+    const now = tokenPatch.updated_at;
+    const finalized = await this.hasura.executeMutation<{
+      update_ai_image_cleanup_jobs: { affected_rows: number };
+    }>(Q.FINALIZE_JOB_IF_PROCESSING, {
       id: job.id,
       _set: {
         status,
-        tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
-        tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
-        updated_at: now,
+        ...tokenPatch,
         ...(status === 'completed' || status === 'failed'
           ? { completed_at: now }
           : {}),
       },
     });
+    if ((finalized.update_ai_image_cleanup_jobs?.affected_rows ?? 0) === 0) {
+      // Append flipped job to queued (or another worker claimed) — keep going.
+      await this.hasura.executeMutation(Q.UPDATE_JOB, {
+        id: job.id,
+        _set: tokenPatch,
+      });
+      const latest = await this.loadJob(job.id);
+      const needsWork = (latest.results ?? []).some((r) =>
+        this.isClaimableResultStatus(r.status, r.updated_at)
+      );
+      if (needsWork || latest.status === 'queued') {
+        if (latest.status !== 'queued') {
+          await this.setJobStatus(job.id, 'queued');
+        }
+        await this.queue.enqueueJob(job.id);
+      }
+      return;
+    }
     const forNotify = await this.loadJob(job.id);
     const needsReview = readyForReview.length > 0;
     const autoAppliedCount = (forNotify.results ?? []).filter(
@@ -1386,37 +1638,43 @@ export class AiImageCleanupService implements OnModuleInit {
       job.item_variant?.name ??
       job.item?.name ??
       (isFr ? 'votre article' : 'your item');
+    const readyResults = (job.results ?? []).filter((r) => r.status === 'ready');
+    const onlyRembg =
+      readyResults.length > 0 &&
+      readyResults.every((r) => (r.kind ?? 'ai') === 'rembg');
     let title: string;
     let body: string;
     let type: string;
     if (needsReview) {
-      const readyCount = (job.results ?? []).filter(
-        (r) => r.status === 'ready'
-      ).length;
+      const readyCount = readyResults.length;
       title = isFr ? 'Photos à examiner' : 'Photos need review';
       body = isFr
-        ? `${readyCount} photo(s) nécessitent votre avis pour « ${itemName} ».`
-        : `${readyCount} photo(s) need your review for “${itemName}”.`;
+        ? onlyRembg
+          ? `${readyCount} photo(s) sans fond prêtes à examiner pour « ${itemName} ».`
+          : `${readyCount} photo(s) nécessitent votre avis pour « ${itemName} ».`
+        : onlyRembg
+          ? `${readyCount} background-removed photo(s) ready to review for “${itemName}”.`
+          : `${readyCount} photo(s) need your review for “${itemName}”.`;
       type = 'ai_image_cleanup_ready';
     } else if (autoAppliedCount > 0) {
-      title = isFr ? 'Photos améliorées' : 'Photos enhanced';
+      title = isFr ? 'Photos mises à jour' : 'Photos updated';
       body = isFr
-        ? `${autoAppliedCount} photo(s) améliorées pour « ${itemName} ».`
-        : `${autoAppliedCount} photo(s) enhanced for “${itemName}”.`;
+        ? `${autoAppliedCount} photo(s) mises à jour pour « ${itemName} ».`
+        : `${autoAppliedCount} photo(s) updated for “${itemName}”.`;
       type = 'ai_image_cleanup_applied';
     } else {
       title = isFr
-        ? 'Échec du nettoyage des photos'
-        : 'Photo cleanup failed';
+        ? 'Échec du traitement des photos'
+        : 'Photo processing failed';
       const refundedAny = (job.tokens_refunded ?? 0) > 0;
       if (refundedAny) {
         body = isFr
-          ? `Le nettoyage IA a échoué pour « ${itemName} ». Vos jetons ont été remboursés.`
-          : `AI cleanup failed for “${itemName}”. Your tokens were refunded.`;
+          ? `Le traitement des photos a échoué pour « ${itemName} ». Vos jetons ont été remboursés.`
+          : `Photo processing failed for “${itemName}”. Your tokens were refunded.`;
       } else {
         body = isFr
-          ? `Le nettoyage IA a échoué pour « ${itemName} ».`
-          : `AI cleanup failed for “${itemName}”.`;
+          ? `Le traitement des photos a échoué pour « ${itemName} ».`
+          : `Photo processing failed for “${itemName}”.`;
       }
       type = 'ai_image_cleanup_ready';
     }
@@ -1473,70 +1731,12 @@ export class AiImageCleanupService implements OnModuleInit {
     };
   }
 
-  /**
-   * Route cleanup request to REMBG or OpenAI based on feature flag.
-   * Automatically falls back to OpenAI if REMBG fails.
-   */
-  private async cleanupAndUploadWithRouting(
-    businessId: string,
-    itemId: string,
-    imageUrl: string,
-    options: {
-      model: OpenAiImageCleanupModel;
-      issues?: CleanupProductImageIssue[];
-    }
-  ): Promise<{ url: string; key: string; provider: 'rembg' | 'openai' }> {
-    const useRembg = await this.shouldUseRembg();
-
-    if (useRembg) {
-      try {
-        return await this.cleanupWithRembg(businessId, itemId, imageUrl);
-      } catch (error: any) {
-        this.logger.warn(
-          `REMBG cleanup failed, falling back to OpenAI: ${error?.message ?? error}`
-        );
-        // Fall through to OpenAI
-      }
-    }
-
-    const result = await this.cleanupAndUpload(
-      businessId,
-      itemId,
-      imageUrl,
-      options
-    );
-    return { ...result, provider: 'openai' };
-  }
-
-  /** Check feature flag to determine if REMBG should be used. */
-  private async shouldUseRembg(): Promise<boolean> {
-    try {
-      const res = await this.hasura.executeQuery<{
-        application_configurations: Array<{ boolean_value?: boolean }>;
-      }>(
-        `query {
-          application_configurations(
-            where: { config_key: { _eq: "use_rembg_cleanup" }, status: { _eq: "active" } }
-            limit: 1
-          ) { boolean_value }
-        }`,
-        {}
-      );
-      return res.application_configurations?.[0]?.boolean_value ?? false;
-    } catch (error: any) {
-      this.logger.warn(
-        `Failed to check REMBG feature flag: ${error?.message ?? error}`
-      );
-      return false;
-    }
-  }
-
-  /** Process image cleanup using REMBG Lambda. */
+  /** Process image cleanup using REMBG Lambda only (no OpenAI fallback). */
   private async cleanupWithRembg(
     businessId: string,
     itemId: string,
     imageUrl: string
-  ): Promise<{ url: string; key: string; provider: 'rembg' }> {
+  ): Promise<{ url: string; key: string; provider: 'rembg'; model: 'u2net' }> {
     const { data } = await axios.get<ArrayBuffer>(imageUrl, {
       responseType: 'arraybuffer',
       timeout: 25000,
@@ -1581,6 +1781,7 @@ export class AiImageCleanupService implements OnModuleInit {
       url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
       key,
       provider: 'rembg',
+      model: 'u2net',
     };
   }
 
@@ -1696,7 +1897,8 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private mapVersionedToEligible(
     img: VersionedImageRow,
-    source: CleanupEligibleImage['source']
+    source: CleanupEligibleImage['source'],
+    kind: AiImageCleanupKind
   ): CleanupEligibleImage {
     return {
       id: img.id,
@@ -1704,6 +1906,7 @@ export class AiImageCleanupService implements OnModuleInit {
       s3_key: img.original_s3_key || img.s3_key,
       content_hash: img.content_hash,
       source,
+      kind,
       width: img.width,
       height: img.height,
       validation_warnings: img.validation_warnings,
@@ -1741,16 +1944,6 @@ export class AiImageCleanupService implements OnModuleInit {
     return { businessId: data.items_by_pk.business_id };
   }
 
-  private async assertNoOpenJobForItem(itemId: string): Promise<void> {
-    const open = await this.findOpenJobForItem(itemId);
-    if (open) {
-      throw new HttpException(
-        'An AI cleanup job is already in progress for this item',
-        HttpStatus.CONFLICT
-      );
-    }
-  }
-
   /** Public check used by AI proposal UI to hide cleanup CTA when a job is open. */
   async getOpenJobForItem(
     itemId: string
@@ -1782,32 +1975,31 @@ export class AiImageCleanupService implements OnModuleInit {
     return data.ai_image_cleanup_jobs?.[0] ?? null;
   }
 
-  private async assertNoOpenJobForVariant(variantId: string): Promise<void> {
-    const data = await this.hasura.executeQuery<{
-      ai_image_cleanup_jobs: { id: string }[];
-    }>(Q.GET_OPEN_JOB_FOR_VARIANT, { variantId });
-    if (data.ai_image_cleanup_jobs?.length) {
-      throw new HttpException(
-        'An AI cleanup job is already in progress for this variant',
-        HttpStatus.CONFLICT
-      );
+  private async assertNoOpenKindLocks(
+    images: CleanupEligibleImage[]
+  ): Promise<void> {
+    for (const img of images) {
+      await this.assertNoOpenJobForImage(img.source, img.id, img.kind);
     }
   }
 
   private async assertNoOpenJobForImage(
-    source: 'item_image' | 'rental_image',
-    imageId: string
+    source: CleanupEligibleImage['source'],
+    imageId: string,
+    kind: AiImageCleanupKind
   ): Promise<void> {
     const query =
       source === 'item_image'
         ? Q.GET_OPEN_JOB_FOR_ITEM_IMAGE
-        : Q.GET_OPEN_JOB_FOR_RENTAL_IMAGE;
+        : source === 'variant_image'
+          ? Q.GET_OPEN_JOB_FOR_VARIANT_IMAGE
+          : Q.GET_OPEN_JOB_FOR_RENTAL_IMAGE;
     const data = await this.hasura.executeQuery<{
       ai_image_cleanup_results: { id: string }[];
-    }>(query, { imageId });
+    }>(query, { imageId, kind });
     if (data.ai_image_cleanup_results?.length) {
       throw new HttpException(
-        'An AI cleanup job is already in progress for this image',
+        `A ${kind} cleanup job is already in progress for this image`,
         HttpStatus.CONFLICT
       );
     }
@@ -1816,7 +2008,7 @@ export class AiImageCleanupService implements OnModuleInit {
   private async loadEligibleItemImages(
     itemId: string,
     businessId: string,
-    imageIds?: string[]
+    selections: CleanupImageSelection[] | null
   ): Promise<CleanupEligibleImage[]> {
     const data = await this.hasura.executeQuery<{
       items_by_pk: { id: string; business_id: string } | null;
@@ -1827,12 +2019,17 @@ export class AiImageCleanupService implements OnModuleInit {
     if (!data.items_by_pk || data.items_by_pk.business_id !== businessId) {
       throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
     }
-    let images = (data.item_images ?? []).filter(
-      (i) => !(i.is_ai_cleaned && i.active_version === 'enhanced')
-    );
-    if (imageIds != null) {
-      const wanted = new Set(imageIds);
-      images = images.filter((i) => wanted.has(i.id));
+    const rows = data.item_images ?? [];
+    const planned: CleanupImageSelection[] =
+      selections ??
+      rows.map((r) => ({ imageId: r.id, kind: 'ai' as const }));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const images: CleanupEligibleImage[] = [];
+    for (const sel of planned) {
+      const row = byId.get(sel.imageId);
+      if (!row) continue;
+      if (hasExistingVersion(row, sel.kind)) continue;
+      images.push(this.mapVersionedToEligible(row, 'item_image', sel.kind));
     }
     if (!images.length) {
       throw new HttpException(
@@ -1840,13 +2037,13 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.BAD_REQUEST
       );
     }
-    return images.map((img) => this.mapVersionedToEligible(img, 'item_image'));
+    return images;
   }
 
   private async loadEligibleVariantImages(
     variantId: string,
     businessId: string,
-    imageIds?: string[]
+    selections: CleanupImageSelection[] | null
   ): Promise<{ itemId: string; images: CleanupEligibleImage[] }> {
     const data = await this.hasura.executeQuery<{
       item_variants_by_pk: {
@@ -1860,12 +2057,17 @@ export class AiImageCleanupService implements OnModuleInit {
     if (!variant?.item || variant.item.business_id !== businessId) {
       throw new HttpException('Variant not found', HttpStatus.NOT_FOUND);
     }
-    let images = (data.item_variant_images ?? []).filter(
-      (i) => !(i.is_ai_cleaned && i.active_version === 'enhanced')
-    );
-    if (imageIds != null) {
-      const wanted = new Set(imageIds);
-      images = images.filter((i) => wanted.has(i.id));
+    const rows = data.item_variant_images ?? [];
+    const planned: CleanupImageSelection[] =
+      selections ??
+      rows.map((r) => ({ imageId: r.id, kind: 'ai' as const }));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const images: CleanupEligibleImage[] = [];
+    for (const sel of planned) {
+      const row = byId.get(sel.imageId);
+      if (!row) continue;
+      if (hasExistingVersion(row, sel.kind)) continue;
+      images.push(this.mapVersionedToEligible(row, 'variant_image', sel.kind));
     }
     if (!images.length) {
       throw new HttpException(
@@ -1873,12 +2075,7 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.BAD_REQUEST
       );
     }
-    return {
-      itemId: variant.item_id,
-      images: images.map((img) =>
-        this.mapVersionedToEligible(img, 'variant_image')
-      ),
-    };
+    return { itemId: variant.item_id, images };
   }
 
   private async createJob(args: {
@@ -1910,31 +2107,40 @@ export class AiImageCleanupService implements OnModuleInit {
   private async createResults(
     jobId: string,
     images: CleanupEligibleImage[]
-  ): Promise<void> {
-    await this.hasura.executeMutation(Q.INSERT_RESULTS, {
+  ): Promise<string[]> {
+    const data = await this.hasura.executeMutation<{
+      insert_ai_image_cleanup_results: { returning: { id: string }[] };
+    }>(Q.INSERT_RESULTS, {
       objects: images.map((img) => ({
         job_id: jobId,
         business_image_id: img.source === 'item_image' ? img.id : null,
         item_variant_image_id: img.source === 'variant_image' ? img.id : null,
         rental_item_image_id: img.source === 'rental_image' ? img.id : null,
+        kind: img.kind,
         original_image_url: img.image_url,
         original_s3_key: img.s3_key,
         status: 'queued',
       })),
     });
+    return (
+      data.insert_ai_image_cleanup_results?.returning?.map((r) => r.id) ?? []
+    );
   }
 
   private async createIneligibleResults(
     jobId: string,
     images: CleanupEligibleImage[]
-  ): Promise<void> {
+  ): Promise<string[]> {
     const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.INSERT_RESULTS, {
+    const data = await this.hasura.executeMutation<{
+      insert_ai_image_cleanup_results: { returning: { id: string }[] };
+    }>(Q.INSERT_RESULTS, {
       objects: images.map((img) => ({
         job_id: jobId,
         business_image_id: img.source === 'item_image' ? img.id : null,
         item_variant_image_id: img.source === 'variant_image' ? img.id : null,
         rental_item_image_id: img.source === 'rental_image' ? img.id : null,
+        kind: img.kind,
         original_image_url: img.image_url,
         original_s3_key: img.s3_key,
         status: 'failed',
@@ -1944,6 +2150,9 @@ export class AiImageCleanupService implements OnModuleInit {
         completed_at: now,
       })),
     });
+    return (
+      data.insert_ai_image_cleanup_results?.returning?.map((r) => r.id) ?? []
+    );
   }
 
   private async loadJob(jobId: string): Promise<AiImageCleanupJobRow> {
@@ -2044,6 +2253,7 @@ export class AiImageCleanupService implements OnModuleInit {
           business_image_id: result.business_image_id,
           item_variant_image_id: result.item_variant_image_id,
           rental_item_image_id: result.rental_item_image_id ?? null,
+          kind: result.kind ?? 'ai',
           original_image_url: result.original_image_url,
           original_s3_key: result.original_s3_key,
           status: 'queued',
@@ -2158,13 +2368,17 @@ export class AiImageCleanupService implements OnModuleInit {
     }
   }
 
-  private async findEnhancedByHash(
+  private async findVersionByHash(
     businessId: string,
-    contentHash: string
+    contentHash: string,
+    kind: AiImageCleanupKind
   ): Promise<VersionedImageRow | null> {
     const data = await this.hasura.executeQuery<{
       item_images: VersionedImageRow[];
-    }>(Q.FIND_ENHANCED_BY_HASH, { businessId, contentHash });
+    }>(
+      kind === 'rembg' ? Q.FIND_REMBG_BY_HASH : Q.FIND_ENHANCED_BY_HASH,
+      { businessId, contentHash }
+    );
     return data.item_images?.[0] ?? null;
   }
 
@@ -2175,6 +2389,23 @@ export class AiImageCleanupService implements OnModuleInit {
       maxContentLength: 25 * 1024 * 1024,
     });
     return createHash('sha256').update(Buffer.from(res.data)).digest('hex');
+  }
+
+  private async probeImageDimensions(
+    imageUrl: string
+  ): Promise<{ width: number; height: number } | null> {
+    try {
+      const res = await axios.get<ArrayBuffer>(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+        maxContentLength: 25 * 1024 * 1024,
+      });
+      const meta = await sharp(Buffer.from(res.data)).metadata();
+      if (!meta.width || !meta.height) return null;
+      return { width: meta.width, height: meta.height };
+    } catch {
+      return null;
+    }
   }
 
   private async trackEvent(
@@ -2195,6 +2426,122 @@ export class AiImageCleanupService implements OnModuleInit {
       });
     } catch (error: any) {
       this.logger.warn(`Analytics event ${eventType} failed: ${error?.message}`);
+    }
+  }
+
+  async setImageActiveVersion(
+    source: CleanupEligibleImage['source'],
+    imageId: string,
+    version: ImageActiveVersion
+  ): Promise<{ image: VersionedImageRow }> {
+    const { businessId } = await this.requireBusinessContext();
+    const row = await this.loadOwnedVersionedImage(source, imageId, businessId);
+    const originalUrl = row.original_image_url || row.image_url;
+    if (!originalUrl) {
+      throw new HttpException('Original image missing', HttpStatus.CONFLICT);
+    }
+    try {
+      const patch = buildSelectVersionPatch({
+        version,
+        originalUrl,
+        originalKey: row.original_s3_key ?? row.s3_key,
+        rembgUrl: row.rembg_image_url ?? null,
+        rembgKey: row.rembg_s3_key ?? null,
+        enhancedUrl: row.enhanced_image_url ?? null,
+        enhancedKey: row.enhanced_s3_key ?? null,
+      });
+      await this.updateImageBySource(source, imageId, patch);
+      this.regenerateThumbBySource(source, imageId);
+      const updated = await this.loadOwnedVersionedImage(
+        source,
+        imageId,
+        businessId
+      );
+      return { image: updated };
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message || 'Cannot select image version',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async loadOwnedVersionedImage(
+    source: CleanupEligibleImage['source'],
+    imageId: string,
+    businessId: string
+  ): Promise<VersionedImageRow> {
+    if (source === 'item_image') {
+      const row = await this.loadItemImageRow(imageId);
+      if (!row || row.business_id !== businessId) {
+        throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+      }
+      return row;
+    }
+    if (source === 'rental_image') {
+      const row = await this.loadRentalImageRow(imageId);
+      if (!row || row.business_id !== businessId) {
+        throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+      }
+      return row;
+    }
+    const data = await this.hasura.executeQuery<{
+      item_variant_images_by_pk:
+        | (VersionedImageRow & {
+            item_variant?: { item?: { business_id?: string } | null } | null;
+          })
+        | null;
+    }>(
+      `query($id: uuid!) {
+        item_variant_images_by_pk(id: $id) {
+          ${Q.VERSION_IMAGE_FIELDS}
+          item_variant { item { business_id } }
+        }
+      }`,
+      { id: imageId }
+    );
+    const row = data.item_variant_images_by_pk;
+    if (!row || row.item_variant?.item?.business_id !== businessId) {
+      throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+    }
+    return row;
+  }
+
+  private async updateImageBySource(
+    source: CleanupEligibleImage['source'],
+    imageId: string,
+    patch: Record<string, unknown>
+  ): Promise<void> {
+    if (source === 'item_image') {
+      await this.hasura.executeMutation(Q.UPDATE_ITEM_IMAGE, {
+        id: imageId,
+        _set: patch,
+      });
+      return;
+    }
+    if (source === 'rental_image') {
+      await this.hasura.executeMutation(Q.UPDATE_RENTAL_IMAGE, {
+        id: imageId,
+        _set: patch,
+      });
+      return;
+    }
+    await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
+      id: imageId,
+      _set: patch,
+    });
+  }
+
+  private regenerateThumbBySource(
+    source: CleanupEligibleImage['source'],
+    imageId: string
+  ): void {
+    if (source === 'item_image') {
+      void this.imageThumbnails.regenerate('item_image', imageId);
+    } else if (source === 'rental_image') {
+      void this.imageThumbnails.regenerate('rental_item_image', imageId);
+    } else {
+      void this.imageThumbnails.regenerate('item_variant_image', imageId);
     }
   }
 

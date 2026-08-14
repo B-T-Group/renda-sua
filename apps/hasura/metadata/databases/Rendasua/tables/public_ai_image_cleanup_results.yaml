@@ -29,6 +29,7 @@ select_permissions:
         - original_s3_key
         - cleaned_image_url
         - cleaned_s3_key
+        - kind
         - status
         - error_message
         - retry_of_result_id

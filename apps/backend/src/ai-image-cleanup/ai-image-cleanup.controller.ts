@@ -18,13 +18,17 @@ export class AiImageCleanupController {
 
   @Post('items/:itemId/ai-image-cleanup')
   @ApiOperation({
-    summary: 'Request async AI cleanup for item images (consumes 1 token each)',
+    summary:
+      'Request async cleanup for item images. selections[].kind rembg|ai; bare imageIds default to ai (1 token each).',
   })
   @ApiParam({ name: 'itemId', format: 'uuid' })
   @ApiBody({ type: RequestAiImageCleanupDto })
   @ApiResponse({ status: 201, description: 'Cleanup job queued' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  @ApiResponse({ status: 409, description: 'Job already open for item' })
+  @ApiResponse({
+    status: 409,
+    description: 'Open rembg/ai result already exists for an image',
+  })
   async requestCleanup(
     @Param('itemId') itemId: string,
     @Body() body: RequestAiImageCleanupDto
@@ -32,7 +36,8 @@ export class AiImageCleanupController {
     const data = await this.cleanupService.requestCleanup(
       itemId,
       body?.imageIds,
-      'creation'
+      'creation',
+      body?.selections
     );
     return { success: true, data };
   }

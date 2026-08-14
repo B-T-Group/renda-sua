@@ -291,11 +291,22 @@ export class RentalItemImagesController {
   @Post(':id/cleanup')
   @ApiOperation({
     summary:
-      'Enqueue async AI cleanup for a rental image (1 token). Returns jobId immediately.',
+      'Enqueue async cleanup for a rental image. Body.kind rembg|ai (default ai, 1 token).',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { kind: { type: 'string', enum: ['rembg', 'ai'] } },
+    },
+    required: false,
   })
   @ApiResponse({ status: 200, description: 'Cleanup job queued' })
   @ApiResponse({ status: 402, description: 'Insufficient AI tokens' })
-  async cleanup(@ReqContext() ctx: RequestContext, @Param('id') id: string) {
+  async cleanup(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+    @Body() body?: { kind?: 'rembg' | 'ai' }
+  ) {
     const user = await this.hasuraUserService.getUser(ctx);
     const businessId = user?.business?.id;
     if (!isActivePersona(user, 'business') || !businessId) {
@@ -305,7 +316,11 @@ export class RentalItemImagesController {
       );
     }
     void ctx;
-    const data = await this.aiImageCleanupService.requestRentalImageCleanup(id);
+    const kind = body?.kind === 'rembg' ? 'rembg' : 'ai';
+    const data = await this.aiImageCleanupService.requestRentalImageCleanup(
+      id,
+      kind
+    );
     return {
       success: true,
       data: {
@@ -314,6 +329,45 @@ export class RentalItemImagesController {
       },
       ai_tokens_remaining: data.ai_tokens_remaining,
     };
+  }
+
+  @Patch(':id/active-version')
+  @ApiOperation({
+    summary:
+      'Set live rental image pointer to original, rembg, or enhanced (version must exist)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        version: {
+          type: 'string',
+          enum: ['original', 'rembg', 'enhanced'],
+        },
+      },
+      required: ['version'],
+    },
+  })
+  async setActiveVersion(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+    @Body() body: { version: 'original' | 'rembg' | 'enhanced' }
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!isActivePersona(user, 'business') || !businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    void ctx;
+    const data = await this.aiImageCleanupService.setImageActiveVersion(
+      'rental_image',
+      id,
+      body.version
+    );
+    return { success: true, data };
   }
 
   private async requireBusinessId(ctx: RequestContext): Promise<string> {

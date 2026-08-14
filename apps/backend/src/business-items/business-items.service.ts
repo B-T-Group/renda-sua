@@ -99,6 +99,11 @@ const GET_ITEMS = `
         alt_text
         display_order
         is_ai_cleaned
+        is_rembg_cleaned
+        original_image_url
+        enhanced_image_url
+        rembg_image_url
+        active_version
         thumbnail
         thumbnail_status
         display_url
@@ -336,6 +341,11 @@ const GET_SINGLE_ITEM = `
         alt_text
         display_order
         is_ai_cleaned
+        is_rembg_cleaned
+        original_image_url
+        enhanced_image_url
+        rembg_image_url
+        active_version
         thumbnail
         thumbnail_status
         display_url

@@ -26,7 +26,9 @@ export type AiImageCleanupJobSource =
   | 'rental'
   | 'admin_moderation';
 
-export type ImageActiveVersion = 'original' | 'enhanced';
+export type AiImageCleanupKind = 'rembg' | 'ai';
+
+export type ImageActiveVersion = 'original' | 'rembg' | 'enhanced';
 
 export interface AiImageCleanupResultRow {
   id: string;
@@ -34,6 +36,7 @@ export interface AiImageCleanupResultRow {
   business_image_id: string | null;
   item_variant_image_id: string | null;
   rental_item_image_id?: string | null;
+  kind?: AiImageCleanupKind;
   original_image_url: string;
   original_s3_key: string | null;
   cleaned_image_url: string | null;
@@ -80,6 +83,7 @@ export type CleanupEligibleImage = {
   s3_key: string | null;
   content_hash?: string | null;
   source: 'item_image' | 'variant_image' | 'rental_image';
+  kind: AiImageCleanupKind;
   width?: number | null;
   height?: number | null;
   validation_warnings?: unknown;
@@ -95,8 +99,12 @@ export type VersionedImageRow = {
   original_s3_key: string | null;
   enhanced_image_url: string | null;
   enhanced_s3_key: string | null;
+  rembg_image_url?: string | null;
+  rembg_s3_key?: string | null;
   active_version: ImageActiveVersion;
   is_ai_cleaned: boolean;
+  is_rembg_cleaned?: boolean;
+  rembg_at?: string | null;
   reverted_at: string | null;
   content_hash?: string | null;
   width?: number | null;
@@ -104,4 +112,9 @@ export type VersionedImageRow = {
   validation_warnings?: unknown;
   validation_errors?: unknown;
   quality_score?: number | null;
+};
+
+export type CleanupImageSelection = {
+  imageId: string;
+  kind: AiImageCleanupKind;
 };
