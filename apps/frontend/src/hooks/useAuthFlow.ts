@@ -16,6 +16,10 @@ export const useAuthFlow = () => {
     userType,
     isProfileComplete,
     needsPersonaSelection,
+    needsContextSelection,
+    isDelegationContext,
+    delegations,
+    personas,
   } = useUserProfileContext();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
@@ -28,50 +32,54 @@ export const useAuthFlow = () => {
 
     // Wait for profile to be loaded
     if (!profileLoading) {
-      // Check if user profile exists
-
       if (!isAuthenticated) {
         navigate('/');
         return;
       }
 
-      if (profileError === 'Profile not found') {
-        // User doesn't have a profile, redirect to complete profile
+      const hasDelegationsOnly =
+        personas.length === 0 && delegations.length > 0;
+
+      if (profileError === 'Profile not found' && !hasDelegationsOnly) {
         navigate('/complete-profile');
-      } else if (profile && isProfileComplete) {
-        if (needsPersonaSelection) {
+      } else if (profile && (isProfileComplete || hasDelegationsOnly)) {
+        if (needsContextSelection || needsPersonaSelection) {
           navigate('/select-persona');
           setIsCheckingProfile(false);
           return;
         }
+        if (isDelegationContext) {
+          navigate('/delegate/orders');
+          setIsCheckingProfile(false);
+          return;
+        }
         switch (userType) {
-          case 'client':
-            // Check if it's the first login
+          case 'client': {
             const firstLogin = user?.['https://groupe-bt.com/first_login'];
-            // If it's NOT the first login, redirect to items page
             if (firstLogin === false || firstLogin === undefined) {
               navigate('/items');
             } else {
-              // First login, redirect to dashboard
               navigate('/dashboard');
             }
             break;
+          }
           case 'agent':
-            navigate('/dashboard'); // Redirect agents to their dashboard
+            navigate('/dashboard');
             break;
           case 'business':
             navigate('/dashboard');
             break;
           default:
-            // Unknown user type, redirect to complete profile
-            navigate('/complete-profile');
+            if (delegations.length > 0) {
+              navigate('/select-persona');
+            } else {
+              navigate('/complete-profile');
+            }
             break;
         }
-      } else if (profile && !isProfileComplete) {
-        // User has a profile but it's incomplete, redirect to complete profile
+      } else if (profile && !isProfileComplete && !hasDelegationsOnly) {
         navigate('/complete-profile');
       } else if (profileError && profileError !== 'Profile not found') {
-        // Other error occurred, redirect to dashboard as fallback
         console.error('Error checking user profile:', profileError);
         navigate('/dashboard');
       }
@@ -87,6 +95,10 @@ export const useAuthFlow = () => {
     userType,
     isProfileComplete,
     needsPersonaSelection,
+    needsContextSelection,
+    isDelegationContext,
+    delegations,
+    personas,
     location.pathname,
     navigate,
   ]);

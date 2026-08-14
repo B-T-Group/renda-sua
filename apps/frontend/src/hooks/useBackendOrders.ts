@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import {
+  useOrdersApiPrefix,
+  withOrdersApiPrefix,
+} from '../contexts/OrdersApiPrefixContext';
 import { useApiClient } from './useApiClient';
 import { useApiWithLoading } from './useApiWithLoading';
 
@@ -151,6 +155,11 @@ function getHttpExceptionMessage(err: any, fallback: string): string {
 export const useBackendOrders = () => {
   const [error, setError] = useState<string | null>(null);
   const apiClient = useApiClient();
+  const ordersPrefix = useOrdersApiPrefix();
+  const op = useCallback(
+    (path: string) => withOrdersApiPrefix(ordersPrefix, path),
+    [ordersPrefix]
+  );
   const { callWithLoading } = useApiWithLoading({
     loadingMessage: 'common.updatingOrder',
   });
@@ -170,7 +179,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<CreateOrderResponse>(
-          '/orders',
+          op('/orders'),
           orderData
         );
 
@@ -201,7 +210,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.patch<UpdateOrderStatusResponse>(
-          `/orders/${orderId}/status`,
+          op(`/orders/${orderId}/status`),
           { status }
         );
 
@@ -236,7 +245,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/confirm',
+          op('/orders/confirm'),
           request
         );
 
@@ -270,7 +279,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/complete_preparation',
+          op('/orders/complete_preparation'),
           request
         );
 
@@ -304,7 +313,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/complete_preparation',
+          op('/orders/batch/complete_preparation'),
           request
         );
 
@@ -338,7 +347,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/cancel',
+          op('/orders/cancel'),
           request
         );
 
@@ -368,7 +377,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/refund',
+          op('/orders/refund'),
           request
         );
 
@@ -399,7 +408,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/get_order',
+          op('/orders/get_order'),
           request
         );
 
@@ -429,7 +438,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/pick_up',
+          op('/orders/pick_up'),
           request
         );
 
@@ -459,7 +468,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/pick_up',
+          op('/orders/batch/pick_up'),
           request
         );
 
@@ -493,7 +502,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/start_transit',
+          op('/orders/start_transit'),
           request
         );
 
@@ -523,7 +532,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/start_transit',
+          op('/orders/batch/start_transit'),
           request
         );
 
@@ -557,7 +566,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/out_for_delivery',
+          op('/orders/out_for_delivery'),
           request
         );
 
@@ -591,7 +600,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/out_for_delivery',
+          op('/orders/batch/out_for_delivery'),
           request
         );
 
@@ -626,7 +635,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/deliver',
+          op('/orders/deliver'),
           request
         );
 
@@ -656,7 +665,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/deliver',
+          op('/orders/batch/deliver'),
           request
         );
 
@@ -724,7 +733,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/complete',
+          op('/orders/complete'),
           request
         );
 
@@ -760,7 +769,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/switch-to-pickup',
+          op('/orders/switch-to-pickup'),
           { orderId }
         );
 
@@ -794,7 +803,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/complete-delivery',
+          op('/orders/complete-delivery'),
           request
         );
 
@@ -829,7 +838,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post(
-          `/orders/${orderId}/initiate-pay-at-delivery-payment`,
+          op(`/orders/${orderId}/initiate-pay-at-delivery-payment`),
           phoneNumberOverride?.trim()
             ? { phone_number: phoneNumberOverride.trim() }
             : {}
@@ -859,7 +868,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post(
-          `/orders/${orderId}/initiate-pay-at-pickup-payment`,
+          op(`/orders/${orderId}/initiate-pay-at-pickup-payment`),
           phoneNumberOverride?.trim()
             ? { phone_number: phoneNumberOverride.trim() }
             : {}
@@ -890,7 +899,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post(
-          `/orders/${orderId}/confirm-pickup`,
+          op(`/orders/${orderId}/confirm-pickup`),
           {
             pin: pin || undefined,
             useLatestSharedPin: options?.useLatestSharedPin,
@@ -918,7 +927,7 @@ export const useBackendOrders = () => {
 
     return callWithoutGlobalOverlay(async () => {
       try {
-        const response = await apiClient.post(`/orders/${orderId}/retry-payment`, {});
+        const response = await apiClient.post(op(`/orders/${orderId}/retry-payment`), {});
         return response.data;
       } catch (err: any) {
         const errorMessage = getHttpExceptionMessage(
@@ -944,7 +953,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post(
-          `/orders/${orderId}/mark-paid-in-cash-exception`,
+          op(`/orders/${orderId}/mark-paid-in-cash-exception`),
           { notes }
         );
         return response.data;
@@ -974,7 +983,7 @@ export const useBackendOrders = () => {
     return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post(
-          `/orders/${orderId}/reconcile-cash-exception`,
+          op(`/orders/${orderId}/reconcile-cash-exception`),
           { customerPhone, reference, notes }
         );
         return response.data;
@@ -999,7 +1008,7 @@ export const useBackendOrders = () => {
     }
 
     const response = await apiClient.get<{ pin: string }>(
-      `/orders/${orderId}/delivery-pin`
+      op(`/orders/${orderId}/delivery-pin`)
     );
 
     if (!response.data?.pin) {
@@ -1017,7 +1026,7 @@ export const useBackendOrders = () => {
     }
 
     const response = await apiClient.post<{ success: boolean }>(
-      `/orders/${orderId}/messages/delivery-pin`,
+      op(`/orders/${orderId}/messages/delivery-pin`),
       {}
     );
 
@@ -1038,7 +1047,7 @@ export const useBackendOrders = () => {
     const response = await apiClient.get<{
       success: boolean;
       templates: QuickMessageTemplate[];
-    }>(`/orders/${orderId}/messages/quick-templates`);
+    }>(op(`/orders/${orderId}/messages/quick-templates`));
 
     return response.data?.templates ?? [];
   };
@@ -1054,7 +1063,7 @@ export const useBackendOrders = () => {
     }
 
     const response = await apiClient.post<{ success: boolean }>(
-      `/orders/${orderId}/messages/quick`,
+      op(`/orders/${orderId}/messages/quick`),
       { templateId }
     );
 
@@ -1085,7 +1094,7 @@ export const useBackendOrders = () => {
         pinVersion: number;
         sharedAt: string;
       } | null;
-    }>(`/orders/${orderId}/messages/active-delivery-pin`);
+    }>(op(`/orders/${orderId}/messages/active-delivery-pin`));
 
     return response.data?.activePin ?? null;
   };
@@ -1101,7 +1110,7 @@ export const useBackendOrders = () => {
 
     const response = await apiClient.post<{
       overwriteCode: string;
-    }>(`/orders/${orderId}/delivery-overwrite-code`, {});
+    }>(op(`/orders/${orderId}/delivery-overwrite-code`), {});
 
     if (!response.data?.overwriteCode) {
       throw new Error('Failed to generate overwrite code');

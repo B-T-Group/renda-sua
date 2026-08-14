@@ -747,6 +747,51 @@ export class HasuraUserService {
   }
 
   /**
+   * Load users + persona relations without resolving a session persona.
+   * Safe for delegate-only accounts. Existing controllers must keep using getUser().
+   */
+  async getUserIdentity(ctx?: RequestContext): Promise<
+    Users & {
+      client?: Clients;
+      agent?: MeAgent;
+      business?: Businesses;
+      personas?: PersonaId[];
+    }
+  > {
+    const resolved = this.resolveContext(ctx);
+    const userId = resolved.userId;
+    if (!userId || userId === 'anonymous') {
+      throw new Error(
+        'No authenticated user. Please provide a valid authentication token.'
+      );
+    }
+    const userData = await this.hasuraSystemService.getUserByIdWithRelations(
+      userId
+    );
+    if (!userData) {
+      throw new Error(`User not found for id: ${userId}`);
+    }
+    if (userData.account_status === 'deleted') {
+      throw new HttpException(
+        { success: false, error: 'Account has been deleted' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const personas = personasFromProfileRelations({
+      client: userData.client,
+      agent: userData.agent,
+      business: userData.business,
+    });
+    return {
+      ...userData,
+      client: userData.client || undefined,
+      agent: await this.resolveMeAgent(userData.id, userData.agent),
+      business: userData.business || undefined,
+      personas,
+    };
+  }
+
+  /**
    * Get the current user by JWT Hasura user id (`x-hasura-user-id`).
    */
   async getUser(ctx?: RequestContext): Promise<

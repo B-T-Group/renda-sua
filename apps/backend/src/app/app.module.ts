@@ -83,6 +83,7 @@ import { AccountRechargeModule } from '../admin/account-recharge/account-recharg
 import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
+import { DelegationsModule } from '../delegations/delegations.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -197,6 +198,7 @@ import { AppService } from './app.service';
     BusinessReferralPayoutsModule,
     LaunchPromoModule,
     BusinessesModule,
+    DelegationsModule,
     AccountRechargeModule,
     MobilePaymentPhonesModule,
   ],

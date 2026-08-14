@@ -22,6 +22,7 @@ import type {
   OrderMessage,
 } from './messaging.types';
 import { OrderParticipantsService } from './order-participants.service';
+import type { AuthorizedBusinessActor } from '../orders/authorized-business-actor';
 import { RecipientResolutionService } from './recipient-resolution.service';
 import { StructuredMessageTypeRegistry } from './structured/structured-message.registry';
 import type { MessageType } from './structured/structured-message.types';
@@ -43,8 +44,38 @@ export class MessagingService {
     private readonly rbacService: RbacService
   ) {}
 
+  actorAsBusinessUser(actor: AuthorizedBusinessActor) {
+    return {
+      id: actor.userId,
+      business: { id: actor.businessId },
+      active_persona: 'business' as const,
+    };
+  }
+
   async getOrderMessages(orderId: string): Promise<OrderMessage[]> {
     const user = await this.hasuraUserService.getUser();
+    return this.listOrderMessagesForViewer(orderId, user);
+  }
+
+  async getOrderMessagesForActor(
+    orderId: string,
+    actor: AuthorizedBusinessActor
+  ): Promise<OrderMessage[]> {
+    return this.listOrderMessagesForViewer(
+      orderId,
+      this.actorAsBusinessUser(actor)
+    );
+  }
+
+  private async listOrderMessagesForViewer(
+    orderId: string,
+    user: {
+      id: string;
+      business?: { id?: string } | null;
+      agent?: { id?: string } | null;
+      active_persona?: PersonaId | null;
+    }
+  ): Promise<OrderMessage[]> {
     const order = await this.loadOrderForMessaging(orderId);
     await this.assertMessagingAccess(user, order);
 
@@ -194,12 +225,31 @@ export class MessagingService {
     };
   }
 
+  async createOrderMessageForActor(
+    orderId: string,
+    message: string,
+    actor: AuthorizedBusinessActor,
+    mentionedUserId?: string
+  ): Promise<OrderMessage> {
+    return this.createOrderMessage(
+      orderId,
+      message,
+      mentionedUserId,
+      this.actorAsBusinessUser(actor)
+    );
+  }
+
   async createOrderMessage(
     orderId: string,
     message: string,
-    mentionedUserId?: string
+    mentionedUserId?: string,
+    viewer?: {
+      id: string;
+      business?: { id?: string } | null;
+      active_persona?: PersonaId | null;
+    }
   ): Promise<OrderMessage> {
-    const user = await this.hasuraUserService.getUser();
+    const user = viewer ?? (await this.hasuraUserService.getUser());
     const order = await this.loadOrderForMessaging(orderId);
     await this.assertMessagingAccess(user, order);
 
@@ -347,10 +397,25 @@ export class MessagingService {
     };
   }
 
-  async getMentionableParticipants(
-    orderId: string
+  async getMentionableParticipantsForActor(
+    orderId: string,
+    actor: AuthorizedBusinessActor
   ): Promise<MentionableParticipant[]> {
-    const user = await this.hasuraUserService.getUser();
+    return this.getMentionableParticipants(
+      orderId,
+      this.actorAsBusinessUser(actor)
+    );
+  }
+
+  async getMentionableParticipants(
+    orderId: string,
+    viewer?: {
+      id: string;
+      business?: { id?: string } | null;
+      active_persona?: PersonaId | null;
+    }
+  ): Promise<MentionableParticipant[]> {
+    const user = viewer ?? (await this.hasuraUserService.getUser());
     const order = await this.loadOrderForMessaging(orderId);
     await this.assertMessagingAccess(user, order);
 

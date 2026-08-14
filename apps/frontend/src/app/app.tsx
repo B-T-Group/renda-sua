@@ -140,6 +140,12 @@ function App() {
     if (path === '/complete-profile' || path.startsWith('/complete-profile/')) {
       return;
     }
+    if (path.startsWith('/invite/') || path.startsWith('/delegate/')) {
+      return;
+    }
+    if (path.startsWith('/auth/')) {
+      return;
+    }
     navigate('/select-persona', { replace: true });
   }, [
     isAuthenticated,
@@ -226,6 +232,10 @@ function App() {
             />
             <Route path="/auth/otp" element={<LazyPages.OtpAuthPage />} />
             <Route path="/signup" element={<LazyPages.SignupPage />} />
+            <Route
+              path="/invite/:token"
+              element={<LazyPages.InviteAcceptPage />}
+            />
 
             {/* Public routes */}
             <Route
@@ -654,6 +664,23 @@ function App() {
               }
             />
 
+            <Route
+              path="/delegate/orders"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.DelegateOrdersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/delegate/orders/:orderId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.DelegateManageOrderPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Open Orders route - for agents */}
             <Route
               path="/open-orders"
@@ -734,6 +761,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessLocationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/team"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessTeamPage />
                 </ProtectedRoute>
               }
             />

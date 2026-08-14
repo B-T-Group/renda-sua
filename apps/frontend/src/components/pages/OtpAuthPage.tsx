@@ -13,10 +13,15 @@ const OtpAuthPage: React.FC = () => {
   const { t } = useTranslation();
   const [search] = useSearchParams();
   const flow = search.get('flow') || 'login';
+  const emailFromQuery = search.get('email') || '';
   const initialEmail = useMemo(() => {
+    if (emailFromQuery) {
+      sessionStorage.setItem('pendingLoginEmail', emailFromQuery);
+      return emailFromQuery;
+    }
     const key = flow === 'signup' ? 'pendingSignupEmail' : 'pendingLoginEmail';
     return sessionStorage.getItem(key) || '';
-  }, [flow]);
+  }, [flow, emailFromQuery]);
   const [email, setEmail] = useState(initialEmail);
   const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ''));
   const [loading, setLoading] = useState(false);

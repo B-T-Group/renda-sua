@@ -13,10 +13,15 @@ import { useSessionAuth } from './SessionAuthContext';
 import { useApiClient } from '../hooks/useApiClient';
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 import {
-  readStoredActivePersona,
+  readStoredActiveContext,
   writeStoredActivePersona,
+  writeStoredActiveDelegation,
   clearStoredActivePersona,
 } from '../utils/activePersonaStorage';
+import type {
+  ActiveContext,
+  DelegationGrant,
+} from '../types/delegation';
 
 export interface Address {
   id: string;
@@ -125,6 +130,10 @@ export interface UserProfileResponse {
   message: string;
   /** True when /me just created a legacy personal wallet for the user's country currency. */
   personalAccountCreated?: boolean;
+  /** Location grants when location_delegations flag is on */
+  delegations?: DelegationGrant[];
+  active_context?: ActiveContext | null;
+  active_persona?: UserType | null;
 }
 
 export interface GetAccountsResponse {
@@ -287,9 +296,20 @@ interface UserProfileContextType {
   userType: UserType | null;
   /** Enabled profile kinds for this account */
   personas: UserType[];
+  /** Active location grants from /users/me */
+  delegations: DelegationGrant[];
+  /** Current session context (persona or location grant) */
+  activeContext: ActiveContext | null;
+  /** Grant matching the active delegation context */
+  activeDelegation: DelegationGrant | null;
+  /** True when user is operating under a location grant */
+  isDelegationContext: boolean;
   /** More than one persona and no valid stored choice yet */
   needsPersonaSelection: boolean;
+  /** Needs to pick persona and/or delegation (multi-context or no stored choice) */
+  needsContextSelection: boolean;
   setActivePersona: (persona: UserType) => Promise<void>;
+  setActiveContext: (context: ActiveContext) => Promise<void>;
   isProfileComplete: boolean;
   successMessage: string | null;
   errorMessage: string | null;
@@ -344,6 +364,10 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [delegations, setDelegations] = useState<DelegationGrant[]>([]);
+  const [activeContext, setActiveContextState] = useState<ActiveContext | null>(
+    null
+  );
 
   const { isLoading, getAccessTokenSilently } = useAuth0();
   const { isAuthenticated } = useSessionAuth();
@@ -388,29 +412,58 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
         }
 
         const personasList = derivePersonasFromProfile(userProfile);
-        let stored = readStoredActivePersona();
-        if (
-          stored?.userId === userProfile.id &&
-          !personasList.includes(stored.persona as UserType)
+        const grants = response.data.delegations ?? [];
+        setDelegations(grants);
+
+        let stored = readStoredActiveContext();
+        if (stored?.userId !== userProfile.id) {
+          stored = null;
+        } else if (
+          stored.kind === 'persona' &&
+          stored.persona &&
+          !personasList.includes(stored.persona)
+        ) {
+          clearStoredActivePersona();
+          stored = null;
+        } else if (
+          stored.kind === 'delegation' &&
+          stored.delegationId &&
+          !grants.some((g) => g.id === stored!.delegationId)
         ) {
           clearStoredActivePersona();
           stored = null;
         }
 
-        let effective: UserType | null = null;
-        if (
-          stored?.userId === userProfile.id &&
-          personasList.includes(stored.persona as UserType)
-        ) {
-          effective = stored.persona as UserType;
-        } else if (personasList.length === 1) {
-          effective = personasList[0];
-          writeStoredActivePersona(userProfile.id, effective);
-        }
-        // Multiple personas: do not infer from users.user_type_id — user must pick
-        // on /select-persona (or use a stored choice from this device).
+        let effectivePersona: UserType | null = null;
+        let nextContext: ActiveContext | null = null;
 
-        setUserType(effective);
+        if (stored?.kind === 'delegation' && stored.delegationId) {
+          nextContext = {
+            kind: 'delegation',
+            delegationId: stored.delegationId,
+          };
+        } else if (
+          stored?.kind === 'persona' &&
+          stored.persona &&
+          personasList.includes(stored.persona)
+        ) {
+          effectivePersona = stored.persona;
+          nextContext = { kind: 'persona', persona: stored.persona };
+        } else if (personasList.length === 1 && grants.length === 0) {
+          effectivePersona = personasList[0];
+          nextContext = { kind: 'persona', persona: effectivePersona };
+          writeStoredActivePersona(userProfile.id, effectivePersona);
+        } else if (personasList.length === 0 && grants.length === 1) {
+          nextContext = {
+            kind: 'delegation',
+            delegationId: grants[0].id,
+          };
+          writeStoredActiveDelegation(userProfile.id, grants[0].id);
+        }
+        // Multiple contexts: user must pick on /select-persona.
+
+        setUserType(effectivePersona);
+        setActiveContextState(nextContext);
 
         const personaComplete = (t: UserType): boolean => {
           if (t === 'client') return !!userProfile.client;
@@ -419,8 +472,9 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
         };
 
         const complete =
-          personasList.length > 0 &&
-          personasList.every((p) => personaComplete(p));
+          (personasList.length > 0 &&
+            personasList.every((p) => personaComplete(p))) ||
+          (personasList.length === 0 && grants.length > 0);
 
         setIsProfileComplete(complete);
       } else {
@@ -488,6 +542,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setErrorMessage(null);
     setAccounts([]);
     setAccountsError(null);
+    setDelegations([]);
+    setActiveContextState(null);
     clearStoredActivePersona();
   };
 
@@ -509,39 +565,109 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     [profile]
   );
 
+  const activeDelegation = useMemo(() => {
+    if (activeContext?.kind !== 'delegation') return null;
+    return (
+      delegations.find((d) => d.id === activeContext.delegationId) ?? null
+    );
+  }, [activeContext, delegations]);
+
+  const isDelegationContext = activeContext?.kind === 'delegation';
+
   const needsPersonaSelection = useMemo(() => {
-    if (!profile?.id || personas.length <= 1) return false;
-    const s = readStoredActivePersona();
-    if (s?.userId === profile.id && personas.includes(s.persona as UserType)) {
+    if (!profile?.id) return false;
+    const contextCount = personas.length + delegations.length;
+    if (contextCount <= 1) return false;
+    const s = readStoredActiveContext();
+    if (s?.userId === profile.id) {
+      if (
+        s.kind === 'persona' &&
+        s.persona &&
+        personas.includes(s.persona)
+      ) {
+        return false;
+      }
+      if (
+        s.kind === 'delegation' &&
+        s.delegationId &&
+        delegations.some((d) => d.id === s.delegationId)
+      ) {
+        return false;
+      }
+    }
+    if (activeContext?.kind === 'persona' && activeContext.persona) {
       return false;
     }
-    // After setActivePersona, localStorage updates before this memo re-ran; include userType
-    // so we don’t keep stale `true` and bounce back to /select-persona from App.tsx.
-    if (userType && personas.includes(userType)) {
+    if (activeContext?.kind === 'delegation' && activeContext.delegationId) {
+      return false;
+    }
+    if (userType && personas.includes(userType) && delegations.length === 0) {
       return false;
     }
     return true;
-  }, [profile?.id, personas, userType]);
+  }, [
+    profile?.id,
+    personas,
+    userType,
+    delegations,
+    activeContext,
+  ]);
 
-  const setActivePersona = useCallback(
-    async (persona: UserType) => {
+  const needsContextSelection = needsPersonaSelection;
+
+  const setActiveContext = useCallback(
+    async (context: ActiveContext) => {
       if (!apiClient || !profile?.id) return;
-      await apiClient.post('/users/me/active-persona', { persona });
-      writeStoredActivePersona(profile.id, persona);
-      setUserType(persona);
-      setProfile((prev) =>
-        prev ? { ...prev, user_type_id: persona } : null
-      );
       try {
-        await getAccessTokenSilently({
-          cacheMode: 'off',
-          authorizationParams: { active_persona: persona },
-        });
-      } catch (e) {
-        console.warn('Token refresh with active_persona:', e);
+        await apiClient.post('/users/me/active-context', context);
+      } catch (e: any) {
+        // Flag off or older backend: fall back to persona endpoint.
+        if (context.kind === 'persona' && context.persona) {
+          await apiClient.post('/users/me/active-persona', {
+            persona: context.persona,
+          });
+        } else {
+          throw e;
+        }
+      }
+      if (context.kind === 'persona' && context.persona) {
+        writeStoredActivePersona(profile.id, context.persona);
+        setUserType(context.persona);
+        setActiveContextState(context);
+        setProfile((prev) =>
+          prev ? { ...prev, user_type_id: context.persona } : null
+        );
+        try {
+          await getAccessTokenSilently({
+            cacheMode: 'off',
+            authorizationParams: { active_persona: context.persona },
+          });
+        } catch (err) {
+          console.warn('Token refresh with active_persona:', err);
+        }
+        return;
+      }
+      if (context.kind === 'delegation' && context.delegationId) {
+        writeStoredActiveDelegation(profile.id, context.delegationId);
+        setUserType(null);
+        setActiveContextState(context);
+        try {
+          await getAccessTokenSilently({
+            cacheMode: 'off',
+          });
+        } catch (err) {
+          console.warn('Token refresh for delegation context:', err);
+        }
       }
     },
     [apiClient, profile?.id, getAccessTokenSilently]
+  );
+
+  const setActivePersona = useCallback(
+    async (persona: UserType) => {
+      await setActiveContext({ kind: 'persona', persona });
+    },
+    [setActiveContext]
   );
 
   const clearMessages = () => {
@@ -713,8 +839,14 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     error,
     userType,
     personas,
+    delegations,
+    activeContext,
+    activeDelegation,
+    isDelegationContext,
     needsPersonaSelection,
+    needsContextSelection,
     setActivePersona,
+    setActiveContext,
     isProfileComplete,
     successMessage,
     errorMessage,

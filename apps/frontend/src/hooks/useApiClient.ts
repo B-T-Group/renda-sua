@@ -1,11 +1,31 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { useCallback, useMemo } from 'react';
 import { environment } from '../config/environment';
-import { activePersonaHeaderForUser } from '../utils/activePersonaStorage';
+import {
+  activeDelegationHeaderForUser,
+  activePersonaHeaderForUser,
+} from '../utils/activePersonaStorage';
 import { decodeHasuraUserIdFromAccessToken } from '../utils/jwtHasura';
 import { useLoading } from '../contexts/LoadingContext';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
+
+function applyActiveContextHeaders(
+  headers: InternalAxiosRequestConfig['headers'],
+  token: string
+) {
+  const uid = decodeHasuraUserIdFromAccessToken(token);
+  if (!uid) return;
+  const delegation = activeDelegationHeaderForUser(uid);
+  if (delegation) {
+    headers['X-Active-Delegation'] = delegation;
+    return;
+  }
+  const persona = activePersonaHeaderForUser(uid);
+  if (persona) {
+    headers['X-Active-Persona'] = persona;
+  }
+}
 
 /** AI cleanup can exceed the default axios 30s client timeout; force a longer limit. */
 function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
@@ -93,11 +113,7 @@ export const useApiClient = (): AxiosInstance => {
 
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
-            const uid = decodeHasuraUserIdFromAccessToken(token);
-            const persona = uid ? activePersonaHeaderForUser(uid) : undefined;
-            if (persona) {
-              config.headers['X-Active-Persona'] = persona;
-            }
+            applyActiveContextHeaders(config.headers, token);
           } else {
             config.headers['X-Hasura-Role'] = 'anonymous';
           }
@@ -144,11 +160,7 @@ export const useApiClient = (): AxiosInstance => {
             const originalRequest = error.config;
             if (originalRequest && newToken) {
               originalRequest.headers.Authorization = `Bearer ${newToken}`;
-              const uid = decodeHasuraUserIdFromAccessToken(newToken);
-              const persona = uid ? activePersonaHeaderForUser(uid) : undefined;
-              if (persona) {
-                originalRequest.headers['X-Active-Persona'] = persona;
-              }
+              applyActiveContextHeaders(originalRequest.headers, newToken);
               return instance.request(originalRequest);
             }
           } catch (refreshError) {

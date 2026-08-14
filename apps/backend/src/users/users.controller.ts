@@ -40,7 +40,12 @@ import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RbacService } from '../rbac/rbac.service';
-import { derivePersonas, userHasPersona } from './persona.util';
+import {
+  derivePersonas,
+  resolveSessionPersona,
+  userHasPersona,
+  type UserPersonaShape,
+} from './persona.util';
 import { isPersonaId, PersonaId } from './persona.types';
 import {
   DEFAULT_USER_TIMEZONE,
@@ -48,6 +53,10 @@ import {
 } from './user-timezone.util';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { DelegationAccessService } from '../delegations/delegation-access.service';
+import { LocationDelegationsFlagService } from '../delegations/location-delegations-flag.service';
+import { SetActiveContextDto } from '../delegations/dto/set-active-context.dto';
+import type { DelegationGrant } from '../delegations/delegation.types';
 
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const PROFILE_PICTURE_ACCEPTED_TYPES = [
@@ -147,7 +156,9 @@ export class UsersController {
     private readonly businessContractsService: BusinessContractsService,
     private readonly rbacService: RbacService,
     private readonly mobilePaymentPhoneSeedService: MobilePaymentPhoneSeedService,
-    private readonly launchPromoService: LaunchPromoService
+    private readonly launchPromoService: LaunchPromoService,
+    private readonly locationDelegationsFlag: LocationDelegationsFlagService,
+    private readonly delegationAccess: DelegationAccessService
   ) {}
 
   private scheduleEnsureContract(businessId: string): void {
@@ -310,6 +321,9 @@ export class UsersController {
   @Get('me')
   async getCurrentUser(@ReqContext() ctx: RequestContext, @CurrentUser() auth0User: any) {
     try {
+      if (await this.locationDelegationsFlag.isEnabled()) {
+        return this.getCurrentUserWithDelegations(ctx, auth0User);
+      }
       const user = await this.hasuraUserService.getUser(ctx);
       const verifiedViaAuthSession =
         await this.syncVerificationAndContractAfterAuth(user, auth0User?.sub);
@@ -373,6 +387,148 @@ export class UsersController {
         HttpStatus.NOT_FOUND
       );
     }
+  }
+
+  @Post('me/active-context')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Validate and echo the active session context' })
+  async setActiveContext(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: SetActiveContextDto
+  ) {
+    if (!(await this.locationDelegationsFlag.isEnabled())) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    if (body.kind === 'persona') {
+      return this.mirrorActivePersona(ctx, { persona: body.persona || '' });
+    }
+    if (body.kind !== 'delegation' || !body.delegationId) {
+      throw new HttpException('Invalid context', HttpStatus.BAD_REQUEST);
+    }
+    const userId = this.hasuraUserService.getUserId(ctx);
+    await this.delegationAccess.resolve(userId, body.delegationId);
+    return { success: true, kind: 'delegation', delegationId: body.delegationId };
+  }
+
+  private async getCurrentUserWithDelegations(
+    ctx: RequestContext,
+    auth0User: any
+  ) {
+    const identity = await this.hasuraUserService.getUserIdentity(ctx);
+    const delegations = await this.delegationAccess.listActiveForUser(identity.id);
+    const activePersona = this.resolveIdentityPersona(identity, ctx, delegations);
+    const user = await this.hydrateIdentityUser(identity, activePersona);
+    return this.buildMeResponse(user, auth0User, ctx, delegations);
+  }
+
+  private resolveIdentityPersona(
+    identity: UserPersonaShape & { personas?: PersonaId[] },
+    ctx: RequestContext,
+    delegations: DelegationGrant[]
+  ): PersonaId | null {
+    const personas = derivePersonas(identity);
+    if (personas.length === 0) {
+      if (delegations.length > 0) return null;
+      throw new HttpException(
+        'No persona profiles found for this user',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    try {
+      return resolveSessionPersona(identity, this.hasuraUserService.sessionPersonaContext(ctx));
+    } catch (error: any) {
+      if (delegations.length > 0) return null;
+      throw error;
+    }
+  }
+
+  private async hydrateIdentityUser(
+    identity: any,
+    activePersona: PersonaId | null
+  ) {
+    const user = { ...identity, active_persona: activePersona };
+    if (activePersona) {
+      const addresses = await this.hasuraSystemService.getAllUserAddresses(
+        identity.id,
+        activePersona
+      );
+      user.addresses = addresses;
+    } else {
+      user.addresses = [];
+    }
+    return user;
+  }
+
+  private async buildMeResponse(
+    user: any,
+    auth0User: any,
+    ctx: RequestContext,
+    delegations: DelegationGrant[]
+  ) {
+    const verifiedViaAuthSession =
+      await this.syncVerificationAndContractAfterAuth(user, auth0User?.sub);
+    const verifiedFlags = verifiedViaAuthSession
+      ? this.verifiedFlagsForAuthChannel(user, auth0User?.sub)
+      : {};
+    const country = await this.resolveUserCountry(user);
+    const currency = country
+      ? await this.addressesService.resolveCurrencyFromCountry(country)
+      : 'XAF';
+    let personalAccountCreated = false;
+    if (country && currency) {
+      personalAccountCreated =
+        await this.addressesService.ensurePersonalAccount(user.id, currency);
+    }
+    const isStripeEnabled = country
+      ? (await this.paymentRoutingService.resolveRailForCountry(country)) ===
+        'stripe'
+      : false;
+    const access = await this.rbacService.getEffectiveAccess(user.id);
+    return {
+      success: true,
+      active_persona: user.active_persona,
+      delegations,
+      active_context: this.resolveActiveContext(ctx, user.active_persona, delegations),
+      user: {
+        ...user,
+        email_verified:
+          verifiedFlags.email_verified === true ? true : user.email_verified,
+        phone_number_verified:
+          verifiedFlags.phone_number_verified === true
+            ? true
+            : user.phone_number_verified,
+        personas: derivePersonas(user),
+        country,
+        currency,
+        is_stripe_enabled: isStripeEnabled,
+        roles: access.roles,
+        permissions: access.isSuperuser ? ['*'] : access.permissions,
+        is_superuser: access.isSuperuser,
+      },
+      personalAccountCreated,
+      userId: this.hasuraUserService.getUserId(ctx),
+      auth0User: {
+        sub: auth0User.sub,
+        email: auth0User.email,
+        email_verified: auth0User.email_verified,
+      },
+    };
+  }
+
+  private resolveActiveContext(
+    ctx: RequestContext,
+    activePersona: PersonaId | null,
+    delegations: DelegationGrant[]
+  ) {
+    const header = ctx.activeDelegation?.trim();
+    if (header && delegations.some((d) => d.id === header)) {
+      return { kind: 'delegation' as const, delegationId: header };
+    }
+    if (activePersona) {
+      return { kind: 'persona' as const, persona: activePersona };
+    }
+    return null;
   }
 
   @Get('me/referred-businesses')

@@ -17,6 +17,8 @@ export interface NotificationData {
   businessName: string;
   /** Store or location name (e.g. Downtown Store), when available */
   businessLocationName?: string;
+  /** Order business_location_id for location-delegate fan-out */
+  businessLocationId?: string;
   businessEmail?: string | null;
   businessVerified?: boolean;
   agentName?: string;

@@ -28,6 +28,9 @@ export type { OrderData } from './useOrderById';
 export { useOrderSubscription } from './useOrderSubscription';
 export { useOrders } from './useOrders';
 export type { Order, OrderFilters } from './useOrders';
+export { useDelegateOrders } from './useDelegateOrders';
+export { useBusinessDelegations } from './useBusinessDelegations';
+export { usePublicInvite } from './usePublicInvite';
 
 // Agent hooks
 export { useAgentHasIdDocument } from './useAgentHasIdDocument';

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>You've been invited to manage a store location - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .cta {
+        display: inline-block;
+        background: #2c3e50;
+        color: white !important;
+        text-decoration: none;
+        padding: 12px 20px;
+        border-radius: 6px;
+        margin-top: 12px;
+      }
+      .small {
+        color: #666;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Location invitation</h1>
+      <p>You've been asked to help manage a store</p>
+    </div>
+    <div class="content">
+      <h2>Hello,</h2>
+      <p>
+        <strong>{{{inviterName}}}</strong> invited you to join
+        <strong>{{{businessName}}}</strong> at
+        <strong>{{{locationName}}}</strong> as
+        <strong>{{{roleName}}}</strong>.
+      </p>
+      <div class="card">
+        <h3>Accept the invitation</h3>
+        <p>
+          Use the button below to review the invite and continue with a one-time
+          code. This link expires on {{{expiresAt}}}.
+        </p>
+        <p>
+          <a class="cta" href="{{{acceptUrl}}}">Accept invitation</a>
+        </p>
+      </div>
+      <p class="small">
+        If you were not expecting this email, you can ignore it.
+      </p>
+    </div>
+  </body>
+</html>

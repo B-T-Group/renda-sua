@@ -270,6 +270,26 @@ export class DeliveryPinShareService {
     return this.readActiveSharedPin(orderId, user.id);
   }
 
+  async getActiveDeliveryPinForLocation(
+    orderId: string,
+    businessId: string
+  ): Promise<{
+    messageId: string;
+    pin: string;
+    pinVersion: number;
+    sharedAt: string;
+  } | null> {
+    const order = await this.messagingService.loadOrderForMessagingPublic(orderId);
+    if (order.business_id !== businessId) {
+      throw new HttpException('Not the business for this order', HttpStatus.FORBIDDEN);
+    }
+    if (order.fulfillment_method !== 'pickup') return null;
+    if (order.current_status !== 'ready_for_pickup') return null;
+    const ownerUserId = order.business?.user_id;
+    if (!ownerUserId) return null;
+    return this.readActiveSharedPin(orderId, ownerUserId);
+  }
+
   private async readActiveSharedPin(
     orderId: string,
     sharedToUserId: string

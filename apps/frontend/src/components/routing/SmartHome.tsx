@@ -17,7 +17,11 @@ const SmartHome: React.FC = () => {
     loading,
     userType,
     needsPersonaSelection,
+    needsContextSelection,
     isProfileComplete,
+    isDelegationContext,
+    delegations,
+    personas,
   } = useUserProfileContext();
 
   if (isAuthenticated && loading) {
@@ -38,12 +42,18 @@ const SmartHome: React.FC = () => {
     );
   }
 
-  if (!isProfileComplete) {
+  const hasDelegationsOnly = personas.length === 0 && delegations.length > 0;
+
+  if (!isProfileComplete && !hasDelegationsOnly) {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  if (needsPersonaSelection) {
+  if (needsContextSelection || needsPersonaSelection) {
     return <Navigate to="/select-persona" replace />;
+  }
+
+  if (isDelegationContext) {
+    return <Navigate to="/delegate/orders" replace />;
   }
 
   if (userType === 'client') {
@@ -57,6 +67,10 @@ const SmartHome: React.FC = () => {
 
   if (userType === 'agent' || userType === 'business') {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (delegations.length > 0) {
+    return <Navigate to="/select-persona" replace />;
   }
 
   return (

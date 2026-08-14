@@ -125,6 +125,17 @@ export function useBusinessDashboardModules({
         color: '#f57c00',
         path: '/business/locations',
       },
+      {
+        title: t('delegation.team.title', 'Team'),
+        description: t(
+          'delegation.team.dashboardDescription',
+          'Invite teammates to manage orders at a location.'
+        ),
+        icon: <UsersIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00897b',
+        path: '/business/team',
+      },
     ];
 
     const catalogMenuHubModule: BusinessDashboardModule = {

@@ -1,0 +1,45 @@
+table:
+  name: location_delegation_events
+  schema: public
+object_relationships:
+  - name: actor
+    using:
+      foreign_key_constraint_on: actor_user_id
+  - name: invite
+    using:
+      foreign_key_constraint_on: invite_id
+  - name: delegation
+    using:
+      foreign_key_constraint_on: delegation_id
+  - name: from_role
+    using:
+      foreign_key_constraint_on: from_role_id
+  - name: to_role
+    using:
+      foreign_key_constraint_on: to_role_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - event_type
+        - actor_user_id
+        - invite_id
+        - delegation_id
+        - from_role_id
+        - to_role_id
+        - created_at
+      filter:
+        _or:
+          - invite:
+              business_location:
+                business:
+                  user:
+                    id:
+                      _eq: X-Hasura-User-Id
+          - delegation:
+              business_location:
+                business:
+                  user:
+                    id:
+                      _eq: X-Hasura-User-Id

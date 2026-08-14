@@ -56,6 +56,7 @@ describe('UsersController', () => {
     preferred_language: 'en',
     timezone: 'Africa/Douala',
   };
+  const ctx = { userId: currentUser.id } as any;
 
   beforeEach(() => {
     hasuraUserService = {
@@ -101,7 +102,9 @@ describe('UsersController', () => {
           .fn()
           .mockResolvedValue(undefined),
       } as any,
-      {} as any
+      { claimSlotIfAvailable: jest.fn().mockResolvedValue(undefined) } as any,
+      { isEnabled: jest.fn().mockResolvedValue(false) } as any,
+      { listActiveForUser: jest.fn(), resolve: jest.fn() } as any
     );
   });
 
@@ -131,7 +134,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.addPersona('client', {})
+        controller.addPersona(ctx, 'client', {})
       ).resolves.toEqual({
         success: true,
         client: { id: 'client-new' },
@@ -162,7 +165,7 @@ describe('UsersController', () => {
         insert_clients_one: { id: 'client-new' },
       });
 
-      await controller.addPersona('client', {});
+      await controller.addPersona(ctx, 'client', {});
 
       expect(
         addressesService.seedDefaultAddressForNewPersona
@@ -183,7 +186,7 @@ describe('UsersController', () => {
         insert_businesses_one: { id: 'biz-new', name: 'Shop' },
       });
 
-      await controller.addPersona('business', {
+      await controller.addPersona(ctx, 'business', {
         name: 'Shop',
         main_interest: 'sell_items',
       });
@@ -207,7 +210,7 @@ describe('UsersController', () => {
         personas: ['client'],
       });
 
-      await expect(controller.addPersona('client', {})).resolves.toEqual({
+      await expect(controller.addPersona(ctx, 'client', {})).resolves.toEqual({
         success: true,
         client: { id: 'client-1' },
       });
@@ -235,7 +238,7 @@ describe('UsersController', () => {
         new Error('seed failed')
       );
 
-      await expect(controller.addPersona('client', {})).rejects.toThrow(
+      await expect(controller.addPersona(ctx, 'client', {})).rejects.toThrow(
         new HttpException(
           { success: false, error: 'seed failed' },
           HttpStatus.BAD_REQUEST
@@ -257,7 +260,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUser({
+        controller.updateCurrentUser(ctx, {
           firstName: 'Current',
           lastName: 'User',
           phoneNumber: '+237600000002',
@@ -286,7 +289,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUser({
+        controller.updateCurrentUser(ctx, {
           firstName: 'Current',
           lastName: 'User',
           phoneNumber: ' +237600000002 ',
@@ -312,7 +315,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserPhone({ phoneNumber: '+237600000002' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237600000002' })
       ).rejects.toThrow(
         new HttpException(
           {
@@ -328,7 +331,7 @@ describe('UsersController', () => {
 
     it('returns current user when phone is unchanged', async () => {
       await expect(
-        controller.updateCurrentUserPhone({ phoneNumber: ' +237600000001 ' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: ' +237600000001 ' })
       ).resolves.toEqual({ success: true, user: currentUser });
       expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
       expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
@@ -346,7 +349,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserPhone({ phoneNumber: '+237600000002' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237600000002' })
       ).resolves.toEqual({ success: true, user: updatedUser });
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('PhoneTakenExclude'),
@@ -367,7 +370,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserPhone({ phoneNumber: '+237699999999' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237699999999' })
       ).rejects.toThrow(
         new HttpException(
           { success: false, error: 'Phone number is already in use' },
@@ -378,7 +381,7 @@ describe('UsersController', () => {
     });
 
     it('rejects empty phone', async () => {
-      await expect(controller.updateCurrentUserPhone({ phoneNumber: '  ' })).rejects.toThrow(
+      await expect(controller.updateCurrentUserPhone(ctx,{ phoneNumber: '  ' })).rejects.toThrow(
         new HttpException(
           { success: false, error: 'Phone number is required' },
           HttpStatus.BAD_REQUEST
@@ -400,7 +403,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserEmail({ email: ' New@Example.COM ' })
+        controller.updateCurrentUserEmail(ctx, { email: ' New@Example.COM ' })
       ).resolves.toEqual({ success: true, user: updatedUser });
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('EmailTakenExclude'),
@@ -414,7 +417,7 @@ describe('UsersController', () => {
 
     it('returns the current user without writes when email is unchanged', async () => {
       await expect(
-        controller.updateCurrentUserEmail({ email: ' Current@Example.COM ' })
+        controller.updateCurrentUserEmail(ctx, { email: ' Current@Example.COM ' })
       ).resolves.toEqual({ success: true, user: currentUser });
       expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
       expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
@@ -427,7 +430,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserEmail({ email: 'new@example.com' })
+        controller.updateCurrentUserEmail(ctx, { email: 'new@example.com' })
       ).rejects.toThrow(
         new HttpException(
           {
@@ -447,7 +450,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserEmail({ email: 'taken@example.com' })
+        controller.updateCurrentUserEmail(ctx, { email: 'taken@example.com' })
       ).rejects.toThrow(
         new HttpException(
           { success: false, error: 'Email is already taken' },

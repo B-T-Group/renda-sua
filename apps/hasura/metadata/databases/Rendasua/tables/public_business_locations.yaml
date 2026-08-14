@@ -21,6 +21,20 @@ array_relationships:
         remote_table:
           name: business_inventory
           schema: public
+  - name: location_delegation_invites
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: location_delegation_invites
+          schema: public
+  - name: location_delegations
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: location_delegations
+          schema: public
   - name: orders
     using:
       manual_configuration:

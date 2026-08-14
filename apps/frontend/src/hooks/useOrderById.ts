@@ -1,4 +1,8 @@
 import { useCallback, useState } from 'react';
+import {
+  useOrdersApiPrefix,
+  withOrdersApiPrefix,
+} from '../contexts/OrdersApiPrefixContext';
 import { useApiClient } from './useApiClient';
 
 export interface OrderData {
@@ -272,6 +276,7 @@ export const useOrderById = (): UseOrderByIdResult => {
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const apiClient = useApiClient();
+  const ordersPrefix = useOrdersApiPrefix();
 
   const fetchOrder = useCallback(
     async (orderId: string) => {
@@ -280,8 +285,9 @@ export const useOrderById = (): UseOrderByIdResult => {
       setLastOrderId(orderId);
 
       try {
-        const response = await apiClient.get(`/orders/${orderId}`);
-
+        const response = await apiClient.get(
+          withOrdersApiPrefix(ordersPrefix, `/orders/${orderId}`)
+        );
         if (response.data.success) {
           setOrder(response.data.order);
         } else {
@@ -298,7 +304,7 @@ export const useOrderById = (): UseOrderByIdResult => {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, ordersPrefix]
   );
 
   const refetch = useCallback(async () => {

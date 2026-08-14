@@ -37,6 +37,7 @@ interface SlaOrder {
   current_status: string;
   acceptance_state: string | null;
   business_id: string;
+  business_location_id?: string | null;
   estimated_prep_minutes?: number | null;
   acceptance_activates_at?: string | null;
   client?: {
@@ -1040,6 +1041,7 @@ export class OrderAcceptanceService {
         clientName: `${order.client?.user?.first_name || ''} ${
           order.client?.user?.last_name || ''
         }`.trim(),
+        businessLocationId: order.business_location_id,
       });
     } catch (error: any) {
       this.logger.error(`Activate notify failed: ${error?.message}`);
@@ -1051,6 +1053,7 @@ export class OrderAcceptanceService {
       `query OrderSla($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status acceptance_state business_id
+          business_location_id
           estimated_prep_minutes acceptance_activates_at
           client {
             user_id
@@ -1118,6 +1121,7 @@ export class OrderAcceptanceService {
   private async notifyEscalation(order: {
     id: string;
     order_number: string;
+    business_location_id?: string | null;
     business?: {
       user_id?: string;
       name?: string;
@@ -1131,6 +1135,7 @@ export class OrderAcceptanceService {
         orderNumber: order.order_number,
         preferredLanguage: order.business?.user?.preferred_language,
         graceSeconds: this.orderConfig().acceptanceGraceSeconds,
+        businessLocationId: order.business_location_id,
       });
       this.logger.warn(
         `Order ${order.order_number} escalated: merchant no response (admin alert via reliability dashboard)`

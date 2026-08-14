@@ -9,6 +9,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
 import { isActivePersona } from '../users/persona.util';
+import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
 @Injectable()
 export class OrderStatusService {
@@ -23,9 +24,18 @@ export class OrderStatusService {
   /**
    * Update order status with validation for business workflow
    */
-  async updateOrderStatus(orderId: string, newStatus: string): Promise<any> {
-    // Get the current user
-    const user = await this.hasuraUserService.getUser();
+  async updateOrderStatus(
+    orderId: string,
+    newStatus: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<any> {
+    const user = actor
+      ? ({
+          id: actor.userId,
+          business: { id: actor.businessId },
+          active_persona: 'business',
+        } as any)
+      : await this.hasuraUserService.getUser();
 
     // Get the order to validate ownership and current status
     const getOrderQuery = `
@@ -61,9 +71,10 @@ export class OrderStatusService {
     }
 
     // Validate user permissions (ownership via order graph; active persona via user_type_id)
-    const isBusinessOwner =
-      isActivePersona(user, 'business') &&
-      order.business.user_id === user.id;
+    const isBusinessOwner = actor
+      ? order.business_id === actor.businessId
+      : isActivePersona(user, 'business') &&
+        order.business.user_id === user.id;
     const isAssignedAgent = !!(
       order.assigned_agent_id &&
       order.assigned_agent.user_id === user.id
@@ -319,6 +330,7 @@ export class OrderStatusService {
             id
             order_number
             current_status
+            business_location_id
             fulfillment_method
             payment_timing
             subtotal
@@ -461,6 +473,7 @@ export class OrderStatusService {
         clientId: order.client?.id,
         clientUserId: order.client?.user?.id ?? undefined,
         businessUserId: order.business?.user?.id ?? undefined,
+        businessLocationId: order.business_location_id ?? undefined,
         assignedAgentUserId: order.assigned_agent?.user?.id ?? undefined,
         orderNumber: order.order_number,
         clientName,
