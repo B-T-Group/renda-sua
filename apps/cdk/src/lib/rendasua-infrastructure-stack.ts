@@ -326,6 +326,18 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     });
 
     // FIFO SQS + Lambda for async AI image cleanup (merchant opt-in)
+    const aiImageCleanupDlq = new sqs.Queue(
+      this,
+      `AiImageCleanupDlq-${environment}`,
+      {
+        queueName: `ai-image-cleanup-dlq-${environment}.fifo`,
+        fifo: true,
+        retentionPeriod: cdk.Duration.days(14),
+        // CONFLICT retries while Nest /process still holds a fresh claim.
+        visibilityTimeout: cdk.Duration.minutes(5),
+      }
+    );
+
     const aiImageCleanupQueue = new sqs.Queue(
       this,
       `AiImageCleanupQueue-${environment}`,
@@ -335,6 +347,11 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         contentBasedDeduplication: true,
         retentionPeriod: cdk.Duration.days(14),
         visibilityTimeout: cdk.Duration.minutes(16),
+        // First attempt + one retry on timeout/failure, then DLQ.
+        deadLetterQueue: {
+          queue: aiImageCleanupDlq,
+          maxReceiveCount: 2,
+        },
       }
     );
 
@@ -365,6 +382,15 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         batchSize: 1,
         reportBatchItemFailures: true,
         maxConcurrency: 5,
+      })
+    );
+
+    // DLQ consumer: mark job failed + refund tokens after maxReceiveCount.
+    aiImageCleanupHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(aiImageCleanupDlq, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+        maxConcurrency: 2,
       })
     );
 
