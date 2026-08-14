@@ -32,7 +32,7 @@ export interface CleanupProductImageInput {
   imageBase64?: string;
   mimeType?: string;
   issues?: CleanupProductImageIssue[];
-  /** OpenAI Images model override (e.g. gpt-image-1-mini). */
+  /** OpenAI Images model override (e.g. gpt-image-1.5). */
   model?: string;
 }
 
@@ -311,7 +311,7 @@ export class AiService {
     form.append('image', buffer, { filename, contentType: mimeType });
     form.append(
       'model',
-      model?.trim() || 'gpt-image-1-mini'
+      model?.trim() || 'gpt-image-1.5'
     );
     form.append('prompt', prompt);
     form.append('n', '1');
