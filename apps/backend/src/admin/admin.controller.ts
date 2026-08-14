@@ -749,12 +749,14 @@ export class AdminController {
   @ApiQuery({
     name: 'idDocumentStatus',
     required: false,
-    description: 'missing | pending | rejected | approved',
+    description:
+      'missing | pending | rejected | approved | not_approved (missing+pending+rejected)',
   })
   @ApiQuery({
     name: 'needsAttention',
     required: false,
-    description: 'When true, lifecycle != active OR ID pending review',
+    description:
+      'When true, lifecycle != active OR ID is missing/pending/rejected',
   })
   async getBusinesses(
     @Query('page') page?: string,

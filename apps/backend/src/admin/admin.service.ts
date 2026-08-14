@@ -8,6 +8,11 @@ import {
   paymentProviderForRail,
 } from '../merchant-lifecycle/merchant-lifecycle-status.util';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import {
+  businessNeedsAttention,
+  matchesIdDocumentStatusFilter as idDocStatusMatches,
+  resolveIdDocumentStatus as resolveIdDocStatus,
+} from './admin-business-id-filter.util';
 import { WithdrawalPinService } from './withdrawal-pin.service';
 
 export type AdminVerificationBlocker =
@@ -283,12 +288,13 @@ export class AdminService {
   /**
    * ID status must match resolveIdDocumentStatus (latest-upload semantics).
    * GraphQL cannot express "latest upload" reliably, so callers post-filter.
+   * Supports exact status or combined `not_approved`.
    */
   private matchesIdDocumentStatusFilter(
     uploads: Array<{ is_approved?: boolean; note?: string | null }>,
     status: string
   ): boolean {
-    return this.resolveIdDocumentStatus(uploads) === status;
+    return idDocStatusMatches(uploads, status);
   }
 
   async getAgentsPaginated(params: {
@@ -510,7 +516,6 @@ export class AdminService {
       if (!rows.length) break;
       for (const b of rows) {
         const uploads = b.user?.user_uploads ?? [];
-        const idStatus = this.resolveIdDocumentStatus(uploads);
         if (
           idDocumentStatus &&
           !this.matchesIdDocumentStatusFilter(uploads, idDocumentStatus)
@@ -518,9 +523,7 @@ export class AdminService {
           continue;
         }
         if (needsAttention) {
-          const needs =
-            b.lifecycle_status !== 'active' || idStatus === 'pending';
-          if (!needs) continue;
+          if (!businessNeedsAttention(b.lifecycle_status, uploads)) continue;
         }
         matched.push(b);
       }
@@ -639,11 +642,7 @@ export class AdminService {
   private resolveIdDocumentStatus(
     uploads: Array<{ is_approved?: boolean; note?: string | null }>
   ): 'missing' | 'pending' | 'rejected' | 'approved' {
-    if (!uploads.length) return 'missing';
-    if (uploads.some((u) => u.is_approved)) return 'approved';
-    const latest = uploads[0];
-    if (latest?.note?.trim()) return 'rejected';
-    return 'pending';
+    return resolveIdDocStatus(uploads);
   }
 
   async getAgentsWithDetails() {
@@ -895,6 +894,7 @@ export class AdminService {
           is_storefront_visible
           merchant_agreement_version
           merchant_agreement_accepted_at
+          created_at
           user {
             id
             first_name
