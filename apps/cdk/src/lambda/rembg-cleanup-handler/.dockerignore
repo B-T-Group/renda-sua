@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.venv
+venv
+README.md
+test_handler.py
+test_structure.py
+*.md

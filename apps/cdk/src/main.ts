@@ -9,11 +9,16 @@ const app = new cdk.App();
 // Get environment from context or default to 'dev'
 const environment = app.node.tryGetContext('environment') || 'dev';
 
+// All Rendasua infra is in ca-central-1. Do not fall back to us-east-1 — that
+// creates orphan stacks (CDK_DEFAULT_REGION often comes from a local AWS profile).
+const awsAccount = process.env.CDK_DEFAULT_ACCOUNT || '235680477887';
+const awsRegion = 'ca-central-1';
+
 new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
   environment,
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    account: awsAccount,
+    region: awsRegion,
   },
 });
 
@@ -36,8 +41,8 @@ if (hasuraEc2Enabled) {
 
   const commonProps = {
     env: {
-      account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+      account: awsAccount,
+      region: awsRegion,
     },
     hostedZoneDomain: String(
       app.node.tryGetContext('hasuraHostedZoneDomain') || 'rendasua.com'

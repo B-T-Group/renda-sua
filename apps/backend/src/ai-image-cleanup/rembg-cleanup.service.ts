@@ -26,7 +26,15 @@ export class RembgCleanupService {
   constructor(private readonly configService: ConfigService<Configuration>) {
     const awsConfig = this.configService.get('aws');
     const region = awsConfig?.region || process.env.AWS_REGION || 'ca-central-1';
-    this.lambdaClient = new LambdaClient({ region });
+    const accessKeyId = awsConfig?.accessKeyId || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey =
+      awsConfig?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY;
+    this.lambdaClient = new LambdaClient({
+      region,
+      ...(accessKeyId && secretAccessKey
+        ? { credentials: { accessKeyId, secretAccessKey } }
+        : {}),
+    });
     this.lambdaArn = this.resolveLambdaArn();
 
     if (this.lambdaArn) {
@@ -65,6 +73,15 @@ export class RembgCleanupService {
       });
 
       const response = await this.lambdaClient.send(command);
+
+      if (response.FunctionError) {
+        const raw = response.Payload
+          ? new TextDecoder().decode(response.Payload)
+          : '';
+        throw new Error(
+          `REMBG Lambda FunctionError=${response.FunctionError}: ${raw.slice(0, 500)}`
+        );
+      }
 
       if (!response.Payload) {
         throw new Error('No payload returned from REMBG Lambda');

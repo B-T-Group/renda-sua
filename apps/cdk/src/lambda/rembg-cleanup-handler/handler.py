@@ -4,20 +4,28 @@ import io
 import os
 from typing import Any, Dict
 
-from PIL import Image
-from rembg import new_session, remove
+# Must be set before importing rembg/pymatting (numba cache on read-only FS fails).
+os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
-# Initialize REMBG session (BiRefNet model for best quality)
-# This is loaded once per Lambda container and reused across invocations
-session = new_session("birefnet-general")
+from PIL import Image
+# Cache model weights under U2NET_HOME (set in Dockerfile / Lambda env).
+from rembg import new_session, remove
+from rembg.sessions.u2net import U2netSession
+
+# rembg 2.0.57 has no birefnet sessions; use u2net (baked into the image).
+MODEL_NAME = "u2net"
+session = new_session(MODEL_NAME)
+if not isinstance(session, U2netSession):
+    raise RuntimeError(f"Expected U2netSession, got {type(session).__name__}")
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Remove background from product image using REMBG BiRefNet model.
+    Remove background from product image using REMBG (u2net).
     
     Input: { "imageBase64": "...", "format": "jpeg|png" }
-    Output: { "success": true, "imageBase64": "...", "format": "jpeg", "model": "birefnet-general" }
+    Output: { "success": true, "imageBase64": "...", "format": "jpeg", "model": "u2net" }
     
     On error: { "success": false, "error": "...", "errorType": "..." }
     """
@@ -35,19 +43,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if input_format not in ["jpeg", "png"]:
             input_format = "jpeg"
 
-        # Decode input image
+        # Decode input image as bytes (rembg returns bytes for bytes input)
         input_bytes = base64.b64decode(input_b64)
-        input_image = Image.open(io.BytesIO(input_bytes))
 
-        # Remove background using REMBG with BiRefNet model
+        # Remove background using REMBG
         # bgcolor creates a white opaque background for clean product photos
         # post_process_mask smooths edges for better quality
         output_bytes = remove(
-            input_image,
+            input_bytes,
             session=session,
             bgcolor=(255, 255, 255, 255),  # White opaque background
             post_process_mask=True,  # Smooth edges
         )
+        if not isinstance(output_bytes, (bytes, bytearray)):
+            raise TypeError(
+                f"rembg.remove expected bytes output, got {type(output_bytes).__name__}"
+            )
 
         # Convert to target format
         output_image = Image.open(io.BytesIO(output_bytes))
@@ -70,7 +81,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "success": True,
             "imageBase64": output_b64,
             "format": input_format,
-            "model": "birefnet-general",
+            "model": MODEL_NAME,
         }
 
     except Exception as e:

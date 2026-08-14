@@ -1,12 +1,16 @@
 # REMBG Cleanup Lambda Handler
 
 ## Overview
-This Lambda function uses REMBG with the BiRefNet model to remove backgrounds from product images. It provides a cost-effective alternative to OpenAI's image editing API (~90% cost reduction).
+This Lambda function uses REMBG (`u2net`) to remove backgrounds from product
+images. It is a cost-effective alternative to OpenAI image editing.
 
 ## Model
-- **BiRefNet-general**: High-quality background removal model
-- Model is loaded once per Lambda container and cached for subsequent invocations
-- Typical processing time: 5-15 seconds per image
+- **u2net**: General-purpose background removal (baked into the container image)
+- Session is created once per Lambda container and reused across invocations
+- Typical processing time: 5–15 seconds per image (cold start longer)
+
+> rembg `2.0.57` does not include BiRefNet session modules; unknown model names
+> silently fall back to u2net. Keep the handler on an explicit `u2net` session.
 
 ## Input
 ```json
@@ -22,7 +26,7 @@ This Lambda function uses REMBG with the BiRefNet model to remove backgrounds fr
   "success": true,
   "imageBase64": "base64-encoded-processed-image",
   "format": "jpeg",
-  "model": "birefnet-general"
+  "model": "u2net"
 }
 ```
 
@@ -36,15 +40,20 @@ This Lambda function uses REMBG with the BiRefNet model to remove backgrounds fr
 ```
 
 ## Configuration
-- **Memory**: 3008 MB (BiRefNet model requires ~2GB)
+- **Memory**: 3008 MB
 - **Timeout**: 120 seconds
-- **Ephemeral Storage**: 2048 MB (for model caching)
-- **Runtime**: Python 3.11
+- **Ephemeral Storage**: 2048 MB
+- **Runtime**: Python 3.11 (container image)
+- **Env**: `U2NET_HOME=/opt/models`, `NUMBA_CACHE_DIR=/tmp`
 
-## Dependencies
-- `rembg`: Background removal library
-- `pillow`: Image processing
-- `onnxruntime`: Neural network runtime for BiRefNet model
+## Packaging
+
+Deployed as a **Lambda container image** (not a zip). CDK builds
+`Dockerfile` and pushes to ECR via `DockerImageFunction`.
+
+Dependencies (`rembg`, `pillow`, `onnxruntime`) and u2net weights are baked
+into the image at build time. Model files are `chmod a+rX` so the Lambda
+runtime user can read them.
 
 ## Cost Comparison
 - REMBG Lambda: ~$0.001-0.003 per image

@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -363,25 +364,33 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `AiImageCleanupQueueUrl-${environment}`,
     });
 
-    // REMBG Lambda for cost-effective background removal
-    const rembgCleanupHandler = new lambda.Function(
+    // REMBG Lambda (container) for cost-effective background removal.
+    // Zip packaging omitted rembg/pillow/onnxruntime; container includes deps + model cache.
+    const rembgCleanupHandler = new lambda.DockerImageFunction(
       this,
       `RembgCleanupHandler-${environment}`,
       {
         functionName: `rembg-cleanup-handler-${environment}`,
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: 'handler.handler',
-        code: lambda.Code.fromAsset('src/lambda/rembg-cleanup-handler'),
+        code: lambda.DockerImageCode.fromImageAsset(
+          'src/lambda/rembg-cleanup-handler',
+          {
+            file: 'Dockerfile',
+            cmd: ['handler.handler'],
+            platform: ecr_assets.Platform.LINUX_AMD64,
+          }
+        ),
         timeout: cdk.Duration.seconds(120),
-        memorySize: 3008, // REMBG needs more memory for BiRefNet model
-        ephemeralStorageSize: cdk.Size.mebibytes(2048), // Model cache
+        memorySize: 3008,
+        ephemeralStorageSize: cdk.Size.mebibytes(2048),
         environment: {
           ENVIRONMENT: environment,
+          U2NET_HOME: '/opt/models',
+          NUMBA_CACHE_DIR: '/tmp',
+          MPLCONFIGDIR: '/tmp',
         },
       }
     );
 
-    // Grant S3 access for direct image fetch if needed
     rembgCleanupHandler.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -390,7 +399,13 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       })
     );
 
-    // Export Lambda ARN for backend to invoke
+    // Nest backend uses IAM user credentials (typically s3User) for AWS SDK calls.
+    const backendIamUser =
+      this.node.tryGetContext('backendAwsIamUser') || 's3User';
+    rembgCleanupHandler.grantInvoke(
+      new iam.ArnPrincipal(`arn:aws:iam::${this.account}:user/${backendIamUser}`)
+    );
+
     new cdk.CfnOutput(this, `RembgCleanupHandlerArn-${environment}`, {
       value: rembgCleanupHandler.functionArn,
       description: 'ARN of REMBG cleanup Lambda',
