@@ -76,7 +76,8 @@ export class AiImageCleanupQueueService {
           jobId,
           timestamp: new Date().toISOString(),
         }),
-        MessageGroupId: 'ai-image-cleanup',
+        // Per-job group so different jobs run in parallel on the FIFO queue.
+        MessageGroupId: jobId,
       };
       const response = await this.sqsClient.send(new SendMessageCommand(input));
       this.logger.log(

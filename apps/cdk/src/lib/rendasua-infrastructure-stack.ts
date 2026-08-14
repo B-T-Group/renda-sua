@@ -341,6 +341,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/ai-image-cleanup-handler'),
         timeout: cdk.Duration.minutes(15),
         memorySize: 256,
+        // Cap parallel Nest /process calls (MessageGroupId is per jobId).
+        reservedConcurrentExecutions: 5,
         layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
@@ -355,6 +357,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       new lambdaEventSources.SqsEventSource(aiImageCleanupQueue, {
         batchSize: 1,
         reportBatchItemFailures: true,
+        maxConcurrency: 5,
       })
     );
 
