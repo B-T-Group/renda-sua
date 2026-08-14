@@ -105,6 +105,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/order-status-handler'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
+        // Per-order MessageGroupId enables parallel jobs; cap Nest/Hasura load.
+        reservedConcurrentExecutions: 10,
         layers: [requestsLayer, corePackagesLayer],
         environment: {
           ENVIRONMENT: environment,
@@ -166,6 +168,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     orderStatusHandlerFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(orderStatusQueue, {
         batchSize: 10,
+        maxConcurrency: 10,
       })
     );
 
@@ -202,6 +205,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         ),
         timeout: cdk.Duration.minutes(15),
         memorySize: 256,
+        reservedConcurrentExecutions: 5,
         layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
@@ -216,6 +220,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       new lambdaEventSources.SqsEventSource(rentalListingAiReviewQueue, {
         batchSize: 1,
         reportBatchItemFailures: true,
+        maxConcurrency: 5,
       })
     );
 
@@ -249,6 +254,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/item-ai-review-handler'),
         timeout: cdk.Duration.minutes(15),
         memorySize: 256,
+        reservedConcurrentExecutions: 5,
         layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
@@ -263,6 +269,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       new lambdaEventSources.SqsEventSource(itemAiReviewQueue, {
         batchSize: 1,
         reportBatchItemFailures: true,
+        maxConcurrency: 5,
       })
     );
 

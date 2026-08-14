@@ -61,7 +61,7 @@ export class ItemAiReviewQueueService {
       const input: SendMessageCommandInput = {
         QueueUrl: this.queueUrl,
         MessageBody: JSON.stringify(message),
-        MessageGroupId: 'item-ai-review',
+        MessageGroupId: String(message.itemId || 'item-ai-review'),
       };
       const response = await this.sqsClient.send(new SendMessageCommand(input));
       this.logger.log(

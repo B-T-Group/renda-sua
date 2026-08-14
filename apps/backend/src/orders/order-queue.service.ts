@@ -148,10 +148,15 @@ export class OrderQueueService {
       const messageBody = JSON.stringify(message);
 
       // For FIFO queues, use MessageGroupId (required) and MessageDeduplicationId (optional with content-based deduplication)
+      // Per-order group so different orders process in parallel; same order stays ordered.
+      const orderId = message.orderId;
       const input: SendMessageCommandInput = {
         QueueUrl: this.queueUrl,
         MessageBody: messageBody,
-        MessageGroupId: 'order-status-events', // All messages in same group for FIFO ordering
+        MessageGroupId:
+          typeof orderId === 'string' && orderId.length > 0
+            ? orderId
+            : 'order-status-events',
       };
 
       const command = new SendMessageCommand(input);
