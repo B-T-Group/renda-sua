@@ -14,6 +14,7 @@ import { AiImageCleanupVariantController } from './ai-image-cleanup-variant.cont
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
 import { AiImageCleanupService } from './ai-image-cleanup.service';
 import { EnhancementConfidenceService } from './enhancement-confidence.service';
+import { RembgCleanupService } from './rembg-cleanup.service';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { EnhancementConfidenceService } from './enhancement-confidence.service';
     AiImageCleanupQueueService,
     AiImageCleanupService,
     EnhancementConfidenceService,
+    RembgCleanupService,
   ],
   exports: [AiImageCleanupService],
 })
