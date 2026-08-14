@@ -983,16 +983,21 @@ export default function ItemDetailPage() {
               >
                 <CardMedia
                   component="img"
-                  height={isMobile ? 280 : 400}
                   image={selectedImageUrl}
                   alt={item.name}
-                  sx={{ objectFit: 'cover', width: '100%' }}
+                  sx={{
+                    width: '100%',
+                    height: 'auto',
+                    display: 'block',
+                    objectFit: 'contain',
+                    bgcolor: 'grey.50',
+                  }}
                 />
               </ButtonBase>
             ) : (
               <Box
                 sx={{
-                  height: isMobile ? 280 : 400,
+                  minHeight: isMobile ? 200 : 280,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
