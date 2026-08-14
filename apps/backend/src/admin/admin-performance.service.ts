@@ -8,6 +8,7 @@ import {
   buildReferredBusinessesQuery,
   buildSummaryQuery,
 } from './admin-performance.queries';
+import { businessReferralPayoutConfigKey } from './business-referral-payout-config.util';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import type { TopAgentMetric } from './dto/admin-performance-query.dto';
 
@@ -59,9 +60,11 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
-  /** Projected next payout: stockedReferralCount × per-referral payout (qualifying businesses not yet paid). */
+  /** Projected next payout: approved unpaid stocked × per-referral payout (internal rate when users.internal). */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
+  /** True when the agent's user has users.internal (higher referral commission). */
+  isInternal?: boolean;
 }
 
 interface AggregateCount {
@@ -82,6 +85,7 @@ interface AgentRow {
   user: {
     first_name: string | null;
     last_name: string | null;
+    internal?: boolean | null;
   } | null;
   agent_addresses?: Array<{ address: { country: string | null } }>;
 }
@@ -273,30 +277,36 @@ export class AdminPerformanceService {
     entries: TopAgentEntry[],
     agents: Map<string, AgentRow>
   ): Promise<TopAgentEntry[]> {
-    const payoutByCountry = new Map<string, { amount: number; currency: string }>();
+    const payoutCache = new Map<string, { amount: number; currency: string }>();
     const results: TopAgentEntry[] = [];
     for (const entry of entries) {
-      const payableCount = this.approvedUnpaidStockedCount(entry);
-      const countryCode = this.agentCountryCode(agents.get(entry.agentId));
-      if (!countryCode || payableCount === 0) {
-        results.push(entry);
-        continue;
-      }
-      if (!payoutByCountry.has(countryCode)) {
-        payoutByCountry.set(
-          countryCode,
-          await this.fetchPayoutConfig(countryCode)
-        );
-      }
-      const payout = payoutByCountry.get(countryCode)!;
-      results.push({
-        ...entry,
-        projectedPayoutAmount:
-          payout.amount > 0 ? payableCount * payout.amount : undefined,
-        projectedPayoutCurrency: payout.amount > 0 ? payout.currency : undefined,
-      });
+      results.push(await this.withProjectedPayout(entry, agents, payoutCache));
     }
     return results;
+  }
+
+  private async withProjectedPayout(
+    entry: TopAgentEntry,
+    agents: Map<string, AgentRow>,
+    cache: Map<string, { amount: number; currency: string }>
+  ): Promise<TopAgentEntry> {
+    const agent = agents.get(entry.agentId);
+    const isInternal = agent?.user?.internal === true;
+    const withFlag = { ...entry, isInternal };
+    const payableCount = this.approvedUnpaidStockedCount(entry);
+    const countryCode = this.agentCountryCode(agent);
+    if (!countryCode || payableCount === 0) return withFlag;
+    const payout = await this.cachedPayoutConfig(
+      countryCode,
+      isInternal,
+      cache
+    );
+    if (payout.amount <= 0) return withFlag;
+    return {
+      ...withFlag,
+      projectedPayoutAmount: payableCount * payout.amount,
+      projectedPayoutCurrency: payout.currency,
+    };
   }
 
   private approvedUnpaidStockedCount(entry: TopAgentEntry): number {
@@ -313,12 +323,27 @@ export class AdminPerformanceService {
     return country?.trim().toUpperCase() || null;
   }
 
-  private async fetchPayoutConfig(
-    countryCode: string
+  private async cachedPayoutConfig(
+    countryCode: string,
+    isInternal: boolean,
+    cache: Map<string, { amount: number; currency: string }>
   ): Promise<{ amount: number; currency: string }> {
+    const cacheKey = `${countryCode}:${isInternal ? 'internal' : 'standard'}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+    const payout = await this.fetchPayoutConfig(countryCode, isInternal);
+    cache.set(cacheKey, payout);
+    return payout;
+  }
+
+  private async fetchPayoutConfig(
+    countryCode: string,
+    isInternal: boolean
+  ): Promise<{ amount: number; currency: string }> {
+    const configKey = businessReferralPayoutConfigKey(isInternal);
     try {
       const config = await this.configurationsService.getConfigurationByKey(
-        'business_referral_payout_amount',
+        configKey,
         countryCode
       );
       const amount = Number(config?.number_value ?? 0);

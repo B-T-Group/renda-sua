@@ -141,6 +141,7 @@ export const AGENTS_BY_IDS_QUERY = `
       user {
         first_name
         last_name
+        internal
       }
       agent_addresses(
         where: { address: { status: { _eq: active } } }
