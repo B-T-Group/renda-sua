@@ -3664,7 +3664,7 @@ export class OrdersService {
 
   /**
    * Cash-exception fallback: agent marks the order paid in cash.
-   * This completes the order operationally but flags it for business reconciliation.
+   * Completes the order and adjusts inventory; reconciliation only settles money.
    */
   async markPaidInCashException(orderId: string, notes?: string) {
     const user = await this.hasuraUserService.getUser();
@@ -3705,6 +3705,9 @@ export class OrdersService {
     if ((order as any).reconciliation_status === 'reconciled') {
       return { success: true, message: 'Order is already reconciled' };
     }
+    if ((order as any).reconciliation_status === 'pending_manual_reconciliation') {
+      return { success: true, message: 'Cash exception already recorded' };
+    }
 
     const at = new Date().toISOString();
     const mutation = `
@@ -3740,6 +3743,13 @@ export class OrdersService {
       notes: notes?.trim() || null,
     });
 
+    try {
+      await this.updateInventoryOnCompletion(order.order_items || []);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update inventory after cash exception: ${error.message}`
+      );
+    }
     try {
       await this.createStatusHistoryEntry(
         orderId,
