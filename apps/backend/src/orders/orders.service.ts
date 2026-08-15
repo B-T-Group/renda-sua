@@ -10695,4 +10695,275 @@ export class OrdersService {
       throw error;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Carrier Shipping Methods
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Mark a shipping order as shipped with optional tracking number
+   * Business only, updates status to 'shipped'
+   */
+  async markOrderAsShipped(
+    orderId: string,
+    trackingNumber?: string,
+    carrier?: string
+  ): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'business', 'Only businesses can mark orders as shipped');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify business owns this order
+    if (order.business_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to mark this order as shipped',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders can be marked as shipped',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Verify order is in correct status
+    const validStatuses = ['confirmed', 'awaiting_shipment'];
+    if (!validStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Order must be in ${validStatuses.join(' or ')} status to mark as shipped`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Update order
+    const mutation = `
+      mutation MarkOrderAsShipped(
+        $orderId: uuid!,
+        $shippedAt: timestamptz!,
+        $trackingNumber: String,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: shipped,
+            shipped_at: $shippedAt,
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          current_status
+          shipped_at
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      shippedAt: now,
+      trackingNumber: trackingNumber || null,
+      carrier: carrier || null,
+    });
+
+    const updatedOrder = result.update_orders_by_pk;
+    if (!updatedOrder) {
+      throw new HttpException(
+        'Failed to update order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    // Record status change in history
+    await this.orderStatusService.recordStatusChange(
+      orderId,
+      'shipped',
+      user.id,
+      'business'
+    );
+
+    // TODO: Send notification to client (will be implemented in notifications step)
+    // await this.notificationsService.sendOrderShippedNotification(order, trackingNumber, carrier);
+
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order marked as shipped',
+    };
+  }
+
+  /**
+   * Update tracking information for a shipped order
+   * Business only
+   */
+  async updateTrackingNumber(
+    orderId: string,
+    trackingNumber: string,
+    carrier?: string
+  ): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'business', 'Only businesses can update tracking');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify business owns this order
+    if (order.business_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to update this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders have tracking numbers',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const mutation = `
+      mutation UpdateTrackingNumber(
+        $orderId: uuid!,
+        $trackingNumber: String!,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      trackingNumber,
+      carrier: carrier || null,
+    });
+
+    return {
+      success: true,
+      order: result.update_orders_by_pk,
+      message: 'Tracking information updated',
+    };
+  }
+
+  /**
+   * Client confirms receipt of a shipped order
+   * Client only, updates status to 'complete'
+   */
+  async confirmOrderReceipt(orderId: string): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'client', 'Only clients can confirm receipt');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify client owns this order
+    if (order.client_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to confirm receipt for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders can have receipt confirmed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Verify order is in correct status
+    const validStatuses = ['shipped', 'in_delivery'];
+    if (!validStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Order must be in ${validStatuses.join(' or ')} status to confirm receipt`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Update order to complete
+    const mutation = `
+      mutation ConfirmOrderReceipt(
+        $orderId: uuid!,
+        $receivedAt: timestamptz!,
+        $completedAt: timestamptz!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: complete,
+            received_at: $receivedAt,
+            completed_at: $completedAt
+          }
+        ) {
+          id
+          order_number
+          current_status
+          received_at
+          completed_at
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      receivedAt: now,
+      completedAt: now,
+    });
+
+    const updatedOrder = result.update_orders_by_pk;
+    if (!updatedOrder) {
+      throw new HttpException(
+        'Failed to update order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    // Record status change in history
+    await this.orderStatusService.recordStatusChange(
+      orderId,
+      'complete',
+      user.id,
+      'client'
+    );
+
+    // TODO: Send notification to business (will be implemented in notifications step)
+    // await this.notificationsService.sendOrderReceivedNotification(order);
+
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Receipt confirmed; order complete',
+    };
+  }
 }

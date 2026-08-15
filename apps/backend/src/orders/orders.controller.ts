@@ -2225,4 +2225,95 @@ export class OrdersController {
       );
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Carrier Shipping Endpoints
+  // -------------------------------------------------------------------------
+
+  @Post(':id/mark-shipped')
+  @ApiOperation({
+    summary: 'Mark order as shipped (business only)',
+    description:
+      'For shipping orders in confirmed or awaiting_shipment status, mark as shipped with optional tracking number. Updates status to shipped and triggers client notification.',
+  })
+  @ApiParam({ name: 'id', description: 'Order UUID', type: String })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        tracking_number: {
+          type: 'string',
+          description: 'Tracking number from carrier (optional but recommended)',
+        },
+        carrier: {
+          type: 'string',
+          description: 'Carrier name (e.g., DHL, FedEx, local courier)',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Order marked as shipped' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or not a shipping order' })
+  @ApiResponse({ status: 403, description: 'Not authorized (business only)' })
+  async markOrderAsShipped(
+    @Param('id') orderId: string,
+    @Body() body: { tracking_number?: string; carrier?: string }
+  ) {
+    return this.ordersService.markOrderAsShipped(
+      orderId,
+      body?.tracking_number,
+      body?.carrier
+    );
+  }
+
+  @Patch(':id/tracking')
+  @ApiOperation({
+    summary: 'Update tracking information (business only)',
+    description:
+      'Update tracking number and/or carrier for a shipped order. Allows correcting or adding tracking info after marking as shipped.',
+  })
+  @ApiParam({ name: 'id', description: 'Order UUID', type: String })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        tracking_number: {
+          type: 'string',
+          description: 'Updated tracking number',
+        },
+        carrier: {
+          type: 'string',
+          description: 'Updated carrier name',
+        },
+      },
+      required: ['tracking_number'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Tracking information updated' })
+  @ApiResponse({ status: 400, description: 'Invalid order state' })
+  @ApiResponse({ status: 403, description: 'Not authorized (business only)' })
+  async updateTrackingNumber(
+    @Param('id') orderId: string,
+    @Body() body: { tracking_number: string; carrier?: string }
+  ) {
+    return this.ordersService.updateTrackingNumber(
+      orderId,
+      body.tracking_number,
+      body?.carrier
+    );
+  }
+
+  @Post(':id/confirm-receipt')
+  @ApiOperation({
+    summary: 'Confirm order receipt (client only)',
+    description:
+      'For shipping orders in shipped or in_delivery status, client confirms they received the package. Updates status to complete.',
+  })
+  @ApiParam({ name: 'id', description: 'Order UUID', type: String })
+  @ApiResponse({ status: 200, description: 'Receipt confirmed; order complete' })
+  @ApiResponse({ status: 400, description: 'Invalid order state or not a shipping order' })
+  @ApiResponse({ status: 403, description: 'Not authorized (client only)' })
+  async confirmOrderReceipt(@Param('id') orderId: string) {
+    return this.ordersService.confirmOrderReceipt(orderId);
+  }
 }
