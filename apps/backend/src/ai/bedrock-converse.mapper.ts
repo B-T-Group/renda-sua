@@ -17,7 +17,8 @@ export type MappedConverseRequest = {
   messages: ConverseMessage[];
 };
 
-const IMAGE_FETCH_MAX_BYTES = 8 * 1024 * 1024;
+/** Above the 10MB ID / product upload cap so allowed photos are not dropped. */
+const IMAGE_FETCH_MAX_BYTES = 12 * 1024 * 1024;
 
 /**
  * Map OpenAI-style chat messages to Bedrock Converse (Nova) shape.
@@ -119,21 +120,25 @@ async function pushPart(
     return;
   }
   if (rec.type === 'image_url') {
-    const image = await resolveImageBlock(rec.image_url);
-    if (image) blocks.push(image);
+    blocks.push(await requireImageBlock(rec.image_url));
   }
 }
 
-async function resolveImageBlock(
+/** Fail closed: never send a vision prompt after dropping a provided image. */
+async function requireImageBlock(
   imageUrl: unknown
-): Promise<ConverseContentBlock | null> {
+): Promise<ConverseContentBlock> {
   const url = extractImageUrl(imageUrl);
-  if (!url) return null;
-  if (url.startsWith('data:')) return parseDataUrlImage(url);
+  if (!url) {
+    throw new Error('Vision request is missing an image URL');
+  }
+  if (url.startsWith('data:')) {
+    return parseRequiredDataUrlImage(url);
+  }
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return fetchHttpImage(url);
   }
-  return null;
+  throw new Error('Vision request image URL must be http(s) or a data URL');
 }
 
 function extractImageUrl(imageUrl: unknown): string | null {
@@ -145,11 +150,12 @@ function extractImageUrl(imageUrl: unknown): string | null {
   return null;
 }
 
-function parseDataUrlImage(dataUrl: string): ConverseContentBlock | null {
+function parseRequiredDataUrlImage(dataUrl: string): ConverseContentBlock {
   const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
-  if (!match) return null;
-  const format = mimeToFormat(match[1]);
-  if (!format) return null;
+  const format = match ? mimeToFormat(match[1]) : null;
+  if (!match || !format) {
+    throw new Error('Vision request has an invalid data-URL image');
+  }
   return {
     image: {
       format,
@@ -158,26 +164,35 @@ function parseDataUrlImage(dataUrl: string): ConverseContentBlock | null {
   };
 }
 
-async function fetchHttpImage(url: string): Promise<ConverseContentBlock | null> {
+async function fetchHttpImage(url: string): Promise<ConverseContentBlock> {
   try {
-    const { data, headers } = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 25000,
-      maxContentLength: IMAGE_FETCH_MAX_BYTES,
-      maxBodyLength: IMAGE_FETCH_MAX_BYTES,
-      validateStatus: (s) => s === 200,
-    });
-    const mime = headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
-    const format = mimeToFormat(mime) || guessFormatFromUrl(url) || 'jpeg';
-    return {
-      image: {
-        format,
-        source: { bytes: new Uint8Array(data) },
-      },
-    };
-  } catch {
-    return null;
+    return await downloadHttpImage(url);
+  } catch (error: any) {
+    throw new Error(
+      `Failed to load vision image: ${error?.message ?? 'unknown error'}`
+    );
   }
+}
+
+async function downloadHttpImage(url: string): Promise<ConverseContentBlock> {
+  const { data, headers } = await axios.get<ArrayBuffer>(url, {
+    responseType: 'arraybuffer',
+    timeout: 25000,
+    maxContentLength: IMAGE_FETCH_MAX_BYTES,
+    maxBodyLength: IMAGE_FETCH_MAX_BYTES,
+    validateStatus: (s) => s === 200,
+  });
+  if (!data || new Uint8Array(data).byteLength === 0) {
+    throw new Error('empty image body');
+  }
+  const mime = headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
+  const format = mimeToFormat(mime) || guessFormatFromUrl(url) || 'jpeg';
+  return {
+    image: {
+      format,
+      source: { bytes: new Uint8Array(data) },
+    },
+  };
 }
 
 function mimeToFormat(mime: string): ConverseImageFormat | null {

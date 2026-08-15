@@ -47,6 +47,28 @@ export interface StripePaymentTransaction {
   updated_at: string;
 }
 
+/** Statuses that represent a real payment we must capture, refund, or cancel. */
+const LIVE_STRIPE_TX_STATUSES: ReadonlySet<StripeTransactionStatus> = new Set([
+  'capture_pending',
+  'authorized',
+  'success',
+  'refunded',
+  'disputed',
+]);
+
+/**
+ * Prefer a live payment over a newer abandoned checkout retry.
+ * `rows` must be ordered by created_at descending.
+ */
+export function preferLiveStripeTransaction(
+  rows: StripePaymentTransaction[]
+): StripePaymentTransaction | null {
+  const live = rows.find((row) => LIVE_STRIPE_TX_STATUSES.has(row.status));
+  if (live) return live;
+  const pending = rows.find((row) => row.status === 'pending');
+  return pending ?? rows[0] ?? null;
+}
+
 export interface CreateStripeTransactionData {
   reference: string;
   amount: number;
@@ -194,8 +216,9 @@ export class StripePaymentsDatabaseService {
   }
 
   /**
-   * Latest non-failed transaction for an entity (e.g. order/booking number).
-   * Failed checkout retries share the same entity_id, so we must not return them.
+   * Best non-failed transaction for an entity (order/booking number).
+   * Failed and later pending retries share entity_id; prefer a live payment
+   * over a newer abandoned checkout row so capture/refund hit the paid PI.
    */
   async getTransactionByEntityId(
     entityId: string
@@ -208,12 +231,14 @@ export class StripePaymentsDatabaseService {
             status: { _neq: "failed" }
           }
           order_by: { created_at: desc }
-          limit: 1
+          limit: 20
         ) { ${TRANSACTION_FIELDS} }
       }
     `;
     const response = await this.hasuraService.executeQuery(query, { entityId });
-    return (response.stripe_payment_transactions || [])[0] || null;
+    return preferLiveStripeTransaction(
+      response.stripe_payment_transactions || []
+    );
   }
 
   /**

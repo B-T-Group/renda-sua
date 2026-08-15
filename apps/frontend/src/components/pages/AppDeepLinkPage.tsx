@@ -9,6 +9,11 @@ import {
 import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  appRelativeFromLocation,
+  mapAppPathToWeb,
+  toAppSchemeUrl,
+} from '../../utils/appDeepLink';
 
 const APP_STORE_URL =
   'https://apps.apple.com/app/rendasua/id6755989000';
@@ -23,10 +28,10 @@ const AppDeepLinkPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const appRelative = useMemo(
-    () => location.pathname.replace(/^\/app\/?/, '') + location.search,
+    () => appRelativeFromLocation(location.pathname, location.search),
     [location.pathname, location.search]
   );
-  const schemeUrl = `rendasua://${appRelative}`;
+  const schemeUrl = toAppSchemeUrl(appRelative);
   const webFallbackPath = useMemo(
     () => mapAppPathToWeb(`/${appRelative}`),
     [appRelative]
@@ -78,24 +83,5 @@ const AppDeepLinkPage: React.FC = () => {
     </Container>
   );
 };
-
-function mapAppPathToWeb(path: string): string {
-  if (path.startsWith('/wallet')) return '/accounts';
-  if (path.startsWith('/verification')) return '/documents';
-  if (path.startsWith('/chat/')) {
-    const id = path.replace('/chat/', '').split(/[?#]/)[0];
-    return `/orders/${id}?messages=1`;
-  }
-  if (path.startsWith('/deliveries/')) {
-    const id = path.replace('/deliveries/', '').split(/[?#]/)[0];
-    return `/orders/${id}`;
-  }
-  if (path.startsWith('/rentals/requests')) return '/business/rentals/requests';
-  if (path.startsWith('/items/')) {
-    const id = path.replace('/items/', '').split(/[?#]/)[0];
-    return `/business/items/${id}`;
-  }
-  return path.startsWith('/') ? path : `/${path}`;
-}
 
 export default AppDeepLinkPage;
