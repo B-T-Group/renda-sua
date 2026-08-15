@@ -78,6 +78,9 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         max_order_quantity
         pay_on_delivery_enabled
         pay_at_pickup_enabled
+        shipping_enabled
+        shipping_price
+        shipping_currency
         item_variants(where: { is_active: { _eq: true } }, order_by: { sort_order: asc }) {
           id
           name
@@ -421,6 +424,9 @@ export class CheckoutPreflightService {
       const allPayAtPickup = group.inventoryRows.every(
         (inv: any) => inv.item?.pay_at_pickup_enabled === true
       );
+      const allShippingEnabled = group.inventoryRows.every(
+        (inv: any) => inv.item?.shipping_enabled === true
+      );
       const allowedPaymentTimings: Array<'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'> = ['pay_now'];
       if (allPayOnDelivery && rail !== 'stripe') allowedPaymentTimings.push('pay_at_delivery');
       if (allPayAtPickup && rail !== 'stripe') allowedPaymentTimings.push('pay_at_pickup');
@@ -455,6 +461,18 @@ export class CheckoutPreflightService {
         blockers.push({
           code: 'PICKUP_UNAVAILABLE',
           message: `Store pickup is not available for all items from ${group.businessName || businessId}.`,
+        });
+      }
+      if (fulfillment === 'shipping' && !allShippingEnabled) {
+        blockers.push({
+          code: 'SHIPPING_UNAVAILABLE',
+          message: `Carrier shipping is not available for all items from ${group.businessName || businessId}.`,
+        });
+      }
+      if (fulfillment === 'shipping' && requestedTiming !== 'pay_now') {
+        blockers.push({
+          code: 'SHIPPING_REQUIRES_PAY_NOW',
+          message: `Carrier shipping requires payment at checkout (pay online).`,
         });
       }
 
@@ -542,10 +560,20 @@ export class CheckoutPreflightService {
 
       const subtotal = itemLines.reduce((s, l) => s + l.line_total, 0);
 
-      // Delivery fee estimate (only for authenticated address)
+      // Delivery/shipping fee estimate
       let deliveryFee: number | null = null;
+      let shippingFee: number | null = null;
       let isFirstOrderClient: boolean | undefined = undefined;
-      if (dto.delivery_address_id && fulfillment === 'delivery' && isAuthenticated) {
+      
+      if (fulfillment === 'shipping') {
+        // Calculate shipping fee: sum of all item shipping prices * quantities
+        shippingFee = 0;
+        for (const line of group.items) {
+          const inv = inventoryById.get(line.business_inventory_id)!;
+          const itemShippingPrice = inv.item?.shipping_price ?? 0;
+          shippingFee += itemShippingPrice * line.quantity;
+        }
+      } else if (dto.delivery_address_id && fulfillment === 'delivery' && isAuthenticated) {
         try {
           const feeResult = await this.hasuraSystemService.executeQuery(
             `query GetDeliveryFeeForPreflight($inventoryId: uuid!, $addressId: uuid!) {
@@ -563,6 +591,8 @@ export class CheckoutPreflightService {
         }
       }
 
+      const totalFee = shippingFee ?? deliveryFee ?? 0;
+
       groups.push({
         business_id: businessId,
         business_name: group.businessName || undefined,
@@ -574,9 +604,9 @@ export class CheckoutPreflightService {
         seller_state: group.sellerState || undefined,
         business_location_id: group.businessLocationId || undefined,
         subtotal,
-        delivery_fee: deliveryFee,
+        delivery_fee: deliveryFee ?? shippingFee,
         is_first_order_client: isFirstOrderClient,
-        total: subtotal + (deliveryFee ?? 0),
+        total: subtotal + totalFee,
         mobile_money_provider: mobileMoneyProvider,
         delivery_availability: availabilityByBusiness.get(businessId) ?? null,
         pickup_eligible: allPayAtPickup,

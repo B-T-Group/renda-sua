@@ -176,7 +176,7 @@ export interface OrderWithDetails {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id: string;
-  fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   subtotal: number;
   base_delivery_fee: number;
   per_km_delivery_fee: number;
@@ -192,6 +192,10 @@ export interface OrderWithDetails {
   payment_status?: string;
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   verified_agent_delivery?: boolean;
+  shipping_tracking_number?: string;
+  shipping_carrier?: string;
+  shipped_at?: string;
+  received_at?: string;
   created_at: string;
   updated_at: string;
   completed_at?: string | null;
@@ -7657,9 +7661,11 @@ export class OrdersService {
     this.requireActivePersona(user, 'client', 'Only clients can create orders');
     const client = this.requireClientRecord(user);
 
-    const fulfillmentMethod: 'delivery' | 'pickup' =
-      orderData.fulfillment_method === 'pickup' ||
-      orderData.payment_timing === 'pay_at_pickup'
+    const fulfillmentMethod: 'delivery' | 'pickup' | 'shipping' =
+      orderData.fulfillment_method === 'shipping'
+        ? 'shipping'
+        : orderData.fulfillment_method === 'pickup' ||
+          orderData.payment_timing === 'pay_at_pickup'
         ? 'pickup'
         : 'delivery';
 
@@ -7677,10 +7683,10 @@ export class OrdersService {
       postal_code: string;
       country: string;
     } | null = null;
-    if (fulfillmentMethod === 'delivery') {
+    if (fulfillmentMethod === 'delivery' || fulfillmentMethod === 'shipping') {
       if (!clientDeliveryAddressId) {
         throw new HttpException(
-          'Delivery address ID is required',
+          `Delivery address ID is required for ${fulfillmentMethod}`,
           HttpStatus.BAD_REQUEST
         );
       }
@@ -7772,6 +7778,9 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             pay_at_pickup_enabled
+            shipping_enabled
+            shipping_price
+            shipping_currency
             currency
             weight
             max_order_quantity
@@ -7998,6 +8007,24 @@ export class OrdersService {
       }
     }
 
+    if (fulfillmentMethod === 'shipping') {
+      const anyNotShippingEnabled = businessInventories.some(
+        (inv) => inv?.item?.shipping_enabled !== true
+      );
+      if (anyNotShippingEnabled) {
+        throw new HttpException(
+          'Carrier shipping is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (paymentTiming !== 'pay_now') {
+        throw new HttpException(
+          'Carrier shipping requires payment at checkout (pay_now)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
     // intentionally carries no internal reason.
@@ -8022,16 +8049,34 @@ export class OrdersService {
       return sum + w * orderData.items[idx].quantity;
     }, 0);
 
-    // Calculate delivery fee (waived for pickup)
-    const deliveryFeeInfo =
-      fulfillmentMethod === 'pickup'
-        ? this.zeroPickupDeliveryFee(currency)
-        : await this.calculateItemDeliveryFee(
-            orderData.items[0].business_inventory_id,
-            clientDeliveryAddressId,
-            orderData.requires_fast_delivery,
-            totalWeight
-          );
+    // Calculate delivery fee (waived for pickup, sum shipping prices for shipping)
+    let deliveryFeeInfo;
+    if (fulfillmentMethod === 'pickup') {
+      deliveryFeeInfo = this.zeroPickupDeliveryFee(currency);
+    } else if (fulfillmentMethod === 'shipping') {
+      // Calculate shipping fee: sum of all item shipping prices * quantities
+      let totalShippingFee = 0;
+      for (let i = 0; i < orderData.items.length; i++) {
+        const inv = lineContexts[i].inventory;
+        const itemShippingPrice = Number(inv.item?.shipping_price ?? 0);
+        totalShippingFee += itemShippingPrice * orderData.items[i].quantity;
+      }
+      deliveryFeeInfo = {
+        baseDeliveryFee: totalShippingFee,
+        perKmDeliveryFee: 0,
+        deliveryFee: totalShippingFee,
+        currency,
+        baseDeliveryFeeBeforeDiscount: totalShippingFee,
+        firstOrderPromo: false,
+      };
+    } else {
+      deliveryFeeInfo = await this.calculateItemDeliveryFee(
+        orderData.items[0].business_inventory_id,
+        clientDeliveryAddressId,
+        orderData.requires_fast_delivery,
+        totalWeight
+      );
+    }
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
     const account = await this.hasuraSystemService.getAccount(
