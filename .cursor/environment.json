@@ -1,0 +1,15 @@
+{
+  "name": "Rendasua",
+  "install": "yarn install --frozen-lockfile",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "COMMERCE_TOKEN_ENCRYPTION_KEY=local-dev-not-a-secret TWILIO_ACCOUNT_SID=AClocaldev TWILIO_ACCOUNT_TOKEN=localdevtoken TWILIO_VERIFY_SERVICE_SID=VAlocaldev npx nx serve backend"
+    },
+    {
+      "name": "frontend",
+      "command": "npx nx serve frontend --host 0.0.0.0 --open=false"
+    }
+  ],
+  "ports": [3000, 4200]
+}
