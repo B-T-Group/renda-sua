@@ -16,7 +16,7 @@ function isConsent(value: unknown): value is AgentLocationTrackingConsent {
 
 export function useAgentLocationConsent() {
   const apiClient = useApiClient();
-  const { profile, userType, refetch } = useUserProfileContext();
+  const { profile, userType, refetch, isDelegationContext } = useUserProfileContext();
   const isAgent = userType === 'agent' && !!profile?.agent;
 
   const consent = useMemo((): AgentLocationTrackingConsent => {
@@ -42,7 +42,7 @@ export function useAgentLocationConsent() {
     [apiClient, refetch]
   );
 
-  const showDisclosure = isAgent && consent === 'not_shown';
+  const showDisclosure = isAgent && consent === 'not_shown' && !isDelegationContext;
 
   return {
     isAgent,
