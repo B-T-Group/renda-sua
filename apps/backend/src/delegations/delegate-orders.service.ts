@@ -13,6 +13,7 @@ import type {
   OrderStatusChangeRequest,
 } from '../orders/orders.service';
 import { OrdersService } from '../orders/orders.service';
+import { GET_ORDERS } from '../orders/orders.queries';
 import type { DelegationAccessContext } from './delegation.types';
 
 @Injectable()
@@ -38,21 +39,8 @@ export class DelegateOrdersService {
   async list(ctx: DelegationAccessContext, filters?: unknown) {
     await this.assertLocation(ctx);
     const result = await this.hasura.executeQuery<{ orders: unknown[] }>(
-      `
-      query DelegateOrders($locationId: uuid!) {
-        orders(
-          where: { business_location_id: { _eq: $locationId } }
-          order_by: { created_at: desc }
-        ) {
-          id order_number current_status fulfillment_method payment_timing
-          payment_status total_amount currency created_at updated_at
-          business_location_id business_id
-          client { id user { id first_name last_name } }
-          order_items { id item_name quantity unit_price total_price }
-        }
-      }
-    `,
-      { locationId: ctx.locationId }
+      GET_ORDERS,
+      { filters: { business_location_id: { _eq: ctx.locationId } } }
     );
     return this.applyFilters(result.orders ?? [], filters);
   }

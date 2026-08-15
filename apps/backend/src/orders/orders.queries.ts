@@ -13,6 +13,7 @@ export const GET_ORDERS = gql`
       delivery_address_id
       subtotal
       base_delivery_fee
+      per_km_delivery_fee
       tax_amount
       total_amount
       currency
@@ -22,9 +23,12 @@ export const GET_ORDERS = gql`
       special_instructions
       preferred_delivery_time
       requires_fast_delivery
-      per_km_delivery_fee
       payment_method
       payment_status
+      payment_source
+      payment_timing
+      reconciliation_status
+      fulfillment_method
       created_at
       updated_at
       client {
@@ -34,6 +38,7 @@ export const GET_ORDERS = gql`
           first_name
           last_name
           email
+          phone_number
         }
       }
       business_location {
@@ -63,8 +68,6 @@ export const GET_ORDERS = gql`
       }
       assigned_agent {
         id
-        is_verified
-        is_internal
         user {
           id
           first_name
@@ -75,15 +78,15 @@ export const GET_ORDERS = gql`
       }
       order_items {
         id
-        item_variant_id
-        variant_name
-        variant_snapshot
         item_name
         item_description
         unit_price
         quantity
         total_price
         special_instructions
+        item_variant_id
+        variant_name
+        variant_snapshot
         item {
           sku
           currency
@@ -107,6 +110,11 @@ export const GET_ORDERS = gql`
           item_images(order_by: { display_order: asc }) {
             id
             image_url
+            image_type
+            display_order
+            thumbnail
+            thumbnail_status
+            display_url
           }
         }
       }

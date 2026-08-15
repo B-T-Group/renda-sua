@@ -64,4 +64,25 @@ describe('DelegateOrdersService location scope', () => {
       locationId: 'loc-1',
     });
   });
+
+  it('lists orders with item images and store address for list confirm', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        business_locations_by_pk: { id: 'loc-1', business_id: 'biz-1' },
+      })
+      .mockResolvedValueOnce({ orders: [] });
+
+    await expect(service.list(ctx)).resolves.toEqual([]);
+
+    const listQuery = String(hasura.executeQuery.mock.calls[1][0]);
+    expect(listQuery).toContain('item_images');
+    expect(listQuery).toContain('display_url');
+    expect(listQuery).toContain('variant_snapshot');
+    expect(listQuery).toContain('business_location');
+    expect(listQuery).toContain('delivery_time_windows');
+    expect(listQuery).toMatch(/address\s*\{[\s\S]*\bstate\b[\s\S]*\bcountry\b/);
+    expect(hasura.executeQuery.mock.calls[1][1]).toEqual({
+      filters: { business_location_id: { _eq: 'loc-1' } },
+    });
+  });
 });
