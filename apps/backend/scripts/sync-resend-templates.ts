@@ -128,6 +128,11 @@ function subjectForTemplate(name: string): string {
       ? 'Commande passée — Rendasua'
       : 'Order placed — Rendasua';
   }
+  if (name.includes('location_delegation_invite')) {
+    return name.endsWith('_fr')
+      ? 'Invitation de gestion — Rendasua'
+      : 'Location invitation — Rendasua';
+  }
   return name.endsWith('_fr')
     ? 'Mise à jour de commande — Rendasua'
     : 'Rendasua — order update';
