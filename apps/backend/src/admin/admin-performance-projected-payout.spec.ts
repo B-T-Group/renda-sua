@@ -1,3 +1,7 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { AdminPerformanceService } from './admin-performance.service';
 
 describe('AdminPerformanceService projected payouts', () => {

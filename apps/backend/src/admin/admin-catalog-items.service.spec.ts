@@ -1,3 +1,19 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../item-ai-review/item-ai-review.service', () => ({
+  ItemAiReviewService: class ItemAiReviewService {},
+}));
+jest.mock('../rental-listing-ai-review/rental-listing-ai-review.service', () => ({
+  RentalListingAiReviewService: class RentalListingAiReviewService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: class AddressesService {},
+}));
+
 import { HttpStatus } from '@nestjs/common';
 import { AdminCatalogItemsService } from './admin-catalog-items.service';
 

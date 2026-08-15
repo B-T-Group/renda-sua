@@ -1,3 +1,16 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
+  MerchantLifecycleService: class MerchantLifecycleService {},
+}));
+jest.mock('../addresses/addresses.service', () => ({
+  AddressesService: class AddressesService {},
+}));
+jest.mock('../business-contracts/business-contracts.service', () => ({
+  BusinessContractsService: class BusinessContractsService {},
+}));
+
 import { HttpStatus } from '@nestjs/common';
 import { UploadService } from './upload.service';
 
