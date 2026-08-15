@@ -23,7 +23,7 @@ const OtpAuthPage: React.FC = () => {
     return sessionStorage.getItem(key) || '';
   }, [flow, emailFromQuery]);
   const [email, setEmail] = useState(initialEmail);
-  const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ''));
+  const [digits, setDigits] = useState<string[]>(Array.from({ length: 4 }, () => ''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingMs, setRemainingMs] = useState<number>(() => {
@@ -85,11 +85,11 @@ const OtpAuthPage: React.FC = () => {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData('text');
-    const onlyDigits = text.replace(/\D/g, '').slice(0, 6);
+    const onlyDigits = text.replace(/\D/g, '').slice(0, 4);
     if (!onlyDigits) return;
     e.preventDefault();
-    setDigits(Array.from({ length: 6 }, (_, i) => onlyDigits[i] || ''));
-    const nextIndex = Math.min(onlyDigits.length, 5);
+    setDigits(Array.from({ length: 4 }, (_, i) => onlyDigits[i] || ''));
+    const nextIndex = Math.min(onlyDigits.length, 3);
     inputRefs.current[nextIndex]?.focus();
   };
 
@@ -186,7 +186,7 @@ const OtpAuthPage: React.FC = () => {
             variant="contained"
             size="large"
             onClick={handleVerify}
-            disabled={loading || !email.trim() || otp.length !== 6 || isExpired}
+            disabled={loading || !email.trim() || otp.length !== 4 || isExpired}
             startIcon={loading ? <CircularProgress size={18} /> : undefined}
           >
             {loading
