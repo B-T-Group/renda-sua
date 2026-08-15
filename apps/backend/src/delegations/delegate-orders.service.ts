@@ -48,7 +48,19 @@ export class DelegateOrdersService {
           payment_status total_amount currency created_at updated_at
           business_location_id business_id
           client { id user { id first_name last_name } }
-          order_items { id item_name quantity unit_price total_price }
+          order_items {
+            id item_name quantity unit_price total_price
+            item {
+              id
+              primary_image_url
+              item_images(order_by: { display_order: asc }, limit: 1) {
+                id
+                image_url
+                thumbnail
+                display_url
+              }
+            }
+          }
         }
       }
     `,
