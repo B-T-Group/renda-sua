@@ -176,7 +176,7 @@ export interface OrderWithDetails {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id: string;
-  fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   subtotal: number;
   base_delivery_fee: number;
   per_km_delivery_fee: number;
@@ -192,6 +192,10 @@ export interface OrderWithDetails {
   payment_status?: string;
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   verified_agent_delivery?: boolean;
+  shipping_tracking_number?: string;
+  shipping_carrier?: string;
+  shipped_at?: string;
+  received_at?: string;
   created_at: string;
   updated_at: string;
   completed_at?: string | null;
@@ -7657,9 +7661,11 @@ export class OrdersService {
     this.requireActivePersona(user, 'client', 'Only clients can create orders');
     const client = this.requireClientRecord(user);
 
-    const fulfillmentMethod: 'delivery' | 'pickup' =
-      orderData.fulfillment_method === 'pickup' ||
-      orderData.payment_timing === 'pay_at_pickup'
+    const fulfillmentMethod: 'delivery' | 'pickup' | 'shipping' =
+      orderData.fulfillment_method === 'shipping'
+        ? 'shipping'
+        : orderData.fulfillment_method === 'pickup' ||
+          orderData.payment_timing === 'pay_at_pickup'
         ? 'pickup'
         : 'delivery';
 
@@ -7677,10 +7683,10 @@ export class OrdersService {
       postal_code: string;
       country: string;
     } | null = null;
-    if (fulfillmentMethod === 'delivery') {
+    if (fulfillmentMethod === 'delivery' || fulfillmentMethod === 'shipping') {
       if (!clientDeliveryAddressId) {
         throw new HttpException(
-          'Delivery address ID is required',
+          `Delivery address ID is required for ${fulfillmentMethod}`,
           HttpStatus.BAD_REQUEST
         );
       }
@@ -7772,6 +7778,9 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             pay_at_pickup_enabled
+            shipping_enabled
+            shipping_price
+            shipping_currency
             currency
             weight
             max_order_quantity
@@ -7998,6 +8007,24 @@ export class OrdersService {
       }
     }
 
+    if (fulfillmentMethod === 'shipping') {
+      const anyNotShippingEnabled = businessInventories.some(
+        (inv) => inv?.item?.shipping_enabled !== true
+      );
+      if (anyNotShippingEnabled) {
+        throw new HttpException(
+          'Carrier shipping is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (paymentTiming !== 'pay_now') {
+        throw new HttpException(
+          'Carrier shipping requires payment at checkout (pay_now)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
     // intentionally carries no internal reason.
@@ -8022,16 +8049,34 @@ export class OrdersService {
       return sum + w * orderData.items[idx].quantity;
     }, 0);
 
-    // Calculate delivery fee (waived for pickup)
-    const deliveryFeeInfo =
-      fulfillmentMethod === 'pickup'
-        ? this.zeroPickupDeliveryFee(currency)
-        : await this.calculateItemDeliveryFee(
-            orderData.items[0].business_inventory_id,
-            clientDeliveryAddressId,
-            orderData.requires_fast_delivery,
-            totalWeight
-          );
+    // Calculate delivery fee (waived for pickup, sum shipping prices for shipping)
+    let deliveryFeeInfo;
+    if (fulfillmentMethod === 'pickup') {
+      deliveryFeeInfo = this.zeroPickupDeliveryFee(currency);
+    } else if (fulfillmentMethod === 'shipping') {
+      // Calculate shipping fee: sum of all item shipping prices * quantities
+      let totalShippingFee = 0;
+      for (let i = 0; i < orderData.items.length; i++) {
+        const inv = lineContexts[i].inventory;
+        const itemShippingPrice = Number(inv.item?.shipping_price ?? 0);
+        totalShippingFee += itemShippingPrice * orderData.items[i].quantity;
+      }
+      deliveryFeeInfo = {
+        baseDeliveryFee: totalShippingFee,
+        perKmDeliveryFee: 0,
+        deliveryFee: totalShippingFee,
+        currency,
+        baseDeliveryFeeBeforeDiscount: totalShippingFee,
+        firstOrderPromo: false,
+      };
+    } else {
+      deliveryFeeInfo = await this.calculateItemDeliveryFee(
+        orderData.items[0].business_inventory_id,
+        clientDeliveryAddressId,
+        orderData.requires_fast_delivery,
+        totalWeight
+      );
+    }
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
     const account = await this.hasuraSystemService.getAccount(
@@ -10649,5 +10694,276 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Carrier Shipping Methods
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Mark a shipping order as shipped with optional tracking number
+   * Business only, updates status to 'shipped'
+   */
+  async markOrderAsShipped(
+    orderId: string,
+    trackingNumber?: string,
+    carrier?: string
+  ): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'business', 'Only businesses can mark orders as shipped');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify business owns this order
+    if (order.business_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to mark this order as shipped',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders can be marked as shipped',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Verify order is in correct status
+    const validStatuses = ['confirmed', 'awaiting_shipment'];
+    if (!validStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Order must be in ${validStatuses.join(' or ')} status to mark as shipped`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Update order
+    const mutation = `
+      mutation MarkOrderAsShipped(
+        $orderId: uuid!,
+        $shippedAt: timestamptz!,
+        $trackingNumber: String,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: shipped,
+            shipped_at: $shippedAt,
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          current_status
+          shipped_at
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      shippedAt: now,
+      trackingNumber: trackingNumber || null,
+      carrier: carrier || null,
+    });
+
+    const updatedOrder = result.update_orders_by_pk;
+    if (!updatedOrder) {
+      throw new HttpException(
+        'Failed to update order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    // Record status change in history
+    await this.orderStatusService.recordStatusChange(
+      orderId,
+      'shipped',
+      user.id,
+      'business'
+    );
+
+    // TODO: Send notification to client (will be implemented in notifications step)
+    // await this.notificationsService.sendOrderShippedNotification(order, trackingNumber, carrier);
+
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order marked as shipped',
+    };
+  }
+
+  /**
+   * Update tracking information for a shipped order
+   * Business only
+   */
+  async updateTrackingNumber(
+    orderId: string,
+    trackingNumber: string,
+    carrier?: string
+  ): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'business', 'Only businesses can update tracking');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify business owns this order
+    if (order.business_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to update this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders have tracking numbers',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const mutation = `
+      mutation UpdateTrackingNumber(
+        $orderId: uuid!,
+        $trackingNumber: String!,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      trackingNumber,
+      carrier: carrier || null,
+    });
+
+    return {
+      success: true,
+      order: result.update_orders_by_pk,
+      message: 'Tracking information updated',
+    };
+  }
+
+  /**
+   * Client confirms receipt of a shipped order
+   * Client only, updates status to 'complete'
+   */
+  async confirmOrderReceipt(orderId: string): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'client', 'Only clients can confirm receipt');
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Verify client owns this order
+    if (order.client_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to confirm receipt for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Verify it's a shipping order
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders can have receipt confirmed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Verify order is in correct status
+    const validStatuses = ['shipped', 'in_delivery'];
+    if (!validStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Order must be in ${validStatuses.join(' or ')} status to confirm receipt`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Update order to complete
+    const mutation = `
+      mutation ConfirmOrderReceipt(
+        $orderId: uuid!,
+        $receivedAt: timestamptz!,
+        $completedAt: timestamptz!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: complete,
+            received_at: $receivedAt,
+            completed_at: $completedAt
+          }
+        ) {
+          id
+          order_number
+          current_status
+          received_at
+          completed_at
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      receivedAt: now,
+      completedAt: now,
+    });
+
+    const updatedOrder = result.update_orders_by_pk;
+    if (!updatedOrder) {
+      throw new HttpException(
+        'Failed to update order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    // Record status change in history
+    await this.orderStatusService.recordStatusChange(
+      orderId,
+      'complete',
+      user.id,
+      'client'
+    );
+
+    // TODO: Send notification to business (will be implemented in notifications step)
+    // await this.notificationsService.sendOrderReceivedNotification(order);
+
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Receipt confirmed; order complete',
+    };
   }
 }

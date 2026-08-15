@@ -72,6 +72,23 @@ export class CreateItemDto {
   @ApiPropertyOptional()
   pay_on_delivery_enabled?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'When true, this item can be shipped via carrier. Default false.',
+    default: false,
+  })
+  shipping_enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cost to ship this item via carrier. Required when shipping_enabled is true.',
+  })
+  shipping_price?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Currency for shipping_price. Defaults to XAF.',
+    default: 'XAF',
+  })
+  shipping_currency?: string;
+
   @ApiPropertyOptional({ default: 'txcd_99999999' })
   stripe_tax_code_id?: string;
 }

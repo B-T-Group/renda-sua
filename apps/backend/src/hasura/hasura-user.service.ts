@@ -46,14 +46,14 @@ export interface CreateOrderRequest {
   items: OrderItem[];
   special_instructions?: string;
   verified_agent_delivery?: boolean;
-  /** Required for delivery orders; omitted when fulfillment_method is pickup. */
+  /** Required for delivery and shipping orders; omitted when fulfillment_method is pickup. */
   delivery_address_id?: string;
-  /** Defaults to delivery when omitted. */
-  fulfillment_method?: 'delivery' | 'pickup';
+  /** Defaults to delivery when omitted. delivery = agent-based, pickup = store pickup, shipping = carrier shipping. */
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   phone_number?: string;
   requires_fast_delivery?: boolean;
   discount_code?: string;
-  /** Client-selected payment timing. Defaults to pay_now when omitted. */
+  /** Client-selected payment timing. Defaults to pay_now when omitted. shipping orders require pay_now. */
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   /**
    * When set to `payment_sheet` on a Stripe-rail pay_now order, the response
