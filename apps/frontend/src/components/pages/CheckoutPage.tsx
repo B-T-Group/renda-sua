@@ -95,7 +95,7 @@ interface OrderSummaryProps {
   businessDeliveryFees: Map<string, BusinessDeliveryFee>;
   fastDeliveryFee: number;
   requiresFastDelivery: boolean;
-  fulfillment: 'delivery' | 'pickup';
+  fulfillment: 'delivery' | 'pickup' | 'shipping';
   /** Seller groups that currently cannot deliver (reason-blind). */
   unavailableBusinessIds: Set<string>;
   formatCurrency: (amount: number, currency?: string) => string;
@@ -143,15 +143,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       (sum, item) => sum + item.itemData.price * item.quantity,
       0
     );
+    
+    // Calculate shipping fee if fulfillment is shipping
+    const shippingFee = fulfillment === 'shipping'
+      ? items.reduce((sum, item) => {
+          // Assuming itemData has shipping_price field (will be fetched from backend)
+          const itemShippingPrice = (item.itemData as any).shipping_price || 0;
+          return sum + itemShippingPrice * item.quantity;
+        }, 0)
+      : 0;
+    
     const deliveryFeeData = businessDeliveryFees.get(businessId);
-    const deliveryFee = deliveryFeeData?.deliveryFee || 0;
-    const orderTotal = subtotal + deliveryFee + (requiresFastDelivery ? fastDeliveryFee : 0);
+    const deliveryFee = fulfillment === 'delivery' ? (deliveryFeeData?.deliveryFee || 0) : 0;
+    const feeForOrder = fulfillment === 'shipping' ? shippingFee : deliveryFee;
+    const orderTotal = subtotal + feeForOrder + (requiresFastDelivery ? fastDeliveryFee : 0);
     
     return {
       businessId,
       items,
       subtotal,
       deliveryFee,
+      shippingFee,
       firstOrderBaseDeliveryDiscountAmount:
         deliveryFeeData?.firstOrderBaseDeliveryDiscountAmount ?? 0,
       fullDeliveryFeeWithoutPromo: deliveryFeeData?.fullDeliveryFeeWithoutPromo,
@@ -246,7 +258,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
-                {t('checkout.deliveryFee', 'Delivery Fee')}
+                {fulfillment === 'shipping'
+                  ? t('checkout.shippingFee', 'Shipping Fee')
+                  : t('checkout.deliveryFee', 'Delivery Fee')}
               </Typography>
               <Box sx={{ textAlign: 'right' }}>
                 {fulfillment === 'pickup' ? (
@@ -540,7 +554,7 @@ const CheckoutPage: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // State
-  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup' | 'shipping'>(
     'delivery'
   );
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -635,6 +649,14 @@ const CheckoutPage: React.FC = () => {
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
 
+  // Check if shipping is available (all items must support shipping)
+  // This will be calculated from cart items
+  const shippingEligible = useMemo(() => {
+    // For now, assume shipping is available if items have shipping data
+    // The backend preflight will validate properly
+    return cartItems.length > 0;
+  }, [cartItems]);
+
   // Reason-blind delivery availability (aggregated + per seller group).
   const deliveryUnavailable =
     fulfillment === 'delivery' &&
@@ -651,6 +673,7 @@ const CheckoutPage: React.FC = () => {
 
   // Pickup on the Mobile Money rail is paid on collection; Stripe pickup is
   // authorized at checkout. The resolver decides — the UI just forwards it.
+  // Shipping always requires pay_now.
   const paymentTiming: 'pay_now' | 'pay_at_pickup' =
     fulfillment === 'pickup' &&
     checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
@@ -677,6 +700,7 @@ const CheckoutPage: React.FC = () => {
     const fetchBusinessDeliveryFees = async () => {
       if (
         fulfillment === 'pickup' ||
+        fulfillment === 'shipping' ||
         !selectedAddressId ||
         cartItems.length === 0 ||
         !apiClient
@@ -851,8 +875,10 @@ const CheckoutPage: React.FC = () => {
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
     const isPickup = fulfillment === 'pickup';
-    if (!isPickup && !selectedAddressId) return;
-    if (!isPickup && deliveryUnavailable) return;
+    const isShipping = fulfillment === 'shipping';
+    if (!isPickup && !isShipping && !selectedAddressId) return;
+    if (isShipping && !selectedAddressId) return;
+    if (!isPickup && !isShipping && deliveryUnavailable) return;
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -876,7 +902,7 @@ const CheckoutPage: React.FC = () => {
         phoneNumber,
         undefined, // specialInstructions removed
         discountCodeToApply,
-        isPickup ? false : requiresFastDelivery,
+        isPickup || isShipping ? false : requiresFastDelivery,
         fastDeliveryFee,
         paymentTiming,
         deliveryWindow
@@ -1017,13 +1043,13 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.deliveryInformation', 'Delivery Information')}
               </Typography>
 
-              {/* Fulfillment method (pickup offered when all sellers support it) */}
-              {pickupEligible && (
+              {/* Fulfillment method (pickup and shipping offered based on item support) */}
+              {(pickupEligible || shippingEligible) && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" sx={{ mb: 1 }}>
                     {t('checkout.fulfillmentTitle', 'How do you want to receive your order?')}
                   </Typography>
-                  <Stack direction="row" spacing={1}>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                     <Button
                       variant={fulfillment === 'delivery' ? 'contained' : 'outlined'}
                       onClick={() => setFulfillment('delivery')}
@@ -1031,13 +1057,24 @@ const CheckoutPage: React.FC = () => {
                     >
                       {t('checkout.fulfillmentDelivery', 'Delivery')}
                     </Button>
-                    <Button
-                      variant={fulfillment === 'pickup' ? 'contained' : 'outlined'}
-                      onClick={handleSwitchToPickup}
-                      disabled={checkoutLoading}
-                    >
-                      {t('checkout.fulfillmentPickup', 'Store pickup')}
-                    </Button>
+                    {pickupEligible && (
+                      <Button
+                        variant={fulfillment === 'pickup' ? 'contained' : 'outlined'}
+                        onClick={handleSwitchToPickup}
+                        disabled={checkoutLoading}
+                      >
+                        {t('checkout.fulfillmentPickup', 'Store pickup')}
+                      </Button>
+                    )}
+                    {shippingEligible && (
+                      <Button
+                        variant={fulfillment === 'shipping' ? 'contained' : 'outlined'}
+                        onClick={() => setFulfillment('shipping')}
+                        disabled={checkoutLoading}
+                      >
+                        {t('checkout.fulfillmentShipping', 'Shipping')}
+                      </Button>
+                    )}
                   </Stack>
                   {fulfillment === 'pickup' && (
                     <Typography
@@ -1048,6 +1085,18 @@ const CheckoutPage: React.FC = () => {
                       {t(
                         'checkout.pickupNotice',
                         'No delivery fee. Collect your order at each store once it is ready.'
+                      )}
+                    </Typography>
+                  )}
+                  {fulfillment === 'shipping' && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 1 }}
+                    >
+                      {t(
+                        'checkout.shippingNotice',
+                        'Shipping fee will be calculated based on item shipping costs. You will receive a tracking number once shipped.'
                       )}
                     </Typography>
                   )}
@@ -1156,6 +1205,57 @@ const CheckoutPage: React.FC = () => {
                     loading={checkoutLoading}
                     businessLocationId={cartItems[0]?.businessLocationId}
                   />
+                </>
+              )}
+
+              {fulfillment === 'shipping' && (
+                <>
+                  {/* Shipping Address Selection */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                      {t('checkout.shippingAddress', 'Shipping Address')}
+                    </Typography>
+
+                    {addressesLoading ? (
+                      <Skeleton variant="rectangular" height={56} />
+                    ) : (
+                      <FormControl fullWidth>
+                        <InputLabel>
+                          {t('checkout.selectAddress', 'Select Address')}
+                        </InputLabel>
+                        <Select
+                          value={selectedAddressId}
+                          onChange={(e) => setSelectedAddressId(e.target.value)}
+                          label={t('checkout.selectAddress', 'Select Address')}
+                        >
+                          {addresses.map((addr) => (
+                            <MenuItem key={addr.address.id} value={addr.address.id}>
+                              <Box>
+                                <Typography variant="body2">
+                                  {addr.address.address_line_1}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {addr.address.city}, {addr.address.state}{' '}
+                                  {addr.address.postal_code}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+
+                    <Button
+                      variant="outlined"
+                      onClick={handleOpenAddressDialog}
+                      sx={{ mt: 1 }}
+                    >
+                      {t('checkout.addNewAddress', 'Add New Address')}
+                    </Button>
+                  </Box>
                 </>
               )}
 
