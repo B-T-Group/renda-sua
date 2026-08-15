@@ -106,8 +106,9 @@ export class AddressesService {
   }
 
   /**
-   * `users.country` is the canonical payment-rail source; keep it aligned
-   * when a primary address country changes. Never clears an existing value.
+   * Keep `users.country` aligned with the merchant's primary business location.
+   * Only call from business-location address paths — never from client/agent
+   * persona addresses, or a shopper delivery country can flip payment rail.
    */
   private async syncUserCountry(
     userId: string,
@@ -573,10 +574,6 @@ export class AddressesService {
           junctionMutation,
           junctionVariables
         );
-      }
-
-      if (addressData.is_primary) {
-        await this.syncUserCountry(user.id, addressData.country);
       }
 
       if (addressCountBefore === 0) {
@@ -1290,15 +1287,6 @@ export class AddressesService {
       const primaryChanged =
         addressData.is_primary !== undefined &&
         addressData.is_primary !== existingAddress.is_primary;
-      const isPrimaryAfterUpdate =
-        addressData.is_primary ?? existingAddress.is_primary ?? false;
-      if (isPrimaryAfterUpdate && (countryChanged || primaryChanged)) {
-        // Sync before lifecycle recompute so rail resolution sees the new country.
-        await this.syncUserCountry(
-          user.id,
-          addressData.country ?? existingAddress.country
-        );
-      }
       if (
         (countryChanged || primaryChanged) &&
         (ownershipResult.business_addresses?.length ?? 0) > 0
