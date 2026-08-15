@@ -97,12 +97,33 @@ export class DelegateOrdersService {
 
   async updateStatus(ctx: DelegationAccessContext, orderId: string, status: string) {
     await this.requireOrderInLocation(ctx, orderId);
-    const order = await this.orderStatus.updateOrderStatus(
-      orderId,
-      status,
-      this.actor(ctx)
+    return this.applyStatusChange(ctx, orderId, status);
+  }
+
+  /**
+   * Generic PATCH must not flip money/dispatch statuses without side effects.
+   * Cancel releases Stripe/wallet holds + inventory; ready_for_pickup schedules
+   * agent dispatch and pickup PINs; confirm requires a time slot.
+   */
+  private applyStatusChange(
+    ctx: DelegationAccessContext,
+    orderId: string,
+    status: string
+  ) {
+    if (status === 'cancelled') {
+      return this.orders.cancelOrder({ orderId }, this.actor(ctx));
+    }
+    if (status === 'ready_for_pickup') {
+      return this.orders.completePreparation({ orderId }, this.actor(ctx));
+    }
+    if (status === 'confirmed') {
+      throw new Error(
+        'Use POST /delegate/orders/confirm with a time slot; PATCH status=confirmed is unsafe'
+      );
+    }
+    return this.orderStatus.updateOrderStatus(orderId, status, this.actor(ctx)).then(
+      (order) => ({ success: true, order, message: 'Order status updated successfully' })
     );
-    return { success: true, order, message: 'Order status updated successfully' };
   }
 
   async confirmPickup(
