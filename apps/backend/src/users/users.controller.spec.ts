@@ -44,6 +44,8 @@ describe('UsersController', () => {
   let businessContractsService: {
     ensureContractForBusiness: jest.Mock;
   };
+  let locationDelegationsFlag: { isEnabled: jest.Mock };
+  let delegationAccess: { listActiveForUser: jest.Mock; resolve: jest.Mock };
 
   const currentUser = {
     id: 'user-123',
@@ -80,6 +82,11 @@ describe('UsersController', () => {
     businessContractsService = {
       ensureContractForBusiness: jest.fn().mockResolvedValue(undefined),
     };
+    locationDelegationsFlag = { isEnabled: jest.fn().mockResolvedValue(false) };
+    delegationAccess = {
+      listActiveForUser: jest.fn(),
+      resolve: jest.fn(),
+    };
     controller = new UsersController(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -103,8 +110,8 @@ describe('UsersController', () => {
           .mockResolvedValue(undefined),
       } as any,
       { claimSlotIfAvailable: jest.fn().mockResolvedValue(undefined) } as any,
-      { isEnabled: jest.fn().mockResolvedValue(false) } as any,
-      { listActiveForUser: jest.fn(), resolve: jest.fn() } as any
+      locationDelegationsFlag as any,
+      delegationAccess as any
     );
   });
 
@@ -458,6 +465,45 @@ describe('UsersController', () => {
         )
       );
       expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setActiveContext', () => {
+    it('returns 404 when location delegations are disabled', async () => {
+      await expect(
+        controller.setActiveContext(ctx, {
+          kind: 'delegation',
+          delegationId: 'grant-1',
+        })
+      ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+      expect(delegationAccess.resolve).not.toHaveBeenCalled();
+    });
+
+    it('rejects a delegation context without an id', async () => {
+      locationDelegationsFlag.isEnabled.mockResolvedValue(true);
+      await expect(
+        controller.setActiveContext(ctx, { kind: 'delegation' })
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(delegationAccess.resolve).not.toHaveBeenCalled();
+    });
+
+    it('validates the grant before echoing the delegation context', async () => {
+      locationDelegationsFlag.isEnabled.mockResolvedValue(true);
+      delegationAccess.resolve.mockResolvedValue({ id: 'grant-1' });
+      await expect(
+        controller.setActiveContext(ctx, {
+          kind: 'delegation',
+          delegationId: 'grant-1',
+        })
+      ).resolves.toEqual({
+        success: true,
+        kind: 'delegation',
+        delegationId: 'grant-1',
+      });
+      expect(delegationAccess.resolve).toHaveBeenCalledWith(
+        currentUser.id,
+        'grant-1'
+      );
     });
   });
 });

@@ -95,4 +95,88 @@ describe('PublicInviteService', () => {
       status: HttpStatus.GONE,
     });
   });
+
+  it('rejects a missing or already accepted invite', async () => {
+    hasura.executeQuery.mockResolvedValue({ location_delegation_invites: [] });
+    await expect(service.preview(token)).rejects.toMatchObject({
+      status: HttpStatus.NOT_FOUND,
+    });
+
+    hasura.executeQuery.mockResolvedValue({
+      location_delegation_invites: [{ ...pendingInvite, status: 'accepted' }],
+    });
+    await expect(service.accept(token, {})).rejects.toMatchObject({
+      status: HttpStatus.GONE,
+    });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('requires first and last name when the invite has none', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (String(query).includes('InviteByHash')) {
+        return {
+          location_delegation_invites: [
+            { ...pendingInvite, first_name: null, last_name: null },
+          ],
+        };
+      }
+      return {};
+    });
+    await expect(service.accept(token, {})).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('creates a user and grant when the invitee is new', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (String(query).includes('InviteByHash')) {
+        return { location_delegation_invites: [pendingInvite] };
+      }
+      if (String(query).includes('UserByEmail')) {
+        return { users: [] };
+      }
+      if (String(query).includes('ActiveGrant')) {
+        return { location_delegations: [] };
+      }
+      return {};
+    });
+    hasura.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('CreateDelegateUser')) {
+        return { insert_users_one: { id: 'user-new', email: pendingInvite.email } };
+      }
+      return {};
+    });
+
+    await expect(service.accept(token, {})).resolves.toEqual({
+      success: true,
+      already_authenticated: false,
+      email: pendingInvite.email,
+    });
+    const mutations = hasura.executeMutation.mock.calls.map((c) => String(c[0]));
+    expect(mutations.some((q) => q.includes('CreateDelegateUser'))).toBe(true);
+    expect(mutations.some((q) => q.includes('InsertGrant'))).toBe(true);
+    expect(mutations.some((q) => q.includes('ConsumeInvite'))).toBe(true);
+    expect(auth0.startEmailOtp).toHaveBeenCalledWith(pendingInvite.email);
+  });
+
+  it('updates an existing grant role instead of inserting another', async () => {
+    mockPendingInvite();
+    await service.accept(token, {});
+    const mutations = hasura.executeMutation.mock.calls.map((c) => String(c[0]));
+    expect(mutations.some((q) => q.includes('UpdateGrantRole'))).toBe(true);
+    expect(mutations.some((q) => q.includes('InsertGrant'))).toBe(false);
+  });
+
+  it('skips OTP when the invitee is already signed in', async () => {
+    mockPendingInvite();
+    await expect(
+      service.accept(token, {}, { userId: 'user-existing', email: pendingInvite.email })
+    ).resolves.toEqual({
+      success: true,
+      already_authenticated: true,
+      email: pendingInvite.email,
+    });
+    expect(auth0.startEmailOtp).not.toHaveBeenCalled();
+  });
 });
