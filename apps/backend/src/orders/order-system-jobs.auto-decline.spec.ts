@@ -18,6 +18,7 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
   function buildService(overrides?: {
     claimAffectedRows?: number;
     order?: typeof pendingOrder | null;
+    stripeCancelResult?: { success: boolean; skipped: boolean; message?: string };
   }) {
     const claimAffectedRows = overrides?.claimAffectedRows ?? 1;
     const order = overrides?.order === undefined ? pendingOrder : overrides.order;
@@ -45,10 +46,12 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
 
     const hasuraSystemService = { executeMutation, executeQuery } as any;
     const stripeCaptureService = {
-      cancelOrderPaymentIntent: jest.fn().mockResolvedValue({
-        success: true,
-        skipped: false,
-      }),
+      cancelOrderPaymentIntent: jest.fn().mockResolvedValue(
+        overrides?.stripeCancelResult ?? {
+          success: true,
+          skipped: false,
+        }
+      ),
     } as any;
     const stripeRefundService = {
       initiateOrderRefund: jest.fn(),
@@ -110,6 +113,26 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
     expect(declined).toBe(false);
     expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
     expect(stripeRefundService.initiateOrderRefund).not.toHaveBeenCalled();
+    expect(orderQueueService.sendOrderCancelledMessage).not.toHaveBeenCalled();
+  });
+
+  it('reverts the cancel claim when Stripe authorization release fails', async () => {
+    const { service, executeMutation, orderQueueService } = buildService({
+      stripeCancelResult: {
+        success: false,
+        skipped: false,
+        message: 'Stripe down',
+      },
+    });
+
+    await expect(
+      service.autoDeclineUnacceptedOrderAsSystem(orderId)
+    ).rejects.toThrow('Stripe down');
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('RevertSystemCancelClaim')
+      )
+    ).toBe(true);
     expect(orderQueueService.sendOrderCancelledMessage).not.toHaveBeenCalled();
   });
 

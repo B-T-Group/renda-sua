@@ -246,7 +246,9 @@ export class OrderCleanupService {
         notifyViaStatusUpdated
       );
     } catch (error) {
-      await this.revertCancelledClaim(order.id, expectedStatus);
+      if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
+        await this.revertCancelledClaim(order.id, expectedStatus);
+      }
       throw error;
     }
     return true;
@@ -283,18 +285,26 @@ export class OrderCleanupService {
     notifyViaStatusUpdated: boolean
   ): Promise<void> {
     const payment = await this.getOrderPaymentFields(order.id);
-    const paymentStatus = await this.releaseOrRefundStripe({
-      ...order,
-      ...payment,
-    });
-    await this.patchPaymentStatus(order.id, paymentStatus);
-    await this.insertSystemHistory(order.id, 'cancelled', historyNotes);
-    await this.runCancelSideEffects(
-      order,
-      previousStatus,
-      historyNotes,
-      notifyViaStatusUpdated
-    );
+    let paymentFinalized = false;
+    try {
+      const paymentStatus = await this.releaseOrRefundStripe({
+        ...order,
+        ...payment,
+      });
+      paymentFinalized = true;
+      await this.patchPaymentStatus(order.id, paymentStatus);
+      await this.insertSystemHistory(order.id, 'cancelled', historyNotes);
+      await this.runCancelSideEffects(
+        order,
+        previousStatus,
+        historyNotes,
+        notifyViaStatusUpdated
+      );
+    } catch (error) {
+      (error as { paymentFinalized?: boolean }).paymentFinalized =
+        paymentFinalized;
+      throw error;
+    }
   }
 
   private async failMissedDeliveryOrder(

@@ -193,7 +193,7 @@ describe('OrderCleanupService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('reverts cancelled claim when finalization fails', async () => {
+    it('reverts cancelled claim when finalization fails before payment release', async () => {
       hasura.executeQuery
         .mockResolvedValueOnce({
           orders: [
@@ -209,25 +209,17 @@ describe('OrderCleanupService', () => {
             },
           ],
         })
-        .mockResolvedValueOnce({
-          orders_by_pk: {
-            payment_status: 'pending',
-            payment_source: 'mobile_money',
-          },
-        });
+        .mockRejectedValueOnce(new Error('payment read failed'));
       hasura.executeMutation.mockImplementation((mutation: string) => {
         const text = String(mutation);
         if (text.includes('CleanupClaimCancel')) {
           return Promise.resolve({ update_orders: { affected_rows: 1 } });
         }
-        if (text.includes('CleanupPatchPayment')) {
-          return Promise.reject(new Error('patch failed'));
-        }
         return Promise.resolve({});
       });
 
       await expect(service.cancelStalePendingPaymentOrders(24, 100)).rejects.toThrow(
-        'patch failed'
+        'payment read failed'
       );
       expect(
         hasura.executeMutation.mock.calls.some((c) =>

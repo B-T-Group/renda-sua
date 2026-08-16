@@ -86,7 +86,14 @@ export class OrderSystemJobsService {
       return false;
     }
 
-    await this.finalizeAutoDeclinedOrder(order, orderId, previousStatus);
+    try {
+      await this.finalizeAutoDeclinedOrder(order, orderId, previousStatus);
+    } catch (error) {
+      if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
+        await this.revertSystemCancelClaim(orderId, previousStatus);
+      }
+      throw error;
+    }
     return true;
   }
 
@@ -95,22 +102,52 @@ export class OrderSystemJobsService {
     orderId: string,
     previousStatus: string
   ): Promise<void> {
-    const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
-    await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
-    await this.runOrderCancellationSideEffects(
-      order,
-      orderId,
-      previousStatus,
-      'system',
-      'Auto-declined: merchant did not accept within the acceptance window'
-    );
+    let paymentFinalized = false;
     try {
-      await this.notifyClientMerchantUnavailable(order, orderId);
-    } catch (error: any) {
-      this.logger.error(
-        `Auto-decline client notify failed for ${orderId}: ${error?.message}`
+      const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
+      paymentFinalized = true;
+      await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
+      await this.runOrderCancellationSideEffects(
+        order,
+        orderId,
+        previousStatus,
+        'system',
+        'Auto-declined: merchant did not accept within the acceptance window'
       );
+      try {
+        await this.notifyClientMerchantUnavailable(order, orderId);
+      } catch (error: any) {
+        this.logger.error(
+          `Auto-decline client notify failed for ${orderId}: ${error?.message}`
+        );
+      }
+    } catch (error) {
+      (error as { paymentFinalized?: boolean }).paymentFinalized =
+        paymentFinalized;
+      throw error;
     }
+  }
+
+  private async revertSystemCancelClaim(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertSystemCancelClaim($orderId: uuid!, $previousStatus: order_status!) {
+        update_orders(
+          where: { id: { _eq: $orderId }, current_status: { _eq: cancelled } }
+          _set: {
+            current_status: $previousStatus
+            cancelled_by: null
+            cancelled_at: null
+            cancellation_reason_id: null
+            cancellation_notes: null
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { orderId, previousStatus }
+    );
   }
 
   /** CAS: cancel only while still pending so confirm cannot be overwritten. */
@@ -245,14 +282,24 @@ export class OrderSystemJobsService {
       return;
     }
 
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    await this.runOrderCancellationSideEffects(
-      order,
-      orderId,
-      previousStatus,
-      'system',
-      'Auto-cancelled: no agent claimed within timeout'
-    );
+    let paymentFinalized = false;
+    try {
+      await this.releaseStripeAuthorizationIfNeeded(order);
+      paymentFinalized = true;
+      await this.patchAutoDeclinePaymentStatus(orderId, 'cancelled');
+      await this.runOrderCancellationSideEffects(
+        order,
+        orderId,
+        previousStatus,
+        'system',
+        'Auto-cancelled: no agent claimed within timeout'
+      );
+    } catch (error) {
+      if (!paymentFinalized) {
+        await this.revertSystemCancelClaim(orderId, previousStatus);
+      }
+      throw error;
+    }
   }
 
   /** CAS: cancel only while still unassigned ready_for_pickup. */
@@ -274,7 +321,6 @@ export class OrderSystemJobsService {
             current_status: cancelled
             cancelled_by: "system"
             cancelled_at: $at
-            payment_status: "cancelled"
             updated_at: $at
           }
         ) { affected_rows }
@@ -493,6 +539,9 @@ export class OrderSystemJobsService {
     if (!cancelResult.success && !cancelResult.skipped) {
       this.logger.warn(
         `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
+      );
+      throw new Error(
+        cancelResult.message || 'Stripe authorization cancel failed'
       );
     }
   }
