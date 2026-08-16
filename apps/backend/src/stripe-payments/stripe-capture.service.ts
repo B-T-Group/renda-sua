@@ -83,12 +83,13 @@ export class StripeCaptureService {
       );
       if (existingPi?.status === 'succeeded') {
         const capturedAt = new Date().toISOString();
+        const shouldSyncAmount =
+          params.captureAmount != null &&
+          existingPi.amount_received === params.captureAmount;
         await this.databaseService.updateTransaction(tx.id, {
           status: 'success',
           captured_at: capturedAt,
-          ...(params.captureAmount != null
-            ? { amount: params.captureAmount }
-            : {}),
+          ...(shouldSyncAmount ? { amount: params.captureAmount } : {}),
         });
         return { success: true, message: 'Already captured on Stripe', captured: true };
       }

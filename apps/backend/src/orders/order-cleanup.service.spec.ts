@@ -316,6 +316,16 @@ describe('OrderCleanupService', () => {
         )
       ).toBe(true);
       expect(
+        hasura.executeMutation.mock.calls.find((c) =>
+          String(c[0]).includes('CleanupClaimFail')
+        )?.[1]
+      ).toEqual(
+        expect.objectContaining({
+          orderId: 'o1',
+          expectedStatus: 'out_for_delivery',
+        })
+      );
+      expect(
         hasura.executeMutation.mock.calls.some((c) =>
           String(c[0]).includes('CleanupInsertFailedDelivery')
         )

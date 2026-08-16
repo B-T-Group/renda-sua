@@ -273,7 +273,7 @@ export class OrderCleanupService {
     reasonId: string
   ): Promise<boolean> {
     const previousStatus = order.current_status;
-    const claimed = await this.claimFailed(order.id);
+    const claimed = await this.claimFailed(order.id, previousStatus);
     if (!claimed) return false;
     try {
       await this.insertFailedDeliveryRecord(order.id, reasonId);
@@ -588,30 +588,32 @@ export class OrderCleanupService {
   }
 
   /** CAS: fail only while still mid-fulfillment (not complete/delivered). */
-  private async claimFailed(orderId: string): Promise<boolean> {
+  private async claimFailed(
+    orderId: string,
+    expectedStatus: string
+  ): Promise<boolean> {
     const at = new Date().toISOString();
-    const statuses = [...MID_FULFILLMENT_STATUSES];
     const result = await this.hasuraSystemService.executeMutation<{
       update_orders: { affected_rows: number } | null;
     }>(
       `
       mutation CleanupClaimFail(
         $orderId: uuid!
-        $statuses: [order_status!]!
+        $expectedStatus: order_status!
         $at: timestamptz!
       ) {
         update_orders(
           where: {
             _and: [
               { id: { _eq: $orderId } }
-              { current_status: { _in: $statuses } }
+              { current_status: { _eq: $expectedStatus } }
             ]
           }
           _set: { current_status: failed, updated_at: $at }
         ) { affected_rows }
       }
     `,
-      { orderId, statuses, at }
+      { orderId, expectedStatus, at }
     );
     return (result?.update_orders?.affected_rows ?? 0) === 1;
   }

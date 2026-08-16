@@ -150,7 +150,10 @@ describe('StripeCaptureService', () => {
 
   it('persists partial amount when syncing an already captured PaymentIntent', async () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
-    stripeService.retrievePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'succeeded',
+      amount_received: 100,
+    });
 
     await expect(
       service.captureOrderPaymentIntent({
@@ -169,6 +172,31 @@ describe('StripeCaptureService', () => {
       status: 'success',
       captured_at: now.toISOString(),
       amount: 100,
+    });
+  });
+
+  it('does not overwrite amount when Stripe already captured the full charge', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'succeeded',
+      amount_received: 125,
+    });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({
+      success: true,
+      message: 'Already captured on Stripe',
+      captured: true,
+    });
+
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'success',
+      captured_at: now.toISOString(),
     });
   });
 
