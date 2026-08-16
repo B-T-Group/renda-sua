@@ -11,5 +11,12 @@
       "command": "NX_DAEMON=false npx nx serve frontend --host 0.0.0.0 --open=false"
     }
   ],
-  "ports": [3000, 4200]
+  "ports": [
+    {
+      "port": 3000
+    },
+    {
+      "port": 4200
+    }
+  ]
 }
