@@ -289,21 +289,16 @@ export class OrderStatusService {
         ? ['cancelled']
         : [],
       confirmed: isBusinessOwner
-        ? ['ready_for_pickup', 'awaiting_shipment', 'shipped', 'cancelled']
+        ? ['ready_for_pickup', 'cancelled']
         : isClient
         ? ['cancelled']
         : [],
-      awaiting_shipment: isBusinessOwner
-        ? ['shipped', 'cancelled']
-        : isClient
-        ? ['cancelled']
-        : [],
-      shipped: isBusinessOwner
-        ? ['in_delivery']
-        : isClient
-        ? ['complete']
-        : [],
-      in_delivery: isClient ? ['complete'] : [],
+      // Carrier shipping must use POST /orders/:id/mark-shipped and
+      // POST /orders/:id/confirm-receipt so capture, settlement, and
+      // inventory run. The generic status endpoint cannot ship or complete.
+      awaiting_shipment: [],
+      shipped: [],
+      in_delivery: [],
       preparing: isBusinessOwner ? ['ready_for_pickup', 'cancelled'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.

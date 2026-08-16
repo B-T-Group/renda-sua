@@ -79,6 +79,16 @@ describe('StripeCaptureService', () => {
     expect(service.resolveCaptureMethodForOrderEntity('CA')).toBe('automatic');
   });
 
+  it('always uses manual capture for pickup and shipping', () => {
+    config.manualCaptureEnabled = false;
+    expect(service.resolveCaptureMethodForOrderEntity('CM', 'pickup')).toBe(
+      'manual'
+    );
+    expect(service.resolveCaptureMethodForOrderEntity('CM', 'shipping')).toBe(
+      'manual'
+    );
+  });
+
   it('captures an authorized manual transaction and records the capture time', async () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
     stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
