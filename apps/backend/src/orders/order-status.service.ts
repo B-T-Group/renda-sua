@@ -35,7 +35,9 @@ export class OrderStatusService {
     const actor = this.isAuthorizedBusinessActor(actorOrOptions)
       ? actorOrOptions
       : undefined;
-    const options = actor ? explicitOptions : actorOrOptions;
+    const options: { viaCancelEndpoint?: boolean } | undefined = actor
+      ? explicitOptions
+      : (actorOrOptions as { viaCancelEndpoint?: boolean } | undefined);
     const user = actor
       ? ({
           id: actor.userId,
