@@ -286,8 +286,9 @@ export class OrderCleanupService {
   ): Promise<void> {
     const payment = await this.getOrderPaymentFields(order.id);
     let paymentFinalized = false;
+    let paymentStatus: 'cancelled' | 'refunded' | 'paid' | null = null;
     try {
-      const paymentStatus = await this.releaseOrRefundStripe({
+      paymentStatus = await this.releaseOrRefundStripe({
         ...order,
         ...payment,
       });
@@ -301,6 +302,22 @@ export class OrderCleanupService {
         notifyViaStatusUpdated
       );
     } catch (error) {
+      if (paymentFinalized) {
+        this.logger.error(
+          `Post-payment cancel finalization failed for ${order.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        if (paymentStatus) {
+          await this.patchPaymentStatus(order.id, paymentStatus).catch(
+            (patchError: any) =>
+              this.logger.error(
+                `Payment status sync retry failed for ${order.id}: ${patchError?.message}`
+              )
+          );
+        }
+        return;
+      }
       (error as { paymentFinalized?: boolean }).paymentFinalized =
         paymentFinalized;
       throw error;
