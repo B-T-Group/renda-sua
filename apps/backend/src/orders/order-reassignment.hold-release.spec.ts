@@ -47,6 +47,9 @@ describe('OrderReassignmentService hold release safety', () => {
       if (mutation.includes('CancelHold')) {
         return { update_order_holds: { affected_rows: 1 } };
       }
+      if (mutation.includes('RevertSystemDrop')) {
+        return { update_orders: { affected_rows: 1 } };
+      }
       if (mutation.includes('Hist')) {
         return { insert_order_status_history: { affected_rows: 1 } };
       }
@@ -107,18 +110,23 @@ describe('OrderReassignmentService hold release safety', () => {
     ).toBe(true);
   });
 
-  it('does not cancel hold row when ledger release fails', async () => {
+  it('rolls back reassignment when ledger release fails', async () => {
     const { service, executeMutation, accountsService } = buildService({
       releaseSuccess: false,
     });
 
     const result = await service.reassignOrder('order-1', 'pickup_sla');
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
     expect(
       executeMutation.mock.calls.some((c) => String(c[0]).includes('CancelHold'))
     ).toBe(false);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('RevertSystemDrop')
+      )
+    ).toBe(true);
   });
 
   it('skips ledger work when hold is not active', async () => {

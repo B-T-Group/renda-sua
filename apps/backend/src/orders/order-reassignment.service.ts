@@ -126,22 +126,47 @@ export class OrderReassignmentService {
     );
     const affected = result?.update_orders?.affected_rows ?? 0;
     if (affected !== 1) return false;
-    await this.releaseHold(order);
+    const released = await this.releaseHold(order);
+    if (!released) {
+      await this.revertSystemDrop(order);
+      return false;
+    }
     await this.insertHistory(order.id, 'System reassigned order after pickup SLA');
     return true;
   }
 
-  private async releaseHold(order: MonitoredPickupOrder): Promise<void> {
+  private async releaseHold(order: MonitoredPickupOrder): Promise<boolean> {
     const hold = await this.fetchActiveAgentHold(order.id);
-    if (!hold) return;
+    if (!hold) return true;
     const credited = await this.creditHoldRelease(order, hold);
     if (!credited) {
       this.logger.error(
         `Hold row left active for order ${order.order_number}: release failed`
       );
-      return;
+      return false;
     }
     await this.cancelHoldRow(hold.id);
+    return true;
+  }
+
+  private async revertSystemDrop(order: MonitoredPickupOrder): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation RevertSystemDrop($id: uuid!, $agentId: uuid!) {
+        update_orders(
+          where: {
+            id: { _eq: $id }
+            assigned_agent_id: { _is_null: true }
+            current_status: { _eq: ready_for_pickup }
+          }
+          _set: {
+            assigned_agent_id: $agentId
+            current_status: assigned_to_agent
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { id: order.id, agentId: order.assigned_agent_id }
+    );
   }
 
   private async fetchActiveAgentHold(
