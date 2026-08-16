@@ -1,3 +1,7 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -1705,11 +1709,22 @@ describe('OrdersService', () => {
           accountId: 'acct-client',
           amount: 15,
           transactionType: 'release',
+          referenceId: 'order-123',
         })
       );
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('SwitchToPickup'),
         expect.objectContaining({ id: 'order-123', total: 40 })
+      );
+      const switchCallIndex = hasuraSystemService.executeMutation.mock.calls.findIndex(
+        ([mutation]) => String(mutation).includes('SwitchToPickup')
+      );
+      expect(
+        accountsService.registerTransaction.mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        hasuraSystemService.executeMutation.mock.invocationCallOrder[
+          switchCallIndex
+        ]
       );
     });
 

@@ -1,3 +1,7 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+
 import { OrderCleanupService } from './order-cleanup.service';
 import {
   CANCEL_REASON_NOT_PICKED_UP_IN_TIME,
@@ -323,6 +327,43 @@ describe('OrderCleanupService', () => {
         'failed',
         null
       );
+    });
+
+    it('does not report success when failed_delivery insert fails', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          delivery_failure_reasons: [{ id: 'reason-uuid' }],
+        })
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'D1',
+              current_status: 'out_for_delivery',
+              pickup_by: '2026-08-01T12:00:00.000Z',
+              client: { user: { timezone: 'UTC' } },
+              order_items: [],
+              failed_delivery: [],
+            },
+          ],
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimFail')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        if (String(mutation).includes('CleanupInsertFailedDelivery')) {
+          return Promise.reject(new Error('insert failed'));
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-03T13:00:00.000Z'));
+      await expect(service.failMissedDeliveryOrders(24, 100)).rejects.toThrow(
+        'insert failed'
+      );
+      jest.useRealTimers();
+
+      expect(orderQueue.sendOrderStatusUpdatedMessage).not.toHaveBeenCalled();
     });
 
     it('no-ops when CAS claim loses complete/delivered race', async () => {

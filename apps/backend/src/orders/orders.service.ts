@@ -1630,8 +1630,15 @@ export class OrdersService {
     const perKmFee = Number((order as any).per_km_delivery_fee ?? 0);
     const waived = baseFee + perKmFee;
     const newTotal = Math.max(0, Number(order.total_amount) - waived);
+    const hold = await this.findOrderHold(order.id);
+    const heldDelivery = Number(hold?.delivery_fees || 0);
+    if (heldDelivery > 0 && (order as any).payment_status === 'paid') {
+      await this.releaseClientDeliveryHold(order, heldDelivery);
+    }
     await this.persistSwitchToPickupClaim(order.id, newTotal);
-    await this.clearWaivedDeliveryHold(order);
+    if (hold && heldDelivery > 0) {
+      await this.updateOrderHold(hold.id, { delivery_fees: 0 });
+    }
   }
 
   /** CAS: only switch while still unassigned delivery ready_for_pickup. */
@@ -1670,21 +1677,6 @@ export class OrdersService {
     }
   }
 
-  /**
-   * Prepaid (wallet/mobile) orders already held the delivery fee. Zero the hold
-   * and release it so settlement does not charge a waived fee.
-   */
-  private async clearWaivedDeliveryHold(order: Orders): Promise<void> {
-    const hold = await this.findOrderHold(order.id);
-    if (!hold) return;
-    const heldDelivery = Number(hold.delivery_fees || 0);
-    if (heldDelivery <= 0) return;
-    if ((order as any).payment_status === 'paid') {
-      await this.releaseClientDeliveryHold(order, heldDelivery);
-    }
-    await this.updateOrderHold(hold.id, { delivery_fees: 0 });
-  }
-
   private async findOrderHold(
     orderId: string
   ): Promise<{ id: string; delivery_fees?: number | null } | null> {
@@ -1721,7 +1713,7 @@ export class OrdersService {
       amount,
       transactionType: 'release',
       memo: `Delivery fee waived after switch to pickup for order ${order.order_number}`,
-      referenceId: `${order.id}:switch_to_pickup_delivery_release`,
+      referenceId: order.id,
     });
     if (!release?.success) {
       throw new HttpException(

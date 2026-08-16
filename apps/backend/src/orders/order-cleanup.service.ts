@@ -623,6 +623,7 @@ export class OrderCleanupService {
       this.logger.error(
         `failed_deliveries insert failed for ${orderId}: ${error?.message}`
       );
+      throw error;
     }
   }
 
