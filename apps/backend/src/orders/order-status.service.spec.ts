@@ -23,6 +23,12 @@ describe('OrderStatusService', () => {
     agent: { id: 'agent-1' },
   };
 
+  const businessUser = {
+    id: 'user-business-1',
+    active_persona: 'business',
+    business: { id: 'business-1' },
+  };
+
   const baseOrder = {
     id: 'order-123',
     order_number: 'ORD-123',
@@ -107,6 +113,60 @@ describe('OrderStatusService', () => {
       ).rejects.toThrow(
         'Invalid status transition from ready_for_pickup to complete'
       );
+    });
+  });
+
+  describe('carrier shipping transitions', () => {
+    const shippingOrder = {
+      ...baseOrder,
+      current_status: 'confirmed',
+    };
+
+    it('lets the business move confirmed to awaiting_shipment or shipped', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: shippingOrder,
+      });
+      mockSuccessfulUpdate('awaiting_shipment');
+
+      await expect(
+        service.updateOrderStatus('order-123', 'awaiting_shipment')
+      ).resolves.toEqual(
+        expect.objectContaining({ current_status: 'awaiting_shipment' })
+      );
+
+      mockSuccessfulUpdate('shipped');
+      await expect(
+        service.updateOrderStatus('order-123', 'shipped')
+      ).resolves.toEqual(expect.objectContaining({ current_status: 'shipped' }));
+    });
+
+    it('lets the client complete a shipped order but not the business', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...shippingOrder, current_status: 'shipped' },
+      });
+      mockSuccessfulUpdate('complete');
+
+      await expect(
+        service.updateOrderStatus('order-123', 'complete')
+      ).resolves.toEqual(expect.objectContaining({ current_status: 'complete' }));
+
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      await expect(
+        service.updateOrderStatus('order-123', 'complete')
+      ).rejects.toThrow('Invalid status transition from shipped to complete');
+    });
+
+    it('rejects agent transitions on shipping statuses', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...shippingOrder, current_status: 'awaiting_shipment' },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'shipped')
+      ).rejects.toThrow('Unauthorized to update this order');
     });
   });
 

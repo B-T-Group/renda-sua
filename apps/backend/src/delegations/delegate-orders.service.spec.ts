@@ -17,16 +17,28 @@ describe('DelegateOrdersService location scope', () => {
   };
 
   let hasura: { executeQuery: jest.Mock };
-  let orders: { getOrderById: jest.Mock };
+  let orders: {
+    getOrderById: jest.Mock;
+    cancelOrder: jest.Mock;
+    completePreparation: jest.Mock;
+  };
+  let orderStatus: { updateOrderStatus: jest.Mock };
   let service: DelegateOrdersService;
 
   beforeEach(() => {
     hasura = { executeQuery: jest.fn() };
-    orders = { getOrderById: jest.fn() };
+    orders = {
+      getOrderById: jest.fn(),
+      cancelOrder: jest.fn().mockResolvedValue({ success: true }),
+      completePreparation: jest.fn().mockResolvedValue({ success: true }),
+    };
+    orderStatus = {
+      updateOrderStatus: jest.fn().mockResolvedValue({ id: 'ord-1' }),
+    };
     service = new DelegateOrdersService(
       hasura as any,
       orders as any,
-      {} as any,
+      orderStatus as any,
       {} as any,
       {} as any,
       {} as any,
@@ -83,6 +95,57 @@ describe('DelegateOrdersService location scope', () => {
     expect(listQuery).toMatch(/address\s*\{[\s\S]*\bstate\b[\s\S]*\bcountry\b/);
     expect(hasura.executeQuery.mock.calls[1][1]).toEqual({
       filters: { business_location_id: { _eq: 'loc-1' } },
+    });
+  });
+
+  describe('updateStatus money-safe routing', () => {
+    beforeEach(() => {
+      hasura.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          id: 'ord-1',
+          business_id: 'biz-1',
+          business_location_id: 'loc-1',
+        },
+      });
+    });
+
+    it('cancels through cancelOrder so holds and inventory are released', async () => {
+      await service.updateStatus(ctx, 'ord-1', 'cancelled');
+      expect(orders.cancelOrder).toHaveBeenCalledWith(
+        { orderId: 'ord-1' },
+        { userId: 'user-1', businessId: 'biz-1', locationId: 'loc-1' }
+      );
+      expect(orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('routes ready_for_pickup through completePreparation', async () => {
+      await service.updateStatus(ctx, 'ord-1', 'ready_for_pickup');
+      expect(orders.completePreparation).toHaveBeenCalledWith(
+        { orderId: 'ord-1' },
+        { userId: 'user-1', businessId: 'biz-1', locationId: 'loc-1' }
+      );
+    });
+
+    it('blocks PATCH confirmed because a time slot is required', async () => {
+      await expect(
+        service.updateStatus(ctx, 'ord-1', 'confirmed')
+      ).rejects.toThrow(/time slot/);
+      expect(orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('keeps other statuses on the generic status service', async () => {
+      await expect(
+        service.updateStatus(ctx, 'ord-1', 'preparing')
+      ).resolves.toEqual({
+        success: true,
+        order: { id: 'ord-1' },
+        message: 'Order status updated successfully',
+      });
+      expect(orderStatus.updateOrderStatus).toHaveBeenCalledWith(
+        'ord-1',
+        'preparing',
+        { userId: 'user-1', businessId: 'biz-1', locationId: 'loc-1' }
+      );
     });
   });
 });

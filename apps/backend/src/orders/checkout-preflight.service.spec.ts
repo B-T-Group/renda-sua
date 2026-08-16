@@ -46,6 +46,8 @@ function makeInventoryRow(overrides: {
   itemName?: string;
   canAcceptOrders?: boolean;
   phoneVerified?: boolean;
+  shippingEnabled?: boolean;
+  shippingPrice?: number;
 } = {}) {
   const sellerCountry = overrides.sellerCountry ?? 'CM';
   const isStripeCountry = sellerCountry === 'CA';
@@ -79,6 +81,9 @@ function makeInventoryRow(overrides: {
       max_order_quantity: null,
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
+      shipping_enabled: overrides.shippingEnabled ?? false,
+      shipping_price: overrides.shippingPrice ?? 0,
+      shipping_currency: overrides.currency ?? 'XAF',
       item_variants: [],
     },
   };
@@ -544,6 +549,98 @@ describe('CheckoutPreflightService', () => {
     expect(result.delivery_availability).toBeNull();
     expect(result.groups[0]?.delivery_availability).toBeNull();
     expect(result.groups[0]?.pickup_eligible).toBe(true);
+  });
+
+  it('blocks carrier shipping when an item is not shipping-enabled', async () => {
+    mockInventory([
+      makeInventoryRow({ shippingEnabled: true, shippingPrice: 500 }),
+      makeInventoryRow({
+        id: 'inv-2',
+        shippingEnabled: false,
+        itemName: 'Local only',
+      }),
+    ]);
+
+    const result = await service.resolve(
+      {
+        items: [
+          { business_inventory_id: 'inv-1', quantity: 1 },
+          { business_inventory_id: 'inv-2', quantity: 1 },
+        ],
+        fulfillment_method: 'shipping',
+        payment_timing: 'pay_now',
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.can_proceed).toBe(false);
+    expect(
+      result.blocking_errors.some((e) => e.code === 'SHIPPING_UNAVAILABLE')
+    ).toBe(true);
+  });
+
+  it('blocks carrier shipping unless payment timing is pay_now', async () => {
+    mockInventory([
+      makeInventoryRow({
+        shippingEnabled: true,
+        shippingPrice: 500,
+        payOnDelivery: true,
+      }),
+    ]);
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        fulfillment_method: 'shipping',
+        payment_timing: 'pay_at_delivery',
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.can_proceed).toBe(false);
+    expect(
+      result.blocking_errors.some((e) => e.code === 'SHIPPING_REQUIRES_PAY_NOW')
+    ).toBe(true);
+  });
+
+  it('adds per-item shipping fees into the group total and skips agent availability', async () => {
+    mockInventory([
+      makeInventoryRow({
+        id: 'inv-1',
+        price: 1000,
+        shippingEnabled: true,
+        shippingPrice: 1500,
+      }),
+      makeInventoryRow({
+        id: 'inv-2',
+        price: 400,
+        shippingEnabled: true,
+        shippingPrice: 250,
+      }),
+    ]);
+
+    const result = await service.resolve(
+      {
+        items: [
+          { business_inventory_id: 'inv-1', quantity: 2 },
+          { business_inventory_id: 'inv-2', quantity: 1 },
+        ],
+        fulfillment_method: 'shipping',
+        payment_timing: 'pay_now',
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.can_proceed).toBe(true);
+    expect(result.requires_address_for_payment).toBe(true);
+    expect(deliveryAvailabilityService.evaluate).not.toHaveBeenCalled();
+    expect(result.delivery_availability).toBeNull();
+    expect(result.groups[0]?.delivery_fee).toBe(3250);
+    expect(result.groups[0]?.subtotal).toBe(2400);
+    expect(result.groups[0]?.total).toBe(5650);
   });
 
   it('blocks checkout when merchant cannot accept orders', async () => {
