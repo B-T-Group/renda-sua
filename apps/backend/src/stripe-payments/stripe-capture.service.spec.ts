@@ -11,6 +11,7 @@ describe('StripeCaptureService', () => {
   let stripeService: {
     capturePaymentIntent: jest.Mock;
     cancelPaymentIntent: jest.Mock;
+    retrievePaymentIntent: jest.Mock;
   };
   let databaseService: {
     getTransactionByEntityId: jest.Mock;
@@ -145,6 +146,30 @@ describe('StripeCaptureService', () => {
       'tx-123',
       { status: 'success', captured_at: now.toISOString(), amount: 100 }
     );
+  });
+
+  it('persists partial amount when syncing an already captured PaymentIntent', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({
+      success: true,
+      message: 'Already captured on Stripe',
+      captured: true,
+    });
+
+    expect(stripeService.capturePaymentIntent).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'success',
+      captured_at: now.toISOString(),
+      amount: 100,
+    });
   });
 
   it('credits wallet using the persisted (possibly partial) transaction amount', async () => {
