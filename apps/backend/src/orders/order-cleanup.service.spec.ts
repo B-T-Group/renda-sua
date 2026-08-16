@@ -192,6 +192,50 @@ describe('OrderCleanupService', () => {
         notifications.sendPendingPaymentCleanupDigestPush
       ).not.toHaveBeenCalled();
     });
+
+    it('reverts cancelled claim when finalization fails', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'A1',
+              current_status: 'pending_payment',
+              payment_status: 'pending',
+              payment_source: 'mobile_money',
+              client: { user_id: 'c1' },
+              business: { user_id: 'b1' },
+              order_items: [],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        const text = String(mutation);
+        if (text.includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        if (text.includes('CleanupPatchPayment')) {
+          return Promise.reject(new Error('patch failed'));
+        }
+        return Promise.resolve({});
+      });
+
+      await expect(service.cancelStalePendingPaymentOrders(24, 100)).rejects.toThrow(
+        'patch failed'
+      );
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('RevertCancelledClaim')
+        )
+      ).toBe(true);
+      expect(orderQueue.sendOrderCancelledMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe('cancelMissedPickupOrders', () => {

@@ -238,13 +238,42 @@ export class OrderCleanupService {
       notes
     );
     if (!claimed) return false;
-    await this.finalizeClaimedCancel(
-      order,
-      expectedStatus,
-      historyNotes,
-      notifyViaStatusUpdated
-    );
+    try {
+      await this.finalizeClaimedCancel(
+        order,
+        expectedStatus,
+        historyNotes,
+        notifyViaStatusUpdated
+      );
+    } catch (error) {
+      await this.revertCancelledClaim(order.id, expectedStatus);
+      throw error;
+    }
     return true;
+  }
+
+  private async revertCancelledClaim(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertCancelledClaim($orderId: uuid!, $previousStatus: order_status!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: cancelled }
+          }
+          _set: {
+            current_status: $previousStatus
+            cancelled_at: null
+            cancellation_reason_id: null
+            cancellation_notes: null
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { orderId, previousStatus }
+    );
   }
 
   private async finalizeClaimedCancel(

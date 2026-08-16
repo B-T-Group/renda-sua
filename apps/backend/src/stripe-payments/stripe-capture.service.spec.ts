@@ -152,7 +152,7 @@ describe('StripeCaptureService', () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
     stripeService.retrievePaymentIntent.mockResolvedValue({
       status: 'succeeded',
-      amount_received: 100,
+      amount_received: 10000,
     });
 
     await expect(
@@ -179,7 +179,7 @@ describe('StripeCaptureService', () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
     stripeService.retrievePaymentIntent.mockResolvedValue({
       status: 'succeeded',
-      amount_received: 125,
+      amount_received: 12500,
     });
 
     await expect(

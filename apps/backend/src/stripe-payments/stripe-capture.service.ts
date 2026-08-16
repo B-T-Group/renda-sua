@@ -10,6 +10,25 @@ import { StripeService } from './stripe.service';
 
 export type StripeCaptureMethod = 'automatic' | 'manual';
 
+const ZERO_DECIMAL_STRIPE_CURRENCIES = new Set([
+  'BIF',
+  'CLP',
+  'DJF',
+  'GNF',
+  'JPY',
+  'KMF',
+  'KRW',
+  'MGA',
+  'PYG',
+  'RWF',
+  'UGX',
+  'VND',
+  'VUV',
+  'XAF',
+  'XOF',
+  'XPF',
+]);
+
 @Injectable()
 export class StripeCaptureService {
   private readonly logger = new Logger(StripeCaptureService.name);
@@ -85,7 +104,8 @@ export class StripeCaptureService {
         const capturedAt = new Date().toISOString();
         const shouldSyncAmount =
           params.captureAmount != null &&
-          existingPi.amount_received === params.captureAmount;
+          existingPi.amount_received ===
+            this.toStripeMinorUnits(params.captureAmount, tx.currency);
         await this.databaseService.updateTransaction(tx.id, {
           status: 'success',
           captured_at: capturedAt,
@@ -246,6 +266,13 @@ export class StripeCaptureService {
       );
       return { success: false, message: error?.message || 'Capture failed' };
     }
+  }
+
+  private toStripeMinorUnits(amount: number, currency?: string | null): number {
+    const code = currency?.toUpperCase();
+    return Math.round(
+      amount * (code && ZERO_DECIMAL_STRIPE_CURRENCIES.has(code) ? 1 : 100)
+    );
   }
 
   async cancelOrderPaymentIntent(params: {
