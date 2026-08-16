@@ -41,6 +41,14 @@ export class PublicInviteService {
     return { success: true, already_authenticated: false, email: invite.email };
   }
 
+  private assertInviteLocationOwnedByInviter(invite: InvitePreviewRow): void {
+    const inviterBusinessId = invite.invited_by?.business?.id;
+    const locationBusinessId = invite.business_location?.business?.id;
+    if (!inviterBusinessId || inviterBusinessId !== locationBusinessId) {
+      throw new HttpException('Invite is no longer valid', HttpStatus.GONE);
+    }
+  }
+
   private assertLoggedInEmail(
     invitedEmail: string,
     loggedInEmail?: string | null
@@ -83,7 +91,7 @@ export class PublicInviteService {
           id email status expires_at role_id first_name last_name
           business_location_id
           role { id key name }
-          invited_by { first_name }
+          invited_by { first_name business { id } }
           business_location {
             id name
             business { id name }
@@ -100,6 +108,7 @@ export class PublicInviteService {
     if (invite.status !== 'pending' || isInviteExpired(invite.expires_at)) {
       throw new HttpException('Invite is no longer valid', HttpStatus.GONE);
     }
+    this.assertInviteLocationOwnedByInviter(invite);
     return invite;
   }
 
@@ -249,7 +258,10 @@ interface InvitePreviewRow {
   last_name?: string | null;
   business_location_id: string;
   role?: { id: string; key: string; name: string } | null;
-  invited_by?: { first_name?: string | null } | null;
+  invited_by?: {
+    first_name?: string | null;
+    business?: { id?: string | null } | null;
+  } | null;
   business_location?: {
     id: string;
     name?: string | null;
