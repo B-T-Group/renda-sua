@@ -256,6 +256,28 @@ export class DelegateOrdersController {
     return this.service.confirmPickup(req.delegation, id, body);
   }
 
+  @Post('orders/:id/mark-shipped')
+  @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
+  @ApiOperation({ summary: 'Mark a shipping order as shipped' })
+  async markShipped(
+    @Req() req: { delegation: DelegationAccessContext },
+    @Param('id') id: string,
+    @Body() body?: { tracking_number?: string; carrier?: string }
+  ) {
+    return this.service.markShipped(req.delegation, id, body);
+  }
+
+  @Patch('orders/:id/tracking')
+  @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
+  @ApiOperation({ summary: 'Update carrier tracking for a shipped order' })
+  async updateTracking(
+    @Req() req: { delegation: DelegationAccessContext },
+    @Param('id') id: string,
+    @Body() body: { tracking_number: string; carrier?: string }
+  ) {
+    return this.service.updateTracking(req.delegation, id, body);
+  }
+
   @Post('orders/:id/pickup-not-ready')
   @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
   async pickupNotReady(

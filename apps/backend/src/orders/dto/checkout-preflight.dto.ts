@@ -59,12 +59,13 @@ export class CheckoutPreflightDto {
   provisional_country?: string;
 
   @ApiPropertyOptional({
-    enum: ['delivery', 'pickup'],
+    enum: ['delivery', 'pickup', 'shipping'],
     default: 'delivery',
+    description: 'delivery = agent-based local delivery, pickup = store pickup, shipping = carrier shipping with tracking',
   })
   @IsOptional()
-  @IsIn(['delivery', 'pickup'])
-  fulfillment_method?: 'delivery' | 'pickup';
+  @IsIn(['delivery', 'pickup', 'shipping'])
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
 
   @ApiPropertyOptional({
     enum: ['pay_now', 'pay_at_delivery', 'pay_at_pickup'],
@@ -270,6 +271,12 @@ export class CheckoutGroupDto {
       'True when every item in this group supports store pickup checkout.',
   })
   pickup_eligible?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every item in this group supports carrier shipping checkout.',
+  })
+  shipping_eligible?: boolean;
 
   @ApiProperty({ type: [CheckoutItemLineDto] })
   items!: CheckoutItemLineDto[];

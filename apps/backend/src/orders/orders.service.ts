@@ -176,7 +176,7 @@ export interface OrderWithDetails {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id: string;
-  fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   subtotal: number;
   base_delivery_fee: number;
   per_km_delivery_fee: number;
@@ -192,6 +192,10 @@ export interface OrderWithDetails {
   payment_status?: string;
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   verified_agent_delivery?: boolean;
+  shipping_tracking_number?: string;
+  shipping_carrier?: string;
+  shipped_at?: string;
+  received_at?: string;
   created_at: string;
   updated_at: string;
   completed_at?: string | null;
@@ -5087,6 +5091,10 @@ export class OrdersService {
           assigned_agent_id
           delivery_address_id
           fulfillment_method
+          shipping_tracking_number
+          shipping_carrier
+          shipped_at
+          received_at
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5289,6 +5297,10 @@ export class OrdersService {
           assigned_agent_id
           delivery_address_id
           fulfillment_method
+          shipping_tracking_number
+          shipping_carrier
+          shipped_at
+          received_at
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -7657,9 +7669,11 @@ export class OrdersService {
     this.requireActivePersona(user, 'client', 'Only clients can create orders');
     const client = this.requireClientRecord(user);
 
-    const fulfillmentMethod: 'delivery' | 'pickup' =
-      orderData.fulfillment_method === 'pickup' ||
-      orderData.payment_timing === 'pay_at_pickup'
+    const fulfillmentMethod: 'delivery' | 'pickup' | 'shipping' =
+      orderData.fulfillment_method === 'shipping'
+        ? 'shipping'
+        : orderData.fulfillment_method === 'pickup' ||
+          orderData.payment_timing === 'pay_at_pickup'
         ? 'pickup'
         : 'delivery';
 
@@ -7677,10 +7691,10 @@ export class OrdersService {
       postal_code: string;
       country: string;
     } | null = null;
-    if (fulfillmentMethod === 'delivery') {
+    if (fulfillmentMethod === 'delivery' || fulfillmentMethod === 'shipping') {
       if (!clientDeliveryAddressId) {
         throw new HttpException(
-          'Delivery address ID is required',
+          `Delivery address ID is required for ${fulfillmentMethod}`,
           HttpStatus.BAD_REQUEST
         );
       }
@@ -7772,6 +7786,9 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             pay_at_pickup_enabled
+            shipping_enabled
+            shipping_price
+            shipping_currency
             currency
             weight
             max_order_quantity
@@ -7998,6 +8015,24 @@ export class OrdersService {
       }
     }
 
+    if (fulfillmentMethod === 'shipping') {
+      const anyNotShippingEnabled = businessInventories.some(
+        (inv) => inv?.item?.shipping_enabled !== true
+      );
+      if (anyNotShippingEnabled) {
+        throw new HttpException(
+          'Carrier shipping is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (paymentTiming !== 'pay_now') {
+        throw new HttpException(
+          'Carrier shipping requires payment at checkout (pay_now)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
     // intentionally carries no internal reason.
@@ -8022,16 +8057,34 @@ export class OrdersService {
       return sum + w * orderData.items[idx].quantity;
     }, 0);
 
-    // Calculate delivery fee (waived for pickup)
-    const deliveryFeeInfo =
-      fulfillmentMethod === 'pickup'
-        ? this.zeroPickupDeliveryFee(currency)
-        : await this.calculateItemDeliveryFee(
-            orderData.items[0].business_inventory_id,
-            clientDeliveryAddressId,
-            orderData.requires_fast_delivery,
-            totalWeight
-          );
+    // Calculate delivery fee (waived for pickup, sum shipping prices for shipping)
+    let deliveryFeeInfo;
+    if (fulfillmentMethod === 'pickup') {
+      deliveryFeeInfo = this.zeroPickupDeliveryFee(currency);
+    } else if (fulfillmentMethod === 'shipping') {
+      // Calculate shipping fee: sum of all item shipping prices * quantities
+      let totalShippingFee = 0;
+      for (let i = 0; i < orderData.items.length; i++) {
+        const inv = lineContexts[i].inventory;
+        const itemShippingPrice = Number(inv.item?.shipping_price ?? 0);
+        totalShippingFee += itemShippingPrice * orderData.items[i].quantity;
+      }
+      deliveryFeeInfo = {
+        baseDeliveryFee: totalShippingFee,
+        perKmDeliveryFee: 0,
+        deliveryFee: totalShippingFee,
+        currency,
+        baseDeliveryFeeBeforeDiscount: totalShippingFee,
+        firstOrderPromo: false,
+      };
+    } else {
+      deliveryFeeInfo = await this.calculateItemDeliveryFee(
+        orderData.items[0].business_inventory_id,
+        clientDeliveryAddressId,
+        orderData.requires_fast_delivery,
+        totalWeight
+      );
+    }
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
     const account = await this.hasuraSystemService.getAccount(
@@ -8892,10 +8945,12 @@ export class OrdersService {
       postal_code: string;
       country: string;
     } | null;
-    fulfillmentMethod: 'delivery' | 'pickup';
+    fulfillmentMethod: 'delivery' | 'pickup' | 'shipping';
   }) {
     const addressRecord =
-      input.fulfillmentMethod === 'delivery' && input.deliveryAddress
+      (input.fulfillmentMethod === 'delivery' ||
+        input.fulfillmentMethod === 'shipping') &&
+      input.deliveryAddress
         ? input.deliveryAddress
         : input.businessLocationAddress;
     const customerAddress = addressRecord
@@ -9061,7 +9116,7 @@ export class OrdersService {
     captureMethod?: 'automatic' | 'manual';
     taxCheckoutParams?: ReturnType<OrdersService['buildStripeTaxCheckoutParams']>;
     shippingName?: string;
-    fulfillmentMethod?: 'delivery' | 'pickup';
+    fulfillmentMethod?: 'delivery' | 'pickup' | 'shipping';
   }): Promise<{
     transactionId: string;
     reference: string;
@@ -9683,14 +9738,15 @@ export class OrdersService {
       | 'pay_at_delivery'
       | 'pay_at_pickup'
       | undefined;
-    const isPickupFulfillment =
-      (order as any).fulfillment_method === 'pickup';
+    const fulfillment = (order as any).fulfillment_method as string | undefined;
     const itemStatuses =
       paymentTiming === 'pay_at_delivery'
         ? ['assigned_to_agent', 'picked_up', 'out_for_delivery', 'complete']
-        : paymentTiming === 'pay_at_pickup' || isPickupFulfillment
+        : paymentTiming === 'pay_at_pickup' || fulfillment === 'pickup'
           ? ['ready_for_pickup', 'complete']
-          : ['assigned_to_agent', 'picked_up'];
+          : fulfillment === 'shipping'
+            ? ['shipped', 'in_delivery', 'complete']
+            : ['assigned_to_agent', 'picked_up'];
     if (!itemStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
@@ -9803,11 +9859,13 @@ export class OrdersService {
       | 'pay_at_pickup'
       | undefined;
 
+    const fulfillment = (order as any).fulfillment_method as string | undefined;
     const deliveryStatuses =
-      paymentTiming === 'pay_at_pickup' ||
-      (order as any).fulfillment_method === 'pickup'
+      paymentTiming === 'pay_at_pickup' || fulfillment === 'pickup'
         ? ['ready_for_pickup', 'complete']
-        : ['out_for_delivery', 'complete'];
+        : fulfillment === 'shipping'
+          ? ['shipped', 'in_delivery', 'complete']
+          : ['out_for_delivery', 'complete'];
     if (!deliveryStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Delivery settlement requires out_for_delivery or complete; got ${order.current_status}`,
@@ -9884,18 +9942,50 @@ export class OrdersService {
       }
     }
 
-    try {
-      await this.commissionsService.distributeDeliveryCommissions(order);
-    } catch (error: any) {
-      this.logger.error(
-        `Failed delivery commission distribution for order ${order.order_number}: ${error.message}`
-      );
+    if ((order as any).fulfillment_method === 'shipping') {
+      await this.payMerchantShippingFee(order, deliveryAmt);
+    } else {
+      try {
+        await this.commissionsService.distributeDeliveryCommissions(order);
+      } catch (error: any) {
+        this.logger.error(
+          `Failed delivery commission distribution for order ${order.order_number}: ${error.message}`
+        );
+      }
     }
 
     await this.updateOrderHold(orderHold.id, {
       delivery_fees: 0,
       status: 'completed',
       delivery_settlement_completed_at: new Date().toISOString(),
+    });
+  }
+
+  private async payMerchantShippingFee(
+    order: Orders,
+    amount: number
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const userId = order.business?.user_id;
+    if (!userId) {
+      throw new HttpException('Business user not found', HttpStatus.BAD_REQUEST);
+    }
+    const locationId =
+      (order as any).business_location_id ?? order.business_location?.id;
+    const account = await this.hasuraSystemService.getAccount(
+      userId,
+      order.currency,
+      locationId
+    );
+    if (!account) {
+      throw new HttpException('Business account not found', HttpStatus.NOT_FOUND);
+    }
+    await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount,
+      transactionType: 'deposit',
+      memo: `Carrier shipping fee for order ${order.order_number}`,
+      referenceId: order.id,
     });
   }
 
@@ -10648,6 +10738,286 @@ export class OrdersService {
         }`
       );
       throw error;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Carrier Shipping Methods
+  // ---------------------------------------------------------------------------
+
+  private async insertOrderStatusHistory(
+    orderId: string,
+    status: string,
+    userId: string,
+    changedByType: string
+  ): Promise<void> {
+    const mutation = `
+      mutation InsertShippingStatusHistory(
+        $orderId: uuid!,
+        $status: order_status!,
+        $changedByType: String!,
+        $changedByUserId: uuid!
+      ) {
+        insert_order_status_history(objects: [{
+          order_id: $orderId
+          status: $status
+          changed_by_type: $changedByType
+          changed_by_user_id: $changedByUserId
+        }]) {
+          affected_rows
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      status,
+      changedByType,
+      changedByUserId: userId,
+    });
+  }
+
+  private assertShippingFulfillment(order: any, message: string): void {
+    if (order.fulfillment_method !== 'shipping') {
+      throw new HttpException(message, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  /**
+   * Mark a shipping order as shipped with optional tracking number
+   * Business only, updates status to 'shipped'
+   */
+  async markOrderAsShipped(
+    orderId: string,
+    trackingNumber?: string,
+    carrier?: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<any> {
+    const userId = await this.requireBusinessOrderAccess(
+      orderId,
+      'Only businesses can mark orders as shipped',
+      'Unauthorized to mark this order as shipped',
+      actor
+    );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    this.assertShippingFulfillment(
+      order,
+      'Only shipping orders can be marked as shipped'
+    );
+
+    const validStatuses = ['confirmed', 'preparing', 'awaiting_shipment'];
+    if (!validStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Order must be in ${validStatuses.join(' or ')} status to mark as shipped`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Update order
+    const mutation = `
+      mutation MarkOrderAsShipped(
+        $orderId: uuid!,
+        $shippedAt: timestamptz!,
+        $trackingNumber: String,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            current_status: shipped,
+            shipped_at: $shippedAt,
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          current_status
+          shipped_at
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      shippedAt: now,
+      trackingNumber: trackingNumber || null,
+      carrier: carrier || null,
+    });
+
+    const updatedOrder = result.update_orders_by_pk;
+    if (!updatedOrder) {
+      throw new HttpException(
+        'Failed to update order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    // Record status change in history
+    await this.insertOrderStatusHistory(orderId, 'shipped', userId, 'business');
+
+    // TODO: Send notification to client (will be implemented in notifications step)
+    // await this.notificationsService.sendOrderShippedNotification(order, trackingNumber, carrier);
+
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order marked as shipped',
+    };
+  }
+
+  /**
+   * Update tracking information for a shipped order
+   * Business only
+   */
+  async updateTrackingNumber(
+    orderId: string,
+    trackingNumber: string,
+    carrier?: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<any> {
+    await this.requireBusinessOrderAccess(
+      orderId,
+      'Only businesses can update tracking',
+      'Unauthorized to update this order',
+      actor
+    );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    this.assertShippingFulfillment(
+      order,
+      'Only shipping orders have tracking numbers'
+    );
+
+    const mutation = `
+      mutation UpdateTrackingNumber(
+        $orderId: uuid!,
+        $trackingNumber: String!,
+        $carrier: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            shipping_tracking_number: $trackingNumber,
+            shipping_carrier: $carrier
+          }
+        ) {
+          id
+          order_number
+          shipping_tracking_number
+          shipping_carrier
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      trackingNumber,
+      carrier: carrier || null,
+    });
+
+    return {
+      success: true,
+      order: result.update_orders_by_pk,
+      message: 'Tracking information updated',
+    };
+  }
+
+  /**
+   * Client confirms receipt of a shipped order.
+   * Captures authorized card payment, settles holds, then completes.
+   */
+  async confirmOrderReceipt(orderId: string): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'client', 'Only clients can confirm receipt');
+    const order = await this.requireShippingReceiptOrder(orderId, user.id);
+    if (order.current_status !== 'complete') {
+      await this.settleAndCompleteShippingReceipt(orderId, order);
+    }
+    return {
+      success: true,
+      order: await this.getOrderDetails(orderId),
+      message: 'Receipt confirmed; order complete',
+    };
+  }
+
+  private async settleAndCompleteShippingReceipt(
+    orderId: string,
+    order: Orders
+  ): Promise<void> {
+    const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
+    await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
+    await this.processOrderPayment(orderId);
+    await this.processOrderDeliveryPayment(orderId);
+    await this.completeOrderWithSideEffects(
+      order,
+      'Order completed after client confirmed receipt'
+    );
+    await this.stampOrderReceivedAt(orderId);
+  }
+
+  private async requireShippingReceiptOrder(
+    orderId: string,
+    userId: string
+  ): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.client?.user_id !== userId) {
+      throw new HttpException(
+        'Unauthorized to confirm receipt for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    this.assertShippingReceiptAllowed(order);
+    return order;
+  }
+
+  private assertShippingReceiptAllowed(order: Orders): void {
+    if ((order as any).fulfillment_method !== 'shipping') {
+      throw new HttpException(
+        'Only shipping orders can have receipt confirmed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (
+      order.current_status !== 'complete' &&
+      !['shipped', 'in_delivery'].includes(order.current_status)
+    ) {
+      throw new HttpException(
+        'Order must be in shipped or in_delivery status to confirm receipt',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async stampOrderReceivedAt(orderId: string): Promise<void> {
+    try {
+      const at = new Date().toISOString();
+      await this.hasuraSystemService.executeMutation(
+        `mutation StampOrderReceived($orderId: uuid!, $at: timestamptz!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: { received_at: $at }
+          ) { id }
+        }`,
+        { orderId, at }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to stamp received_at for ${orderId}: ${error.message}`
+      );
     }
   }
 }

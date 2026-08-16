@@ -33,6 +33,9 @@ const MUTABLE_ITEM_FIELDS = [
   'is_active',
   'pay_on_delivery_enabled',
   'pay_at_pickup_enabled',
+  'shipping_enabled',
+  'shipping_price',
+  'shipping_currency',
   'status',
   'stripe_tax_code_id',
 ] as const;
@@ -45,6 +48,8 @@ const GET_ITEM_BY_ID = `
       name
       description
       moderation_status
+      shipping_enabled
+      shipping_price
     }
   }
 `;
@@ -72,6 +77,9 @@ const UPDATE_ITEM = `
       item_sub_category_id
       pay_on_delivery_enabled
       pay_at_pickup_enabled
+      shipping_enabled
+      shipping_price
+      shipping_currency
       weight
       weight_unit
       dimensions
@@ -147,6 +155,7 @@ export class ItemsService {
       // surprising status if defaults or presets change.
       moderation_status: 'draft',
     };
+    this.assertShippingFields(itemData);
     const result = await this.hasuraSystemService.executeMutation<{
       insert_items_one: {
         id: string;
@@ -190,10 +199,13 @@ export class ItemsService {
       name: string;
       description: string;
       moderation_status: string;
+      shipping_enabled?: boolean | null;
+      shipping_price?: number | null;
     },
     updates: UpdateItemDto | Record<string, unknown>
   ): Promise<Record<string, unknown> | null> {
     const itemData = this.normalizeUpdatePayload(updates);
+    this.assertShippingFields(itemData, item);
     await this.assertActivationAllowed(item, itemData, itemId);
     const result = await this.hasuraSystemService.executeMutation<{
       update_items_by_pk: Record<string, unknown> | null;
@@ -239,6 +251,8 @@ export class ItemsService {
     name: string;
     description: string;
     moderation_status: string;
+    shipping_enabled?: boolean | null;
+    shipping_price?: number | null;
   }> {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: {
@@ -247,6 +261,8 @@ export class ItemsService {
         name: string;
         description: string;
         moderation_status: string;
+        shipping_enabled?: boolean | null;
+        shipping_price?: number | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -263,6 +279,8 @@ export class ItemsService {
     name: string;
     description: string;
     moderation_status: string;
+    shipping_enabled?: boolean | null;
+    shipping_price?: number | null;
   }> {
     const result = await this.hasuraSystemService.executeQuery<{
       items_by_pk: {
@@ -270,6 +288,8 @@ export class ItemsService {
         name: string;
         description: string;
         moderation_status: string;
+        shipping_enabled?: boolean | null;
+        shipping_price?: number | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -310,6 +330,38 @@ export class ItemsService {
         return [field, value];
       })
     );
+  }
+
+  private assertShippingFields(
+    itemData: Record<string, unknown>,
+    existing?: {
+      shipping_enabled?: boolean | null;
+      shipping_price?: number | null;
+    }
+  ): void {
+    const enabled =
+      itemData.shipping_enabled !== undefined
+        ? itemData.shipping_enabled === true
+        : existing?.shipping_enabled === true;
+    if (!enabled) return;
+    const price =
+      itemData.shipping_price !== undefined
+        ? itemData.shipping_price
+        : existing?.shipping_price;
+    if (!this.shippingPriceIsValid(price)) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'shipping_price is required and must be >= 0 when shipping is enabled',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private shippingPriceIsValid(price: unknown): price is number {
+    return typeof price === 'number' && !Number.isNaN(price) && price >= 0;
   }
 
   private resolveWeightUnit(value: unknown): string | null {

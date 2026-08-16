@@ -41,11 +41,11 @@ export class StripeCaptureService {
 
   resolveCaptureMethodForOrderEntity(
     countryCode?: string,
-    fulfillment?: 'delivery' | 'pickup'
+    fulfillment?: 'delivery' | 'pickup' | 'shipping'
   ): StripeCaptureMethod {
-    // Pickup orders always authorize at placement and capture at store
-    // handoff, regardless of the env-gated manual-capture rollout.
-    if (fulfillment === 'pickup') return 'manual';
+    // Pickup and carrier shipping authorize at placement and capture at
+    // handoff/receipt, regardless of the env-gated manual-capture rollout.
+    if (fulfillment === 'pickup' || fulfillment === 'shipping') return 'manual';
     return this.isManualCaptureEnabledForCountry(countryCode)
       ? 'manual'
       : 'automatic';

@@ -127,6 +127,34 @@ export class DelegateOrdersService {
     });
   }
 
+  async markShipped(
+    ctx: DelegationAccessContext,
+    orderId: string,
+    body?: { tracking_number?: string; carrier?: string }
+  ) {
+    await this.requireOrderInLocation(ctx, orderId);
+    return this.orders.markOrderAsShipped(
+      orderId,
+      body?.tracking_number,
+      body?.carrier,
+      this.actor(ctx)
+    );
+  }
+
+  async updateTracking(
+    ctx: DelegationAccessContext,
+    orderId: string,
+    body: { tracking_number: string; carrier?: string }
+  ) {
+    await this.requireOrderInLocation(ctx, orderId);
+    return this.orders.updateTrackingNumber(
+      orderId,
+      body.tracking_number,
+      body?.carrier,
+      this.actor(ctx)
+    );
+  }
+
   async pickupNotReady(
     ctx: DelegationAccessContext,
     orderId: string,

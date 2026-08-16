@@ -564,6 +564,20 @@ export class BusinessLocationTransferService {
             business_id: { _eq: $fromBusinessId }
           }
         ) { affected_rows }
+        update_location_delegations(
+          where: {
+            business_location_id: { _eq: $locationId }
+            status: { _eq: "active" }
+          }
+          _set: { status: "revoked", updated_at: $now }
+        ) { affected_rows }
+        update_location_delegation_invites(
+          where: {
+            business_location_id: { _eq: $locationId }
+            status: { _eq: "pending" }
+          }
+          _set: { status: "revoked", updated_at: $now }
+        ) { affected_rows }
       }
     `;
     const result = await this.hasuraSystem.executeMutation<{

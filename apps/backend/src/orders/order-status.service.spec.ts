@@ -110,6 +110,36 @@ describe('OrderStatusService', () => {
     });
   });
 
+  describe('updateOrderStatus shipping backdoor', () => {
+    const businessUser = {
+      id: 'user-business-1',
+      active_persona: 'business',
+      business: { id: 'business-1' },
+    };
+
+    it('rejects business confirmed → shipped on the generic status endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'confirmed' },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'shipped')
+      ).rejects.toThrow('Invalid status transition from confirmed to shipped');
+    });
+
+    it('rejects client shipped → complete on the generic status endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'shipped' },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'complete')
+      ).rejects.toThrow('Invalid status transition from shipped to complete');
+    });
+  });
+
   describe('updateOrderStatus after agent assignment', () => {
     it('rejects a client cancel once the order is assigned to an agent', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);

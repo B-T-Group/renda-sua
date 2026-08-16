@@ -7,11 +7,13 @@ describe('ItemsService privileged field filtering', () => {
     name: 'Old name',
     description: 'Old description',
     moderation_status: 'draft',
+    shipping_enabled: false,
+    shipping_price: null,
   };
 
-  function createService() {
+  function createService(item = ownedItem) {
     const hasuraUser = {
-      executeQuery: jest.fn().mockResolvedValue({ items_by_pk: ownedItem }),
+      executeQuery: jest.fn().mockResolvedValue({ items_by_pk: item }),
     };
     const hasuraSystem = {
       executeMutation: jest.fn(),
@@ -73,5 +75,71 @@ describe('ItemsService privileged field filtering', () => {
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'New name',
     });
+  });
+
+  it('persists shipping fields when updating an item', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', shipping_enabled: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      shipping_enabled: true,
+      shipping_price: 2500,
+      shipping_currency: 'XAF',
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      shipping_enabled: true,
+      shipping_price: 2500,
+      shipping_currency: 'XAF',
+    });
+  });
+
+  it('enables shipping using the existing shipping_price when price is omitted', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      shipping_enabled: false,
+      shipping_price: 2500,
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', shipping_enabled: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      shipping_enabled: true,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      shipping_enabled: true,
+    });
+  });
+
+  it('rejects shipping_enabled without a valid shipping_price', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.updateItem('business-1', 'item-1', {
+        shipping_enabled: true,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects clearing shipping_price while shipping remains enabled', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      shipping_enabled: true,
+      shipping_price: 2500,
+    });
+
+    await expect(
+      service.updateItem('business-1', 'item-1', {
+        shipping_price: null,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
 });

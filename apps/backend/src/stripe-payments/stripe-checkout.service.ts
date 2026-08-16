@@ -27,7 +27,7 @@ export interface CreateCheckoutParams {
   allowedShippingCountries?: string[];
   shippingName?: string;
   /** Order fulfillment for success-page copy (pickup vs delivery charge timing). */
-  fulfillmentMethod?: 'delivery' | 'pickup';
+  fulfillmentMethod?: 'delivery' | 'pickup' | 'shipping';
 }
 
 export interface CreateCheckoutResult {
