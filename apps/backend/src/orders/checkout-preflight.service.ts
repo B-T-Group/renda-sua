@@ -138,11 +138,9 @@ export class CheckoutPreflightService {
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
 
-    const fulfillment: 'delivery' | 'pickup' | 'shipping' =
-      dto.fulfillment_method === 'shipping'
-        ? 'shipping'
-        : dto.fulfillment_method === 'pickup' ||
-          dto.payment_timing === 'pay_at_pickup'
+    const fulfillment: 'delivery' | 'pickup' =
+      dto.fulfillment_method === 'pickup' ||
+      dto.payment_timing === 'pay_at_pickup'
         ? 'pickup'
         : 'delivery';
 

@@ -1,0 +1,61 @@
+---
+description: Make UI effortless — obvious purpose, one primary action, remove before adding
+globs: apps/frontend/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Effortless UI
+
+The goal is **not** prettier. The goal is **effortless**.
+
+A first-time user should know within 2–3 seconds: where they are, what they can do, what to do next, what matters, and what to ignore. If those answers are not obvious, redesign the screen.
+
+## Every screen must
+
+- One purpose, one obvious primary action
+- Feel calm and uncluttered; whitespace is hierarchy (prefer spacing over borders)
+- Be usable without explanation, onboarding walls, or tooltips for basic actions
+- Follow existing Material-UI patterns, theme tokens, and i18n (`t('key', 'Default')`)
+
+## Hierarchy (only one primary CTA)
+
+1. Primary user goal  
+2. Current task  
+3. Supporting information  
+4. Secondary actions  
+5. Rare actions (hide or bury)
+
+If everything attracts attention, nothing does.
+
+## Remove before adding
+
+Challenge every element: Does this need to exist *now*? Can it wait, merge, be disclosed later, or be automated?
+
+Remove unnecessary clicks, cards, sections, buttons, icons, labels, borders, dividers, and copy. Prefer infer / recommend / auto-select over asking.
+
+Icons reinforce labels; they never replace them.
+
+## Rendasua
+
+- Customer, Business, and Agent share one visual language; similar actions look and behave the same
+- Dashboards surface **only the next most important action** — actionable cards, not statistic grids
+- Rare features live in secondary navigation (e.g. Menu), not on the home screen
+- Empty states guide the next successful step; never a blank page
+- Progressive disclosure over showing every option
+- Approachable for low-tech users, efficient for power users
+
+## Before shipping UI
+
+Ask: What can be removed? What competes for attention? What would confuse a first-time user? Fewer steps? Would Apple, Stripe, Notion, or Linear ship this?
+
+```tsx
+// ❌ Competing actions + stats with no next step
+<Button variant="contained">Orders</Button>
+<Button variant="contained">Items</Button>
+<Button variant="contained">Locations</Button>
+<Typography>Revenue: {n}</Typography>
+
+// ✅ One next action; the rest is secondary
+<Button variant="contained">{t('orders.confirmNext', 'Confirm 3 orders')}</Button>
+<Button variant="text">{t('business.menu.viewAll', 'View all')}</Button>
+```
