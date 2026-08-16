@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
 import { HttpException } from '@nestjs/common';
 import {
   fetchStripeEnabledCountries,

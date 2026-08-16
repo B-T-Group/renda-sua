@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
 import { OrderReassignmentService } from './order-reassignment.service';
 
 describe('OrderReassignmentService hold release safety', () => {

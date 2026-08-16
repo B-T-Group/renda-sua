@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
 import { OrderSystemJobsService } from './order-system-jobs.service';
 
 describe('OrderSystemJobsService auto-decline claim race', () => {
