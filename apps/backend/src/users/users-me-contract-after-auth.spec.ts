@@ -51,6 +51,9 @@ describe('UsersController Auth0 /me contract sync', () => {
   let rbacService: {
     getEffectiveAccess: jest.Mock;
   };
+  let locationDelegationsFlag: {
+    isEnabled: jest.Mock;
+  };
 
   const unverifiedBusinessUser = {
     id: 'user-123',
@@ -95,6 +98,9 @@ describe('UsersController Auth0 /me contract sync', () => {
         isSuperuser: false,
       }),
     };
+    locationDelegationsFlag = {
+      isEnabled: jest.fn().mockResolvedValue(false),
+    };
 
     controller = new UsersController(
       hasuraUserService as never,
@@ -110,6 +116,8 @@ describe('UsersController Auth0 /me contract sync', () => {
       businessContractsService as never,
       rbacService as never,
       {} as never,
+      {} as never,
+      locationDelegationsFlag as never,
       {} as never
     );
   });

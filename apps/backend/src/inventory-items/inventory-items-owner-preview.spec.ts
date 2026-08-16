@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
 import { InventoryItemsService } from './inventory-items.service';
 
 describe('InventoryItemsService.resolveOwnerPreview', () => {

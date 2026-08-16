@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
 import { DashboardService } from './dashboard.service';
 
 describe('DashboardService tips reminders fallback', () => {

@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';

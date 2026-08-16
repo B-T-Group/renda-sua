@@ -45,6 +45,9 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       requestReview: jest.fn(),
       resubmitIfRejected: jest.fn(),
     };
+    const paymentRoutingService = {
+      resolveRailForBusiness: jest.fn().mockResolvedValue('stripe'),
+    };
     const merchantLifecycleService = { recompute: jest.fn() };
 
     const service = new BusinessItemsService(
@@ -54,7 +57,7 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       aiService as any,
       itemsService as any,
       itemAiReviewService as any,
-      {} as any,
+      paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
       {} as any

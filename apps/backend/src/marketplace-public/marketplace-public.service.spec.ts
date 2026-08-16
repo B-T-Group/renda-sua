@@ -44,7 +44,7 @@ describe('MarketplacePublicService', () => {
       { cityLimit: 2000, logoLimit: 12 }
     );
     const query = String(hasura.executeQuery.mock.calls[0][0]);
-    expect(query).toContain('can_accept_orders: { _eq: true }');
+    expect(query).toContain('is_storefront_visible: { _eq: true }');
     expect(query).toContain('moderation_status: { _eq: "approved" }');
     expect(query).toContain('current_status: { _in: ["delivered", "complete"] }');
     expect(result).toEqual({

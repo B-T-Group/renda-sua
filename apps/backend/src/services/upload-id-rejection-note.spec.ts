@@ -1,3 +1,6 @@
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: jest.fn(),
+}));
 import {
   formatIdRejectionNote,
   ID_REJECTION_NOTE_PREFIX,
