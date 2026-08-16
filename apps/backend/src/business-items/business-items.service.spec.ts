@@ -219,7 +219,7 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
   });
 
   it('creates inventory when missing on first draft publish', async () => {
-    const { service, updateInventoryItem, createInventoryItem, } =
+    const { service, updateInventoryItem, createInventoryItem } =
       createQuickPublishService('draft');
     const hasuraUserService = (service as any).hasuraUserService;
     hasuraUserService.executeQuery.mockResolvedValue({ business_inventory: [] });
@@ -240,5 +240,32 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
     expect(result.inventory.id).toBe('inv-new');
     expect(createInventoryItem).toHaveBeenCalled();
     expect(updateInventoryItem).not.toHaveBeenCalled();
+  });
+
+  it('updates existing inventory on first draft publish', async () => {
+    const { service, updateInventoryItem, createInventoryItem } =
+      createQuickPublishService('draft');
+    const hasuraSystemService = (service as any).hasuraSystemService;
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_items: {
+        affected_rows: 1,
+        returning: [{ id: itemId, moderation_status: 'pending' }],
+      },
+    });
+
+    const result = await service.quickPublishBusinessItem(businessId, itemId, {
+      locationId,
+      quantity: 5,
+      sellingPrice: 20,
+    });
+
+    expect(result.inventory.id).toBe('inv-existing');
+    expect(updateInventoryItem).toHaveBeenCalledWith(businessId, 'inv-existing', {
+      quantity: 5,
+      unit_cost: 20,
+      selling_price: 20,
+      is_active: true,
+    });
+    expect(createInventoryItem).not.toHaveBeenCalled();
   });
 });

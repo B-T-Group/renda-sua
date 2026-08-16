@@ -275,7 +275,12 @@ export class OrderCleanupService {
     const previousStatus = order.current_status;
     const claimed = await this.claimFailed(order.id);
     if (!claimed) return false;
-    await this.insertFailedDeliveryRecord(order.id, reasonId);
+    try {
+      await this.insertFailedDeliveryRecord(order.id, reasonId);
+    } catch (error) {
+      await this.revertFailedClaim(order.id, previousStatus);
+      throw error;
+    }
     await this.insertSystemHistory(
       order.id,
       'failed',
@@ -283,6 +288,24 @@ export class OrderCleanupService {
     );
     await this.queueFailedStatusUpdate(order.id, previousStatus);
     return true;
+  }
+
+  private async revertFailedClaim(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertFailedClaim($orderId: uuid!, $previousStatus: order_status!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: failed }
+          }
+          _set: { current_status: $previousStatus, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { orderId, previousStatus }
+    );
   }
 
   private async queueFailedStatusUpdate(

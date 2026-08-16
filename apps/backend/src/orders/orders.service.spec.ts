@@ -1720,12 +1720,10 @@ describe('OrdersService', () => {
         ([mutation]) => String(mutation).includes('SwitchToPickup')
       );
       expect(
-        accountsService.registerTransaction.mock.invocationCallOrder[0]
-      ).toBeLessThan(
         hasuraSystemService.executeMutation.mock.invocationCallOrder[
           switchCallIndex
         ]
-      );
+      ).toBeLessThan(accountsService.registerTransaction.mock.invocationCallOrder[0]);
     });
 
     it('does not release a hold for authorized card orders without prepaid holds', async () => {

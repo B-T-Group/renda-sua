@@ -363,6 +363,11 @@ describe('OrderCleanupService', () => {
       );
       jest.useRealTimers();
 
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('RevertFailedClaim')
+        )
+      ).toBe(true);
       expect(orderQueue.sendOrderStatusUpdatedMessage).not.toHaveBeenCalled();
     });
 

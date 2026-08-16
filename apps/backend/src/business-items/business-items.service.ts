@@ -2165,7 +2165,8 @@ export class BusinessItemsService {
       itemId,
       input.locationId,
       quantity,
-      sellingPrice
+      sellingPrice,
+      item.moderation_status
     );
 
     const published = await this.publishBusinessItem(businessId, itemId);
@@ -2180,7 +2181,8 @@ export class BusinessItemsService {
     itemId: string,
     locationId: string,
     quantity: number,
-    sellingPrice: number
+    sellingPrice: number,
+    moderationStatus: string
   ): Promise<string> {
     const existing = await this.hasuraUserService.executeQuery<{
       business_inventory: { id: string }[];
@@ -2203,7 +2205,15 @@ export class BusinessItemsService {
     );
     const existingId = existing.business_inventory?.[0]?.id;
     if (existingId) {
-      // Idempotent re-publish (and retries) must not clobber live stock/pricing.
+      // Idempotent re-publish of already-submitted items must not clobber live stock/pricing.
+      if (!this.isAlreadySubmittedForModeration(moderationStatus)) {
+        await this.updateInventoryItem(businessId, existingId, {
+          quantity,
+          unit_cost: sellingPrice,
+          selling_price: sellingPrice,
+          is_active: true,
+        });
+      }
       return existingId;
     }
     const created = await this.createInventoryItem(businessId, {

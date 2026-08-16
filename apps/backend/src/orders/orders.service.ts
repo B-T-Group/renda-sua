@@ -1632,13 +1632,76 @@ export class OrdersService {
     const newTotal = Math.max(0, Number(order.total_amount) - waived);
     const hold = await this.findOrderHold(order.id);
     const heldDelivery = Number(hold?.delivery_fees || 0);
-    if (heldDelivery > 0 && (order as any).payment_status === 'paid') {
-      await this.releaseClientDeliveryHold(order, heldDelivery);
-    }
     await this.persistSwitchToPickupClaim(order.id, newTotal);
-    if (hold && heldDelivery > 0) {
-      await this.updateOrderHold(hold.id, { delivery_fees: 0 });
+    try {
+      if (hold && heldDelivery > 0) {
+        await this.updateOrderHold(hold.id, { delivery_fees: 0 });
+      }
+      if (heldDelivery > 0 && (order as any).payment_status === 'paid') {
+        await this.releaseClientDeliveryHold(order, heldDelivery);
+      }
+    } catch (error) {
+      await this.rollbackSwitchToPickup(order, hold?.id, heldDelivery);
+      throw error;
     }
+  }
+
+  private async rollbackSwitchToPickup(
+    order: Orders,
+    holdId: string | undefined,
+    heldDelivery: number
+  ): Promise<void> {
+    try {
+      await this.revertSwitchToPickupClaim(order);
+      if (holdId && heldDelivery > 0) {
+        await this.updateOrderHold(holdId, { delivery_fees: heldDelivery });
+      }
+    } catch (rollbackError) {
+      this.logger.error(
+        `Failed to rollback switch-to-pickup for ${order.id}: ${
+          rollbackError instanceof Error ? rollbackError.message : rollbackError
+        }`
+      );
+    }
+  }
+
+  private async revertSwitchToPickupClaim(order: Orders): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertSwitchToPickup(
+        $id: uuid!
+        $fulfillmentMethod: order_fulfillment_method_enum!
+        $baseFee: numeric!
+        $perKmFee: numeric!
+        $total: numeric!
+        $dispatchReadyAt: timestamptz
+        $dispatchRound: Int
+        $dispatchExhaustedAt: timestamptz
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            fulfillment_method: $fulfillmentMethod
+            base_delivery_fee: $baseFee
+            per_km_delivery_fee: $perKmFee
+            total_amount: $total
+            dispatch_ready_at: $dispatchReadyAt
+            dispatch_round: $dispatchRound
+            dispatch_exhausted_at: $dispatchExhaustedAt
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      {
+        id: order.id,
+        fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
+        baseFee: Number((order as any).base_delivery_fee ?? 0),
+        perKmFee: Number((order as any).per_km_delivery_fee ?? 0),
+        total: Number(order.total_amount),
+        dispatchReadyAt: (order as any).dispatch_ready_at ?? null,
+        dispatchRound: (order as any).dispatch_round ?? null,
+        dispatchExhaustedAt: (order as any).dispatch_exhausted_at ?? null,
+      }
+    );
   }
 
   /** CAS: only switch while still unassigned delivery ready_for_pickup. */
