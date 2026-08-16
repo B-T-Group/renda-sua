@@ -36,6 +36,9 @@ const GET_ITEMS = `
       item_sub_category_id
       pay_on_delivery_enabled
       pay_at_pickup_enabled
+      shipping_enabled
+      shipping_price
+      shipping_currency
       weight
       weight_unit
       dimensions
@@ -278,6 +281,9 @@ const GET_SINGLE_ITEM = `
       item_sub_category_id
       pay_on_delivery_enabled
       pay_at_pickup_enabled
+      shipping_enabled
+      shipping_price
+      shipping_currency
       weight
       weight_unit
       dimensions
@@ -510,6 +516,9 @@ const GET_AVAILABLE_ITEMS = `
       description
       pay_on_delivery_enabled
       pay_at_pickup_enabled
+      shipping_enabled
+      shipping_price
+      shipping_currency
       price
       currency
       weight

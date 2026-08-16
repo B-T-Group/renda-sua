@@ -29,6 +29,10 @@ export const GET_ORDERS = gql`
       payment_timing
       reconciliation_status
       fulfillment_method
+      shipping_tracking_number
+      shipping_carrier
+      shipped_at
+      received_at
       created_at
       updated_at
       client {
@@ -198,6 +202,11 @@ export const GET_ORDER_BY_ID = gql`
       payment_method
       payment_status
       verified_agent_delivery
+      fulfillment_method
+      shipping_tracking_number
+      shipping_carrier
+      shipped_at
+      received_at
       created_at
       updated_at
       client {

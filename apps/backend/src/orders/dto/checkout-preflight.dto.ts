@@ -272,6 +272,12 @@ export class CheckoutGroupDto {
   })
   pickup_eligible?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'True when every item in this group supports carrier shipping checkout.',
+  })
+  shipping_eligible?: boolean;
+
   @ApiProperty({ type: [CheckoutItemLineDto] })
   items!: CheckoutItemLineDto[];
 }

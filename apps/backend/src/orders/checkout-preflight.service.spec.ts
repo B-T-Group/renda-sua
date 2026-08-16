@@ -41,6 +41,8 @@ function makeInventoryRow(overrides: {
   currency?: string;
   payOnDelivery?: boolean;
   payAtPickup?: boolean;
+  shippingEnabled?: boolean;
+  shippingPrice?: number | null;
   available?: number;
   price?: number;
   itemName?: string;
@@ -79,6 +81,8 @@ function makeInventoryRow(overrides: {
       max_order_quantity: null,
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
+      shipping_enabled: overrides.shippingEnabled ?? false,
+      shipping_price: overrides.shippingPrice ?? null,
       item_variants: [],
     },
   };
@@ -544,6 +548,101 @@ describe('CheckoutPreflightService', () => {
     expect(result.delivery_availability).toBeNull();
     expect(result.groups[0]?.delivery_availability).toBeNull();
     expect(result.groups[0]?.pickup_eligible).toBe(true);
+  });
+
+  it('marks groups shipping_eligible when every item supports carrier shipping', async () => {
+    mockInventory([
+      makeInventoryRow({
+        id: 'inv-ship',
+        shippingEnabled: true,
+        shippingPrice: 1500,
+      }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-ship', quantity: 1 }],
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.groups[0]?.shipping_eligible).toBe(true);
+  });
+
+  it('is not shipping_eligible when any item lacks shipping_enabled', async () => {
+    mockInventory([
+      makeInventoryRow({ id: 'inv-1', shippingEnabled: true, shippingPrice: 500 }),
+      makeInventoryRow({ id: 'inv-2', shippingEnabled: false }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [
+        { business_inventory_id: 'inv-1', quantity: 1 },
+        { business_inventory_id: 'inv-2', quantity: 1 },
+      ],
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.groups[0]?.shipping_eligible).toBe(false);
+  });
+
+  it('is not shipping_eligible when an enabled item has no shipping_price', async () => {
+    mockInventory([
+      makeInventoryRow({ shippingEnabled: true, shippingPrice: null }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.groups[0]?.shipping_eligible).toBe(false);
+  });
+
+  it('requires a delivery address for carrier shipping payment', async () => {
+    mockInventory([
+      makeInventoryRow({ shippingEnabled: true, shippingPrice: 1500 }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'shipping',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.requires_address_for_payment).toBe(true);
+  });
+
+  it('blocks shipping when the ship-to country does not match the seller', async () => {
+    mockInventory([
+      makeInventoryRow({
+        sellerCountry: 'CM',
+        shippingEnabled: true,
+        shippingPrice: 1500,
+      }),
+    ], { addressCountry: 'CA' });
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      fulfillment_method: 'shipping',
+      delivery_address_id: 'addr-canada',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(
+      result.blocking_errors.some((e) => e.code === 'DELIVERY_COUNTRY_MISMATCH')
+    ).toBe(true);
   });
 
   it('blocks checkout when merchant cannot accept orders', async () => {

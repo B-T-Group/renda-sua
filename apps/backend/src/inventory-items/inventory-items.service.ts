@@ -312,6 +312,9 @@ const CATALOG_INVENTORY_LIST_GQL = `
         description
         pay_on_delivery_enabled
         pay_at_pickup_enabled
+        shipping_enabled
+        shipping_price
+        shipping_currency
         price
         currency
         weight
@@ -2270,6 +2273,9 @@ export class InventoryItemsService {
             description
             pay_on_delivery_enabled
             pay_at_pickup_enabled
+            shipping_enabled
+            shipping_price
+            shipping_currency
             price
             currency
             weight

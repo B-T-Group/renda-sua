@@ -138,11 +138,13 @@ export class CheckoutPreflightService {
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
 
-    const fulfillment: 'delivery' | 'pickup' =
-      dto.fulfillment_method === 'pickup' ||
-      dto.payment_timing === 'pay_at_pickup'
-        ? 'pickup'
-        : 'delivery';
+    const fulfillment: 'delivery' | 'pickup' | 'shipping' =
+      dto.fulfillment_method === 'shipping'
+        ? 'shipping'
+        : dto.fulfillment_method === 'pickup' ||
+            dto.payment_timing === 'pay_at_pickup'
+          ? 'pickup'
+          : 'delivery';
 
     // -----------------------------------------------------------------------
     // 1. Load inventory
@@ -321,7 +323,7 @@ export class CheckoutPreflightService {
     let deliveryCountry: string | null = null;
     let deliveryCoords: { lat: number; lon: number } | null = null;
 
-    if (dto.delivery_address_id && fulfillment === 'delivery') {
+    if (dto.delivery_address_id && this.needsShipToAddress(fulfillment)) {
       try {
         const addrResult = await this.hasuraSystemService.executeQuery(
           ADDRESS_COUNTRY_QUERY,
@@ -425,7 +427,9 @@ export class CheckoutPreflightService {
         (inv: any) => inv.item?.pay_at_pickup_enabled === true
       );
       const allShippingEnabled = group.inventoryRows.every(
-        (inv: any) => inv.item?.shipping_enabled === true
+        (inv: any) =>
+          inv.item?.shipping_enabled === true &&
+          this.isValidShippingPrice(inv.item?.shipping_price)
       );
       const allowedPaymentTimings: Array<'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'> = ['pay_now'];
       if (allPayOnDelivery && rail !== 'stripe') allowedPaymentTimings.push('pay_at_delivery');
@@ -610,6 +614,7 @@ export class CheckoutPreflightService {
         mobile_money_provider: mobileMoneyProvider,
         delivery_availability: availabilityByBusiness.get(businessId) ?? null,
         pickup_eligible: allPayAtPickup,
+        shipping_eligible: allShippingEnabled,
         items: itemLines,
       });
     }
@@ -706,7 +711,7 @@ export class CheckoutPreflightService {
       buyer_rail: buyerRail,
       can_pay_with_wallet: canPayWithWallet,
       wallet_balance: walletBalance,
-      requires_address_for_payment: fulfillment === 'delivery',
+      requires_address_for_payment: this.needsShipToAddress(fulfillment),
       requires_payment_phone: requiresPaymentPhoneOverall,
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
@@ -716,6 +721,12 @@ export class CheckoutPreflightService {
           ? this.aggregateDeliveryAvailability(groups)
           : null,
     };
+  }
+
+  private needsShipToAddress(
+    fulfillment: 'delivery' | 'pickup' | 'shipping'
+  ): boolean {
+    return fulfillment === 'delivery' || fulfillment === 'shipping';
   }
 
   private scheduleInitiateCheckout(
@@ -889,5 +900,11 @@ export class CheckoutPreflightService {
       }
       throw error;
     }
+  }
+
+  private isValidShippingPrice(price: unknown): boolean {
+    if (price === null || price === undefined || price === '') return false;
+    const n = Number(price);
+    return Number.isFinite(n) && n >= 0;
   }
 }

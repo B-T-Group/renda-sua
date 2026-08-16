@@ -22,7 +22,10 @@ jest.mock('../notifications/orchestration/channels/email.channel', () => ({
 describe('OrdersService carrier shipping', () => {
   let service: OrdersService;
   let hasuraUserService: { getUser: jest.Mock; sessionPersonaContext: jest.Mock };
-  let hasuraSystemService: { executeMutation: jest.Mock };
+  let hasuraSystemService: {
+    executeMutation: jest.Mock;
+    getAccount?: jest.Mock;
+  };
 
   const businessUser = {
     id: 'user-123',
@@ -68,7 +71,7 @@ describe('OrdersService carrier shipping', () => {
         { provide: HasuraSystemService, useValue: hasuraSystemService },
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: AccountsService, useValue: { registerTransaction: jest.fn() } },
-        { provide: OrderStatusService, useValue: {} },
+    { provide: OrderStatusService, useValue: {} },
         { provide: StripeCaptureService, useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
@@ -96,13 +99,26 @@ describe('OrdersService carrier shipping', () => {
     hasuraUserService.getUser.mockResolvedValue(businessUser);
     jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(shippingOrder);
     hasuraSystemService.executeMutation.mockResolvedValue({
-      update_orders: {
-        affected_rows: 1,
-        returning: [{ ...shippingOrder, current_status: 'shipped' }],
-      },
+      update_orders_by_pk: { ...shippingOrder, current_status: 'shipped' },
     });
 
     const result = await service.markOrderAsShipped('order-123', 'TRACK-1', 'DHL');
+
+    expect(result.success).toBe(true);
+    expect(result.order.current_status).toBe('shipped');
+  });
+
+  it('marks a preparing shipping order as shipped', async () => {
+    hasuraUserService.getUser.mockResolvedValue(businessUser);
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'preparing',
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_orders_by_pk: { ...shippingOrder, current_status: 'shipped' },
+    });
+
+    const result = await service.markOrderAsShipped('order-123');
 
     expect(result.success).toBe(true);
     expect(result.order.current_status).toBe('shipped');
@@ -127,35 +143,97 @@ describe('OrdersService carrier shipping', () => {
     });
   });
 
-  it('captures, settles, and runs completion side effects on confirmOrderReceipt', async () => {
+  it('confirms receipt for the client owner', async () => {
     hasuraUserService.sessionPersonaContext.mockReturnValue({
       jwtDefaultRole: 'client',
       jwtAllowedRoles: ['client'],
     });
     hasuraUserService.getUser.mockResolvedValue(clientUser);
-    jest
-      .spyOn(service as any, 'getOrderDetails')
-      .mockResolvedValue({ ...shippingOrder, current_status: 'shipped' });
-    const captureSpy = jest
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'shipped',
+    });
+    const capture = jest
       .spyOn(service as any, 'captureStripeAuthorizedOrderIfNeeded')
       .mockResolvedValue(undefined);
-    const paySpy = jest.spyOn(service, 'processOrderPayment').mockResolvedValue();
-    const feeSpy = jest
-      .spyOn(service as any, 'settleShippingFeeToMerchant')
+    const itemPay = jest
+      .spyOn(service, 'processOrderPayment')
       .mockResolvedValue(undefined);
-    const completeSpy = jest
+    const deliveryPay = jest
+      .spyOn(service, 'processOrderDeliveryPayment')
+      .mockResolvedValue(undefined);
+    const complete = jest
       .spyOn(service as any, 'completeOrderWithSideEffects')
       .mockResolvedValue(undefined);
-    hasuraSystemService.executeMutation.mockResolvedValue({
-      update_orders: { affected_rows: 1 },
-    });
+    jest.spyOn(service as any, 'stampOrderReceivedAt').mockResolvedValue(undefined);
 
     const result = await service.confirmOrderReceipt('order-123');
 
     expect(result.success).toBe(true);
-    expect(captureSpy).toHaveBeenCalled();
-    expect(paySpy).toHaveBeenCalledWith('order-123');
-    expect(feeSpy).toHaveBeenCalledWith('order-123');
-    expect(completeSpy).toHaveBeenCalled();
+    expect(capture).toHaveBeenCalled();
+    expect(itemPay).toHaveBeenCalledWith('order-123');
+    expect(deliveryPay).toHaveBeenCalledWith('order-123');
+    expect(complete).toHaveBeenCalled();
+  });
+
+  it('is idempotent when the shipping order is already complete', async () => {
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+    });
+    hasuraUserService.getUser.mockResolvedValue(clientUser);
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'complete',
+    });
+    const capture = jest.spyOn(
+      service as any,
+      'captureStripeAuthorizedOrderIfNeeded'
+    );
+
+    const result = await service.confirmOrderReceipt('order-123');
+
+    expect(result.success).toBe(true);
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('credits the merchant shipping fee and skips delivery commissions', async () => {
+    const order = {
+      ...shippingOrder,
+      current_status: 'shipped',
+      business_location_id: 'loc-1',
+    };
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(order);
+    jest.spyOn(service as any, 'getOrCreateOrderHold').mockResolvedValue({
+      id: 'hold-1',
+      item_settlement_completed_at: '2026-01-01T00:00:00Z',
+      delivery_settlement_completed_at: null,
+      delivery_fees: 1500,
+      agent_hold_amount: 0,
+    });
+    hasuraSystemService.getAccount = jest
+      .fn()
+      .mockResolvedValueOnce({ id: 'client-acct' })
+      .mockResolvedValueOnce({ id: 'biz-acct' });
+    const register = jest
+      .fn()
+      .mockResolvedValue({ success: true, transactionId: 'tx-1' });
+    (service as any).accountsService.registerTransaction = register;
+    const distribute = jest.fn();
+    (service as any).commissionsService = {
+      distributeDeliveryCommissions: distribute,
+    };
+    jest.spyOn(service as any, 'updateOrderHold').mockResolvedValue(undefined);
+
+    await service.processOrderDeliveryPayment('order-123');
+
+    expect(distribute).not.toHaveBeenCalled();
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'biz-acct',
+        amount: 1500,
+        transactionType: 'deposit',
+      })
+    );
   });
 });

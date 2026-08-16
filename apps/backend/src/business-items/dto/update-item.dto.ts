@@ -28,6 +28,9 @@ export class UpdateItemDto {
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
+  shipping_enabled?: boolean;
+  shipping_price?: number | null;
+  shipping_currency?: string;
   stripe_tax_code_id?: string;
 }
 

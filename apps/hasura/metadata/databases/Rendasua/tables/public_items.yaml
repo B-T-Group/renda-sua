@@ -120,6 +120,9 @@ insert_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - business_id
         - status
         - stripe_tax_code_id
@@ -152,6 +155,9 @@ select_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - moderation_status
@@ -189,6 +195,9 @@ select_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - moderation_status
@@ -226,6 +235,9 @@ select_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - moderation_status
@@ -270,6 +282,9 @@ select_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - moderation_status
@@ -307,6 +322,9 @@ select_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - moderation_status
@@ -343,6 +361,9 @@ update_permissions:
         - is_active
         - pay_on_delivery_enabled
         - pay_at_pickup_enabled
+        - shipping_enabled
+        - shipping_price
+        - shipping_currency
         - status
         - stripe_tax_code_id
         - updated_at
