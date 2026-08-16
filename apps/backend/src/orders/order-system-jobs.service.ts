@@ -104,15 +104,15 @@ export class OrderSystemJobsService {
   ): Promise<void> {
     let paymentFinalized = false;
     try {
+      await this.decrementReservedQuantities(order.order_items || []);
       const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
       paymentFinalized = true;
       await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
-      await this.runOrderCancellationSideEffects(
-        order,
+      await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
-        previousStatus,
         'system',
-        'Auto-declined: merchant did not accept within the acceptance window'
+        'Auto-declined: merchant did not accept within the acceptance window',
+        previousStatus
       );
       try {
         await this.notifyClientMerchantUnavailable(order, orderId);
@@ -122,6 +122,14 @@ export class OrderSystemJobsService {
         );
       }
     } catch (error) {
+      if (paymentFinalized) {
+        this.logger.error(
+          `Post-payment auto-decline finalization failed for ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        return;
+      }
       (error as { paymentFinalized?: boolean }).paymentFinalized =
         paymentFinalized;
       throw error;

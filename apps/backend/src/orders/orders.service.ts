@@ -1745,7 +1745,13 @@ export class OrdersService {
   ): Promise<{ id: string; delivery_fees?: number | null } | null> {
     const result = await this.hasuraSystemService.executeQuery(
       `query FindOrderHold($orderId: uuid!) {
-        order_holds(where: { order_id: { _eq: $orderId } }, limit: 1) {
+        order_holds(
+          where: {
+            order_id: { _eq: $orderId }
+            status: { _eq: active }
+          }
+          limit: 1
+        ) {
           id
           delivery_fees
         }
