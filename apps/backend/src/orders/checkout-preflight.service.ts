@@ -138,9 +138,11 @@ export class CheckoutPreflightService {
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
 
-    const fulfillment: 'delivery' | 'pickup' =
-      dto.fulfillment_method === 'pickup' ||
-      dto.payment_timing === 'pay_at_pickup'
+    const fulfillment: 'delivery' | 'pickup' | 'shipping' =
+      dto.fulfillment_method === 'shipping'
+        ? 'shipping'
+        : dto.fulfillment_method === 'pickup' ||
+          dto.payment_timing === 'pay_at_pickup'
         ? 'pickup'
         : 'delivery';
 
@@ -706,7 +708,8 @@ export class CheckoutPreflightService {
       buyer_rail: buyerRail,
       can_pay_with_wallet: canPayWithWallet,
       wallet_balance: walletBalance,
-      requires_address_for_payment: fulfillment === 'delivery',
+      requires_address_for_payment:
+        fulfillment === 'delivery' || fulfillment === 'shipping',
       requires_payment_phone: requiresPaymentPhoneOverall,
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
