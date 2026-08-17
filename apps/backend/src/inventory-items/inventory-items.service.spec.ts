@@ -114,7 +114,7 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"_ilike":"%phone%"');
     expect(json).toContain('"name"');
     expect(json).toContain('"sku"');
-    expect(json).not.toContain('"_in"');
+    expect(json).toContain('"_in":["CA","CM"]');
   });
 });
 

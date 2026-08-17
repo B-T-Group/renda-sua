@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { AppService } from './app.service';
 
 describe('AppService', () => {
@@ -6,15 +7,21 @@ describe('AppService', () => {
 
   beforeAll(async () => {
     const app = await Test.createTestingModule({
-      providers: [AppService],
+      providers: [
+        AppService,
+        {
+          provide: WINSTON_MODULE_PROVIDER,
+          useValue: { info: jest.fn(), error: jest.fn() },
+        },
+      ],
     }).compile();
 
     service = app.get<AppService>(AppService);
   });
 
-  describe('getData', () => {
-    it('should return "Hello API"', () => {
-      expect(service.getData()).toEqual({message: 'Hello API'});
+  describe('getHello', () => {
+    it('should return "Hello World!"', () => {
+      expect(service.getHello()).toBe('Hello World!');
     });
   });
 });
