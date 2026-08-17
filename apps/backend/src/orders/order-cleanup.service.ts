@@ -199,54 +199,145 @@ export class OrderCleanupService {
   private async cancelPendingPaymentOrder(
     order: CleanupOrderRow
   ): Promise<boolean> {
-    const fresh = await this.getOrderStatus(order.id);
-    if (fresh !== 'pending_payment') return false;
-    const previousStatus = fresh;
-    const paymentStatus = await this.releaseOrRefundStripe(order);
-    await this.markCancelled(
-      order.id,
+    return this.cancelWithClaim(
+      order,
+      'pending_payment',
       CANCEL_REASON_PAYMENT_NOT_COMPLETED,
       'Payment not completed in time',
-      paymentStatus
-    );
-    await this.insertSystemHistory(
-      order.id,
-      'cancelled',
-      'Auto-cancelled: payment not completed in time'
-    );
-    await this.runCancelSideEffects(
-      order,
-      previousStatus,
       'Auto-cancelled: payment not completed in time',
       false
     );
-    return true;
   }
 
   private async cancelMissedPickupOrder(
     order: CleanupOrderRow
   ): Promise<boolean> {
-    const fresh = await this.getOrderStatus(order.id);
-    if (fresh !== 'ready_for_pickup') return false;
-    const previousStatus = fresh;
-    const paymentStatus = await this.releaseOrRefundStripe(order);
-    await this.markCancelled(
-      order.id,
+    return this.cancelWithClaim(
+      order,
+      'ready_for_pickup',
       CANCEL_REASON_NOT_PICKED_UP_IN_TIME,
       'Order was not picked up in time',
-      paymentStatus
-    );
-    await this.insertSystemHistory(
-      order.id,
-      'cancelled',
-      'Auto-cancelled: not picked up before window elapsed'
-    );
-    await this.runCancelSideEffects(
-      order,
-      previousStatus,
       'Auto-cancelled: not picked up before window elapsed',
       true
     );
+  }
+
+  /** CAS-claim cancel before Stripe so payment/agent races cannot overwrite. */
+  private async cancelWithClaim(
+    order: CleanupOrderRow,
+    expectedStatus: string,
+    reasonId: number,
+    notes: string,
+    historyNotes: string,
+    notifyViaStatusUpdated: boolean
+  ): Promise<boolean> {
+    const claimed = await this.claimCancelled(
+      order.id,
+      expectedStatus,
+      reasonId,
+      notes
+    );
+    if (!claimed) return false;
+    try {
+      return await this.finalizeClaimedCancel(
+        order,
+        expectedStatus,
+        historyNotes,
+        notifyViaStatusUpdated
+      );
+    } catch (error) {
+      if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
+        await this.revertCancelledClaim(order.id, expectedStatus);
+      }
+      throw error;
+    }
+  }
+
+  private async revertCancelledClaim(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertCancelledClaim($orderId: uuid!, $previousStatus: order_status!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: cancelled }
+          }
+          _set: {
+            current_status: $previousStatus
+            cancelled_by: null
+            cancelled_at: null
+            cancellation_reason_id: null
+            cancellation_notes: null
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { orderId, previousStatus }
+    );
+  }
+
+  private async finalizeClaimedCancel(
+    order: CleanupOrderRow,
+    previousStatus: string,
+    historyNotes: string,
+    notifyViaStatusUpdated: boolean
+  ): Promise<boolean> {
+    const payment = await this.getOrderPaymentFields(order.id);
+    let paymentFinalized = false;
+    let paymentStatus: 'cancelled' | 'refunded' | 'paid' | null = null;
+    try {
+      paymentStatus = await this.releaseOrRefundStripe({
+        ...order,
+        ...payment,
+      });
+      paymentFinalized = true;
+      await this.patchPaymentStatus(order.id, paymentStatus);
+      await this.insertSystemHistory(order.id, 'cancelled', historyNotes);
+      await this.runCancelSideEffects(
+        order,
+        previousStatus,
+        historyNotes,
+        notifyViaStatusUpdated
+      );
+    } catch (error) {
+      if (paymentFinalized) {
+        this.logger.error(
+          `Post-payment cancel finalization failed for ${order.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        if (paymentStatus) {
+          await this.patchPaymentStatus(order.id, paymentStatus).catch(
+            (patchError: any) =>
+              this.logger.error(
+                `Payment status sync retry failed for ${order.id}: ${patchError?.message}`
+              )
+          );
+        }
+        await this.insertSystemHistory(order.id, 'cancelled', historyNotes).catch(
+          (historyError: any) =>
+            this.logger.error(
+              `Cancellation history retry failed for ${order.id}: ${historyError?.message}`
+            )
+        );
+        await this.runCancelSideEffects(
+          order,
+          previousStatus,
+          historyNotes,
+          notifyViaStatusUpdated
+        ).catch((sideEffectError: any) =>
+          this.logger.error(
+            `Cancellation side-effect retry failed for ${order.id}: ${sideEffectError?.message}`
+          )
+        );
+        return false;
+      }
+      (error as { paymentFinalized?: boolean }).paymentFinalized =
+        paymentFinalized;
+      throw error;
+    }
     return true;
   }
 
@@ -254,29 +345,58 @@ export class OrderCleanupService {
     order: CleanupOrderRow,
     reasonId: string
   ): Promise<boolean> {
-    const fresh = await this.getOrderStatus(order.id);
-    if (!fresh || !MID_FULFILLMENT_STATUSES.includes(fresh as any)) {
-      return false;
+    const previousStatus = order.current_status;
+    const claimed = await this.claimFailed(order.id, previousStatus);
+    if (!claimed) return false;
+    try {
+      await this.insertFailedDeliveryRecord(order.id, reasonId);
+    } catch (error) {
+      await this.revertFailedClaim(order.id, previousStatus);
+      throw error;
     }
-    await this.markFailedWithDeliveryRecord(order.id, reasonId);
     await this.insertSystemHistory(
       order.id,
       'failed',
       'Auto-failed: delivery window missed'
     );
+    await this.queueFailedStatusUpdate(order.id, previousStatus);
+    return true;
+  }
+
+  private async revertFailedClaim(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation RevertFailedClaim($orderId: uuid!, $previousStatus: order_status!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: failed }
+          }
+          _set: { current_status: $previousStatus, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { orderId, previousStatus }
+    );
+  }
+
+  private async queueFailedStatusUpdate(
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
     try {
       await this.orderQueueService.sendOrderStatusUpdatedMessage(
-        order.id,
-        fresh,
+        orderId,
+        previousStatus,
         'failed',
         null
       );
     } catch (error: any) {
       this.logger.error(
-        `Failed to queue status.updated for ${order.id}: ${error?.message}`
+        `Failed to queue status.updated for ${orderId}: ${error?.message}`
       );
     }
-    return true;
   }
 
   private async isStaleWindowOrder(
@@ -461,85 +581,148 @@ export class OrderCleanupService {
     return res.orders ?? [];
   }
 
-  private async getOrderStatus(orderId: string): Promise<string | null> {
+  private async getOrderPaymentFields(
+    orderId: string
+  ): Promise<Pick<CleanupOrderRow, 'payment_status' | 'payment_source'>> {
     const res = await this.hasuraSystemService.executeQuery<{
-      orders_by_pk: { current_status: string } | null;
+      orders_by_pk: {
+        payment_status?: string | null;
+        payment_source?: string | null;
+      } | null;
     }>(
       `query($orderId: uuid!) {
-        orders_by_pk(id: $orderId) { current_status }
+        orders_by_pk(id: $orderId) { payment_status payment_source }
       }`,
       { orderId }
     );
-    return res.orders_by_pk?.current_status ?? null;
+    return {
+      payment_status: res.orders_by_pk?.payment_status,
+      payment_source: res.orders_by_pk?.payment_source,
+    };
   }
 
-  private async markCancelled(
+  /** CAS: cancel only while still in expectedStatus (payment/agent races). */
+  private async claimCancelled(
     orderId: string,
+    expectedStatus: string,
     reasonId: number,
-    notes: string,
-    paymentStatus: 'cancelled' | 'refunded' | 'paid'
-  ): Promise<void> {
+    notes: string
+  ): Promise<boolean> {
     const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
       `
-      mutation CleanupCancelOrder(
+      mutation CleanupClaimCancel(
         $orderId: uuid!
+        $expectedStatus: order_status!
         $at: timestamptz!
         $reasonId: Int!
         $notes: String!
-        $paymentStatus: String!
       ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: $expectedStatus } }
+            ]
+          }
           _set: {
             current_status: cancelled
             cancelled_by: "system"
             cancelled_at: $at
             cancellation_reason_id: $reasonId
             cancellation_notes: $notes
-            payment_status: $paymentStatus
             updated_at: $at
           }
+        ) { affected_rows }
+      }
+    `,
+      { orderId, expectedStatus, at, reasonId, notes }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  private async patchPaymentStatus(
+    orderId: string,
+    paymentStatus: 'cancelled' | 'refunded' | 'paid'
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation CleanupPatchPayment($orderId: uuid!, $paymentStatus: String!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { payment_status: $paymentStatus, updated_at: "now()" }
         ) { id }
       }
     `,
-      { orderId, at, reasonId, notes, paymentStatus }
+      { orderId, paymentStatus }
     );
   }
 
-  /** Single Hasura mutation so status + failed_deliveries stay consistent. */
-  private async markFailedWithDeliveryRecord(
+  /** CAS: fail only while still mid-fulfillment (not complete/delivered). */
+  private async claimFailed(
+    orderId: string,
+    expectedStatus: string
+  ): Promise<boolean> {
+    const at = new Date().toISOString();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation CleanupClaimFail(
+        $orderId: uuid!
+        $expectedStatus: order_status!
+        $at: timestamptz!
+      ) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _eq: $expectedStatus } }
+            ]
+          }
+          _set: { current_status: failed, updated_at: $at }
+        ) { affected_rows }
+      }
+    `,
+      { orderId, expectedStatus, at }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  private async insertFailedDeliveryRecord(
     orderId: string,
     reasonId: string
   ): Promise<void> {
-    const at = new Date().toISOString();
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation CleanupFailOrderWithRecord(
-        $orderId: uuid!
-        $at: timestamptz!
-        $reasonId: uuid!
-        $notes: String!
-      ) {
-        insert_failed_deliveries_one(object: {
-          order_id: $orderId
-          failure_reason_id: $reasonId
-          notes: $notes
-          status: pending
-        }) { id }
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { current_status: failed, updated_at: $at }
-        ) { id }
-      }
-    `,
-      {
-        orderId,
-        at,
-        reasonId,
-        notes: 'System: delivery window missed / order stuck past slot',
-      }
-    );
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation CleanupInsertFailedDelivery(
+          $orderId: uuid!
+          $reasonId: uuid!
+          $notes: String!
+        ) {
+          insert_failed_deliveries_one(object: {
+            order_id: $orderId
+            failure_reason_id: $reasonId
+            notes: $notes
+            status: pending
+          }) { id }
+        }
+      `,
+        {
+          orderId,
+          reasonId,
+          notes: 'System: delivery window missed / order stuck past slot',
+        }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `failed_deliveries insert failed for ${orderId}: ${error?.message}`
+      );
+      throw error;
+    }
   }
 
   private async getDeliveryWindowMissedReasonId(): Promise<string | null> {

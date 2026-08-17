@@ -126,33 +126,81 @@ export class OrderReassignmentService {
     );
     const affected = result?.update_orders?.affected_rows ?? 0;
     if (affected !== 1) return false;
-    await this.releaseHold(order);
+    const released = await this.releaseHold(order);
+    if (!released) {
+      await this.revertSystemDrop(order);
+      return false;
+    }
     await this.insertHistory(order.id, 'System reassigned order after pickup SLA');
     return true;
   }
 
-  private async releaseHold(order: MonitoredPickupOrder): Promise<void> {
+  private async releaseHold(order: MonitoredPickupOrder): Promise<boolean> {
+    const hold = await this.fetchActiveAgentHold(order.id);
+    if (!hold) return true;
+    const credited = await this.creditHoldRelease(order, hold);
+    if (!credited) {
+      this.logger.error(
+        `Hold row left active for order ${order.order_number}: release failed`
+      );
+      return false;
+    }
+    await this.cancelHoldRow(hold.id);
+    return true;
+  }
+
+  private async revertSystemDrop(order: MonitoredPickupOrder): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation RevertSystemDrop($id: uuid!, $agentId: uuid!) {
+        update_orders(
+          where: {
+            id: { _eq: $id }
+            assigned_agent_id: { _is_null: true }
+            current_status: { _eq: ready_for_pickup }
+          }
+          _set: {
+            assigned_agent_id: $agentId
+            current_status: assigned_to_agent
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { id: order.id, agentId: order.assigned_agent_id }
+    );
+  }
+
+  private async fetchActiveAgentHold(
+    orderId: string
+  ): Promise<{ id: string; agent_hold_amount: number } | null> {
     const holdRes = await this.hasura.executeQuery(
       `query OrderHold($id: uuid!) {
-        order_holds(where: { order_id: { _eq: $id } }, limit: 1) {
+        order_holds(
+          where: {
+            order_id: { _eq: $id }
+            status: { _eq: active }
+          }
+          limit: 1
+        ) {
           id agent_hold_amount agent_id status
         }
       }`,
-      { id: order.id }
+      { id: orderId }
     );
-    const hold = holdRes.order_holds?.[0];
-    if (!hold || !order.assigned_agent?.user_id) return;
-    await this.creditHoldRelease(order, hold);
-    await this.cancelHoldRow(hold.id);
+    return holdRes.order_holds?.[0] ?? null;
   }
 
   private async creditHoldRelease(
     order: MonitoredPickupOrder,
     hold: { agent_hold_amount: number }
-  ): Promise<void> {
-    if (Number(hold.agent_hold_amount) <= 0) return;
+  ): Promise<boolean> {
+    if (Number(hold.agent_hold_amount) <= 0) return true;
     const userId = order.assigned_agent?.user_id;
-    if (!userId) return;
+    if (!userId) {
+      this.logger.error(
+        `Hold funds not credited for order ${order.order_number}: agent user missing`
+      );
+      return false;
+    }
     const account = await this.hasura.getAccount(
       userId,
       (order as any).currency || 'XAF'
@@ -161,24 +209,35 @@ export class OrderReassignmentService {
       this.logger.error(
         `Hold funds not credited for order ${order.order_number}: agent account missing`
       );
-      return;
+      return false;
     }
-    await this.accountsService.registerTransaction({
+    const released = await this.accountsService.registerReleaseIfNotExists({
       accountId: account.id,
       amount: hold.agent_hold_amount,
-      transactionType: 'release',
       memo: `Hold released for order ${order.order_number}. System reassignment.`,
       referenceId: order.id,
     });
+    if (!released.success) {
+      this.logger.error(
+        `Hold release failed for order ${order.order_number}: ${released.error}`
+      );
+      return false;
+    }
+    return true;
   }
 
   private async cancelHoldRow(holdId: string): Promise<void> {
     await this.hasura.executeMutation(
       `mutation CancelHold($id: uuid!) {
-        update_order_holds_by_pk(
-          pk_columns: { id: $id }
+        update_order_holds(
+          where: {
+            _and: [
+              { id: { _eq: $id } }
+              { status: { _eq: active } }
+            ]
+          }
           _set: { status: "cancelled" }
-        ) { id }
+        ) { affected_rows }
       }`,
       { id: holdId }
     );
