@@ -235,7 +235,10 @@ describe('OrdersService', () => {
           calculateAgentEarningsSync: jest.fn().mockReturnValue({ delivery_commission: 500 }),
         } },
         { provide: PdfService, useValue: {} },
-        { provide: OrderQueueService, useValue: {} },
+        {
+          provide: OrderQueueService,
+          useValue: { sendOrderCreatedMessage: jest.fn() },
+        },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         {
           provide: DeliveryPinService,
