@@ -266,6 +266,7 @@ export class OrderCleanupService {
           }
           _set: {
             current_status: $previousStatus
+            cancelled_by: null
             cancelled_at: null
             cancellation_reason_id: null
             cancellation_notes: null

@@ -226,6 +226,10 @@ describe('OrderCleanupService', () => {
           String(c[0]).includes('RevertCancelledClaim')
         )
       ).toBe(true);
+      const revertMutation = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('RevertCancelledClaim')
+      )?.[0];
+      expect(String(revertMutation)).toContain('cancelled_by: null');
       expect(orderQueue.sendOrderCancelledMessage).not.toHaveBeenCalled();
     });
   });
