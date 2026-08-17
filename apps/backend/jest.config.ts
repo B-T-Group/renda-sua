@@ -18,6 +18,6 @@ export default {
   },
   transformIgnorePatterns: ['node_modules/(?!(graphql-request)/)'],
   moduleFileExtensions: ['ts', 'js', 'html'],
-  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/test-setup.ts'],
   coverageDirectory: 'test-output/jest/coverage'
 };
