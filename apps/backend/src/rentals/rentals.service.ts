@@ -38,6 +38,10 @@ import {
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
+import {
+  fetchStripeEnabledCountries,
+  isLocationPaymentsEnabled,
+} from '../inventory-items/inventory-catalog-eligibility.util';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
 import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -262,6 +266,7 @@ export interface PublicRentalListingRow {
     id: string;
     name: string;
     is_active?: boolean;
+    mobile_payment_phone?: { is_verified?: boolean } | null;
     address: {
       id?: string;
       address_line_1?: string;
@@ -382,6 +387,7 @@ export class RentalsService {
       order_by: [{ updated_at: 'desc' }],
     });
     let rows = r.rental_location_listings ?? [];
+    rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
     rows = this.filterListingsByPrice(rows, query.min_price, query.max_price);
@@ -740,6 +746,9 @@ export class RentalsService {
     if (row.rental_item?.business?.is_storefront_visible !== true) {
       return null;
     }
+    if (!(await this.isListingPaymentsEnabled(row))) {
+      return null;
+    }
     if (
       !this.listingMatchesCatalogGeo(
         row,
@@ -784,7 +793,7 @@ export class RentalsService {
       throw new HttpException('Only clients can create requests', HttpStatus.FORBIDDEN);
     }
     const listing = await this.fetchListing(dto.rentalLocationListingId);
-    this.assertListingBookable(listing);
+    await this.assertListingBookable(listing);
     const unitsRequested = this.normalizeUnitsRequested(dto.unitsRequested);
     const unitsAvailable = Math.max(1, Number(listing.units_available) || 1);
     if (unitsRequested > unitsAvailable) {
@@ -3167,7 +3176,12 @@ export class RentalsService {
     return r.rental_location_listings_by_pk;
   }
 
-  private assertListingBookable(listing: any) {
+  private async assertListingBookable(listing: any) {
+    this.assertListingActiveAndApproved(listing);
+    await this.assertListingLocationPaymentsEnabled(listing);
+  }
+
+  private assertListingActiveAndApproved(listing: any) {
     if (!listing?.is_active || !listing.rental_item?.is_active) {
       throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
     }
@@ -3186,6 +3200,40 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  private async assertListingLocationPaymentsEnabled(listing: any) {
+    if (await this.isListingPaymentsEnabled(listing)) return;
+    throw new HttpException(
+      'This location is not available for booking yet. Payments at this location are coming soon.',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async isListingPaymentsEnabled(listing: {
+    business_location?: {
+      address?: { country?: string | null } | null;
+      mobile_payment_phone?: { is_verified?: boolean } | null;
+    } | null;
+  }): Promise<boolean> {
+    const stripeCountries = await fetchStripeEnabledCountries(
+      this.hasuraSystemService
+    );
+    return isLocationPaymentsEnabled(
+      listing.business_location,
+      stripeCountries
+    );
+  }
+
+  private async filterListingsByPaymentsEnabled(
+    rows: PublicRentalListingRow[]
+  ): Promise<PublicRentalListingRow[]> {
+    const stripeCountries = await fetchStripeEnabledCountries(
+      this.hasuraSystemService
+    );
+    return rows.filter((row) =>
+      isLocationPaymentsEnabled(row.business_location, stripeCountries)
+    );
   }
 
   private assertDurationHours(listing: any, hours: number) {

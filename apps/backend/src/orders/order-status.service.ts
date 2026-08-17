@@ -22,13 +22,22 @@ export class OrderStatusService {
   ) {}
 
   /**
-   * Update order status with validation for business workflow
+   * Update order status with validation for business workflow.
+   * Cancellations must use POST /orders/cancel (viaCancelEndpoint) so Stripe
+   * release, inventory restore, and order.cancelled side effects always run.
    */
   async updateOrderStatus(
     orderId: string,
     newStatus: string,
-    actor?: AuthorizedBusinessActor
+    actorOrOptions?: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean },
+    explicitOptions?: { viaCancelEndpoint?: boolean }
   ): Promise<any> {
+    const actor = this.isAuthorizedBusinessActor(actorOrOptions)
+      ? actorOrOptions
+      : undefined;
+    const options: { viaCancelEndpoint?: boolean } | undefined =
+      explicitOptions ??
+      (actor ? undefined : (actorOrOptions as { viaCancelEndpoint?: boolean }));
     const user = actor
       ? ({
           id: actor.userId,
@@ -110,6 +119,8 @@ export class OrderStatusService {
       isAnyAgent
     ) {
       // This transition is allowed
+    } else if (newStatus === 'cancelled') {
+      this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
     } else if (!validTransitions.includes(newStatus)) {
       throw new Error(
         `Invalid status transition from ${order.current_status} to ${newStatus}`
@@ -165,6 +176,12 @@ export class OrderStatusService {
     }
 
     return updatedRow;
+  }
+
+  private isAuthorizedBusinessActor(
+    value: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean } | undefined
+  ): value is AuthorizedBusinessActor {
+    return !!value && 'businessId' in value && 'userId' in value;
   }
 
   private buildConditionalStatusMutation(
@@ -268,8 +285,19 @@ export class OrderStatusService {
     );
   }
 
+  /** Cancel is never a generic status transition — use POST /orders/cancel. */
+  private assertCancelViaDedicatedEndpoint(
+    viaCancelEndpoint?: boolean
+  ): void {
+    if (viaCancelEndpoint) return;
+    throw new Error(
+      'Cancellations must use POST /orders/cancel so payment release and inventory restore run'
+    );
+  }
+
   /**
-   * Get valid status transitions based on current status and user type
+   * Get valid status transitions based on current status and user type.
+   * Cancellation is intentionally omitted — use POST /orders/cancel.
    */
   private getValidStatusTransitions(
     currentStatus: string,
@@ -278,46 +306,20 @@ export class OrderStatusService {
     isClient: boolean
   ): string[] {
     const transitions: { [key: string]: string[] } = {
-      pending_payment: isClient
-        ? ['pending', 'cancelled']
-        : isBusinessOwner
-        ? ['cancelled']
-        : [],
-      pending: isBusinessOwner
-        ? ['confirmed', 'cancelled']
-        : isClient
-        ? ['cancelled']
-        : [],
-      confirmed: isBusinessOwner
-        ? ['ready_for_pickup', 'awaiting_shipment', 'shipped', 'cancelled']
-        : isClient
-        ? ['cancelled']
-        : [],
-      awaiting_shipment: isBusinessOwner
-        ? ['shipped', 'cancelled']
-        : isClient
-        ? ['cancelled']
-        : [],
-      shipped: isBusinessOwner
-        ? ['in_delivery']
-        : isClient
-        ? ['complete']
-        : [],
-      in_delivery: isClient ? ['complete'] : [],
-      preparing: isBusinessOwner ? ['ready_for_pickup', 'cancelled'] : [],
+      pending_payment: [],
+      pending: isBusinessOwner ? ['confirmed'] : [],
+      confirmed: isBusinessOwner ? ['ready_for_pickup'] : [],
+      preparing: isBusinessOwner ? ['ready_for_pickup'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
-      // Clients may still cancel until an agent takes the order (mirrors
-      // CancellationPolicyService.CLIENT_CANCELLABLE_STATUSES).
-      ready_for_pickup: isAssignedAgent
-        ? ['assigned_to_agent']
-        : isClient
-        ? ['cancelled']
-        : [],
+      // Client cancel until agent assignment uses POST /orders/cancel.
+      ready_for_pickup: isAssignedAgent ? ['assigned_to_agent'] : [],
       assigned_to_agent: isAssignedAgent ? ['picked_up'] : [],
       picked_up: isAssignedAgent ? ['in_transit', 'out_for_delivery'] : [],
       in_transit: isAssignedAgent ? ['out_for_delivery'] : [],
       out_for_delivery: isAssignedAgent ? ['complete', 'failed'] : [],
+      shipped: [],
+      in_delivery: [],
       delivered: isClient ? ['complete'] : [],
       cancelled: [],
       failed: [],
