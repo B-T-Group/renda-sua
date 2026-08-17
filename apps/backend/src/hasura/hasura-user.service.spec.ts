@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClsService } from 'nestjs-cls';
 import {
@@ -133,5 +134,62 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(client.requestConfig.headers).toMatchObject({
       'X-Hasura-Role': 'client',
     });
+  });
+
+  it('maps transient Hasura network errors in getUser to 503', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: '11111111-1111-1111-1111-111111111111',
+        authToken: 'token',
+      })
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
+      new Error(
+        'request to https://hasura.rendasua.com/v1/graphql failed, reason: '
+      )
+    );
+
+    await expect(service.getUser()).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+  });
+
+  it('rethrows user-not-found from getUser', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: '11111111-1111-1111-1111-111111111111',
+        authToken: 'token',
+      })
+    );
+    const missing = new Error('User not found for id: 11111111-1111-1111-1111-111111111111');
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
+      missing
+    );
+
+    await expect(service.getUser()).rejects.toBe(missing);
+  });
+
+  it('preserves HttpException from getUser', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: '11111111-1111-1111-1111-111111111111',
+        authToken: 'token',
+      })
+    );
+    const forbidden = new HttpException(
+      { success: false, error: 'Account has been deleted' },
+      HttpStatus.FORBIDDEN
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
+      forbidden
+    );
+
+    await expect(service.getUser()).rejects.toBe(forbidden);
   });
 });
