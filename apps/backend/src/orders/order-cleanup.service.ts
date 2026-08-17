@@ -239,7 +239,7 @@ export class OrderCleanupService {
     );
     if (!claimed) return false;
     try {
-      await this.finalizeClaimedCancel(
+      return await this.finalizeClaimedCancel(
         order,
         expectedStatus,
         historyNotes,
@@ -251,7 +251,6 @@ export class OrderCleanupService {
       }
       throw error;
     }
-    return true;
   }
 
   private async revertCancelledClaim(
@@ -283,7 +282,7 @@ export class OrderCleanupService {
     previousStatus: string,
     historyNotes: string,
     notifyViaStatusUpdated: boolean
-  ): Promise<void> {
+  ): Promise<boolean> {
     const payment = await this.getOrderPaymentFields(order.id);
     let paymentFinalized = false;
     let paymentStatus: 'cancelled' | 'refunded' | 'paid' | null = null;
@@ -316,12 +315,13 @@ export class OrderCleanupService {
               )
           );
         }
-        return;
+        return false;
       }
       (error as { paymentFinalized?: boolean }).paymentFinalized =
         paymentFinalized;
       throw error;
     }
+    return true;
   }
 
   private async failMissedDeliveryOrder(

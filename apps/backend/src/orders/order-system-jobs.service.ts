@@ -87,21 +87,20 @@ export class OrderSystemJobsService {
     }
 
     try {
-      await this.finalizeAutoDeclinedOrder(order, orderId, previousStatus);
+      return await this.finalizeAutoDeclinedOrder(order, orderId, previousStatus);
     } catch (error) {
       if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
         await this.revertSystemCancelClaim(orderId, previousStatus);
       }
       throw error;
     }
-    return true;
   }
 
   private async finalizeAutoDeclinedOrder(
     order: Orders,
     orderId: string,
     previousStatus: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     let paymentFinalized = false;
     try {
       const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
@@ -128,12 +127,13 @@ export class OrderSystemJobsService {
             error instanceof Error ? error.message : String(error)
           }`
         );
-        return;
+        return false;
       }
       (error as { paymentFinalized?: boolean }).paymentFinalized =
         paymentFinalized;
       throw error;
     }
+    return true;
   }
 
   private async revertSystemCancelClaim(
@@ -305,8 +305,13 @@ export class OrderSystemJobsService {
     } catch (error) {
       if (!paymentFinalized) {
         await this.revertSystemCancelClaim(orderId, previousStatus);
+        throw error;
       }
-      throw error;
+      this.logger.error(
+        `Post-payment stale cancel finalization failed for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
