@@ -101,6 +101,23 @@ describe('OrderStatusService', () => {
       expect(result.current_status).toBe('cancelled');
     });
 
+    it('allows cancel endpoint options when actor argument is omitted', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: baseOrder,
+      });
+      mockSuccessfulUpdate('cancelled');
+
+      const result = await service.updateOrderStatus(
+        'order-123',
+        'cancelled',
+        undefined,
+        { viaCancelEndpoint: true }
+      );
+
+      expect(result.current_status).toBe('cancelled');
+    });
+
     it('still allows an agent to assign the order to themselves', async () => {
       hasuraUserService.getUser.mockResolvedValue(agentUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
