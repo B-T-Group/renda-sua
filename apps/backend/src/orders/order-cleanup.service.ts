@@ -315,6 +315,22 @@ export class OrderCleanupService {
               )
           );
         }
+        await this.insertSystemHistory(order.id, 'cancelled', historyNotes).catch(
+          (historyError: any) =>
+            this.logger.error(
+              `Cancellation history retry failed for ${order.id}: ${historyError?.message}`
+            )
+        );
+        await this.runCancelSideEffects(
+          order,
+          previousStatus,
+          historyNotes,
+          notifyViaStatusUpdated
+        ).catch((sideEffectError: any) =>
+          this.logger.error(
+            `Cancellation side-effect retry failed for ${order.id}: ${sideEffectError?.message}`
+          )
+        );
         return false;
       }
       (error as { paymentFinalized?: boolean }).paymentFinalized =

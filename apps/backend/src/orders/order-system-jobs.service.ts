@@ -353,7 +353,36 @@ export class OrderSystemJobsService {
           error instanceof Error ? error.message : String(error)
         }`
       );
+      await this.recoverStaleAuthorizedPostPayment(
+        order,
+        orderId,
+        previousStatus
+      );
     }
+  }
+
+  private async recoverStaleAuthorizedPostPayment(
+    order: Orders,
+    orderId: string,
+    previousStatus: string
+  ): Promise<void> {
+    await this.patchAutoDeclinePaymentStatus(orderId, 'cancelled').catch(
+      (error: any) =>
+        this.logger.error(
+          `Stale cancel payment status retry failed for ${orderId}: ${error?.message}`
+        )
+    );
+    await this.runOrderCancellationSideEffects(
+      order,
+      orderId,
+      previousStatus,
+      'system',
+      'Auto-cancelled: no agent claimed within timeout'
+    ).catch((error: any) =>
+      this.logger.error(
+        `Stale cancel side-effect retry failed for ${orderId}: ${error?.message}`
+      )
+    );
   }
 
   /** CAS: cancel only while still unassigned ready_for_pickup. */
