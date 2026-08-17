@@ -636,9 +636,6 @@ export class AiService {
         },
       };
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
       this.logger.error(
         `Failed to generate image item suggestions for ${urls.length} image(s)`,
         error
@@ -1207,9 +1204,6 @@ The "description" field MUST be written in ${languageLabel}.`;
         descriptionLanguage
       );
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
       this.logger.error(
         `Rental image suggestions failed for ${input.imageUrl}`,
         error
