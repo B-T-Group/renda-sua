@@ -102,8 +102,9 @@ export class OrderSystemJobsService {
     previousStatus: string
   ): Promise<boolean> {
     let paymentFinalized = false;
+    let paymentStatus: 'cancelled' | 'refunded' | 'paid' | null = null;
     try {
-      const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
+      paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
       paymentFinalized = true;
       await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
       await this.decrementReservedQuantities(order.order_items || []);
@@ -127,6 +128,12 @@ export class OrderSystemJobsService {
             error instanceof Error ? error.message : String(error)
           }`
         );
+        await this.recoverAutoDeclinePostPayment(
+          order,
+          orderId,
+          previousStatus,
+          paymentStatus
+        );
         return false;
       }
       (error as { paymentFinalized?: boolean }).paymentFinalized =
@@ -134,6 +141,40 @@ export class OrderSystemJobsService {
       throw error;
     }
     return true;
+  }
+
+  private async recoverAutoDeclinePostPayment(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    paymentStatus: 'cancelled' | 'refunded' | 'paid' | null
+  ): Promise<void> {
+    if (paymentStatus) {
+      await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus).catch(
+        (error: any) =>
+          this.logger.error(
+            `Auto-decline payment status retry failed for ${orderId}: ${error?.message}`
+          )
+      );
+    }
+    await this.decrementReservedQuantities(order.order_items || []).catch(
+      (error: any) =>
+        this.logger.error(
+          `Auto-decline inventory retry failed for ${orderId}: ${error?.message}`
+        )
+    );
+    await this.orderQueueService
+      .sendOrderCancelledMessage(
+        orderId,
+        'system',
+        'Auto-declined: merchant did not accept within the acceptance window',
+        previousStatus
+      )
+      .catch((error: any) =>
+        this.logger.error(
+          `Auto-decline cancellation enqueue retry failed for ${orderId}: ${error?.message}`
+        )
+      );
   }
 
   private async revertSystemCancelClaim(
