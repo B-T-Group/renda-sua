@@ -221,27 +221,40 @@ export class BedrockLunaService {
         error?.name ?? 'Error'
       }: ${error?.message ?? 'unknown'}`
     );
+    throw this.mapBedrockHttpError(error, status);
+  }
+
+  private mapBedrockHttpError(
+    error: any,
+    status: number | undefined
+  ): HttpException {
+    const options = { cause: error };
     if (status === 429 || error?.name === 'ThrottlingException') {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS
-      );
+      return this.aiUnavailable(HttpStatus.TOO_MANY_REQUESTS, options, true);
     }
     if (status === 401 || status === 403) {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
+      return this.aiUnavailable(HttpStatus.SERVICE_UNAVAILABLE, options, true);
     }
     if (error?.code === 'ECONNABORTED') {
-      throw new HttpException(
+      return new HttpException(
         'AI request timed out. Please try again.',
-        HttpStatus.REQUEST_TIMEOUT
+        HttpStatus.REQUEST_TIMEOUT,
+        options
       );
     }
-    throw new HttpException(
-      'AI temporarily unavailable. Please try again.',
-      HttpStatus.SERVICE_UNAVAILABLE
+    return this.aiUnavailable(HttpStatus.SERVICE_UNAVAILABLE, options, false);
+  }
+
+  private aiUnavailable(
+    status: HttpStatus,
+    options: { cause: unknown },
+    later: boolean
+  ): HttpException {
+    const suffix = later ? ' later.' : '.';
+    return new HttpException(
+      `AI temporarily unavailable. Please try again${suffix}`,
+      status,
+      options
     );
   }
 }
