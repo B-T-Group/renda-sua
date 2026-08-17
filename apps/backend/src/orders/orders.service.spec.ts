@@ -1761,5 +1761,92 @@ describe('OrdersService', () => {
 
       expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
+
+    it('rolls back the pickup claim when wallet release fails', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      accountsService.registerTransaction.mockResolvedValue({
+        success: false,
+        error: 'Insufficient withheld funds',
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-client' });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder') || query.includes('orders_by_pk')) {
+          return { orders_by_pk: switchOrder };
+        }
+        if (query.includes('OrderItemsPickupEligibility')) {
+          return {
+            order_items: [
+              { business_inventory: { item: { pay_at_pickup_enabled: true } } },
+            ],
+          };
+        }
+        if (query.includes('FindOrderHold') || query.includes('order_holds')) {
+          return {
+            order_holds: [{ id: 'hold-1', delivery_fees: 15, client_hold_amount: 40 }],
+          };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('SwitchToPickup')) {
+          return { update_orders: { affected_rows: 1 } };
+        }
+        if (mutation.includes('RevertSwitchToPickup')) {
+          return { update_orders_by_pk: { id: 'order-123' } };
+        }
+        if (mutation.includes('UpdateOrderHold') || mutation.includes('order_holds')) {
+          return { update_order_holds_by_pk: { id: 'hold-1' } };
+        }
+        return {};
+      });
+
+      await expect(service.switchToPickup('order-123')).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+      });
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('RevertSwitchToPickup'),
+        expect.objectContaining({
+          id: 'order-123',
+          fulfillmentMethod: 'delivery',
+          total: 55,
+        })
+      );
+    });
+
+    it('conflicts when another actor already claimed the pickup switch', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder') || query.includes('orders_by_pk')) {
+          return { orders_by_pk: switchOrder };
+        }
+        if (query.includes('OrderItemsPickupEligibility')) {
+          return {
+            order_items: [
+              { business_inventory: { item: { pay_at_pickup_enabled: true } } },
+            ],
+          };
+        }
+        if (query.includes('FindOrderHold') || query.includes('order_holds')) {
+          return { order_holds: [] };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await expect(service.switchToPickup('order-123')).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+      });
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
   });
 });
