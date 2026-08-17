@@ -379,6 +379,10 @@ describe('OrdersService', () => {
   describe('createOrder', () => {
     it('passes first-order delivery promo defaults for shipping orders', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
       hasuraUserService.getUserAddressById.mockResolvedValue({
         id: 'address-123',
         address_line_1: '123 Main St',
