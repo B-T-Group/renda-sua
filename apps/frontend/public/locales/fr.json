@@ -74,6 +74,7 @@
     "withdrawAmountHelper": "Retrait minimum : {{min}} {{currency}}",
     "withdrawBalanceBelowMin": "Il vous faut au moins {{min}} {{currency}} de solde disponible pour retirer.",
     "withdrawPhoneCmGaHint": "Utilisez un numéro mobile du Cameroun (+237) ou du Gabon (+241).",
+    "updatePhone": "Modifier",
     "withdrawPhoneCmGaOnly": "Seuls les numéros du Cameroun (+237) ou du Gabon (+241) sont acceptés.",
     "available": "Disponible",
     "availableBalance": "Solde disponible",
