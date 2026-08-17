@@ -288,6 +288,12 @@ export class OrderCleanupService {
     let paymentFinalized = false;
     let paymentStatus: 'cancelled' | 'refunded' | 'paid' | null = null;
     try {
+      paymentStatus = await this.releaseOrRefundStripe({
+        ...order,
+        ...payment,
+      });
+      paymentFinalized = true;
+      await this.patchPaymentStatus(order.id, paymentStatus);
       await this.insertSystemHistory(order.id, 'cancelled', historyNotes);
       await this.runCancelSideEffects(
         order,
@@ -295,12 +301,6 @@ export class OrderCleanupService {
         historyNotes,
         notifyViaStatusUpdated
       );
-      paymentStatus = await this.releaseOrRefundStripe({
-        ...order,
-        ...payment,
-      });
-      paymentFinalized = true;
-      await this.patchPaymentStatus(order.id, paymentStatus);
     } catch (error) {
       if (paymentFinalized) {
         this.logger.error(

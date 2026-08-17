@@ -104,10 +104,10 @@ export class OrderSystemJobsService {
   ): Promise<void> {
     let paymentFinalized = false;
     try {
-      await this.decrementReservedQuantities(order.order_items || []);
       const paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
       paymentFinalized = true;
       await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
+      await this.decrementReservedQuantities(order.order_items || []);
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         'system',
