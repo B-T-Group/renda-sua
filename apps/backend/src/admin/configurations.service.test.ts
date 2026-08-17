@@ -1,68 +1,33 @@
-// Example test cases for the updated getFastDeliveryFromSupportedLocations function
-
 import { ConfigurationsService } from '../admin/configurations.service';
 
-describe('ConfigurationsService - getFastDeliveryFromSupportedLocations', () => {
+describe('ConfigurationsService', () => {
   let service: ConfigurationsService;
+  let hasura: { executeQuery: jest.Mock };
 
   beforeEach(() => {
-    service = new ConfigurationsService();
+    hasura = { executeQuery: jest.fn() };
+    service = new ConfigurationsService(hasura as any);
   });
 
-  it('should match state by state_name', async () => {
-    // Test with state code 'ES' (Estuaire)
-    const result = await service.getFastDeliveryFromSupportedLocations(
-      'GA',
-      'ES'
+  it('returns active configuration by key and country', async () => {
+    const configuration = { id: 'cfg-1', config_key: 'fast_delivery' };
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [configuration],
+    });
+
+    await expect(
+      service.getConfigurationByKey('fast_delivery', 'GA')
+    ).resolves.toEqual(configuration);
+
+    expect(hasura.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('country_code: { _eq: $country_code }'),
+      { config_key: 'fast_delivery', country_code: 'GA' }
     );
-
-    expect(result).toBeDefined();
-    expect(result.enabled).toBe(true);
-    expect(result.fee).toBe(2000);
   });
 
-  it('should match state by state_name', async () => {
-    // Test with state name 'Estuaire'
-    const result = await service.getFastDeliveryFromSupportedLocations(
-      'GA',
-      'Estuaire'
-    );
+  it('returns null when no active configuration exists', async () => {
+    hasura.executeQuery.mockResolvedValue({ application_configurations: [] });
 
-    expect(result).toBeDefined();
-    expect(result.enabled).toBe(true);
-    expect(result.fee).toBe(2000);
-  });
-
-  it('should return null for non-existent state', async () => {
-    // Test with non-existent state
-    const result = await service.getFastDeliveryFromSupportedLocations(
-      'GA',
-      'NonExistent'
-    );
-
-    expect(result).toBeNull();
-  });
-
-  it('should return country-level config when no state provided', async () => {
-    // Test without state code
-    const result = await service.getFastDeliveryFromSupportedLocations('GA');
-
-    expect(result).toBeDefined();
+    await expect(service.getConfigurationByKey('missing')).resolves.toBeNull();
   });
 });
-
-// Example usage scenarios:
-
-// Scenario 1: Frontend sends state code
-const config1 = await service.getFastDeliveryFromSupportedLocations('GA', 'ES');
-// This will match the state_name field
-
-// Scenario 2: Frontend sends state name
-const config2 = await service.getFastDeliveryFromSupportedLocations(
-  'GA',
-  'Estuaire'
-);
-// This will match the state_name field
-
-// Scenario 3: Both scenarios return the same configuration
-// because they refer to the same state (Estuaire in Gabon)

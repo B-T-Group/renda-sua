@@ -6,5 +6,9 @@ export default {
     '^.+\\.[tj]sx?$': ['babel-jest', { presets: ['@nx/react/babel'] }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  testEnvironmentOptions: {
+    url: 'https://localhost/',
+  },
   coverageDirectory: 'test-output/jest/coverage',
 };

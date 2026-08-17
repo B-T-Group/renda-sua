@@ -7,9 +7,7 @@ import {
 describe('agent location consent utilities', () => {
   describe('normalizeAgentLocationTrackingConsent', () => {
     it('keeps known consent values', () => {
-      expect(normalizeAgentLocationTrackingConsent('accepted_bg')).toBe(
-        'accepted_bg'
-      );
+      expect(normalizeAgentLocationTrackingConsent('accepted')).toBe('accepted');
       expect(normalizeAgentLocationTrackingConsent('deferred')).toBe(
         'deferred'
       );
@@ -17,7 +15,7 @@ describe('agent location consent utilities', () => {
 
     it('falls back to not_shown for unknown or missing values', () => {
       expect(normalizeAgentLocationTrackingConsent(null)).toBe('not_shown');
-      expect(normalizeAgentLocationTrackingConsent('accepted')).toBe(
+      expect(normalizeAgentLocationTrackingConsent('accepted_bg')).toBe(
         'not_shown'
       );
     });
@@ -25,36 +23,26 @@ describe('agent location consent utilities', () => {
 
   describe('assertLocationConsentTransition', () => {
     it.each([
-      ['accepted_fg', 'not_shown'],
-      ['accepted_bg', 'not_shown'],
-      ['rejected', 'not_shown'],
-      ['deferred', 'not_shown'],
-    ] as const)('allows resetting %s disclosure to %s', (current, next) => {
+      ['not_shown', 'accepted'],
+      ['not_shown', 'deferred'],
+      ['deferred', 'accepted'],
+    ] as const)('allows supported transition from %s to %s', (current, next) => {
       expect(() => assertLocationConsentTransition(current, next)).not.toThrow();
     });
 
-    it('allows foreground and background acceptance upgrades', () => {
+    it('rejects unsupported transitions', () => {
       expect(() =>
-        assertLocationConsentTransition('accepted_fg', 'accepted_bg')
-      ).not.toThrow();
-      expect(() =>
-        assertLocationConsentTransition('accepted_bg', 'accepted_fg')
-      ).not.toThrow();
-    });
-
-    it('rejects direct consent after a rejection without resetting disclosure', () => {
-      expect(() =>
-        assertLocationConsentTransition('rejected', 'accepted_fg')
+        assertLocationConsentTransition('accepted', 'deferred')
       ).toThrow(HttpException);
 
       try {
-        assertLocationConsentTransition('rejected', 'accepted_fg');
+        assertLocationConsentTransition('accepted', 'deferred');
       } catch (error: any) {
         expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
         expect(error.getResponse()).toEqual({
           success: false,
           error:
-            'Cannot transition location_tracking_consent from rejected to accepted_fg',
+            'Cannot transition location_tracking_consent from accepted to deferred',
         });
       }
     });

@@ -91,6 +91,7 @@ describe('AgentHoldService', () => {
   describe('getHoldPercentageForAgent', () => {
     it('should return 0 when current user agent is internal', async () => {
       hasuraUserService.getUser.mockResolvedValue({
+        active_persona: 'agent',
         agent: { is_internal: true, is_verified: true },
       } as any);
       const result = await service.getHoldPercentageForAgent();
@@ -99,6 +100,7 @@ describe('AgentHoldService', () => {
 
     it('should return 80 when current user agent is verified but not internal', async () => {
       hasuraUserService.getUser.mockResolvedValue({
+        active_persona: 'agent',
         agent: { is_internal: false, is_verified: true },
       } as any);
       const result = await service.getHoldPercentageForAgent();
@@ -107,6 +109,7 @@ describe('AgentHoldService', () => {
 
     it('should return 100 when current user agent is unverified', async () => {
       hasuraUserService.getUser.mockResolvedValue({
+        active_persona: 'agent',
         agent: { is_internal: false, is_verified: false },
       } as any);
       const result = await service.getHoldPercentageForAgent();
@@ -116,14 +119,14 @@ describe('AgentHoldService', () => {
     it('should return correct percentage when agentId provided', async () => {
       hasuraSystemService.executeQuery
         .mockResolvedValueOnce({
+          agents_by_pk: { is_internal: true, is_verified: true },
+        })
+        .mockResolvedValueOnce({
           application_configurations: [
             { config_key: 'internal_agent_hold_percentage', number_value: 0 },
             { config_key: 'verified_agent_hold_percentage', number_value: 80 },
             { config_key: 'unverified_agent_hold_percentage', number_value: 100 },
           ],
-        })
-        .mockResolvedValueOnce({
-          agents_by_pk: { is_internal: true, is_verified: true },
         });
       const result = await service.getHoldPercentageForAgent('agent-1');
       expect(result).toBe(0);
