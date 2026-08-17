@@ -3603,10 +3603,13 @@ export class OrdersService {
 
     const { taxCheckoutParams, checkoutAmount } =
       await this.buildTaxParamsForOrderRetry(order.id);
+    const fulfillmentMethod = this.resolveOrderFulfillmentMethod(
+      (order as any).fulfillment_method
+    );
     const captureMethod =
       this.stripeCaptureService.resolveCaptureMethodForOrderEntity(
         order.business_location?.address?.country ?? undefined,
-        (order as any).fulfillment_method === 'pickup' ? 'pickup' : 'delivery'
+        fulfillmentMethod
       );
     const customerDisplayName =
       `${order.client?.user?.first_name || ''} ${order.client?.user?.last_name || ''}`.trim() ||
@@ -3653,8 +3656,7 @@ export class OrdersService {
       captureMethod,
       taxCheckoutParams,
       shippingName: customerDisplayName,
-      fulfillmentMethod:
-        (order as any).fulfillment_method === 'pickup' ? 'pickup' : 'delivery',
+      fulfillmentMethod,
     });
     if (!checkout?.paymentUrl) {
       throw new HttpException(
@@ -8494,7 +8496,7 @@ export class OrdersService {
     const pre_tax_total = total_amount;
     const tax_amount = 0;
     const taxCountrySource =
-      fulfillmentMethod === 'delivery' && address?.country
+      this.usesDestinationTaxAddress(fulfillmentMethod) && address?.country
         ? address.country
         : businessInventories[0]?.business_location?.address?.country;
     const tax_status =
@@ -8948,8 +8950,9 @@ export class OrdersService {
         deliveryFee:
           deliveryFeeInfo.baseDeliveryFee + deliveryFeeInfo.perKmDeliveryFee,
         discountAmount: discountAmount ?? 0,
-        deliveryAddress:
-          fulfillmentMethod === 'delivery' && address ? address : null,
+        deliveryAddress: this.usesDestinationTaxAddress(fulfillmentMethod)
+          ? address ?? null
+          : null,
         businessLocationAddress:
           businessInventories[0]?.business_location?.address ?? null,
         fulfillmentMethod,
@@ -9067,6 +9070,21 @@ export class OrdersService {
       },
       database_transaction: null,
     };
+  }
+
+  private resolveOrderFulfillmentMethod(
+    fulfillment?: string | null
+  ): 'delivery' | 'pickup' | 'shipping' {
+    if (fulfillment === 'pickup' || fulfillment === 'shipping') {
+      return fulfillment;
+    }
+    return 'delivery';
+  }
+
+  private usesDestinationTaxAddress(
+    fulfillmentMethod: 'delivery' | 'pickup' | 'shipping'
+  ): boolean {
+    return fulfillmentMethod === 'delivery' || fulfillmentMethod === 'shipping';
   }
 
   private buildStripeTaxCheckoutParams(input: {
@@ -9212,9 +9230,9 @@ export class OrdersService {
     const deliveryFee =
       Number(row.base_delivery_fee) + Number(row.per_km_delivery_fee);
     const discountAmount = Number(row.discount_amount ?? 0);
-    const fulfillmentMethod = (row.fulfillment_method ?? 'delivery') as
-      | 'delivery'
-      | 'pickup';
+    const fulfillmentMethod = this.resolveOrderFulfillmentMethod(
+      row.fulfillment_method
+    );
     const orderItemsData = row.order_items.map((item) => ({
       item_name: item.item_name,
       unit_price: Number(item.unit_price),
@@ -9242,8 +9260,9 @@ export class OrdersService {
       orderItemsData,
       deliveryFee,
       discountAmount,
-      deliveryAddress:
-        fulfillmentMethod === 'delivery' ? deliveryAddress ?? null : null,
+      deliveryAddress: this.usesDestinationTaxAddress(fulfillmentMethod)
+        ? deliveryAddress ?? null
+        : null,
       businessLocationAddress: businessLocationAddress ?? null,
       fulfillmentMethod,
     });

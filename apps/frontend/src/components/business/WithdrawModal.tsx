@@ -76,15 +76,17 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const [showResult, setShowResult] = useState(false);
 
   const [paymentMethod] = useState<PaymentMethod>('airtel-money');
+  const [phoneLocked, setPhoneLocked] = useState(false);
 
   const isStripe = mode === 'stripe';
   const minWithdrawAmount = isStripe ? 0 : MIN_WITHDRAW_AMOUNT;
 
   useEffect(() => {
-    if (userPhoneNumber) {
-      setPhoneNumber(userPhoneNumber);
-    }
-  }, [userPhoneNumber]);
+    if (!open) return;
+    const next = userPhoneNumber?.trim() || '';
+    setPhoneNumber(next);
+    setPhoneLocked(!!next);
+  }, [open, userPhoneNumber]);
 
   useEffect(() => {
     if (!open) {
@@ -278,16 +280,30 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
             )}
 
             {!isStripe && (
-              <PhoneInput
-                value={phoneNumber}
-                onChange={(value) => setPhoneNumber(value || '')}
-                label={t('accounts.phoneNumber')}
-                placeholder={t('accounts.phoneNumberPlaceholder')}
-                helperText={getPhoneNumberHint()}
-                disabled={loading || !balanceAllowsWithdraw}
-                defaultCountry="CM"
-                onlyCountries={['CM', 'GA']}
-              />
+              <Box>
+                {phoneLocked ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.5 }}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setPhoneLocked(false)}
+                      disabled={loading}
+                    >
+                      {t('accounts.updatePhone', 'Update')}
+                    </Button>
+                  </Box>
+                ) : null}
+                <PhoneInput
+                  value={phoneNumber}
+                  onChange={(value) => setPhoneNumber(value || '')}
+                  label={t('accounts.phoneNumber')}
+                  placeholder={t('accounts.phoneNumberPlaceholder')}
+                  helperText={getPhoneNumberHint()}
+                  disabled={loading || !balanceAllowsWithdraw || phoneLocked}
+                  defaultCountry="CM"
+                  onlyCountries={['CM', 'GA']}
+                />
+              </Box>
             )}
 
             <TextField

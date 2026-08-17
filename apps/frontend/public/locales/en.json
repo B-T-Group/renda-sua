@@ -316,6 +316,7 @@
     "withdrawAmountHelper": "Minimum withdrawal: {{min}} {{currency}}",
     "withdrawBalanceBelowMin": "You need at least {{min}} {{currency}} available to withdraw.",
     "withdrawPhoneCmGaHint": "Use a Cameroon (+237) or Gabon (+241) mobile number.",
+    "updatePhone": "Update",
     "withdrawPhoneCmGaOnly": "Only Cameroon (+237) or Gabon (+241) phone numbers are supported.",
     "available": "Available",
     "availableBalance": "Available Balance",

@@ -26,6 +26,9 @@ describe('OrdersService carrier shipping', () => {
     executeMutation: jest.Mock;
     getAccount?: jest.Mock;
   };
+  let stripeCaptureService: {
+    resolveCaptureMethodForOrderEntity: jest.Mock;
+  };
 
   const businessUser = {
     id: 'user-123',
@@ -71,8 +74,13 @@ describe('OrdersService carrier shipping', () => {
         { provide: HasuraSystemService, useValue: hasuraSystemService },
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: AccountsService, useValue: { registerTransaction: jest.fn() } },
-    { provide: OrderStatusService, useValue: {} },
-        { provide: StripeCaptureService, useValue: {} },
+        { provide: OrderStatusService, useValue: {} },
+        {
+          provide: StripeCaptureService,
+          useValue: {
+            resolveCaptureMethodForOrderEntity: jest.fn().mockReturnValue('manual'),
+          },
+        },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     })
@@ -80,6 +88,7 @@ describe('OrdersService carrier shipping', () => {
       .compile();
 
     service = module.get(OrdersService);
+    stripeCaptureService = module.get(StripeCaptureService);
   });
 
   it('rejects markOrderAsShipped when the actor is not the business owner user', async () => {
@@ -235,5 +244,105 @@ describe('OrdersService carrier shipping', () => {
         transactionType: 'deposit',
       })
     );
+  });
+
+  it('retries Stripe shipping payment with shipping capture, not delivery', async () => {
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+    });
+    hasuraUserService.getUser.mockResolvedValue(clientUser);
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'pending_payment',
+      payment_source: 'credit_card',
+      payment_status: 'pending',
+      business_location: { address: { country: 'CA' } },
+      client: {
+        user_id: 'client-456',
+        user: { email: 'c@test.com', first_name: 'Ada', last_name: 'Lovelace' },
+      },
+    });
+    hasuraSystemService.getAccount = jest.fn().mockResolvedValue({ id: 'acct-1' });
+    jest.spyOn(service as any, 'buildTaxParamsForOrderRetry').mockResolvedValue({
+      taxCheckoutParams: { taxEnabled: false },
+      checkoutAmount: 25,
+    });
+    const createCheckout = jest
+      .spyOn(service as any, 'createStripeOrderCheckout')
+      .mockResolvedValue({
+        paymentUrl: 'https://stripe.test/pay',
+        reference: 'ref-1',
+        transactionId: 'tx-1',
+      });
+    jest.spyOn(service as any, 'resetOrderPaymentFailure').mockResolvedValue(undefined);
+
+    const result = await service.retryOrderPayment('order-123');
+
+    expect(result.success).toBe(true);
+    expect(
+      stripeCaptureService.resolveCaptureMethodForOrderEntity
+    ).toHaveBeenCalledWith('CA', 'shipping');
+    expect(createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        captureMethod: 'manual',
+        fulfillmentMethod: 'shipping',
+      })
+    );
+  });
+
+  it('uses the customer ship-to address for shipping Stripe tax retry params', async () => {
+    const shipTo = {
+      address_line_1: '1 King St',
+      city: 'Toronto',
+      state: 'ON',
+      postal_code: 'M5V 1A1',
+      country: 'CA',
+    };
+    const store = {
+      address_line_1: '9 Store Rd',
+      city: 'Vancouver',
+      state: 'BC',
+      postal_code: 'V6B 1A1',
+      country: 'CA',
+    };
+    hasuraSystemService.executeQuery = jest.fn().mockResolvedValue({
+      orders_by_pk: {
+        currency: 'CAD',
+        subtotal: 20,
+        total_amount: 25,
+        base_delivery_fee: 5,
+        per_km_delivery_fee: 0,
+        discount_amount: 0,
+        fulfillment_method: 'shipping',
+        delivery_address: shipTo,
+        business_location: { address: store },
+        order_items: [
+          {
+            item_name: 'Hat',
+            unit_price: 20,
+            quantity: 1,
+            business_inventory_id: 'inv-1',
+            business_inventory: { item: { stripe_tax_code_id: 'txcd' } },
+          },
+        ],
+      },
+    });
+    (service as any).taxCheckoutBuilder = {
+      addressFromRecord: (record: { address_line_1: string; country: string }) => ({
+        line1: record.address_line_1,
+        country: record.country,
+      }),
+      isTaxEnabledForCountry: () => true,
+      buildLineItems: jest.fn().mockReturnValue([{ amount: 20 }]),
+    };
+
+    const result = await (service as any).buildTaxParamsForOrderRetry('order-123');
+
+    expect(result.taxCheckoutParams.customerAddress).toEqual({
+      line1: '1 King St',
+      country: 'CA',
+    });
+    expect(result.taxCheckoutParams.deliveryAddress).toEqual(shipTo);
   });
 });
