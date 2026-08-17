@@ -106,6 +106,46 @@ describe('OrdersService', () => {
     assigned_agent: null,
   };
 
+  const shippingInventoryFixture = () => ({
+    id: 'inventory-123',
+    computed_available_quantity: 10,
+    selling_price: 25,
+    is_active: true,
+    business_location_id: 'location-123',
+    item_variant_id: null,
+    variant_price_overrides: [],
+    item_variant: null,
+    business_location: {
+      business_id: 'business-123',
+      is_active: true,
+      operating_hours: null,
+      mobile_payment_phone: { is_verified: true },
+      address: { country: 'CA' },
+      business: {
+        id: 'business-123',
+        can_accept_orders: true,
+        user: { id: 'merchant-user-123' },
+      },
+    },
+    item: shippingItemFixture(),
+  });
+
+  const shippingItemFixture = () => ({
+    id: 'item-123',
+    name: 'Shipping item',
+    description: 'Ships to the customer',
+    pay_on_delivery_enabled: false,
+    pay_at_pickup_enabled: false,
+    shipping_enabled: true,
+    shipping_price: 5,
+    shipping_currency: 'CAD',
+    currency: 'CAD',
+    weight: 1,
+    max_order_quantity: null,
+    stripe_tax_code_id: null,
+    item_variants: [],
+  });
+
   const mockReadyOrder = {
     ...mockOrder,
     current_status: 'ready_for_pickup',
@@ -125,6 +165,7 @@ describe('OrdersService', () => {
         jwtDefaultRole: undefined,
         jwtAllowedRoles: [],
       }),
+      getUserAddressById: jest.fn(),
       updateOrderStatus: jest.fn(),
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
@@ -181,7 +222,7 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: {} },
+        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
@@ -194,7 +235,10 @@ describe('OrdersService', () => {
           calculateAgentEarningsSync: jest.fn().mockReturnValue({ delivery_commission: 500 }),
         } },
         { provide: PdfService, useValue: {} },
-        { provide: OrderQueueService, useValue: {} },
+        {
+          provide: OrderQueueService,
+          useValue: { sendOrderCreatedMessage: jest.fn() },
+        },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         {
           provide: DeliveryPinService,
@@ -224,7 +268,13 @@ describe('OrdersService', () => {
           },
         },
         { provide: LoyaltyService, useValue: {} },
-        { provide: PaymentRoutingService, useValue: { resolveRailForBusiness: jest.fn() } },
+        {
+          provide: PaymentRoutingService,
+          useValue: {
+            resolveRailForBusiness: jest.fn(),
+            resolveRailForUser: jest.fn(),
+          },
+        },
         { provide: StripeCheckoutService, useValue: {} },
         {
           provide: StripeCaptureService,
@@ -327,6 +377,77 @@ describe('OrdersService', () => {
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
     stripeCaptureService = module.get(StripeCaptureService);
+  });
+
+  describe('createOrder', () => {
+    it('passes first-order delivery promo defaults for shipping orders', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraUserService.getUserAddressById.mockResolvedValue({
+        id: 'address-123',
+        address_line_1: '123 Main St',
+        city: 'Toronto',
+        state: 'ON',
+        postal_code: 'M5V 1A1',
+        country: 'CA',
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 100,
+      } as any);
+      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
+        'mobile_money'
+      );
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'triggerCommerceInventoryCommit')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ id: 'order-123', order_number: '12345678' });
+      jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [shippingInventoryFixture()],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-123',
+            order_number: '12345678',
+            payment_source: 'wallet',
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      await service.createOrder({
+        delivery_address_id: 'address-123',
+        fulfillment_method: 'shipping',
+        payment_timing: 'pay_now',
+        phone_number: '+14165550123',
+        items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({
+          baseDeliveryFee: 5,
+          perKmDeliveryFee: 0,
+          firstOrderDeliveryFeePromo: false,
+          firstOrderBaseDeliveryDiscountAmount: 0,
+        })
+      );
+    });
   });
 
   describe.skip('confirmOrder', () => {

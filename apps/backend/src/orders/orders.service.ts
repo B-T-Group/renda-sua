@@ -167,6 +167,20 @@ type InventoryQuantityRequest = {
   quantity?: number;
 };
 
+type OrderDeliveryFeeInfo = {
+  deliveryFee: number;
+  method: 'distance_based' | 'flat_fee';
+  currency: string;
+  country: string;
+  baseDeliveryFee: number;
+  perKmDeliveryFee: number;
+  isFirstOrderClient: boolean;
+  firstOrderDeliveryFeePromo: boolean;
+  firstOrderBaseDeliveryDiscountAmount: number;
+  baseDeliveryFeeBeforeDiscount: number;
+  distance?: number;
+};
+
 // Custom interface for complex order data with all relationships
 export interface OrderWithDetails {
   id: string;
@@ -7777,18 +7791,7 @@ export class OrdersService {
     );
   }
 
-  private zeroPickupDeliveryFee(currency: string): {
-    deliveryFee: number;
-    method: 'distance_based' | 'flat_fee';
-    currency: string;
-    country: string;
-    baseDeliveryFee: number;
-    perKmDeliveryFee: number;
-    isFirstOrderClient: boolean;
-    firstOrderDeliveryFeePromo: boolean;
-    firstOrderBaseDeliveryDiscountAmount: number;
-    baseDeliveryFeeBeforeDiscount: number;
-  } {
+  private zeroPickupDeliveryFee(currency: string): OrderDeliveryFeeInfo {
     return {
       deliveryFee: 0,
       method: 'flat_fee',
@@ -8202,7 +8205,7 @@ export class OrdersService {
     }, 0);
 
     // Calculate delivery fee (waived for pickup, sum shipping prices for shipping)
-    let deliveryFeeInfo;
+    let deliveryFeeInfo: OrderDeliveryFeeInfo;
     if (fulfillmentMethod === 'pickup') {
       deliveryFeeInfo = this.zeroPickupDeliveryFee(currency);
     } else if (fulfillmentMethod === 'shipping') {
@@ -8217,9 +8220,13 @@ export class OrdersService {
         baseDeliveryFee: totalShippingFee,
         perKmDeliveryFee: 0,
         deliveryFee: totalShippingFee,
+        method: 'flat_fee',
         currency,
+        country: '',
+        isFirstOrderClient: false,
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
         baseDeliveryFeeBeforeDiscount: totalShippingFee,
-        firstOrderPromo: false,
       };
     } else {
       deliveryFeeInfo = await this.calculateItemDeliveryFee(
@@ -10246,19 +10253,7 @@ export class OrdersService {
     addressId?: string,
     requiresFastDelivery = false,
     totalWeight?: number
-  ): Promise<{
-    deliveryFee: number;
-    distance?: number;
-    method: 'distance_based' | 'flat_fee';
-    currency: string;
-    country: string;
-    baseDeliveryFee: number;
-    perKmDeliveryFee: number;
-    isFirstOrderClient: boolean;
-    firstOrderDeliveryFeePromo: boolean;
-    firstOrderBaseDeliveryDiscountAmount: number;
-    baseDeliveryFeeBeforeDiscount: number;
-  }> {
+  ): Promise<OrderDeliveryFeeInfo> {
     try {
       // Get user for authorization
       const user = await this.hasuraUserService.getUser();
