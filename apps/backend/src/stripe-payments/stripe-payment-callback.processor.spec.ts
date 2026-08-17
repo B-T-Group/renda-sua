@@ -10,6 +10,7 @@ describe('StripePaymentCallbackProcessor', () => {
     getTransactionByReference: jest.Mock;
     getTransactionBySessionId: jest.Mock;
     getTransactionByPaymentIntentId: jest.Mock;
+    getTransactionById: jest.Mock;
     updateTransaction: jest.Mock;
   };
   let accountsService: {
@@ -39,6 +40,7 @@ describe('StripePaymentCallbackProcessor', () => {
       getTransactionByReference: jest.fn(),
       getTransactionBySessionId: jest.fn(),
       getTransactionByPaymentIntentId: jest.fn(),
+      getTransactionById: jest.fn(),
       updateTransaction: jest.fn(),
     };
     accountsService = { registerTransaction: jest.fn() };
@@ -50,7 +52,7 @@ describe('StripePaymentCallbackProcessor', () => {
       onPaymentFailure: jest.fn(),
     };
     paymentCallbackRegistry = {
-      getHandlers: jest.fn().mockResolvedValue([callbackHandler]),
+      getHandlers: jest.fn().mockReturnValue([callbackHandler]),
     };
     stripeService = { retrievePaymentIntent: jest.fn() };
     hasuraSystemService = { executeQuery: jest.fn() };
@@ -127,6 +129,9 @@ describe('StripePaymentCallbackProcessor', () => {
   it('finalizes authorized manual payments when the PaymentIntent succeeds', async () => {
     databaseService.getTransactionByReference.mockResolvedValue(
       makeTransaction({ status: 'authorized' })
+    );
+    databaseService.getTransactionById.mockResolvedValue(
+      makeTransaction({ status: 'success' })
     );
     accountsService.registerTransaction.mockResolvedValue({ success: true });
 

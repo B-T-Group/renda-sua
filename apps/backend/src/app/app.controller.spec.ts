@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -8,14 +10,27 @@ describe('AppController', () => {
   beforeAll(async () => {
     app = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        AppService,
+        {
+          provide: HasuraSystemService,
+          useValue: { executeQuery: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: WINSTON_MODULE_PROVIDER,
+          useValue: { info: jest.fn(), error: jest.fn() },
+        },
+      ],
     }).compile();
   });
 
-  describe('getData', () => {
-    it('should return "Hello API"', () => {
+  describe('getHealth', () => {
+    it('should return health status', async () => {
       const appController = app.get<AppController>(AppController);
-      expect(appController.getData()).toEqual({message: 'Hello API'});
+      const res = { status: jest.fn() } as any;
+      await expect(appController.getHealth(res)).resolves.toEqual(
+        expect.objectContaining({ status: 'healthy' })
+      );
     });
   });
 });

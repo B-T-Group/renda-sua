@@ -3,9 +3,12 @@ import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { StripePaymentsController } from './stripe-payments.controller';
 
 describe('StripePaymentsController', () => {
+  const ctx = {} as any;
   let controller: StripePaymentsController;
   let hasuraUserService: {
     getUser: jest.Mock;
+  };
+  let hasuraSystemService: {
     executeQuery: jest.Mock;
   };
   let databaseService: {
@@ -19,6 +22,8 @@ describe('StripePaymentsController', () => {
   beforeEach(() => {
     hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({ id: 'user-123' }),
+    };
+    hasuraSystemService = {
       executeQuery: jest.fn(),
     };
     databaseService = {
@@ -33,9 +38,12 @@ describe('StripePaymentsController', () => {
       {} as any,
       databaseService as any,
       hasuraUserService as any,
+      hasuraSystemService as any,
       {} as any,
       {} as any,
       payoutService as any,
+      {} as any,
+      {} as any,
       {} as any
     );
   });
@@ -49,11 +57,11 @@ describe('StripePaymentsController', () => {
     };
 
     it('rejects withdrawals from accounts not owned by the user', async () => {
-      hasuraUserService.executeQuery.mockResolvedValue({ accounts: [] });
+      hasuraSystemService.executeQuery.mockResolvedValue({ accounts: [] });
 
       let error: HttpException | undefined;
       try {
-        await controller.withdraw(request);
+        await controller.withdraw(ctx, request);
       } catch (caught: any) {
         error = caught;
       }
@@ -61,7 +69,7 @@ describe('StripePaymentsController', () => {
       expect(error).toBeInstanceOf(HttpException);
       expect(error?.getStatus()).toBe(HttpStatus.NOT_FOUND);
 
-      expect(hasuraUserService.executeQuery).toHaveBeenCalledWith(
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
         GET_ACCOUNT_BY_ID_FOR_USER,
         { accountId: request.accountId, userId: 'user-123' }
       );
@@ -69,7 +77,7 @@ describe('StripePaymentsController', () => {
     });
 
     it('executes payout after account ownership is verified', async () => {
-      hasuraUserService.executeQuery.mockResolvedValue({
+      hasuraSystemService.executeQuery.mockResolvedValue({
         accounts: [{ id: request.accountId }],
       });
       payoutService.executePayout.mockResolvedValue({
@@ -77,7 +85,7 @@ describe('StripePaymentsController', () => {
         data: { transactionId: 'tx-123' },
       });
 
-      await expect(controller.withdraw(request)).resolves.toEqual({
+      await expect(controller.withdraw(ctx, request)).resolves.toEqual({
         success: true,
         data: { transactionId: 'tx-123' },
       });
@@ -101,18 +109,18 @@ describe('StripePaymentsController', () => {
         id: 'transaction-123',
         account_id: 'foreign-account',
       });
-      hasuraUserService.executeQuery.mockResolvedValue({ accounts: [] });
+      hasuraSystemService.executeQuery.mockResolvedValue({ accounts: [] });
 
       let error: HttpException | undefined;
       try {
-        await controller.getById('transaction-123');
+        await controller.getById(ctx, 'transaction-123');
       } catch (caught: any) {
         error = caught;
       }
 
       expect(error).toBeInstanceOf(HttpException);
       expect(error?.getStatus()).toBe(HttpStatus.NOT_FOUND);
-      expect(hasuraUserService.executeQuery).toHaveBeenCalledWith(
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
         GET_ACCOUNT_BY_ID_FOR_USER,
         { accountId: 'foreign-account', userId: 'user-123' }
       );
@@ -123,7 +131,7 @@ describe('StripePaymentsController', () => {
     it('requires accountId before listing Stripe transactions', async () => {
       let error: HttpException | undefined;
       try {
-        await controller.list(undefined, undefined, undefined, undefined);
+        await controller.list(ctx, undefined, undefined, undefined, undefined);
       } catch (caught: any) {
         error = caught;
       }

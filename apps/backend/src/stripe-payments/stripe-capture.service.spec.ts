@@ -11,6 +11,7 @@ describe('StripeCaptureService', () => {
   let stripeService: {
     capturePaymentIntent: jest.Mock;
     cancelPaymentIntent: jest.Mock;
+    retrievePaymentIntent: jest.Mock;
   };
   let databaseService: {
     getTransactionByEntityId: jest.Mock;
@@ -27,6 +28,7 @@ describe('StripeCaptureService', () => {
     stripeService = {
       capturePaymentIntent: jest.fn(),
       cancelPaymentIntent: jest.fn(),
+      retrievePaymentIntent: jest.fn(),
     };
     databaseService = {
       getTransactionByEntityId: jest.fn(),
@@ -102,7 +104,8 @@ describe('StripeCaptureService', () => {
 
     expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
       'pi_123',
-      'capture_order-id-123'
+      'capture_order-id-123',
+      undefined
     );
     expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
       1,
@@ -113,6 +116,106 @@ describe('StripeCaptureService', () => {
       2,
       'tx-123',
       { status: 'success', captured_at: now.toISOString() }
+    );
+  });
+
+  it('persists partial captureAmount so wallet credit matches Stripe charge', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({ success: true, captured: true });
+
+    expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+      'pi_123',
+      'capture_order-id-123',
+      { amount: 100, currency: 'CAD' }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      1,
+      'tx-123',
+      { status: 'capture_pending', amount: 100 }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      2,
+      'tx-123',
+      { status: 'success', captured_at: now.toISOString(), amount: 100 }
+    );
+  });
+
+  it('persists partial amount when syncing an already captured PaymentIntent', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'succeeded',
+      amount_received: 10000,
+    });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({
+      success: true,
+      message: 'Already captured on Stripe',
+      captured: true,
+    });
+
+    expect(stripeService.capturePaymentIntent).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'success',
+      captured_at: now.toISOString(),
+      amount: 100,
+    });
+  });
+
+  it('does not overwrite amount when Stripe already captured the full charge', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'succeeded',
+      amount_received: 12500,
+    });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({
+      success: true,
+      message: 'Already captured on Stripe',
+      captured: true,
+    });
+
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'success',
+      captured_at: now.toISOString(),
+    });
+  });
+
+  it('credits wallet using the persisted (possibly partial) transaction amount', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(
+      makeTransaction({ status: 'success', amount: 100 })
+    );
+    accountsService.registerTransaction.mockResolvedValue({ success: true });
+
+    await expect(
+      service.creditWalletForCapturedOrder('ORDER-1001')
+    ).resolves.toBe('account-123');
+
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'account-123',
+        amount: 100,
+        transactionType: 'deposit',
+      })
     );
   });
 
@@ -186,6 +289,9 @@ describe('StripeCaptureService', () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(
       makeTransaction({ status: 'success' })
     );
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'succeeded',
+    });
 
     await expect(
       service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })

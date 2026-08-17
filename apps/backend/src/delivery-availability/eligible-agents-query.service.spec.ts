@@ -105,4 +105,27 @@ describe('EligibleAgentsQueryService', () => {
 
     expect(result.map((c) => c.agentId)).toEqual(['internal']);
   });
+
+  it('accepts cased/padded focus strings when deciding delivery eligibility', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      agent_locations: [
+        agentRow('delivery-cased', 4.01, { focus: ' Delivery ' }),
+        agentRow('both-cased', 4.02, { focus: 'BOTH' }),
+        agentRow('commercial-cased', 4.015, { focus: 'Commercial' }),
+      ],
+    });
+
+    const result = await service.findEligibleAgents({
+      originLat: 4,
+      originLon: 9,
+      targetCountry: 'CM',
+      targetState: 'Littoral',
+    });
+
+    expect(result.map((c) => c.agentId)).toEqual([
+      'delivery-cased',
+      'both-cased',
+    ]);
+  });
 });
+

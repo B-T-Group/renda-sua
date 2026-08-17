@@ -1,5 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 import { MtnMomoService } from './mtn-momo.service';
 
 describe('MtnMomoService', () => {
@@ -30,6 +32,19 @@ describe('MtnMomoService', () => {
               };
               return config[key];
             }),
+          },
+        },
+        {
+          provide: MtnMomoDatabaseService,
+          useValue: {},
+        },
+        {
+          provide: WINSTON_MODULE_PROVIDER,
+          useValue: {
+            info: jest.fn(),
+            log: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
           },
         },
       ],

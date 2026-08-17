@@ -47,6 +47,14 @@ describe('requiresMerchantAction', () => {
     expect(
       requiresMerchantAction(baseStatus({ nextAction: 'pending_review' }))
     ).toBe(false);
+    expect(
+      requiresMerchantAction(
+        baseStatus({ nextAction: 'verify_mobile_payment_phone' })
+      )
+    ).toBe(false);
+    expect(
+      requiresMerchantAction(baseStatus({ nextAction: 'publish_catalog' }))
+    ).toBe(false);
   });
 });
 
@@ -100,6 +108,31 @@ describe('isSetupMode', () => {
         })
       )
     ).toBe(true);
+  });
+
+  it('exits setup when server marks MoMo onboarding complete during ID review', () => {
+    expect(
+      isSetupMode(
+        baseStatus({
+          nextAction: 'pending_review',
+          isOnboarding: false,
+          lifecycle_status: 'payment_verification_pending',
+          can_accept_orders: false,
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('falls back to can_accept_orders when isOnboarding is absent', () => {
+    expect(
+      isSetupMode(
+        baseStatus({
+          nextAction: 'complete',
+          can_accept_orders: true,
+          lifecycle_status: 'catalog_ready',
+        })
+      )
+    ).toBe(false);
   });
 });
 

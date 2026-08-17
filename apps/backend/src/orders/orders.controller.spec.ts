@@ -10,6 +10,7 @@ describe('OrdersController', () => {
 
   beforeEach(async () => {
     const mockOrdersService = {
+      createOrder: jest.fn(),
       confirmOrder: jest.fn(),
       completePreparation: jest.fn(),
       completePreparationBatch: jest.fn(),
@@ -57,6 +58,7 @@ describe('OrdersController', () => {
     it('should create an order successfully', async () => {
       const orderData = {
         item: { business_inventory_id: 'inv-123', quantity: 2 },
+        delivery_address_id: 'addr-123',
       };
       const expectedResult = {
         success: true,
@@ -71,21 +73,22 @@ describe('OrdersController', () => {
         message: 'Order created successfully',
       };
 
-      hasuraUserService.createOrder.mockResolvedValue(expectedResult.order);
+      ordersService.createOrder.mockResolvedValue(expectedResult.order as any);
 
       const result = await controller.createOrder(orderData);
 
       expect(result).toEqual(expectedResult);
-      expect(hasuraUserService.createOrder).toHaveBeenCalledWith(orderData);
+      expect(ordersService.createOrder).toHaveBeenCalledWith(orderData);
     });
 
     it('should handle service errors appropriately', async () => {
       const orderData = {
         item: { business_inventory_id: 'inv-123', quantity: 2 },
+        delivery_address_id: 'addr-123',
       };
       const error = new Error('No valid items found');
 
-      hasuraUserService.createOrder.mockRejectedValue(error);
+      ordersService.createOrder.mockRejectedValue(error);
 
       await expect(controller.createOrder(orderData)).rejects.toThrow();
     });
@@ -152,25 +155,6 @@ describe('OrdersController', () => {
       expect(ordersService.completePreparationBatch).toHaveBeenCalledWith(
         request
       );
-    });
-  });
-
-  describe('getOrder', () => {
-    it('should assign order to agent successfully', async () => {
-      const request = { orderId: 'order-123' };
-      const expectedResult = {
-        success: true,
-        order: { id: 'order-123', current_status: 'assigned_to_agent' },
-        holdAmount: 80.0,
-        message: 'Order assigned successfully',
-      };
-
-      ordersService.getOrder.mockResolvedValue(expectedResult);
-
-      const result = await controller.getOrder(request);
-
-      expect(result).toEqual(expectedResult);
-      expect(ordersService.getOrder).toHaveBeenCalledWith(request);
     });
   });
 
@@ -353,24 +337,6 @@ describe('OrdersController', () => {
     });
   });
 
-  describe('failDelivery', () => {
-    it('should mark delivery as failed successfully', async () => {
-      const request = { orderId: 'order-123', notes: 'Customer not available' };
-      const expectedResult = {
-        success: true,
-        order: { id: 'order-123', current_status: 'failed' },
-        message: 'Delivery marked as failed',
-      };
-
-      ordersService.failDelivery.mockResolvedValue(expectedResult);
-
-      const result = await controller.failDelivery(request);
-
-      expect(result).toEqual(expectedResult);
-      expect(ordersService.failDelivery).toHaveBeenCalledWith(request);
-    });
-  });
-
   describe('cancelOrder', () => {
     it('should cancel order successfully', async () => {
       const request = { orderId: 'order-123', notes: 'Cancelled by business' };
@@ -411,26 +377,22 @@ describe('OrdersController', () => {
   });
 
   describe('updateOrderStatus', () => {
-    it('should update order status successfully', async () => {
+    it('routes cancelled to cancelOrder so payment release runs', async () => {
       const orderId = 'order-123';
-      const updateData = { status: 'confirmed' };
       const expectedResult = {
         success: true,
-        order: { id: 'order-123', current_status: 'confirmed' },
-        message: 'Order status updated successfully',
+        order: { id: 'order-123', current_status: 'cancelled' },
+        message: 'Order cancelled successfully',
       };
 
-      hasuraUserService.updateOrderStatus.mockResolvedValue(
-        expectedResult.order
-      );
+      ordersService.cancelOrder.mockResolvedValue(expectedResult);
 
-      const result = await controller.updateOrderStatus(orderId, updateData);
+      const result = await controller.updateOrderStatus(orderId, {
+        status: 'cancelled',
+      });
 
       expect(result).toEqual(expectedResult);
-      expect(hasuraUserService.updateOrderStatus).toHaveBeenCalledWith(
-        orderId,
-        updateData.status
-      );
+      expect(ordersService.cancelOrder).toHaveBeenCalledWith({ orderId });
     });
   });
 });

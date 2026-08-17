@@ -167,6 +167,20 @@ type InventoryQuantityRequest = {
   quantity?: number;
 };
 
+type OrderDeliveryFeeInfo = {
+  deliveryFee: number;
+  method: 'distance_based' | 'flat_fee';
+  currency: string;
+  country: string;
+  baseDeliveryFee: number;
+  perKmDeliveryFee: number;
+  isFirstOrderClient: boolean;
+  firstOrderDeliveryFeePromo: boolean;
+  firstOrderBaseDeliveryDiscountAmount: number;
+  baseDeliveryFeeBeforeDiscount: number;
+  distance?: number;
+};
+
 // Custom interface for complex order data with all relationships
 export interface OrderWithDetails {
   id: string;
@@ -1628,11 +1642,96 @@ export class OrdersService {
   private async applySwitchToPickup(order: Orders): Promise<void> {
     const baseFee = Number((order as any).base_delivery_fee ?? 0);
     const perKmFee = Number((order as any).per_km_delivery_fee ?? 0);
-    const newTotal = Math.max(0, Number(order.total_amount) - baseFee - perKmFee);
+    const waived = baseFee + perKmFee;
+    const newTotal = Math.max(0, Number(order.total_amount) - waived);
+    const hold = await this.findOrderHold(order.id);
+    const heldDelivery = Number(hold?.delivery_fees || 0);
+    await this.persistSwitchToPickupClaim(order.id, newTotal);
+    try {
+      if (hold && heldDelivery > 0) {
+        await this.updateOrderHold(hold.id, { delivery_fees: 0 });
+      }
+      if (heldDelivery > 0 && (order as any).payment_status === 'paid') {
+        await this.releaseClientDeliveryHold(order, heldDelivery);
+      }
+    } catch (error) {
+      await this.rollbackSwitchToPickup(order, hold?.id, heldDelivery);
+      throw error;
+    }
+  }
+
+  private async rollbackSwitchToPickup(
+    order: Orders,
+    holdId: string | undefined,
+    heldDelivery: number
+  ): Promise<void> {
+    try {
+      await this.revertSwitchToPickupClaim(order);
+      if (holdId && heldDelivery > 0) {
+        await this.updateOrderHold(holdId, { delivery_fees: heldDelivery });
+      }
+    } catch (rollbackError) {
+      this.logger.error(
+        `Failed to rollback switch-to-pickup for ${order.id}: ${
+          rollbackError instanceof Error ? rollbackError.message : rollbackError
+        }`
+      );
+    }
+  }
+
+  private async revertSwitchToPickupClaim(order: Orders): Promise<void> {
     await this.hasuraSystemService.executeMutation(
-      `mutation SwitchToPickup($id: uuid!, $total: numeric!) {
+      `mutation RevertSwitchToPickup(
+        $id: uuid!
+        $fulfillmentMethod: order_fulfillment_method_enum!
+        $baseFee: numeric!
+        $perKmFee: numeric!
+        $total: numeric!
+        $dispatchReadyAt: timestamptz
+        $dispatchRound: Int
+        $dispatchExhaustedAt: timestamptz
+      ) {
         update_orders_by_pk(
           pk_columns: { id: $id }
+          _set: {
+            fulfillment_method: $fulfillmentMethod
+            base_delivery_fee: $baseFee
+            per_km_delivery_fee: $perKmFee
+            total_amount: $total
+            dispatch_ready_at: $dispatchReadyAt
+            dispatch_round: $dispatchRound
+            dispatch_exhausted_at: $dispatchExhaustedAt
+            updated_at: "now()"
+          }
+        ) { id }
+      }`,
+      {
+        id: order.id,
+        fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
+        baseFee: Number((order as any).base_delivery_fee ?? 0),
+        perKmFee: Number((order as any).per_km_delivery_fee ?? 0),
+        total: Number(order.total_amount),
+        dispatchReadyAt: (order as any).dispatch_ready_at ?? null,
+        dispatchRound: (order as any).dispatch_round ?? null,
+        dispatchExhaustedAt: (order as any).dispatch_exhausted_at ?? null,
+      }
+    );
+  }
+
+  /** CAS: only switch while still unassigned delivery ready_for_pickup. */
+  private async persistSwitchToPickupClaim(
+    orderId: string,
+    total: number
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation(
+      `mutation SwitchToPickup($id: uuid!, $total: numeric!) {
+        update_orders(
+          where: {
+            id: { _eq: $id }
+            current_status: { _eq: ready_for_pickup }
+            assigned_agent_id: { _is_null: true }
+            fulfillment_method: { _neq: pickup }
+          }
           _set: {
             fulfillment_method: pickup
             base_delivery_fee: 0
@@ -1643,10 +1742,68 @@ export class OrdersService {
             dispatch_exhausted_at: null
             updated_at: "now()"
           }
-        ) { id }
+        ) { affected_rows }
       }`,
-      { id: order.id, total: newTotal }
+      { id: orderId, total }
     );
+    if ((result?.update_orders?.affected_rows ?? 0) < 1) {
+      throw new HttpException(
+        'Order can no longer be switched to pickup',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async findOrderHold(
+    orderId: string
+  ): Promise<{ id: string; delivery_fees?: number | null } | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query FindOrderHold($orderId: uuid!) {
+        order_holds(
+          where: {
+            order_id: { _eq: $orderId }
+            status: { _eq: active }
+          }
+          limit: 1
+        ) {
+          id
+          delivery_fees
+        }
+      }`,
+      { orderId }
+    );
+    return result?.order_holds?.[0] ?? null;
+  }
+
+  private async releaseClientDeliveryHold(
+    order: Orders,
+    amount: number
+  ): Promise<void> {
+    const clientUserId = order.client?.user_id;
+    if (!clientUserId || amount <= 0) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      clientUserId,
+      order.currency
+    );
+    if (!clientAccount) {
+      throw new HttpException(
+        'Client account not found to release waived delivery fee',
+        HttpStatus.NOT_FOUND
+      );
+    }
+    const release = await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount,
+      transactionType: 'release',
+      memo: `Delivery fee waived after switch to pickup for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+    if (!release?.success) {
+      throw new HttpException(
+        release?.error || 'Failed to release waived delivery fee hold',
+        HttpStatus.CONFLICT
+      );
+    }
   }
 
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
@@ -4285,11 +4442,12 @@ export class OrdersService {
 
     await this.releaseStripeAuthorizationIfNeeded(order);
 
-    // Update order status to cancelled
+    // Update order status to cancelled (dedicated path; not via PATCH status)
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'cancelled',
-      actor
+      actor,
+      { viaCancelEndpoint: true }
     );
 
     // Persist cancellation metadata on the orders row
@@ -7633,18 +7791,7 @@ export class OrdersService {
     );
   }
 
-  private zeroPickupDeliveryFee(currency: string): {
-    deliveryFee: number;
-    method: 'distance_based' | 'flat_fee';
-    currency: string;
-    country: string;
-    baseDeliveryFee: number;
-    perKmDeliveryFee: number;
-    isFirstOrderClient: boolean;
-    firstOrderDeliveryFeePromo: boolean;
-    firstOrderBaseDeliveryDiscountAmount: number;
-    baseDeliveryFeeBeforeDiscount: number;
-  } {
+  private zeroPickupDeliveryFee(currency: string): OrderDeliveryFeeInfo {
     return {
       deliveryFee: 0,
       method: 'flat_fee',
@@ -8058,7 +8205,7 @@ export class OrdersService {
     }, 0);
 
     // Calculate delivery fee (waived for pickup, sum shipping prices for shipping)
-    let deliveryFeeInfo;
+    let deliveryFeeInfo: OrderDeliveryFeeInfo;
     if (fulfillmentMethod === 'pickup') {
       deliveryFeeInfo = this.zeroPickupDeliveryFee(currency);
     } else if (fulfillmentMethod === 'shipping') {
@@ -8073,9 +8220,13 @@ export class OrdersService {
         baseDeliveryFee: totalShippingFee,
         perKmDeliveryFee: 0,
         deliveryFee: totalShippingFee,
+        method: 'flat_fee',
         currency,
+        country: '',
+        isFirstOrderClient: false,
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
         baseDeliveryFeeBeforeDiscount: totalShippingFee,
-        firstOrderPromo: false,
       };
     } else {
       deliveryFeeInfo = await this.calculateItemDeliveryFee(
@@ -10102,19 +10253,7 @@ export class OrdersService {
     addressId?: string,
     requiresFastDelivery = false,
     totalWeight?: number
-  ): Promise<{
-    deliveryFee: number;
-    distance?: number;
-    method: 'distance_based' | 'flat_fee';
-    currency: string;
-    country: string;
-    baseDeliveryFee: number;
-    perKmDeliveryFee: number;
-    isFirstOrderClient: boolean;
-    firstOrderDeliveryFeePromo: boolean;
-    firstOrderBaseDeliveryDiscountAmount: number;
-    baseDeliveryFeeBeforeDiscount: number;
-  }> {
+  ): Promise<OrderDeliveryFeeInfo> {
     try {
       // Get user for authorization
       const user = await this.hasuraUserService.getUser();

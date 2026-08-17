@@ -23,6 +23,12 @@ describe('OrderStatusService', () => {
     agent: { id: 'agent-1' },
   };
 
+  const businessUser = {
+    id: 'user-business-1',
+    active_persona: 'business',
+    business: { id: 'business-1' },
+  };
+
   const baseOrder = {
     id: 'order-123',
     order_number: 'ORD-123',
@@ -69,14 +75,45 @@ describe('OrderStatusService', () => {
   };
 
   describe('updateOrderStatus from ready_for_pickup', () => {
-    it('allows the client to cancel when no agent is assigned', async () => {
+    it('rejects client cancel via generic status path (must use POST /orders/cancel)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: baseOrder,
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'cancelled')
+      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows cancel when called from the dedicated cancel endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
         orders_by_pk: baseOrder,
       });
       mockSuccessfulUpdate('cancelled');
 
-      const result = await service.updateOrderStatus('order-123', 'cancelled');
+      const result = await service.updateOrderStatus('order-123', 'cancelled', {
+        viaCancelEndpoint: true,
+      });
+
+      expect(result.current_status).toBe('cancelled');
+    });
+
+    it('allows cancel endpoint options when actor argument is omitted', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: baseOrder,
+      });
+      mockSuccessfulUpdate('cancelled');
+
+      const result = await service.updateOrderStatus(
+        'order-123',
+        'cancelled',
+        undefined,
+        { viaCancelEndpoint: true }
+      );
 
       expect(result.current_status).toBe('cancelled');
     });
@@ -96,7 +133,7 @@ describe('OrderStatusService', () => {
       expect(result.current_status).toBe('assigned_to_agent');
     });
 
-    it('rejects client transitions other than cancelled', async () => {
+    it('rejects client transitions other than cancel-via-endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
         orders_by_pk: baseOrder,
@@ -111,12 +148,6 @@ describe('OrderStatusService', () => {
   });
 
   describe('updateOrderStatus shipping backdoor', () => {
-    const businessUser = {
-      id: 'user-business-1',
-      active_persona: 'business',
-      business: { id: 'business-1' },
-    };
-
     it('rejects business confirmed → shipped on the generic status endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(businessUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
@@ -140,8 +171,25 @@ describe('OrderStatusService', () => {
     });
   });
 
+  describe('updateOrderStatus cancel from preparing', () => {
+    it('rejects business cancel via generic status path', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'preparing',
+        },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'cancelled')
+      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateOrderStatus after agent assignment', () => {
-    it('rejects a client cancel once the order is assigned to an agent', async () => {
+    it('still rejects status-only cancel (eligibility is enforced by cancelOrder)', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
         orders_by_pk: {
@@ -154,9 +202,7 @@ describe('OrderStatusService', () => {
 
       await expect(
         service.updateOrderStatus('order-123', 'cancelled')
-      ).rejects.toThrow(
-        'Invalid status transition from assigned_to_agent to cancelled'
-      );
+      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
     });
   });
 });
