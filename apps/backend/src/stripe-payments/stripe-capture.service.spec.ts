@@ -12,6 +12,7 @@ describe('StripeCaptureService', () => {
     capturePaymentIntent: jest.Mock;
     cancelPaymentIntent: jest.Mock;
     retrievePaymentIntent: jest.Mock;
+    expireCheckoutSession: jest.Mock;
   };
   let databaseService: {
     getTransactionByEntityId: jest.Mock;
@@ -29,6 +30,7 @@ describe('StripeCaptureService', () => {
       capturePaymentIntent: jest.fn(),
       cancelPaymentIntent: jest.fn(),
       retrievePaymentIntent: jest.fn(),
+      expireCheckoutSession: jest.fn(),
     };
     databaseService = {
       getTransactionByEntityId: jest.fn(),
@@ -302,5 +304,27 @@ describe('StripeCaptureService', () => {
 
     expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('expires an open checkout session when the PaymentIntent does not exist yet', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(
+      makeTransaction({
+        status: 'pending',
+        stripe_payment_intent_id: undefined,
+        stripe_session_id: 'cs_123',
+      })
+    );
+    stripeService.expireCheckoutSession.mockResolvedValue({ id: 'cs_123' });
+
+    await expect(
+      service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+    ).resolves.toEqual({ success: true });
+
+    expect(stripeService.expireCheckoutSession).toHaveBeenCalledWith('cs_123');
+    expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'cancelled',
+      error_message: 'Checkout session expired on order cancellation',
+    });
   });
 });
