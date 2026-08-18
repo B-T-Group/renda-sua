@@ -282,8 +282,14 @@ export class StripeCaptureService {
     const tx = await this.databaseService.getTransactionByEntityId(
       params.orderNumber
     );
-    if (!tx?.stripe_payment_intent_id) {
+    if (!tx) {
       return { success: true, skipped: true, message: 'No Stripe transaction' };
+    }
+
+    await this.expireCheckoutSessionIfPresent(tx);
+
+    if (!tx.stripe_payment_intent_id) {
+      return this.markPendingCheckoutCancelled(tx);
     }
     if (tx.status === 'success') {
       // Status drift: DB says captured but Stripe may still be requires_capture.
@@ -341,5 +347,31 @@ export class StripeCaptureService {
       );
       return { success: false, message: error?.message || 'Cancel failed' };
     }
+  }
+
+  private async expireCheckoutSessionIfPresent(
+    tx: StripePaymentTransaction
+  ): Promise<void> {
+    if (!tx.stripe_session_id) return;
+    try {
+      await this.stripeService.expireCheckoutSession(tx.stripe_session_id);
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not expire checkout session ${tx.stripe_session_id}: ${error?.message}`
+      );
+    }
+  }
+
+  private async markPendingCheckoutCancelled(
+    tx: StripePaymentTransaction
+  ): Promise<{ success: boolean; message?: string; skipped?: boolean }> {
+    if (tx.status !== 'pending') {
+      return { success: true, skipped: true, message: 'No Stripe payment intent' };
+    }
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'cancelled',
+      error_message: 'Checkout session expired on order cancellation',
+    });
+    return { success: true };
   }
 }

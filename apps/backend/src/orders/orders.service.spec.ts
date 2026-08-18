@@ -281,6 +281,9 @@ describe('OrdersService', () => {
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
             creditWalletForCapturedOrder: jest.fn(),
+            cancelOrderPaymentIntent: jest.fn().mockResolvedValue({
+              success: true,
+            }),
           },
         },
         {
@@ -1647,6 +1650,94 @@ describe('OrdersService', () => {
 
       requireSpy.mockRestore();
       getByNumberSpy.mockRestore();
+      finalizeSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterAuthorization does not resurrect a cancelled order', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'cancelled',
+          payment_timing: 'pay_now',
+        });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterAuthorization releases Stripe when CAS finds the order already cancelled', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation AuthorizeOrderPayment'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          allowedStatuses: ['pending_payment', 'pending'],
+        })
+      );
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterIncomingPayment does not mark a cancelled order paid', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+
+      await service.finalizeOrderAfterIncomingPayment({
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+      });
+
+      expect(finalizeSpy).not.toHaveBeenCalled();
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
       finalizeSpy.mockRestore();
     });
   });
