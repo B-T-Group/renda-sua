@@ -53,6 +53,7 @@ export class OrderStatusService {
           id
           order_number
           current_status
+          fulfillment_method
           business_id
           business {
             user_id
@@ -109,7 +110,8 @@ export class OrderStatusService {
       order.current_status,
       isBusinessOwner,
       isAssignedAgent,
-      isClient
+      isClient,
+      order.fulfillment_method
     );
 
     // Special case: Any agent can assign ready_for_pickup orders
@@ -303,13 +305,16 @@ export class OrderStatusService {
     currentStatus: string,
     isBusinessOwner: boolean,
     isAssignedAgent: boolean,
-    isClient: boolean
+    isClient: boolean,
+    fulfillmentMethod?: string
   ): string[] {
+    const canReadyForPickup =
+      isBusinessOwner && fulfillmentMethod !== 'shipping';
     const transitions: { [key: string]: string[] } = {
       pending_payment: [],
       pending: isBusinessOwner ? ['confirmed'] : [],
-      confirmed: isBusinessOwner ? ['ready_for_pickup'] : [],
-      preparing: isBusinessOwner ? ['ready_for_pickup'] : [],
+      confirmed: canReadyForPickup ? ['ready_for_pickup'] : [],
+      preparing: canReadyForPickup ? ['ready_for_pickup'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
       // Client cancel until agent assignment uses POST /orders/cancel.

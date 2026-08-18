@@ -131,6 +131,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const {
     confirmOrder,
     completePreparation,
+    markOrderAsShipped,
     completeOrder,
     confirmClientPickup,
     getActiveDeliveryPin,
@@ -205,6 +206,26 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       );
       onActionComplete?.();
       setConfirmModalOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkShipped = async () => {
+    setLoading(true);
+    try {
+      await markOrderAsShipped(order.id);
+      onShowNotification?.(
+        t('messages.orderMarkShippedSuccess', 'Order marked as shipped'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderMarkShippedError', 'Failed to mark order as shipped');
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -449,27 +470,26 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'confirmed':
-        actions.push({
-          label: t('orderActions.readyForPickup', 'Set as ready'),
-          action: handleCompletePreparation,
-          color: 'success' as const,
-          icon: <CheckCircle />,
-        });
-        actions.push({
-          label: t('orderActions.cancelOrder', 'Cancel Order'),
-          action: handleCancelClick,
-          color: 'error' as const,
-          icon: <Cancel />,
-        });
-        break;
-
       case 'preparing':
-        actions.push({
-          label: t('orderActions.completePreparation', 'Complete Preparation'),
-          action: handleCompletePreparation,
-          color: 'success' as const,
-          icon: <CheckCircle />,
-        });
+      case 'awaiting_shipment':
+        if (order.fulfillment_method === 'shipping') {
+          actions.push({
+            label: t('orderActions.markAsShipped', 'Mark as shipped'),
+            action: handleMarkShipped,
+            color: 'success' as const,
+            icon: <LocalShipping />,
+          });
+        } else if (order.current_status !== 'awaiting_shipment') {
+          actions.push({
+            label:
+              order.current_status === 'preparing'
+                ? t('orderActions.completePreparation', 'Complete Preparation')
+                : t('orderActions.readyForPickup', 'Set as ready'),
+            action: handleCompletePreparation,
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+        }
         actions.push({
           label: t('orderActions.cancelOrder', 'Cancel Order'),
           action: handleCancelClick,
@@ -490,6 +510,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'ready_for_pickup':
+        if (order.fulfillment_method === 'shipping') {
+          actions.push({
+            label: t('orderActions.markAsShipped', 'Mark as shipped'),
+            action: handleMarkShipped,
+            color: 'success' as const,
+            icon: <LocalShipping />,
+          });
+          break;
+        }
         if (
           order.fulfillment_method === 'pickup' &&
           order.payment_timing === 'pay_at_pickup' &&
