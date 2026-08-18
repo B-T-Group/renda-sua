@@ -84,7 +84,9 @@ describe('DashboardService tips reminders fallback', () => {
       } as any,
       {
         listPending: jest.fn().mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
-      } as any
+      } as any,
+      { resolveRailForUser: jest.fn().mockResolvedValue('mobile_money') } as any,
+      { isPayoutReady: jest.fn().mockResolvedValue(false) } as any
     );
   });
 

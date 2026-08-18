@@ -5,6 +5,8 @@ describe('DashboardService', () => {
   let service: DashboardService;
   let hasuraUserService: { getUser: jest.Mock };
   let hasuraSystemService: { executeQuery: jest.Mock };
+  let paymentRouting: { resolveRailForUser: jest.Mock };
+  let stripeConnectService: { isPayoutReady: jest.Mock };
 
   beforeEach(() => {
     hasuraUserService = { getUser: jest.fn() };
@@ -18,6 +20,12 @@ describe('DashboardService', () => {
         user_uploads: [],
       }),
     };
+    paymentRouting = {
+      resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+    };
+    stripeConnectService = {
+      isPayoutReady: jest.fn().mockResolvedValue(false),
+    };
     service = new DashboardService(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -28,7 +36,9 @@ describe('DashboardService', () => {
           .fn()
           .mockResolvedValue({ incoming: [], outgoing: [] }),
       } as any,
-      { listPending: jest.fn().mockResolvedValue({ jobs: [], pendingResultCount: 0 }) } as any
+      { listPending: jest.fn().mockResolvedValue({ jobs: [], pendingResultCount: 0 }) } as any,
+      paymentRouting as any,
+      stripeConnectService as any
     );
   });
 
@@ -235,6 +245,48 @@ describe('DashboardService', () => {
         }),
       ]);
     });
+
+    it('emits setup_payouts for Stripe agents who are not payout-ready', async () => {
+      paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+      stripeConnectService.isPayoutReady.mockResolvedValue(false);
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+
+      const result = await service.getActionsNeeded();
+
+      const idCall = hasuraSystemService.executeQuery.mock.calls.find(
+        ([query]) => String(query).includes('AgentIdDoc')
+      );
+      expect(idCall).toBeUndefined();
+      expect(result.actions).toEqual([
+        expect.objectContaining({
+          id: 'setup_payouts',
+          kind: 'setup_payouts',
+          priority: 'critical',
+          count: 1,
+        }),
+      ]);
+    });
+
+    it('omits ID and payouts actions when Stripe payouts are ready', async () => {
+      paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+      stripeConnectService.isPayoutReady.mockResolvedValue(true);
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+
+      const result = await service.getActionsNeeded();
+
+      expect(result.actions.map((a) => a.kind)).not.toContain('id_verification');
+      expect(result.actions.map((a) => a.kind)).not.toContain('setup_payouts');
+    });
   });
 
   describe('getAggregates', () => {
@@ -271,7 +323,9 @@ describe('DashboardService', () => {
           listPending: jest
             .fn()
             .mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
-        } as any
+        } as any,
+        paymentRouting as any,
+        stripeConnectService as any
       );
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',
