@@ -9,6 +9,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { ID_DOCUMENT_TYPE_NAMES, parseIdRejectionReason } from '../services/upload.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { StripeConnectService } from '../stripe-payments/stripe-connect.service';
 import { isActivePersona } from '../users/persona.util';
 
 export interface TopViewedProductDto {
@@ -95,7 +97,9 @@ export class DashboardService {
     private readonly permissionService: PermissionService,
     private readonly rbacService: RbacService,
     private readonly businessLocationTransferService: BusinessLocationTransferService,
-    private readonly aiImageCleanupService: AiImageCleanupService
+    private readonly aiImageCleanupService: AiImageCleanupService,
+    private readonly paymentRouting: PaymentRoutingService,
+    private readonly stripeConnectService: StripeConnectService
   ) {}
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
@@ -295,17 +299,39 @@ export class DashboardService {
   }
 
   private async getAgentActions(userId: string): Promise<ActionsNeededDto> {
-    const [openOrders, activeOrders, idStatus] = await Promise.all([
+    const [openOrders, activeOrders, activation] = await Promise.all([
       this.countAgentOpenOrders(userId),
       this.countAgentActiveOrders(userId),
-      this.getAgentIdDocumentStatus(userId),
+      this.getAgentActivationAction(userId),
     ]);
     const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
-      { id: 'id_verification', kind: 'id_verification', priority: 'critical', count: idStatus.needsAction ? 1 : 0 },
+      activation,
       { id: 'open_deliveries', kind: 'open_deliveries', priority: 'high', count: openOrders },
       { id: 'active_orders', kind: 'active_orders', priority: 'normal', count: activeOrders },
     ];
     return this.buildDto(raw);
+  }
+
+  private async getAgentActivationAction(
+    userId: string
+  ): Promise<Omit<ActionItemDto, 'count'> & { count: number }> {
+    const rail = await this.paymentRouting.resolveRailForUser(userId);
+    if (rail === 'stripe') {
+      const ready = await this.stripeConnectService.isPayoutReady(userId);
+      return {
+        id: 'setup_payouts',
+        kind: 'setup_payouts',
+        priority: 'critical',
+        count: ready ? 0 : 1,
+      };
+    }
+    const idStatus = await this.getAgentIdDocumentStatus(userId);
+    return {
+      id: 'id_verification',
+      kind: 'id_verification',
+      priority: 'critical',
+      count: idStatus.needsAction ? 1 : 0,
+    };
   }
 
   private async getClientActions(clientId: string): Promise<ActionsNeededDto> {
