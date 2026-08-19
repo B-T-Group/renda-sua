@@ -14,6 +14,7 @@ import {
   extractConverseOutputText,
   mapChatMessagesToConverse,
 } from './bedrock-converse.mapper';
+import { mapBedrockErrorToHttpException } from './bedrock-luna.errors';
 
 export type BedrockReasoningEffort =
   | 'none'
@@ -221,27 +222,6 @@ export class BedrockLunaService {
         error?.name ?? 'Error'
       }: ${error?.message ?? 'unknown'}`
     );
-    if (status === 429 || error?.name === 'ThrottlingException') {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS
-      );
-    }
-    if (status === 401 || status === 403) {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
-    }
-    if (error?.code === 'ECONNABORTED') {
-      throw new HttpException(
-        'AI request timed out. Please try again.',
-        HttpStatus.REQUEST_TIMEOUT
-      );
-    }
-    throw new HttpException(
-      'AI temporarily unavailable. Please try again.',
-      HttpStatus.SERVICE_UNAVAILABLE
-    );
+    throw mapBedrockErrorToHttpException(error);
   }
 }
