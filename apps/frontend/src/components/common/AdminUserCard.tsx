@@ -38,6 +38,7 @@ interface AdminUserCardProps {
   addresses?: AdminAddress[];
   footer?: React.ReactNode;
   headerRight?: React.ReactNode;
+  meta?: React.ReactNode;
   verified?: boolean;
   admin?: boolean;
   userId?: string;
@@ -51,6 +52,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
   addresses = [],
   footer,
   headerRight,
+  meta,
   verified,
   admin,
   userId,
@@ -77,6 +79,7 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
                 {subtitle}
               </Typography>
             )}
+            {meta}
           </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flexShrink: 0 }}>
             {verified && <StatusBadge type="verified" />}

@@ -19,6 +19,7 @@ import { useAgentOrders } from '../../hooks/useAgentOrders';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
+import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
@@ -103,6 +104,7 @@ const AgentDashboard: React.FC = () => {
             )}
           </Alert>
         ) : null}
+        <ReferralPayoutSnapshot source="agent" walletPath="/profile" />
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentEarningsWidget summary={summary} loading={loading} error={error} />

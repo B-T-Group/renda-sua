@@ -113,13 +113,15 @@ export class AgentReferralsService {
     newAgentId: string,
     resolved: ResolvedBusinessReferral,
     countryCode: string,
-    referredAgentName = 'Agent'
+    referredAgentName = 'Agent',
+    options?: { swallowErrors?: boolean }
   ): Promise<void> {
     if (!countryCode) return;
+    const throwOnFailure = options?.swallowErrors === false;
     try {
       if (resolved.kind === 'agent') {
         const earnerUserId = await this.getAgentUserId(resolved.agentId);
-        await this.creditReferral({
+        await this.creditReferralChecked({
           referringAgentId: resolved.agentId,
           referrerBusinessId: null,
           referredAgentId: newAgentId,
@@ -128,10 +130,11 @@ export class AgentReferralsService {
           referredAgentName,
           earnerName: `${resolved.userFirstName}`.trim() || 'Agent',
           earnerUserId,
+          throwOnFailure,
         });
         return;
       }
-      await this.creditReferral({
+      await this.creditReferralChecked({
         referringAgentId: null,
         referrerBusinessId: resolved.businessId,
         referredAgentId: newAgentId,
@@ -140,10 +143,23 @@ export class AgentReferralsService {
         referredAgentName,
         earnerName: resolved.businessName || 'Business',
         earnerUserId: resolved.userId,
+        throwOnFailure,
       });
     } catch (error: any) {
       this.logger.error(
         `Failed to credit agent referral for ${newAgentId}: ${error.message}`
+      );
+      if (throwOnFailure) throw error;
+    }
+  }
+
+  private async creditReferralChecked(
+    params: Parameters<AgentReferralsService['creditReferral']>[0]
+  ): Promise<void> {
+    const result = await this.creditReferral(params);
+    if (params.throwOnFailure && !result.credited) {
+      throw new Error(
+        `Failed to credit agent referral for ${params.referredAgentId}`
       );
     }
   }
@@ -186,7 +202,9 @@ export class AgentReferralsService {
     referredAgentName: string;
     earnerName: string;
     earnerUserId: string | null;
+    throwOnFailure?: boolean;
   }): Promise<{ credited: boolean; amount?: number }> {
+    let referralId: string | null = null;
     try {
       const earnerId = params.referringAgentId || params.referrerBusinessId;
       if (!earnerId || !params.earnerUserId) {
@@ -203,7 +221,7 @@ export class AgentReferralsService {
       }
 
       const currency = this.getCurrencyForCountry(params.countryCode);
-      const referralId = await this.insertOrGetReferralRecord({
+      referralId = await this.insertOrGetReferralRecord({
         referringAgentId: params.referringAgentId,
         referrerBusinessId: params.referrerBusinessId,
         referredAgentId: params.referredAgentId,
@@ -245,6 +263,8 @@ export class AgentReferralsService {
       this.logger.error(
         `Failed to credit referral for agent ${params.referredAgentId}: ${error.message}`
       );
+      if (referralId) await this.deleteReferralRecord(referralId);
+      if (params.throwOnFailure) throw error;
       return { credited: false };
     }
   }
@@ -446,6 +466,11 @@ export class AgentReferralsService {
         `Failed to delete unpaid agent referral ${referralId}: ${error.message}`
       );
     }
+  }
+
+  async deleteReferralForReferredAgent(referredAgentId: string): Promise<void> {
+    const referralId = await this.findReferralIdByReferredAgent(referredAgentId);
+    if (referralId) await this.deleteReferralRecord(referralId);
   }
 
   async listReferredBusinesses(

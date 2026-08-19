@@ -35,6 +35,8 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
+import { AdminApplyReferralDialog } from '../admin/AdminApplyReferralDialog';
+import { AdminReferralMeta } from '../admin/AdminReferralMeta';
 import {
   displayIdRejectionNote,
   isIdRejectionNote,
@@ -70,6 +72,7 @@ const AdminManageAgents: React.FC = () => {
     updateAgent,
     setAgentInternal,
     setUserInternal,
+    applyReferral,
   } = useAdminAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
@@ -87,6 +90,7 @@ const AdminManageAgents: React.FC = () => {
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectMessage, setRejectMessage] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [applyAgentId, setApplyAgentId] = useState<string | null>(null);
 
   const verificationAgent = agents.find((a) => a.id === verificationAgentId);
 
@@ -350,6 +354,18 @@ const AdminManageAgents: React.FC = () => {
                   verified={!!a.is_verified}
                   userId={a.user.id}
                   userType="agent"
+                  meta={
+                    <AdminReferralMeta
+                      referralCode={a.referralCode}
+                      referredBy={a.referredBy}
+                      createdAt={a.created_at}
+                      onApply={
+                        a.referredBy
+                          ? undefined
+                          : () => setApplyAgentId(a.id)
+                      }
+                    />
+                  }
                   footer={
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       <Button
@@ -678,6 +694,14 @@ const AdminManageAgents: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <AdminApplyReferralDialog
+        open={!!applyAgentId}
+        onClose={() => setApplyAgentId(null)}
+        onSubmit={async (code) => {
+          if (!applyAgentId) return;
+          await applyReferral(applyAgentId, code);
+        }}
+      />
     </Box>
   );
 };

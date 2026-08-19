@@ -905,6 +905,23 @@
     "manageAgents": "Gérer les Agents",
     "manageBusinesses": "Gérer les Entreprises",
     "manageClients": "Gérer les Clients",
+    "users": {
+      "createdAt": "Créé le {{date}}"
+    },
+    "referrals": {
+      "code": "Code de parrainage",
+      "copyCode": "Copier le code",
+      "copied": "Copié !",
+      "referredBy": "Parrainé par {{name}}",
+      "apply": "Appliquer un parrainage",
+      "applyTitle": "Appliquer un code de parrainage",
+      "applyHelp": "Saisissez le code à 6 caractères oublié à l'inscription.",
+      "applyConfirm": "Appliquer",
+      "applySuccess": "Parrainage appliqué",
+      "applyError": "Impossible d'appliquer ce code de parrainage",
+      "alreadySet": "Ce compte a déjà un parrain",
+      "noCode": "Aucun code de parrainage"
+    },
     "messages": {
       "createdAt": "Créé le",
       "entityId": "ID de l'Entité",
@@ -986,6 +1003,13 @@
       "itemCounts": "{{approved}} approuvés · {{pending}} en attente · {{rejected}} refusés",
       "call": "Appeler",
       "email": "E-mail"
+    },
+    "projectedPayout": {
+      "title": "Paiement du samedi",
+      "hint": "Parrainages approuvés en attente du versement de cette semaine.",
+      "available": "Disponible",
+      "expected": "Prévu ce samedi",
+      "wallet": "Portefeuille"
     }
   },
   "agent": {

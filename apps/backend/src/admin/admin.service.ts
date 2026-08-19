@@ -9,6 +9,10 @@ import {
 } from '../merchant-lifecycle/merchant-lifecycle-status.util';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
+  mapAdminReferredBy,
+  pickReferralCode,
+} from './admin-referral.util';
+import {
   businessNeedsAttention,
   matchesIdDocumentStatusFilter as idDocStatusMatches,
   resolveIdDocumentStatus as resolveIdDocStatus,
@@ -310,8 +314,11 @@ export class AdminService {
       query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!, $idTypeNames: [String!]) {
         agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id vehicle_type_id is_verified is_internal created_at updated_at
+          agent_code referred_by_agent_id referred_by_business_id referral_code_used
+          referring_agent { user { first_name last_name } }
+          referring_business { name }
           user {
-          id email first_name last_name phone_number internal
+          id email first_name last_name phone_number internal referral_code
             accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at }
             user_uploads(where: { document_type: { name: { _in: $idTypeNames } } }, order_by: { created_at: desc }) {
               id file_name content_type document_type_id is_approved note created_at updated_at
@@ -329,17 +336,9 @@ export class AdminService {
       offset,
       idTypeNames,
     });
-    const items = (result.agents || []).map((a: any) => {
-      const idDocuments = a.user?.user_uploads ?? [];
-      const { user, ...rest } = a;
-      const { user_uploads, ...userRest } = user || {};
-      return {
-        ...rest,
-        user: userRest,
-        addresses: (a.agent_addresses || []).map((x: any) => x.address),
-        id_documents: idDocuments,
-      };
-    });
+    const items = (result.agents || []).map((a: any) =>
+      this.mapAgentListItem(a)
+    );
     const total = result.agents_aggregate?.aggregate?.count || 0;
     return { items, total, page, limit };
   }
@@ -419,6 +418,12 @@ export class AdminService {
           merchant_agreement_accepted_at
           created_at
           updated_at
+          business_code
+          referred_by_agent_id
+          referred_by_business_id
+          referral_code_used
+          referring_agent { user { first_name last_name } }
+          referring_business { name }
           user {
             id
             email
@@ -426,6 +431,7 @@ export class AdminService {
             last_name
             phone_number
             internal
+            referral_code
             accounts {
               id
               currency
@@ -538,20 +544,63 @@ export class AdminService {
     return { items, total: matched.length, page, limit };
   }
 
+  private mapAgentListItem(a: any) {
+    const idDocuments = a.user?.user_uploads ?? [];
+    const {
+      user,
+      referring_agent,
+      referring_business,
+      referred_by_agent_id,
+      referred_by_business_id,
+      referral_code_used,
+      agent_code,
+      ...rest
+    } = a;
+    const { user_uploads: _u, referral_code, ...userRest } = user || {};
+    return {
+      ...rest,
+      user: userRest,
+      referralCode: pickReferralCode(referral_code, agent_code),
+      referredBy: mapAdminReferredBy(
+        referring_agent,
+        referring_business,
+        referral_code_used,
+        referred_by_agent_id,
+        referred_by_business_id
+      ),
+      addresses: (a.agent_addresses || []).map((x: any) => x.address),
+      id_documents: idDocuments,
+    };
+  }
+
   private async mapBusinessListItem(b: any) {
     const {
       business_contracts: _contracts,
       business_addresses,
       business_locations,
       user,
+      referring_agent,
+      referring_business,
+      referred_by_agent_id,
+      referred_by_business_id,
+      referral_code_used,
+      business_code,
       ...rest
     } = b;
-    const { user_uploads: _uploads, ...userRest } = user || {};
+    const { user_uploads: _uploads, referral_code, ...userRest } = user || {};
     const verificationSummary = await this.buildVerificationSummary(b);
     return {
       ...rest,
       is_storefront_visible: rest.is_storefront_visible === true,
       user: userRest,
+      referralCode: pickReferralCode(referral_code, business_code),
+      referredBy: mapAdminReferredBy(
+        referring_agent,
+        referring_business,
+        referral_code_used,
+        referred_by_agent_id,
+        referred_by_business_id
+      ),
       addresses: (business_addresses || []).map((x: any) => x.address),
       locations: business_locations || [],
       verificationSummary,

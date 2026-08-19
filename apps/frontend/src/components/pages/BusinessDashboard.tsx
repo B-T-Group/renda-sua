@@ -42,6 +42,7 @@ import {
   shouldShowGoLiveCelebration,
 } from '../../utils/businessSetup';
 import UserAccount from '../common/UserAccount';
+import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import SEOHead from '../seo/SEOHead';
 
 const DASHBOARD_ACCOUNT_PREVIEW_LIMIT = 2;
@@ -214,6 +215,8 @@ const BusinessDashboard: React.FC = () => {
           {hasAdminAccess && <StatusBadge type="admin" />}
         </Box>
       </Box>
+
+      <ReferralPayoutSnapshot source="business" walletPath="/business/accounts" />
 
       {showOperationalModules ? <BusinessAccountTypeLink /> : null}
 
