@@ -9,8 +9,7 @@ describe('AdminReferralService', () => {
     notifyReferrerOfBusinessReferral: jest.Mock;
   };
   let agentReferrals: {
-    creditResolvedAgentReferral: jest.Mock;
-    deleteReferralForReferredAgent: jest.Mock;
+    creditAfterFirstDelivery: jest.Mock;
   };
   let paymentRouting: { getUserCountryCode: jest.Mock };
 
@@ -30,8 +29,7 @@ describe('AdminReferralService', () => {
       notifyReferrerOfBusinessReferral: jest.fn().mockResolvedValue(undefined),
     };
     agentReferrals = {
-      creditResolvedAgentReferral: jest.fn().mockResolvedValue(undefined),
-      deleteReferralForReferredAgent: jest.fn().mockResolvedValue(undefined),
+      creditAfterFirstDelivery: jest.fn().mockResolvedValue(undefined),
     };
     paymentRouting = { getUserCountryCode: jest.fn().mockResolvedValue('CM') };
     service = new AdminReferralService(
@@ -42,7 +40,7 @@ describe('AdminReferralService', () => {
     );
   });
 
-  it('credits the referrer when applying a code to an agent', async () => {
+  it('persists the referrer and attempts first-delivery credit', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({
         agents_by_pk: {
@@ -62,12 +60,9 @@ describe('AdminReferralService', () => {
       'ABC123',
       'u1'
     );
-    expect(agentReferrals.creditResolvedAgentReferral).toHaveBeenCalledWith(
+    expect(agentReferrals.creditAfterFirstDelivery).toHaveBeenCalledWith(
       'ag1',
-      resolved,
-      'CM',
-      'Bob Lee',
-      { swallowErrors: false }
+      'CM'
     );
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
@@ -91,7 +86,7 @@ describe('AdminReferralService', () => {
     await expect(service.applyToBusiness('b1', 'ABC123')).resolves.toEqual({
       success: true,
     });
-    expect(agentReferrals.creditResolvedAgentReferral).not.toHaveBeenCalled();
+    expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
     ).toHaveBeenCalledWith(
@@ -121,7 +116,7 @@ describe('AdminReferralService', () => {
       expect(error).toBeInstanceOf(HttpException);
       expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
     }
-    expect(agentReferrals.creditResolvedAgentReferral).not.toHaveBeenCalled();
+    expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
   });
 
   it('propagates an invalid referral code from resolve', async () => {
@@ -143,7 +138,7 @@ describe('AdminReferralService', () => {
     await expect(service.applyToAgent('ag1', 'XXXXXX')).rejects.toBeInstanceOf(
       HttpException
     );
-    expect(agentReferrals.creditResolvedAgentReferral).not.toHaveBeenCalled();
+    expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
   });
 
   it('rejects a missing agent', async () => {
@@ -170,11 +165,11 @@ describe('AdminReferralService', () => {
     } catch (error: any) {
       expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
     }
-    expect(agentReferrals.creditResolvedAgentReferral).not.toHaveBeenCalled();
+    expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
     expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
   });
 
-  it('rolls back persisted referrer FKs when credit fails', async () => {
+  it('keeps the applied referrer when first-delivery credit is a no-op', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({
         agents_by_pk: {
@@ -185,23 +180,18 @@ describe('AdminReferralService', () => {
           user: { first_name: 'Bob', last_name: 'Lee' },
         },
       })
-      .mockResolvedValueOnce({ update_agents_by_pk: { id: 'ag1' } })
       .mockResolvedValueOnce({ update_agents_by_pk: { id: 'ag1' } });
-    agentReferrals.creditResolvedAgentReferral.mockRejectedValueOnce(
-      new Error('payout failed')
-    );
 
-    await expect(service.applyToAgent('ag1', 'ABC123')).rejects.toThrow(
-      'payout failed'
-    );
+    await expect(service.applyToAgent('ag1', 'ABC123')).resolves.toEqual({
+      success: true,
+    });
     expect(hasura.executeQuery.mock.calls[1][0]).toContain(
       'AdminApplyAgentReferral'
     );
-    expect(agentReferrals.deleteReferralForReferredAgent).toHaveBeenCalledWith(
-      'ag1'
+    expect(agentReferrals.creditAfterFirstDelivery).toHaveBeenCalledWith(
+      'ag1',
+      'CM'
     );
-    expect(hasura.executeQuery.mock.calls[2][0]).toContain(
-      'AdminClearAgentReferral'
-    );
+    expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
   });
 });

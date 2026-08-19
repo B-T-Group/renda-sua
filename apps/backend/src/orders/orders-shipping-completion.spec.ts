@@ -74,7 +74,7 @@ describe('OrdersService carrier shipping', () => {
         { provide: HasuraSystemService, useValue: hasuraSystemService },
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: AccountsService, useValue: { registerTransaction: jest.fn() } },
-        { provide: OrderStatusService, useValue: {} },
+        { provide: OrderStatusService, useValue: { creditReferralAfterCompletedDelivery: jest.fn() } },
         {
           provide: StripeCaptureService,
           useValue: {

@@ -162,19 +162,10 @@ export class AdminReferralService {
   ): Promise<void> {
     const country = await this.requireCountry(agent.user_id);
     await this.updateAgentReferral(agent.id, resolved);
-    try {
-      await this.agentReferralsService.creditResolvedAgentReferral(
-        agent.id,
-        resolved,
-        country,
-        agent.name,
-        { swallowErrors: false }
-      );
-    } catch (error: any) {
-      await this.agentReferralsService.deleteReferralForReferredAgent(agent.id);
-      await this.clearAgentReferral(agent.id);
-      throw error;
-    }
+    await this.agentReferralsService.creditAfterFirstDelivery(
+      agent.id,
+      country
+    );
   }
 
   private async requireCountry(userId: string): Promise<string> {
@@ -187,22 +178,6 @@ export class AdminReferralService {
       },
       HttpStatus.BAD_REQUEST
     );
-  }
-
-  private async clearAgentReferral(agentId: string): Promise<void> {
-    const q = `
-      mutation AdminClearAgentReferral($id: uuid!) {
-        update_agents_by_pk(
-          pk_columns: { id: $id }
-          _set: {
-            referred_by_agent_id: null
-            referred_by_business_id: null
-            referral_code_used: null
-          }
-        ) { id }
-      }
-    `;
-    await this.hasuraSystemService.executeQuery(q, { id: agentId });
   }
 
   private async notifyBusinessReferrer(

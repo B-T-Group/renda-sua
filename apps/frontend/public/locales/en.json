@@ -1386,7 +1386,8 @@
       "yourCode": "Your agent referral code",
       "copyCode": "Copy code",
       "copied": "Copied!",
-      "shareHint": "Share this code with other agents and businesses so they can enter it when they sign up."
+      "shareHint": "Share this code with other agents and businesses so they can enter it when they sign up.",
+      "shareHintAgentBonus": "Agent-referral bonuses pay after the referred agent's first delivery."
     },
     "unverifiedHoldNote": "Verify your account and add a profile picture to reduce your hold amounts.",
     "orders": {

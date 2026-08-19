@@ -3906,6 +3906,7 @@ export class OrdersService {
       at,
       notes: notes?.trim() || null,
     });
+    await this.creditAgentReferralIfDelivered(order);
 
     try {
       await this.updateInventoryOnCompletion(order.order_items || []);
@@ -6770,10 +6771,12 @@ export class OrdersService {
       this.logger.log(
         `Order ${order.order_number} is already complete; skipping completion side effects`
       );
+      await this.creditAgentReferralIfDelivered(freshOrder);
       return;
     }
 
     await this.setOrderCompleteSystem(order.id, historyMessage);
+    await this.creditAgentReferralIfDelivered(freshOrder ?? order);
 
     try {
       const orderWithDetails = await this.getOrderDetails(order.id);
@@ -6806,6 +6809,16 @@ export class OrdersService {
       );
     }
     await this.sendRateAgentPromptToClient(order.id);
+  }
+
+  private async creditAgentReferralIfDelivered(order: {
+    assigned_agent_id?: string | null;
+    assigned_agent?: { user_id?: string | null } | null;
+  }): Promise<void> {
+    await this.orderStatusService.creditReferralAfterCompletedDelivery(
+      order.assigned_agent_id,
+      order.assigned_agent?.user_id
+    );
   }
 
   /** Best-effort push prompting the client to rate their delivery agent. */

@@ -1344,14 +1344,6 @@ export class UsersController {
             }
           }
         }
-        if (inserted.agent?.id && signupReferral) {
-          await this.agentReferralsService.creditResolvedAgentReferral(
-            inserted.agent.id,
-            signupReferral,
-            userData.address?.country ?? '',
-            `${userData.first_name} ${userData.last_name}`.trim() || 'Agent'
-          );
-        }
         if (inserted.business?.id && signupReferral) {
           await this.businessReferralsService.notifyReferrerOfBusinessReferral(
             {
@@ -1608,23 +1600,6 @@ export class UsersController {
           'agent',
           source
         );
-      }
-      if (agentReferral) {
-        const country =
-          source?.country ||
-          (await this.paymentRoutingService.getUserCountryCode(uid));
-        if (country) {
-          await this.agentReferralsService.creditResolvedAgentReferral(
-            r.insert_agents_one.id,
-            agentReferral,
-            country,
-            `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || 'Agent'
-          );
-        } else {
-          this.logger.warn(
-            `Agent referral credit skipped for ${r.insert_agents_one.id}: no country`
-          );
-        }
       }
       return { success: true, agent: r.insert_agents_one };
     }

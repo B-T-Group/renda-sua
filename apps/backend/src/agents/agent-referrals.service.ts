@@ -109,6 +109,23 @@ export class AgentReferralsService {
     };
   }
 
+  async creditAfterFirstDelivery(
+    referredAgentId: string,
+    countryCode: string
+  ): Promise<void> {
+    if (!countryCode) return;
+    if (await this.hasCreditedReferral(referredAgentId)) return;
+    if (!(await this.hasCompletedDelivery(referredAgentId))) return;
+    const context = await this.loadReferrerCreditContext(referredAgentId);
+    if (!context) return;
+    await this.creditResolvedAgentReferral(
+      referredAgentId,
+      context.resolved,
+      countryCode,
+      context.referredAgentName
+    );
+  }
+
   async creditResolvedAgentReferral(
     newAgentId: string,
     resolved: ResolvedBusinessReferral,
@@ -179,18 +196,7 @@ export class AgentReferralsService {
       return;
     }
 
-    await this.creditResolvedAgentReferral(
-      newAgentId,
-      {
-        kind: 'agent',
-        agentId: referringAgent.agentId,
-        normalizedCode: normalizedCode.toUpperCase(),
-        userEmail: referringAgent.userEmail,
-        userFirstName: referringAgent.userFirstName,
-        preferredLanguage: referringAgent.preferredLanguage,
-      },
-      countryCode
-    );
+    await this.creditAfterFirstDelivery(newAgentId, countryCode);
   }
 
   async creditReferral(params: {
@@ -267,6 +273,133 @@ export class AgentReferralsService {
       if (params.throwOnFailure) throw error;
       return { credited: false };
     }
+  }
+
+  private async hasCreditedReferral(referredAgentId: string): Promise<boolean> {
+    const referralId = await this.findReferralIdByReferredAgent(referredAgentId);
+    if (!referralId) return false;
+    return this.hasPaidDistribution(referralId);
+  }
+
+  private async hasPaidDistribution(referralId: string): Promise<boolean> {
+    const query = `
+      query AgentReferralPaidDist($referralId: uuid!) {
+        referral_bonus_distributions(
+          where: {
+            agent_referral_id: { _eq: $referralId }
+            transaction_id: { _is_null: false }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      referralId,
+    });
+    return Boolean(result?.referral_bonus_distributions?.[0]?.id);
+  }
+
+  private async hasCompletedDelivery(agentId: string): Promise<boolean> {
+    const query = `
+      query AgentCompletedDeliveries($agentId: uuid!) {
+        orders_aggregate(
+          where: {
+            assigned_agent_id: { _eq: $agentId }
+            current_status: { _in: ["complete", "delivered"] }
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return (result?.orders_aggregate?.aggregate?.count ?? 0) > 0;
+  }
+
+  private async loadReferrerCreditContext(
+    referredAgentId: string
+  ): Promise<{
+    resolved: ResolvedBusinessReferral;
+    referredAgentName: string;
+  } | null> {
+    const row = await this.loadReferredAgentRow(referredAgentId);
+    if (!row) return null;
+    const referredAgentName =
+      `${row.user?.first_name ?? ''} ${row.user?.last_name ?? ''}`.trim() ||
+      'Agent';
+    const resolved = this.resolvedReferrerFromRow(row);
+    return resolved ? { resolved, referredAgentName } : null;
+  }
+
+  private async loadReferredAgentRow(agentId: string): Promise<any> {
+    const query = `
+      query ReferredAgentForCredit($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          referral_code_used
+          user { first_name last_name }
+          referring_agent {
+            id
+            user { first_name email preferred_language }
+          }
+          referring_business {
+            id
+            name
+            user_id
+            user { first_name email preferred_language }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return result?.agents_by_pk ?? null;
+  }
+
+  private resolvedReferrerFromRow(row: any): ResolvedBusinessReferral | null {
+    const code = String(row.referral_code_used || '').trim().toUpperCase();
+    if (!code) return null;
+    if (row.referring_agent?.id) {
+      return this.resolvedAgentReferrer(row.referring_agent, code);
+    }
+    if (row.referring_business?.id) {
+      return this.resolvedBusinessReferrer(row.referring_business, code);
+    }
+    return null;
+  }
+
+  private resolvedAgentReferrer(
+    agent: { id: string; user?: any },
+    code: string
+  ): ResolvedBusinessReferral {
+    const user = agent.user || {};
+    return {
+      kind: 'agent',
+      agentId: agent.id,
+      normalizedCode: code,
+      userEmail: user.email ?? '',
+      userFirstName: user.first_name ?? '',
+      preferredLanguage: user.preferred_language ?? 'en',
+    };
+  }
+
+  private resolvedBusinessReferrer(
+    business: { id: string; name?: string; user_id: string; user?: any },
+    code: string
+  ): ResolvedBusinessReferral {
+    const user = business.user || {};
+    return {
+      kind: 'business',
+      businessId: business.id,
+      businessName: business.name || 'Business',
+      normalizedCode: code,
+      userId: business.user_id,
+      userEmail: user.email ?? '',
+      userFirstName: user.first_name ?? '',
+      preferredLanguage: user.preferred_language ?? 'en',
+    };
   }
 
   private async getAgentUserId(agentId: string): Promise<string | null> {
@@ -466,11 +599,6 @@ export class AgentReferralsService {
         `Failed to delete unpaid agent referral ${referralId}: ${error.message}`
       );
     }
-  }
-
-  async deleteReferralForReferredAgent(referredAgentId: string): Promise<void> {
-    const referralId = await this.findReferralIdByReferredAgent(referredAgentId);
-    if (referralId) await this.deleteReferralRecord(referralId);
   }
 
   async listReferredBusinesses(
