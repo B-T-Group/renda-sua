@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { ConfigService } from '@nestjs/config';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { Configuration } from '../config/configuration';
@@ -486,6 +487,7 @@ export class BusinessReferralsService {
           referral_code
           internal
           country
+          agent { id }
         }
       }
     `;
@@ -548,7 +550,7 @@ export class BusinessReferralsService {
     const internal = user.internal === true;
     const referralAmount = await this.getReferralPayoutAmount(
       countryCode,
-      internal
+      user
     );
 
     return {
@@ -579,7 +581,7 @@ export class BusinessReferralsService {
           id
           business_code
           user_id
-          user { referral_code internal country }
+          user { referral_code internal country agent { id } }
           referred_businesses_aggregate {
             aggregate { count }
           }
@@ -617,10 +619,9 @@ export class BusinessReferralsService {
       null;
     countryCode = countryCode ? String(countryCode).toUpperCase() : null;
     const currency = this.getCurrencyForCountry(countryCode);
-    const internal = business.user?.internal === true;
     const referralAmount = await this.getReferralPayoutAmount(
       countryCode,
-      internal
+      business.user
     );
     const referralCode =
       business.user?.referral_code || business.business_code;
@@ -639,15 +640,12 @@ export class BusinessReferralsService {
 
   private async getReferralPayoutAmount(
     countryCode: string | null,
-    isInternal: boolean
+    user?: { internal?: boolean | null; agent?: { id?: string } | null } | null
   ): Promise<number> {
     if (!countryCode) return 0;
-    const key = isInternal
-      ? 'business_referral_payout_amount_internal'
-      : 'business_referral_payout_amount';
     try {
-      const query = `
-        query ReferralPayoutAmount($key: String!, $country: String!) {
+      const result = await this.hasuraSystemService.executeQuery(
+        `query ReferralPayoutAmount($key: String!, $country: String!) {
           application_configurations(
             where: {
               config_key: { _eq: $key }
@@ -656,12 +654,9 @@ export class BusinessReferralsService {
             }
             limit: 1
           ) { number_value }
-        }
-      `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        key,
-        country: countryCode,
-      });
+        }`,
+        { key: businessReferralPayoutConfigKeyFromUser(user), country: countryCode }
+      );
       return Number(result?.application_configurations?.[0]?.number_value ?? 0);
     } catch {
       return 0;

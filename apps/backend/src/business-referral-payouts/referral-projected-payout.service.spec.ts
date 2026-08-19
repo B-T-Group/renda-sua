@@ -19,7 +19,9 @@ describe('ReferralProjectedPayoutService', () => {
         return { businesses_aggregate: { aggregate: { count: 2 } } };
       }
       if (query.includes('ProjectionPayoutUser')) {
-        return { users_by_pk: { internal: false, country: 'CM' } };
+        return {
+          users_by_pk: { internal: false, country: 'CM', agent: { id: 'a1' } },
+        };
       }
       return {};
     });
@@ -38,6 +40,32 @@ describe('ReferralProjectedPayoutService', () => {
     });
     expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
       'business_referral_payout_amount',
+      'CM'
+    );
+  });
+
+  it('uses the B2B config key when the referrer has no agent persona', async () => {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('PayableReferralCount')) {
+        return { businesses_aggregate: { aggregate: { count: 2 } } };
+      }
+      return {
+        users_by_pk: { internal: false, country: 'CM', agent: null },
+      };
+    });
+    configurationsService.getConfigurationByKey.mockResolvedValue({
+      number_value: 2000,
+    });
+
+    const result = await service.forBusiness('biz-1', 'user-1');
+    expect(result).toEqual({
+      payableCount: 2,
+      amountPerReferral: 2000,
+      projectedAmount: 4000,
+      currency: 'XAF',
+    });
+    expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
+      'business_to_business_referral_amount',
       'CM'
     );
   });

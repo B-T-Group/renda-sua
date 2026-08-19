@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -532,17 +533,12 @@ export class BusinessReferralPayoutsService {
       params.referrerUserId
     );
     const currency = this.getCurrencyForCountry(countryCode);
-    const isInternal = await this.isInternalUser(params.referrerUserId);
-    const amountKey = isInternal
-      ? 'business_referral_payout_amount_internal'
-      : 'business_referral_payout_amount';
-    const amount = await this.getPayoutAmount(amountKey, countryCode);
-    if (!amount || amount <= 0) {
-      this.logger.warn(
-        `No payout amount configured for country ${countryCode} — skipping business ${params.businessId}.`
-      );
-      return null;
-    }
+    const amount = await this.resolvePayoutAmount(
+      params.referrerUserId,
+      countryCode,
+      params.businessId
+    );
+    if (!amount) return null;
 
     const accountId = params.preferPersonalAccount
       ? await this.findPersonalAccountId(params.referrerUserId, currency)
@@ -564,22 +560,46 @@ export class BusinessReferralPayoutsService {
     return { accountId, amount, currency, rail };
   }
 
-  private async isInternalUser(userId: string): Promise<boolean> {
+  private async resolvePayoutAmount(
+    userId: string,
+    countryCode: string | null,
+    businessId: string
+  ): Promise<number | null> {
+    const amountKey = await this.referrerPayoutAmountKey(userId);
+    if (!amountKey) {
+      this.logger.warn(
+        `Could not resolve payout tier for referrer ${userId} — skipping business ${businessId}.`
+      );
+      return null;
+    }
+    const amount = await this.getPayoutAmount(amountKey, countryCode);
+    if (!amount || amount <= 0) {
+      this.logger.warn(
+        `No payout amount configured for country ${countryCode} — skipping business ${businessId}.`
+      );
+      return null;
+    }
+    return amount;
+  }
+
+  private async referrerPayoutAmountKey(userId: string): Promise<string | null> {
     const query = `
-      query IsInternalUser($userId: uuid!) {
-        users_by_pk(id: $userId) { internal }
+      query ReferrerPayoutUser($userId: uuid!) {
+        users_by_pk(id: $userId) { internal agent { id } }
       }
     `;
     try {
       const result = await this.hasuraSystemService.executeQuery(query, {
         userId,
       });
-      return result?.users_by_pk?.internal === true;
+      const row = result?.users_by_pk;
+      if (!row) return null;
+      return businessReferralPayoutConfigKeyFromUser(row);
     } catch (error: any) {
       this.logger.warn(
-        `Failed to read users.internal for ${userId}: ${error.message}`
+        `Failed to read referrer payout tier for ${userId}: ${error.message}`
       );
-      return false;
+      return null;
     }
   }
 
