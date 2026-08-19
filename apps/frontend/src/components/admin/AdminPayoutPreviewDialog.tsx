@@ -64,10 +64,19 @@ export const AdminPayoutPreviewDialog: React.FC<
       >
         {t('admin.performance.payoutPreview.button', 'Preview Saturday payouts')}
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle sx={{ pr: 6 }}>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        scroll="paper"
+        PaperProps={{
+          sx: { maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
+        }}
+      >
+        <DialogTitle sx={{ pr: 6, pb: 1.5 }}>
           <Stack direction="row" spacing={2} alignItems="center">
-            <ReferralSaturdayPayoutIllustration size={72} />
+            <ReferralSaturdayPayoutIllustration size={56} />
             <Box>
               <Typography variant="h6" fontWeight={700}>
                 {t(
@@ -91,14 +100,25 @@ export const AdminPayoutPreviewDialog: React.FC<
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent dividers>
+        <DialogContent
+          dividers
+          sx={{
+            p: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minHeight: 0,
+          }}
+        >
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
           )}
           {!loading && loadError && (
-            <Alert severity="error">{loadError}</Alert>
+            <Box sx={{ px: 3, py: 2 }}>
+              <Alert severity="error">{loadError}</Alert>
+            </Box>
           )}
           {!loading && preview && <PreviewBody preview={preview} />}
         </DialogContent>
@@ -112,7 +132,30 @@ const PreviewBody: React.FC<{ preview: WeeklyPayoutPreview }> = ({
 }) => {
   const { t } = useTranslation();
   return (
-    <Stack spacing={2}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      <PreviewSummary preview={preview} />
+      {preview.rows.length === 0 ? (
+        <Typography color="text.secondary" sx={{ px: 3, pb: 2 }}>
+          {t(
+            'admin.performance.payoutPreview.empty',
+            'No unpaid eligible businesses for this market.'
+          )}
+        </Typography>
+      ) : (
+        <Box sx={{ overflow: 'auto', flex: 1, minHeight: 0, px: 3, pb: 1 }}>
+          <AdminPayoutPreviewTable rows={preview.rows} />
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+const PreviewSummary: React.FC<{ preview: WeeklyPayoutPreview }> = ({
+  preview,
+}) => {
+  const { t } = useTranslation();
+  return (
+    <Stack spacing={1.5} sx={{ px: 3, pt: 2, pb: 1.5, flexShrink: 0 }}>
       {!preview.enabled && (
         <Alert severity="warning">
           {t(
@@ -136,29 +179,22 @@ const PreviewBody: React.FC<{ preview: WeeklyPayoutPreview }> = ({
           }
         )}
       </Typography>
-      {preview.totalsByCurrency.map((total) => (
-        <Chip
-          key={total.currency}
-          label={t(
-            'admin.performance.payoutPreview.totalChip',
-            '{{count}} businesses · {{amount}}',
-            {
-              count: total.count,
-              amount: formatPayoutMoney(total.gross, total.currency),
-            }
-          )}
-        />
-      ))}
-      {preview.rows.length === 0 ? (
-        <Typography color="text.secondary">
-          {t(
-            'admin.performance.payoutPreview.empty',
-            'No unpaid eligible businesses for this market.'
-          )}
-        </Typography>
-      ) : (
-        <AdminPayoutPreviewTable rows={preview.rows} />
-      )}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        {preview.totalsByCurrency.map((total) => (
+          <Chip
+            key={total.currency}
+            size="small"
+            label={t(
+              'admin.performance.payoutPreview.totalChip',
+              '{{count}} businesses · {{amount}}',
+              {
+                count: total.count,
+                amount: formatPayoutMoney(total.gross, total.currency),
+              }
+            )}
+          />
+        ))}
+      </Box>
     </Stack>
   );
 };

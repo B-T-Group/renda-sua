@@ -84,6 +84,7 @@ export const SignupWizard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [postSignupEmail, setPostSignupEmail] = useState<string | null>(null);
+  const [pendingOwnEmail, setPendingOwnEmail] = useState<string | null>(null);
   const [postSignupPhone, setPostSignupPhone] = useState<string | null>(null);
   const [launchPromo, setLaunchPromo] =
     useState<LaunchPromoCongratsData | null>(() => {
@@ -97,6 +98,7 @@ export const SignupWizard: React.FC = () => {
     });
   const [verifyRedirectLoading, setVerifyRedirectLoading] = useState(false);
   const [emailTakenConflict, setEmailTakenConflict] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
   /** True only after user taps “Wrong email/phone?” on the post-create screen. */
   const [editingPendingContact, setEditingPendingContact] = useState(false);
 
@@ -106,6 +108,14 @@ export const SignupWizard: React.FC = () => {
     loading: referralLookupLoading,
     error: referralLookupError,
   } = useAgentReferralLookup(referralCode);
+
+  const contactEmail =
+    (wizard.form.watch('contact.email') || '').trim().toLowerCase();
+  const ownPendingEmail = (pendingOwnEmail || '').trim().toLowerCase();
+  const emailTakenByOther =
+    emailTaken && (!ownPendingEmail || contactEmail !== ownPendingEmail);
+  const contactEmailTaken =
+    wizard.activeStepId === 'contact' && emailTakenByOther;
 
   const personas = wizard.form.watch('personas') || [];
   const primaryVerifyPersona = legacyUserTypeFromPersonas(personas);
@@ -186,6 +196,7 @@ export const SignupWizard: React.FC = () => {
       sessionStorage.removeItem('pendingSignupPhone');
     }
     setPostSignupEmail(emailNormalized || null);
+    setPendingOwnEmail(emailNormalized || pendingOwnEmail);
     setPostSignupPhone(useSms ? phoneNormalized : null);
   };
 
@@ -298,6 +309,7 @@ export const SignupWizard: React.FC = () => {
       await savePendingContactAndContinue();
       return;
     }
+    if (wizard.activeStepId === 'contact' && emailTakenByOther) return;
     await wizard.goNext();
   };
 
@@ -549,6 +561,10 @@ export const SignupWizard: React.FC = () => {
                 countriesLoading,
                 postalCodeRequired: wizard.postalCodeRequired,
                 signupCountryCodes,
+                onLoginInstead: () => setLoginDialogOpen(true),
+                emailTaken,
+                setEmailTaken,
+                ownSignupEmail: pendingOwnEmail,
               }}
             >
               <FormProvider {...wizard.form}>
@@ -558,6 +574,7 @@ export const SignupWizard: React.FC = () => {
                   isFirst={wizard.isFirst}
                   isLast={wizard.isLast}
                   saving={saving}
+                  nextDisabled={contactEmailTaken}
                   onBack={wizard.goBack}
                   onNext={() => void handleWizardNext()}
                   onCreate={() => void handleCreate()}

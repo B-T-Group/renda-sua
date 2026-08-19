@@ -182,7 +182,12 @@ export const WizardChrome: React.FC<WizardChromeProps> = ({
                   fullWidth
                   onClick={onNext}
                   disabled={nextDisabled || saving}
-                  sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
+                  sx={{
+                    py: 1.25,
+                    borderRadius: 0,
+                    fontWeight: 700,
+                    '&.Mui-disabled': { boxShadow: 'none' },
+                  }}
                 >
                   {t('signupPage.next', 'Next')}
                 </Button>
