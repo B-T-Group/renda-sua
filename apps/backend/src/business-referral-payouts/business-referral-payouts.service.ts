@@ -3,9 +3,11 @@ import { ConfigurationsService } from '../admin/configurations.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
-
-const BUSINESS_CUTOFF_DATE = '2026-04-01';
-const MIN_ITEM_COUNT = 10;
+import {
+  BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+  BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
+  currencyForReferralPayout,
+} from './business-referral-payout.constants';
 
 interface EligibleAgentReferral {
   kind: 'agent';
@@ -278,8 +280,8 @@ export class BusinessReferralPayoutsService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_CUTOFF_DATE,
-      minItems: MIN_ITEM_COUNT,
+      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+      minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
     return (result?.businesses ?? []).map((b: Omit<EligibleAgentReferral, 'kind'>) => ({
       ...b,
@@ -330,8 +332,8 @@ export class BusinessReferralPayoutsService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_CUTOFF_DATE,
-      minItems: MIN_ITEM_COUNT,
+      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+      minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
     return (result?.businesses ?? []).map(
       (b: Omit<EligibleBusinessReferral, 'kind'>) => ({
@@ -582,13 +584,7 @@ export class BusinessReferralPayoutsService {
   }
 
   private getCurrencyForCountry(countryCode: string | null): string {
-    const map: Record<string, string> = {
-      GA: 'XAF',
-      CM: 'XAF',
-      CA: 'CAD',
-      US: 'USD',
-    };
-    return map[(countryCode ?? '').toUpperCase()] ?? 'XAF';
+    return currencyForReferralPayout(countryCode);
   }
 
   private async getPayoutAmount(

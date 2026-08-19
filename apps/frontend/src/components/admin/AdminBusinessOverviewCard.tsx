@@ -24,6 +24,7 @@ import type { AdminBusiness } from '../../hooks/useAdminBusinesses';
 import { AdminBusinessVerificationSteps } from './AdminBusinessVerificationSteps';
 import { AdminLifecycleChip } from './AdminLifecycleChip';
 import { AdminOperatingHoursSummary } from './AdminOperatingHoursSummary';
+import { AdminReferralMeta } from './AdminReferralMeta';
 import { formatVerificationBlocker } from './AdminBusinessVerificationDialog';
 
 export interface AdminBusinessOverviewCardProps {
@@ -32,6 +33,7 @@ export interface AdminBusinessOverviewCardProps {
   onEdit: () => void;
   onSuspend: () => void;
   onReinstate: () => void;
+  onApplyReferral?: () => void;
 }
 
 function primaryLocationLabel(business: AdminBusiness): string | null {
@@ -48,7 +50,7 @@ function primaryLocationLabel(business: AdminBusiness): string | null {
 
 export const AdminBusinessOverviewCard: React.FC<
   AdminBusinessOverviewCardProps
-> = ({ business, onVerify, onEdit, onSuspend, onReinstate }) => {
+> = ({ business, onVerify, onEdit, onSuspend, onReinstate, onApplyReferral }) => {
   const { t } = useTranslation();
   const summary = business.verificationSummary;
   const rail = summary?.rail;
@@ -62,9 +64,6 @@ export const AdminBusinessOverviewCard: React.FC<
         )
       : undefined;
   const location = primaryLocationLabel(business);
-  const createdLabel = business.created_at
-    ? new Date(business.created_at).toLocaleDateString()
-    : null;
 
   return (
     <Card
@@ -197,16 +196,14 @@ export const AdminBusinessOverviewCard: React.FC<
               )}
             />
           ) : null}
-          {createdLabel ? (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={t('admin.businesses.meta.created', 'Created {{date}}', {
-                date: createdLabel,
-              })}
-            />
-          ) : null}
         </Stack>
+
+        <AdminReferralMeta
+          referralCode={business.referralCode}
+          referredBy={business.referredBy}
+          createdAt={business.created_at}
+          onApply={business.referredBy ? undefined : onApplyReferral}
+        />
 
         <Divider />
 

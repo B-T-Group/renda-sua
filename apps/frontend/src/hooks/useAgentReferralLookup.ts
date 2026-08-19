@@ -51,6 +51,29 @@ export const useAgentReferralLookup = (
       setResult(null);
 
       try {
+        const userRes = await apiClient
+          .get<{
+            success: boolean;
+            referralCode: string;
+            fullName: string;
+            firstName?: string;
+            kind?: 'user' | 'agent' | 'business';
+          }>(`/users/public/by-referral-code/${trimmed}`)
+          .then((res) => ({ ok: true as const, data: res.data }))
+          .catch(() => ({ ok: false as const, data: null }));
+
+        if (cancelled) return;
+
+        if (userRes.ok && userRes.data?.success) {
+          setResult({
+            agentCode: userRes.data.referralCode,
+            fullName: userRes.data.fullName,
+            firstName: userRes.data.firstName,
+            kind: userRes.data.kind === 'business' ? 'business' : 'agent',
+          });
+          return;
+        }
+
         const [agentOutcome, businessOutcome] = await Promise.all([
           apiClient
             .get<{

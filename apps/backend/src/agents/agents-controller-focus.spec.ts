@@ -65,6 +65,7 @@ describe('AgentsController updateMyFocus', () => {
       hasuraSystemService as any,
       {} as any,
       {} as any,
+      {} as any,
       {} as any
     );
   });

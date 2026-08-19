@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
@@ -14,6 +16,7 @@ import { AdminPerformanceService } from './admin-performance.service';
 import { BusinessReferralReviewController } from './business-referral-review.controller';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import { AdminMessageService } from './admin-message.service';
+import { AdminReferralService } from './admin-referral.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { ApplicationSetupService } from './application-setup.service';
@@ -42,6 +45,8 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
 @Module({
   imports: [
     AuthModule,
+    AgentsModule,
+    BusinessReferralsModule,
     AdminAuthModule,
     RbacModule,
     HasuraModule,
@@ -74,6 +79,7 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     BusinessReferralReviewService,
     AdminMessageService,
     AdminService,
+    AdminReferralService,
     ConfigurationsService,
     RentalListingModerationService,
     ItemModerationService,

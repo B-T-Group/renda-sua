@@ -62,6 +62,12 @@ export interface AdminBusiness {
   addresses: any[];
   locations?: AdminBusinessLocationSummary[];
   verificationSummary?: AdminBusinessVerificationSummary;
+  referralCode?: string;
+  referredBy?: {
+    kind: 'agent' | 'business';
+    name: string;
+    codeUsed: string | null;
+  } | null;
 }
 
 export interface UpdateBusinessPayload {
@@ -210,6 +216,15 @@ export const useAdminBusinesses = () => {
     [apiClient, callWithLoading, ensureClient, fetchBusinesses]
   );
 
+  const applyReferral = useCallback(
+    async (id: string, code: string) => {
+      const client = ensureClient(apiClient);
+      await client.post(`/admin/businesses/${id}/referral`, { code });
+      await fetchBusinesses();
+    },
+    [apiClient, ensureClient, fetchBusinesses]
+  );
+
   const setSearchAndReset = useCallback((value: string) => {
     setPage(1);
     setSearch(value);
@@ -269,6 +284,7 @@ export const useAdminBusinesses = () => {
       setWithdrawalPin,
       clearWithdrawalPin,
       setUserInternal,
+      applyReferral,
     }),
     [
       businesses,
@@ -292,6 +308,7 @@ export const useAdminBusinesses = () => {
       setWithdrawalPin,
       clearWithdrawalPin,
       setUserInternal,
+      applyReferral,
     ]
   );
 };

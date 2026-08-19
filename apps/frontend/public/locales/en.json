@@ -1146,6 +1146,23 @@
     "manageAgents": "Manage Agents",
     "manageBusinesses": "Manage Businesses",
     "manageClients": "Manage Clients",
+    "users": {
+      "createdAt": "Created {{date}}"
+    },
+    "referrals": {
+      "code": "Referral code",
+      "copyCode": "Copy code",
+      "copied": "Copied!",
+      "referredBy": "Referred by {{name}}",
+      "apply": "Apply referral",
+      "applyTitle": "Apply referral code",
+      "applyHelp": "Enter the 6-character code they forgot at signup.",
+      "applyConfirm": "Apply",
+      "applySuccess": "Referral applied",
+      "applyError": "Could not apply this referral code",
+      "alreadySet": "This account already has a referrer",
+      "noCode": "No referral code"
+    },
     "messages": {
       "createdAt": "Created At",
       "entityId": "Entity ID",
@@ -1227,6 +1244,13 @@
       "itemCounts": "{{approved}} approved · {{pending}} pending · {{rejected}} rejected",
       "call": "Call",
       "email": "Email"
+    },
+    "projectedPayout": {
+      "title": "Saturday payout",
+      "hint": "Approved referrals awaiting this week’s payout.",
+      "available": "Available",
+      "expected": "Expected this Saturday",
+      "wallet": "Wallet"
     }
   },
   "agent": {

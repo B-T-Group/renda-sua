@@ -35,6 +35,7 @@ import { useAdminRbac } from '../../hooks/useAdminRbac';
 import { usePermission, usePermissions } from '../../hooks/usePermissions';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { AdminBusinessOverviewCard } from '../admin/AdminBusinessOverviewCard';
+import { AdminApplyReferralDialog } from '../admin/AdminApplyReferralDialog';
 import { AdminBusinessVerificationDialog } from '../admin/AdminBusinessVerificationDialog';
 import { PinCodeFields } from '../common/PinCodeFields';
 
@@ -78,6 +79,7 @@ const AdminManageBusinesses: React.FC = () => {
     setWithdrawalPin,
     clearWithdrawalPin,
     setUserInternal,
+    applyReferral,
   } = useAdminBusinesses();
   const {
     roles: platformRoles,
@@ -97,6 +99,7 @@ const AdminManageBusinesses: React.FC = () => {
   const [verificationBusinessId, setVerificationBusinessId] = useState<
     string | null
   >(null);
+  const [applyBusinessId, setApplyBusinessId] = useState<string | null>(null);
 
   const current = useMemo(
     () => businesses.find((b) => b.id === editingId),
@@ -446,6 +449,7 @@ const AdminManageBusinesses: React.FC = () => {
               onEdit={() => void openEdit(b.id)}
               onSuspend={() => void handleSuspendBusiness(b.id)}
               onReinstate={() => void handleReinstateBusiness(b.id)}
+              onApplyReferral={() => setApplyBusinessId(b.id)}
             />
           ))}
           <Box
@@ -739,6 +743,14 @@ const AdminManageBusinesses: React.FC = () => {
         }
         onClose={() => setVerificationBusinessId(null)}
         onUpdated={fetchBusinesses}
+      />
+      <AdminApplyReferralDialog
+        open={!!applyBusinessId}
+        onClose={() => setApplyBusinessId(null)}
+        onSubmit={async (code) => {
+          if (!applyBusinessId) return;
+          await applyReferral(applyBusinessId, code);
+        }}
       />
     </Box>
   );
