@@ -52,6 +52,9 @@ describe('BusinessReferralPayoutsService', () => {
         if (key === 'business_referral_payout_amount') {
           return { number_value: 5000 };
         }
+        if (key === 'business_to_business_referral_amount') {
+          return { number_value: 2000 };
+        }
         return null;
       }
     );
@@ -64,8 +67,8 @@ describe('BusinessReferralPayoutsService', () => {
       if (query.includes('EligibleBusinessReferredBusinesses')) {
         return { businesses: [] };
       }
-      if (query.includes('IsInternalUser')) {
-        return { users_by_pk: { internal: false } };
+      if (query.includes('ReferrerPayoutUser')) {
+        return { users_by_pk: { internal: false, agent: { id: 'agent-1' } } };
       }
       if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'account-1' }] };
@@ -96,8 +99,8 @@ describe('BusinessReferralPayoutsService', () => {
       if (query.includes('EligibleBusinessReferredBusinesses')) {
         return { businesses: [] };
       }
-      if (query.includes('IsInternalUser')) {
-        return { users_by_pk: { internal: false } };
+      if (query.includes('ReferrerPayoutUser')) {
+        return { users_by_pk: { internal: false, agent: { id: 'agent-1' } } };
       }
       if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'account-1' }] };
@@ -195,5 +198,84 @@ describe('BusinessReferralPayoutsService', () => {
       expect.stringContaining('ReleaseReferralPayoutClaim'),
       { businessId: 'business-1' }
     );
+  });
+
+  it('credits 2000 XAF for a business-only referrer', async () => {
+    const referred = {
+      kind: 'business' as const,
+      id: 'business-2',
+      name: 'Referred Shop',
+      referred_by_business_id: 'biz-ref-1',
+      referring_business: {
+        id: 'biz-ref-1',
+        user_id: 'user-2',
+        user: { id: 'user-2', preferred_language: 'en' },
+      },
+      items_aggregate: { aggregate: { count: 12 } },
+    };
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [referred] };
+      }
+      if (query.includes('ReferrerPayoutUser')) {
+        return { users_by_pk: { internal: false, agent: null } };
+      }
+      if (query.includes('GetBusinessAccount')) {
+        return { accounts: [{ id: 'biz-account-1' }] };
+      }
+      if (query.includes('EarnerBusinessName')) {
+        return { businesses_by_pk: { name: 'Referrer Shop' } };
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_referral_payouts_one: { id: 'payout-2' },
+      update_business_referral_payouts: { affected_rows: 1 },
+    });
+    referralPyramidService.distributeReferralBonus.mockResolvedValue({
+      credited: 1,
+      transactionIds: ['tx-b2b'],
+    });
+
+    const summary = await service.runWeeklyPayouts();
+
+    expect(summary.credited).toBe(1);
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({ grossAmount: 2000 })
+    );
+  });
+
+  it('skips payout when referrer lookup fails instead of guessing a rate', async () => {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        return { businesses: [business] };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        return { businesses: [] };
+      }
+      if (query.includes('ReferrerPayoutUser')) {
+        throw new Error('Hasura timeout');
+      }
+      if (query.includes('IncompleteBusinessReferralPayouts')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+
+    const summary = await service.runWeeklyPayouts();
+
+    expect(summary).toEqual({
+      processed: 1,
+      credited: 0,
+      skipped: 1,
+      failures: 0,
+    });
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 });

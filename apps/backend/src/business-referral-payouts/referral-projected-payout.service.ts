@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
-import { businessReferralPayoutConfigKey } from '../admin/business-referral-payout-config.util';
+import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
@@ -60,12 +60,12 @@ export class ReferralProjectedPayoutService {
     const payableCount = await this.countPayable(
       this.payableWhere(referrerField, referrerId, requireActiveLifecycle)
     );
-    const { internal, countryCode } = await this.loadUserPayoutContext(userId);
+    const { countryCode, amountKey } = await this.loadUserPayoutContext(userId);
     const currency = currencyForReferralPayout(countryCode);
     if (payableCount <= 0 || !countryCode) {
       return { ...ZERO, currency };
     }
-    return this.withAmount(payableCount, countryCode, internal, currency);
+    return this.withAmount(payableCount, countryCode, amountKey, currency);
   }
 
   private payableWhere(
@@ -109,7 +109,7 @@ export class ReferralProjectedPayoutService {
   }
 
   private async loadUserPayoutContext(userId: string): Promise<{
-    internal: boolean;
+    amountKey: string;
     countryCode: string | null;
   }> {
     const user = await this.loadUserRow(userId);
@@ -118,15 +118,16 @@ export class ReferralProjectedPayoutService {
       ? null
       : await this.paymentRoutingService.getUserCountryCode(userId);
     const countryCode = fromUser ?? (fromRouting ? String(fromRouting).toUpperCase() : null);
-    return { internal: user.internal, countryCode };
+    return { amountKey: user.amountKey, countryCode };
   }
 
-  private async loadUserRow(
-    userId: string
-  ): Promise<{ internal: boolean; country: string | null }> {
+  private async loadUserRow(userId: string): Promise<{
+    amountKey: string;
+    country: string | null;
+  }> {
     const query = `
       query ProjectionPayoutUser($userId: uuid!) {
-        users_by_pk(id: $userId) { internal country }
+        users_by_pk(id: $userId) { internal country agent { id } }
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
@@ -134,7 +135,7 @@ export class ReferralProjectedPayoutService {
     });
     const row = result?.users_by_pk;
     return {
-      internal: row?.internal === true,
+      amountKey: businessReferralPayoutConfigKeyFromUser(row),
       country: row?.country ?? null,
     };
   }
@@ -142,13 +143,10 @@ export class ReferralProjectedPayoutService {
   private async withAmount(
     payableCount: number,
     countryCode: string,
-    internal: boolean,
+    amountKey: string,
     currency: string
   ): Promise<ReferralProjectedPayout> {
-    const amountPerReferral = await this.readPayoutAmount(
-      countryCode,
-      internal
-    );
+    const amountPerReferral = await this.readPayoutAmount(countryCode, amountKey);
     return {
       payableCount,
       amountPerReferral,
@@ -159,11 +157,11 @@ export class ReferralProjectedPayoutService {
 
   private async readPayoutAmount(
     countryCode: string,
-    internal: boolean
+    amountKey: string
   ): Promise<number> {
     try {
       const config = await this.configurationsService.getConfigurationByKey(
-        businessReferralPayoutConfigKey(internal),
+        amountKey,
         countryCode
       );
       return Number(config?.number_value ?? 0);

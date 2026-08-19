@@ -26,8 +26,8 @@ describe('BusinessReferralPayoutsService agent wallet lookup', () => {
       if (query.includes('EligibleBusinessReferredBusinesses')) {
         return { businesses: [] };
       }
-      if (query.includes('IsInternalUser')) {
-        return { users_by_pk: { internal: false } };
+      if (query.includes('ReferrerPayoutUser')) {
+        return { users_by_pk: { internal: false, agent: { id: 'agent-1' } } };
       }
       if (query.includes('GetPersonalAccount')) {
         return { accounts: [{ id: 'acct-1' }] };

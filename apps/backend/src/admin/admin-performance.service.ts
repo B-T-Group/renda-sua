@@ -8,7 +8,10 @@ import {
   buildReferredBusinessesQuery,
   buildSummaryQuery,
 } from './admin-performance.queries';
-import { businessReferralPayoutConfigKey } from './business-referral-payout-config.util';
+import {
+  businessReferralPayoutConfigKey,
+  businessReferralPayoutTier,
+} from './business-referral-payout-config.util';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import type { TopAgentMetric } from './dto/admin-performance-query.dto';
 
@@ -340,7 +343,9 @@ export class AdminPerformanceService {
     countryCode: string,
     isInternal: boolean
   ): Promise<{ amount: number; currency: string }> {
-    const configKey = businessReferralPayoutConfigKey(isInternal);
+    const configKey = businessReferralPayoutConfigKey(
+      businessReferralPayoutTier({ isInternal, hasAgentPersona: true })
+    );
     try {
       const config = await this.configurationsService.getConfigurationByKey(
         configKey,
