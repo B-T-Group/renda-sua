@@ -57,7 +57,7 @@ export class GetAdminOrdersDto {
 export class ReassignAgentDto {
   @ApiProperty({ description: 'New agent ID to assign' })
   @IsUUID()
-  agent_id: string;
+  agent_id!: string;
 
   @ApiPropertyOptional({ description: 'Reason for reassignment' })
   @IsOptional()
@@ -68,7 +68,7 @@ export class ReassignAgentDto {
 export class UpdateOrderStatusDto {
   @ApiProperty({ description: 'New order status' })
   @IsString()
-  status: string;
+  status!: string;
 
   @ApiPropertyOptional({ description: 'Admin notes for status change' })
   @IsOptional()
@@ -79,5 +79,5 @@ export class UpdateOrderStatusDto {
 export class AddAdminNoteDto {
   @ApiProperty({ description: 'Admin note content' })
   @IsString()
-  note: string;
+  note!: string;
 }

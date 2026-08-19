@@ -23,7 +23,6 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
 import { OrderReassignmentService } from './order-reassignment.service';
-import { OrderStatusService } from './order-status.service';
 import { OrderEventsService } from './order-events.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MessagingService } from '../messaging/messaging.service';
@@ -49,7 +48,6 @@ export class AdminOrdersController {
     private readonly ordersService: OrdersService,
     private readonly orderRiskService: OrderRiskService,
     private readonly orderReassignmentService: OrderReassignmentService,
-    private readonly orderStatusService: OrderStatusService,
     private readonly orderEventsService: OrderEventsService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly messagingService: MessagingService,
@@ -251,18 +249,30 @@ export class AdminOrdersController {
         throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
       }
 
-      await this.orderReassignmentService.reassignToAgent(
+      const updateMutation = `
+        mutation AdminReassignAgent($orderId: uuid!, $agentId: uuid!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: { assigned_agent_id: $agentId }
+          ) {
+            id
+            assigned_agent_id
+          }
+        }
+      `;
+
+      await this.hasuraSystemService.executeMutation(updateMutation, {
         orderId,
-        dto.agent_id,
-        dto.reason || 'Admin reassignment',
-      );
+        agentId: dto.agent_id,
+      });
 
       await this.orderEventsService.recordEvent({
-        order_id: orderId,
-        event_type: 'admin_reassignment',
-        event_data: {
+        orderId,
+        eventType: 'reassignment_started',
+        actorType: 'admin',
+        payload: {
           new_agent_id: dto.agent_id,
-          reason: dto.reason,
+          reason: dto.reason || 'Admin reassignment',
         },
       });
 
@@ -321,9 +331,10 @@ export class AdminOrdersController {
       });
 
       await this.orderEventsService.recordEvent({
-        order_id: orderId,
-        event_type: 'admin_status_change',
-        event_data: {
+        orderId,
+        eventType: 'gps_unavailable',
+        actorType: 'admin',
+        payload: {
           old_status: order.current_status,
           new_status: dto.status,
           notes: dto.notes,
@@ -357,9 +368,10 @@ export class AdminOrdersController {
       }
 
       await this.orderEventsService.recordEvent({
-        order_id: orderId,
-        event_type: 'admin_note',
-        event_data: {
+        orderId,
+        eventType: 'gps_unavailable',
+        actorType: 'admin',
+        payload: {
           note: dto.note,
         },
       });
@@ -390,10 +402,24 @@ export class AdminOrdersController {
         throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
       }
 
-      await this.messagingService.createOrderMessage({
-        order_id: orderId,
-        message_text: body.message,
-        is_from_support: true,
+      const messageMutation = `
+        mutation CreateSupportMessage($orderId: uuid!, $messageText: String!) {
+          insert_user_messages_one(
+            object: {
+              order_id: $orderId
+              message_text: $messageText
+              is_from_support: true
+              entity_type: "order"
+            }
+          ) {
+            id
+          }
+        }
+      `;
+
+      await this.hasuraSystemService.executeMutation(messageMutation, {
+        orderId,
+        messageText: body.message,
       });
 
       return {
@@ -435,11 +461,11 @@ export class AdminOrdersController {
         throw new HttpException('Recipient email not found', HttpStatus.BAD_REQUEST);
       }
 
-      await this.notificationsService.sendEmail({
-        to: recipientEmail,
-        subject: body.subject,
-        html: body.message,
-      });
+      await this.notificationsService.sendMerchantEngagementHtmlEmail(
+        recipientEmail,
+        body.subject,
+        body.message,
+      );
 
       return {
         success: true,
@@ -470,8 +496,8 @@ export class AdminOrdersController {
       let recipientPhone: string | undefined;
       if (body.recipient_type === 'client' && order.client?.user?.phone_number) {
         recipientPhone = order.client.user.phone_number;
-      } else if (body.recipient_type === 'business') {
-        recipientPhone = order.business_location?.phone || order.business?.user?.phone_number;
+      } else if (body.recipient_type === 'business' && order.business?.user?.phone_number) {
+        recipientPhone = order.business.user.phone_number;
       } else if (body.recipient_type === 'agent' && order.assigned_agent?.user?.phone_number) {
         recipientPhone = order.assigned_agent.user.phone_number;
       }

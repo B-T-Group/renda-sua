@@ -2,9 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { Orders } from '../generated/graphql';
 
-export interface OrderWithRisk extends Orders {
+export interface OrderWithRisk {
   risk_score: number;
   risk_factors: string[];
+  [key: string]: any;
 }
 
 export enum RiskLevel {
@@ -21,9 +22,7 @@ export interface RiskFactor {
 
 @Injectable()
 export class OrderRiskService {
-  private readonly logger = new Logger(OrderRiskService.name);
-
-  calculateRiskScore(order: Orders): { score: number; factors: string[] } {
+  calculateRiskScore(order: any): { score: number; factors: string[] } {
     const factors: RiskFactor[] = [];
     const now = DateTime.utc();
 
@@ -144,7 +143,7 @@ export class OrderRiskService {
     return RiskLevel.LOW;
   }
 
-  enrichOrderWithRisk(order: Orders): OrderWithRisk {
+  enrichOrderWithRisk(order: any): OrderWithRisk {
     const { score, factors } = this.calculateRiskScore(order);
     return {
       ...order,
