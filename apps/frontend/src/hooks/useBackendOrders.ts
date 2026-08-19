@@ -117,7 +117,7 @@ export interface OrderDetails {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id?: string | null;
-  fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   subtotal: number;
   base_delivery_fee: number;
   tax_amount: number;
@@ -1119,6 +1119,68 @@ export const useBackendOrders = () => {
     return response.data;
   };
 
+  const markOrderAsShipped = async (
+    orderId: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          op(`/orders/${orderId}/mark-shipped`),
+          {}
+        );
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to mark order as shipped'
+          );
+        }
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to mark order as shipped'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.markingShipped');
+  };
+
+  const confirmOrderReceipt = async (
+    orderId: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          `/orders/${orderId}/confirm-receipt`,
+          {}
+        );
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to confirm receipt'
+          );
+        }
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to confirm receipt'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.confirmingReceipt');
+  };
+
   return {
     // Legacy methods
     createOrder,
@@ -1128,6 +1190,7 @@ export const useBackendOrders = () => {
     confirmOrder,
     completePreparation,
     completePreparationBatch,
+    markOrderAsShipped,
     cancelOrder,
     refundOrder,
 
@@ -1145,6 +1208,7 @@ export const useBackendOrders = () => {
 
     // Client methods
     completeOrder,
+    confirmOrderReceipt,
     switchToPickup,
 
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)

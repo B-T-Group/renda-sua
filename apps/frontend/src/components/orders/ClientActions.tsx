@@ -31,7 +31,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
-  const { completeOrder, switchToPickup } = useBackendOrders();
+  const { completeOrder, confirmOrderReceipt, switchToPickup } =
+    useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -73,6 +74,26 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
+  const handleConfirmReceipt = async () => {
+    setCompleting(true);
+    try {
+      await confirmOrderReceipt(order.id);
+      onShowNotification?.(
+        t('messages.orderConfirmReceiptSuccess', 'Receipt confirmed'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('messages.orderConfirmReceiptError', 'Failed to confirm receipt'),
+        'error'
+      );
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const handleSwitchToPickup = async () => {
     setSwitchingToPickup(true);
     try {
@@ -105,6 +126,20 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       variant?: 'outlined' | 'contained';
       loading?: boolean;
     }> = [];
+
+    if (
+      order.fulfillment_method === 'shipping' &&
+      ['shipped', 'in_delivery'].includes(order.current_status)
+    ) {
+      actions.push({
+        label: t('orderActions.confirmReceipt', 'Confirm receipt'),
+        action: () => void handleConfirmReceipt(),
+        color: 'success',
+        icon: <CheckCircle />,
+        variant: 'contained',
+        loading: completing,
+      });
+    }
 
     if (order.current_status === 'delivered') {
       actions.push({

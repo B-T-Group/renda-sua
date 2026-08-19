@@ -159,6 +159,23 @@ describe('OrderStatusService', () => {
       ).rejects.toThrow('Invalid status transition from confirmed to shipped');
     });
 
+    it('rejects business confirmed → ready_for_pickup for shipping orders', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'confirmed',
+          fulfillment_method: 'shipping',
+        },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'ready_for_pickup')
+      ).rejects.toThrow(
+        'Invalid status transition from confirmed to ready_for_pickup'
+      );
+    });
+
     it('rejects client shipped → complete on the generic status endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
