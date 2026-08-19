@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
 import { isActivePersona } from '../users/persona.util';
@@ -18,7 +20,9 @@ export class OrderStatusService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly orderQueueService: OrderQueueService
+    private readonly orderQueueService: OrderQueueService,
+    private readonly agentReferralsService: AgentReferralsService,
+    private readonly paymentRoutingService: PaymentRoutingService
   ) {}
 
   /**
@@ -175,13 +179,47 @@ export class OrderStatusService {
       );
     }
 
+    await this.maybeCreditAgentReferralAfterDelivery(order, newStatus);
+
     return updatedRow;
+  }
+
+  async creditReferralAfterCompletedDelivery(
+    agentId?: string | null,
+    agentUserId?: string | null
+  ): Promise<void> {
+    if (!agentId || !agentUserId) return;
+    try {
+      const country = await this.paymentRoutingService.getUserCountryCode(
+        agentUserId
+      );
+      if (!country) return;
+      await this.agentReferralsService.creditAfterFirstDelivery(
+        agentId,
+        country
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Agent referral credit after delivery failed: ${error.message}`
+      );
+    }
   }
 
   private isAuthorizedBusinessActor(
     value: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean } | undefined
   ): value is AuthorizedBusinessActor {
     return !!value && 'businessId' in value && 'userId' in value;
+  }
+
+  private async maybeCreditAgentReferralAfterDelivery(
+    order: { assigned_agent_id?: string; assigned_agent?: { user_id?: string } },
+    newStatus: string
+  ): Promise<void> {
+    if (newStatus !== 'complete' && newStatus !== 'delivered') return;
+    await this.creditReferralAfterCompletedDelivery(
+      order.assigned_agent_id,
+      order.assigned_agent?.user_id
+    );
   }
 
   private buildConditionalStatusMutation(

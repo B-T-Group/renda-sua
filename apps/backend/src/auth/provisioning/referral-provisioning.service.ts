@@ -84,18 +84,5 @@ export class ReferralProvisioningService {
       }
     }
 
-    const agent = input.entities.find((e) => e.type === 'agent');
-    if (agent && input.referral && input.country) {
-      try {
-        await this.agentReferralsService.creditResolvedAgentReferral(
-          agent.id,
-          input.referral,
-          input.country,
-          input.ownerName || 'Agent'
-        );
-      } catch (error: any) {
-        this.logger.warn(`Agent referral credit failed: ${error?.message}`);
-      }
-    }
   }
 }

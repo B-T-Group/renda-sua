@@ -191,6 +191,7 @@ describe('OrdersService', () => {
 
     const mockOrderStatusService = {
       updateOrderStatus: jest.fn(),
+      creditReferralAfterCompletedDelivery: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
