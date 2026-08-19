@@ -199,6 +199,9 @@ export const theme = createTheme({
           '&:hover': {
             boxShadow: '0 6px 20px rgba(30, 64, 175, 0.35)',
           },
+          '&.Mui-disabled': {
+            boxShadow: 'none',
+          },
           '&.MuiButton-containedSecondary': {
             boxShadow: '0 4px 14px rgba(22, 163, 74, 0.25)',
             '&:hover': {

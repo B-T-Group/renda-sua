@@ -1281,6 +1281,7 @@
     "lastName": "Nom",
     "email": "E-mail",
     "emailTaken": "Cette adresse e-mail est déjà utilisée.",
+    "logInInstead": "Se connecter à la place",
     "checkingEmail": "Vérification de la disponibilité de l'e-mail...",
     "phoneNumber": "Numéro de téléphone",
     "phoneHelper": "Utilisez le numéro associé à votre compte de paiement mobile.",

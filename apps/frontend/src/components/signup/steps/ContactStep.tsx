@@ -4,12 +4,20 @@ import {
   PersonOutline as PersonOutlineIcon,
   PhoneOutlined as PhoneOutlinedIcon,
 } from '@mui/icons-material';
-import { InputAdornment, Stack, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import React, { useEffect } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
 import PhoneInput from '../../common/PhoneInput';
+import { useSignupWizardUi } from '../wizard/SignupWizardUiContext';
 import type { SignupFormValues } from '../wizard/types';
 
 function isValidEmailFormat(email: string): boolean {
@@ -18,9 +26,44 @@ function isValidEmailFormat(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(s);
 }
 
+function isOwnSignupEmail(email: string, ownSignupEmail: string | null): boolean {
+  if (!ownSignupEmail) return false;
+  return email.trim().toLowerCase() === ownSignupEmail.trim().toLowerCase();
+}
+
+function EmailTakenHelper({ onLoginInstead }: { onLoginInstead: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 0.5,
+        mt: 0.25,
+      }}
+    >
+      <Box component="span">
+        {t('signupPage.emailTaken', 'This email is already in use.')}
+      </Box>
+      <Button
+        type="button"
+        size="small"
+        onClick={onLoginInstead}
+        sx={{ minHeight: 32, py: 0, px: 0.5, textTransform: 'none', fontWeight: 700 }}
+      >
+        {t('signupPage.logInInstead', 'Log in instead')}
+      </Button>
+    </Box>
+  );
+}
+
 export const ContactStep: React.FC = () => {
   const { t } = useTranslation();
   const apiClient = useApiClient();
+  const { onLoginInstead, emailTaken, setEmailTaken, ownSignupEmail } =
+    useSignupWizardUi();
   const {
     control,
     watch,
@@ -34,6 +77,7 @@ export const ContactStep: React.FC = () => {
 
   useEffect(() => {
     if (!isValidEmailFormat(email || '')) {
+      setEmailTaken(false);
       clearErrors('contact.email');
       return;
     }
@@ -45,23 +89,28 @@ export const ContactStep: React.FC = () => {
           { params: { email: email.trim() }, signal: controller.signal }
         );
         if (controller.signal.aborted) return;
-        if (data?.taken) {
+        if (data?.taken && !isOwnSignupEmail(email, ownSignupEmail)) {
+          setEmailTaken(true);
           setError('contact.email', {
-            type: 'validate',
-            message: t('signupPage.emailTaken', 'This email is already taken.'),
+            type: 'emailTaken',
+            message: t('signupPage.emailTaken', 'This email is already in use.'),
           });
         } else {
+          setEmailTaken(false);
           clearErrors('contact.email');
         }
       } catch {
-        if (!controller.signal.aborted) clearErrors('contact.email');
+        if (!controller.signal.aborted) {
+          setEmailTaken(false);
+          clearErrors('contact.email');
+        }
       }
     }, 500);
     return () => {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [apiClient, clearErrors, email, setError, t]);
+  }, [apiClient, clearErrors, email, ownSignupEmail, setEmailTaken, setError, t]);
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
@@ -120,10 +169,14 @@ export const ContactStep: React.FC = () => {
             type="email"
             required
             autoComplete="email"
-            error={Boolean(errors.contact?.email)}
+            error={emailTaken || Boolean(errors.contact?.email)}
             helperText={
-              errors.contact?.email?.message ||
-              t('signupPage.checkingEmailHint', ' ')
+              emailTaken ? (
+                <EmailTakenHelper onLoginInstead={onLoginInstead} />
+              ) : (
+                errors.contact?.email?.message ||
+                t('signupPage.checkingEmailHint', ' ')
+              )
             }
             InputProps={{
               startAdornment: (
