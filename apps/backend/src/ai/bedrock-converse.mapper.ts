@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { ChatCompletionMessage } from './chat-completion.types';
+import { fitImageBytesForBedrockConverse } from './bedrock-converse-image';
 
 export type ConverseImageFormat = 'png' | 'jpeg' | 'gif' | 'webp';
 
@@ -150,18 +151,15 @@ function extractImageUrl(imageUrl: unknown): string | null {
   return null;
 }
 
-function parseRequiredDataUrlImage(dataUrl: string): ConverseContentBlock {
+async function parseRequiredDataUrlImage(
+  dataUrl: string
+): Promise<ConverseContentBlock> {
   const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
   const format = match ? mimeToFormat(match[1]) : null;
   if (!match || !format) {
     throw new Error('Vision request has an invalid data-URL image');
   }
-  return {
-    image: {
-      format,
-      source: { bytes: Buffer.from(match[2], 'base64') },
-    },
-  };
+  return toFittedImageBlock(Buffer.from(match[2], 'base64'), format);
 }
 
 async function fetchHttpImage(url: string): Promise<ConverseContentBlock> {
@@ -187,11 +185,16 @@ async function downloadHttpImage(url: string): Promise<ConverseContentBlock> {
   }
   const mime = headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
   const format = mimeToFormat(mime) || guessFormatFromUrl(url) || 'jpeg';
+  return toFittedImageBlock(new Uint8Array(data), format);
+}
+
+async function toFittedImageBlock(
+  bytes: Uint8Array,
+  format: ConverseImageFormat
+): Promise<ConverseContentBlock> {
+  const fitted = await fitImageBytesForBedrockConverse(bytes, format);
   return {
-    image: {
-      format,
-      source: { bytes: new Uint8Array(data) },
-    },
+    image: { format: fitted.format, source: { bytes: fitted.bytes } },
   };
 }
 
