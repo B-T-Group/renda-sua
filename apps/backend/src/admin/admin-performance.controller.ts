@@ -17,7 +17,9 @@ import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminPerformanceService } from './admin-performance.service';
+import { ReferralPayoutPreviewService } from '../business-referral-payouts/referral-payout-preview.service';
 import {
+  AdminPayoutPreviewQueryDto,
   AdminPerformanceSummaryQueryDto,
   AdminPerformanceTopAgentsQueryDto,
 } from './dto/admin-performance-query.dto';
@@ -35,7 +37,8 @@ const QUERY_PIPE = new ValidationPipe({
 @ApiBearerAuth()
 export class AdminPerformanceController {
   constructor(
-    private readonly adminPerformanceService: AdminPerformanceService
+    private readonly adminPerformanceService: AdminPerformanceService,
+    private readonly referralPayoutPreviewService: ReferralPayoutPreviewService
   ) {}
 
   @Get('summary')
@@ -78,6 +81,21 @@ export class AdminPerformanceController {
       minItemsPerReferral: query.minItemsPerReferral ?? null,
       agents,
     };
+  }
+
+  @Get('payout-preview')
+  @ApiOperation({
+    summary:
+      'Dry-run upcoming Saturday business-referral payouts (no credits). One row per referred business, including pyramid splits.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Simulated payout rows and pyramid beneficiaries',
+  })
+  async payoutPreview(@Query() query: AdminPayoutPreviewQueryDto) {
+    return this.referralPayoutPreviewService.previewWeeklyPayouts(
+      query.countryCode
+    );
   }
 
   @Get('markets')

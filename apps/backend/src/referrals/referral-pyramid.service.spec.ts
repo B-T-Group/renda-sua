@@ -323,4 +323,25 @@ describe('ReferralPyramidService', () => {
       expect.objectContaining({ amount: 100 })
     );
   });
+
+  it('previews shares without crediting wallets', async () => {
+    mockNoUplineAndPersonalAccount();
+
+    const result = await service.previewBonusShares({
+      grossAmount: 5000,
+      earner,
+      preferPersonalAccount: true,
+      currency: 'XAF',
+    });
+
+    expect(result.shares).toEqual([
+      expect.objectContaining({
+        generation: 0,
+        amount: 5000,
+        hasAccount: true,
+        percent: null,
+      }),
+    ]);
+    expect(accounts.registerTransaction).not.toHaveBeenCalled();
+  });
 });
