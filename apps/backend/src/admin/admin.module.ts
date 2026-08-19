@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
@@ -47,6 +48,7 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     AuthModule,
     AgentsModule,
     BusinessReferralsModule,
+    BusinessReferralPayoutsModule,
     AdminAuthModule,
     RbacModule,
     HasuraModule,

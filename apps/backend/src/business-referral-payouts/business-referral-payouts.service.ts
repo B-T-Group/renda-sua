@@ -9,6 +9,12 @@ import {
   BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
   currencyForReferralPayout,
 } from './business-referral-payout.constants';
+import type {
+  PreviewEligibleBusiness,
+  PreviewGross,
+  PreviewPendingClaim,
+  PayoutPreviewReferrer,
+} from './referral-payout-preview.types';
 
 interface EligibleAgentReferral {
   kind: 'agent';
@@ -18,7 +24,7 @@ interface EligibleAgentReferral {
   agent: {
     id: string;
     user_id: string;
-    user: { id: string; preferred_language: string };
+    user: { id: string; first_name?: string; last_name?: string; preferred_language: string };
   };
   items_aggregate: { aggregate: { count: number } };
 }
@@ -30,13 +36,34 @@ interface EligibleBusinessReferral {
   referred_by_business_id: string;
   referring_business: {
     id: string;
+    name?: string;
     user_id: string;
-    user: { id: string; preferred_language: string };
+    user: { id: string; first_name?: string; last_name?: string; preferred_language: string };
   };
   items_aggregate: { aggregate: { count: number } };
 }
 
 type EligibleBusiness = EligibleAgentReferral | EligibleBusinessReferral;
+
+interface IncompletePayoutRow {
+  id: string;
+  business_id: string;
+  agent_id: string | null;
+  referrer_business_id: string | null;
+  amount: number;
+  currency: string;
+  business: { id: string; name: string };
+  agent?: {
+    id: string;
+    user_id: string;
+    user?: { first_name?: string; last_name?: string };
+  } | null;
+  referrer_business?: {
+    id: string;
+    name: string;
+    user_id: string;
+  } | null;
+}
 
 interface PayoutSummary {
   processed: number;
@@ -55,6 +82,37 @@ export class BusinessReferralPayoutsService {
     private readonly configurationsService: ConfigurationsService,
     private readonly referralPyramidService: ReferralPyramidService
   ) {}
+
+  async isPayoutFeatureEnabled(): Promise<boolean> {
+    return this.isPayoutEnabled();
+  }
+
+  async listEligibleForPreview(): Promise<PreviewEligibleBusiness[]> {
+    const rows = await this.fetchEligibleBusinesses();
+    return rows.map((row) => this.toPreviewEligible(row));
+  }
+
+  async previewGrossForUser(userId: string): Promise<PreviewGross> {
+    const countryCode = await this.paymentRoutingService.getUserCountryCode(
+      userId
+    );
+    const normalized = countryCode ? String(countryCode).toUpperCase() : null;
+    const configKey = await this.referrerPayoutAmountKey(userId);
+    const amount = configKey
+      ? await this.getPayoutAmount(configKey, countryCode)
+      : 0;
+    return {
+      countryCode: normalized,
+      currency: this.getCurrencyForCountry(countryCode),
+      amount: amount || 0,
+      configKey,
+    };
+  }
+
+  async listIncompleteClaimsForPreview(): Promise<PreviewPendingClaim[]> {
+    const rows = await this.loadIncompletePayoutRows();
+    return rows.map((row) => this.toPreviewPendingClaim(row));
+  }
 
   async runWeeklyPayouts(): Promise<PayoutSummary & { skippedReason?: string }> {
     const enabled = await this.isPayoutEnabled();
@@ -108,6 +166,23 @@ export class BusinessReferralPayoutsService {
       skipped: 0,
       failures: 0,
     };
+    const rows = await this.loadIncompletePayoutRows();
+    for (const row of rows) {
+      summary.processed++;
+      try {
+        const ok = await this.retryIncompletePayout(row);
+        ok ? summary.credited++ : summary.skipped++;
+      } catch (error: any) {
+        this.logger.error(
+          `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
+        );
+        summary.failures++;
+      }
+    }
+    return summary;
+  }
+
+  private async loadIncompletePayoutRows(): Promise<IncompletePayoutRow[]> {
     const query = `
       query IncompleteBusinessReferralPayouts {
         business_referral_payouts(where: { transaction_id: { _is_null: true } }) {
@@ -124,76 +199,19 @@ export class BusinessReferralPayoutsService {
         }
       }
     `;
-    let rows: any[] = [];
     try {
       const result = await this.hasuraSystemService.executeQuery(query);
-      rows = result?.business_referral_payouts ?? [];
+      return result?.business_referral_payouts ?? [];
     } catch (error: any) {
       this.logger.error(
         `Failed to load incomplete referral payouts: ${error.message}`
       );
-      return summary;
+      return [];
     }
-
-    for (const row of rows) {
-      summary.processed++;
-      try {
-        const ok = await this.retryIncompletePayout(row);
-        ok ? summary.credited++ : summary.skipped++;
-      } catch (error: any) {
-        this.logger.error(
-          `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
-        );
-        summary.failures++;
-      }
-    }
-    return summary;
   }
 
-  private async retryIncompletePayout(row: {
-    id: string;
-    business_id: string;
-    agent_id: string | null;
-    referrer_business_id: string | null;
-    amount: number;
-    currency: string;
-    business: { id: string; name: string };
-    agent?: {
-      id: string;
-      user_id: string;
-      user?: { first_name?: string; last_name?: string };
-    } | null;
-    referrer_business?: {
-      id: string;
-      name: string;
-      user_id: string;
-    } | null;
-  }): Promise<boolean> {
-    let earner: {
-      kind: 'agent' | 'business';
-      id: string;
-      userId: string;
-      name: string;
-    } | null = null;
-
-    if (row.agent_id && row.agent?.user_id) {
-      earner = {
-        kind: 'agent',
-        id: row.agent.id,
-        userId: row.agent.user_id,
-        name:
-          `${row.agent.user?.first_name ?? ''} ${row.agent.user?.last_name ?? ''}`.trim() ||
-          'Agent',
-      };
-    } else if (row.referrer_business_id && row.referrer_business?.user_id) {
-      earner = {
-        kind: 'business',
-        id: row.referrer_business.id,
-        userId: row.referrer_business.user_id,
-        name: row.referrer_business.name || 'Business',
-      };
-    }
-
+  private async retryIncompletePayout(row: IncompletePayoutRow): Promise<boolean> {
+    const earner = this.earnerFromIncompleteRow(row);
     if (!earner) {
       this.logger.warn(
         `Incomplete payout ${row.id} missing earner relation — skipping`
@@ -268,7 +286,7 @@ export class BusinessReferralPayoutsService {
           agent: referring_agent {
             id
             user_id
-            user { id preferred_language }
+            user { id first_name last_name preferred_language }
           }
           items_aggregate(
             where: {
@@ -319,8 +337,9 @@ export class BusinessReferralPayoutsService {
           referred_by_business_id
           referring_business {
             id
+            name
             user_id
-            user { id preferred_language }
+            user { id first_name last_name preferred_language }
           }
           items_aggregate(
             where: {
@@ -351,6 +370,93 @@ export class BusinessReferralPayoutsService {
       return this.processAgentReferralPayout(business);
     }
     return this.processBusinessReferralPayout(business);
+  }
+
+  private toPreviewEligible(row: EligibleBusiness): PreviewEligibleBusiness {
+    if (row.kind === 'agent') return this.toPreviewAgentEligible(row);
+    return this.toPreviewBusinessEligible(row);
+  }
+
+  private toPreviewPendingClaim(row: IncompletePayoutRow): PreviewPendingClaim {
+    const earner = this.earnerFromIncompleteRow(row);
+    return {
+      referredBusinessId: row.business_id,
+      referredBusinessName: row.business?.name || 'Business',
+      referralKind: earner?.kind ?? (row.agent_id ? 'agent' : 'business'),
+      amount: Number(row.amount),
+      currency: row.currency,
+      earner,
+    };
+  }
+
+  private earnerFromIncompleteRow(
+    row: IncompletePayoutRow
+  ): PayoutPreviewReferrer | null {
+    if (row.agent_id && row.agent?.user_id) {
+      return {
+        kind: 'agent',
+        id: row.agent.id,
+        userId: row.agent.user_id,
+        name: this.displayName(row.agent.user, 'Agent'),
+      };
+    }
+    if (row.referrer_business_id && row.referrer_business?.user_id) {
+      return {
+        kind: 'business',
+        id: row.referrer_business.id,
+        userId: row.referrer_business.user_id,
+        name: row.referrer_business.name || 'Business',
+      };
+    }
+    return null;
+  }
+
+  private toPreviewAgentEligible(
+    row: EligibleAgentReferral
+  ): PreviewEligibleBusiness {
+    const agent = row.agent;
+    return {
+      kind: 'agent',
+      id: row.id,
+      name: row.name,
+      itemCount: row.items_aggregate.aggregate.count,
+      earner: agent?.user_id
+        ? {
+            kind: 'agent',
+            id: agent.id,
+            userId: agent.user_id,
+            name: this.displayName(agent.user, 'Agent'),
+          }
+        : null,
+    };
+  }
+
+  private toPreviewBusinessEligible(
+    row: EligibleBusinessReferral
+  ): PreviewEligibleBusiness {
+    const biz = row.referring_business;
+    return {
+      kind: 'business',
+      id: row.id,
+      name: row.name,
+      itemCount: row.items_aggregate.aggregate.count,
+      earner: biz?.user_id
+        ? {
+            kind: 'business',
+            id: biz.id,
+            userId: biz.user_id,
+            name: biz.name || this.displayName(biz.user, 'Business'),
+          }
+        : null,
+    };
+  }
+
+  private displayName(
+    user: { first_name?: string; last_name?: string } | null | undefined,
+    fallback: string
+  ): string {
+    const name = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+    return name || fallback;
   }
 
   private async processAgentReferralPayout(

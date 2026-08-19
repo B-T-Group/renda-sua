@@ -6,6 +6,7 @@ import { ReferralsModule } from '../referrals/referrals.module';
 import { BusinessReferralPayoutsInternalController } from './business-referral-payouts-internal.controller';
 import { BusinessReferralPayoutsService } from './business-referral-payouts.service';
 import { ReferralProjectedPayoutService } from './referral-projected-payout.service';
+import { ReferralPayoutPreviewService } from './referral-payout-preview.service';
 
 @Module({
   imports: [ConfigModule, StripePaymentsModule, ReferralsModule],
@@ -13,8 +14,13 @@ import { ReferralProjectedPayoutService } from './referral-projected-payout.serv
   providers: [
     BusinessReferralPayoutsService,
     ReferralProjectedPayoutService,
+    ReferralPayoutPreviewService,
     ConfigurationsService,
   ],
-  exports: [BusinessReferralPayoutsService, ReferralProjectedPayoutService],
+  exports: [
+    BusinessReferralPayoutsService,
+    ReferralProjectedPayoutService,
+    ReferralPayoutPreviewService,
+  ],
 })
 export class BusinessReferralPayoutsModule {}

@@ -43,6 +43,7 @@ import {
 } from '../../hooks/useAdminPerformance';
 import { usePermission } from '../../hooks/usePermissions';
 import LoadingScreen from '../common/LoadingScreen';
+import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
 import SEOHead from '../seo/SEOHead';
 
 const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
@@ -402,7 +403,7 @@ const AdminPerformancePage: React.FC = () => {
   const { t } = useTranslation();
   const { profile, loading: profileLoading } = useUserProfileContext();
   const canAccess = usePermission(PlatformPermissions.DASHBOARD_PLATFORM_STATS);
-  const { fetchMarkets, fetchSummary, fetchTopAgents, error } =
+  const { fetchMarkets, fetchSummary, fetchTopAgents, fetchPayoutPreview, error } =
     useAdminPerformance();
 
   const [markets, setMarkets] = useState<PerformanceMarket[]>([]);
@@ -576,6 +577,10 @@ const AdminPerformancePage: React.FC = () => {
           ))}
         </ToggleButtonGroup>
         {loading && <CircularProgress size={20} />}
+        <AdminPayoutPreviewDialog
+          countryCode={countryCode}
+          fetchPreview={fetchPayoutPreview}
+        />
       </Stack>
 
       <Card

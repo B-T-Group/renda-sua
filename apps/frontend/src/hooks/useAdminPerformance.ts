@@ -80,6 +80,49 @@ export interface PerformanceMarket {
   countryName: string;
 }
 
+export interface PayoutPreviewBeneficiary {
+  generation: number;
+  kind: 'agent' | 'business';
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  percent: number | null;
+  hasAccount: boolean;
+}
+
+export interface PayoutPreviewRow {
+  referredBusinessId: string;
+  referredBusinessName: string;
+  itemCount: number;
+  referralKind: 'agent' | 'business';
+  countryCode: string | null;
+  currency: string;
+  grossAmount: number;
+  payoutConfigKey: string | null;
+  wouldCredit: boolean;
+  skipReason: 'no_referrer' | 'no_amount' | 'no_account' | null;
+  pendingRetry: boolean;
+  referrer: {
+    kind: 'agent' | 'business';
+    id: string;
+    userId: string;
+    name: string;
+  } | null;
+  beneficiaries: PayoutPreviewBeneficiary[];
+}
+
+export interface WeeklyPayoutPreview {
+  enabled: boolean;
+  cutoffDate: string;
+  minItems: number;
+  percents: { gen1: number; gen2: number; gen3: number };
+  payableCount: number;
+  skippedCount: number;
+  rows: PayoutPreviewRow[];
+  totalsByCurrency: Array<{ currency: string; count: number; gross: number }>;
+}
+
 export function resolvePeriodRange(period: PerformancePeriod): {
   from: string;
   to: string;
@@ -204,5 +247,29 @@ export function useAdminPerformance() {
     [apiClient]
   );
 
-  return { fetchMarkets, fetchSummary, fetchTopAgents, error };
+  const fetchPayoutPreview = useCallback(
+    async (countryCode: string): Promise<WeeklyPayoutPreview | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = new URLSearchParams();
+        if (countryCode) params.set('countryCode', countryCode);
+        const qs = params.toString();
+        const { data } = await apiClient.get<WeeklyPayoutPreview>(
+          `/admin/performance/payout-preview${qs ? `?${qs}` : ''}`
+        );
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
+  return {
+    fetchMarkets,
+    fetchSummary,
+    fetchTopAgents,
+    fetchPayoutPreview,
+    error,
+  };
 }

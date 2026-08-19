@@ -719,6 +719,31 @@
         "referredBusinesses": "Referred businesses",
         "noBusinesses": "No referred businesses",
         "businessName": "Business"
+      },
+      "payoutPreview": {
+        "button": "Preview Saturday payouts",
+        "title": "Upcoming referral payouts",
+        "subtitle": "Dry run of the Saturday job: one line per referred business, including pyramid shares. Nothing is credited.",
+        "disabled": "Payouts are currently disabled. The Saturday job will skip these until the flag is on.",
+        "summary": "{{payable}} payable, {{skipped}} skipped. Pyramid {{g1}}% / {{g2}}% / {{g3}}%. Min {{min}} approved items after {{cutoff}}.",
+        "totalChip": "{{count}} businesses · {{amount}}",
+        "empty": "No unpaid eligible businesses for this market.",
+        "colBusiness": "Business",
+        "colReferrer": "Referrer",
+        "colGross": "Gross",
+        "colPyramid": "Who gets paid",
+        "colStatus": "Status",
+        "kindAgent": "Agent",
+        "kindBusiness": "Business",
+        "itemsCount": "{{n}} approved items",
+        "shareLine": "L{{gen}} {{name}}: {{amount}}{{wallet}}",
+        "noWallet": " (no wallet)",
+        "willPay": "Will pay",
+        "skipNoReferrer": "No referrer",
+        "skipNoAmount": "No amount",
+        "skipNoAccount": "Missing wallet",
+        "pendingRetry": "Pending retry",
+        "loadError": "Could not load the payout preview."
       }
     },
     "businesses": {

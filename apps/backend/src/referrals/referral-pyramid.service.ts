@@ -13,6 +13,17 @@ import {
   splitReferralBonus,
 } from './referral-pyramid.util';
 
+export interface PreviewBonusShare {
+  generation: number;
+  kind: ReferralEntityKind;
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  percent: number | null;
+  hasAccount: boolean;
+}
+
 export interface DistributeReferralBonusInput {
   grossAmount: number;
   earner: ReferralEntityRef;
@@ -123,6 +134,76 @@ export class ReferralPyramidService {
       );
     }
     return { credited, transactionIds };
+  }
+
+  async previewBonusShares(params: {
+    grossAmount: number;
+    earner: ReferralEntityRef;
+    preferPersonalAccount: boolean;
+    currency: string;
+  }): Promise<{ percents: PyramidPercents; shares: PreviewBonusShare[] }> {
+    const percents = await this.getPyramidPercents();
+    const upline = await this.resolveUpline(params.earner, 3);
+    const amounts = splitReferralBonus(
+      params.grossAmount,
+      percents,
+      upline.length
+    );
+    const shares = await Promise.all(
+      amounts.map((share) => this.mapPreviewShare(share, params, percents, upline))
+    );
+    return { percents, shares };
+  }
+
+  private async mapPreviewShare(
+    share: BonusShareAmount,
+    params: {
+      earner: ReferralEntityRef;
+      preferPersonalAccount: boolean;
+      currency: string;
+    },
+    percents: PyramidPercents,
+    upline: ReferralEntityRef[]
+  ): Promise<PreviewBonusShare> {
+    const beneficiary =
+      share.generation === 0 ? params.earner : upline[share.generation - 1];
+    const hasAccount = await this.previewHasAccount(
+      beneficiary,
+      params.currency,
+      beneficiary?.kind === 'agent' ? true : params.preferPersonalAccount
+    );
+    return {
+      generation: share.generation,
+      kind: beneficiary?.kind ?? params.earner.kind,
+      id: beneficiary?.id ?? '',
+      userId: beneficiary?.userId ?? '',
+      name: beneficiary?.name ?? '',
+      amount: share.amount,
+      percent: this.sharePercent(share.generation, percents),
+      hasAccount,
+    };
+  }
+
+  private sharePercent(
+    generation: 0 | 1 | 2 | 3,
+    percents: PyramidPercents
+  ): number | null {
+    if (generation === 0) return null;
+    return [percents.gen1, percents.gen2, percents.gen3][generation - 1] ?? null;
+  }
+
+  private async previewHasAccount(
+    beneficiary: ReferralEntityRef | undefined,
+    currency: string,
+    preferPersonalAccount: boolean
+  ): Promise<boolean> {
+    if (!beneficiary) return false;
+    const accountId = await this.resolveAccountId(
+      beneficiary,
+      currency,
+      preferPersonalAccount
+    );
+    return Boolean(accountId);
   }
 
   private async creditShare(params: {

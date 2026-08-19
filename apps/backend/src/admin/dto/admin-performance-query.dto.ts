@@ -58,3 +58,14 @@ export class AdminPerformanceTopAgentsQueryDto extends AdminPerformanceSummaryQu
   @Max(1000)
   minItemsPerReferral?: number;
 }
+
+export class AdminPayoutPreviewQueryDto {
+  @ApiPropertyOptional({
+    description: 'ISO 3166-1 alpha-2 market filter (e.g. CM, GA, CA)',
+    example: 'CM',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryCode?: string;
+}
