@@ -1,9 +1,11 @@
 import axios from 'axios';
+import sharp from 'sharp';
 import {
   extractConverseOutputText,
   mapChatMessagesToConverse,
   stripCodeFences,
 } from './bedrock-converse.mapper';
+import { BEDROCK_CONVERSE_MAX_IMAGE_BYTES } from './bedrock-converse-image';
 
 jest.mock('axios');
 
@@ -108,6 +110,43 @@ describe('bedrock-converse.mapper', () => {
         },
       ])
     ).rejects.toThrow(/missing an image URL/);
+  });
+
+  it('compresses oversized http images before Converse', async () => {
+    const raw = Buffer.alloc(2400 * 2400 * 3);
+    for (let i = 0; i < raw.length; i++) {
+      raw[i] = (i * 31 + 17) % 256;
+    }
+    const oversized = await sharp(raw, {
+      raw: { width: 2400, height: 2400, channels: 3 },
+    })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+    expect(oversized.byteLength).toBeGreaterThan(BEDROCK_CONVERSE_MAX_IMAGE_BYTES);
+    mockedAxios.get.mockResolvedValue({
+      data: oversized,
+      headers: { 'content-type': 'image/jpeg' },
+    });
+
+    const mapped = await mapChatMessagesToConverse([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe' },
+          {
+            type: 'image_url',
+            image_url: { url: 'https://uploads.example/big.jpg' },
+          },
+        ],
+      },
+    ]);
+    const imagePart = mapped.messages[0].content[1] as {
+      image: { format: string; source: { bytes: Uint8Array } };
+    };
+    expect(imagePart.image.format).toBe('jpeg');
+    expect(imagePart.image.source.bytes.byteLength).toBeLessThanOrEqual(
+      BEDROCK_CONVERSE_MAX_IMAGE_BYTES
+    );
   });
 
   it('extracts text from Converse output', () => {

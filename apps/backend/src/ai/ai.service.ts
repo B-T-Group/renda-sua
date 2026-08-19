@@ -636,14 +636,11 @@ export class AiService {
         },
       };
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      this.logger.error(
+      return this.logAndDegrade(
+        error,
         `Failed to generate image item suggestions for ${urls.length} image(s)`,
-        error
+        emptyResult()
       );
-      return emptyResult();
     }
   }
 
@@ -875,17 +872,10 @@ Do not include any text outside the JSON.`;
       const suggestion = this.mapParsedItemRefinement(parsed);
       return this.mergeBarcodeLookup(suggestion);
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      this.logger.error('Failed to generate item refinement suggestions', error);
-      throw new HttpException(
-        {
-          success: false,
-          message: 'AI temporarily unavailable. Please try again.',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        },
-        HttpStatus.SERVICE_UNAVAILABLE
+      return this.logAndDegrade(
+        error,
+        'Failed to generate item refinement suggestions',
+        {}
       );
     }
   }
@@ -1207,14 +1197,11 @@ The "description" field MUST be written in ${languageLabel}.`;
         descriptionLanguage
       );
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      this.logger.error(
+      return this.logAndDegrade(
+        error,
         `Rental image suggestions failed for ${input.imageUrl}`,
-        error
+        this.fallbackRentalSuggestion(input, defaultCurrency)
       );
-      return this.fallbackRentalSuggestion(input, defaultCurrency);
     }
   }
 
@@ -1348,6 +1335,15 @@ No markdown, no explanation outside JSON.`;
       suggestedTags: undefined,
       currency: defaultCurrency,
     };
+  }
+
+  private logAndDegrade<T>(
+    error: unknown,
+    message: string,
+    fallback: T
+  ): T {
+    this.logger.error(message, error);
+    return fallback;
   }
 
   private resolvePreferredLanguage(
