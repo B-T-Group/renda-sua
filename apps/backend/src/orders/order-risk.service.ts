@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { Orders } from '../generated/graphql';
 
 export interface OrderWithRisk {
   risk_score: number;

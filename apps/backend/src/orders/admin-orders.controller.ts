@@ -22,10 +22,8 @@ import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
-import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderEventsService } from './order-events.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MessagingService } from '../messaging/messaging.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   GetAdminOrdersDto,
@@ -47,10 +45,8 @@ export class AdminOrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderRiskService: OrderRiskService,
-    private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly messagingService: MessagingService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -269,7 +265,7 @@ export class AdminOrdersController {
       await this.orderEventsService.recordEvent({
         orderId,
         eventType: 'reassignment_started',
-        actorType: 'admin',
+        actorType: 'support',
         payload: {
           new_agent_id: dto.agent_id,
           reason: dto.reason || 'Admin reassignment',
@@ -333,7 +329,7 @@ export class AdminOrdersController {
       await this.orderEventsService.recordEvent({
         orderId,
         eventType: 'gps_unavailable',
-        actorType: 'admin',
+        actorType: 'support',
         payload: {
           old_status: order.current_status,
           new_status: dto.status,
@@ -370,7 +366,7 @@ export class AdminOrdersController {
       await this.orderEventsService.recordEvent({
         orderId,
         eventType: 'gps_unavailable',
-        actorType: 'admin',
+        actorType: 'support',
         payload: {
           note: dto.note,
         },
@@ -461,11 +457,11 @@ export class AdminOrdersController {
         throw new HttpException('Recipient email not found', HttpStatus.BAD_REQUEST);
       }
 
-      await this.notificationsService.sendMerchantEngagementHtmlEmail(
-        recipientEmail,
-        body.subject,
-        body.message,
-      );
+      await this.notificationsService.sendMerchantEngagementHtmlEmail({
+        to: recipientEmail,
+        subject: body.subject,
+        html: body.message,
+      });
 
       return {
         success: true,
