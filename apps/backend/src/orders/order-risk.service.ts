@@ -19,119 +19,42 @@ export interface RiskFactor {
   score: number;
 }
 
+/** Statuses that should progress; long dwell time is a risk signal. */
+const STUCK_STATUSES = new Set([
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'awaiting_shipment',
+  'shipped',
+  'in_delivery',
+]);
+
 @Injectable()
 export class OrderRiskService {
   calculateRiskScore(order: any): { score: number; factors: string[] } {
-    const factors: RiskFactor[] = [];
-    const now = DateTime.utc();
-
     if (!order.current_status) {
       return { score: 0, factors: [] };
     }
 
-    if (order.current_status === 'pending' && order.created_at) {
-      const minutesSinceCreated = now.diff(
-        DateTime.fromISO(order.created_at),
-        'minutes'
-      ).minutes;
-      
-      if (minutesSinceCreated > 30) {
-        factors.push({
-          factor: `Not confirmed for ${Math.round(minutesSinceCreated)} minutes`,
-          score: Math.min(30, minutesSinceCreated),
-        });
-      }
-    }
-
-    if (
-      order.acceptance_deadline_at &&
-      order.current_status !== 'confirmed' &&
-      order.current_status !== 'cancelled' &&
-      order.current_status !== 'failed'
-    ) {
-      const deadlineTime = DateTime.fromISO(order.acceptance_deadline_at);
-      if (now > deadlineTime) {
-        const minutesOverdue = now.diff(deadlineTime, 'minutes').minutes;
-        factors.push({
-          factor: `Acceptance deadline passed ${Math.round(minutesOverdue)} minutes ago`,
-          score: Math.min(40, 20 + minutesOverdue),
-        });
-      }
-    }
-
-    if (order.pickup_state === 'at_risk') {
-      factors.push({
-        factor: 'Pickup at risk',
-        score: 25,
-      });
-    }
-
-    if (order.pickup_state === 'overdue') {
-      factors.push({
-        factor: 'Pickup overdue',
-        score: 40,
-      });
-    }
-
-    if (order.delivery_time_window) {
-      const window = order.delivery_time_window as any;
-      if (window.time_slot_end) {
-        const slotEnd = DateTime.fromISO(window.time_slot_end);
-        if (
-          now > slotEnd &&
-          order.current_status !== 'delivered' &&
-          order.current_status !== 'complete' &&
-          order.current_status !== 'cancelled'
-        ) {
-          const minutesLate = now.diff(slotEnd, 'minutes').minutes;
-          factors.push({
-            factor: `Past delivery window by ${Math.round(minutesLate)} minutes`,
-            score: Math.min(50, 30 + minutesLate * 0.5),
-          });
-        }
-      }
-    }
-
-    if (
-      order.current_status === 'assigned_to_agent' &&
-      order.pickup_due_at
-    ) {
-      const pickupDue = DateTime.fromISO(order.pickup_due_at);
-      const minutesUntilDue = pickupDue.diff(now, 'minutes').minutes;
-      
-      if (minutesUntilDue < 0) {
-        factors.push({
-          factor: `Agent has not picked up (${Math.abs(Math.round(minutesUntilDue))} min overdue)`,
-          score: Math.min(35, 15 + Math.abs(minutesUntilDue) * 0.5),
-        });
-      } else if (minutesUntilDue < 10) {
-        factors.push({
-          factor: `Agent pickup due in ${Math.round(minutesUntilDue)} minutes`,
-          score: 15,
-        });
-      }
-    }
-
-    if (
-      ['out_for_delivery', 'in_transit'].includes(order.current_status) &&
-      order.estimated_delivery_time
-    ) {
-      const estimatedTime = DateTime.fromISO(order.estimated_delivery_time);
-      if (now > estimatedTime) {
-        const minutesLate = now.diff(estimatedTime, 'minutes').minutes;
-        factors.push({
-          factor: `Estimated delivery time passed ${Math.round(minutesLate)} minutes ago`,
-          score: Math.min(30, 10 + minutesLate * 0.3),
-        });
-      }
-    }
+    const now = DateTime.utc();
+    const factors: RiskFactor[] = [
+      ...this.pendingConfirmationFactors(order, now),
+      ...this.acceptanceDeadlineFactors(order, now),
+      ...this.pickupStateFactors(order),
+      ...this.deliveryWindowFactors(order, now),
+      ...this.agentPickupFactors(order, now),
+      ...this.estimatedDeliveryFactors(order, now),
+      ...this.stuckStatusFactors(order, now),
+    ];
 
     const totalScore = factors.reduce((sum, f) => sum + f.score, 0);
-    const factorDescriptions = factors.map((f) => f.factor);
-
     return {
       score: Math.min(100, Math.round(totalScore)),
-      factors: factorDescriptions,
+      factors: factors.map((f) => f.factor),
     };
   }
 
@@ -149,5 +72,157 @@ export class OrderRiskService {
       risk_score: score,
       risk_factors: factors,
     };
+  }
+
+  private pendingConfirmationFactors(
+    order: any,
+    now: DateTime
+  ): RiskFactor[] {
+    if (order.current_status !== 'pending' || !order.created_at) return [];
+    const minutes = now.diff(DateTime.fromISO(order.created_at), 'minutes')
+      .minutes;
+    if (minutes <= 30) return [];
+    return [
+      {
+        factor: `Not confirmed for ${Math.round(minutes)} minutes`,
+        score: Math.min(30, minutes),
+      },
+    ];
+  }
+
+  private acceptanceDeadlineFactors(
+    order: any,
+    now: DateTime
+  ): RiskFactor[] {
+    if (
+      !order.acceptance_deadline_at ||
+      ['confirmed', 'cancelled', 'failed'].includes(order.current_status)
+    ) {
+      return [];
+    }
+    const deadline = DateTime.fromISO(order.acceptance_deadline_at);
+    if (now <= deadline) return [];
+    const minutesOverdue = now.diff(deadline, 'minutes').minutes;
+    return [
+      {
+        factor: `Acceptance deadline passed ${Math.round(minutesOverdue)} minutes ago`,
+        score: Math.min(40, 20 + minutesOverdue),
+      },
+    ];
+  }
+
+  private pickupStateFactors(order: any): RiskFactor[] {
+    if (order.pickup_state === 'at_risk') {
+      return [{ factor: 'Pickup at risk', score: 25 }];
+    }
+    if (order.pickup_state === 'overdue') {
+      return [{ factor: 'Pickup overdue', score: 40 }];
+    }
+    return [];
+  }
+
+  private deliveryWindowFactors(order: any, now: DateTime): RiskFactor[] {
+    const window = order.delivery_time_window as
+      | { preferred_date?: string; time_slot_end?: string }
+      | null
+      | undefined;
+    if (!window?.preferred_date || !window?.time_slot_end) return [];
+    if (
+      ['delivered', 'complete', 'cancelled'].includes(order.current_status)
+    ) {
+      return [];
+    }
+    const slotEnd = this.combineDateAndTime(
+      window.preferred_date,
+      window.time_slot_end
+    );
+    if (!slotEnd || now <= slotEnd) return [];
+    const minutesLate = now.diff(slotEnd, 'minutes').minutes;
+    return [
+      {
+        factor: `Past delivery window by ${Math.round(minutesLate)} minutes`,
+        score: Math.min(50, 30 + minutesLate * 0.5),
+      },
+    ];
+  }
+
+  private agentPickupFactors(order: any, now: DateTime): RiskFactor[] {
+    if (order.current_status !== 'assigned_to_agent' || !order.pickup_due_at) {
+      return [];
+    }
+    const pickupDue = DateTime.fromISO(order.pickup_due_at);
+    const minutesUntilDue = pickupDue.diff(now, 'minutes').minutes;
+    if (minutesUntilDue < 0) {
+      return [
+        {
+          factor: `Agent has not picked up (${Math.abs(Math.round(minutesUntilDue))} min overdue)`,
+          score: Math.min(35, 15 + Math.abs(minutesUntilDue) * 0.5),
+        },
+      ];
+    }
+    if (minutesUntilDue < 10) {
+      return [
+        {
+          factor: `Agent pickup due in ${Math.round(minutesUntilDue)} minutes`,
+          score: 15,
+        },
+      ];
+    }
+    return [];
+  }
+
+  private estimatedDeliveryFactors(
+    order: any,
+    now: DateTime
+  ): RiskFactor[] {
+    if (
+      !['out_for_delivery', 'in_transit'].includes(order.current_status) ||
+      !order.estimated_delivery_time
+    ) {
+      return [];
+    }
+    const estimated = DateTime.fromISO(order.estimated_delivery_time);
+    if (now <= estimated) return [];
+    const minutesLate = now.diff(estimated, 'minutes').minutes;
+    return [
+      {
+        factor: `Estimated delivery time passed ${Math.round(minutesLate)} minutes ago`,
+        score: Math.min(30, 10 + minutesLate * 0.3),
+      },
+    ];
+  }
+
+  /**
+   * Flag orders that remain in an in-progress status for too long
+   * (e.g. ready_for_pickup for months with no agent / no pickup).
+   */
+  private stuckStatusFactors(order: any, now: DateTime): RiskFactor[] {
+    if (!STUCK_STATUSES.has(order.current_status)) return [];
+    const sinceIso = order.updated_at || order.created_at;
+    if (!sinceIso) return [];
+    const since = DateTime.fromISO(sinceIso);
+    if (!since.isValid) return [];
+    const hoursStuck = now.diff(since, 'hours').hours;
+    if (hoursStuck < 4) return [];
+    const days = Math.floor(hoursStuck / 24);
+    const label =
+      days >= 1
+        ? `${days} day${days === 1 ? '' : 's'}`
+        : `${Math.round(hoursStuck)} hours`;
+    return [
+      {
+        factor: `Stuck in ${order.current_status} for ${label}`,
+        score: Math.min(70, Math.round(15 + hoursStuck * 0.75)),
+      },
+    ];
+  }
+
+  private combineDateAndTime(
+    date: string,
+    time: string
+  ): DateTime | null {
+    const timePart = time.length === 5 ? `${time}:00` : time;
+    const combined = DateTime.fromISO(`${date}T${timePart}`, { zone: 'utc' });
+    return combined.isValid ? combined : null;
   }
 }

@@ -131,6 +131,7 @@ export class AdminOrdersController {
             order_number
             current_status
             created_at
+            updated_at
             acceptance_deadline_at
             pickup_state
             pickup_due_at
