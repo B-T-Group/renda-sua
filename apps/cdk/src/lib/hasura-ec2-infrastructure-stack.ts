@@ -90,7 +90,8 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       blockDevices: [
         {
           deviceName: '/dev/sda1',
-          volume: ec2.BlockDeviceVolume.ebs(12, {
+          // Double prior 12 GiB root — container logs previously filled the disk.
+          volume: ec2.BlockDeviceVolume.ebs(24, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
             encrypted: true,
           }),
