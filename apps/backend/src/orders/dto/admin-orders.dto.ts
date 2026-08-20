@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsUUID, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -54,12 +54,8 @@ export class GetAdminOrdersDto {
   limit?: number;
 }
 
-export class ReassignAgentDto {
-  @ApiProperty({ description: 'New agent ID to assign' })
-  @IsUUID()
-  agent_id!: string;
-
-  @ApiPropertyOptional({ description: 'Reason for reassignment' })
+export class UnassignRedispatchDto {
+  @ApiPropertyOptional({ description: 'Reason for unassigning and redispatching' })
   @IsOptional()
   @IsString()
   reason?: string;

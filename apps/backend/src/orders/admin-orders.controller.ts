@@ -22,12 +22,13 @@ import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
+import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderEventsService } from './order-events.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   GetAdminOrdersDto,
-  ReassignAgentDto,
+  UnassignRedispatchDto,
   UpdateOrderStatusDto,
   AddAdminNoteDto,
   OrderStatusFilter,
@@ -45,6 +46,7 @@ export class AdminOrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderRiskService: OrderRiskService,
+    private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
@@ -232,12 +234,25 @@ export class AdminOrdersController {
     }
   }
 
-  @Post(':orderId/reassign-agent')
-  @ApiOperation({ summary: 'Reassign order to a different agent' })
-  @ApiResponse({ status: 200, description: 'Agent reassigned successfully' })
-  async reassignAgent(
+  @Post(':orderId/unassign-redispatch')
+  @ApiOperation({ 
+    summary: 'Unassign current agent and redispatch to nearby agents',
+    description: 'Unassigns the current agent, releases their hold, and redispatches to nearby available agents. If no agents are available after exhausting dispatch rounds, the client will be notified with the option to switch to store pickup.'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Order unassigned and redispatched successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async unassignAndRedispatch(
     @Param('orderId') orderId: string,
-    @Body() dto: ReassignAgentDto,
+    @Body() dto: UnassignRedispatchDto,
   ) {
     try {
       const order = await this.ordersService.getOrderById(orderId);
@@ -245,41 +260,28 @@ export class AdminOrdersController {
         throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
       }
 
-      const updateMutation = `
-        mutation AdminReassignAgent($orderId: uuid!, $agentId: uuid!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { assigned_agent_id: $agentId }
-          ) {
-            id
-            assigned_agent_id
-          }
-        }
-      `;
+      if (order.current_status !== 'assigned_to_agent') {
+        throw new HttpException(
+          'Order is not in assigned_to_agent status',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-      await this.hasuraSystemService.executeMutation(updateMutation, {
+      const result = await this.orderReassignmentService.reassignOrder(
         orderId,
-        agentId: dto.agent_id,
-      });
+        dto.reason || 'Admin-initiated reassignment',
+        { skipReliabilityPenalty: true },
+      );
 
-      await this.orderEventsService.recordEvent({
-        orderId,
-        eventType: 'reassignment_started',
-        actorType: 'support',
-        payload: {
-          new_agent_id: dto.agent_id,
-          reason: dto.reason || 'Admin reassignment',
-        },
-      });
+      if (!result.success) {
+        throw new HttpException(result.message, HttpStatus.BAD_REQUEST);
+      }
 
-      return {
-        success: true,
-        message: 'Agent reassigned successfully',
-      };
+      return result;
     } catch (error: any) {
-      this.logger.error('Failed to reassign agent', error);
+      this.logger.error('Failed to unassign and redispatch', error);
       throw new HttpException(
-        error.message || 'Failed to reassign agent',
+        error.message || 'Failed to unassign and redispatch',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

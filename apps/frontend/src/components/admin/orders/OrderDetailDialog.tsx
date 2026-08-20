@@ -34,14 +34,13 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import {
   OrderWithRisk,
-  useReassignAgent,
+  useUnassignRedispatch,
   useUpdateOrderStatus,
   useAddAdminNote,
   useSendOrderMessage,
   useSendOrderEmail,
   useSendOrderSms,
 } from '../../../hooks/useAdminOrders';
-import { useAgents } from '../../../hooks/useAgents';
 
 interface OrderDetailDialogProps {
   open: boolean;
@@ -73,14 +72,12 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [smsText, setSmsText] = useState('');
-  const [newAgentId, setNewAgentId] = useState('');
-  const [reassignReason, setReassignReason] = useState('');
+  const [unassignReason, setUnassignReason] = useState('');
   const [newStatus, setNewStatus] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
   const [adminNote, setAdminNote] = useState('');
 
-  const { data: agentsData } = useAgents();
-  const reassignAgent = useReassignAgent();
+  const unassignRedispatch = useUnassignRedispatch();
   const updateStatus = useUpdateOrderStatus();
   const addNote = useAddAdminNote();
   const sendMessage = useSendOrderMessage();
@@ -143,29 +140,21 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
     }
   };
 
-  const handleReassignAgent = async () => {
-    if (!newAgentId) {
-      enqueueSnackbar(t('admin.orders.selectAgent', 'Please select an agent'), {
-        variant: 'warning',
-      });
-      return;
-    }
-
+  const handleUnassignRedispatch = async () => {
     try {
-      await reassignAgent.mutateAsync({
+      await unassignRedispatch.mutateAsync({
         orderId: order.id,
-        agentId: newAgentId,
-        reason: reassignReason,
+        reason: unassignReason,
       });
-      enqueueSnackbar(t('admin.orders.agentReassigned', 'Agent reassigned successfully'), {
-        variant: 'success',
-      });
-      setNewAgentId('');
-      setReassignReason('');
+      enqueueSnackbar(
+        t('admin.orders.unassignSuccess', 'Order unassigned and redispatched successfully'),
+        { variant: 'success' }
+      );
+      setUnassignReason('');
       onClose();
     } catch (error: any) {
       enqueueSnackbar(
-        error.message || t('admin.orders.reassignFailed', 'Failed to reassign agent'),
+        error.message || t('admin.orders.unassignFailed', 'Failed to unassign and redispatch'),
         { variant: 'error' }
       );
     }
@@ -382,7 +371,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
         <Box>
           <Tabs value={activeTab} onChange={(_e, newValue) => setActiveTab(newValue)}>
             <Tab icon={<MessageIcon />} label={t('admin.orders.contact', 'Contact')} />
-            <Tab icon={<PersonAddIcon />} label={t('admin.orders.reassign', 'Reassign')} />
+            <Tab icon={<PersonAddIcon />} label={t('admin.orders.unassign', 'Unassign & Redispatch')} />
             <Tab icon={<EditIcon />} label={t('admin.orders.updateStatus', 'Update Status')} />
             <Tab icon={<NoteAddIcon />} label={t('admin.orders.notes', 'Notes')} />
           </Tabs>
@@ -484,37 +473,30 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
 
           <TabPanel value={activeTab} index={1}>
             <Alert severity="info" sx={{ mb: 2 }}>
-              {t('admin.orders.reassignInfo', 'Reassign this order to a different delivery agent')}
+              {t(
+                'admin.orders.unassignInfo',
+                'Unassigns the current agent and automatically redispatches to nearby available agents. If no agents are found after exhausting dispatch rounds, the client will be notified with the option to switch to store pickup.'
+              )}
             </Alert>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>{t('admin.orders.selectAgent', 'Select Agent')}</InputLabel>
-              <Select
-                value={newAgentId}
-                label={t('admin.orders.selectAgent', 'Select Agent')}
-                onChange={(e) => setNewAgentId(e.target.value)}
-              >
-                {agentsData?.agents?.map((agent: any) => (
-                  <MenuItem key={agent.id} value={agent.id}>
-                    {agent.user.first_name} {agent.user.last_name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
             <TextField
               fullWidth
               multiline
-              rows={2}
-              value={reassignReason}
-              onChange={(e) => setReassignReason(e.target.value)}
-              label={t('admin.orders.reassignReason', 'Reason for reassignment')}
+              rows={3}
+              value={unassignReason}
+              onChange={(e) => setUnassignReason(e.target.value)}
+              label={t('admin.orders.unassignReason', 'Reason for unassigning (optional)')}
+              placeholder={t(
+                'admin.orders.unassignReasonPlaceholder',
+                'E.g., Current agent is unable to complete delivery...'
+              )}
               sx={{ mb: 2 }}
             />
             <Button
               variant="contained"
-              onClick={handleReassignAgent}
-              disabled={reassignAgent.isPending || !newAgentId}
+              onClick={handleUnassignRedispatch}
+              disabled={unassignRedispatch.isPending}
             >
-              {t('admin.orders.reassignAgent', 'Reassign Agent')}
+              {t('admin.orders.unassignRedispatch', 'Unassign & Redispatch')}
             </Button>
           </TabPanel>
 

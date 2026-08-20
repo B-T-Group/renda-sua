@@ -87,22 +87,19 @@ export const useAdminOrders = (filters: AdminOrderFilters = {}) => {
   });
 };
 
-export const useReassignAgent = () => {
+export const useUnassignRedispatch = () => {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       orderId,
-      agentId,
       reason,
     }: {
       orderId: string;
-      agentId: string;
       reason?: string;
     }) => {
-      const response = await apiClient.post(`/admin/orders/${orderId}/reassign-agent`, {
-        agent_id: agentId,
+      const response = await apiClient.post(`/admin/orders/${orderId}/unassign-redispatch`, {
         reason,
       });
       return response.data;
