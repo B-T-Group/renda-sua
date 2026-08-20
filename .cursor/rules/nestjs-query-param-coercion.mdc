@@ -1,0 +1,66 @@
+---
+description: Coerce NestJS query params before Hasura Int/numeric GraphQL variables
+globs: apps/backend/src/**/*.{ts,dto.ts}
+alwaysApply: false
+---
+
+# NestJS query params → GraphQL Int/Float
+
+HTTP query strings are always **strings**. Hasura rejects `"50"` for `$limit: Int!` (`expected a non-negative 32-bit integer… found a string`).
+
+## Required pattern for numeric query DTO fields
+
+Use `@Type(() => Number)` **and** a `ValidationPipe` with `transform: true` on the controller (or method). `@IsInt()` alone does **not** coerce.
+
+```typescript
+// ✅ GOOD
+import { Type } from 'class-transformer';
+import { IsInt, IsOptional, Min } from 'class-validator';
+
+@IsOptional()
+@Type(() => Number)
+@IsInt()
+@Min(0)
+offset?: number;
+
+@IsOptional()
+@Type(() => Number)
+@IsInt()
+@Min(1)
+limit?: number;
+```
+
+```typescript
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+export class AdminOrdersController { ... }
+```
+
+```typescript
+// ❌ BAD — query stays "50" / "0"; Hasura Int validation fails
+@IsOptional()
+@IsInt()
+limit?: number;
+```
+
+## When passing to Hasura
+
+Variables typed `Int!` / `Float!` must be JS numbers:
+
+```typescript
+// ✅ GOOD
+{ limit: Number(limit), offset: Number(offset) }
+
+// ❌ BAD
+{ limit, offset } // may still be strings if the pipe was skipped
+```
+
+Same for any `@Query('page')` / `@Query('limit')` read as a raw string — `parseInt` / `Number` before `executeQuery`.
+
+## Checklist for new list endpoints
+
+1. Numeric query DTO fields use `@Type(() => Number)` + `@IsInt()` / `@IsNumber()`.
+2. Controller has `ValidationPipe({ transform: true })`.
+3. GraphQL variables for `limit` / `offset` / counts are numbers in the request payload.
+4. Smoke the operation (see `hasura-validate-queries.mdc`) with real numeric variables, not quoted ints.
+
+Reference DTOs: `admin/dto/admin-site-events-query.dto.ts`, `orders/dto/admin-orders.dto.ts`.
