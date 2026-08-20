@@ -32,7 +32,7 @@ export interface OrderWithRisk {
   };
   business?: {
     id: string;
-    business_name: string;
+    name: string;
     user: {
       email: string;
       phone_number?: string;

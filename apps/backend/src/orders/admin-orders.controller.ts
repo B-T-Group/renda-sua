@@ -150,7 +150,7 @@ export class AdminOrdersController {
             }
             business {
               id
-              business_name
+              name
               user {
                 email
                 phone_number

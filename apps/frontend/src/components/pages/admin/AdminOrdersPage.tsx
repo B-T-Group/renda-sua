@@ -251,7 +251,7 @@ export const AdminOrdersPage: React.FC = () => {
                         : t('admin.orders.noClient', 'N/A')}
                     </TableCell>
                     <TableCell>
-                      {order.business_location?.name || order.business?.business_name || t('admin.orders.noBusiness', 'N/A')}
+                      {order.business_location?.name || order.business?.name || t('admin.orders.noBusiness', 'N/A')}
                     </TableCell>
                     <TableCell>
                       <Chip
