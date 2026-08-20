@@ -10,6 +10,8 @@ import {
   Post,
   Query,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -40,6 +42,7 @@ import {
 @UseGuards(AdminAuthGuard)
 @ApiBearerAuth()
 @RequirePermissions(PlatformPermissions.ORDERS_CROSS_BUSINESS)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AdminOrdersController {
   private readonly logger = new Logger(AdminOrdersController.name);
 
@@ -155,7 +158,7 @@ export class AdminOrdersController {
             }
             business_location {
               id
-              location_name
+              name
               phone
               email
             }
@@ -177,7 +180,7 @@ export class AdminOrdersController {
             }
             delivery_address {
               id
-              address_line1
+              address_line_1
               city
               state
             }
@@ -192,8 +195,8 @@ export class AdminOrdersController {
 
       const result = await this.hasuraSystemService.executeQuery(ordersQuery, {
         where: whereClause,
-        limit,
-        offset,
+        limit: Number(limit),
+        offset: Number(offset),
       });
 
       const orders = result.orders || [];

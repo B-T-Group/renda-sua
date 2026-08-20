@@ -325,7 +325,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
               </Typography>
               {order.business_location && (
                 <>
-                  <Typography variant="body2">{order.business_location.location_name}</Typography>
+                  <Typography variant="body2">{order.business_location.name}</Typography>
                   {order.business_location.email && (
                     <Typography variant="body2" color="text.secondary">
                       {order.business_location.email}
