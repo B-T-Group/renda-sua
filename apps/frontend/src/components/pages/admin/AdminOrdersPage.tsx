@@ -310,3 +310,5 @@ export const AdminOrdersPage: React.FC = () => {
     </Box>
   );
 };
+
+export default AdminOrdersPage;
