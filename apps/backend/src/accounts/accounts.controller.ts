@@ -23,6 +23,7 @@ import type { TransactionRequest } from './accounts.service';
 import { AccountsService } from './accounts.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { throwMappedHasuraError } from '../hasura/hasura-request.util';
 
 @ApiTags('accounts')
 @Controller('accounts')
@@ -150,16 +151,7 @@ export class AccountsController {
         data: { accounts, clients },
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch account info',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to fetch account info');
     }
   }
 
@@ -191,14 +183,7 @@ export class AccountsController {
       const data = await this.accountsService.getWithdrawalConfig(accountId);
       return { success: true, data };
     } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch withdrawal config',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to fetch withdrawal config');
     }
   }
 
@@ -254,16 +239,7 @@ export class AccountsController {
 
       return { success: true, data: { account } };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch account',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to fetch account');
     }
   }
 
@@ -351,16 +327,7 @@ export class AccountsController {
         data: { accounts },
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch accounts',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to fetch accounts');
     }
   }
 
@@ -466,16 +433,7 @@ export class AccountsController {
         account: result.insert_accounts_one,
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to create account');
     }
   }
 
@@ -502,16 +460,7 @@ export class AccountsController {
         newBalance: result.newBalance,
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to register transaction');
     }
   }
 }

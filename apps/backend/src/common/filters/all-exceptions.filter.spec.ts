@@ -110,4 +110,23 @@ describe('AllExceptionsFilter', () => {
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
+
+  it('maps leftover Hasura gateway errors to HTTP 503', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new Error('GraphQL Error (Code: 503)') as Error & {
+      response: { status: number };
+    };
+    exception.response = { status: 503 };
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      statusCode: 503,
+      message: 'Service temporarily unavailable',
+    });
+    expect(logger.error).toHaveBeenCalled();
+    expect(Sentry.captureException).toHaveBeenCalledWith(exception);
+  });
 });

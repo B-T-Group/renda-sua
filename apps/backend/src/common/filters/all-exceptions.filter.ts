@@ -11,6 +11,7 @@ import { Request, Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { getRequestLogContext } from '../request-context-log.util';
+import { isRetryableHasuraError } from '../../hasura/hasura-request.util';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -35,22 +36,36 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
+    if (isRetryableHasuraError(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
   private resolveBody(exception: unknown, status: number): object {
     if (exception instanceof HttpException) {
-      const response = exception.getResponse();
-      if (typeof response === 'string') {
-        return { statusCode: status, message: response };
-      }
-      return response as object;
+      return this.httpExceptionBody(exception, status);
+    }
+    if (isRetryableHasuraError(exception)) {
+      return {
+        success: false,
+        statusCode: status,
+        message: 'Service temporarily unavailable',
+      };
     }
     return {
       success: false,
       statusCode: status,
       message: 'Internal server error',
     };
+  }
+
+  private httpExceptionBody(exception: HttpException, status: number): object {
+    const response = exception.getResponse();
+    if (typeof response === 'string') {
+      return { statusCode: status, message: response };
+    }
+    return response as object;
   }
 
   private logException(
