@@ -2069,6 +2069,8 @@
       "manageBusinessesDescription": "View and update businesses",
       "businessReliability": "Business reliability",
       "businessReliabilityDescription": "Top least reliable merchants by acceptance score",
+      "orderRiskManagement": "Order Risk Management",
+      "orderRiskManagementDescription": "Monitor and act on at-risk orders with risk scoring and smart redispatch",
       "manageCategories": "Manage Categories",
       "manageCategoriesDescription": "Manage product categories and subcategories",
       "manageClients": "Manage Clients",
