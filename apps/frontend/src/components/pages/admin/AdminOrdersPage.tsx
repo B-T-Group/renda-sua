@@ -81,7 +81,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithRisk | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
-  const { data, isLoading, error } = useAdminOrders({
+  const { data, isLoading, error, refetch } = useAdminOrders({
     status: statusFilter,
     risk_level: riskFilter,
     search: searchQuery,
