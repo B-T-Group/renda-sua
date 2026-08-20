@@ -63,6 +63,7 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
 };
 
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, order, onClose }) => {
+  const [refreshKey, setRefreshKey] = React.useState(0);
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const [activeTab, setActiveTab] = useState(0);
@@ -151,6 +152,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
         { variant: 'success' }
       );
       setUnassignReason('');
+      setRefreshKey((k) => k + 1);
       onClose();
     } catch (error: any) {
       enqueueSnackbar(
@@ -179,6 +181,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
       });
       setNewStatus('');
       setStatusNotes('');
+      setRefreshKey((k) => k + 1);
       onClose();
     } catch (error: any) {
       enqueueSnackbar(
