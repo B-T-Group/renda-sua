@@ -42,6 +42,7 @@ import {
   buildRevertPatch,
   buildSelectVersionPatch,
   hasExistingVersion,
+  omitUnsupportedVariantImageFields,
   shouldSkipAutoApply,
 } from './image-versioning.helpers';
 import {
@@ -746,7 +747,7 @@ export class AiImageCleanupService implements OnModuleInit {
     } else if (img.source === 'variant_image') {
       await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
         id: img.id,
-        _set: patch,
+        _set: omitUnsupportedVariantImageFields(patch),
       });
       void this.imageThumbnails.regenerate('item_variant_image', img.id);
     } else {
@@ -2312,10 +2313,7 @@ export class AiImageCleanupService implements OnModuleInit {
     if (result.item_variant_image_id) {
       const data = await this.hasura.executeQuery<{
         item_variant_images_by_pk: VersionedImageRow | null;
-      }>(
-        `query($id: uuid!) { item_variant_images_by_pk(id: $id) { ${Q.VERSION_IMAGE_FIELDS} } }`,
-        { id: result.item_variant_image_id }
-      );
+      }>(Q.GET_VARIANT_IMAGE_BY_ID, { id: result.item_variant_image_id });
       return data.item_variant_images_by_pk;
     }
     if (result.rental_item_image_id) {
@@ -2334,7 +2332,7 @@ export class AiImageCleanupService implements OnModuleInit {
     if (result.item_variant_image_id) {
       await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
         id: result.item_variant_image_id,
-        _set: patch,
+        _set: omitUnsupportedVariantImageFields(patch),
       });
       return;
     }
@@ -2497,15 +2495,7 @@ export class AiImageCleanupService implements OnModuleInit {
             item_variant?: { item?: { business_id?: string } | null } | null;
           })
         | null;
-    }>(
-      `query($id: uuid!) {
-        item_variant_images_by_pk(id: $id) {
-          ${Q.VERSION_IMAGE_FIELDS}
-          item_variant { item { business_id } }
-        }
-      }`,
-      { id: imageId }
-    );
+    }>(Q.GET_VARIANT_IMAGE_BY_ID_WITH_OWNER, { id: imageId });
     const row = data.item_variant_images_by_pk;
     if (!row || row.item_variant?.item?.business_id !== businessId) {
       throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
@@ -2534,7 +2524,7 @@ export class AiImageCleanupService implements OnModuleInit {
     }
     await this.hasura.executeMutation(Q.UPDATE_VARIANT_IMAGE, {
       id: imageId,
-      _set: patch,
+      _set: omitUnsupportedVariantImageFields(patch),
     });
   }
 
