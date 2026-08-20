@@ -40,7 +40,7 @@ export interface OrderWithRisk {
   };
   business_location?: {
     id: string;
-    location_name: string;
+    name: string;
     phone?: string;
     email?: string;
   };
@@ -62,7 +62,7 @@ export interface OrderWithRisk {
   };
   delivery_address?: {
     id: string;
-    address_line1: string;
+    address_line_1: string;
     city: string;
     state: string;
   };
