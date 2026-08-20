@@ -1818,6 +1818,8 @@
       "manageBusinessesDescription": "Voir et mettre à jour les entreprises",
       "businessReliability": "Fiabilité des commerces",
       "businessReliabilityDescription": "Commerces les moins fiables selon le score d’acceptation",
+      "orderRiskManagement": "Gestion des Risques des Commandes",
+      "orderRiskManagementDescription": "Surveiller et agir sur les commandes à risque avec scoring et redispatch intelligent",
       "manageCategories": "Gérer les Catégories",
       "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits",
       "manageClients": "Gérer les Clients",
