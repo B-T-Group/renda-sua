@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsOptional, IsString, IsEnum, IsInt, Min, Max } from 'class-validator';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -43,14 +44,17 @@ export class GetAdminOrdersDto {
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   offset?: number;
 
-  @ApiPropertyOptional({ default: 50 })
+  @ApiPropertyOptional({ default: 50, maximum: 200 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(200)
   limit?: number;
 }
 

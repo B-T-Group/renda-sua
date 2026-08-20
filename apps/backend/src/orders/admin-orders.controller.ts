@@ -10,6 +10,8 @@ import {
   Post,
   Query,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -34,6 +36,7 @@ import {
   OrderStatusFilter,
   RiskLevelFilter,
 } from './dto/admin-orders.dto';
+import { resolveAdminOrdersPagination } from './admin-orders.pagination';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -53,6 +56,7 @@ export class AdminOrdersController {
   ) {}
 
   @Get()
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({ summary: 'Get all active orders with risk scores for admin dashboard' })
   @ApiResponse({
     status: 200,
@@ -74,9 +78,8 @@ export class AdminOrdersController {
         status = OrderStatusFilter.ALL,
         risk_level = RiskLevelFilter.ALL,
         search,
-        offset = 0,
-        limit = 50,
       } = query;
+      const { limit, offset } = resolveAdminOrdersPagination(query);
 
       const excludedStatuses = [
         'delivered',
