@@ -40,8 +40,10 @@ import { OrderCleanupInternalController } from './order-cleanup-internal.control
 import { OrderCleanupService } from './order-cleanup.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
+import { AdminOrdersController } from './admin-orders.controller';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { OrderRiskService } from './order-risk.service';
 import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -71,6 +73,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
   controllers: [
     OrdersController,
     AdminPickupOpsController,
+    AdminOrdersController,
     FailedDeliveriesController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
@@ -81,6 +84,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
   providers: [
     OrdersService,
     OrderStatusService,
+    OrderRiskService,
     OrderQueueService,
     OrderOffersService,
     WaitAndExecuteScheduleService,

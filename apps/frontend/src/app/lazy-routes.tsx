@@ -37,6 +37,9 @@ export const AdminBusinessReliabilityPage = lazy(() =>
 export const AdminPickupOpsPage = lazy(() =>
   import('../components/pages/AdminPickupOpsPage')
 );
+export const AdminOrdersPage = lazy(() =>
+  import('../components/pages/admin/AdminOrdersPage')
+);
 export const AdminLocationTransfersPage = lazy(() =>
   import('../components/pages/AdminLocationTransfersPage')
 );

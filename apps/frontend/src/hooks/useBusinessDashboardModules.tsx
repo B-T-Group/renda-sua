@@ -339,6 +339,21 @@ export function useBusinessDashboardModules({
       },
       {
         title: t(
+          'business.dashboard.orderRiskManagement',
+          'Order Risk Management'
+        ),
+        description: t(
+          'business.dashboard.orderRiskManagementDescription',
+          'Monitor and act on at-risk orders with risk scoring and smart redispatch'
+        ),
+        icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#d32f2f',
+        requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        path: '/admin/orders',
+      },
+      {
+        title: t(
           'business.dashboard.locationTransfers',
           'Location transfers'
         ),
