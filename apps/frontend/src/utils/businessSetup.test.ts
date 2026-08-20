@@ -42,8 +42,14 @@ describe('requiresMerchantAction', () => {
 
   it('falls back to nextAction when flag missing', () => {
     expect(requiresMerchantAction(baseStatus({ nextAction: 'upload_id' }))).toBe(
-      true
+      false
     );
+    expect(
+      requiresMerchantAction(baseStatus({ nextAction: 'setup_stripe_connect' }))
+    ).toBe(false);
+    expect(
+      requiresMerchantAction(baseStatus({ nextAction: 'sign_agreement' }))
+    ).toBe(true);
     expect(
       requiresMerchantAction(baseStatus({ nextAction: 'pending_review' }))
     ).toBe(false);

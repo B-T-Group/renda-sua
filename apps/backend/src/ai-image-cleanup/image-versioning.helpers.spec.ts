@@ -3,6 +3,7 @@ import {
   buildRevertPatch,
   buildSelectVersionPatch,
   hasExistingVersion,
+  omitUnsupportedVariantImageFields,
   shouldSkipAutoApply,
 } from './image-versioning.helpers';
 
@@ -156,6 +157,25 @@ describe('image versioning helpers', () => {
         enhancedKey: 'ek',
       }).active_version
     ).toBe('original');
+  });
+
+  it('strips width and validation fields from variant image patches', () => {
+    const patch = omitUnsupportedVariantImageFields({
+      image_url: 'https://cdn/enhanced.png',
+      s3_key: 'enhanced-key',
+      width: 1024,
+      height: 1024,
+      validation_warnings: [],
+      validation_errors: [],
+      quality_score: 90,
+      validated_at: '2026-08-20T00:00:00Z',
+      content_hash: 'abc123',
+    });
+    expect(patch).toEqual({
+      image_url: 'https://cdn/enhanced.png',
+      s3_key: 'enhanced-key',
+      content_hash: 'abc123',
+    });
   });
 
   it('detects existing versions by flag or URL', () => {

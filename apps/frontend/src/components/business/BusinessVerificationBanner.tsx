@@ -1,7 +1,6 @@
 import {
   Alert,
   AlertTitle,
-  Box,
   Button,
   Stack,
   Step,
@@ -22,7 +21,7 @@ import {
 } from '../../hooks/useBusinessVerification';
 import { suspendedReasonMessage } from '../../utils/suspendedReasonMessage';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
+import { VerifiedBadgeTip } from './VerifiedBadgeTip';
 
 function needsMobilePaymentPhone(status: BusinessVerificationStatus): boolean {
   if (status.paymentRail !== 'mobile_money') return false;
@@ -40,6 +39,7 @@ export const BusinessVerificationBanner: React.FC = () => {
   const { profile } = useUserProfileContext();
   const { status, loading, refresh } = useBusinessVerification();
   const [refreshing, setRefreshing] = useState(false);
+  const businessId = profile?.business?.id;
   const mainInterest = profile?.business?.main_interest ?? 'sell_items';
   const itemsListPath =
     mainInterest === 'rent_items'
@@ -86,56 +86,19 @@ export const BusinessVerificationBanner: React.FC = () => {
   ) : null;
 
   if (status.can_accept_orders) {
-    return phoneCta;
+    return (
+      <>
+        {phoneCta}
+        <VerifiedBadgeTip status={status} businessId={businessId} />
+      </>
+    );
   }
 
   if (status.lifecycle_status === 'suspended') {
-    const reasonText = suspendedReasonMessage(status.suspension?.code, t);
-    const mailto = supportMailto(
-      t(
-        'business.lifecycle.suspendedEmailSubject',
-        'Store suspension appeal'
-      ),
-      t(
-        'business.lifecycle.suspendedEmailBody',
-        'Hello,\n\nMy store appears to be suspended. Please review my account.\n\nThank you.'
-      )
-    );
-    return (
-      <Alert severity="error" sx={{ mb: 3 }}>
-        <AlertTitle>
-          {t('business.lifecycle.suspendedTitle', 'Store suspended')}
-        </AlertTitle>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          {reasonText}
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 1.5 }}>
-          {t(
-            'business.lifecycle.suspendedNotice',
-            'Your store is hidden and cannot accept orders. Email {{email}} if you believe this is a mistake.',
-            { email: SUPPORT_EMAIL }
-          )}
-        </Typography>
-        <Button variant="contained" color="error" href={mailto} component="a">
-          {t('business.lifecycle.emailSupport', 'Email {{email}}', {
-            email: SUPPORT_EMAIL,
-          })}
-        </Button>
-      </Alert>
-    );
+    return <SuspendedBanner status={status} t={t} />;
   }
 
-  const isStripe = status.paymentRail === 'stripe';
   const agreementDone = status.steps.agreement?.complete === true;
-  const payoutsDone = status.steps.stripeConnect?.complete === true;
-  const identityDone = status.steps.identity?.status === 'approved';
-  const reviewDone =
-    status.nextAction === 'complete' ||
-    status.is_verified === true ||
-    status.steps.identity?.status === 'approved';
-
-  const activeStep = resolveActiveStep(status, isStripe);
-
   const stepIcon = (complete: boolean) =>
     complete ? (
       <CheckCircleIcon color="success" fontSize="small" />
@@ -151,36 +114,17 @@ export const BusinessVerificationBanner: React.FC = () => {
           {t('business.lifecycle.setupTitle', 'Finish setting up your store')}
         </AlertTitle>
         <Typography variant="body2" sx={{ mb: 2 }}>
-          {isStripe
-            ? t(
-                'business.lifecycle.setupNotice',
-                'Sign the merchant agreement and connect payouts to go live.'
-              )
-            : t(
-                'business.lifecycle.setupNoticeMobileMoney',
-                'Sign the merchant agreement and upload a valid ID. We review it before your account can accept orders.'
-              )}
+          {t(
+            'business.lifecycle.setupNotice',
+            'Sign the merchant agreement to go live and start accepting orders.'
+          )}
         </Typography>
-        <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
+        <Stepper activeStep={agreementDone ? 1 : 0} alternativeLabel sx={{ mb: 2 }}>
           <Step completed={agreementDone}>
             <StepLabel icon={stepIcon(agreementDone)}>
               {t('business.verification.stepAgreement', 'Agreement')}
             </StepLabel>
           </Step>
-          <Step completed={isStripe ? payoutsDone : identityDone}>
-            <StepLabel icon={stepIcon(isStripe ? payoutsDone : identityDone)}>
-              {isStripe
-                ? t('business.verification.stepPayouts', 'Payouts')
-                : t('business.verification.stepIdentity', 'ID document')}
-            </StepLabel>
-          </Step>
-          {isStripe ? null : (
-            <Step completed={reviewDone}>
-              <StepLabel icon={stepIcon(reviewDone)}>
-                {t('business.verification.stepReview', 'Review')}
-              </StepLabel>
-            </Step>
-          )}
         </Stepper>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           {status.nextAction === 'sign_agreement' ? (
@@ -195,15 +139,6 @@ export const BusinessVerificationBanner: React.FC = () => {
                     'business.verification.signAgreement',
                     'Sign merchant agreement'
                   )}
-            </Button>
-          ) : null}
-          {status.nextAction === 'upload_id' ? (
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={() => navigate('/documents')}
-            >
-              {t('business.verification.uploadId', 'Upload identification')}
             </Button>
           ) : null}
           {status.steps.catalog?.hasPendingItem ||
@@ -227,26 +162,46 @@ export const BusinessVerificationBanner: React.FC = () => {
             {t('common.refresh', 'Refresh')}
           </Button>
         </Stack>
-        {status.nextAction === 'setup_stripe_connect' ? (
-          <Box sx={{ mt: 2 }}>
-            <StripeConnectOnboardingCard />
-          </Box>
-        ) : null}
       </Alert>
     </>
   );
 };
 
-function resolveActiveStep(
-  status: BusinessVerificationStatus,
-  isStripe: boolean
-): number {
-  if (isStripe) {
-    if (status.nextAction === 'sign_agreement') return 0;
-    if (status.nextAction === 'setup_stripe_connect') return 1;
-    return 2;
-  }
-  if (status.nextAction === 'sign_agreement') return 0;
-  if (status.nextAction === 'upload_id') return 1;
-  return 2;
+function SuspendedBanner({
+  status,
+  t,
+}: {
+  status: BusinessVerificationStatus;
+  t: (key: string, defaultValue: string, options?: Record<string, string>) => string;
+}) {
+  const reasonText = suspendedReasonMessage(status.suspension?.code, t);
+  const mailto = supportMailto(
+    t('business.lifecycle.suspendedEmailSubject', 'Store suspension appeal'),
+    t(
+      'business.lifecycle.suspendedEmailBody',
+      'Hello,\n\nMy store appears to be suspended. Please review my account.\n\nThank you.'
+    )
+  );
+  return (
+    <Alert severity="error" sx={{ mb: 3 }}>
+      <AlertTitle>
+        {t('business.lifecycle.suspendedTitle', 'Store suspended')}
+      </AlertTitle>
+      <Typography variant="body2" sx={{ mb: 1 }}>
+        {reasonText}
+      </Typography>
+      <Typography variant="body2" sx={{ mb: 1.5 }}>
+        {t(
+          'business.lifecycle.suspendedNotice',
+          'Your store is hidden and cannot accept orders. Email {{email}} if you believe this is a mistake.',
+          { email: SUPPORT_EMAIL }
+        )}
+      </Typography>
+      <Button variant="contained" color="error" href={mailto} component="a">
+        {t('business.lifecycle.emailSupport', 'Email {{email}}', {
+          email: SUPPORT_EMAIL,
+        })}
+      </Button>
+    </Alert>
+  );
 }

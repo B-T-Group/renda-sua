@@ -83,19 +83,11 @@ describe('admin-business-id-filter.util', () => {
       expect(businessNeedsAttention('suspended', [])).toBe(true);
     });
 
-    it('flags active businesses without approved ID', () => {
-      expect(businessNeedsAttention('active', [])).toBe(true);
+    it('does not flag active businesses even without approved ID', () => {
+      expect(businessNeedsAttention('active', [])).toBe(false);
       expect(
         businessNeedsAttention('active', [{ is_approved: false, note: null }])
-      ).toBe(true);
-      expect(
-        businessNeedsAttention('active', [
-          { is_approved: false, note: '[REJECTED] unclear' },
-        ])
-      ).toBe(true);
-    });
-
-    it('does not flag active businesses with approved ID', () => {
+      ).toBe(false);
       expect(
         businessNeedsAttention('active', [{ is_approved: true, note: null }])
       ).toBe(false);

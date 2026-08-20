@@ -28,9 +28,10 @@ describe('BusinessVerificationService MoMo ID status', () => {
     merchantLifecycle = {
       recompute: jest.fn().mockResolvedValue(null),
       getBusinessSnapshot: jest.fn().mockResolvedValue({
-        lifecycle_status: 'created',
-        is_storefront_visible: false,
-        can_accept_orders: false,
+        lifecycle_status: 'active',
+        is_storefront_visible: true,
+        can_accept_orders: true,
+        is_verified: true,
       }),
       getCatalogStep: jest.fn().mockResolvedValue({
         complete: true,
@@ -103,20 +104,38 @@ describe('BusinessVerificationService MoMo ID status', () => {
     );
   });
 
-  it('derives verified status from approved ID without writing generated is_verified', async () => {
+  it('returns DB is_verified from lifecycle snapshot after agreement', async () => {
     const status = await service.getStatus();
 
     expect(merchantLifecycle.upsertPaymentAccount).not.toHaveBeenCalled();
     expect(status.is_verified).toBe(true);
     expect(status.nextAction).toBe('complete');
+    expect(status.isOnboarding).toBe(false);
   });
 
-  it('includes phone and catalog steps while ID approval completes verification', async () => {
+  it('includes phone and catalog steps while ID is optional for the badge', async () => {
     const status = await service.getStatus();
 
     expect(status.steps.identity.status).toBe('approved');
     expect(status.steps.mobilePaymentPhone.status).toBe('verified');
     expect(status.steps.catalog.complete).toBe(true);
     expect(status.nextAction).toBe('complete');
+  });
+
+  it('ends onboarding after agreement even without approved ID', async () => {
+    merchantLifecycle.getBusinessSnapshot.mockResolvedValue({
+      lifecycle_status: 'active',
+      is_storefront_visible: true,
+      can_accept_orders: true,
+      is_verified: false,
+    });
+    hasuraUser.executeQuery.mockResolvedValue({ user_uploads: [] });
+
+    const status = await service.getStatus();
+
+    expect(status.is_verified).toBe(false);
+    expect(status.nextAction).toBe('complete');
+    expect(status.isOnboarding).toBe(false);
+    expect(status.requiresMerchantAction).toBe(false);
   });
 });
