@@ -34,6 +34,7 @@ import { UpdateAgentAvailabilityDto } from './dto/update-agent-availability.dto'
 import { UpdateAgentFocusDto } from './dto/update-agent-focus.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { throwMappedHasuraError } from '../hasura/hasura-request.util';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -761,16 +762,7 @@ export class AgentsController {
         recentCommissions,
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to fetch earnings summary',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throwMappedHasuraError(error, 'Failed to fetch earnings summary');
     }
   }
 

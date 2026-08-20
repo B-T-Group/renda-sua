@@ -28,6 +28,11 @@ import { isPersonaId, type PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
 import { HasuraSystemService } from './hasura-system.service';
+import {
+  isRetryableHasuraError,
+  requestHasuraWithRetry,
+  toHasuraHttpException,
+} from './hasura-request.util';
 
 export type MeAgent = Agents & {
   location_tracking_consent_ios: AgentLocationTrackingConsent;
@@ -180,7 +185,9 @@ export class HasuraUserService {
     variables?: any,
     ctx?: RequestContext
   ): Promise<T> {
-    return this.createGraphQLClient(ctx).request<T>(query, variables);
+    return requestHasuraWithRetry(() =>
+      this.createGraphQLClient(ctx).request<T>(query, variables)
+    );
   }
 
   /**
@@ -868,23 +875,28 @@ export class HasuraUserService {
 
       return user;
     } catch (error: any) {
-      this.logger.error('Error in getUser()', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-      });
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      if (error.message?.includes('User not found')) {
-        throw error;
-      }
-      throw new Error(
-        `Failed to get user by id: ${error.message || 'Unknown error'}`
-      );
+      throw this.mapGetUserError(userId, error);
     }
+  }
+
+  private mapGetUserError(userId: string, error: any): never {
+    this.logger.error('Error in getUser()', {
+      userId,
+      error: error.message,
+      stack: error.stack,
+    });
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    if (error.message?.includes('User not found')) {
+      throw error;
+    }
+    if (isRetryableHasuraError(error)) {
+      throw toHasuraHttpException(error, 'Failed to get user by id');
+    }
+    throw new Error(
+      `Failed to get user by id: ${error.message || 'Unknown error'}`
+    );
   }
 
   /** Ensures `/users/me` always exposes platform-specific location consent fields. */
