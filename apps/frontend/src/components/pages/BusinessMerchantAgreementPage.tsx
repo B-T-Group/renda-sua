@@ -123,10 +123,6 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [done, setDone] = useState(false);
   const [contract, setContract] = useState<MerchantContractStatus | null>(null);
   const [agreementComplete, setAgreementComplete] = useState(false);
-  const [stillOnboarding, setStillOnboarding] = useState(false);
-  const [paymentRail, setPaymentRail] = useState<'stripe' | 'mobile_money' | null>(
-    null
-  );
   const [statusLoading, setStatusLoading] = useState(true);
   const [openingSigned, setOpeningSigned] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -162,8 +158,6 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         data: {
           contract?: MerchantContractStatus;
           steps?: { agreement?: { complete?: boolean } };
-          isOnboarding?: boolean;
-          paymentRail?: 'stripe' | 'mobile_money';
         };
       }>('/business-verification/status');
       if (res.data.success) {
@@ -172,8 +166,6 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
           res.data.data.contract?.complete === true ||
             res.data.data.steps?.agreement?.complete === true
         );
-        setStillOnboarding(res.data.data.isOnboarding === true);
-        setPaymentRail(res.data.data.paymentRail ?? null);
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load contract status');
@@ -311,17 +303,12 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   }
 
   if ((agreementComplete && !done) || (contract?.boldSignEnabled && contract.complete)) {
-    const continueTo = paymentRail === 'stripe' ? '/dashboard' : '/documents';
-    const continueLabel =
-      paymentRail === 'stripe'
-        ? t('business.setup.ctaPayouts', 'Set up payouts')
-        : t('business.verification.uploadId', 'Upload identification');
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Alert severity="success" sx={{ mb: 2 }}>
           {t(
             'business.contract.signedBody',
-            'Your partnership agreement is on file. You can view the signed PDF anytime.'
+            'Your partnership agreement is on file. Your store is active — return to the dashboard to keep selling. You can earn a Verified badge later.'
           )}
         </Alert>
         {error ? (
@@ -331,18 +318,17 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         ) : null}
         <Button
           variant="contained"
+          onClick={() => navigate('/dashboard')}
+        >
+          {t('business.verification.backToDashboard', 'Back to dashboard')}
+        </Button>
+        <Button
+          sx={{ ml: 1 }}
+          variant="outlined"
           disabled={openingSigned}
           onClick={() => void openSignedContract()}
         >
           {t('business.contract.viewSigned', 'View signed contract')}
-        </Button>
-        {stillOnboarding ? (
-          <Button sx={{ ml: 1 }} variant="outlined" onClick={() => navigate(continueTo)}>
-            {continueLabel}
-          </Button>
-        ) : null}
-        <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>
-          {t('business.verification.backToDashboard', 'Back to dashboard')}
         </Button>
       </Container>
     );
@@ -404,26 +390,26 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Alert severity="success" sx={{ mb: 2 }}>
-          {t('business.verification.agreementSuccess', 'Agreement accepted successfully.')}
+          {t(
+            'business.verification.agreementSuccess',
+            'Agreement accepted. Your store is active — return to the dashboard to keep selling. You can earn a Verified badge later.'
+          )}
         </Alert>
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         ) : null}
+        <Button variant="contained" onClick={() => navigate('/dashboard')}>
+          {t('business.verification.backToDashboard', 'Back to dashboard')}
+        </Button>
         <Button
-          variant="contained"
+          sx={{ ml: 1 }}
+          variant="outlined"
           disabled={openingSigned}
           onClick={() => void openSignedContract()}
-          sx={{ mr: 1 }}
         >
           {t('business.contract.viewSigned', 'View signed contract')}
-        </Button>
-        <Button variant="outlined" onClick={() => navigate('/documents')}>
-          {t('business.verification.uploadId', 'Upload identification')}
-        </Button>
-        <Button sx={{ ml: 1 }} onClick={() => navigate('/dashboard')}>
-          {t('business.verification.backToDashboard', 'Back to dashboard')}
         </Button>
       </Container>
     );
