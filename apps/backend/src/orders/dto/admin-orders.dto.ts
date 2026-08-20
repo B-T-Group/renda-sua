@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -79,4 +79,26 @@ export class AddAdminNoteDto {
   @ApiProperty({ description: 'Admin note content' })
   @IsString()
   note!: string;
+}
+
+export const ORDER_CONTACT_RECIPIENT_TYPES = [
+  'client',
+  'business',
+  'agent',
+] as const;
+
+export type OrderContactRecipientType =
+  (typeof ORDER_CONTACT_RECIPIENT_TYPES)[number];
+
+export class SendOrderContactMessageDto {
+  @ApiProperty({ description: 'In-app message body' })
+  @IsString()
+  message!: string;
+
+  @ApiProperty({
+    description: 'Order participant to notify',
+    enum: ORDER_CONTACT_RECIPIENT_TYPES,
+  })
+  @IsIn(ORDER_CONTACT_RECIPIENT_TYPES)
+  recipient_type!: OrderContactRecipientType;
 }

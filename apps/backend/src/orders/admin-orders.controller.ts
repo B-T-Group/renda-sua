@@ -22,6 +22,7 @@ import {
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
+import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
 import { OrderReassignmentService } from './order-reassignment.service';
@@ -33,6 +34,7 @@ import {
   UnassignRedispatchDto,
   UpdateOrderStatusDto,
   AddAdminNoteDto,
+  SendOrderContactMessageDto,
   OrderStatusFilter,
   RiskLevelFilter,
 } from './dto/admin-orders.dto';
@@ -53,6 +55,7 @@ export class AdminOrdersController {
     private readonly orderEventsService: OrderEventsService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
+    private readonly adminOrderContactService: AdminOrderContactService,
   ) {}
 
   @Get()
@@ -393,47 +396,26 @@ export class AdminOrdersController {
   @Post(':orderId/contact/message')
   @ApiOperation({ summary: 'Send in-app message to order participant' })
   @ApiResponse({ status: 200, description: 'Message sent successfully' })
+  @ApiResponse({ status: 400, description: 'Missing message or recipient' })
   async sendMessage(
     @Param('orderId') orderId: string,
-    @Body() body: { message: string; recipient_type: 'client' | 'business' | 'agent' },
+    @Body() body: SendOrderContactMessageDto,
   ) {
-    try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-      }
-
-      const messageMutation = `
-        mutation CreateSupportMessage($orderId: uuid!, $messageText: String!) {
-          insert_user_messages_one(
-            object: {
-              order_id: $orderId
-              message_text: $messageText
-              is_from_support: true
-              entity_type: "order"
-            }
-          ) {
-            id
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(messageMutation, {
-        orderId,
-        messageText: body.message,
-      });
-
-      return {
-        success: true,
-        message: 'Message sent successfully',
-      };
-    } catch (error: any) {
-      this.logger.error('Failed to send message', error);
-      throw new HttpException(
-        error.message || 'Failed to send message',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    const order = await this.ordersService.getOrderById(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
+
+    await this.adminOrderContactService.sendInAppMessage({
+      order,
+      message: body.message,
+      recipientType: body.recipient_type,
+    });
+
+    return {
+      success: true,
+      message: 'Message sent successfully',
+    };
   }
 
   @Post(':orderId/contact/email')

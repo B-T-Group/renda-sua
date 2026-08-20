@@ -41,6 +41,7 @@ import { OrderCleanupService } from './order-cleanup.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
+import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
@@ -102,6 +103,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPickupMonitorService,
     OrderPickupAnalyticsService,
     StripeAuthReconcilerService,
+    AdminOrderContactService,
   ],
   exports: [
     OrdersService,
