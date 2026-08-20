@@ -13,10 +13,12 @@ describe('referred-business-followup', () => {
     expect(deriveFollowUpStatus('contract_signed', false)).toBe(
       'payment_setup_pending'
     );
+    expect(deriveFollowUpStatus('active', false)).toBe('payment_setup_pending');
   });
 
-  it('treats signed + verified as active follow-up', () => {
+  it('treats signed/active + verified as active follow-up', () => {
     expect(deriveFollowUpStatus('contract_signed', true)).toBe('active');
+    expect(deriveFollowUpStatus('active', true)).toBe('active');
   });
 
   it('detects verified payment accounts', () => {

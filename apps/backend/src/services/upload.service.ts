@@ -664,8 +664,8 @@ export class UploadService {
         }
       }
 
-      // businesses.is_verified is generated from lifecycle_status; MoMo sync
-      // happens through lifecycle recompute, never a direct column write.
+      // businesses.is_verified is maintained by MerchantLifecycleService from
+      // rail proof (approved ID / Stripe Connect), never a direct column write.
       void this.notifyBusinessIdApprovedIfNeeded(
         upload.user_id,
         upload.document_type.name

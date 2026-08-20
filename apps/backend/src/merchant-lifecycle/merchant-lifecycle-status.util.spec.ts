@@ -3,6 +3,7 @@ import {
   aggregatePaymentCapabilityForProvider,
   deriveLifecycleStatus,
   deriveStorefrontVisibility,
+  deriveVerifiedBadge,
   mapCapabilityStatusToDb,
 } from './merchant-lifecycle-status.util';
 
@@ -20,21 +21,20 @@ describe('mapCapabilityStatusToDb', () => {
 
 describe('deriveLifecycleStatus', () => {
   it('returns created when the contract is not signed', () => {
-    expect(deriveLifecycleStatus(false, 'NOT_STARTED')).toBe('created');
-    expect(deriveLifecycleStatus(false, 'VERIFIED')).toBe('created');
+    expect(deriveLifecycleStatus(false)).toBe('created');
   });
 
-  it('returns contract_signed until payment capability is verified', () => {
-    expect(deriveLifecycleStatus(true, 'NOT_STARTED')).toBe('contract_signed');
-    expect(deriveLifecycleStatus(true, 'IN_PROGRESS')).toBe('contract_signed');
-    expect(deriveLifecycleStatus(true, 'VERIFICATION_PENDING')).toBe(
-      'contract_signed'
-    );
-    expect(deriveLifecycleStatus(true, 'REJECTED')).toBe('contract_signed');
+  it('returns active when the contract is signed', () => {
+    expect(deriveLifecycleStatus(true)).toBe('active');
   });
+});
 
-  it('returns active when payment is verified', () => {
-    expect(deriveLifecycleStatus(true, 'VERIFIED')).toBe('active');
+describe('deriveVerifiedBadge', () => {
+  it('is true only when payment capability is verified', () => {
+    expect(deriveVerifiedBadge('VERIFIED')).toBe(true);
+    expect(deriveVerifiedBadge('NOT_STARTED')).toBe(false);
+    expect(deriveVerifiedBadge('VERIFICATION_PENDING')).toBe(false);
+    expect(deriveVerifiedBadge('REJECTED')).toBe(false);
   });
 });
 

@@ -3769,10 +3769,10 @@ export class NotificationsService {
   }): Promise<void> {
     await this.sendSimpleLifecycleEmail({
       to: params.to,
-      subject: `Payment setup under review — ${params.businessName}`,
+      subject: `Verified badge under review — ${params.businessName}`,
       html: `
-        <p>Your payment setup for <strong>${params.businessName}</strong> is being reviewed.</p>
-        <p>Your store remains visible to customers, but orders will open once verification is complete.</p>
+        <p>We are reviewing identification for <strong>${params.businessName}</strong>.</p>
+        <p>Your store can already accept orders. Once approved, a Verified badge will appear on your storefront to help customers trust your business.</p>
         <p>— Rendasua</p>
       `,
     });
@@ -3788,11 +3788,11 @@ export class NotificationsService {
       : '';
     await this.sendSimpleLifecycleEmail({
       to: params.to,
-      subject: `Payment verification needs attention — ${params.businessName}`,
+      subject: `Verified badge needs attention — ${params.businessName}`,
       html: `
-        <p>We could not verify payment setup for <strong>${params.businessName}</strong>.</p>
+        <p>We could not approve identification for <strong>${params.businessName}</strong>.</p>
         ${reasonLine}
-        <p>Your store stays visible, but orders remain paused until verification succeeds. Sign in to update your payment details.</p>
+        <p>Your store can still accept orders. Sign in and upload a clearer ID that matches your profile name to earn the Verified badge.</p>
         <p>— Rendasua</p>
       `,
     });
@@ -3806,9 +3806,9 @@ export class NotificationsService {
       process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
     await this.sendSimpleLifecycleEmail({
       to: adminTo,
-      subject: `Merchant awaiting payment review — ${params.businessName}`,
+      subject: `Merchant awaiting verified-badge review — ${params.businessName}`,
       html: `
-        <p>Business <strong>${params.businessName}</strong> (${params.businessId}) needs payment verification review.</p>
+        <p>Business <strong>${params.businessName}</strong> (${params.businessId}) needs identity review for the Verified badge.</p>
         <p>Check the admin businesses panel to approve or reject.</p>
       `,
     });

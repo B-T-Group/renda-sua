@@ -75,8 +75,8 @@ export function deriveFollowUpStatus(
   paymentVerified: boolean
 ): ReferredBusinessFollowUpStatus {
   if (lifecycle === 'suspended') return 'suspended';
-  if (lifecycle === 'active') return 'active';
   if (lifecycle === 'created') return 'contract_pending';
+  // active / contract_signed: follow-up "active" means badge/payment proof too.
   return paymentVerified ? 'active' : 'payment_setup_pending';
 }
 

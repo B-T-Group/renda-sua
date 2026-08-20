@@ -702,7 +702,7 @@
         "missingSignedContract": "Manquant : contrat signé",
         "missingActiveLocation": "Manquant : emplacement actif",
         "missingApprovedProduct": "Manquant : produit ou location approuvé(e)",
-        "missingPaymentVerification": "Manquant : vérification du paiement"
+        "missingPaymentVerification": "Pas encore de badge vérifié (pièce d'identité ou Stripe Connect)"
       },
       "suspend": "Suspendre",
       "reinstate": "Rétablir",
@@ -1691,9 +1691,17 @@
       "ctaAddRental": "Ajouter une location",
       "ctaContinue": "Continuer vers le tableau de bord"
     },
+    "verifiedBadgeTip": {
+      "title": "Obtenez un badge Vérifié",
+      "bodyMm": "Téléversez une pièce d'identité correspondant au nom de votre profil pour obtenir un badge Vérifié sur votre boutique. Cela rassure vos clients.",
+      "bodyStripe": "Connectez les paiements pour obtenir un badge Vérifié sur votre boutique. Cela aide les clients à vous faire confiance.",
+      "bodyRejected": "Votre pièce d'identité n'a pas été approuvée. Téléversez une pièce plus claire correspondant au nom de votre profil pour obtenir le badge Vérifié.",
+      "uploadId": "Téléverser l'ID",
+      "skip": "Passer pour l'instant"
+    },
     "setup": {
       "title": "Configurez votre boutique",
-      "subtitle": "Complétez ces étapes pour être en ligne et accepter des commandes. Les outils opérationnels comme les commandes apparaissent après la configuration.",
+      "subtitle": "Signez le contrat marchand pour être en ligne et accepter des commandes. Vous pourrez obtenir un badge Vérifié plus tard.",
       "illustrationLabel": "Étape de configuration",
       "stepAgreement": "Signer le contrat marchand",
       "stepAgreementDesc": "Acceptez les conditions de partenariat pour vendre sur Rendasua.",
@@ -1701,7 +1709,7 @@
       "stepPayouts": "Connecter les paiements",
       "stepPayoutsDesc": "Liez Stripe pour recevoir les paiements des clients.",
       "stepIdentity": "Téléverser une pièce d'identité",
-      "stepIdentityDesc": "Téléversez une carte d'identité, un passeport ou un permis de conduire.",
+      "stepIdentityDesc": "Facultatif : téléversez une carte d'identité, un passeport ou un permis correspondant au nom de votre profil pour obtenir un badge Vérifié.",
       "stepIdentityRejected": "Pièce d'identité refusée",
       "stepIdentityRejectedDesc": "Votre pièce d'identité n'a pas été approuvée. Veuillez en téléverser une nouvelle plus claire.",
       "identityRejectionReasonPrefix": "Motif :",
@@ -1798,7 +1806,7 @@
       "storeLiveNotice": "Les clients peuvent découvrir vos produits. Terminez la configuration des paiements pour accepter les commandes.",
       "paymentReviewPending": "Les informations de paiement ont été soumises. Nous vous informerons lorsque vous pourrez accepter des commandes.",
       "setupTitle": "Terminez la configuration de votre boutique",
-      "setupNotice": "Signez le contrat marchand et connectez les paiements pour être en ligne."
+      "setupNotice": "Signez le contrat marchand pour être en ligne et commencer à accepter des commandes."
     },
     "dashboard": {
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",

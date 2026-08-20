@@ -35,7 +35,7 @@ export type VerificationNextAction =
   | 'complete';
 
 const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set(['sign_agreement', 'setup_stripe_connect', 'upload_id']);
+  new Set(['sign_agreement']);
 
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
 
@@ -75,11 +75,13 @@ export class BusinessVerificationService {
     const lifecycleStatus = lifecycle?.lifecycle_status ?? 'created';
     const canAcceptOrders = lifecycle?.can_accept_orders ?? false;
     const storefrontVisible = lifecycle?.is_storefront_visible ?? false;
+    const isVerified = lifecycle?.is_verified ?? false;
     const launchPromo = await this.launchPromoService.getSlotForBusiness(
       businessId
     );
     return {
       ...base,
+      is_verified: isVerified,
       lifecycle_status: lifecycleStatus,
       is_storefront_visible: storefrontVisible,
       can_accept_orders: canAcceptOrders,
@@ -236,7 +238,6 @@ export class BusinessVerificationService {
     user: any,
     agreement: { complete: boolean }
   ) {
-    const adminVerified = user.business?.is_verified === true;
     const identity = await this.getIdentityStep(user.id);
     const [mobilePaymentPhone, catalog] = await Promise.all([
       this.mobilePaymentPhonesService.getBusinessPhoneVerificationStep(
@@ -245,14 +246,10 @@ export class BusinessVerificationService {
       ),
       this.merchantLifecycleService.getCatalogStep(user.business!.id),
     ]);
-    const identityApproved = identity.status === 'approved';
-    const nextAction = this.resolveNextAction(
-      adminVerified || identityApproved,
-      agreement,
-      identity
-    );
+    const nextAction = this.resolveNextAction(agreement);
     return {
-      is_verified: adminVerified || identityApproved,
+      // Overwritten in getStatus from lifecycle snapshot (DB is_verified).
+      is_verified: false,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, identity, mobilePaymentPhone, catalog },
       nextAction,
@@ -266,18 +263,10 @@ export class BusinessVerificationService {
     agreement: { complete: boolean }
   ) {
     const stripeConnect = await this.getStripeConnectStep(user.id);
-    const lifecycle = await this.merchantLifecycleService.getBusinessSnapshot(
-      user.business!.id
-    );
-    const canAccept = lifecycle?.can_accept_orders === true;
-    const nextAction = this.resolveStripeNextAction(
-      agreement,
-      stripeConnect,
-      canAccept
-    );
+    const nextAction = this.resolveStripeNextAction(agreement);
     return {
-      // Match mobile-money: setup complete once payouts are ready (not catalog).
-      is_verified: canAccept || stripeConnect.complete,
+      // Overwritten in getStatus from lifecycle snapshot (DB is_verified).
+      is_verified: false,
       accountFullName: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
       steps: { agreement, stripeConnect },
       nextAction,
@@ -301,17 +290,11 @@ export class BusinessVerificationService {
     };
   }
 
-  private resolveStripeNextAction(
-    agreement: { complete: boolean },
-    stripeConnect: { complete: boolean },
-    canAcceptOrders: boolean
-  ): VerificationNextAction {
-    if (canAcceptOrders || (agreement.complete && stripeConnect.complete)) {
-      return 'complete';
-    }
+  private resolveStripeNextAction(agreement: {
+    complete: boolean;
+  }): VerificationNextAction {
     if (!agreement.complete) return 'sign_agreement';
-    if (!stripeConnect.complete) return 'setup_stripe_connect';
-    return 'pending_review';
+    return 'complete';
   }
 
   private async getAgreementStep(businessId: string, business: any) {
@@ -407,43 +390,26 @@ export class BusinessVerificationService {
     };
   }
 
-  private resolveNextAction(
-    identitySatisfied: boolean,
-    agreement: { complete: boolean },
-    identity: { complete: boolean; status: string }
-  ): VerificationNextAction {
+  private resolveNextAction(agreement: {
+    complete: boolean;
+  }): VerificationNextAction {
     if (!agreement.complete) return 'sign_agreement';
-    if (!identity.complete) return 'upload_id';
-    // One approved ID is enough — a rejected older upload does not block this.
-    if (identitySatisfied || identity.status === 'approved') return 'complete';
-    if (identity.status === 'pending') return 'pending_review';
-    return 'pending_review';
+    return 'complete';
   }
 
-  /**
-   * Stripe: focused setup until lifecycle is active/suspended.
-   * Mobile money: setup ends once agreement is signed and an ID is uploaded
-   * (pending/rejected review happens on the dashboard).
-   */
+  /** Focused setup until the merchant agreement is signed. */
   private resolveIsOnboarding(
     lifecycleStatus: string,
     base: {
-      paymentRail?: 'stripe' | 'mobile_money';
       steps?: {
         agreement?: { complete?: boolean };
-        identity?: { status?: string };
       };
     }
   ): boolean {
     if (lifecycleStatus === 'active' || lifecycleStatus === 'suspended') {
       return false;
     }
-    if (base.paymentRail === 'mobile_money') {
-      const agreementDone = base.steps?.agreement?.complete === true;
-      const identityMissing = base.steps?.identity?.status === 'missing';
-      return !agreementDone || identityMissing;
-    }
-    return true;
+    return base.steps?.agreement?.complete !== true;
   }
 
   private async insertAcceptance(params: {

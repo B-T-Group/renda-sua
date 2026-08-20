@@ -943,7 +943,7 @@
         "missingSignedContract": "Missing: signed contract",
         "missingActiveLocation": "Missing: active location",
         "missingApprovedProduct": "Missing: approved product or rental",
-        "missingPaymentVerification": "Missing: payment verification"
+        "missingPaymentVerification": "No verified badge yet (ID or Stripe Connect)"
       },
       "suspend": "Suspend",
       "reinstate": "Reinstate",
@@ -1942,9 +1942,17 @@
       "ctaAddRental": "Add a rental",
       "ctaContinue": "Continue to dashboard"
     },
+    "verifiedBadgeTip": {
+      "title": "Get a Verified badge",
+      "bodyMm": "Upload an ID that matches the name on your profile to earn a Verified badge on your store. It gives clients more confidence.",
+      "bodyStripe": "Connect payouts to earn a Verified badge on your store. It helps customers trust your business.",
+      "bodyRejected": "Your ID was not approved. Upload a clearer ID that matches the name on your profile to earn the Verified badge.",
+      "uploadId": "Upload ID",
+      "skip": "Skip for now"
+    },
     "setup": {
       "title": "Set up your store",
-      "subtitle": "Complete these steps to go live and accept orders. Operational tools like orders appear after setup.",
+      "subtitle": "Sign the merchant agreement to go live and accept orders. You can earn a Verified badge later.",
       "illustrationLabel": "Setup step",
       "stepAgreement": "Sign merchant agreement",
       "stepAgreementDesc": "Accept the partnership terms to sell on Rendasua.",
@@ -1952,7 +1960,7 @@
       "stepPayouts": "Connect payouts",
       "stepPayoutsDesc": "Link Stripe so you can receive customer payments.",
       "stepIdentity": "Upload identification",
-      "stepIdentityDesc": "Upload a national ID, passport, or driver's license.",
+      "stepIdentityDesc": "Optional: upload a national ID, passport, or driver's license that matches your profile name to earn a Verified badge.",
       "stepIdentityRejected": "Identification rejected",
       "stepIdentityRejectedDesc": "Your ID was not approved. Please upload a clearer valid ID document.",
       "identityRejectionReasonPrefix": "Reason:",
@@ -2049,7 +2057,7 @@
       "storeLiveNotice": "Customers can discover your products. Complete payment setup to start accepting orders.",
       "paymentReviewPending": "Payment details submitted. We will notify you when you can accept orders.",
       "setupTitle": "Finish setting up your store",
-      "setupNotice": "Sign the merchant agreement and connect payouts to go live."
+      "setupNotice": "Sign the merchant agreement to go live and start accepting orders."
     },
     "dashboard": {
       "welcome": "Welcome to your business dashboard",

@@ -35,11 +35,10 @@ export function matchesIdDocumentStatusFilter(
   return resolved === status;
 }
 
-/** Needs attention: not active, or ID not yet approved. */
+/** Needs attention: not yet active (or suspended). ID is optional for the badge. */
 export function businessNeedsAttention(
   lifecycleStatus: string | null | undefined,
-  uploads: UploadRow[]
+  _uploads?: UploadRow[]
 ): boolean {
-  if (lifecycleStatus !== 'active') return true;
-  return resolveIdDocumentStatus(uploads) !== 'approved';
+  return lifecycleStatus !== 'active';
 }
