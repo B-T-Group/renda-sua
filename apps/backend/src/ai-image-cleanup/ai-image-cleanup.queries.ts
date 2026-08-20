@@ -66,6 +66,26 @@ export const VERSION_IMAGE_FIELDS = `
   quality_score
 `;
 
+/** item_variant_images has no width/height/validation columns. */
+export const VARIANT_IMAGE_FIELDS = `
+  id
+  image_url
+  s3_key
+  original_image_url
+  original_s3_key
+  enhanced_image_url
+  enhanced_s3_key
+  rembg_image_url
+  rembg_s3_key
+  active_version
+  is_ai_cleaned
+  is_rembg_cleaned
+  enhanced_at
+  rembg_at
+  reverted_at
+  content_hash
+`;
+
 export const INSERT_JOB = `
   mutation InsertAiImageCleanupJob($object: ai_image_cleanup_jobs_insert_input!) {
     insert_ai_image_cleanup_jobs_one(object: $object) {
@@ -263,7 +283,7 @@ export const GET_VARIANT_IMAGES = `
       where: { item_variant_id: { _eq: $variantId } }
       order_by: [{ display_order: asc }, { created_at: asc }]
     ) {
-      ${VERSION_IMAGE_FIELDS}
+      ${VARIANT_IMAGE_FIELDS}
       item_variant_id
     }
   }
@@ -514,7 +534,24 @@ export const UPDATE_ITEM_IMAGE = `
 export const UPDATE_VARIANT_IMAGE = `
   mutation ApplyCleanedVariantImage($id: uuid!, $_set: item_variant_images_set_input!) {
     update_item_variant_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
-      ${VERSION_IMAGE_FIELDS}
+      ${VARIANT_IMAGE_FIELDS}
+    }
+  }
+`;
+
+export const GET_VARIANT_IMAGE_BY_ID = `
+  query GetVariantImageForCleanup($id: uuid!) {
+    item_variant_images_by_pk(id: $id) {
+      ${VARIANT_IMAGE_FIELDS}
+    }
+  }
+`;
+
+export const GET_VARIANT_IMAGE_BY_ID_WITH_OWNER = `
+  query GetVariantImageForCleanupWithOwner($id: uuid!) {
+    item_variant_images_by_pk(id: $id) {
+      ${VARIANT_IMAGE_FIELDS}
+      item_variant { item { business_id } }
     }
   }
 `;
