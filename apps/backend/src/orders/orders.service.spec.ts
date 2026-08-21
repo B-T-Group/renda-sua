@@ -238,7 +238,10 @@ describe('OrdersService', () => {
         { provide: PdfService, useValue: {} },
         {
           provide: OrderQueueService,
-          useValue: { sendOrderCreatedMessage: jest.fn() },
+          useValue: {
+            sendOrderCreatedMessage: jest.fn(),
+            sendOrderCancelledMessage: jest.fn().mockResolvedValue(undefined),
+          },
         },
         { provide: WaitAndExecuteScheduleService, useValue: {} },
         {
@@ -281,6 +284,10 @@ describe('OrdersService', () => {
           provide: StripeCaptureService,
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
+            cancelOrderPaymentIntent: jest.fn().mockResolvedValue({
+              success: true,
+              skipped: false,
+            }),
             creditWalletForCapturedOrder: jest.fn(),
           },
         },
@@ -1969,6 +1976,87 @@ describe('OrdersService', () => {
         status: HttpStatus.CONFLICT,
       });
       expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelOrderAsAdmin', () => {
+    const assignedCardOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      assigned_agent_id: 'agent-123',
+      order_items: [
+        { id: 'oi-1', business_inventory_id: 'inv-1', quantity: 2 },
+      ],
+    };
+
+    it('releases Stripe auth and emits order.cancelled for a stuck assignment', async () => {
+      const orderQueueService = {
+        sendOrderCancelledMessage: jest.fn().mockResolvedValue(undefined),
+      };
+      (service as any).orderQueueService = orderQueueService;
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder')) {
+          return { orders_by_pk: assignedCardOrder };
+        }
+        if (query.includes('GetCurrentReservedQuantities')) {
+          return {
+            business_inventory: [
+              { id: 'inv-1', reserved_quantity: 2, quantity: 10 },
+            ],
+          };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1 },
+      });
+
+      const result = await service.cancelOrderAsAdmin(
+        'order-123',
+        'Agent unavailable'
+      );
+
+      expect(result.success).toBe(true);
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: assignedCardOrder.order_number,
+        orderId: assignedCardOrder.id,
+      });
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('AdminCancelOrder'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          expected: 'assigned_to_agent',
+        })
+      );
+      expect(orderQueueService.sendOrderCancelledMessage).toHaveBeenCalledWith(
+        'order-123',
+        'system',
+        'Agent unavailable',
+        'assigned_to_agent'
+      );
+    });
+
+    it('rejects post-pickup cancel that would skip refund', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...assignedCardOrder, current_status: 'picked_up' },
+      });
+
+      await expect(service.cancelOrderAsAdmin('order-123')).rejects.toBeInstanceOf(
+        HttpException
+      );
+      expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the order is already cancelled', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...assignedCardOrder, current_status: 'cancelled' },
+      });
+
+      const result = await service.cancelOrderAsAdmin('order-123');
+      expect(result.success).toBe(true);
+      expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
     });
   });
 });
