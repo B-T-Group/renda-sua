@@ -505,7 +505,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
 
           <TabPanel value={activeTab} index={2}>
             <Alert severity="warning" sx={{ mb: 2 }}>
-              {t('admin.orders.statusWarning', 'Changing the order status may affect fulfillment workflow')}
+              {t(
+                'admin.orders.statusWarning',
+                'Cancellation releases payment holds and restores inventory. Picked up and delivered must use the fulfillment flow so capture and settlement run.'
+              )}
             </Alert>
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>{t('admin.orders.newStatus', 'New Status')}</InputLabel>
@@ -519,10 +522,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({ open, orde
                 <MenuItem value="preparing">Preparing</MenuItem>
                 <MenuItem value="ready_for_pickup">Ready for Pickup</MenuItem>
                 <MenuItem value="assigned_to_agent">Assigned to Agent</MenuItem>
-                <MenuItem value="picked_up">Picked Up</MenuItem>
                 <MenuItem value="in_transit">In Transit</MenuItem>
                 <MenuItem value="out_for_delivery">Out for Delivery</MenuItem>
-                <MenuItem value="delivered">Delivered</MenuItem>
                 <MenuItem value="cancelled">Cancelled</MenuItem>
               </Select>
             </FormControl>

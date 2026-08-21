@@ -468,7 +468,7 @@
       "selectAgent": "Sélectionner un Agent",
       "reassignReason": "Raison de la réassignation",
       "reassignAgent": "Réassigner l'Agent",
-      "statusWarning": "Modifier le statut de la commande peut affecter le flux de livraison",
+      "statusWarning": "L'annulation libère les fonds et restaure le stock. Les statuts ramassé et livré doivent passer par le flux de livraison pour que le paiement et le règlement s'exécutent.",
       "newStatus": "Nouveau Statut",
       "statusNotes": "Notes (optionnel)",
       "updateStatusButton": "Mettre à Jour le Statut",

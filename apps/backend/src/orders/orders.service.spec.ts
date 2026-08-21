@@ -1971,4 +1971,73 @@ describe('OrdersService', () => {
       expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
   });
+
+  describe('cancelOrderAsAdmin', () => {
+    const openOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      order_items: [],
+    };
+
+    it('releases payment and runs cancel side effects instead of a status-only write', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+      const releaseStripe = jest
+        .spyOn(service as any, 'releaseStripeAuthorizationIfNeeded')
+        .mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...openOrder,
+        current_status: 'cancelled',
+      });
+      const persistMeta = jest
+        .spyOn(service as any, 'persistCancellationMetadata')
+        .mockResolvedValue(undefined);
+      const history = jest
+        .spyOn(service as any, 'createStatusHistoryEntry')
+        .mockResolvedValue(undefined);
+      const sideEffects = jest
+        .spyOn(service as any, 'runOrderCancellationSideEffects')
+        .mockResolvedValue(undefined);
+
+      const result = await service.cancelOrderAsAdmin(
+        'order-123',
+        'Admin cancel'
+      );
+
+      expect(result.success).toBe(true);
+      expect(releaseStripe).toHaveBeenCalledWith(openOrder);
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'order-123',
+        'cancelled',
+        { viaCancelEndpoint: true, viaSystem: true }
+      );
+      expect(persistMeta).toHaveBeenCalledWith(
+        'order-123',
+        'system',
+        'Admin cancel'
+      );
+      expect(history).toHaveBeenCalled();
+      expect(sideEffects).toHaveBeenCalledWith(
+        openOrder,
+        'order-123',
+        'assigned_to_agent',
+        'system',
+        'Admin cancel'
+      );
+    });
+
+    it('rejects cancel of an already terminal order', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        ...openOrder,
+        current_status: 'cancelled',
+      });
+
+      await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
+        { status: HttpStatus.BAD_REQUEST }
+      );
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+  });
 });

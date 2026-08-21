@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
+import { ADMIN_STATUS_OVERRIDE_VALUES } from '../admin-order-status.util';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -65,8 +66,12 @@ export class UnassignRedispatchDto {
 }
 
 export class UpdateOrderStatusDto {
-  @ApiProperty({ description: 'New order status' })
-  @IsString()
+  @ApiProperty({
+    description:
+      'New order status. cancelled runs payment/inventory cancel; settlement statuses are rejected.',
+    enum: ADMIN_STATUS_OVERRIDE_VALUES,
+  })
+  @IsIn(ADMIN_STATUS_OVERRIDE_VALUES)
   status!: string;
 
   @ApiPropertyOptional({ description: 'Admin notes for status change' })

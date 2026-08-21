@@ -78,6 +78,7 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
+import { isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
@@ -4525,6 +4526,115 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order cancelled successfully',
     };
+  }
+
+  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+    const order = await this.requireCancellableAdminOrder(orderId);
+    const adminUserId = await this.resolveOptionalUserId();
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
+    await this.finishAdminCancellation(order, adminUserId, notes);
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order cancelled successfully',
+    };
+  }
+
+  private async requireCancellableAdminOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (isAdminTerminalStatus(order.current_status)) {
+      throw new HttpException(
+        `Cannot cancel order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return order;
+  }
+
+  private async resolveOptionalUserId(): Promise<string | null> {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      return user?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async markOrderCancelledAsSystem(orderId: string) {
+    return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
+      viaCancelEndpoint: true,
+      viaSystem: true,
+    });
+  }
+
+  private async finishAdminCancellation(
+    order: Orders,
+    adminUserId: string | null,
+    notes?: string
+  ): Promise<void> {
+    await this.persistCancellationMetadata(order.id, 'system', notes);
+    if (adminUserId) {
+      await this.createStatusHistoryEntry(
+        order.id,
+        'cancelled',
+        'Order cancelled by admin',
+        'system',
+        adminUserId,
+        notes
+      );
+    }
+    await this.runOrderCancellationSideEffects(
+      order,
+      order.id,
+      order.current_status,
+      'system',
+      notes
+    );
+  }
+
+  private async persistCancellationMetadata(
+    orderId: string,
+    cancelledBy: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation SetCancellationFields(
+          $orderId: uuid!,
+          $cancelledBy: String!,
+          $cancelledAt: timestamptz!,
+          $cancellationReasonId: Int,
+          $cancellationNotes: String
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId },
+            _set: {
+              cancelled_by: $cancelledBy,
+              cancelled_at: $cancelledAt,
+              cancellation_reason_id: $cancellationReasonId,
+              cancellation_notes: $cancellationNotes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId,
+          cancelledBy,
+          cancelledAt: new Date().toISOString(),
+          cancellationReasonId: null,
+          cancellationNotes: notes ?? null,
+        }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to persist cancellation metadata: ${error.message}`
+      );
+    }
   }
 
   async getCancellationPreview(
