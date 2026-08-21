@@ -709,7 +709,7 @@
       "selectAgent": "Select Agent",
       "reassignReason": "Reason for reassignment",
       "reassignAgent": "Reassign Agent",
-      "statusWarning": "Changing the order status may affect fulfillment workflow",
+      "statusWarning": "Cancel releases payment holds and restores inventory. Pickup, delivery, and refund statuses must use their dedicated flows so money is not skipped.",
       "newStatus": "New Status",
       "statusNotes": "Notes (optional)",
       "updateStatusButton": "Update Status",

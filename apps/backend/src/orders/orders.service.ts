@@ -4365,6 +4365,30 @@ export class OrdersService {
     return this.businessMayCancelDeferredUncollectedOrder(order);
   }
 
+  /**
+   * Admin cancel for stuck pre-pickup / pre-shipment orders.
+   * Releases Stripe auth, restores reserved inventory, and emits order.cancelled.
+   */
+  async cancelOrderAsAdmin(
+    orderId: string,
+    notes?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const order = await this.requireOrderForAdminCancel(orderId);
+    if (order.current_status === 'cancelled') {
+      return { success: true, message: 'Order already cancelled' };
+    }
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    await this.persistAdminCancellation(order, notes);
+    await this.runOrderCancellationSideEffects(
+      order,
+      orderId,
+      order.current_status,
+      'system',
+      notes
+    );
+    return { success: true, message: 'Order cancelled successfully' };
+  }
+
   async cancelOrder(
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
@@ -4525,6 +4549,107 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order cancelled successfully',
     };
+  }
+
+  private async requireOrderForAdminCancel(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.current_status === 'cancelled') return order;
+    if (!this.adminMayCancelOrder(order)) {
+      throw new HttpException(
+        `Cannot cancel order in ${order.current_status} status without a refund workflow. Cancel is only allowed before pickup or shipment.`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return order;
+  }
+
+  private adminMayCancelOrder(order: Orders): boolean {
+    const preFulfillment = [
+      'pending_payment',
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'assigned_to_agent',
+      'awaiting_shipment',
+    ];
+    if (preFulfillment.includes(order.current_status)) return true;
+    return this.businessMayCancelDeferredUncollectedOrder(order);
+  }
+
+  private async persistAdminCancellation(
+    order: Orders,
+    notes?: string
+  ): Promise<void> {
+    const claimed = await this.claimAdminCancellation(order, notes);
+    if (!claimed) {
+      throw new HttpException(
+        'Order status already changed. Please refresh and try again.',
+        HttpStatus.CONFLICT
+      );
+    }
+    await this.insertAdminCancelHistory(order.id, notes);
+  }
+
+  private async claimAdminCancellation(
+    order: Orders,
+    notes?: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminCancelOrder(
+        $orderId: uuid!
+        $expected: order_status!
+        $at: timestamptz!
+        $notes: String
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: $expected }
+          }
+          _set: {
+            current_status: cancelled
+            cancelled_by: "system"
+            cancelled_at: $at
+            cancellation_notes: $notes
+          }
+        ) { affected_rows }
+      }
+    `,
+      {
+        orderId: order.id,
+        expected: order.current_status,
+        at: new Date().toISOString(),
+        notes: notes ?? null,
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  private async insertAdminCancelHistory(
+    orderId: string,
+    notes?: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminCancelHistory($orderId: uuid!, $notes: String!) {
+        insert_order_status_history(objects: [{
+          order_id: $orderId
+          status: cancelled
+          notes: $notes
+          changed_by_type: "system"
+        }]) { affected_rows }
+      }
+    `,
+      {
+        orderId,
+        notes: notes?.trim() || 'Admin cancelled order',
+      }
+    );
   }
 
   async getCancellationPreview(

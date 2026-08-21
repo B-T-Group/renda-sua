@@ -302,39 +302,15 @@ export class AdminOrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     try {
+      if (dto.status === 'cancelled') {
+        return this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
+      }
+      this.assertAdminStatusOverrideAllowed(dto.status);
       const order = await this.ordersService.getOrderById(orderId);
       if (!order) {
         throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
       }
-
-      const updateMutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $status: order_status_enum!, $notes: String) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { current_status: $status }
-          ) {
-            id
-            current_status
-          }
-          insert_order_status_history_one(
-            object: {
-              order_id: $orderId
-              from_status: "${order.current_status}"
-              to_status: $status
-              notes: $notes
-            }
-          ) {
-            id
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(updateMutation, {
-        orderId,
-        status: dto.status,
-        notes: dto.notes || 'Admin status override',
-      });
-
+      await this.persistAdminStatusOverride(orderId, order.current_status, dto);
       await this.orderEventsService.recordEvent({
         orderId,
         eventType: 'gps_unavailable',
@@ -345,18 +321,78 @@ export class AdminOrdersController {
           notes: dto.notes,
         },
       });
-
-      return {
-        success: true,
-        message: 'Status updated successfully',
-      };
+      return { success: true, message: 'Status updated successfully' };
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       this.logger.error('Failed to update status', error);
       throw new HttpException(
         error.message || 'Failed to update status',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private assertAdminStatusOverrideAllowed(status: string): void {
+    const blocked = new Set([
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+      'delivered',
+      'complete',
+      'failed',
+      'refunded',
+      'refund_processing',
+      'refund_failed',
+      'refund_requested',
+      'refund_approved_full',
+      'refund_approved_partial',
+      'refund_rejected',
+      'refund_approved_replace',
+      'shipped',
+      'in_delivery',
+    ]);
+    if (!blocked.has(status)) return;
+    throw new HttpException(
+      'Cannot set this status from admin override. Use cancel for pre-pickup orders, or the dedicated completion/refund flow so payment and inventory stay consistent.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private async persistAdminStatusOverride(
+    orderId: string,
+    fromStatus: string,
+    dto: UpdateOrderStatusDto,
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation UpdateOrderStatus(
+        $orderId: uuid!
+        $status: order_status!
+        $previousStatus: order_status!
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { current_status: $status }
+        ) { id current_status }
+        insert_order_status_history_one(
+          object: {
+            order_id: $orderId
+            status: $status
+            previous_status: $previousStatus
+            changed_by_type: "system"
+            notes: $notes
+          }
+        ) { id }
+      }
+    `,
+      {
+        orderId,
+        status: dto.status,
+        previousStatus: fromStatus,
+        notes: dto.notes || 'Admin status override',
+      },
+    );
   }
 
   @Post(':orderId/notes')
