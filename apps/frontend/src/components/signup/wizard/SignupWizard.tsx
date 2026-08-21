@@ -26,6 +26,7 @@ import LaunchPromoCongrats, {
 import Logo from '../../common/Logo';
 import SignupAccountCreatedAnimation from '../../onboarding/SignupAccountCreatedAnimation';
 import { buildSignupPayload } from './buildSignupPayload';
+import { isEmailTakenByOtherAccount } from './emailTaken';
 import { clearSignupDraft } from './useSignupDraft';
 import { SignupWizardUiProvider } from './SignupWizardUiContext';
 import { StepHost } from './StepHost';
@@ -109,11 +110,12 @@ export const SignupWizard: React.FC = () => {
     error: referralLookupError,
   } = useAgentReferralLookup(referralCode);
 
-  const contactEmail =
-    (wizard.form.watch('contact.email') || '').trim().toLowerCase();
-  const ownPendingEmail = (pendingOwnEmail || '').trim().toLowerCase();
-  const emailTakenByOther =
-    emailTaken && (!ownPendingEmail || contactEmail !== ownPendingEmail);
+  const contactEmail = wizard.form.watch('contact.email') || '';
+  const emailTakenByOther = isEmailTakenByOtherAccount(
+    emailTaken,
+    contactEmail,
+    pendingOwnEmail
+  );
   const contactEmailTaken =
     wizard.activeStepId === 'contact' && emailTakenByOther;
 
