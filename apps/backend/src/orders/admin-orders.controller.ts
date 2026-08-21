@@ -38,6 +38,7 @@ import {
   OrderStatusFilter,
   RiskLevelFilter,
 } from './dto/admin-orders.dto';
+import { isAdminOperationalStatus } from './admin-order-status.util';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -295,68 +296,101 @@ export class AdminOrdersController {
   }
 
   @Patch(':orderId/status')
-  @ApiOperation({ summary: 'Override order status' })
+  @ApiOperation({
+    summary: 'Override order status',
+    description:
+      'cancelled releases payment and restores inventory. Settlement statuses (delivered, picked_up, complete) are rejected.',
+  })
   @ApiResponse({ status: 200, description: 'Status updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Settlement status or invalid transition',
+  })
   async updateStatus(
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
   ) {
     try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      if (dto.status === 'cancelled') {
+        return this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
       }
-
-      const updateMutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $status: order_status_enum!, $notes: String) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { current_status: $status }
-          ) {
-            id
-            current_status
-          }
-          insert_order_status_history_one(
-            object: {
-              order_id: $orderId
-              from_status: "${order.current_status}"
-              to_status: $status
-              notes: $notes
-            }
-          ) {
-            id
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(updateMutation, {
-        orderId,
-        status: dto.status,
-        notes: dto.notes || 'Admin status override',
-      });
-
-      await this.orderEventsService.recordEvent({
-        orderId,
-        eventType: 'gps_unavailable',
-        actorType: 'support',
-        payload: {
-          old_status: order.current_status,
-          new_status: dto.status,
-          notes: dto.notes,
-        },
-      });
-
+      const order = await this.requireAdminOrder(orderId);
+      this.assertOperationalAdminStatus(dto.status);
+      await this.writeOperationalAdminStatus(order, dto);
       return {
         success: true,
         message: 'Status updated successfully',
       };
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       this.logger.error('Failed to update status', error);
       throw new HttpException(
         error.message || 'Failed to update status',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private async requireAdminOrder(orderId: string): Promise<any> {
+    const order = await this.ordersService.getOrderById(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    return order;
+  }
+
+  private assertOperationalAdminStatus(status: string): void {
+    if (isAdminOperationalStatus(status)) return;
+    throw new HttpException(
+      'Cannot set delivered, picked up, or complete via status override. Use the fulfillment flow so payment capture and settlement run.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private async writeOperationalAdminStatus(
+    order: { id: string; current_status: string },
+    dto: UpdateOrderStatusDto,
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminOperationalStatus(
+        $orderId: uuid!
+        $status: order_status!
+        $previousStatus: order_status!
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { current_status: $status }
+        ) { id current_status }
+        insert_order_status_history_one(
+          object: {
+            order_id: $orderId
+            status: $status
+            previous_status: $previousStatus
+            changed_by_type: "system"
+            notes: $notes
+          }
+        ) { id }
+      }
+      `,
+      {
+        orderId: order.id,
+        status: dto.status,
+        previousStatus: order.current_status,
+        notes: dto.notes || 'Admin status override',
+      },
+    );
+    await this.orderEventsService.recordEvent({
+      orderId: order.id,
+      eventType: 'gps_unavailable',
+      actorType: 'support',
+      payload: {
+        old_status: order.current_status,
+        new_status: dto.status,
+        notes: dto.notes,
+      },
+    });
   }
 
   @Post(':orderId/notes')
