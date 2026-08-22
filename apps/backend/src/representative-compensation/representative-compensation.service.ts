@@ -35,30 +35,18 @@ const DEFAULTS: Record<string, CompensationMarketConfig> = {
   CM: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
-    onboarding25SmallSale: 10000,
-    onboarding25LargeSale: 15000,
-    smallSaleMaxExclusive: 10000,
-    largeSaleMaxInclusive: 25000,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   GA: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
-    onboarding25SmallSale: 10000,
-    onboarding25LargeSale: 15000,
-    smallSaleMaxExclusive: 10000,
-    largeSaleMaxInclusive: 25000,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   CA: {
     currency: 'CAD',
     onboarding10FirstSale: 25,
-    onboarding25SmallSale: 40,
-    onboarding25LargeSale: 50,
-    smallSaleMaxExclusive: 25,
-    largeSaleMaxInclusive: 75,
     salePercent: 1,
     businessReferral10Items: 10,
   },
@@ -308,7 +296,12 @@ export class RepresentativeCompensationService {
       result.skipped += 1;
       return result;
     }
-    const actions = evaluateCompensation(context.input);
+    const actions = triggeringOrderId
+      ? evaluateCompensation(context.input)
+      : [
+          ...evaluateCompensation(context.input),
+          ...this.pendingOrderActions(context),
+        ];
     if (actions.length === 0) {
       result.skipped += 1;
       return result;
@@ -353,30 +346,40 @@ export class RepresentativeCompensationService {
     input: Parameters<typeof evaluateCompensation>[0];
     eval: EvalContext;
   }): CompensationAction[] {
-    const paidOrders = new Set(context.input.paidOrderIds ?? []);
+    const paidPercent = new Set(context.input.paidSalePercentOrderIds ?? []);
     const paidRules = [...(context.input.paidOnboardingRules ?? [])];
     const sales = [...context.input.completedSales].sort((a, b) =>
       (a.completedAt ?? '').localeCompare(b.completedAt ?? '')
     );
     const actions: CompensationAction[] = [];
     for (const sale of sales) {
-      if (paidOrders.has(sale.id)) continue;
       if (sale.currency !== context.input.payoutCurrency) continue;
       const extra = evaluateCompensation({
         ...context.input,
         paidOnboardingRules: paidRules,
-        paidOrderIds: [...paidOrders],
+        paidSalePercentOrderIds: [...paidPercent],
         triggeringOrderId: sale.id,
       });
-      for (const action of extra) {
-        actions.push(action);
-        paidOrders.add(sale.id);
-        if (ONBOARDING_RULES.includes(action.ruleCode as OnboardingRuleCode)) {
-          paidRules.push(action.ruleCode as OnboardingRuleCode);
-        }
-      }
+      this.recordPendingActions(extra, actions, paidPercent, paidRules);
     }
     return actions;
+  }
+
+  private recordPendingActions(
+    extra: CompensationAction[],
+    actions: CompensationAction[],
+    paidPercent: Set<string>,
+    paidRules: OnboardingRuleCode[]
+  ): void {
+    for (const action of extra) {
+      actions.push(action);
+      if (action.ruleCode === SALE_PERCENT && action.orderId) {
+        paidPercent.add(action.orderId);
+      }
+      if (ONBOARDING_RULES.includes(action.ruleCode as OnboardingRuleCode)) {
+        paidRules.push(action.ruleCode as OnboardingRuleCode);
+      }
+    }
   }
 
   private isEligible(snapshot: BusinessSnapshot | null): snapshot is BusinessSnapshot {
@@ -424,14 +427,6 @@ export class RepresentativeCompensationService {
     ) {
       paidOnboardingRules.push(ONBOARDING_10_FIRST_SALE);
     }
-    const paidOrderIds = [
-      ...new Set([
-        ...creditedEvents
-          .map((event) => event.triggering_order_id)
-          .filter((id): id is string => Boolean(id)),
-        ...this.catalogCoveredOrderIds(creditedEvents, sales),
-      ]),
-    ];
     const paidSalePercentOrderIds = creditedEvents
       .filter(
         (event) => event.rule_code === SALE_PERCENT && event.triggering_order_id
@@ -448,8 +443,9 @@ export class RepresentativeCompensationService {
         alreadyPaidBusinessReferral: creditedEvents.some(
           (event) => event.rule_code === BUSINESS_REFERRAL_10_ITEMS
         ),
+        businessOnboardedAt: snapshot.created_at,
         triggeringOrderId,
-        paidOrderIds,
+        paidSalePercentOrderIds,
         config,
       },
       eval: {
@@ -532,23 +528,29 @@ export class RepresentativeCompensationService {
       return { ...claimed, triggering_order_id: orderId };
     } catch (error: any) {
       if (!this.isUniqueViolation(error)) throw error;
-      return this.findEventByOrder(orderId);
+      return this.findEventByOrder(orderId, claimed.rule_code);
     }
   }
 
-  private async findEventByOrder(orderId: string): Promise<EventClaim | null> {
+  private async findEventByOrder(
+    orderId: string,
+    ruleCode?: CompensationRuleCode
+  ): Promise<EventClaim | null> {
     const query = `
-      query CompensationEventByOrder($orderId: uuid!) {
-        representative_compensation_events(
-          where: { triggering_order_id: { _eq: $orderId } }
-          limit: 1
-        ) {
+      query CompensationEventByOrder(
+        $where: representative_compensation_events_bool_exp!
+      ) {
+        representative_compensation_events(where: $where, limit: 1) {
           id reference_id status rule_code amount
           gross_milestone_amount triggering_order_id sale_amount
         }
       }
     `;
-    const result = await this.hasuraSystemService.executeQuery(query, { orderId });
+    const where: Record<string, unknown> = {
+      triggering_order_id: { _eq: orderId },
+    };
+    if (ruleCode) where.rule_code = { _eq: ruleCode };
+    const result = await this.hasuraSystemService.executeQuery(query, { where });
     return result?.representative_compensation_events?.[0] ?? null;
   }
 
@@ -705,12 +707,25 @@ export class RepresentativeCompensationService {
         }
       }
     `;
-    const lookups = orderId
-      ? [
-          { triggering_order_id: { _eq: orderId } },
-          { rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } },
-        ]
-      : [{ rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } }];
+    const lookups =
+      ruleCode === SALE_PERCENT && orderId
+        ? [
+            {
+              triggering_order_id: { _eq: orderId },
+              rule_code: { _eq: SALE_PERCENT },
+            },
+          ]
+        : orderId
+          ? [
+              {
+                triggering_order_id: { _eq: orderId },
+                rule_code: { _eq: ruleCode },
+              },
+              { rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } },
+            ]
+          : [
+              { rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } },
+            ];
     for (const where of lookups) {
       const result = await this.hasuraSystemService.executeQuery(query, { where });
       const row = result?.representative_compensation_events?.[0];
@@ -803,33 +818,6 @@ export class RepresentativeCompensationService {
     return result?.businesses_by_pk ?? null;
   }
 
-  private catalogCoveredOrderIds(
-    events: Array<{
-      rule_code: string;
-      status: string;
-      triggering_order_id: string | null;
-      created_at?: string;
-    }>,
-    sales: CompletedSale[]
-  ): string[] {
-    const catalogCredits = events.filter(
-      (event) =>
-        event.status === 'credited' &&
-        !event.triggering_order_id &&
-        (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
-    );
-    if (catalogCredits.length === 0) return [];
-    const cutoff = catalogCredits
-      .map((event) => event.created_at)
-      .filter((value): value is string => Boolean(value))
-      .sort()
-      .at(-1);
-    if (!cutoff) return sales.map((sale) => sale.id);
-    return sales
-      .filter((sale) => !sale.completedAt || sale.completedAt <= cutoff)
-      .map((sale) => sale.id);
-  }
-
   private async loadCompletedSales(businessId: string): Promise<CompletedSale[]> {
     const query = `
       query CompensationSales($businessId: uuid!) {
@@ -913,22 +901,6 @@ export class RepresentativeCompensationService {
         'onboarding_10_first_sale_amount',
         fallback.onboarding10FirstSale
       ),
-      onboarding25SmallSale: await read(
-        'onboarding_25_small_sale_amount',
-        fallback.onboarding25SmallSale
-      ),
-      onboarding25LargeSale: await read(
-        'onboarding_25_large_sale_amount',
-        fallback.onboarding25LargeSale
-      ),
-      smallSaleMaxExclusive: await read(
-        'onboarding_small_sale_max',
-        fallback.smallSaleMaxExclusive
-      ),
-      largeSaleMaxInclusive: await read(
-        'onboarding_large_sale_max',
-        fallback.largeSaleMaxInclusive
-      ),
       salePercent: await read(
         'sale_only_commission_percent',
         fallback.salePercent
@@ -984,7 +956,11 @@ export class RepresentativeCompensationService {
               referred_by_agent_id: { _is_null: false }
               created_at: { _gte: $cutoff }
             }
-            _not: { representative_compensation_events: {} }
+            _not: {
+              representative_compensation_events: {
+                rule_code: { _eq: "sale_percent" }
+              }
+            }
           }
           limit: 200
         ) { id business_id }

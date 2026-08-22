@@ -1,24 +1,16 @@
 import {
   BUSINESS_REFERRAL_10_ITEMS,
   ONBOARDING_10_FIRST_SALE,
-  ONBOARDING_25_LARGE_SALE,
-  ONBOARDING_25_SMALL_SALE,
   SALE_PERCENT,
   evaluateCompensation,
-  isSmallSale,
-  matchingOnboardingRulesForOrder,
-  pickHighestUnpaidOnboardingRule,
   salePercentAmount,
+  saleWithinOnboardingWindow,
   type CompensationMarketConfig,
 } from './compensation-rules';
 
 const XAF: CompensationMarketConfig = {
   currency: 'XAF',
   onboarding10FirstSale: 7500,
-  onboarding25SmallSale: 10000,
-  onboarding25LargeSale: 15000,
-  smallSaleMaxExclusive: 10000,
-  largeSaleMaxInclusive: 25000,
   salePercent: 1,
   businessReferral10Items: 1000,
 };
@@ -26,275 +18,151 @@ const XAF: CompensationMarketConfig = {
 const CAD: CompensationMarketConfig = {
   currency: 'CAD',
   onboarding10FirstSale: 25,
-  onboarding25SmallSale: 40,
-  onboarding25LargeSale: 50,
-  smallSaleMaxExclusive: 25,
-  largeSaleMaxInclusive: 75,
   salePercent: 1,
   businessReferral10Items: 10,
 };
 
+const onboarded = '2026-05-01T00:00:00.000Z';
+
+function sale(
+  id: string,
+  subtotal: number,
+  completedAt = '2026-05-10T00:00:00.000Z',
+  currency = 'XAF'
+) {
+  return { id, subtotal, currency, completedAt };
+}
+
+function agentEval(
+  extra: Partial<Parameters<typeof evaluateCompensation>[0]>
+) {
+  return evaluateCompensation({
+    approvedItemCount: 10,
+    completedSales: [sale('o1', 20000)],
+    payoutCurrency: 'XAF',
+    paidOnboardingRules: [],
+    hasAgentReferrer: true,
+    hasBusinessReferrer: false,
+    alreadyPaidBusinessReferral: false,
+    businessOnboardedAt: onboarded,
+    triggeringOrderId: 'o1',
+    config: XAF,
+    ...extra,
+  });
+}
+
 describe('compensation-rules', () => {
-  describe('sale bands', () => {
-    it('treats 9999.99 XAF as small and 10000 as large', () => {
-      expect(isSmallSale(9999.99, 10000)).toBe(true);
-      expect(isSmallSale(10000, 10000)).toBe(false);
+  describe('saleWithinOnboardingWindow', () => {
+    it('allows a sale on day 30 and rejects day 31', () => {
+      expect(
+        saleWithinOnboardingWindow(onboarded, '2026-05-31T00:00:00.000Z')
+      ).toBe(true);
+      expect(
+        saleWithinOnboardingWindow(onboarded, '2026-05-31T00:00:01.000Z')
+      ).toBe(false);
     });
 
-    it('treats 24.99 CAD as small and 25 as large', () => {
-      expect(isSmallSale(24.99, 25)).toBe(true);
-      expect(isSmallSale(25, 25)).toBe(false);
-    });
-  });
-
-  describe('matchingOnboardingRulesForOrder', () => {
-    it('matches only the 10-item bonus below 25 items', () => {
-      expect(
-        matchingOnboardingRulesForOrder({
-          approvedItemCount: 10,
-          orderSubtotal: 20000,
-          config: XAF,
-        })
-      ).toEqual([ONBOARDING_10_FIRST_SALE]);
-    });
-
-    it('matches 10-item and small-25 on a sale below 10000 at 25 items', () => {
-      expect(
-        matchingOnboardingRulesForOrder({
-          approvedItemCount: 25,
-          orderSubtotal: 9999.99,
-          config: XAF,
-        })
-      ).toEqual([ONBOARDING_10_FIRST_SALE, ONBOARDING_25_SMALL_SALE]);
-    });
-
-    it('matches 10-item and large-25 on a sale at or above 10000', () => {
-      expect(
-        matchingOnboardingRulesForOrder({
-          approvedItemCount: 25,
-          orderSubtotal: 10000,
-          config: XAF,
-        })
-      ).toEqual([ONBOARDING_10_FIRST_SALE, ONBOARDING_25_LARGE_SALE]);
-    });
-  });
-
-  describe('pickHighestUnpaidOnboardingRule', () => {
-    it('picks 15000 when a first 25-item sale is large', () => {
-      expect(
-        pickHighestUnpaidOnboardingRule({
-          approvedItemCount: 25,
-          orderSubtotal: 15000,
-          paidOnboardingRules: [],
-          config: XAF,
-        })
-      ).toBe(ONBOARDING_25_LARGE_SALE);
-    });
-
-    it('picks 10000 on a later small sale after 7500 is paid', () => {
-      expect(
-        pickHighestUnpaidOnboardingRule({
-          approvedItemCount: 25,
-          orderSubtotal: 5000,
-          paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
-          config: XAF,
-        })
-      ).toBe(ONBOARDING_25_SMALL_SALE);
-    });
-
-    it('uses CAD thresholds', () => {
-      expect(
-        pickHighestUnpaidOnboardingRule({
-          approvedItemCount: 25,
-          orderSubtotal: 24.99,
-          paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
-          config: CAD,
-        })
-      ).toBe(ONBOARDING_25_SMALL_SALE);
-      expect(
-        pickHighestUnpaidOnboardingRule({
-          approvedItemCount: 25,
-          orderSubtotal: 25,
-          paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
-          config: CAD,
-        })
-      ).toBe(ONBOARDING_25_LARGE_SALE);
+    it('rejects a missing completedAt', () => {
+      expect(saleWithinOnboardingWindow(onboarded, undefined)).toBe(false);
     });
   });
 
   describe('evaluateCompensation', () => {
-    it('pays no agent milestone without a triggering order', () => {
+    it('pays no agent bonus without a triggering order', () => {
       expect(
-        evaluateCompensation({
-          approvedItemCount: 10,
-          completedSales: [{ id: 'o1', subtotal: 20000, currency: 'XAF' }],
-          payoutCurrency: 'XAF',
-          paidOnboardingRules: [],
-          hasAgentReferrer: true,
-          hasBusinessReferrer: false,
-          alreadyPaidBusinessReferral: false,
-          config: XAF,
-        })
+        agentEval({ triggeringOrderId: undefined, completedSales: [sale('o1', 20000)] })
       ).toEqual([]);
     });
 
-    it('pays 7500 on the first 10-item sale and not 1%', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 10,
-        completedSales: [{ id: 'o1', subtotal: 20000, currency: 'XAF' }],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [],
-        hasAgentReferrer: true,
-        hasBusinessReferrer: false,
-        alreadyPaidBusinessReferral: false,
-        triggeringOrderId: 'o1',
-        config: XAF,
-      });
+    it('pays 7500 and 1% on the qualifying first sale', () => {
+      const actions = agentEval({});
       expect(actions).toEqual([
         expect.objectContaining({
           ruleCode: ONBOARDING_10_FIRST_SALE,
           amount: 7500,
           orderId: 'o1',
         }),
-      ]);
-    });
-
-    it('pays 10000 on a later small 25-item sale after 7500', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 25,
-        completedSales: [
-          { id: 'o1', subtotal: 20000, currency: 'XAF' },
-          { id: 'o2', subtotal: 5000, currency: 'XAF' },
-        ],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
-        hasAgentReferrer: true,
-        hasBusinessReferrer: false,
-        alreadyPaidBusinessReferral: false,
-        triggeringOrderId: 'o2',
-        paidOrderIds: ['o1'],
-        config: XAF,
-      });
-      expect(actions).toEqual([
         expect.objectContaining({
-          ruleCode: ONBOARDING_25_SMALL_SALE,
-          amount: 10000,
-          orderId: 'o2',
-        }),
-      ]);
-    });
-
-    it('pays 15000 on a later large 25-item sale after 7500 and 10000', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 30,
-        completedSales: [
-          { id: 'o1', subtotal: 8000, currency: 'XAF' },
-          { id: 'o2', subtotal: 5000, currency: 'XAF' },
-          { id: 'o3', subtotal: 12000, currency: 'XAF' },
-        ],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [
-          ONBOARDING_10_FIRST_SALE,
-          ONBOARDING_25_SMALL_SALE,
-        ],
-        hasAgentReferrer: true,
-        hasBusinessReferrer: false,
-        alreadyPaidBusinessReferral: false,
-        triggeringOrderId: 'o3',
-        paidOrderIds: ['o1', 'o2'],
-        config: XAF,
-      });
-      expect(actions).toEqual([
-        expect.objectContaining({
-          ruleCode: ONBOARDING_25_LARGE_SALE,
-          amount: 15000,
-          orderId: 'o3',
-        }),
-      ]);
-    });
-
-    it('pays only 15000 on a first large 25-item sale', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 25,
-        completedSales: [{ id: 'o1', subtotal: 15000, currency: 'XAF' }],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [],
-        hasAgentReferrer: true,
-        hasBusinessReferrer: false,
-        alreadyPaidBusinessReferral: false,
-        triggeringOrderId: 'o1',
-        config: XAF,
-      });
-      expect(actions).toHaveLength(1);
-      expect(actions[0]).toEqual(
-        expect.objectContaining({
-          ruleCode: ONBOARDING_25_LARGE_SALE,
-          amount: 15000,
+          ruleCode: SALE_PERCENT,
+          amount: 200,
           orderId: 'o1',
-        })
-      );
+        }),
+      ]);
     });
 
-    it('pays 1% when all milestone types for that band are already paid', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 30,
-        completedSales: [
-          { id: 'o1', subtotal: 8000, currency: 'XAF' },
-          { id: 'o2', subtotal: 5000, currency: 'XAF' },
-          { id: 'o3', subtotal: 12000, currency: 'XAF' },
-          { id: 'o4', subtotal: 50000, currency: 'XAF' },
-        ],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [
-          ONBOARDING_10_FIRST_SALE,
-          ONBOARDING_25_SMALL_SALE,
-          ONBOARDING_25_LARGE_SALE,
-        ],
-        hasAgentReferrer: true,
-        hasBusinessReferrer: false,
-        alreadyPaidBusinessReferral: false,
-        triggeringOrderId: 'o4',
-        paidOrderIds: ['o1', 'o2', 'o3'],
-        config: XAF,
+    it('pays CAD 25 plus 1% on a qualifying Canadian sale', () => {
+      const actions = agentEval({
+        completedSales: [sale('o1', 80, '2026-05-10T00:00:00.000Z', 'CAD')],
+        payoutCurrency: 'CAD',
+        config: CAD,
+      });
+      expect(actions).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_10_FIRST_SALE,
+          amount: 25,
+        }),
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 0.8 }),
+      ]);
+    });
+
+    it('pays only 1% after the 7500 is already credited', () => {
+      const actions = agentEval({
+        completedSales: [sale('o1', 20000), sale('o2', 50000, '2026-06-01T00:00:00.000Z')],
+        paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
+        triggeringOrderId: 'o2',
+        paidSalePercentOrderIds: ['o1'],
       });
       expect(actions).toEqual([
         expect.objectContaining({
           ruleCode: SALE_PERCENT,
           amount: 500,
-          orderId: 'o4',
+          orderId: 'o2',
         }),
       ]);
     });
 
-    it('does not pay again on an order that already paid a commission', () => {
+    it('pays only 1% when the sale is after day 30', () => {
+      const actions = agentEval({
+        completedSales: [sale('o1', 20000, '2026-06-15T00:00:00.000Z')],
+      });
+      expect(actions).toEqual([
+        expect.objectContaining({
+          ruleCode: SALE_PERCENT,
+          amount: 200,
+          orderId: 'o1',
+        }),
+      ]);
+    });
+
+    it('pays only 1% when the catalog has fewer than 10 items', () => {
+      const actions = agentEval({ approvedItemCount: 9 });
+      expect(actions).toEqual([
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 200 }),
+      ]);
+    });
+
+    it('does not pay 1% again on an order that already has it', () => {
       expect(
-        evaluateCompensation({
-          approvedItemCount: 10,
-          completedSales: [{ id: 'o1', subtotal: 20000, currency: 'XAF' }],
-          payoutCurrency: 'XAF',
+        agentEval({
           paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
-          hasAgentReferrer: true,
-          hasBusinessReferrer: false,
-          alreadyPaidBusinessReferral: false,
-          triggeringOrderId: 'o1',
-          paidOrderIds: ['o1'],
-          config: XAF,
+          paidSalePercentOrderIds: ['o1'],
         })
       ).toEqual([]);
     });
 
     it('pays the B2B 10-item reward once without an order', () => {
-      const actions = evaluateCompensation({
-        approvedItemCount: 10,
-        completedSales: [],
-        payoutCurrency: 'XAF',
-        paidOnboardingRules: [],
-        hasAgentReferrer: false,
-        hasBusinessReferrer: true,
-        alreadyPaidBusinessReferral: false,
-        config: XAF,
-      });
-      expect(actions).toEqual([
+      expect(
+        evaluateCompensation({
+          approvedItemCount: 10,
+          completedSales: [],
+          payoutCurrency: 'XAF',
+          paidOnboardingRules: [],
+          hasAgentReferrer: false,
+          hasBusinessReferrer: true,
+          alreadyPaidBusinessReferral: false,
+          config: XAF,
+        })
+      ).toEqual([
         expect.objectContaining({
           ruleCode: BUSINESS_REFERRAL_10_ITEMS,
           amount: 1000,

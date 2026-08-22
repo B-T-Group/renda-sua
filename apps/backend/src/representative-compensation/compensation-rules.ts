@@ -4,36 +4,23 @@ export const ONBOARDING_25_LARGE_SALE = 'onboarding_25_large_sale';
 export const SALE_PERCENT = 'sale_percent';
 export const BUSINESS_REFERRAL_10_ITEMS = 'business_referral_10_items';
 
-export const ONBOARDING_RULES = [
-  ONBOARDING_10_FIRST_SALE,
-  ONBOARDING_25_SMALL_SALE,
-  ONBOARDING_25_LARGE_SALE,
-] as const;
+export const ONBOARDING_RULES = [ONBOARDING_10_FIRST_SALE] as const;
 
 export type OnboardingRuleCode = (typeof ONBOARDING_RULES)[number];
 
-/** Highest unpaid match wins when one order qualifies for more than one type. */
-export const ONBOARDING_RULE_RANK: OnboardingRuleCode[] = [
-  ONBOARDING_25_LARGE_SALE,
-  ONBOARDING_25_SMALL_SALE,
-  ONBOARDING_10_FIRST_SALE,
-];
-
 export type CompensationRuleCode =
   | OnboardingRuleCode
+  | typeof ONBOARDING_25_SMALL_SALE
+  | typeof ONBOARDING_25_LARGE_SALE
   | typeof SALE_PERCENT
   | typeof BUSINESS_REFERRAL_10_ITEMS;
 
 export const ONBOARDING_10_ITEMS = 10;
-export const ONBOARDING_25_ITEMS = 25;
+export const ONBOARDING_WINDOW_DAYS = 30;
 
 export interface CompensationMarketConfig {
   currency: string;
   onboarding10FirstSale: number;
-  onboarding25SmallSale: number;
-  onboarding25LargeSale: number;
-  smallSaleMaxExclusive: number;
-  largeSaleMaxInclusive: number;
   salePercent: number;
   businessReferral10Items: number;
 }
@@ -63,54 +50,16 @@ export function roundCompensationAmount(
   return Math.round(amount);
 }
 
-export function isSmallSale(
-  amount: number,
-  smallSaleMaxExclusive: number
+export function saleWithinOnboardingWindow(
+  onboardedAt: string | undefined,
+  completedAt: string | undefined
 ): boolean {
-  return amount < smallSaleMaxExclusive;
-}
-
-export function onboardingGross(
-  rule: OnboardingRuleCode,
-  config: CompensationMarketConfig
-): number {
-  if (rule === ONBOARDING_10_FIRST_SALE) return config.onboarding10FirstSale;
-  if (rule === ONBOARDING_25_SMALL_SALE) return config.onboarding25SmallSale;
-  return config.onboarding25LargeSale;
-}
-
-export function matchingOnboardingRulesForOrder(params: {
-  approvedItemCount: number;
-  orderSubtotal: number;
-  config: CompensationMarketConfig;
-}): OnboardingRuleCode[] {
-  const rules: OnboardingRuleCode[] = [];
-  if (params.approvedItemCount >= ONBOARDING_10_ITEMS) {
-    rules.push(ONBOARDING_10_FIRST_SALE);
-  }
-  if (params.approvedItemCount >= ONBOARDING_25_ITEMS) {
-    if (isSmallSale(params.orderSubtotal, params.config.smallSaleMaxExclusive)) {
-      rules.push(ONBOARDING_25_SMALL_SALE);
-    } else {
-      rules.push(ONBOARDING_25_LARGE_SALE);
-    }
-  }
-  return rules;
-}
-
-export function pickHighestUnpaidOnboardingRule(params: {
-  approvedItemCount: number;
-  orderSubtotal: number;
-  paidOnboardingRules: OnboardingRuleCode[];
-  config: CompensationMarketConfig;
-}): OnboardingRuleCode | null {
-  const paid = new Set(params.paidOnboardingRules);
-  const matching = matchingOnboardingRulesForOrder(params);
-  return (
-    ONBOARDING_RULE_RANK.find(
-      (rule) => matching.includes(rule) && !paid.has(rule)
-    ) ?? null
-  );
+  if (!onboardedAt || !completedAt) return false;
+  const start = Date.parse(onboardedAt);
+  const completed = Date.parse(completedAt);
+  if (Number.isNaN(start) || Number.isNaN(completed)) return false;
+  const max = start + ONBOARDING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return completed >= start && completed <= max;
 }
 
 export function salePercentAmount(
@@ -130,85 +79,100 @@ export function evaluateCompensation(params: {
   hasAgentReferrer: boolean;
   hasBusinessReferrer: boolean;
   alreadyPaidBusinessReferral: boolean;
+  businessOnboardedAt?: string;
   triggeringOrderId?: string;
-  /** Orders that already paid any commission; they never earn another. */
-  paidOrderIds?: string[];
+  paidSalePercentOrderIds?: string[];
   config: CompensationMarketConfig;
 }): CompensationAction[] {
-  const actions: CompensationAction[] = [];
-
-  if (
-    params.hasBusinessReferrer &&
-    !params.hasAgentReferrer &&
-    params.approvedItemCount >= ONBOARDING_10_ITEMS &&
-    !params.alreadyPaidBusinessReferral &&
-    !params.triggeringOrderId
-  ) {
-    const amount = roundCompensationAmount(
-      params.config.businessReferral10Items,
-      params.payoutCurrency
-    );
-    if (amount > 0) {
-      actions.push({
-        ruleCode: BUSINESS_REFERRAL_10_ITEMS,
-        amount,
-        grossMilestoneAmount: null,
-        orderId: null,
-        saleAmount: null,
-      });
-    }
-    return actions;
-  }
-
-  if (!params.hasAgentReferrer || !params.triggeringOrderId) {
-    return actions;
-  }
-  if ((params.paidOrderIds ?? []).includes(params.triggeringOrderId)) {
-    return actions;
-  }
-
+  const b2b = businessReferralAction(params);
+  if (b2b) return [b2b];
+  if (!params.hasAgentReferrer || !params.triggeringOrderId) return [];
   const sale = params.completedSales.find(
     (row) =>
       row.id === params.triggeringOrderId &&
       row.currency === params.payoutCurrency &&
       row.subtotal > 0
   );
-  if (!sale) return actions;
+  if (!sale) return [];
+  return [
+    ...optionalAction(onboardingBonusAction(params, sale)),
+    ...optionalAction(salePercentAction(params, sale)),
+  ];
+}
 
-  const unpaidRule = pickHighestUnpaidOnboardingRule({
-    approvedItemCount: params.approvedItemCount,
-    orderSubtotal: sale.subtotal,
-    paidOnboardingRules: params.paidOnboardingRules,
-    config: params.config,
-  });
-  if (unpaidRule) {
-    const gross = onboardingGross(unpaidRule, params.config);
-    const amount = roundCompensationAmount(gross, params.payoutCurrency);
-    if (amount > 0) {
-      actions.push({
-        ruleCode: unpaidRule,
-        amount,
-        grossMilestoneAmount: gross,
-        orderId: params.triggeringOrderId,
-        saleAmount: sale.subtotal,
-      });
-    }
-    return actions;
+function optionalAction(
+  action: CompensationAction | null
+): CompensationAction[] {
+  return action ? [action] : [];
+}
+
+function businessReferralAction(
+  params: Parameters<typeof evaluateCompensation>[0]
+): CompensationAction | null {
+  if (
+    !params.hasBusinessReferrer ||
+    params.hasAgentReferrer ||
+    params.approvedItemCount < ONBOARDING_10_ITEMS ||
+    params.alreadyPaidBusinessReferral ||
+    params.triggeringOrderId
+  ) {
+    return null;
   }
+  const amount = roundCompensationAmount(
+    params.config.businessReferral10Items,
+    params.payoutCurrency
+  );
+  if (amount <= 0) return null;
+  return {
+    ruleCode: BUSINESS_REFERRAL_10_ITEMS,
+    amount,
+    grossMilestoneAmount: null,
+    orderId: null,
+    saleAmount: null,
+  };
+}
 
-  const percentAmount = salePercentAmount(
+function onboardingBonusAction(
+  params: Parameters<typeof evaluateCompensation>[0],
+  sale: CompletedSale
+): CompensationAction | null {
+  if (params.paidOnboardingRules.includes(ONBOARDING_10_FIRST_SALE)) {
+    return null;
+  }
+  if (params.approvedItemCount < ONBOARDING_10_ITEMS) return null;
+  if (!saleWithinOnboardingWindow(params.businessOnboardedAt, sale.completedAt)) {
+    return null;
+  }
+  const amount = roundCompensationAmount(
+    params.config.onboarding10FirstSale,
+    params.payoutCurrency
+  );
+  if (amount <= 0) return null;
+  return {
+    ruleCode: ONBOARDING_10_FIRST_SALE,
+    amount,
+    grossMilestoneAmount: amount,
+    orderId: sale.id,
+    saleAmount: sale.subtotal,
+  };
+}
+
+function salePercentAction(
+  params: Parameters<typeof evaluateCompensation>[0],
+  sale: CompletedSale
+): CompensationAction | null {
+  if ((params.paidSalePercentOrderIds ?? []).includes(sale.id)) return null;
+  const amount = salePercentAmount(
     sale.subtotal,
     params.config.salePercent,
     params.payoutCurrency
   );
-  if (percentAmount > 0) {
-    actions.push({
-      ruleCode: SALE_PERCENT,
-      amount: percentAmount,
-      grossMilestoneAmount: null,
-      orderId: sale.id,
-      saleAmount: sale.subtotal,
-    });
-  }
-  return actions;
+  if (amount <= 0) return null;
+  return {
+    ruleCode: SALE_PERCENT,
+    amount,
+    grossMilestoneAmount: null,
+    orderId: sale.id,
+    saleAmount: sale.subtotal,
+  };
 }
