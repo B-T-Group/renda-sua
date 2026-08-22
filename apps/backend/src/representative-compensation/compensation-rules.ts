@@ -12,6 +12,13 @@ export const ONBOARDING_RULES = [
 
 export type OnboardingRuleCode = (typeof ONBOARDING_RULES)[number];
 
+/** Highest unpaid match wins when one order qualifies for more than one type. */
+export const ONBOARDING_RULE_RANK: OnboardingRuleCode[] = [
+  ONBOARDING_25_LARGE_SALE,
+  ONBOARDING_25_SMALL_SALE,
+  ONBOARDING_10_FIRST_SALE,
+];
+
 export type CompensationRuleCode =
   | OnboardingRuleCode
   | typeof SALE_PERCENT
@@ -72,28 +79,38 @@ export function onboardingGross(
   return config.onboarding25LargeSale;
 }
 
-export function resolveHighestOnboardingRule(params: {
+export function matchingOnboardingRulesForOrder(params: {
   approvedItemCount: number;
-  completedSales: CompletedSale[];
-  payoutCurrency: string;
+  orderSubtotal: number;
+  config: CompensationMarketConfig;
+}): OnboardingRuleCode[] {
+  const rules: OnboardingRuleCode[] = [];
+  if (params.approvedItemCount >= ONBOARDING_10_ITEMS) {
+    rules.push(ONBOARDING_10_FIRST_SALE);
+  }
+  if (params.approvedItemCount >= ONBOARDING_25_ITEMS) {
+    if (isSmallSale(params.orderSubtotal, params.config.smallSaleMaxExclusive)) {
+      rules.push(ONBOARDING_25_SMALL_SALE);
+    } else {
+      rules.push(ONBOARDING_25_LARGE_SALE);
+    }
+  }
+  return rules;
+}
+
+export function pickHighestUnpaidOnboardingRule(params: {
+  approvedItemCount: number;
+  orderSubtotal: number;
+  paidOnboardingRules: OnboardingRuleCode[];
   config: CompensationMarketConfig;
 }): OnboardingRuleCode | null {
-  const sales = params.completedSales.filter(
-    (sale) => sale.currency === params.payoutCurrency && sale.subtotal > 0
+  const paid = new Set(params.paidOnboardingRules);
+  const matching = matchingOnboardingRulesForOrder(params);
+  return (
+    ONBOARDING_RULE_RANK.find(
+      (rule) => matching.includes(rule) && !paid.has(rule)
+    ) ?? null
   );
-  if (sales.length === 0) return null;
-  if (params.approvedItemCount >= ONBOARDING_25_ITEMS) {
-    const hasLargeOrAbove = sales.some(
-      (sale) => !isSmallSale(sale.subtotal, params.config.smallSaleMaxExclusive)
-    );
-    return hasLargeOrAbove
-      ? ONBOARDING_25_LARGE_SALE
-      : ONBOARDING_25_SMALL_SALE;
-  }
-  if (params.approvedItemCount >= ONBOARDING_10_ITEMS) {
-    return ONBOARDING_10_FIRST_SALE;
-  }
-  return null;
 }
 
 export function salePercentAmount(
@@ -109,48 +126,23 @@ export function evaluateCompensation(params: {
   approvedItemCount: number;
   completedSales: CompletedSale[];
   payoutCurrency: string;
-  alreadyPaidOnboarding: number;
+  paidOnboardingRules: OnboardingRuleCode[];
   hasAgentReferrer: boolean;
   hasBusinessReferrer: boolean;
   alreadyPaidBusinessReferral: boolean;
   triggeringOrderId?: string;
-  /** Orders that already unlocked an onboarding milestone; they never also earn 1%. */
-  onboardingTriggerOrderIds?: string[];
+  /** Orders that already paid any commission; they never earn another. */
+  paidOrderIds?: string[];
   config: CompensationMarketConfig;
 }): CompensationAction[] {
   const actions: CompensationAction[] = [];
-  const matchingSales = params.completedSales.filter(
-    (sale) => sale.currency === params.payoutCurrency && sale.subtotal > 0
-  );
-
-  if (params.hasAgentReferrer) {
-    const rule = resolveHighestOnboardingRule(params);
-    if (rule) {
-      const gross = onboardingGross(rule, params.config);
-      const delta = roundCompensationAmount(
-        Math.max(0, gross - params.alreadyPaidOnboarding),
-        params.payoutCurrency
-      );
-      if (delta > 0) {
-        const qualifying = matchingSales.reduce((best, sale) =>
-          sale.subtotal > best.subtotal ? sale : best
-        );
-        actions.push({
-          ruleCode: rule,
-          amount: delta,
-          grossMilestoneAmount: gross,
-          orderId: params.triggeringOrderId ?? null,
-          saleAmount: qualifying.subtotal,
-        });
-      }
-    }
-  }
 
   if (
     params.hasBusinessReferrer &&
     !params.hasAgentReferrer &&
     params.approvedItemCount >= ONBOARDING_10_ITEMS &&
-    !params.alreadyPaidBusinessReferral
+    !params.alreadyPaidBusinessReferral &&
+    !params.triggeringOrderId
   ) {
     const amount = roundCompensationAmount(
       params.config.businessReferral10Items,
@@ -165,38 +157,58 @@ export function evaluateCompensation(params: {
         saleAmount: null,
       });
     }
+    return actions;
   }
 
-  const onboardingThisRun = actions.some((action) =>
-    ONBOARDING_RULES.includes(action.ruleCode as OnboardingRuleCode)
+  if (!params.hasAgentReferrer || !params.triggeringOrderId) {
+    return actions;
+  }
+  if ((params.paidOrderIds ?? []).includes(params.triggeringOrderId)) {
+    return actions;
+  }
+
+  const sale = params.completedSales.find(
+    (row) =>
+      row.id === params.triggeringOrderId &&
+      row.currency === params.payoutCurrency &&
+      row.subtotal > 0
   );
-  const onboardingOrderIds = new Set(params.onboardingTriggerOrderIds ?? []);
-  if (
-    params.hasAgentReferrer &&
-    params.triggeringOrderId &&
-    !onboardingThisRun &&
-    !onboardingOrderIds.has(params.triggeringOrderId)
-  ) {
-    const sale = matchingSales.find(
-      (row) => row.id === params.triggeringOrderId
-    );
-    if (sale) {
-      const amount = salePercentAmount(
-        sale.subtotal,
-        params.config.salePercent,
-        params.payoutCurrency
-      );
-      if (amount > 0) {
-        actions.push({
-          ruleCode: SALE_PERCENT,
-          amount,
-          grossMilestoneAmount: null,
-          orderId: sale.id,
-          saleAmount: sale.subtotal,
-        });
-      }
+  if (!sale) return actions;
+
+  const unpaidRule = pickHighestUnpaidOnboardingRule({
+    approvedItemCount: params.approvedItemCount,
+    orderSubtotal: sale.subtotal,
+    paidOnboardingRules: params.paidOnboardingRules,
+    config: params.config,
+  });
+  if (unpaidRule) {
+    const gross = onboardingGross(unpaidRule, params.config);
+    const amount = roundCompensationAmount(gross, params.payoutCurrency);
+    if (amount > 0) {
+      actions.push({
+        ruleCode: unpaidRule,
+        amount,
+        grossMilestoneAmount: gross,
+        orderId: params.triggeringOrderId,
+        saleAmount: sale.subtotal,
+      });
     }
+    return actions;
   }
 
+  const percentAmount = salePercentAmount(
+    sale.subtotal,
+    params.config.salePercent,
+    params.payoutCurrency
+  );
+  if (percentAmount > 0) {
+    actions.push({
+      ruleCode: SALE_PERCENT,
+      amount: percentAmount,
+      grossMilestoneAmount: null,
+      orderId: sale.id,
+      saleAmount: sale.subtotal,
+    });
+  }
   return actions;
 }
