@@ -38,6 +38,7 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderEventsService } from './order-events.service';
 import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
@@ -342,6 +343,12 @@ describe('OrdersService', () => {
             startAcceptanceSla: jest.fn(),
             isBusinessAcceptingOrders: jest.fn().mockResolvedValue(true),
             isWithinOperatingHours: jest.fn().mockReturnValue(true),
+            getBusinessTiming: jest.fn().mockResolvedValue({
+              defaultEstimatedPrepMinutes: 30,
+              asapTimeoutSeconds: 900,
+              futureTimeoutSeconds: 1800,
+              activationLeadMinutes: 30,
+            }),
             isSlotWithinOperatingHours: jest.fn().mockReturnValue(true),
             fetchDeliverySlotTimes: jest.fn().mockResolvedValue({
               start_time: '12:00',
@@ -349,6 +356,22 @@ describe('OrdersService', () => {
             }),
             getAcceptanceTimeoutSeconds: jest.fn().mockResolvedValue(300),
             recordMerchantCancelOfPending: jest.fn(),
+          },
+        },
+        {
+          provide: FulfillmentPromiseService,
+          useValue: {
+            persistForOrder: jest.fn(),
+            evaluateAsap: jest.fn().mockReturnValue({
+              available: true,
+              estimatedPrepMinutes: 30,
+              scheduleRequired: false,
+            }),
+            timezoneForCountry: jest.fn().mockResolvedValue('UTC'),
+            closedStoreMessage: jest
+              .fn()
+              .mockReturnValue('This store is closed. Select a future date below.'),
+            inferTiming: jest.fn().mockReturnValue('asap'),
           },
         },
         { provide: RbacService, useValue: {} },

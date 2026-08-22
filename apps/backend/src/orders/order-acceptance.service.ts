@@ -22,6 +22,7 @@ import {
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
 import { OrderSystemJobsService } from './order-system-jobs.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import {
   ACTIVATION_LEAD_MINUTES_ALLOWED,
   CONFIRMABLE_ACCEPTANCE_STATES,
@@ -80,7 +81,8 @@ export class OrderAcceptanceService {
     private readonly orderSystemJobs: OrderSystemJobsService,
     private readonly notifications: NotificationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -102,9 +104,11 @@ export class OrderAcceptanceService {
         ? timing.futureTimeoutSeconds
         : timing.asapTimeoutSeconds;
       await this.beginActiveAcceptanceSla(order, prep, timeoutSeconds);
+      await this.fulfillmentPromiseService.persistForOrder(orderId);
       return;
     }
     await this.beginScheduledAcceptance(order, prep, activationAt);
+    await this.fulfillmentPromiseService.persistForOrder(orderId);
   }
 
   async activateAcceptanceSla(
@@ -242,9 +246,10 @@ export class OrderAcceptanceService {
     }
 
     const cfg = this.orderConfig();
+    const previousExtra = order.busy_extra_prep_minutes || 0;
     const nextExtra = Math.min(
       cfg.busyExtraPrepCapMinutes,
-      (order.busy_extra_prep_minutes || 0) + cfg.busyExtraPrepMinutes
+      previousExtra + cfg.busyExtraPrepMinutes
     );
     const estimated =
       cfg.defaultEstimatedPrepMinutes + nextExtra;
@@ -268,6 +273,9 @@ export class OrderAcceptanceService {
     );
 
     await this.notifyClientBusy(order, estimated);
+    await this.fulfillmentPromiseService.persistForOrder(orderId, {
+      extendPrepMinutes: Math.max(0, nextExtra - previousExtra),
+    });
     return {
       success: true,
       order: updated.update_orders_by_pk,
@@ -292,7 +300,8 @@ export class OrderAcceptanceService {
           id order_number current_status acceptance_state
           acceptance_deadline_at grace_deadline_at
           busy_extra_prep_minutes estimated_prep_minutes
-          created_at total_amount currency fulfillment_method business_id
+          created_at total_amount currency fulfillment_method
+          fulfillment_timing promised_ready_at promised_fulfill_by business_id
           client { user { first_name last_name } }
           order_items { item_name quantity }
         }
@@ -1093,7 +1102,8 @@ export class OrderAcceptanceService {
           id order_number current_status acceptance_state
           acceptance_deadline_at grace_deadline_at
           busy_extra_prep_minutes estimated_prep_minutes
-          created_at total_amount currency fulfillment_method business_id
+          created_at total_amount currency fulfillment_method
+          fulfillment_timing promised_ready_at promised_fulfill_by business_id
           client { user { first_name last_name } }
           order_items { item_name quantity }
         }

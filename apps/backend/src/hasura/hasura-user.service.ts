@@ -66,6 +66,7 @@ export interface CreateOrderRequest {
     preferred_date: string;
     special_instructions?: string;
   };
+  fulfillment_timing?: 'asap' | 'scheduled';
 }
 
 export interface Item {

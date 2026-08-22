@@ -515,6 +515,9 @@ export class PdfService {
     if (order.estimated_delivery_time) {
       return new Date(order.estimated_delivery_time).toLocaleString();
     }
+    if ((order as any).fulfillment_timing === 'asap' && (order as any).promised_fulfill_by) {
+      return `ASAP by ${new Date((order as any).promised_fulfill_by).toLocaleString()}`;
+    }
     return '—';
   }
 

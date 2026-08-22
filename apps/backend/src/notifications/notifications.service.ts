@@ -2697,7 +2697,9 @@ export class NotificationsService {
           data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
             ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
             : data?.fulfillmentMethod === 'pickup'
-              ? `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
+              ? data?.fulfillmentTiming === 'asap'
+                ? `Order ${orderNumber} has been confirmed. Come as soon as it is ready.`
+                : `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
               : `Order ${orderNumber} has been confirmed.`,
       },
       preparing: {

@@ -86,6 +86,7 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderEventsService } from './order-events.service';
 import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
@@ -192,6 +193,9 @@ export interface OrderWithDetails {
   assigned_agent_id?: string;
   delivery_address_id: string;
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
+  fulfillment_timing?: 'asap' | 'scheduled' | null;
+  promised_ready_at?: string | null;
+  promised_fulfill_by?: string | null;
   subtotal: number;
   base_delivery_fee: number;
   per_km_delivery_fee: number;
@@ -419,6 +423,7 @@ export class OrdersService {
     private readonly locationsService: LocationsService,
     private readonly orderSystemJobsService: OrderSystemJobsService,
     private readonly orderAcceptanceService: OrderAcceptanceService,
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService,
     private readonly orderPickupMonitorService: OrderPickupMonitorService,
     private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
@@ -1288,8 +1293,18 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     this.orderAcceptanceService.assertConfirmableAcceptance(order as any);
 
-    // Validate that delivery/pickup window is provided
-    if (!request.delivery_time_window_id && !request.delivery_window_details) {
+    const isAsapConfirm =
+      (order as any).fulfillment_timing === 'asap' ||
+      (!(order as any).delivery_time_windows?.length &&
+        (order as any).fulfillment_method !== 'shipping' &&
+        !request.delivery_time_window_id &&
+        !request.delivery_window_details);
+
+    if (
+      !isAsapConfirm &&
+      !request.delivery_time_window_id &&
+      !request.delivery_window_details
+    ) {
       const isPickup = (order as any).fulfillment_method === 'pickup';
       throw new HttpException(
         isPickup
@@ -1307,7 +1322,7 @@ export class OrdersService {
       );
     }
 
-    let confirmedWindowId: string;
+    let confirmedWindowId: string | undefined;
 
     const isPickupOrder = (order as any).fulfillment_method === 'pickup';
     const countryCode =
@@ -1336,15 +1351,16 @@ export class OrdersService {
         userId,
         deliveryTimezone
       );
-    } else {
+    } else if (!isAsapConfirm) {
       throw new HttpException(
         'No delivery window provided',
         HttpStatus.BAD_REQUEST
       );
     }
 
-    // Attach confirmed window before status update so client notifications include the slot.
-    await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
+    if (confirmedWindowId) {
+      await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
+    }
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
@@ -1364,12 +1380,18 @@ export class OrdersService {
       );
     }
 
+    await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+
     await this.createStatusHistoryEntry(
       request.orderId,
       'confirmed',
       isPickupOrder
-        ? 'Order confirmed by business with pickup slot'
-        : 'Order confirmed by business',
+        ? isAsapConfirm
+          ? 'Order confirmed by business for ASAP pickup'
+          : 'Order confirmed by business with pickup slot'
+        : isAsapConfirm
+          ? 'Order confirmed by business for ASAP delivery'
+          : 'Order confirmed by business',
       'business',
       userId,
       request.notes
@@ -1486,7 +1508,11 @@ export class OrdersService {
     const now = new Date();
     const window = (order as any).delivery_time_windows?.[0];
     if (!window?.is_confirmed || !window.preferred_date || !window.time_slot_start) {
-      return { dispatchReadyAt: now, pickupBy: null };
+      const promisedReady = (order as any).promised_ready_at;
+      return {
+        dispatchReadyAt: now,
+        pickupBy: promisedReady ? new Date(promisedReady) : now,
+      };
     }
     const countryCode =
       order.business_location?.address?.country ||
@@ -1515,6 +1541,18 @@ export class OrdersService {
       dispatchReadyAt: dispatchReadyAt < now ? now : dispatchReadyAt,
       pickupBy: windowStart,
     };
+  }
+
+  private async markOrderTimingScheduled(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation MarkOrderTimingScheduled($id: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { fulfillment_timing: "scheduled" }
+        ) { id }
+      }`,
+      { id: orderId }
+    );
   }
 
   private async persistDispatchSchedule(
@@ -5258,8 +5296,11 @@ export class OrdersService {
           business_location_id
           assigned_agent_id
           delivery_address_id
-          fulfillment_method
-          shipping_tracking_number
+      fulfillment_method
+      fulfillment_timing
+      promised_ready_at
+      promised_fulfill_by
+      shipping_tracking_number
           shipping_carrier
           shipped_at
           received_at
@@ -5464,8 +5505,11 @@ export class OrdersService {
           business_location_id
           assigned_agent_id
           delivery_address_id
-          fulfillment_method
-          shipping_tracking_number
+      fulfillment_method
+      fulfillment_timing
+      promised_ready_at
+      promised_fulfill_by
+      shipping_tracking_number
           shipping_carrier
           shipped_at
           received_at
@@ -7079,6 +7123,7 @@ export class OrdersService {
         deliveryAddress: this.formatAddress(order.delivery_address),
         estimatedDeliveryTime: order.estimated_delivery_time || undefined,
         specialInstructions: order.special_instructions || undefined,
+        fulfillmentTiming: (order as any).fulfillment_timing || undefined,
         ...acceptanceNotify,
       };
 
@@ -7654,7 +7699,13 @@ export class OrdersService {
     deliveryWindow?: {
       slot_id?: string;
       preferred_date?: string;
-    } | null
+    } | null,
+    asapContext?: {
+      fulfillmentMethod: 'delivery' | 'pickup';
+      country: string;
+      prepMinutes: number;
+      isFastDelivery: boolean;
+    }
   ): Promise<void> {
     if (!locationHours) return;
 
@@ -7694,17 +7745,27 @@ export class OrdersService {
       return;
     }
 
-    if (!this.orderAcceptanceService.isWithinOperatingHours(locationHours)) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'MERCHANT_CLOSED',
-          message:
-            'This merchant is currently closed. Choose a delivery or pickup time when they are open.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    const timezone = await this.fulfillmentPromiseService.timezoneForCountry(
+      asapContext?.country
+    );
+    const availability = this.fulfillmentPromiseService.evaluateAsap({
+      operatingHours: locationHours,
+      prepMinutes: asapContext?.prepMinutes ?? 30,
+      fulfillmentMethod: asapContext?.fulfillmentMethod ?? 'delivery',
+      timezone,
+      isFastDelivery: asapContext?.isFastDelivery,
+    });
+    if (availability.available) return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'MERCHANT_CLOSED',
+        message: this.fulfillmentPromiseService.closedStoreMessage(
+          availability.reason
+        ),
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**
@@ -8102,7 +8163,20 @@ export class OrdersService {
 
     await this.assertMerchantOpenForCheckout(
       businessInventories[0].business_location?.operating_hours,
-      orderData.delivery_window
+      orderData.delivery_window,
+      {
+        fulfillmentMethod:
+          orderData.fulfillment_method === 'pickup' ? 'pickup' : 'delivery',
+        country:
+          businessInventories[0].business_location?.address?.country || 'GA',
+        prepMinutes:
+          (
+            await this.orderAcceptanceService.getBusinessTiming(
+              merchantBusinessId
+            )
+          ).defaultEstimatedPrepMinutes,
+        isFastDelivery: !!orderData.requires_fast_delivery,
+      }
     );
 
     const requestedQuantityByInventoryId =
@@ -8820,6 +8894,7 @@ export class OrdersService {
         );
       } catch (error) {
         this.logger.error('Failed to create delivery window:', error);
+        await this.markOrderTimingScheduled(order.id);
       }
     }
 
@@ -8927,6 +9002,8 @@ export class OrdersService {
               estimatedDeliveryTime:
                 orderWithDetails.estimated_delivery_time || undefined,
               specialInstructions: orderWithDetails.special_instructions || undefined,
+              fulfillmentTiming:
+                (orderWithDetails as any).fulfillment_timing || undefined,
               ...acceptanceNotify,
             };
 

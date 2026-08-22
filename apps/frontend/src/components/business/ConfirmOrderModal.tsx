@@ -113,6 +113,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const windowCountryCode = windowAddress?.country?.trim() || 'GA';
   const windowStateCode = windowAddress?.state?.trim() || '';
   const isPickup = order?.fulfillment_method === 'pickup';
+  const isAsap =
+    order?.fulfillment_timing === 'asap' ||
+    (!order?.delivery_time_windows?.length &&
+      order?.fulfillment_method !== 'shipping');
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -168,8 +172,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const handleConfirm = useCallback(async () => {
     setError('');
 
-    // Validate that a delivery window is selected
-    if (!selectedWindowId && !newWindowData) {
+    // Validate that a delivery window is selected (not required for ASAP)
+    if (!isAsap && !selectedWindowId && !newWindowData) {
       setError(
         isPickup
           ? t(
@@ -233,6 +237,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     t,
     existingWindows,
     isPickup,
+    isAsap,
   ]);
 
   // Early return after all hooks
@@ -379,6 +384,20 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
           {/* Delivery Window Selection */}
           <Card>
             <CardContent sx={{ py: 2 }}>
+              {isAsap ? (
+                <Typography variant="body1">
+                  {isPickup
+                    ? t(
+                        'orders.confirmModal.asapPickup',
+                        'Customer wants pickup as soon as possible. Confirm to start preparing now.'
+                      )
+                    : t(
+                        'orders.confirmModal.asapDelivery',
+                        'Customer wants delivery as soon as possible. Confirm to start preparing now.'
+                      )}
+                </Typography>
+              ) : (
+                <>
               <Typography variant="h6" gutterBottom>
                 {isPickup
                   ? t(
@@ -547,6 +566,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   />
                 </Box>
               )}
+              </>
+              )}
             </CardContent>
           </Card>
         </Stack>
@@ -566,7 +587,9 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
           <Button
             variant="contained"
             onClick={handleConfirm}
-            disabled={loading || (!selectedWindowId && !newWindowData)}
+            disabled={
+              loading || (!isAsap && !selectedWindowId && !newWindowData)
+            }
             startIcon={<CheckCircle />}
           >
             {loading

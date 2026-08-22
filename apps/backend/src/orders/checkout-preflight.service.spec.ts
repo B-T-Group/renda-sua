@@ -21,6 +21,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
   CheckoutMethod,
@@ -174,6 +175,20 @@ describe('CheckoutPreflightService', () => {
           provide: MetaConversionsService,
           useValue: {
             trackInitiateCheckoutSafe: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: FulfillmentPromiseService,
+          useValue: {
+            timezoneForCountry: jest.fn().mockResolvedValue('UTC'),
+            evaluateAsap: jest.fn().mockReturnValue({
+              available: true,
+              estimatedPrepMinutes: 30,
+              scheduleRequired: false,
+              estimatedReadyAt: '2026-08-21T12:30:00.000Z',
+              estimatedFulfillBy: '2026-08-21T13:00:00.000Z',
+            }),
+            closedStoreMessage: jest.fn().mockReturnValue('This store is closed.'),
           },
         },
       ],

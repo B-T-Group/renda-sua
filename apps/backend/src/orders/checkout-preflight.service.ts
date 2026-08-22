@@ -9,6 +9,7 @@
  * If you change a rule in one, change it in both.
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -59,6 +60,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         id
         business_id
         is_active
+        operating_hours
         mobile_payment_phone {
           is_verified
         }
@@ -66,6 +68,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           id
           name
           can_accept_orders
+          default_estimated_prep_minutes
           user { id country }
         }
         address { country state latitude longitude }
@@ -122,7 +125,8 @@ export class CheckoutPreflightService {
     private readonly configService: ConfigService,
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
-    private readonly metaConversionsService: MetaConversionsService
+    private readonly metaConversionsService: MetaConversionsService,
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService
   ) {}
 
   async resolve(
@@ -596,6 +600,25 @@ export class CheckoutPreflightService {
       }
 
       const totalFee = shippingFee ?? deliveryFee ?? 0;
+      const location = group.inventoryRows[0]?.business_location;
+      const configuredPrep =
+        this.configService.get<Configuration['order']>('order')
+          ?.defaultEstimatedPrepMinutes ?? 30;
+      const prepMinutes =
+        typeof location?.business?.default_estimated_prep_minutes === 'number' &&
+        location.business.default_estimated_prep_minutes > 0
+          ? location.business.default_estimated_prep_minutes
+          : configuredPrep;
+      const timezone = await this.fulfillmentPromiseService.timezoneForCountry(
+        group.sellerCountry
+      );
+      const asap = this.fulfillmentPromiseService.evaluateAsap({
+        operatingHours: location?.operating_hours,
+        prepMinutes,
+        fulfillmentMethod: fulfillment,
+        timezone,
+        isFastDelivery: dto.requires_fast_delivery === true,
+      });
 
       groups.push({
         business_id: businessId,
@@ -616,6 +639,13 @@ export class CheckoutPreflightService {
         pickup_eligible: allPayAtPickup,
         shipping_eligible: allShippingEnabled,
         items: itemLines,
+        asap_available: asap.available,
+        asap_disabled_reason: asap.reason,
+        opens_at: asap.opensAt ?? null,
+        estimated_prep_minutes: asap.estimatedPrepMinutes,
+        estimated_ready_at: asap.estimatedReadyAt,
+        estimated_fulfill_by: asap.estimatedFulfillBy,
+        schedule_required: asap.scheduleRequired,
       });
     }
 
@@ -698,6 +728,14 @@ export class CheckoutPreflightService {
       this.scheduleInitiateCheckout(dto, groups, meta);
     }
 
+    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
+    const scheduleRequired = asapGroups.some((g) => g.schedule_required);
+    const asapAvailable =
+      fulfillment !== 'shipping' &&
+      asapGroups.length > 0 &&
+      asapGroups.every((g) => g.asap_available);
+    const firstBlocked = asapGroups.find((g) => !g.asap_available);
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -720,6 +758,13 @@ export class CheckoutPreflightService {
         fulfillment === 'delivery'
           ? this.aggregateDeliveryAvailability(groups)
           : null,
+      asap_available: asapAvailable,
+      asap_disabled_reason: firstBlocked?.asap_disabled_reason,
+      opens_at: firstBlocked?.opens_at ?? asapGroups[0]?.opens_at ?? null,
+      estimated_prep_minutes: asapGroups[0]?.estimated_prep_minutes,
+      estimated_ready_at: asapGroups[0]?.estimated_ready_at,
+      estimated_fulfill_by: asapGroups[0]?.estimated_fulfill_by,
+      schedule_required: scheduleRequired,
     };
   }
 

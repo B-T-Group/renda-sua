@@ -5,18 +5,22 @@ import type { Configuration } from '../../config/configuration';
 import { NotificationAnalyticsService } from './notification-analytics.service';
 import { WhatsAppReplyService } from './whatsapp-reply.service';
 
+interface WhatsAppStatusEvent {
+  id?: string;
+  status?: string;
+  recipient_id?: string;
+  [key: string]: unknown;
+}
+
 interface WhatsAppChangeValue {
-  statuses?: Array<{
-    id?: string;
-    status?: string;
-    recipient_id?: string;
-  }>;
+  statuses?: WhatsAppStatusEvent[];
   messages?: Array<{
     from?: string;
     id?: string;
     type?: string;
     text?: { body?: string };
   }>;
+  [key: string]: unknown;
 }
 
 @Injectable()
@@ -68,17 +72,17 @@ export class WhatsAppInboundService {
   private async processValue(value?: WhatsAppChangeValue): Promise<void> {
     if (!value) return;
     for (const status of value.statuses ?? []) {
-      await this.handleStatus(status);
+      await this.handleStatus(status, value);
     }
     for (const message of value.messages ?? []) {
       await this.handleMessage(message);
     }
   }
 
-  private async handleStatus(status: {
-    id?: string;
-    status?: string;
-  }): Promise<void> {
+  private async handleStatus(
+    status: WhatsAppStatusEvent,
+    event: WhatsAppChangeValue
+  ): Promise<void> {
     if (!status.id || !status.status) return;
     const mapped =
       status.status === 'delivered'
@@ -90,9 +94,11 @@ export class WhatsAppInboundService {
             : status.status === 'read'
               ? 'delivered'
               : 'attempted';
-    await this.analytics.markByProviderMessageId(status.id, mapped as any, {
-      waStatus: status.status,
-    });
+    await this.analytics.markByProviderMessageId(
+      status.id,
+      mapped as any,
+      event as Record<string, unknown>
+    );
   }
 
   private async handleMessage(message: {

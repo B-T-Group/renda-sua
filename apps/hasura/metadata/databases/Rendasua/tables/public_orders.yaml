@@ -225,6 +225,9 @@ select_permissions:
         - cancellation_notes
         - dispatch_ready_at
         - pickup_by
+        - fulfillment_timing
+        - promised_ready_at
+        - promised_fulfill_by
         - dispatch_round
         - dispatch_exhausted_at
         - assigned_at
@@ -309,6 +312,9 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - fulfillment_timing
+        - promised_ready_at
+        - promised_fulfill_by
         - dispatch_round
         - dispatch_exhausted_at
         - assigned_at
@@ -392,6 +398,9 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - fulfillment_timing
+        - promised_ready_at
+        - promised_fulfill_by
         - dispatch_round
         - dispatch_exhausted_at
         - assigned_at

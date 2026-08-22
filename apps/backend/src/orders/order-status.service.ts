@@ -571,6 +571,7 @@ export class OrderStatusService {
           deliveryTimeWindow || order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
         fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
+        fulfillmentTiming: (order as any).fulfillment_timing ?? null,
         paymentTiming: (order as any).payment_timing ?? null,
       };
     } catch (error: any) {

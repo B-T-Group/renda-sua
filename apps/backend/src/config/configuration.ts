@@ -149,6 +149,14 @@ export interface OrderConfig {
   cleanupBatchLimit: number;
   /** When false, OrderCleanupCronService no-ops. */
   cleanupEnabled: boolean;
+  /** Travel minutes added to prep for ASAP delivery ETA. */
+  asapTravelBufferMinutes: number;
+  /** Grace minutes after ready for ASAP pickup-by. */
+  asapPickupGraceMinutes: number;
+  /** Extra minutes that must remain before close to offer ASAP. */
+  asapCloseBufferMinutes: number;
+  /** Travel minutes for ASAP + fast delivery. */
+  asapFastTravelBufferMinutes: number;
 }
 
 /** When agent has an active delivery, location update interval in ms (default 60s). */
@@ -765,6 +773,22 @@ export default (): Configuration => {
       cleanupEnabled:
         process.env.ORDER_CLEANUP_ENABLED !== 'false' &&
         process.env.ORDER_CLEANUP_ENABLED !== '0',
+      asapTravelBufferMinutes: parseInt(
+        process.env.ORDER_ASAP_TRAVEL_BUFFER_MINUTES || '30',
+        10
+      ),
+      asapPickupGraceMinutes: parseInt(
+        process.env.ORDER_ASAP_PICKUP_GRACE_MINUTES || '60',
+        10
+      ),
+      asapCloseBufferMinutes: parseInt(
+        process.env.ORDER_ASAP_CLOSE_BUFFER_MINUTES || '15',
+        10
+      ),
+      asapFastTravelBufferMinutes: parseInt(
+        process.env.ORDER_ASAP_FAST_TRAVEL_BUFFER_MINUTES || '20',
+        10
+      ),
     },
     agentTracking: {
       activeDeliveryIntervalMs: parseInt(

@@ -91,14 +91,23 @@ export function buildReadyNextStepHtml(
       ? `<p>Votre commande est prête. Un livreur sera bientôt assigné pour la récupérer et vous la livrer.</p>`
       : `<p>Your order is now ready for pickup. A delivery agent will be assigned shortly to collect and deliver your order.</p>`;
   }
+  const asap = data.fulfillmentTiming === 'asap';
   if (isPayAtPickup) {
     return locale === 'fr'
-      ? `<p>Votre commande est prête au magasin. Rendez-vous sur place pendant le créneau prévu. Le vendeur vous enverra une demande de paiement mobile money lors du retrait.</p>`
-      : `<p>Your order is ready at the store. Come during your pickup slot. The seller will send a mobile money payment request when you pick up.</p>`;
+      ? asap
+        ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. Le vendeur vous enverra une demande de paiement mobile money lors du retrait.</p>`
+        : `<p>Votre commande est prête au magasin. Rendez-vous sur place pendant le créneau prévu. Le vendeur vous enverra une demande de paiement mobile money lors du retrait.</p>`
+      : asap
+        ? `<p>Your order is ready at the store. Come as soon as it is ready. The seller will send a mobile money payment request when you pick up.</p>`
+        : `<p>Your order is ready at the store. Come during your pickup slot. The seller will send a mobile money payment request when you pick up.</p>`;
   }
   return locale === 'fr'
-    ? `<p>Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait. Envoyez votre code PIN au vendeur pour confirmer le retrait.</p>`
-    : `<p>Your order is ready at the store. Come during your pickup slot. Send your PIN to the seller to confirm pickup.</p>`;
+    ? asap
+      ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. Envoyez votre code PIN au vendeur pour confirmer le retrait.</p>`
+      : `<p>Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait. Envoyez votre code PIN au vendeur pour confirmer le retrait.</p>`
+    : asap
+      ? `<p>Your order is ready at the store. Come as soon as it is ready. Send your PIN to the seller to confirm pickup.</p>`
+      : `<p>Your order is ready at the store. Come during your pickup slot. Send your PIN to the seller to confirm pickup.</p>`;
 }
 
 export function buildOrderItemsHtml(
