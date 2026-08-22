@@ -10,6 +10,7 @@ import * as Sentry from '@sentry/nestjs';
 import { Request, Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
+import { isTransientHasuraNetworkError } from '../../hasura/hasura-request.util';
 import { getRequestLogContext } from '../request-context-log.util';
 
 @Catch()
@@ -35,6 +36,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
+    if (isTransientHasuraNetworkError(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
@@ -45,6 +49,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return { statusCode: status, message: response };
       }
       return response as object;
+    }
+    if (isTransientHasuraNetworkError(exception)) {
+      return {
+        success: false,
+        statusCode: status,
+        message: 'Temporarily unable to reach the data service',
+      };
     }
     return {
       success: false,
