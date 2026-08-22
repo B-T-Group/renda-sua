@@ -12,6 +12,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
+import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -70,6 +71,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CommerceIntegrationsModule,
     MetaConversionsModule,
     MerchantLifecycleModule,
+    RepresentativeCompensationModule,
   ],
   controllers: [
     OrdersController,

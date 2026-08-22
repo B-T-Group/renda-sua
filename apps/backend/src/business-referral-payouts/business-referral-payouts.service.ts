@@ -3,6 +3,7 @@ import { ConfigurationsService } from '../admin/configurations.service';
 import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
@@ -80,7 +81,8 @@ export class BusinessReferralPayoutsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly configurationsService: ConfigurationsService,
-    private readonly referralPyramidService: ReferralPyramidService
+    private readonly referralPyramidService: ReferralPyramidService,
+    private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
 
   async isPayoutFeatureEnabled(): Promise<boolean> {
@@ -127,27 +129,18 @@ export class BusinessReferralPayoutsService {
       };
     }
 
-    const businesses = await this.fetchEligibleBusinesses();
-    this.logger.log(`Found ${businesses.length} eligible businesses for payout.`);
-
     const summary: PayoutSummary = {
       processed: 0,
       credited: 0,
       skipped: 0,
       failures: 0,
     };
-    for (const business of businesses) {
-      summary.processed++;
-      try {
-        const credited = await this.processBusinessPayout(business);
-        credited ? summary.credited++ : summary.skipped++;
-      } catch (error: any) {
-        this.logger.error(
-          `Payout failed for business ${business.id}: ${error.message}`
-        );
-        summary.failures++;
-      }
-    }
+
+    const sweep = await this.representativeCompensationService.sweepPending();
+    summary.processed += sweep.credited + sweep.skipped + sweep.failed;
+    summary.credited += sweep.credited;
+    summary.skipped += sweep.skipped;
+    summary.failures += sweep.failed;
 
     const retried = await this.retryIncompletePayoutClaims();
     summary.processed += retried.processed;
@@ -363,7 +356,7 @@ export class BusinessReferralPayoutsService {
     );
   }
 
-  private async processBusinessPayout(
+  async processBusinessPayout(
     business: EligibleBusiness
   ): Promise<boolean> {
     if (business.kind === 'agent') {

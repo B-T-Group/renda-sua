@@ -416,7 +416,7 @@ export class AgentReferralsService {
 
   private async getReferralConfig(countryCode: string): Promise<ReferralConfig> {
     const defaults: ReferralConfig = {
-      referralAmount: 500,
+      referralAmount: 1000,
       maxReferralTotal: 10000,
     };
 

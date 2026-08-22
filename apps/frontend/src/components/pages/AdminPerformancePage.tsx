@@ -44,6 +44,7 @@ import {
 import { usePermission } from '../../hooks/usePermissions';
 import LoadingScreen from '../common/LoadingScreen';
 import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
+import { AdminCompensationEventsDialog } from '../admin/AdminCompensationEventsDialog';
 import SEOHead from '../seo/SEOHead';
 
 const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
@@ -403,8 +404,14 @@ const AdminPerformancePage: React.FC = () => {
   const { t } = useTranslation();
   const { profile, loading: profileLoading } = useUserProfileContext();
   const canAccess = usePermission(PlatformPermissions.DASHBOARD_PLATFORM_STATS);
-  const { fetchMarkets, fetchSummary, fetchTopAgents, fetchPayoutPreview, error } =
-    useAdminPerformance();
+  const {
+    fetchMarkets,
+    fetchSummary,
+    fetchTopAgents,
+    fetchPayoutPreview,
+    fetchCompensationEvents,
+    error,
+  } = useAdminPerformance();
 
   const [markets, setMarkets] = useState<PerformanceMarket[]>([]);
   const [countryCode, setCountryCode] = useState('');
@@ -580,6 +587,10 @@ const AdminPerformancePage: React.FC = () => {
         <AdminPayoutPreviewDialog
           countryCode={countryCode}
           fetchPreview={fetchPayoutPreview}
+        />
+        <AdminCompensationEventsDialog
+          countryCode={countryCode}
+          fetchEvents={fetchCompensationEvents}
         />
       </Stack>
 

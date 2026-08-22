@@ -3,7 +3,9 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
@@ -22,7 +24,9 @@ export class OrderStatusService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly orderQueueService: OrderQueueService,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   /**
@@ -212,7 +216,12 @@ export class OrderStatusService {
   }
 
   private async maybeCreditAgentReferralAfterDelivery(
-    order: { assigned_agent_id?: string; assigned_agent?: { user_id?: string } },
+    order: {
+      id?: string;
+      business_id?: string;
+      assigned_agent_id?: string;
+      assigned_agent?: { user_id?: string };
+    },
     newStatus: string
   ): Promise<void> {
     if (newStatus !== 'complete' && newStatus !== 'delivered') return;
@@ -220,6 +229,12 @@ export class OrderStatusService {
       order.assigned_agent_id,
       order.assigned_agent?.user_id
     );
+    if (order.id && order.business_id) {
+      void this.representativeCompensationService?.evaluateForOrderSafe(
+        order.id,
+        order.business_id
+      );
+    }
   }
 
   private buildConditionalStatusMutation(

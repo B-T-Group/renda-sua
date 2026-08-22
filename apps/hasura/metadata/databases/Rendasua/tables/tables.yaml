@@ -122,6 +122,7 @@
 - "!include public_rental_location_listings.yaml"
 - "!include public_rental_requests.yaml"
 - "!include public_rental_status_history.yaml"
+- "!include public_representative_compensation_events.yaml"
 - "!include public_role_permissions.yaml"
 - "!include public_roles.yaml"
 - "!include public_site_events.yaml"

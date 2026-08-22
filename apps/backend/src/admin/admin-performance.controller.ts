@@ -18,6 +18,7 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminPerformanceService } from './admin-performance.service';
 import { ReferralPayoutPreviewService } from '../business-referral-payouts/referral-payout-preview.service';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import {
   AdminPayoutPreviewQueryDto,
   AdminPerformanceSummaryQueryDto,
@@ -38,7 +39,8 @@ const QUERY_PIPE = new ValidationPipe({
 export class AdminPerformanceController {
   constructor(
     private readonly adminPerformanceService: AdminPerformanceService,
-    private readonly referralPayoutPreviewService: ReferralPayoutPreviewService
+    private readonly referralPayoutPreviewService: ReferralPayoutPreviewService,
+    private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
 
   @Get('summary')
@@ -96,6 +98,22 @@ export class AdminPerformanceController {
     return this.referralPayoutPreviewService.previewWeeklyPayouts(
       query.countryCode
     );
+  }
+
+  @Get('compensation-events')
+  @ApiOperation({
+    summary: 'List representative compensation ledger rows (newest first)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Compensation events with rule, amount, status, and business',
+  })
+  async compensationEvents(@Query() query: AdminPayoutPreviewQueryDto) {
+    const events = await this.representativeCompensationService.listEvents({
+      countryCode: query.countryCode,
+      limit: 100,
+    });
+    return { events };
   }
 
   @Get('markets')

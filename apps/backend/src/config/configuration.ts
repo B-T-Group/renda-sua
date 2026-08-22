@@ -996,10 +996,11 @@ export default (): Configuration => {
     whatsapp: {
       webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',
       accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-      phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+      phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '1351448634709036',
       apiVersion: process.env.WHATSAPP_API_VERSION || 'v25.0',
       appSecret: process.env.WHATSAPP_APP_SECRET || '',
-      notificationsEnabled: process.env.WHATSAPP_NOTIFICATIONS_ENABLED === 'true',
+      notificationsEnabled:
+        process.env.WHATSAPP_NOTIFICATIONS_ENABLED === 'true',
     },
   };
 };

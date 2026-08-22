@@ -810,9 +810,9 @@
         "businessName": "Business"
       },
       "payoutPreview": {
-        "button": "Preview Saturday payouts",
-        "title": "Upcoming referral payouts",
-        "subtitle": "Dry run of the Saturday job: one line per referred business, including pyramid shares. Nothing is credited.",
+        "button": "Preview pending compensation",
+        "title": "Pending representative compensation",
+        "subtitle": "Dry run of pending onboarding, sale, and referral credits, including pyramid shares. Nothing is credited.",
         "disabled": "Payouts are currently disabled. The Saturday job will skip these until the flag is on.",
         "summary": "{{payable}} payable, {{skipped}} skipped. Pyramid {{g1}}% / {{g2}}% / {{g3}}%. Min {{min}} approved items after {{cutoff}}.",
         "totalChip": "{{count}} businesses · {{amount}}",
@@ -833,6 +833,17 @@
         "skipNoAccount": "Missing wallet",
         "pendingRetry": "Pending retry",
         "loadError": "Could not load the payout preview."
+      },
+      "compensationEvents": {
+        "button": "Compensation ledger",
+        "title": "Representative compensation",
+        "subtitle": "Credited and pending compensation events for this market.",
+        "empty": "No compensation events for this market.",
+        "loadError": "Could not load compensation events.",
+        "colRule": "Rule",
+        "colBusiness": "Business",
+        "colAmount": "Amount",
+        "colStatus": "Status"
       }
     },
     "businesses": {
@@ -1360,8 +1371,8 @@
       "email": "Email"
     },
     "projectedPayout": {
-      "title": "Saturday payout",
-      "hint": "Approved referrals awaiting this week’s payout.",
+      "title": "Pending compensation",
+      "hint": "Onboarding and referral rewards waiting to be credited.",
       "available": "Available",
       "expected": "Expected this Saturday",
       "wallet": "Wallet"

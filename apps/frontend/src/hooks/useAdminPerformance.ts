@@ -112,6 +112,17 @@ export interface PayoutPreviewRow {
   beneficiaries: PayoutPreviewBeneficiary[];
 }
 
+export interface CompensationEventRow {
+  id: string;
+  rule_code: string;
+  amount: number;
+  currency: string;
+  country_code: string;
+  status: string;
+  created_at: string;
+  business?: { id: string; name: string } | null;
+}
+
 export interface WeeklyPayoutPreview {
   enabled: boolean;
   cutoffDate: string;
@@ -265,11 +276,30 @@ export function useAdminPerformance() {
     [apiClient]
   );
 
+  const fetchCompensationEvents = useCallback(
+    async (countryCode: string): Promise<CompensationEventRow[] | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = new URLSearchParams();
+        if (countryCode) params.set('countryCode', countryCode);
+        const qs = params.toString();
+        const { data } = await apiClient.get<{ events: CompensationEventRow[] }>(
+          `/admin/performance/compensation-events${qs ? `?${qs}` : ''}`
+        );
+        return data.events;
+      } catch {
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
   return {
     fetchMarkets,
     fetchSummary,
     fetchTopAgents,
     fetchPayoutPreview,
+    fetchCompensationEvents,
     error,
   };
 }
