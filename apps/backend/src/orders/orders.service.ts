@@ -7087,32 +7087,12 @@ export class OrdersService {
   private async captureStripeAuthorizedOrderIfNeeded(
     order: Orders
   ): Promise<void> {
-    const paymentSource = (order as any).payment_source as string | undefined;
-    const paymentTiming = (order as any).payment_timing as string | undefined;
-    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (!this.shouldCaptureAuthorizedStripeOrder(order)) return;
 
-    // Wallet / mobile / already-captured orders must never hit Stripe capture.
-    if (paymentStatus === 'paid') {
-      return;
-    }
-    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
-      return;
-    }
-    if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
-      return;
-    }
-    if (paymentStatus !== 'authorized') {
-      return;
-    }
-
-    const isPickup = (order as any).fulfillment_method === 'pickup';
     const result = await this.stripeCaptureService.captureOrderPaymentIntent({
       orderId: order.id,
       orderNumber: order.order_number,
-      // Pickup orders may have switched from delivery with a waived delivery
-      // fee after the Stripe authorization was placed; capture only the
-      // current (possibly lower) total so Stripe releases the difference.
-      ...(isPickup ? { captureAmount: Number(order.total_amount) } : {}),
+      ...this.pickupStripeCaptureAmountFields(order),
     });
     if (!result.success) {
       throw new HttpException(
@@ -7123,6 +7103,40 @@ export class OrdersService {
     if (result.captured) {
       await this.finalizeStripeCapturedOrderPayment(order.order_number);
     }
+  }
+
+  private shouldCaptureAuthorizedStripeOrder(order: Orders): boolean {
+    const paymentSource = (order as any).payment_source as string | undefined;
+    const paymentTiming = (order as any).payment_timing as string | undefined;
+    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (paymentStatus === 'paid') return false;
+    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
+      return false;
+    }
+    return (
+      paymentSource === 'credit_card' &&
+      paymentTiming === 'pay_now' &&
+      paymentStatus === 'authorized'
+    );
+  }
+
+  /**
+   * Partial capture only after switch-to-pickup waived the delivery fee.
+   * Native pickup must omit captureAmount so Stripe collects authorized tax.
+   */
+  private pickupStripeCaptureAmountFields(
+    order: Orders
+  ): { captureAmount?: number } {
+    const captureAmount = this.resolvePickupStripeCaptureAmount(order);
+    return captureAmount == null ? {} : { captureAmount };
+  }
+
+  private resolvePickupStripeCaptureAmount(order: Orders): number | undefined {
+    if ((order as any).fulfillment_method !== 'pickup') return undefined;
+    const currentTotal = Number(order.total_amount);
+    const originalPreTax = Number((order as any).pre_tax_total ?? currentTotal);
+    if (!(currentTotal + 0.0001 < originalPreTax)) return undefined;
+    return currentTotal;
   }
 
   private async finalizeStripeCapturedOrderPayment(
