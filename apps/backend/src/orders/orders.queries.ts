@@ -433,6 +433,7 @@ export const GET_ORDER_BY_NUMBER = gql`
       business_id
       client_id
       delivery_address_id
+      fulfillment_method
       requires_fast_delivery
       client {
         user_id

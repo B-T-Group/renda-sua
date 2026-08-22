@@ -288,5 +288,5 @@ Merci de vendre avec Rendasua.
 ## Ops notes
 
 1. After approval, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
-2. Keep `WHATSAPP_NOTIFICATIONS_ENABLED` unset or `false` until templates are approved; then set it to `true`. Notifications stay off automatically while token/phone id/app secret are empty.
-3. Users must explicitly opt in (`whatsapp_enabled`) with a verified phone.
+2. Set `WHATSAPP_NOTIFICATIONS_ENABLED=true` after templates are approved. Notifications stay off automatically while token/phone id/app secret are empty.
+3. Users with a phone number are opted in (`whatsapp_enabled`) by default.
