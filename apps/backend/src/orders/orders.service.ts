@@ -26,6 +26,7 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { resolveOrderNotificationAddress } from './order-notification-address.util';
 import {
   MobilePaymentsDatabaseService,
   type MobilePaymentTransaction,
@@ -7063,8 +7064,9 @@ export class OrdersService {
       if (!order.business_location?.business?.name) {
         throw new Error('Business name is undefined');
       }
-      if (!order.delivery_address) {
-        throw new Error('Delivery address is undefined');
+      const notifyAddress = resolveOrderNotificationAddress(order);
+      if (!notifyAddress) {
+        throw new Error('Notification address is undefined');
       }
 
       const businessId =
@@ -7120,9 +7122,10 @@ export class OrdersService {
         taxAmount: order.tax_amount || 0,
         totalAmount: order.total_amount || 0,
         currency: order.currency || 'USD',
-        deliveryAddress: this.formatAddress(order.delivery_address),
+        deliveryAddress: this.formatAddress(notifyAddress),
         estimatedDeliveryTime: order.estimated_delivery_time || undefined,
         specialInstructions: order.special_instructions || undefined,
+        fulfillmentMethod: (order as any).fulfillment_method || undefined,
         fulfillmentTiming: (order as any).fulfillment_timing || undefined,
         ...acceptanceNotify,
       };
@@ -8933,9 +8936,7 @@ export class OrdersService {
           const orderWithDetails = await this.requireOrderDetailsByNumber(
             order.order_number
           );
-          const notifyAddress =
-            orderWithDetails?.delivery_address ||
-            (orderWithDetails as any)?.business_location?.address;
+          const notifyAddress = resolveOrderNotificationAddress(orderWithDetails);
           if (
             orderWithDetails?.business_location?.business?.name &&
             orderWithDetails?.business_location?.business?.user?.email &&
@@ -9002,6 +9003,8 @@ export class OrdersService {
               estimatedDeliveryTime:
                 orderWithDetails.estimated_delivery_time || undefined,
               specialInstructions: orderWithDetails.special_instructions || undefined,
+              fulfillmentMethod:
+                (orderWithDetails as any).fulfillment_method || undefined,
               fulfillmentTiming:
                 (orderWithDetails as any).fulfillment_timing || undefined,
               ...acceptanceNotify,

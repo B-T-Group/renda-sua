@@ -12,6 +12,7 @@ import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
+import { resolveOrderNotificationAddress } from './order-notification-address.util';
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
@@ -437,6 +438,17 @@ export class OrderStatusService {
                 preferred_language
               }
             }
+            business_location {
+              address {
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                instructions
+              }
+            }
             delivery_address {
               address_line_1
               address_line_2
@@ -566,7 +578,9 @@ export class OrderStatusService {
         taxAmount: order.tax_amount || 0,
         totalAmount: order.total_amount || 0,
         currency: order.currency || 'USD',
-        deliveryAddress: this.formatAddress(order.delivery_address),
+        deliveryAddress: this.formatAddress(
+          resolveOrderNotificationAddress(order)
+        ),
         estimatedDeliveryTime:
           deliveryTimeWindow || order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
