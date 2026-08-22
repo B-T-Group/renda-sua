@@ -45,6 +45,7 @@ export interface NotificationData {
   agentPreferredLanguage?: string;
   /** delivery | pickup — drives ready-for-pickup copy */
   fulfillmentMethod?: 'delivery' | 'pickup' | string | null;
+  fulfillmentTiming?: 'asap' | 'scheduled' | string | null;
   /** pay_now | pay_at_delivery | pay_at_pickup */
   paymentTiming?: string | null;
   /** Seconds the merchant has to confirm before acceptance escalate/grace */

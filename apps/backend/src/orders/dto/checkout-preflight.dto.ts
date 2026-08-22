@@ -280,6 +280,33 @@ export class CheckoutGroupDto {
 
   @ApiProperty({ type: [CheckoutItemLineDto] })
   items!: CheckoutItemLineDto[];
+
+  @ApiPropertyOptional({
+    description: 'True when this seller can fulfill as soon as possible right now.',
+  })
+  asap_available?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['merchant_closed', 'too_close_to_close', 'merchant_paused'],
+  })
+  asap_disabled_reason?: 'merchant_closed' | 'too_close_to_close' | 'merchant_paused';
+
+  @ApiPropertyOptional({ description: 'ISO timestamp when the store next opens.' })
+  opens_at?: string | null;
+
+  @ApiPropertyOptional()
+  estimated_prep_minutes?: number;
+
+  @ApiPropertyOptional()
+  estimated_ready_at?: string;
+
+  @ApiPropertyOptional()
+  estimated_fulfill_by?: string;
+
+  @ApiProperty({
+    description: 'True when the client must pick a future slot (store closed or closing soon).',
+  })
+  schedule_required?: boolean;
 }
 
 export class CheckoutDiscountPreviewDto {
@@ -396,4 +423,31 @@ export class CheckoutPreflightResponseDto {
     nullable: true,
   })
   delivery_availability?: DeliveryAvailabilityDto | null;
+
+  @ApiPropertyOptional({
+    description: 'True when every seller group can fulfill ASAP right now.',
+  })
+  asap_available?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['merchant_closed', 'too_close_to_close', 'merchant_paused'],
+  })
+  asap_disabled_reason?: 'merchant_closed' | 'too_close_to_close' | 'merchant_paused';
+
+  @ApiPropertyOptional()
+  opens_at?: string | null;
+
+  @ApiPropertyOptional()
+  estimated_prep_minutes?: number;
+
+  @ApiPropertyOptional()
+  estimated_ready_at?: string;
+
+  @ApiPropertyOptional()
+  estimated_fulfill_by?: string;
+
+  @ApiPropertyOptional({
+    description: 'True when checkout must collect a future slot.',
+  })
+  schedule_required?: boolean;
 }

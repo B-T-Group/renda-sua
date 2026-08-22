@@ -13,6 +13,7 @@ export interface CleanupDeliveryWindow {
 
 export interface CleanupWindowOrder {
   pickup_by?: string | null;
+  promised_fulfill_by?: string | null;
   delivery_time_window?: CleanupDeliveryWindow | null;
   client?: { user?: { timezone?: string | null } | null } | null;
   delivery_address?: { country?: string | null } | null;
@@ -76,6 +77,10 @@ export function resolveWindowEndUtc(
   order: CleanupWindowOrder,
   timezone: string
 ): Date | null {
+  if (order.promised_fulfill_by) {
+    const promised = new Date(order.promised_fulfill_by);
+    if (!Number.isNaN(promised.getTime())) return promised;
+  }
   if (order.pickup_by) {
     const pickupBy = new Date(order.pickup_by);
     if (!Number.isNaN(pickupBy.getTime())) return pickupBy;

@@ -14,6 +14,9 @@ export interface OrderData {
   assigned_agent_id?: string;
   delivery_address_id?: string | null;
   fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_timing?: 'asap' | 'scheduled' | null;
+  promised_ready_at?: string | null;
+  promised_fulfill_by?: string | null;
   dispatch_ready_at?: string | null;
   pickup_by?: string | null;
   assigned_at?: string | null;

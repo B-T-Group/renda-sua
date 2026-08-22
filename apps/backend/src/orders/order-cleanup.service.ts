@@ -545,6 +545,7 @@ export class OrderCleanupService {
             current_status: { _in: $statuses }
             _or: [
               { pickup_by: { _lt: $pickupCutoff } }
+              { promised_fulfill_by: { _lt: $pickupCutoff } }
               {
                 delivery_time_window: {
                   preferred_date: { _lt: $todayUtc }
@@ -562,6 +563,7 @@ export class OrderCleanupService {
           payment_status
           payment_source
           pickup_by
+          promised_fulfill_by
           assigned_agent_id
           client { user_id user { preferred_language timezone } }
           business { user_id user { preferred_language } }

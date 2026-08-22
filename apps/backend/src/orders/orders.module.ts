@@ -26,6 +26,7 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
 import { OrderEventsService } from './order-events.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
@@ -99,6 +100,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderCleanupCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    FulfillmentPromiseService,
     OrderEventsService,
     PickupProgressService,
     OrderReassignmentService,
@@ -116,6 +118,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderCleanupService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    FulfillmentPromiseService,
     OrderEventsService,
     OrderPickupMonitorService,
     OrderReassignmentService,

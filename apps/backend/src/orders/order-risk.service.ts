@@ -122,6 +122,19 @@ export class OrderRiskService {
   }
 
   private deliveryWindowFactors(order: any, now: DateTime): RiskFactor[] {
+    if (order.promised_fulfill_by) {
+      const promiseEnd = DateTime.fromISO(order.promised_fulfill_by);
+      if (promiseEnd.isValid && now > promiseEnd) {
+        const minutesLate = now.diff(promiseEnd, 'minutes').minutes;
+        return [
+          {
+            factor: `Past fulfillment promise by ${Math.round(minutesLate)} minutes`,
+            score: Math.min(50, 30 + minutesLate * 0.5),
+          },
+        ];
+      }
+      if (order.fulfillment_timing === 'asap') return [];
+    }
     const window = order.delivery_time_window as
       | { preferred_date?: string; time_slot_end?: string }
       | null
