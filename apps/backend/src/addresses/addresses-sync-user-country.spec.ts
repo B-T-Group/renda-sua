@@ -137,6 +137,51 @@ describe('AddressesService.syncUserCountry isolation', () => {
     expect(syncSpy).toHaveBeenCalledWith('user-1', 'CM');
   });
 
+  it('does not flip users.country when a shopper updates a primary delivery address', async () => {
+    const { service, hasuraUser, hasuraSystem } = createService();
+    hasuraUser.getUser.mockResolvedValue({
+      id: 'user-1',
+      active_persona: 'client',
+      client: { id: 'client-1' },
+    });
+    jest.spyOn(service as any, 'getAddressesByIds').mockResolvedValue([
+      { id: 'addr-1', ...storeAddress, country: 'CM', is_primary: true },
+    ]);
+    jest
+      .spyOn(service as any, 'geocodeAddress')
+      .mockResolvedValue({ latitude: 45.5, longitude: -73.6 });
+    jest.spyOn(service as any, 'ensureSinglePrimaryAddress').mockResolvedValue(undefined);
+    const syncSpy = jest.spyOn(service as any, 'syncUserCountry');
+    const lifecycleSpy = jest
+      .spyOn(service as any, 'recomputeBusinessLifecycle')
+      .mockResolvedValue(undefined);
+    hasuraSystem.executeQuery.mockResolvedValue({
+      client_addresses: [{ id: 'link-1' }],
+      agent_addresses: [],
+      business_addresses: [],
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_addresses_by_pk: {
+        id: 'addr-1',
+        ...storeAddress,
+        country: 'CA',
+        is_primary: true,
+      },
+    });
+
+    await service.updateAddress('addr-1', {
+      country: 'CA',
+      is_primary: true,
+    });
+
+    expect(syncSpy).not.toHaveBeenCalled();
+    expect(lifecycleSpy).not.toHaveBeenCalled();
+    const mutations = hasuraSystem.executeMutation.mock.calls.map(
+      ([query]) => String(query)
+    );
+    expect(mutations.some((q) => q.includes('SyncUserCountry'))).toBe(false);
+  });
+
   it('does not sync users.country for a non-primary store location', async () => {
     const { service, hasuraUser, hasuraSystem } = createService();
     jest
