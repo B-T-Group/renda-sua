@@ -569,9 +569,9 @@
         "businessName": "Entreprise"
       },
       "payoutPreview": {
-        "button": "Prévisualiser les paiements du samedi",
-        "title": "Paiements de parrainage à venir",
-        "subtitle": "Simulation du job du samedi : une ligne par entreprise parrainée, y compris les parts de la pyramide. Rien n’est crédité.",
+        "button": "Prévisualiser la compensation en attente",
+        "title": "Compensation représentative en attente",
+        "subtitle": "Simulation des crédits d’onboarding, de vente et de parrainage, y compris les parts de la pyramide. Rien n’est crédité.",
         "disabled": "Les paiements sont actuellement désactivés. Le job du samedi les ignorera tant que le flag n’est pas activé.",
         "summary": "{{payable}} à payer, {{skipped}} ignorés. Pyramide {{g1}} % / {{g2}} % / {{g3}} %. Min. {{min}} articles approuvés après {{cutoff}}.",
         "totalChip": "{{count}} entreprises · {{amount}}",

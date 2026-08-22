@@ -1,4 +1,8 @@
-"""Thin Lambda: EventBridge Saturday cron → Nest internal business-referral-payouts endpoint."""
+"""Thin Lambda: EventBridge Saturday cron → Nest internal compensation sweeper.
+
+Credits pending representative compensation (onboarding milestones, 1% sales,
+B2B 10-item referrals) and retries incomplete legacy business-referral claims.
+"""
 import os
 from typing import Any, Dict
 

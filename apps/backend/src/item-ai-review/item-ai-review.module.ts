@@ -5,6 +5,7 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { ItemAiProposalController } from './item-ai-proposal.controller';
 import { ItemAiProposalService } from './item-ai-proposal.service';
 import { ItemAiReviewAdminService } from './item-ai-review-admin.service';
@@ -22,6 +23,7 @@ import { ItemAiReviewSweeperService } from './item-ai-review-sweeper.service';
     ImageValidationModule,
     MerchantLifecycleModule,
     AiGenerationModule,
+    RepresentativeCompensationModule,
   ],
   controllers: [ItemAiReviewInternalController, ItemAiProposalController],
   providers: [

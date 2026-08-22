@@ -6,6 +6,7 @@ import {
   BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
 } from './business-referral-payout.constants';
 import { BusinessReferralPayoutsService } from './business-referral-payouts.service';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import type {
   PayoutPreviewRow,
   PayoutPreviewTotal,
@@ -19,7 +20,8 @@ import type {
 export class ReferralPayoutPreviewService {
   constructor(
     private readonly payoutsService: BusinessReferralPayoutsService,
-    private readonly referralPyramidService: ReferralPyramidService
+    private readonly referralPyramidService: ReferralPyramidService,
+    private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
 
   async previewWeeklyPayouts(countryCode?: string): Promise<WeeklyPayoutPreview> {
@@ -39,10 +41,25 @@ export class ReferralPayoutPreviewService {
   }
 
   private async collectRows(countryCode?: string): Promise<PayoutPreviewRow[]> {
-    const [eligible, pending] = await Promise.all([
-      this.payoutsService.listEligibleForPreview(),
+    const [pendingCompensation, pending] = await Promise.all([
+      this.representativeCompensationService.previewPending(countryCode),
       this.payoutsService.listIncompleteClaimsForPreview(),
     ]);
+    const eligible = pendingCompensation.map((row) => ({
+      kind: row.earnerKind,
+      id: row.businessId,
+      name: row.businessName,
+      itemCount: row.itemCount,
+      earner: {
+        kind: row.earnerKind,
+        id: row.earnerId,
+        userId: row.earnerUserId,
+        name: row.earnerName,
+      },
+      pendingAmount: row.amount,
+      pendingCurrency: row.currency,
+      countryCode: row.countryCode,
+    }));
     const eligibleRows = await this.buildEligibleRows(eligible, countryCode);
     const pendingRows = await this.buildPendingRows(pending, countryCode);
     return [...eligibleRows, ...pendingRows];
@@ -81,9 +98,15 @@ export class ReferralPayoutPreviewService {
     business: PreviewEligibleBusiness
   ): Promise<PayoutPreviewRow> {
     if (!business.earner) return this.skippedRow(business, 'no_referrer');
-    const gross = await this.payoutsService.previewGrossForUser(
+    const configured = await this.payoutsService.previewGrossForUser(
       business.earner.userId
     );
+    const gross: PreviewGross = {
+      countryCode: business.countryCode ?? configured.countryCode,
+      currency: business.pendingCurrency ?? configured.currency,
+      amount: business.pendingAmount ?? configured.amount,
+      configKey: configured.configKey,
+    };
     if (!gross.amount) {
       return this.skippedRow(business, 'no_amount', gross);
     }

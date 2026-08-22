@@ -37,6 +37,7 @@ export interface DistributeReferralBonusInput {
   currency: string;
   businessReferralPayoutId?: string;
   agentReferralId?: string;
+  compensationEventId?: string;
 }
 
 @Injectable()
@@ -78,7 +79,11 @@ export class ReferralPyramidService {
   async distributeReferralBonus(
     input: DistributeReferralBonusInput
   ): Promise<{ credited: number; transactionIds: string[] }> {
-    if (!input.businessReferralPayoutId && !input.agentReferralId) {
+    if (
+      !input.businessReferralPayoutId &&
+      !input.agentReferralId &&
+      !input.compensationEventId
+    ) {
       throw new Error('Distribution source payout/referral id is required');
     }
     if (input.grossAmount <= 0) {
@@ -113,6 +118,7 @@ export class ReferralPyramidService {
         currency: input.currency,
         businessReferralPayoutId: input.businessReferralPayoutId,
         agentReferralId: input.agentReferralId,
+        compensationEventId: input.compensationEventId,
       });
       if (credit) {
         transactionIds.push(credit.transactionId);
@@ -216,12 +222,14 @@ export class ReferralPyramidService {
     currency: string;
     businessReferralPayoutId?: string;
     agentReferralId?: string;
+    compensationEventId?: string;
   }): Promise<{ transactionId: string; createdNewDeposit: boolean } | null> {
     const generation = params.share.generation;
     const existing = await this.findExistingDistribution({
       generation,
       businessReferralPayoutId: params.businessReferralPayoutId,
       agentReferralId: params.agentReferralId,
+      compensationEventId: params.compensationEventId,
     });
     if (existing?.transaction_id) {
       return { transactionId: existing.transaction_id, createdNewDeposit: false };
@@ -253,7 +261,9 @@ export class ReferralPyramidService {
       referredName: params.referred.name,
       referredId: params.referred.id,
     });
-    const sourceKey = `ref:${params.referred.kind}:${params.referred.id}`;
+    const sourceKey = params.compensationEventId
+      ? `comp:${params.compensationEventId}`
+      : `ref:${params.referred.kind}:${params.referred.id}`;
     const textReference = `${sourceKey}:gen${generation}`;
     const referenceId = referralReferenceUuid(textReference);
 
@@ -267,6 +277,7 @@ export class ReferralPyramidService {
       (await this.accountsService.findDepositByReferenceId(referenceId));
     if (
       !prior &&
+      !params.compensationEventId &&
       generation === 0 &&
       (params.referred.kind === 'business' || params.referred.kind === 'agent')
     ) {
@@ -304,6 +315,7 @@ export class ReferralPyramidService {
       beneficiary: params.beneficiary,
       businessReferralPayoutId: params.businessReferralPayoutId,
       agentReferralId: params.agentReferralId,
+      compensationEventId: params.compensationEventId,
     });
 
     return { transactionId, createdNewDeposit };
@@ -499,40 +511,35 @@ export class ReferralPyramidService {
     generation: number;
     businessReferralPayoutId?: string;
     agentReferralId?: string;
+    compensationEventId?: string;
   }): Promise<{ transaction_id: string | null } | null> {
-    const query = params.businessReferralPayoutId
-      ? `
-        query ExistingBizDist($payoutId: uuid!, $generation: smallint!) {
-          referral_bonus_distributions(
-            where: {
-              business_referral_payout_id: { _eq: $payoutId }
-              generation: { _eq: $generation }
-            }
-            limit: 1
-          ) { transaction_id }
-        }
-      `
-      : `
-        query ExistingAgentDist($referralId: uuid!, $generation: smallint!) {
-          referral_bonus_distributions(
-            where: {
-              agent_referral_id: { _eq: $referralId }
-              generation: { _eq: $generation }
-            }
-            limit: 1
-          ) { transaction_id }
-        }
-      `;
-    const vars = params.businessReferralPayoutId
-      ? {
-          payoutId: params.businessReferralPayoutId,
-          generation: params.generation,
-        }
-      : {
-          referralId: params.agentReferralId,
-          generation: params.generation,
-        };
-    const result = await this.hasuraSystemService.executeQuery(query, vars);
+    const queryName = params.compensationEventId
+      ? 'ExistingCompDist'
+      : params.businessReferralPayoutId
+        ? 'ExistingBizDist'
+        : 'ExistingAgentDist';
+    const filter = params.compensationEventId
+      ? 'compensation_event_id: { _eq: $sourceId }'
+      : params.businessReferralPayoutId
+        ? 'business_referral_payout_id: { _eq: $sourceId }'
+        : 'agent_referral_id: { _eq: $sourceId }';
+    const query = `
+      query ${queryName}($sourceId: uuid!, $generation: smallint!) {
+        referral_bonus_distributions(
+          where: { ${filter}, generation: { _eq: $generation } }
+          limit: 1
+        ) { transaction_id }
+      }
+    `;
+    const sourceId =
+      params.compensationEventId ??
+      params.businessReferralPayoutId ??
+      params.agentReferralId;
+    if (!sourceId) return null;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      sourceId,
+      generation: params.generation,
+    });
     return result?.referral_bonus_distributions?.[0] ?? null;
   }
 
@@ -546,6 +553,7 @@ export class ReferralPyramidService {
     beneficiary: ReferralEntityRef;
     businessReferralPayoutId?: string;
     agentReferralId?: string;
+    compensationEventId?: string;
   }): Promise<void> {
     const mutation = `
       mutation InsertReferralBonusDistribution(
@@ -563,6 +571,7 @@ export class ReferralPyramidService {
       transaction_id: params.transactionId,
       business_referral_payout_id: params.businessReferralPayoutId ?? null,
       agent_referral_id: params.agentReferralId ?? null,
+      compensation_event_id: params.compensationEventId ?? null,
       beneficiary_agent_id:
         params.beneficiary.kind === 'agent' ? params.beneficiary.id : null,
       beneficiary_business_id:

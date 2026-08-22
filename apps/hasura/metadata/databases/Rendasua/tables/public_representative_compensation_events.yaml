@@ -1,0 +1,76 @@
+table:
+  name: representative_compensation_events
+  schema: public
+object_relationships:
+  - name: account
+    using:
+      foreign_key_constraint_on: account_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: earner_agent
+    using:
+      foreign_key_constraint_on: earner_agent_id
+  - name: earner_business
+    using:
+      foreign_key_constraint_on: earner_business_id
+  - name: earner_user
+    using:
+      foreign_key_constraint_on: earner_user_id
+  - name: referred_agent
+    using:
+      foreign_key_constraint_on: referred_agent_id
+  - name: triggering_order
+    using:
+      foreign_key_constraint_on: triggering_order_id
+array_relationships:
+  - name: referral_bonus_distributions
+    using:
+      foreign_key_constraint_on:
+        column: compensation_event_id
+        table:
+          name: referral_bonus_distributions
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - rule_code
+        - earner_agent_id
+        - earner_user_id
+        - business_id
+        - triggering_order_id
+        - amount
+        - gross_milestone_amount
+        - currency
+        - country_code
+        - status
+        - item_count
+        - sale_amount
+        - created_at
+      filter:
+        earner_agent:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - rule_code
+        - earner_business_id
+        - earner_user_id
+        - business_id
+        - triggering_order_id
+        - amount
+        - gross_milestone_amount
+        - currency
+        - country_code
+        - status
+        - item_count
+        - sale_amount
+        - created_at
+      filter:
+        earner_business:
+          user_id:
+            _eq: X-Hasura-User-Id

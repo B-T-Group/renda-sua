@@ -103,6 +103,13 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: representative_compensation_events
+    using:
+      foreign_key_constraint_on:
+        column: triggering_order_id
+        table:
+          name: representative_compensation_events
+          schema: public
   - name: stripe_refunds
     using:
       manual_configuration:

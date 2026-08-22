@@ -60,6 +60,9 @@ export interface PreviewEligibleBusiness {
   name: string;
   itemCount: number;
   earner: PayoutPreviewReferrer | null;
+  pendingAmount?: number;
+  pendingCurrency?: string;
+  countryCode?: string;
 }
 
 export interface PreviewGross {

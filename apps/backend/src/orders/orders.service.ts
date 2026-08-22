@@ -8,6 +8,7 @@ import { AddressesService } from '../addresses/addresses.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { assertMobileLocationConsentAccepted } from '../agents/agent-location-claim.util';
 import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -425,7 +426,9 @@ export class OrdersService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     @Optional()
-    private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook
+    private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -3907,6 +3910,10 @@ export class OrdersService {
       notes: notes?.trim() || null,
     });
     await this.creditAgentReferralIfDelivered(order);
+    void this.representativeCompensationService?.evaluateForOrderSafe(
+      order.id,
+      order.business_id
+    );
 
     try {
       await this.updateInventoryOnCompletion(order.order_items || []);
@@ -6772,11 +6779,19 @@ export class OrdersService {
         `Order ${order.order_number} is already complete; skipping completion side effects`
       );
       await this.creditAgentReferralIfDelivered(freshOrder);
+      void this.representativeCompensationService?.evaluateForOrderSafe(
+        freshOrder.id,
+        freshOrder.business_id
+      );
       return;
     }
 
     await this.setOrderCompleteSystem(order.id, historyMessage);
     await this.creditAgentReferralIfDelivered(freshOrder ?? order);
+    void this.representativeCompensationService?.evaluateForOrderSafe(
+      order.id,
+      order.business_id
+    );
 
     try {
       const orderWithDetails = await this.getOrderDetails(order.id);
