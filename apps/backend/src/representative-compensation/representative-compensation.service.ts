@@ -12,13 +12,24 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import {
   BUSINESS_REFERRAL_10_ITEMS,
   evaluateCompensation,
+  ONBOARDING_10_FIRST_SALE,
   ONBOARDING_RULES,
   SALE_PERCENT,
   type CompensationAction,
   type CompensationMarketConfig,
   type CompensationRuleCode,
   type CompletedSale,
+  type OnboardingRuleCode,
 } from './compensation-rules';
+
+const BIND_ORDER_MUTATION = `
+  mutation BindCompensationOrder($id: uuid!, $orderId: uuid!) {
+    update_representative_compensation_events_by_pk(
+      pk_columns: { id: $id }
+      _set: { triggering_order_id: $orderId }
+    ) { id triggering_order_id }
+  }
+`;
 
 const DEFAULTS: Record<string, CompensationMarketConfig> = {
   CM: {
@@ -117,6 +128,11 @@ interface EventClaim {
   id: string;
   reference_id: string;
   status: string;
+  rule_code?: CompensationRuleCode;
+  amount?: number;
+  gross_milestone_amount?: number | null;
+  triggering_order_id?: string | null;
+  sale_amount?: number | null;
 }
 
 interface EarnerInfo {
@@ -315,7 +331,7 @@ export class RepresentativeCompensationService {
     if (!context) return [];
     const actions = [
       ...evaluateCompensation(context.input),
-      ...this.pendingSalePercentActions(context),
+      ...this.pendingOrderActions(context),
     ];
     return actions.map((action) => ({
       businessId: snapshot.id,
@@ -333,26 +349,31 @@ export class RepresentativeCompensationService {
     }));
   }
 
-  private pendingSalePercentActions(context: {
+  private pendingOrderActions(context: {
     input: Parameters<typeof evaluateCompensation>[0];
     eval: EvalContext;
   }): CompensationAction[] {
-    const skipIds = new Set([
-      ...(context.input.onboardingTriggerOrderIds ?? []),
-      ...context.eval.paidSalePercentOrderIds,
-    ]);
+    const paidOrders = new Set(context.input.paidOrderIds ?? []);
+    const paidRules = [...(context.input.paidOnboardingRules ?? [])];
+    const sales = [...context.input.completedSales].sort((a, b) =>
+      (a.completedAt ?? '').localeCompare(b.completedAt ?? '')
+    );
     const actions: CompensationAction[] = [];
-    for (const sale of context.input.completedSales) {
-      if (skipIds.has(sale.id)) continue;
+    for (const sale of sales) {
+      if (paidOrders.has(sale.id)) continue;
       if (sale.currency !== context.input.payoutCurrency) continue;
       const extra = evaluateCompensation({
         ...context.input,
+        paidOnboardingRules: paidRules,
+        paidOrderIds: [...paidOrders],
         triggeringOrderId: sale.id,
       });
       for (const action of extra) {
-        if (action.ruleCode !== SALE_PERCENT) continue;
-        if (actions.some((row) => row.orderId === action.orderId)) continue;
         actions.push(action);
+        paidOrders.add(sale.id);
+        if (ONBOARDING_RULES.includes(action.ruleCode as OnboardingRuleCode)) {
+          paidRules.push(action.ruleCode as OnboardingRuleCode);
+        }
       }
     }
     return actions;
@@ -384,46 +405,34 @@ export class RepresentativeCompensationService {
       'CM'
     ).toUpperCase();
     const currency = currencyForReferralPayout(countryCode);
-    const [sales, events, legacy, config, rail] = await Promise.all([
+    const [sales, events, legacyTenItemPaid, config, rail] = await Promise.all([
       this.loadCompletedSales(snapshot.id),
       this.loadEvents(snapshot.id),
-      this.loadLegacyAmount(snapshot.id),
+      this.loadLegacyHas10ItemPayout(snapshot.id),
       this.loadMarketConfig(countryCode, currency),
       this.paymentRoutingService.resolveRailForUser(earner.userId),
     ]);
-    const liveEvents = events.filter((event) => event.status !== 'failed');
-    const alreadyPaidOnboarding =
-      legacy +
-      liveEvents
-        .filter((event) =>
-          (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
-        )
-        .reduce((sum, event) => sum + Number(event.amount), 0);
-    const onboardingTriggerOrderIds = liveEvents
-      .filter(
-        (event) =>
-          (ONBOARDING_RULES as readonly string[]).includes(event.rule_code) &&
-          event.triggering_order_id
+    const creditedEvents = events.filter((event) => event.status === 'credited');
+    const paidOnboardingRules = creditedEvents
+      .filter((event) =>
+        (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
       )
-      .map((event) => event.triggering_order_id as string);
-    const catalogOnboardingAt = liveEvents
-      .filter(
-        (event) =>
-          (ONBOARDING_RULES as readonly string[]).includes(event.rule_code) &&
-          !event.triggering_order_id &&
-          event.created_at
-      )
-      .map((event) => event.created_at as string)
-      .sort()
-      .pop();
-    if (catalogOnboardingAt) {
-      for (const sale of sales) {
-        if (sale.completedAt && sale.completedAt <= catalogOnboardingAt) {
-          onboardingTriggerOrderIds.push(sale.id);
-        }
-      }
+      .map((event) => event.rule_code as OnboardingRuleCode);
+    if (
+      legacyTenItemPaid &&
+      !paidOnboardingRules.includes(ONBOARDING_10_FIRST_SALE)
+    ) {
+      paidOnboardingRules.push(ONBOARDING_10_FIRST_SALE);
     }
-    const paidSalePercentOrderIds = liveEvents
+    const paidOrderIds = [
+      ...new Set([
+        ...creditedEvents
+          .map((event) => event.triggering_order_id)
+          .filter((id): id is string => Boolean(id)),
+        ...this.catalogCoveredOrderIds(creditedEvents, sales),
+      ]),
+    ];
+    const paidSalePercentOrderIds = creditedEvents
       .filter(
         (event) => event.rule_code === SALE_PERCENT && event.triggering_order_id
       )
@@ -433,14 +442,14 @@ export class RepresentativeCompensationService {
         approvedItemCount: snapshot.items_aggregate.aggregate.count,
         completedSales: sales,
         payoutCurrency: currency,
-        alreadyPaidOnboarding,
+        paidOnboardingRules,
         hasAgentReferrer: Boolean(snapshot.referred_by_agent_id),
         hasBusinessReferrer: Boolean(snapshot.referred_by_business_id),
-        alreadyPaidBusinessReferral: liveEvents.some(
+        alreadyPaidBusinessReferral: creditedEvents.some(
           (event) => event.rule_code === BUSINESS_REFERRAL_10_ITEMS
         ),
         triggeringOrderId,
-        onboardingTriggerOrderIds,
+        paidOrderIds,
         config,
       },
       eval: {
@@ -484,7 +493,63 @@ export class RepresentativeCompensationService {
     const claimed = await this.claimEvent(snapshot, context, action);
     if (!claimed) return null;
     if (claimed.status === 'credited') return null;
-    return this.fulfillEvent(claimed, snapshot, context, action);
+    const event = await this.bindOrderIfMissing(claimed, action.orderId);
+    if (!event || event.status === 'credited') return null;
+    return this.fulfillEvent(
+      event,
+      snapshot,
+      context,
+      this.actionForExisting(event, action)
+    );
+  }
+
+  private actionForExisting(
+    claimed: EventClaim,
+    action: CompensationAction
+  ): CompensationAction {
+    if (!claimed.rule_code || claimed.rule_code === action.ruleCode) {
+      return action;
+    }
+    return {
+      ruleCode: claimed.rule_code,
+      amount: Number(claimed.amount ?? 0),
+      grossMilestoneAmount: claimed.gross_milestone_amount ?? null,
+      orderId: claimed.triggering_order_id ?? action.orderId,
+      saleAmount: claimed.sale_amount ?? null,
+    };
+  }
+
+  private async bindOrderIfMissing(
+    claimed: EventClaim,
+    orderId: string | null
+  ): Promise<EventClaim | null> {
+    if (!orderId || claimed.triggering_order_id) return claimed;
+    try {
+      await this.hasuraSystemService.executeMutation(BIND_ORDER_MUTATION, {
+        id: claimed.id,
+        orderId,
+      });
+      return { ...claimed, triggering_order_id: orderId };
+    } catch (error: any) {
+      if (!this.isUniqueViolation(error)) throw error;
+      return this.findEventByOrder(orderId);
+    }
+  }
+
+  private async findEventByOrder(orderId: string): Promise<EventClaim | null> {
+    const query = `
+      query CompensationEventByOrder($orderId: uuid!) {
+        representative_compensation_events(
+          where: { triggering_order_id: { _eq: $orderId } }
+          limit: 1
+        ) {
+          id reference_id status rule_code amount
+          gross_milestone_amount triggering_order_id sale_amount
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, { orderId });
+    return result?.representative_compensation_events?.[0] ?? null;
   }
 
   private async fulfillEvent(
@@ -592,7 +657,8 @@ export class RepresentativeCompensationService {
         $object: representative_compensation_events_insert_input!
       ) {
         insert_representative_compensation_events_one(object: $object) {
-          id reference_id status
+          id reference_id status rule_code amount
+          gross_milestone_amount triggering_order_id sale_amount
         }
       }
     `;
@@ -629,21 +695,28 @@ export class RepresentativeCompensationService {
     businessId: string,
     orderId: string | null
   ): Promise<EventClaim | null> {
-    const where =
-      ruleCode === SALE_PERCENT
-        ? { rule_code: { _eq: ruleCode }, triggering_order_id: { _eq: orderId } }
-        : { rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } };
     const query = `
       query ExistingCompensationEvent(
         $where: representative_compensation_events_bool_exp!
       ) {
         representative_compensation_events(where: $where, limit: 1) {
-          id reference_id status
+          id reference_id status rule_code amount
+          gross_milestone_amount triggering_order_id sale_amount
         }
       }
     `;
-    const result = await this.hasuraSystemService.executeQuery(query, { where });
-    return result?.representative_compensation_events?.[0] ?? null;
+    const lookups = orderId
+      ? [
+          { triggering_order_id: { _eq: orderId } },
+          { rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } },
+        ]
+      : [{ rule_code: { _eq: ruleCode }, business_id: { _eq: businessId } }];
+    for (const where of lookups) {
+      const result = await this.hasuraSystemService.executeQuery(query, { where });
+      const row = result?.representative_compensation_events?.[0];
+      if (row) return row;
+    }
+    return null;
   }
 
   private async markEvent(
@@ -730,6 +803,33 @@ export class RepresentativeCompensationService {
     return result?.businesses_by_pk ?? null;
   }
 
+  private catalogCoveredOrderIds(
+    events: Array<{
+      rule_code: string;
+      status: string;
+      triggering_order_id: string | null;
+      created_at?: string;
+    }>,
+    sales: CompletedSale[]
+  ): string[] {
+    const catalogCredits = events.filter(
+      (event) =>
+        event.status === 'credited' &&
+        !event.triggering_order_id &&
+        (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
+    );
+    if (catalogCredits.length === 0) return [];
+    const cutoff = catalogCredits
+      .map((event) => event.created_at)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+    if (!cutoff) return sales.map((sale) => sale.id);
+    return sales
+      .filter((sale) => !sale.completedAt || sale.completedAt <= cutoff)
+      .map((sale) => sale.id);
+  }
+
   private async loadCompletedSales(businessId: string): Promise<CompletedSale[]> {
     const query = `
       query CompensationSales($businessId: uuid!) {
@@ -776,7 +876,7 @@ export class RepresentativeCompensationService {
     return result?.representative_compensation_events ?? [];
   }
 
-  private async loadLegacyAmount(businessId: string): Promise<number> {
+  private async loadLegacyHas10ItemPayout(businessId: string): Promise<boolean> {
     const query = `
       query LegacyReferralPayout($businessId: uuid!) {
         business_referral_payouts(where: { business_id: { _eq: $businessId } }) {
@@ -787,10 +887,7 @@ export class RepresentativeCompensationService {
     const result = await this.hasuraSystemService.executeQuery(query, {
       businessId,
     });
-    return (result?.business_referral_payouts ?? []).reduce(
-      (sum: number, row: { amount: number }) => sum + Number(row.amount ?? 0),
-      0
-    );
+    return (result?.business_referral_payouts ?? []).length > 0;
   }
 
   private async loadMarketConfig(
