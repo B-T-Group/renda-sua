@@ -160,6 +160,67 @@ describe('OrderOffersService', () => {
         notificationsService.sendOrderOfferPush.mock.calls[0][0].body
       ).toContain('Est. 43 XAF');
     });
+
+    it('still offers the shop owner and client when they have agent profiles', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('orders_by_pk')) {
+            return {
+              orders_by_pk: {
+                ...buildOfferOrder(),
+                business: {
+                  name: 'Fallback Store',
+                  user_id: 'user-shop-owner',
+                },
+                client: { user_id: 'user-client' },
+              },
+            };
+          }
+          if (query.includes('agent_locations')) {
+            return {
+              agent_locations: [
+                buildAgentLocation('agent-shop', 'user-shop-owner', 4.01),
+                buildAgentLocation('agent-client', 'user-client', 4.02),
+              ],
+            };
+          }
+          if (query.includes('mobile_push_tokens')) {
+            return {
+              mobile_push_tokens: [
+                { user_id: 'user-shop-owner' },
+                { user_id: 'user-client' },
+              ],
+            };
+          }
+          if (query.includes('pickup_reliability_score')) {
+            return {
+              agents: [
+                { id: 'agent-shop', pickup_reliability_score: 100 },
+                { id: 'agent-client', pickup_reliability_score: 95 },
+              ],
+            };
+          }
+          return {};
+        }
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_order_offers: { affected_rows: 2 },
+        update_orders_by_pk: { id: 'order-1' },
+      });
+      commissionsService.calculateAgentEarnings.mockResolvedValue({
+        totalEarnings: 42.6,
+        currency: 'XAF',
+      } as any);
+      notificationsService.sendOrderOfferPush.mockResolvedValue(undefined);
+
+      await service.dispatchOrderOffers('order-1');
+
+      expect(getInsertedOffers().map((offer) => offer.user_id)).toEqual([
+        'user-shop-owner',
+        'user-client',
+      ]);
+      expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('getOfferDetailsForAgent', () => {
