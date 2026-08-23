@@ -30,7 +30,8 @@ interface OfferOrderDetails {
       longitude?: number | null;
     } | null;
   } | null;
-  business?: { name?: string | null } | null;
+  business?: { name?: string | null; user_id?: string | null } | null;
+  client?: { user_id?: string | null } | null;
 }
 
 interface CandidateAgent {
@@ -427,19 +428,35 @@ export class OrderOffersService {
     winnerAgentId: string
   ): Promise<void> {
     try {
+      let winnerUserId: string | null = null;
+      try {
+        winnerUserId = await this.getAgentUserId(winnerAgentId);
+      } catch (error) {
+        this.logger.warn(
+          `Could not resolve winner user for agent ${winnerAgentId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       await this.markWinnerOffer(orderId, winnerAgentId);
       const losers = await this.cancelSiblingOffers(orderId, winnerAgentId);
+      const notified = new Set<string>();
       await Promise.all(
-        losers.map((row) =>
-          this.notificationsService
+        losers.map((row) => {
+          const userId = row.user_id;
+          if (!userId || userId === winnerUserId || notified.has(userId)) {
+            return Promise.resolve();
+          }
+          notified.add(userId);
+          return this.notificationsService
             .sendOrderOfferCancelledPush({
-              userId: row.user_id,
+              userId,
               title: 'Delivery already taken',
               body: 'Another courier accepted this delivery first.',
               orderId,
             })
-            .catch(() => undefined)
-        )
+            .catch(() => undefined);
+        })
       );
     } catch (error) {
       this.logger.warn(
@@ -738,6 +755,10 @@ export class OrderOffersService {
           dispatch_round
           business {
             name
+            user_id
+          }
+          client {
+            user_id
           }
           business_location {
             name
@@ -777,8 +798,14 @@ export class OrderOffersService {
       }
     );
 
+    const excludedUserIds = new Set(
+      [order.business?.user_id, order.client?.user_id].filter(
+        (id): id is string => !!id
+      )
+    );
+
     const eligible: CandidateAgent[] = candidates
-      .filter((c) => c.userId != null)
+      .filter((c) => c.userId != null && !excludedUserIds.has(c.userId as string))
       .map((c) => ({
         agentId: c.agentId,
         userId: c.userId as string,
@@ -952,6 +979,18 @@ export class OrderOffersService {
       }`,
       { orderId }
     );
+  }
+
+  private async getAgentUserId(agentId: string): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      agents_by_pk: { user_id: string } | null;
+    }>(
+      `query AgentUser($id: uuid!) {
+        agents_by_pk(id: $id) { user_id }
+      }`,
+      { id: agentId }
+    );
+    return result?.agents_by_pk?.user_id ?? null;
   }
 
   private async markWinnerOffer(
