@@ -188,6 +188,12 @@ export class GoogleDistanceService {
         'administrative_area_level_1',
       ]);
       const country = this.getAddressComponent(addressComponents, ['country']);
+      // ISO-2 code (e.g. "CA") — profile/business addresses store codes, not names.
+      const countryCode = this.getAddressComponent(
+        addressComponents,
+        ['country'],
+        true
+      );
       const postalCode = this.getAddressComponent(addressComponents, [
         'postal_code',
       ]);
@@ -197,6 +203,7 @@ export class GoogleDistanceService {
         city: city || '',
         state: state || '',
         country: country || '',
+        country_code: countryCode || '',
         postal_code: postalCode || '',
       };
 
