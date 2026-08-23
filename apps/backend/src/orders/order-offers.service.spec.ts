@@ -211,6 +211,9 @@ describe('OrderOffersService', () => {
 
   describe('handleOrderAssigned', () => {
     it('accepts the winner offer, cancels siblings, and dismisses losing agents', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        agents_by_pk: { user_id: 'user-winner' },
+      });
       hasuraSystemService.executeMutation
         .mockResolvedValueOnce({ update_order_offers: { affected_rows: 1 } })
         .mockResolvedValueOnce({
@@ -244,6 +247,57 @@ describe('OrderOffersService', () => {
           title: 'Delivery already taken',
         })
       );
+    });
+
+    it('does not send already-taken push to the winning courier user', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        agents_by_pk: { user_id: 'user-winner' },
+      });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({ update_order_offers: { affected_rows: 1 } })
+        .mockResolvedValueOnce({
+          update_order_offers: {
+            returning: [
+              { user_id: 'user-winner' },
+              { user_id: 'user-loser-1' },
+            ],
+          },
+        });
+      notificationsService.sendOrderOfferCancelledPush.mockResolvedValue(
+        undefined
+      );
+
+      await service.handleOrderAssigned('order-1', 'agent-winner');
+
+      expect(
+        notificationsService.sendOrderOfferCancelledPush
+      ).toHaveBeenCalledTimes(1);
+      expect(notificationsService.sendOrderOfferCancelledPush).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-loser-1' })
+      );
+    });
+
+    it('still finalizes offers if winner user lookup fails', async () => {
+      hasuraSystemService.executeQuery.mockRejectedValueOnce(
+        new Error('hasura timeout')
+      );
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({ update_order_offers: { affected_rows: 1 } })
+        .mockResolvedValueOnce({
+          update_order_offers: {
+            returning: [{ user_id: 'user-loser-1' }],
+          },
+        });
+      notificationsService.sendOrderOfferCancelledPush.mockResolvedValue(
+        undefined
+      );
+
+      await service.handleOrderAssigned('order-1', 'agent-winner');
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(2);
+      expect(
+        notificationsService.sendOrderOfferCancelledPush
+      ).toHaveBeenCalledTimes(1);
     });
   });
 
