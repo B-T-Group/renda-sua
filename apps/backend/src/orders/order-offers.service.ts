@@ -30,8 +30,7 @@ interface OfferOrderDetails {
       longitude?: number | null;
     } | null;
   } | null;
-  business?: { name?: string | null; user_id?: string | null } | null;
-  client?: { user_id?: string | null } | null;
+  business?: { name?: string | null } | null;
 }
 
 interface CandidateAgent {
@@ -755,10 +754,6 @@ export class OrderOffersService {
           dispatch_round
           business {
             name
-            user_id
-          }
-          client {
-            user_id
           }
           business_location {
             name
@@ -798,14 +793,8 @@ export class OrderOffersService {
       }
     );
 
-    const excludedUserIds = new Set(
-      [order.business?.user_id, order.client?.user_id].filter(
-        (id): id is string => !!id
-      )
-    );
-
     const eligible: CandidateAgent[] = candidates
-      .filter((c) => c.userId != null && !excludedUserIds.has(c.userId as string))
+      .filter((c) => c.userId != null)
       .map((c) => ({
         agentId: c.agentId,
         userId: c.userId as string,
