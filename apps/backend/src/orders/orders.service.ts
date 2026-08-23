@@ -4922,7 +4922,8 @@ export class OrdersService {
       : null;
     const reverseGeocode = async (lat: number, lng: number) => {
       const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
-      return { country: geo.country, state: geo.state };
+      // Prefer the ISO-2 code — addresses store "CA"/"CM", not "Canada".
+      return { country: geo.country_code || geo.country, state: geo.state };
     };
 
     const isVerified = Boolean(agent.is_verified);
