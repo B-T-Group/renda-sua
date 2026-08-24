@@ -133,6 +133,13 @@ export interface ExpoPushOptions {
   ttlSeconds?: number;
 }
 
+/** Android channel + Expo flags for merchant incoming-order interrupts. */
+const MERCHANT_INCOMING_ORDER_PUSH: ExpoPushOptions = {
+  priority: 'high',
+  sound: 'default',
+  channelId: 'order_incoming',
+};
+
 function escapeHtmlForEmail(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -696,14 +703,19 @@ export class NotificationsService {
     });
     if (userId) {
       try {
-        await this.sendPushNotificationByUserId(userId, title, body, {
-          url: `/orders/${params.orderId}`,
-          orderId: params.orderId,
-          orderNumber: params.orderNumber,
-          event: 'order_acceptance_escalation',
-          persona: 'business',
-          graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
-        });
+        await this.sendPushNotificationByUserId(
+          userId,
+          title,
+          body,
+          {
+            url: `/orders/${params.orderId}`,
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            event: 'order_acceptance_escalation',
+            persona: 'business',
+            graceSeconds: graceSeconds != null ? String(graceSeconds) : undefined,
+          }
+        );
       } catch (error: any) {
         this.logger.warn(
           `sendOrderAcceptanceEscalationPush failed: ${error?.message ?? String(error)}`
@@ -826,13 +838,18 @@ export class NotificationsService {
       preferredLanguage: params.preferredLanguage,
     });
     try {
-      await this.sendPushNotificationByUserId(userId, title, body, {
-        url: `/orders/${params.orderId}`,
-        orderId: params.orderId,
-        orderNumber: params.orderNumber,
-        event: 'order_acceptance_missed',
-        persona: 'business',
-      });
+      await this.sendPushNotificationByUserId(
+        userId,
+        title,
+        body,
+        {
+          url: `/orders/${params.orderId}`,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          event: 'order_acceptance_missed',
+          persona: 'business',
+        }
+      );
     } catch (error: any) {
       this.logger.warn(
         `sendMerchantMissedOrderReminder failed: ${error?.message ?? String(error)}`
@@ -892,17 +909,23 @@ export class NotificationsService {
     });
     if (userId) {
       try {
-        await this.sendPushNotificationByUserId(userId, title, body, {
-          url: `/orders/${params.orderId}`,
-          orderId: params.orderId,
-          orderNumber: params.orderNumber,
-          event: 'order_acceptance_activate',
-          persona: 'business',
-          acceptanceTimeoutSeconds:
-            params.acceptanceTimeoutSeconds != null
-              ? String(params.acceptanceTimeoutSeconds)
-              : undefined,
-        });
+        await this.sendPushNotificationByUserId(
+          userId,
+          title,
+          body,
+          {
+            url: `/orders/${params.orderId}`,
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            event: 'order_acceptance_activate',
+            persona: 'business',
+            acceptanceTimeoutSeconds:
+              params.acceptanceTimeoutSeconds != null
+                ? String(params.acceptanceTimeoutSeconds)
+                : undefined,
+          },
+          MERCHANT_INCOMING_ORDER_PUSH
+        );
       } catch (error: any) {
         this.logger.warn(
           `sendOrderAcceptanceActivatePush failed: ${error?.message ?? String(error)}`
@@ -919,6 +942,7 @@ export class NotificationsService {
         event: 'order_acceptance_activate',
       },
       excludeUserId: userId,
+      expoOptions: MERCHANT_INCOMING_ORDER_PUSH,
     });
   }
 
@@ -1189,6 +1213,7 @@ export class NotificationsService {
         push: {
           title,
           body,
+          interruptible: true,
           data: {
             url: links.path,
             orderId: data.orderId,
@@ -1295,17 +1320,23 @@ export class NotificationsService {
     });
 
     try {
-      await this.sendPushNotificationByUserId(businessUserId, title, body, {
-        url: `/orders/${data.orderId}`,
-        orderId: data.orderId,
-        orderNumber: data.orderNumber,
-        event: 'order_created',
-        persona: 'business',
-        acceptanceTimeoutSeconds:
-          data.acceptanceTimeoutSeconds != null
-            ? String(data.acceptanceTimeoutSeconds)
-            : undefined,
-      });
+      await this.sendPushNotificationByUserId(
+        businessUserId,
+        title,
+        body,
+        {
+          url: `/orders/${data.orderId}`,
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          event: 'order_created',
+          persona: 'business',
+          acceptanceTimeoutSeconds:
+            data.acceptanceTimeoutSeconds != null
+              ? String(data.acceptanceTimeoutSeconds)
+              : undefined,
+        },
+        MERCHANT_INCOMING_ORDER_PUSH
+      );
     } catch (error: any) {
       this.logger.warn(
         `sendOrderCreatedBusinessPush failed for order ${data.orderNumber}: ${
@@ -4147,6 +4178,7 @@ export class NotificationsService {
 
   private async fanOutOrderCreatedToDelegates(data: NotificationData) {
     const delegates = await this.listOrderManagerDelegates(data.businessLocationId);
+    const interruptible = data.acceptanceMode !== 'scheduled';
     for (const delegate of delegates) {
       if (delegate.userId === data.businessUserId) continue;
       await this.sendPushNotificationByUserId(
@@ -4157,9 +4189,10 @@ export class NotificationsService {
           url: `/delegate/orders/${data.orderId}`,
           orderId: data.orderId,
           orderNumber: data.orderNumber,
-          event: 'order_created',
+          event: interruptible ? 'order_created' : 'order_scheduled',
           locationId: data.businessLocationId,
-        }
+        },
+        interruptible ? MERCHANT_INCOMING_ORDER_PUSH : undefined
       ).catch((error: any) => {
         this.logger.warn(`Delegate order-created push failed: ${error?.message}`);
       });
@@ -4198,6 +4231,7 @@ export class NotificationsService {
       body: string;
       data: Record<string, string | undefined>;
       excludeUserId?: string;
+      expoOptions?: ExpoPushOptions;
     }
   ) {
     const delegates = await this.listOrderManagerDelegates(locationId);
@@ -4215,7 +4249,8 @@ export class NotificationsService {
         delegate.userId,
         payload.title,
         payload.body,
-        data
+        data,
+        payload.expoOptions
       ).catch((error: any) => {
         this.logger.warn(`Delegate fan-out push failed: ${error?.message}`);
       });
@@ -4484,7 +4519,8 @@ export class NotificationsService {
     userId: string,
     title: string,
     body: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    expoOptions?: ExpoPushOptions
   ): Promise<{ success: boolean; webSent: number; expoSent: number; error?: string }> {
     const pushCfg = this.configService.get<Configuration['push']>('push');
     if (!pushCfg?.enabled) return { success: true, webSent: 0, expoSent: 0 };
@@ -4492,14 +4528,15 @@ export class NotificationsService {
     if (!uid) {
       return { success: false, webSent: 0, expoSent: 0, error: 'userId is required' };
     }
-    return this.runInternalPushDelivery(uid, title, body, data);
+    return this.runInternalPushDelivery(uid, title, body, data, expoOptions);
   }
 
   private async runInternalPushDelivery(
     userId: string,
     title: string,
     body: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    expoOptions?: ExpoPushOptions
   ): Promise<{ success: boolean; webSent: number; expoSent: number; error?: string }> {
     try {
       const normalized = this.stringifyPushDataForExpo(data);
@@ -4507,7 +4544,8 @@ export class NotificationsService {
         userId,
         title.trim() || 'Rendasua',
         body.trim(),
-        normalized
+        normalized,
+        expoOptions
       );
       return { success: true, webSent, expoSent };
     } catch (error: unknown) {
