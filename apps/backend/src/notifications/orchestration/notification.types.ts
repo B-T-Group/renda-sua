@@ -64,7 +64,7 @@ export interface PushChannelPayload {
   title: string;
   body: string;
   data?: Record<string, unknown>;
-  /** High-priority Expo options for interruptible offers */
+  /** High-priority Expo options (sound + heads-up) for incoming-order interrupts */
   interruptible?: boolean;
 }
 

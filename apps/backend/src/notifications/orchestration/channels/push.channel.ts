@@ -17,7 +17,10 @@ export class PushChannel {
       userId,
       payload.title,
       payload.body,
-      payload.data
+      payload.data,
+      payload.interruptible
+        ? { priority: 'high', sound: 'default', channelId: 'order_incoming' }
+        : undefined
     );
     if (!result.success) {
       return {
