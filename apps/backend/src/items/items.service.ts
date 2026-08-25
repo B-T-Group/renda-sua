@@ -5,6 +5,10 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { UpdateItemDto } from '../business-items/dto/update-item.dto';
+import {
+  assertItemDecimalField,
+  rethrowNumericOverflow,
+} from './item-numeric-fields';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
 export type ItemsInsertInput = Record<string, unknown>;
@@ -156,7 +160,7 @@ export class ItemsService {
       moderation_status: 'draft',
     };
     this.assertShippingFields(itemData);
-    const result = await this.hasuraSystemService.executeMutation<{
+    const result = await this.mutateItem<{
       insert_items_one: {
         id: string;
         name: string;
@@ -207,7 +211,7 @@ export class ItemsService {
     const itemData = this.normalizeUpdatePayload(updates);
     this.assertShippingFields(itemData, item);
     await this.assertActivationAllowed(item, itemData, itemId);
-    const result = await this.hasuraSystemService.executeMutation<{
+    const result = await this.mutateItem<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });
     const updated = result?.update_items_by_pk;
@@ -327,6 +331,7 @@ export class ItemsService {
         if (field === 'weight_unit') {
           return [field, this.resolveWeightUnit(value)];
         }
+        assertItemDecimalField(field, value);
         return [field, value];
       })
     );
@@ -357,6 +362,21 @@ export class ItemsService {
         },
         HttpStatus.BAD_REQUEST
       );
+    }
+  }
+
+  private async mutateItem<T>(
+    mutation: string,
+    variables: Record<string, unknown>
+  ): Promise<T> {
+    try {
+      return await this.hasuraSystemService.executeMutation<T>(
+        mutation,
+        variables
+      );
+    } catch (error: any) {
+      rethrowNumericOverflow(error);
+      throw error;
     }
   }
 
