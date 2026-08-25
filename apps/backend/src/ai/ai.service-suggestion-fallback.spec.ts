@@ -68,6 +68,32 @@ describe('AiService suggestion fallbacks', () => {
     expect(result.isSizeRequired).toBe(true);
   });
 
+  it('defaults isSizeRequired to false when Bedrock sends a non-boolean flag', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'Cotton hoodie',
+              dimensions: 'L',
+              isSizeRequired: 'true',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateImageItemSuggestions({
+      imageUrls: ['https://uploads.example/hoodie.jpg'],
+      defaultCurrency: 'XAF',
+    });
+
+    expect(result.name).toBe('Cotton hoodie');
+    expect(result.dimensions).toBe('L');
+    expect(result.isSizeRequired).toBe(false);
+  });
+
   it('defaults isSizeRequired to false when Bedrock omits the flag', async () => {
     const { service, bedrockLunaService } = makeService();
     bedrockLunaService.chatCompletions.mockResolvedValue({

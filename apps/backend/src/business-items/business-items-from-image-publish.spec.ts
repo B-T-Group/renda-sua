@@ -186,6 +186,50 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       );
     });
 
+    it('omits blank shopper-facing dimensions on insert', async () => {
+      const {
+        service,
+        businessImagesService,
+        hasuraSystemService,
+        itemsService,
+      } = createService();
+
+      businessImagesService.getImageForBusiness.mockResolvedValue({
+        id: imageId,
+        image_url: 'https://cdn.example/img.jpg',
+        caption: null,
+        alt_text: null,
+        item_id: null,
+      });
+      hasuraSystemService.executeQuery.mockImplementation((query: string) => {
+        if (query.includes('CheckItemSkus')) {
+          return Promise.resolve({ items: [] });
+        }
+        if (query.includes('FindCategoryAndSubcategory')) {
+          return Promise.resolve({
+            item_sub_categories: [{ id: 99, item_category_id: 7 }],
+          });
+        }
+        return Promise.resolve({});
+      });
+      itemsService.createItem.mockResolvedValue({
+        id: itemId,
+        name: 'USB charger',
+        sku: 'USB-CHARGE',
+      });
+
+      await service.createItemFromImage(businessId, {
+        imageId,
+        name: 'USB charger',
+        description: 'Ready for review',
+        dimensions: '   ',
+      });
+
+      expect(itemsService.createItem.mock.calls[0][1]).not.toHaveProperty(
+        'dimensions'
+      );
+    });
+
     it('resumes an existing draft linked to the image without creating another item', async () => {
       const {
         service,
