@@ -201,7 +201,9 @@ export function mapCommission(
     minItems: ONBOARDING_10_ITEMS,
     salesTotal: requiresSale ? inWindowSalesForRow(row, currency) : 0,
     minSalesTotal: requiresSale ? configuredMin : 0,
-    windowEndsAt: requiresSale ? onboardingWindowEndsAt(row.created_at) : null,
+    windowEndsAt: requiresSale
+      ? onboardingWindowEndsAt(row.created_at ?? undefined)
+      : null,
     requiresSale,
   };
   return commissionFromState(row, kind, currency, requirements);
