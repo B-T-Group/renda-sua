@@ -142,4 +142,44 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
+
+  it('rejects DECIMAL(10,2) overflow before calling Hasura', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.updateItem('business-1', 'item-1', { price: 100_000_000 })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'NUMERIC_FIELD_OVERFLOW' },
+    });
+
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('maps leftover Hasura numeric overflow to HTTP 400', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation.mockRejectedValue(
+      new Error('numeric field overflow: {"response":{"errors":[]}}')
+    );
+
+    await expect(
+      service.updateItem('business-1', 'item-1', { price: 12.5 })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'NUMERIC_FIELD_OVERFLOW' },
+    });
+  });
+
+  it('rejects overflow on create as well', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.createItem('business-1', {
+        name: 'Huge price',
+        price: 1e20,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
 });

@@ -291,6 +291,7 @@ export class AiController {
         weight: suggestion.weight ?? undefined,
         weightUnit: suggestion.weightUnit ?? undefined,
         dimensions: suggestion.dimensions ?? undefined,
+        isSizeRequired: suggestion.isSizeRequired ?? false,
         isUsed: suggestion.isUsed ?? undefined,
         confidence: suggestion.confidence,
         categoryAlternates: suggestion.categoryAlternates ?? [],

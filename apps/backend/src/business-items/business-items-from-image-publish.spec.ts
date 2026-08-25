@@ -138,6 +138,54 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       ).toHaveBeenCalledWith(businessId, imageId, itemId);
     });
 
+    it('persists shopper-facing dimensions on insert', async () => {
+      const {
+        service,
+        businessImagesService,
+        hasuraSystemService,
+        itemsService,
+      } = createService();
+
+      businessImagesService.getImageForBusiness.mockResolvedValue({
+        id: imageId,
+        image_url: 'https://cdn.example/img.jpg',
+        caption: null,
+        alt_text: null,
+        item_id: null,
+      });
+      hasuraSystemService.executeQuery.mockImplementation((query: string) => {
+        if (query.includes('CheckItemSkus')) {
+          return Promise.resolve({ items: [] });
+        }
+        if (query.includes('FindCategoryAndSubcategory')) {
+          return Promise.resolve({
+            item_sub_categories: [{ id: 99, item_category_id: 7 }],
+          });
+        }
+        return Promise.resolve({});
+      });
+      itemsService.createItem.mockResolvedValue({
+        id: itemId,
+        name: 'Eau de parfum',
+        sku: 'EAU-DE-PARF',
+      });
+
+      await service.createItemFromImage(businessId, {
+        imageId,
+        name: 'Eau de parfum',
+        description: 'Ready for review',
+        dimensions: '  50ml  ',
+      });
+
+      expect(itemsService.createItem).toHaveBeenCalledWith(
+        businessId,
+        expect.objectContaining({
+          name: 'Eau de parfum',
+          dimensions: '50ml',
+        })
+      );
+    });
+
     it('resumes an existing draft linked to the image without creating another item', async () => {
       const {
         service,

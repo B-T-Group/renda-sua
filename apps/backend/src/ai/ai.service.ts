@@ -63,6 +63,11 @@ export interface ImageItemSuggestionResult {
   weight?: number | null;
   weightUnit?: string | null;
   dimensions?: string | null;
+  /**
+   * True when a shopper needs size (clothing, shoes, perfume volume, etc.)
+   * to decide on a purchase. False when size is not purchase-relevant.
+   */
+  isSizeRequired?: boolean | null;
   /** True when photos/text indicate a used / pre-owned item. */
   isUsed?: boolean | null;
   confidence?: ImageItemSuggestionConfidence;
@@ -542,6 +547,7 @@ export class AiService {
       weight: null,
       weightUnit: null,
       dimensions: null,
+      isSizeRequired: false,
       isUsed: null,
       confidence: this.defaultConfidence(!!input.hint?.trim()),
       categoryAlternates: [],
@@ -658,6 +664,10 @@ export class AiService {
     };
   }
 
+  private parseOptionalBoolean(value: unknown): boolean | null {
+    return typeof value === 'boolean' ? value : null;
+  }
+
   private parseConfidenceLevel(
     value: unknown,
     fallback: SuggestionFieldConfidence
@@ -754,6 +764,7 @@ export class AiService {
           : null,
       dimensions:
         typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
+      isSizeRequired: this.parseOptionalBoolean(parsed.isSizeRequired) ?? false,
       isUsed: typeof parsed.isUsed === 'boolean' ? parsed.isUsed : null,
       confidence: { ...defaults, ...confidence },
       categoryAlternates,
@@ -919,7 +930,8 @@ Then extract from the images:
 - Any decoded barcode values (EAN/UPC/etc) if readable.
 - Product weight as a number (if visible)
 - Weight unit: only "g", "kg", "lb", or "oz" (lowercase). Never "Kg", "ml", or "l".
-- Product dimensions string (e.g. 20x10x5 cm) if visible.
+- Shopper-facing size in "dimensions" when a buyer needs it to purchase: clothing/shoe size (e.g. "M", "42"), volume for perfume/lotion/cream/cosmetics (e.g. "50ml", "1.5L"), or L×W×H (e.g. "20x10x5 cm"). Infer from labels, packaging, or the photo. Prefer shopper-facing size over shipping-box measurements when both exist. Use null if unknown.
+- isSizeRequired: true when size matters for the purchase decision (clothing, shoes, apparel, perfume, lotion, cream, cosmetics, and similar) — even if dimensions was inferred, so the merchant can confirm. false when size is not purchase-relevant (e.g. a phone charger). null only if truly uncertain.
 - Whether the item appears used / pre-owned (not new): set isUsed true only when photos or text clearly show wear, scratches, open packaging, or "used"/"second-hand"/"refurbished"/"open-box" labels. Set false only when clearly new/sealed. If uncertain, set isUsed to null (do not guess).
 - Up to 3 alternate category names and subcategory names.
 - Per-field confidence: "high" | "medium" | "low".
@@ -945,6 +957,7 @@ Return ONLY a single JSON object with this exact shape:
   "weight": number | null,
   "weightUnit": "g" | "kg" | "lb" | "oz" | null,
   "dimensions": string | null,
+  "isSizeRequired": boolean | null,
   "isUsed": boolean | null,
   "categoryAlternates": string[] | null,
   "subCategoryAlternates": string[] | null,

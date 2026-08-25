@@ -137,6 +137,8 @@ export interface OrderConfig {
   busyExtraPrepMinutes: number;
   /** Cap on busy_extra_prep_minutes. */
   busyExtraPrepCapMinutes: number;
+  /** Minutes to snooze the incoming-order interrupt after Busy. */
+  busyInterruptSnoozeMinutes: number;
   /** Auto-decline count (30d) to enter demote tier. */
   reliabilityDemoteAutoDeclines: number;
   /** Auto-decline count (30d) to enter restrict tier. */
@@ -748,6 +750,10 @@ export default (): Configuration => {
       ),
       busyExtraPrepCapMinutes: parseInt(
         process.env.ORDER_BUSY_EXTRA_PREP_CAP_MINUTES || '60',
+        10
+      ),
+      busyInterruptSnoozeMinutes: parseInt(
+        process.env.ORDER_BUSY_INTERRUPT_SNOOZE_MINUTES || '15',
         10
       ),
       reliabilityDemoteAutoDeclines: parseInt(

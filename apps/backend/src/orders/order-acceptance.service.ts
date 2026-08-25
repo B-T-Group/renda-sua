@@ -30,6 +30,14 @@ import {
   type PendingAcceptanceOrder,
   type ReliabilityTier,
 } from './order-acceptance.types';
+import {
+  buildBusySlaPatch,
+  busySnoozeCutoffIso,
+  DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES,
+  isDeadlineInFuture,
+  remainingWaitSeconds,
+  type BusySlaPatch,
+} from './order-acceptance-busy.util';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 interface SlaOrder {
@@ -37,6 +45,8 @@ interface SlaOrder {
   order_number: string;
   current_status: string;
   acceptance_state: string | null;
+  acceptance_deadline_at?: string | null;
+  grace_deadline_at?: string | null;
   business_id: string;
   business_location_id?: string | null;
   estimated_prep_minutes?: number | null;
@@ -135,7 +145,15 @@ export class OrderAcceptanceService {
 
   async onAcceptanceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
     const order = await this.fetchOrderForSla(orderId);
-    if (!this.isPendingAwaiting(order)) {
+    if (!order || !this.isPendingAwaiting(order)) {
+      return { success: true, skipped: true };
+    }
+    if (isDeadlineInFuture(order.acceptance_deadline_at)) {
+      await this.rescheduleIfFuture(
+        'order.acceptance_deadline',
+        orderId,
+        order.acceptance_deadline_at
+      );
       return { success: true, skipped: true };
     }
     const graceSec = this.orderConfig().acceptanceGraceSeconds;
@@ -156,7 +174,7 @@ export class OrderAcceptanceService {
       { id: orderId, grace: graceDeadline }
     );
 
-    await this.notifyEscalation(order!);
+    await this.notifyEscalation(order);
     await this.waitAndExecute.scheduleAcceptanceTimeout(
       'order.acceptance_grace_deadline',
       { order_id: orderId },
@@ -172,6 +190,14 @@ export class OrderAcceptanceService {
     }
     const state = order.acceptance_state as OrderAcceptanceState | null;
     if (state !== 'no_response' && state !== 'grace') {
+      return { success: true, skipped: true };
+    }
+    if (isDeadlineInFuture(order.grace_deadline_at)) {
+      await this.rescheduleIfFuture(
+        'order.acceptance_grace_deadline',
+        orderId,
+        order.grace_deadline_at
+      );
       return { success: true, skipped: true };
     }
 
@@ -233,7 +259,41 @@ export class OrderAcceptanceService {
     success: boolean;
     order: PendingAcceptanceOrder;
     message: string;
+    snoozeUntil: string;
   }> {
+    const order = await this.loadBusyOrder(orderId, businessUserId);
+    const cfg = this.orderConfig();
+    const previousExtra = order.busy_extra_prep_minutes || 0;
+    const nextExtra = this.nextBusyExtraMinutes(previousExtra, cfg);
+    const estimated = cfg.defaultEstimatedPrepMinutes + nextExtra;
+    const patch = buildBusySlaPatch(
+      order,
+      cfg.busyInterruptSnoozeMinutes || DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES
+    );
+    const updated = await this.persistMarkBusy(orderId, nextExtra, estimated, patch);
+    await this.afterMarkBusy(orderId, order, estimated, nextExtra - previousExtra, patch);
+    return {
+      success: true,
+      order: updated,
+      message: 'Customer notified of higher demand',
+      snoozeUntil: patch.snoozeUntil,
+    };
+  }
+
+  private nextBusyExtraMinutes(
+    previousExtra: number,
+    cfg: Configuration['order']
+  ): number {
+    return Math.min(
+      cfg.busyExtraPrepCapMinutes,
+      previousExtra + cfg.busyExtraPrepMinutes
+    );
+  }
+
+  private async loadBusyOrder(
+    orderId: string,
+    businessUserId: string
+  ): Promise<PendingAcceptanceOrder> {
     const order = await this.fetchPendingAcceptanceDetail(orderId);
     if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     await this.assertBusinessOwnsOrder(order.business_id, businessUserId);
@@ -244,23 +304,27 @@ export class OrderAcceptanceService {
         HttpStatus.BAD_REQUEST
       );
     }
+    return order;
+  }
 
-    const cfg = this.orderConfig();
-    const previousExtra = order.busy_extra_prep_minutes || 0;
-    const nextExtra = Math.min(
-      cfg.busyExtraPrepCapMinutes,
-      previousExtra + cfg.busyExtraPrepMinutes
-    );
-    const estimated =
-      cfg.defaultEstimatedPrepMinutes + nextExtra;
-
+  private async persistMarkBusy(
+    orderId: string,
+    extra: number,
+    prep: number,
+    patch: BusySlaPatch
+  ): Promise<PendingAcceptanceOrder> {
     const updated = await this.hasura.executeMutation(
-      `mutation MarkBusy($id: uuid!, $extra: Int!, $prep: Int!) {
+      `mutation MarkBusy(
+        $id: uuid!, $extra: Int!, $prep: Int!,
+        $deadline: timestamptz, $grace: timestamptz
+      ) {
         update_orders_by_pk(
           pk_columns: { id: $id }
           _set: {
             busy_extra_prep_minutes: $extra
             estimated_prep_minutes: $prep
+            acceptance_deadline_at: $deadline
+            grace_deadline_at: $grace
             updated_at: "now()"
           }
         ) {
@@ -269,30 +333,76 @@ export class OrderAcceptanceService {
           current_status created_at total_amount currency business_id
         }
       }`,
-      { id: orderId, extra: nextExtra, prep: estimated }
+      {
+        id: orderId,
+        extra,
+        prep,
+        deadline: patch.acceptanceDeadlineAt,
+        grace: patch.graceDeadlineAt,
+      }
     );
+    return updated.update_orders_by_pk;
+  }
 
+  private async afterMarkBusy(
+    orderId: string,
+    order: PendingAcceptanceOrder,
+    estimated: number,
+    extraDelta: number,
+    patch: BusySlaPatch
+  ): Promise<void> {
+    await this.rescheduleBusySla(orderId, patch);
     await this.notifyClientBusy(order, estimated);
     await this.fulfillmentPromiseService.persistForOrder(orderId, {
-      extendPrepMinutes: Math.max(0, nextExtra - previousExtra),
+      extendPrepMinutes: Math.max(0, extraDelta),
     });
-    return {
-      success: true,
-      order: updated.update_orders_by_pk,
-      message: 'Customer notified of higher demand',
-    };
+  }
+
+  private async rescheduleBusySla(
+    orderId: string,
+    patch: BusySlaPatch
+  ): Promise<void> {
+    if (!patch.rescheduleEvent) return;
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      patch.rescheduleEvent,
+      { order_id: orderId },
+      patch.waitSeconds
+    );
+  }
+
+  private async rescheduleIfFuture(
+    event: 'order.acceptance_deadline' | 'order.acceptance_grace_deadline',
+    orderId: string,
+    deadlineIso: string | null | undefined
+  ): Promise<void> {
+    if (!deadlineIso || !isDeadlineInFuture(deadlineIso)) return;
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      event,
+      { order_id: orderId },
+      remainingWaitSeconds(deadlineIso)
+    );
   }
 
   async getPendingAcceptanceForBusiness(
     businessId: string
   ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+    const snoozeCutoff = busySnoozeCutoffIso(
+      this.orderConfig().busyInterruptSnoozeMinutes ||
+        DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES
+    );
     const res = await this.hasura.executeQuery(
-      `query PendingAcceptance($bid: uuid!) {
+      `query PendingAcceptance($bid: uuid!, $snoozeCutoff: timestamptz!) {
         orders(
           where: {
             business_id: { _eq: $bid }
             current_status: { _eq: pending }
             acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
+            _not: {
+              _and: [
+                { busy_extra_prep_minutes: { _gt: 0 } }
+                { updated_at: { _gte: $snoozeCutoff } }
+              ]
+            }
           }
           order_by: { created_at: asc }
           limit: 1
@@ -306,7 +416,7 @@ export class OrderAcceptanceService {
           order_items { item_name quantity }
         }
       }`,
-      { bid: businessId }
+      { bid: businessId, snoozeCutoff }
     );
     const order = res.orders?.[0] ?? null;
     return { active: !!order, order };
@@ -1062,7 +1172,7 @@ export class OrderAcceptanceService {
       `query OrderSla($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status acceptance_state business_id
-          business_location_id
+          business_location_id acceptance_deadline_at grace_deadline_at
           estimated_prep_minutes acceptance_activates_at
           client {
             user_id
