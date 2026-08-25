@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
+import { ConfigurationsService } from '../admin/configurations.service';
 import {
-  mapReferredBusinessRow,
+  mapReferredBusinesses,
   REFERRED_BUSINESSES_LIST_SELECTION,
   type ReferredBusinessFollowUp,
   type ReferredBusinessRow,
 } from '../business-referrals/referred-business-followup.util';
+import { ONBOARDING_10_MIN_SALE_TOTAL_KEY } from '../representative-compensation/compensation-rules';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 
@@ -32,7 +34,8 @@ export class AgentReferralsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly referralPyramidService: ReferralPyramidService
+    private readonly referralPyramidService: ReferralPyramidService,
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   normalizeAgentCode(agentCode: string): string | null {
@@ -617,7 +620,26 @@ export class AgentReferralsService {
     const result = await this.hasuraSystemService.executeQuery<{
       businesses: ReferredBusinessRow[];
     }>(query, { agentId });
-    return (result?.businesses ?? []).map(mapReferredBusinessRow);
+    return mapReferredBusinesses(
+      result?.businesses ?? [],
+      'agent',
+      (country) => this.readOnboardingMinSaleTotal(country)
+    );
+  }
+
+  private async readOnboardingMinSaleTotal(
+    country: string
+  ): Promise<number | null> {
+    try {
+      const config = await this.configurationsService.getConfigurationByKey(
+        ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+        country
+      );
+      const value = Number(config?.number_value);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    } catch {
+      return null;
+    }
   }
 
   async getReferredBusinessCount(agentId: string): Promise<number> {

@@ -140,6 +140,24 @@ describe('RepresentativeCompensationService', () => {
     expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
   });
 
+  it('credits only 1% when the first sale is below 2500 XAF', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    accountsService.findDepositByReferenceId.mockResolvedValue(null);
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-sale',
+    });
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(1);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([SALE_PERCENT]);
+  });
+
   it('pays 1% on a later sale after 7500 is already credited', async () => {
     mockBusinessQueries(
       [
