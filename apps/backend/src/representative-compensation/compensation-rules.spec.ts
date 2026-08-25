@@ -11,6 +11,7 @@ import {
 const XAF: CompensationMarketConfig = {
   currency: 'XAF',
   onboarding10FirstSale: 7500,
+  onboarding10MinSaleTotal: 2500,
   salePercent: 1,
   businessReferral10Items: 1000,
 };
@@ -18,6 +19,7 @@ const XAF: CompensationMarketConfig = {
 const CAD: CompensationMarketConfig = {
   currency: 'CAD',
   onboarding10FirstSale: 25,
+  onboarding10MinSaleTotal: 0,
   salePercent: 1,
   businessReferral10Items: 10,
 };
@@ -72,6 +74,49 @@ describe('compensation-rules', () => {
       expect(
         agentEval({ triggeringOrderId: undefined, completedSales: [sale('o1', 20000)] })
       ).toEqual([]);
+    });
+
+    it('pays only 1% when in-window sales are below 2500 XAF', () => {
+      const actions = agentEval({
+        completedSales: [sale('o1', 1000)],
+      });
+      expect(actions).toEqual([
+        expect.objectContaining({
+          ruleCode: SALE_PERCENT,
+          amount: 10,
+          orderId: 'o1',
+        }),
+      ]);
+    });
+
+    it('pays 7500 on the sale that crosses 2500 XAF', () => {
+      const first = sale('o1', 1500, '2026-05-08T00:00:00.000Z');
+      const second = sale('o2', 1500, '2026-05-12T00:00:00.000Z');
+      expect(
+        agentEval({
+          completedSales: [first, second],
+          triggeringOrderId: 'o1',
+        })
+      ).toEqual([
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 15 }),
+      ]);
+      expect(
+        agentEval({
+          completedSales: [first, second],
+          triggeringOrderId: 'o2',
+        })
+      ).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_10_FIRST_SALE,
+          amount: 7500,
+          orderId: 'o2',
+        }),
+        expect.objectContaining({
+          ruleCode: SALE_PERCENT,
+          amount: 15,
+          orderId: 'o2',
+        }),
+      ]);
     });
 
     it('pays 7500 and 1% on the qualifying first sale', () => {

@@ -4,6 +4,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { ConfigurationsService } from '../admin/configurations.service';
 import { BusinessReferralsService } from './business-referrals.service';
 
 @Module({
@@ -14,7 +15,7 @@ import { BusinessReferralsService } from './business-referrals.service';
     NotificationsModule,
     StripePaymentsModule,
   ],
-  providers: [BusinessReferralsService],
+  providers: [BusinessReferralsService, ConfigurationsService],
   exports: [BusinessReferralsService],
 })
 export class BusinessReferralsModule {}

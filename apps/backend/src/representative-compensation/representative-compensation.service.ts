@@ -13,6 +13,7 @@ import {
   BUSINESS_REFERRAL_10_ITEMS,
   evaluateCompensation,
   ONBOARDING_10_FIRST_SALE,
+  ONBOARDING_10_MIN_SALE_TOTAL_KEY,
   ONBOARDING_RULES,
   SALE_PERCENT,
   type CompensationAction,
@@ -35,18 +36,21 @@ const DEFAULTS: Record<string, CompensationMarketConfig> = {
   CM: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
+    onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   GA: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
+    onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   CA: {
     currency: 'CAD',
     onboarding10FirstSale: 25,
+    onboarding10MinSaleTotal: 0,
     salePercent: 1,
     businessReferral10Items: 10,
   },
@@ -883,14 +887,16 @@ export class RepresentativeCompensationService {
     currency: string
   ): Promise<CompensationMarketConfig> {
     const fallback = DEFAULTS[countryCode] ?? { ...DEFAULTS.CM, currency };
-    const read = async (key: string, fallbackValue: number) => {
+    const read = async (key: string, fallbackValue: number, allowZero = false) => {
       try {
         const config = await this.configurationsService.getConfigurationByKey(
           key,
           countryCode
         );
         const value = Number(config?.number_value);
-        return Number.isFinite(value) && value > 0 ? value : fallbackValue;
+        if (!Number.isFinite(value)) return fallbackValue;
+        if (allowZero ? value < 0 : value <= 0) return fallbackValue;
+        return value;
       } catch {
         return fallbackValue;
       }
@@ -900,6 +906,11 @@ export class RepresentativeCompensationService {
       onboarding10FirstSale: await read(
         'onboarding_10_first_sale_amount',
         fallback.onboarding10FirstSale
+      ),
+      onboarding10MinSaleTotal: await read(
+        ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+        fallback.onboarding10MinSaleTotal,
+        true
       ),
       salePercent: await read(
         'sale_only_commission_percent',

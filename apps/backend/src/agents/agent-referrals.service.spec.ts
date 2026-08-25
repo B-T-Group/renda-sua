@@ -22,7 +22,8 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
     hasura = { executeQuery: jest.fn(), executeMutation: jest.fn() };
     service = new AgentReferralsService(
       hasura as unknown as HasuraSystemService,
-      {} as ReferralPyramidService
+      {} as ReferralPyramidService,
+      { getConfigurationByKey: jest.fn() } as never
     );
     creditSpy = jest
       .spyOn(service, 'creditResolvedAgentReferral')
