@@ -11,6 +11,12 @@ import { PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { SmsService } from '../sms/sms.service';
 import { DeepLinkService } from './deep-link.service';
+import {
+  incomingOrderDelegateEvent,
+  incomingOrderExpoOptions,
+  isIncomingOrderInterruptible,
+  MERCHANT_INCOMING_ORDER_PUSH,
+} from './merchant-incoming-order-push';
 import { NotificationOrchestrator } from './orchestration/notification-orchestrator.service';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
@@ -132,13 +138,6 @@ export interface ExpoPushOptions {
   channelId?: string;
   ttlSeconds?: number;
 }
-
-/** Android channel + Expo flags for merchant incoming-order interrupts. */
-const MERCHANT_INCOMING_ORDER_PUSH: ExpoPushOptions = {
-  priority: 'high',
-  sound: 'default',
-  channelId: 'order_incoming',
-};
 
 function escapeHtmlForEmail(text: string): string {
   return text
@@ -1213,7 +1212,7 @@ export class NotificationsService {
         push: {
           title,
           body,
-          interruptible: true,
+          interruptible: isIncomingOrderInterruptible(data.acceptanceMode),
           data: {
             url: links.path,
             orderId: data.orderId,
@@ -4178,7 +4177,6 @@ export class NotificationsService {
 
   private async fanOutOrderCreatedToDelegates(data: NotificationData) {
     const delegates = await this.listOrderManagerDelegates(data.businessLocationId);
-    const interruptible = data.acceptanceMode !== 'scheduled';
     for (const delegate of delegates) {
       if (delegate.userId === data.businessUserId) continue;
       await this.sendPushNotificationByUserId(
@@ -4189,10 +4187,10 @@ export class NotificationsService {
           url: `/delegate/orders/${data.orderId}`,
           orderId: data.orderId,
           orderNumber: data.orderNumber,
-          event: interruptible ? 'order_created' : 'order_scheduled',
+          event: incomingOrderDelegateEvent(data.acceptanceMode),
           locationId: data.businessLocationId,
         },
-        interruptible ? MERCHANT_INCOMING_ORDER_PUSH : undefined
+        incomingOrderExpoOptions(data.acceptanceMode)
       ).catch((error: any) => {
         this.logger.warn(`Delegate order-created push failed: ${error?.message}`);
       });
