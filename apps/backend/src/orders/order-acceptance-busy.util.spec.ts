@@ -30,6 +30,11 @@ describe('order-acceptance-busy.util', () => {
     expect(isDeadlineInFuture(null, now)).toBe(false);
   });
 
+  it('treats invalid or barely-future deadlines as not in the future', () => {
+    expect(isDeadlineInFuture('not-a-timestamp', now)).toBe(false);
+    expect(isDeadlineInFuture('2026-08-24T21:00:01.000Z', now)).toBe(false);
+  });
+
   it('computes remaining wait seconds with a 1s floor', () => {
     expect(remainingWaitSeconds('2026-08-24T21:00:10.000Z', now)).toBe(10);
     expect(remainingWaitSeconds('2026-08-24T20:59:00.000Z', now)).toBe(1);
@@ -63,6 +68,20 @@ describe('order-acceptance-busy.util', () => {
     );
     expect(patch.graceDeadlineAt).toBe('2026-08-24T21:15:00.000Z');
     expect(patch.acceptanceDeadlineAt).toBe('2026-08-24T20:55:00.000Z');
+    expect(patch.rescheduleEvent).toBe('order.acceptance_grace_deadline');
+  });
+
+  it('treats no_response as a grace-window snooze', () => {
+    const patch = buildBusySlaPatch(
+      {
+        acceptance_state: 'no_response',
+        acceptance_deadline_at: '2026-08-24T20:55:00.000Z',
+        grace_deadline_at: '2026-08-24T21:01:00.000Z',
+      },
+      15,
+      now
+    );
+    expect(patch.graceDeadlineAt).toBe('2026-08-24T21:15:00.000Z');
     expect(patch.rescheduleEvent).toBe('order.acceptance_grace_deadline');
   });
 
