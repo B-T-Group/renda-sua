@@ -32,6 +32,7 @@ export interface ReviewFormValues {
   price: string;
   currency: string;
   isUsed: boolean;
+  dimensions: string;
 }
 
 export interface FirstSaleItemReviewStepProps {
@@ -67,6 +68,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
   const [brandName, setBrandName] = useState('');
   const [price, setPrice] = useState('');
   const [isUsed, setIsUsed] = useState(false);
+  const [dimensions, setDimensions] = useState('');
   const [filled, setFilled] = useState(false);
 
   useEffect(() => {
@@ -80,6 +82,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
       setBrandName(initialValues.brandName);
       setPrice(initialValues.price);
       setIsUsed(initialValues.isUsed);
+      setDimensions(initialValues.dimensions);
       return;
     }
     setName(suggestions?.name?.trim() || merchantHint.trim() || '');
@@ -88,6 +91,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
     setBrandName(suggestions?.brandName?.trim() || '');
     setIsUsed(suggestions?.isUsed === true);
+    setDimensions(suggestions?.dimensions?.trim() || '');
     if (merchantPrice.trim()) {
       setPrice(merchantPrice.trim());
     } else if (suggestions?.price != null) {
@@ -101,8 +105,12 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     suggestions?.currency ||
     'XAF';
   const priceNum = Number.parseFloat(price);
+  const sizeRequired = suggestions?.isSizeRequired === true;
   const canContinue =
-    !!name.trim() && !Number.isNaN(priceNum) && priceNum > 0;
+    !!name.trim() &&
+    !Number.isNaN(priceNum) &&
+    priceNum > 0 &&
+    (!sizeRequired || !!dimensions.trim());
 
   const quality = suggestions?.listingQuality;
   const topDuplicate = suggestions?.duplicateCandidates?.[0];
@@ -227,6 +235,20 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
         onChange={(e) => setBrandName(e.target.value)}
         fullWidth
       />
+      {sizeRequired ? (
+        <TextField
+          required
+          label={t('business.onboarding.firstSale.review.size', 'Size')}
+          value={dimensions}
+          onChange={(e) => setDimensions(e.target.value)}
+          fullWidth
+          helperText={t(
+            'business.onboarding.firstSale.review.sizeHelper',
+            'e.g. M, 42, 50ml'
+          )}
+          placeholder="M, 42, 50ml"
+        />
+      ) : null}
       <TextField
         label={t(
           'business.onboarding.firstSale.create.description',
@@ -268,6 +290,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
             price,
             currency,
             isUsed,
+            dimensions,
           })
         }
       >

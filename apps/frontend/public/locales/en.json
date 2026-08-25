@@ -2326,7 +2326,9 @@
           "finishLater": "Finish later",
           "submitted": "Product submitted for approval",
           "publishFailed": "Could not publish product",
-          "isUsed": "This item is used"
+          "isUsed": "This item is used",
+          "size": "Size",
+          "sizeHelper": "e.g. M, 42, 50ml"
         },
         "steps": {
           "upload": "Photos",
@@ -3023,9 +3025,12 @@
           "brand": "Brand",
           "description": "Description",
           "price": "Price",
-          "currency": "Currency"
+          "currency": "Currency",
+          "size": "Size"
         },
         "nameRequired": "Please provide a name for the item",
+        "sizeRequired": "Please enter a size for this item",
+        "sizeHelper": "e.g. M, 42, 50ml",
         "submit": "Create item",
         "success": "Item created from image successfully",
         "suggestionsError": "Failed to get suggestions from image",

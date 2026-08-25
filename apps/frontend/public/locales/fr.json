@@ -2035,7 +2035,9 @@
           "finishLater": "Terminer plus tard",
           "submitted": "Produit soumis pour approbation",
           "publishFailed": "Impossible de publier le produit",
-          "isUsed": "Cet article est d'occasion"
+          "isUsed": "Cet article est d'occasion",
+          "size": "Taille",
+          "sizeHelper": "ex. M, 42, 50ml"
         },
         "steps": {
           "upload": "Photos",
@@ -2732,9 +2734,12 @@
           "brand": "Marque",
           "description": "Description",
           "price": "Prix",
-          "currency": "Devise"
+          "currency": "Devise",
+          "size": "Taille"
         },
         "nameRequired": "Veuillez renseigner un nom pour l'article",
+        "sizeRequired": "Veuillez saisir une taille pour cet article",
+        "sizeHelper": "ex. M, 42, 50ml",
         "submit": "Créer l'article",
         "success": "Article créé à partir de l'image avec succès",
         "suggestionsError": "Échec de la récupération des suggestions à partir de l'image",

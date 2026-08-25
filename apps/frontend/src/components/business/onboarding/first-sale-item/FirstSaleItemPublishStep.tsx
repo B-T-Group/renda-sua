@@ -112,6 +112,7 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
         subCategoryName: form.subCategoryName.trim() || undefined,
         brandName: form.brandName.trim() || undefined,
         is_used: form.isUsed,
+        dimensions: form.dimensions.trim() || undefined,
       };
       if (form.description.trim()) {
         patch.description = form.description.trim();

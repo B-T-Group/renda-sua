@@ -36,6 +36,62 @@ describe('AiService suggestion fallbacks', () => {
     expect(result.price).toBeNull();
     expect(result.currency).toBe('XAF');
     expect(result.name).toBeUndefined();
+    expect(result.isSizeRequired).toBe(false);
+    expect(result.dimensions).toBeNull();
+  });
+
+  it('parses shopper-facing dimensions and isSizeRequired from Bedrock JSON', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'Cotton T-shirt',
+              dimensions: 'M',
+              isSizeRequired: true,
+              price: 5000,
+              currency: 'XAF',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateImageItemSuggestions({
+      imageUrls: ['https://uploads.example/shirt.jpg'],
+      defaultCurrency: 'XAF',
+    });
+
+    expect(result.name).toBe('Cotton T-shirt');
+    expect(result.dimensions).toBe('M');
+    expect(result.isSizeRequired).toBe(true);
+  });
+
+  it('defaults isSizeRequired to false when Bedrock omits the flag', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'USB charger',
+              dimensions: null,
+              isSizeRequired: null,
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateImageItemSuggestions({
+      imageUrls: ['https://uploads.example/charger.jpg'],
+      defaultCurrency: 'XAF',
+    });
+
+    expect(result.name).toBe('USB charger');
+    expect(result.isSizeRequired).toBe(false);
+    expect(result.dimensions).toBeNull();
   });
 
   it('returns empty refinement suggestions when Bedrock is unavailable', async () => {

@@ -92,5 +92,14 @@ export class CreateItemFromImageDto {
   @IsBoolean()
   @IsOptional()
   is_used?: boolean;
+
+  @ApiProperty({
+    description:
+      'Shopper-facing size (clothing size, volume, shoe size, or L×W×H)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  dimensions?: string;
 }
 

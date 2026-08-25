@@ -2925,6 +2925,7 @@ export class BusinessItemsService {
       max_order_quantity: 10,
       is_active: false,
       ...(typeof dto.is_used === 'boolean' && { is_used: dto.is_used }),
+      ...(dto.dimensions?.trim() && { dimensions: dto.dimensions.trim() }),
     });
 
     const newItem = await this.itemsService.createItem(
