@@ -158,6 +158,64 @@ describe('RepresentativeCompensationService', () => {
     expect(inserts).toEqual([SALE_PERCENT]);
   });
 
+  it('credits 7500 on a small sale when min sale total is configured to 0', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (key: string) => {
+        if (key === 'business_referral_payout_enabled') {
+          return { boolean_value: true, status: 'active' };
+        }
+        if (key === 'onboarding_10_min_sale_total') {
+          return { number_value: 0 };
+        }
+        return null;
+      }
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    accountsService.findDepositByReferenceId.mockResolvedValue(null);
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-sale',
+    });
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(2);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
+  });
+
+  it('falls back to 2500 XAF when the min sale config is negative', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (key: string) => {
+        if (key === 'business_referral_payout_enabled') {
+          return { boolean_value: true, status: 'active' };
+        }
+        if (key === 'onboarding_10_min_sale_total') {
+          return { number_value: -1 };
+        }
+        return null;
+      }
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    accountsService.findDepositByReferenceId.mockResolvedValue(null);
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-sale',
+    });
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(1);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([SALE_PERCENT]);
+  });
+
   it('pays 1% on a later sale after 7500 is already credited', async () => {
     mockBusinessQueries(
       [
