@@ -1994,4 +1994,98 @@ describe('OrdersService', () => {
       expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
   });
+
+  describe('calculateItemDeliveryFee', () => {
+    const itemId = '6c5c123d-f89d-46cb-8d4d-f43ca5e384bd';
+    const itemDetails = {
+      id: itemId,
+      computed_available_quantity: 5,
+      selling_price: 10,
+      item: { id: 'catalog-1', name: 'Item', currency: 'XAF' },
+      business_location: { address_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+    };
+
+    function stubItemQueries() {
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('ClientHasOrders')) {
+          return { orders_aggregate: { aggregate: { count: 1 } } };
+        }
+        if (query.includes('GetItem')) {
+          return { business_inventory_by_pk: itemDetails };
+        }
+        return {};
+      });
+    }
+
+    it('returns 404 when the client has no address instead of querying Hasura with ""', async () => {
+      const getAddressesByIds = jest.fn();
+      (service as any).addressesService = { getAddressesByIds };
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockClientUser,
+        addresses: [],
+      });
+      stubItemQueries();
+
+      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        message: 'User address not found',
+      });
+      expect(getAddressesByIds).not.toHaveBeenCalled();
+    });
+
+    it('treats a blank addressId query as missing and still 404s without a fallback address', async () => {
+      const getAddressesByIds = jest.fn();
+      (service as any).addressesService = { getAddressesByIds };
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockClientUser,
+        addresses: [{ id: '', status: 'active', is_primary: true }],
+      });
+      stubItemQueries();
+
+      await expect(
+        service.calculateItemDeliveryFee(itemId, '   ')
+      ).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        message: 'User address not found',
+      });
+      expect(getAddressesByIds).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the item has no business address id', async () => {
+      const getAddressesByIds = jest.fn().mockResolvedValue([
+        { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+      ]);
+      (service as any).addressesService = { getAddressesByIds };
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockClientUser,
+        addresses: [
+          {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            status: 'active',
+            is_primary: true,
+          },
+        ],
+      });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('ClientHasOrders')) {
+          return { orders_aggregate: { aggregate: { count: 1 } } };
+        }
+        if (query.includes('GetItem')) {
+          return {
+            business_inventory_by_pk: {
+              ...itemDetails,
+              business_location: { address_id: '' },
+            },
+          };
+        }
+        return {};
+      });
+
+      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        message: 'Business address not found',
+      });
+      expect(getAddressesByIds).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -1,5 +1,44 @@
 import { AddressesService } from './addresses.service';
 
+describe('AddressesService.getAddressesByIds', () => {
+  function createService() {
+    const hasuraSystem = {
+      executeQuery: jest.fn().mockResolvedValue({ addresses: [] }),
+    };
+    const service = new AddressesService(
+      {} as any,
+      hasuraSystem as any,
+      {} as any,
+      { get: jest.fn() } as any
+    );
+    return { service, hasuraSystem };
+  }
+
+  it('does not query Hasura when ids are empty or blank', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(service.getAddressesByIds([])).resolves.toEqual([]);
+    await expect(service.getAddressesByIds(['', '  '])).resolves.toEqual([]);
+
+    expect(hasuraSystem.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('drops blank ids before querying', async () => {
+    const { service, hasuraSystem } = createService();
+    const validId = '6c5c123d-f89d-46cb-8d4d-f43ca5e384bd';
+    hasuraSystem.executeQuery.mockResolvedValue({
+      addresses: [{ id: validId }],
+    });
+
+    await service.getAddressesByIds(['', validId, '  ', validId]);
+
+    expect(hasuraSystem.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('GetAddressesByIds'),
+      { ids: [validId] }
+    );
+  });
+});
+
 describe('AddressesService.syncUserCountry isolation', () => {
   function createService() {
     const hasuraUser = {
