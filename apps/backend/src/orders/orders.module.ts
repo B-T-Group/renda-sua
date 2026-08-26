@@ -43,10 +43,15 @@ import { OrderCleanupService } from './order-cleanup.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
+import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
+import { OrderRiskAlertService } from './order-risk-alert.service';
+import { OrderRiskConfigService } from './order-risk-config.service';
+import { OrderRiskIncidentsService } from './order-risk-incidents.service';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -89,6 +94,10 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrdersService,
     OrderStatusService,
     OrderRiskService,
+    OrderRiskConfigService,
+    OrderRiskIncidentsService,
+    OrderRiskAlertService,
+    OrderRiskMonitorService,
     OrderQueueService,
     OrderOffersService,
     WaitAndExecuteScheduleService,
@@ -108,6 +117,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPickupAnalyticsService,
     StripeAuthReconcilerService,
     AdminOrderContactService,
+    AdminOrdersService,
   ],
   exports: [
     OrdersService,
@@ -123,6 +133,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPickupMonitorService,
     OrderReassignmentService,
     OrderPickupAnalyticsService,
+    OrderRiskIncidentsService,
+    OrderRiskMonitorService,
     FailedDeliveriesService,
   ],
 })

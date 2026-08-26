@@ -31,6 +31,13 @@ object_relationships:
           name: order_holds
           schema: public
 array_relationships:
+  - name: risk_incidents
+    using:
+      foreign_key_constraint_on:
+        column: order_id
+        table:
+          name: order_risk_incidents
+          schema: public
   - name: delivery_time_windows
     using:
       manual_configuration:

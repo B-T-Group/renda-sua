@@ -51,7 +51,8 @@ export type NotificationType =
   | 'chat.message'
   | 'merchant.digest'
   | 'merchant.tip'
-  | 'admin.broadcast';
+  | 'admin.broadcast'
+  | 'admin.order_risk';
 
 export type NotificationPreferenceCategory =
   | 'order_updates'

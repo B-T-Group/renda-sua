@@ -40,6 +40,57 @@ export class OrderReassignmentService {
     return { success: true, message: 'Order reassigned to open pool' };
   }
 
+  /**
+   * Re-opens dispatch for a delivery order sitting in `ready_for_pickup` with no
+   * agent. Clears the exhausted/round state so the offer rounds start over, which
+   * is the only recovery path once the original rounds found nobody.
+   */
+  async redispatchUnassignedOrder(
+    orderId: string,
+    reason: string
+  ): Promise<{ success: boolean; message: string }> {
+    const reset = await this.resetDispatchState(orderId);
+    if (!reset) {
+      return {
+        success: false,
+        message: 'Order is not awaiting an agent in ready_for_pickup',
+      };
+    }
+    await this.orderEvents.recordEvent({
+      orderId,
+      eventType: 'reassignment_started',
+      actorType: 'system',
+      payload: { reason, mode: 'redispatch_unassigned' },
+    });
+    await this.redispatch(orderId);
+    return { success: true, message: 'Order redispatched to nearby agents' };
+  }
+
+  private async resetDispatchState(orderId: string): Promise<boolean> {
+    const result = await this.hasura.executeMutation(
+      `mutation ResetOrderDispatch($id: uuid!) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $id } }
+              { current_status: { _eq: "ready_for_pickup" } }
+              { assigned_agent_id: { _is_null: true } }
+              { fulfillment_method: { _neq: "pickup" } }
+            ]
+          }
+          _set: {
+            dispatch_round: 0
+            dispatch_exhausted_at: null
+            dispatch_ready_at: "now()"
+            updated_at: "now()"
+          }
+        ) { affected_rows }
+      }`,
+      { id: orderId }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
   async reportIssueAndRelease(
     orderId: string,
     agentId: string,

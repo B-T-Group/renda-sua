@@ -40,6 +40,9 @@ export const AdminPickupOpsPage = lazy(() =>
 export const AdminOrdersPage = lazy(() =>
   import('../components/pages/admin/AdminOrdersPage')
 );
+export const AdminOrderDetailPage = lazy(() =>
+  import('../components/pages/admin/AdminOrderDetailPage')
+);
 export const AdminLocationTransfersPage = lazy(() =>
   import('../components/pages/AdminLocationTransfersPage')
 );

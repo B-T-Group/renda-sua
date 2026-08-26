@@ -1,182 +1,260 @@
-import React, { useState } from 'react';
+import LaunchIcon from '@mui/icons-material/Launch';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
-  Typography,
-  TextField,
-  Select,
-  MenuItem,
+  Chip,
+  CircularProgress,
   FormControl,
+  IconButton,
   InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
   TablePagination,
-  Chip,
-  IconButton,
+  TableRow,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
-  CircularProgress,
-  Alert,
-  Paper,
+  Typography,
 } from '@mui/material';
-import {
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Visibility as VisibilityIcon,
-} from '@mui/icons-material';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAdminOrders, OrderWithRisk } from '../../../hooks/useAdminOrders';
-import { OrderDetailDialog } from '../../admin/orders/OrderDetailDialog';
+import { useNavigate } from 'react-router-dom';
+import { OrderRiskChip } from '../../admin/orders/OrderRiskChip';
+import {
+  formatMinutes,
+  formatOrderAmount,
+  nextActionLabel,
+  riskTypeLabel,
+  statusColor,
+} from '../../admin/orders/orderRiskLabels';
+import {
+  useAdminOrders,
+  type AdminOrderRow,
+} from '../../../hooks/useAdminOrders';
 
-const getRiskColor = (level: string) => {
-  switch (level) {
-    case 'critical':
-      return 'error';
-    case 'high':
-      return 'warning';
-    case 'medium':
-      return 'info';
-    case 'low':
-      return 'success';
-    default:
-      return 'default';
-  }
-};
+const STATUS_OPTIONS = [
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'in_delivery',
+];
 
-const getRiskIcon = (level: string) => {
-  switch (level) {
-    case 'critical':
-      return <ErrorIcon fontSize="small" />;
-    case 'high':
-      return <WarningIcon fontSize="small" />;
-    case 'medium':
-      return <InfoIcon fontSize="small" />;
-    case 'low':
-      return <CheckCircleIcon fontSize="small" />;
-    default:
-      return null;
-  }
-};
-
-const getStatusColor = (status: string) => {
-  if (status.includes('cancel') || status.includes('fail')) return 'error';
-  if (status === 'delivered' || status === 'complete') return 'success';
-  if (status === 'pending' || status === 'pending_payment') return 'warning';
-  return 'primary';
-};
+const RISK_TYPE_OPTIONS = [
+  'pending_acceptance',
+  'ready_unassigned',
+  'pickup_overdue',
+  'delivery_delayed',
+] as const;
 
 export const AdminOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [riskFilter, setRiskFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+  const [queue, setQueue] = useState<'at_risk' | 'all'>('at_risk');
+  const [status, setStatus] = useState('all');
+  const [severity, setSeverity] = useState('all');
+  const [riskType, setRiskType] = useState('all');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [selectedOrder, setSelectedOrder] = useState<OrderWithRisk | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
-  const { data, isLoading, error, refetch } = useAdminOrders({
-    status: statusFilter,
-    risk_level: riskFilter,
-    search: searchQuery,
-    offset: page * rowsPerPage,
-    limit: rowsPerPage,
-  });
+  const filters = useMemo(
+    () => ({
+      queue,
+      status,
+      severity,
+      risk_type: riskType === 'all' ? undefined : riskType,
+      search: search.trim() || undefined,
+      offset: page * rowsPerPage,
+      limit: rowsPerPage,
+    }),
+    [queue, status, severity, riskType, search, page, rowsPerPage]
+  );
 
-  const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const { data, isLoading, error, refetch } = useAdminOrders(filters);
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+  const resetToFirstPage = <T,>(setter: (value: T) => void) => (value: T) => {
+    setter(value);
     setPage(0);
-  };
-
-  const handleViewOrder = (order: OrderWithRisk) => {
-    setSelectedOrder(order);
-    setDetailDialogOpen(true);
-  };
-
-  const handleCloseDetailDialog = () => {
-    setDetailDialogOpen(false);
-    setSelectedOrder(null);
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'XAF',
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        {t('admin.orders.title', 'Order Risk Management')}
-      </Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ sm: 'center' }}
+        spacing={1}
+        sx={{ mb: 2 }}
+      >
+        <Box>
+          <Typography variant="h4">
+            {t('admin.orders.title', 'Order operations')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'admin.orders.subtitle',
+              'Orders that need a human, and everything else still in flight.'
+            )}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            variant="outlined"
+            onClick={() => navigate('/admin/pickup-ops')}
+          >
+            {t('admin.orders.pickupOps', 'Pickup health')}
+          </Button>
+          <Tooltip title={t('common.refresh', 'Refresh')}>
+            <IconButton onClick={refetch}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Stack>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <TextField
-              label={t('admin.orders.search', 'Search')}
-              variant="outlined"
-              size="small"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('admin.orders.searchPlaceholder', 'Order number or client name')}
-              sx={{ minWidth: 250 }}
-            />
-
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>{t('admin.orders.status', 'Status')}</InputLabel>
-              <Select
-                value={statusFilter}
-                label={t('admin.orders.status', 'Status')}
-                onChange={(e) => setStatusFilter(e.target.value)}
+          <Stack spacing={2}>
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+            >
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={queue}
+                onChange={(_e, value) =>
+                  value && resetToFirstPage(setQueue)(value)
+                }
               >
-                <MenuItem value="all">{t('admin.orders.allStatuses', 'All Statuses')}</MenuItem>
-                <MenuItem value="pending">{t('admin.orders.pending', 'Pending')}</MenuItem>
-                <MenuItem value="confirmed">{t('admin.orders.confirmed', 'Confirmed')}</MenuItem>
-                <MenuItem value="preparing">{t('admin.orders.preparing', 'Preparing')}</MenuItem>
-                <MenuItem value="ready_for_pickup">{t('admin.orders.readyForPickup', 'Ready for Pickup')}</MenuItem>
-                <MenuItem value="assigned_to_agent">{t('admin.orders.assignedToAgent', 'Assigned to Agent')}</MenuItem>
-                <MenuItem value="picked_up">{t('admin.orders.pickedUp', 'Picked Up')}</MenuItem>
-                <MenuItem value="in_transit">{t('admin.orders.inTransit', 'In Transit')}</MenuItem>
-                <MenuItem value="out_for_delivery">{t('admin.orders.outForDelivery', 'Out for Delivery')}</MenuItem>
-              </Select>
-            </FormControl>
+                <ToggleButton value="at_risk">
+                  {t('admin.orders.queueAtRisk', 'Needs attention')}
+                  {data ? ` (${data.counts.at_risk})` : ''}
+                </ToggleButton>
+                <ToggleButton value="all">
+                  {t('admin.orders.queueAll', 'All active orders')}
+                  {data ? ` (${data.counts.total})` : ''}
+                </ToggleButton>
+              </ToggleButtonGroup>
 
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>{t('admin.orders.riskLevel', 'Risk Level')}</InputLabel>
-              <Select
-                value={riskFilter}
-                label={t('admin.orders.riskLevel', 'Risk Level')}
-                onChange={(e) => setRiskFilter(e.target.value)}
-              >
-                <MenuItem value="all">{t('admin.orders.allRisks', 'All Risks')}</MenuItem>
-                <MenuItem value="critical">{t('admin.orders.critical', 'Critical')}</MenuItem>
-                <MenuItem value="high">{t('admin.orders.high', 'High')}</MenuItem>
-                <MenuItem value="medium">{t('admin.orders.medium', 'Medium')}</MenuItem>
-                <MenuItem value="low">{t('admin.orders.low', 'Low')}</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
+              {data && (
+                <Stack direction="row" spacing={1}>
+                  <Chip
+                    size="small"
+                    color="error"
+                    label={t('admin.orders.criticalCount', '{{count}} critical', {
+                      count: data.counts.critical,
+                    })}
+                  />
+                  <Chip
+                    size="small"
+                    color="warning"
+                    label={t('admin.orders.warningCount', '{{count}} warning', {
+                      count: data.counts.warning,
+                    })}
+                  />
+                </Stack>
+              )}
+            </Stack>
+
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              <TextField
+                label={t('admin.orders.search', 'Search')}
+                size="small"
+                value={search}
+                onChange={(e) => resetToFirstPage(setSearch)(e.target.value)}
+                placeholder={t(
+                  'admin.orders.searchPlaceholder',
+                  'Order number, client, or business'
+                )}
+                sx={{ minWidth: 260 }}
+              />
+
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel>{t('admin.orders.status', 'Status')}</InputLabel>
+                <Select
+                  value={status}
+                  label={t('admin.orders.status', 'Status')}
+                  onChange={(e) => resetToFirstPage(setStatus)(e.target.value)}
+                >
+                  <MenuItem value="all">
+                    {t('admin.orders.allStatuses', 'All statuses')}
+                  </MenuItem>
+                  {STATUS_OPTIONS.map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {option.replace(/_/g, ' ')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>{t('admin.orders.severity', 'Severity')}</InputLabel>
+                <Select
+                  value={severity}
+                  label={t('admin.orders.severity', 'Severity')}
+                  onChange={(e) => resetToFirstPage(setSeverity)(e.target.value)}
+                >
+                  <MenuItem value="all">
+                    {t('admin.orders.allSeverities', 'All severities')}
+                  </MenuItem>
+                  <MenuItem value="critical">
+                    {t('admin.orders.riskLabels.critical', 'Critical')}
+                  </MenuItem>
+                  <MenuItem value="warning">
+                    {t('admin.orders.riskLabels.warning', 'Warning')}
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>{t('admin.orders.riskType', 'Risk')}</InputLabel>
+                <Select
+                  value={riskType}
+                  label={t('admin.orders.riskType', 'Risk')}
+                  onChange={(e) => resetToFirstPage(setRiskType)(e.target.value)}
+                >
+                  <MenuItem value="all">
+                    {t('admin.orders.allRisks', 'All risks')}
+                  </MenuItem>
+                  {RISK_TYPE_OPTIONS.map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {riskTypeLabel(t, option)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </Stack>
         </CardContent>
       </Card>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 3 }} action={
+          <Button color="inherit" size="small" onClick={refetch}>
+            {t('common.retry', 'Retry')}
+          </Button>
+        }>
           {t('admin.orders.error', 'Failed to load orders')}
         </Alert>
       )}
@@ -188,99 +266,43 @@ export const AdminOrdersPage: React.FC = () => {
       ) : (
         <Paper>
           <TableContainer>
-            <Table>
+            <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>{t('admin.orders.risk', 'Risk')}</TableCell>
                   <TableCell>{t('admin.orders.orderNumber', 'Order #')}</TableCell>
-                  <TableCell>{t('admin.orders.client', 'Client')}</TableCell>
-                  <TableCell>{t('admin.orders.business', 'Business')}</TableCell>
+                  <TableCell>{t('admin.orders.whyAtRisk', 'Why')}</TableCell>
                   <TableCell>{t('admin.orders.statusHeader', 'Status')}</TableCell>
-                  <TableCell>{t('admin.orders.amount', 'Amount')}</TableCell>
-                  <TableCell>{t('admin.orders.created', 'Created')}</TableCell>
+                  <TableCell>{t('admin.orders.business', 'Business')}</TableCell>
                   <TableCell>{t('admin.orders.agent', 'Agent')}</TableCell>
-                  <TableCell>{t('admin.orders.actions', 'Actions')}</TableCell>
+                  <TableCell>{t('admin.orders.amount', 'Amount')}</TableCell>
+                  <TableCell align="right">
+                    {t('admin.orders.actions', 'Actions')}
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data?.orders.map((order) => (
-                  <TableRow
+                  <OrderQueueRow
                     key={order.id}
-                    sx={{
-                      backgroundColor:
-                        order.risk_level === 'critical'
-                          ? 'rgba(211, 47, 47, 0.08)'
-                          : order.risk_level === 'high'
-                          ? 'rgba(237, 108, 2, 0.08)'
-                          : 'inherit',
-                    }}
-                  >
-                    <TableCell>
-                      <Tooltip
-                        title={
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              {t('admin.orders.riskFactors', 'Risk Factors')}:
-                            </Typography>
-                            {order.risk_factors.length > 0 ? (
-                              order.risk_factors.map((factor, idx) => (
-                                <Typography key={idx} variant="body2">
-                                  • {factor}
-                                </Typography>
-                              ))
-                            ) : (
-                              <Typography variant="body2">
-                                {t('admin.orders.noRiskFactors', 'No risk factors')}
-                              </Typography>
-                            )}
-                          </Box>
-                        }
-                      >
-                        <Chip
-                          icon={getRiskIcon(order.risk_level)}
-                          label={`${order.risk_score} - ${order.risk_level.toUpperCase()}`}
-                          color={getRiskColor(order.risk_level) as any}
-                          size="small"
-                        />
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{order.order_number}</TableCell>
-                    <TableCell>
-                      {order.client?.user
-                        ? `${order.client.user.first_name} ${order.client.user.last_name}`
-                        : t('admin.orders.noClient', 'N/A')}
-                    </TableCell>
-                    <TableCell>
-                      {order.business_location?.name || order.business?.name || t('admin.orders.noBusiness', 'N/A')}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={order.current_status.replace(/_/g, ' ')}
-                        color={getStatusColor(order.current_status) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{formatCurrency(order.total_amount, order.currency)}</TableCell>
-                    <TableCell>{formatDate(order.created_at)}</TableCell>
-                    <TableCell>
-                      {order.assigned_agent?.user
-                        ? `${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`
-                        : t('admin.orders.noAgent', 'Unassigned')}
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={t('admin.orders.viewDetails', 'View Details')}>
-                        <IconButton size="small" onClick={() => handleViewOrder(order)}>
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
+                    order={order}
+                    onOpen={() => navigate(`/admin/orders/${order.id}`)}
+                  />
                 ))}
                 {data?.orders.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
-                      <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
-                        {t('admin.orders.noOrders', 'No orders found')}
+                    <TableCell colSpan={8} align="center">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ py: 4 }}
+                      >
+                        {queue === 'at_risk'
+                          ? t(
+                              'admin.orders.emptyAtRisk',
+                              'Nothing needs attention right now.'
+                            )
+                          : t('admin.orders.noOrders', 'No orders found')}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -294,20 +316,85 @@ export const AdminOrdersPage: React.FC = () => {
             count={data?.total || 0}
             rowsPerPage={rowsPerPage}
             page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
+            onPageChange={(_e, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
           />
         </Paper>
       )}
-
-      {selectedOrder && (
-        <OrderDetailDialog
-          open={detailDialogOpen}
-          order={selectedOrder}
-          onClose={handleCloseDetailDialog}
-        />
-      )}
     </Box>
+  );
+};
+
+const OrderQueueRow: React.FC<{
+  order: AdminOrderRow;
+  onOpen: () => void;
+}> = ({ order, onOpen }) => {
+  const { t } = useTranslation();
+  const leading = order.risk_incidents[0];
+  const recommendation = nextActionLabel(t, order.next_action);
+  const business =
+    order.business_location?.name ||
+    order.contacts.find((c) => c.role === 'business')?.name ||
+    '—';
+  const agent = order.contacts.find((c) => c.role === 'agent')?.name;
+
+  return (
+    <TableRow hover>
+      <TableCell>
+        <Stack spacing={0.5} alignItems="flex-start">
+          <OrderRiskChip level={order.risk_level} tooltip={order.risk_summary} />
+          {order.risk_acknowledged && order.risk_level !== 'none' && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={t('admin.orders.acknowledgedShort', 'Acknowledged')}
+            />
+          )}
+        </Stack>
+      </TableCell>
+      <TableCell>{order.order_number}</TableCell>
+      <TableCell sx={{ maxWidth: 320 }}>
+        {leading ? (
+          <>
+            <Typography variant="body2" fontWeight={600}>
+              {riskTypeLabel(t, leading.risk_type)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('admin.orders.overdueBy', 'overdue by {{duration}}', {
+                duration: formatMinutes(t, leading.overdue_minutes),
+              })}
+              {recommendation ? ` · ${recommendation}` : ''}
+            </Typography>
+          </>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            {t('admin.orders.onTrack', 'On track')}
+          </Typography>
+        )}
+      </TableCell>
+      <TableCell>
+        <Chip
+          size="small"
+          label={order.current_status.replace(/_/g, ' ')}
+          color={statusColor(order.current_status)}
+        />
+      </TableCell>
+      <TableCell>{business}</TableCell>
+      <TableCell>
+        {agent || t('admin.orders.noAgent', 'Unassigned')}
+      </TableCell>
+      <TableCell>
+        {formatOrderAmount(order.total_amount, order.currency)}
+      </TableCell>
+      <TableCell align="right">
+        <Button size="small" endIcon={<LaunchIcon />} onClick={onOpen}>
+          {t('admin.orders.openOrder', 'Open order')}
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 };
 

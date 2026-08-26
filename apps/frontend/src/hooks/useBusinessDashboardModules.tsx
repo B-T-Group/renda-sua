@@ -338,19 +338,28 @@ export function useBusinessDashboardModules({
         path: '/admin/business-reliability',
       },
       {
-        title: t(
-          'business.dashboard.orderRiskManagement',
-          'Order Risk Management'
-        ),
+        title: t('business.dashboard.orderOperations', 'Order operations'),
         description: t(
-          'business.dashboard.orderRiskManagementDescription',
-          'Monitor and act on at-risk orders with risk scoring and smart redispatch'
+          'business.dashboard.orderOperationsDescription',
+          'Intervene on at-risk orders, contact every participant, and redispatch'
         ),
         icon: <OrdersIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#d32f2f',
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
         path: '/admin/orders',
+      },
+      {
+        title: t('business.dashboard.pickupOps', 'Pickup health'),
+        description: t(
+          'business.dashboard.pickupOpsDescription',
+          'Live pickup SLA board for orders waiting on agent collection'
+        ),
+        icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00695c',
+        requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        path: '/admin/pickup-ops',
       },
       {
         title: t(

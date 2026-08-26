@@ -29,7 +29,12 @@ export type OrderEventType =
   | 'reassigned'
   | 'reassignment_pool_empty'
   | 'customer_notified_delay'
-  | 'address_changed_post_assignment';
+  | 'address_changed_post_assignment'
+  | 'risk_incident_opened'
+  | 'risk_incident_resolved'
+  | 'risk_superusers_alerted'
+  | 'risk_incident_acknowledged'
+  | 'admin_intervention';
 
 export type OrderEventActorType =
   | 'client'

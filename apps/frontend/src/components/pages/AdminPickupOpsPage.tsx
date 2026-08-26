@@ -173,7 +173,7 @@ const AdminPickupOpsPage: React.FC = () => {
                 <TableCell>
                   <Button
                     component={RouterLink}
-                    to={`/orders/${row.id}`}
+                    to={`/admin/orders/${row.id}`}
                     size="small"
                   >
                     {row.order_number}

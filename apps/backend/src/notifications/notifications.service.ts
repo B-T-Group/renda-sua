@@ -103,6 +103,19 @@ import {
   buildItemAiProposalPushMessage,
   buildRentalListingAiProposalPushMessage,
 } from './ai-proposal-push.messages';
+import {
+  buildOrderRiskSuperuserEmail,
+  buildOrderRiskSuperuserPushMessage,
+  orderRiskLabel,
+} from './order-risk-push.messages';
+import type {
+  OrderRiskSeverity,
+  OrderRiskType,
+} from '../orders/order-risk.types';
+import type {
+  ChannelAttemptResult,
+  NotifyRequest,
+} from './orchestration/notification.types';
 import type { RatingType } from '../ratings/dto/create-rating.dto';
 
 export type {
@@ -3936,6 +3949,88 @@ export class NotificationsService {
         `notifySuperusersIdDocumentUploaded: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /**
+   * Alerts every platform superuser that an order needs intervention.
+   * Returns the per-recipient channel attempts so the incident can record them.
+   */
+  async notifySuperusersOrderRisk(params: {
+    orderId: string;
+    orderNumber: string;
+    riskType: OrderRiskType;
+    severity: OrderRiskSeverity;
+    reason: string;
+    incidentId: string;
+  }): Promise<ChannelAttemptResult[]> {
+    try {
+      const recipients = await this.listSuperuserRecipients();
+      const requests = recipients.map((recipient) =>
+        this.buildOrderRiskNotifyRequest(params, recipient)
+      );
+      const results = await this.orchestrator.notifyMany(requests);
+      return results.flatMap((result) => result.attempts);
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperusersOrderRisk: ${error?.message ?? String(error)}`
+      );
+      return [];
+    }
+  }
+
+  private buildOrderRiskNotifyRequest(
+    params: {
+      orderId: string;
+      orderNumber: string;
+      riskType: OrderRiskType;
+      severity: OrderRiskSeverity;
+      reason: string;
+      incidentId: string;
+    },
+    recipient: { userId: string; email: string | null }
+  ): NotifyRequest {
+    const links = this.deepLinkService.adminOrder(params.orderId);
+    const push = buildOrderRiskSuperuserPushMessage(params);
+    const email = buildOrderRiskSuperuserEmail({
+      ...params,
+      adminUrl: links.universal,
+    });
+    return {
+      type: 'admin.order_risk',
+      category: 'actionable',
+      recipientUserId: recipient.userId,
+      preferenceCategory: 'order_updates',
+      entityType: 'order_risk_incident',
+      entityId: params.incidentId,
+      dedupeKey: `order_risk:${params.incidentId}:${params.severity}`,
+      channels: {
+        push: {
+          ...push,
+          interruptible: params.severity === 'critical',
+          data: {
+            type: 'admin_order_risk',
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            riskType: params.riskType,
+            severity: params.severity,
+            incidentId: params.incidentId,
+            url: links.path,
+          },
+        },
+        whatsapp: {
+          templateKey: 'admin_order_risk',
+          ctaUrl: links.universal,
+          variables: {
+            orderNumber: params.orderNumber,
+            riskLabel: orderRiskLabel(params.riskType),
+            reason: params.reason,
+          },
+        },
+        email: recipient.email
+          ? { to: recipient.email, subject: email.subject, html: email.html }
+          : undefined,
+      },
+    };
   }
 
   async notifySuperusersItemAiReviewFailed(params: {

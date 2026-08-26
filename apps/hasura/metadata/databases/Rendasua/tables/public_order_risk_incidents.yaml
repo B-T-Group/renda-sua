@@ -1,0 +1,10 @@
+table:
+  name: order_risk_incidents
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: acknowledged_by_user
+    using:
+      foreign_key_constraint_on: acknowledged_by
