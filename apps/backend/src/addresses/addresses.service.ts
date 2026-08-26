@@ -1417,7 +1417,8 @@ export class AddressesService {
     addressIds: string[],
     opts?: { includeInactive?: boolean }
   ): Promise<AddressResponse[]> {
-    if (!addressIds || addressIds.length === 0) return [];
+    const ids = this.uniqueNonEmptyIds(addressIds);
+    if (ids.length === 0) return [];
     const statusFilter = opts?.includeInactive ? '' : ', status: {_eq: active}';
     const query = `
       query GetAddressesByIds($ids: [uuid!]!) {
@@ -1441,9 +1442,19 @@ export class AddressesService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      ids: addressIds,
+      ids,
     });
     return result.addresses || [];
+  }
+
+  private uniqueNonEmptyIds(addressIds?: Array<string | null | undefined>): string[] {
+    return [
+      ...new Set(
+        (addressIds ?? [])
+          .map((id) => (typeof id === 'string' ? id.trim() : ''))
+          .filter((id) => id.length > 0)
+      ),
+    ];
   }
 
   /**

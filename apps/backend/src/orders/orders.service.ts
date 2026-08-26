@@ -10372,6 +10372,17 @@ export class OrdersService {
     return primaryActive?.id ?? active[0]?.id ?? '';
   }
 
+  private requireDeliveryAddressId(
+    addressId: string | undefined,
+    notFoundMessage: string
+  ): string {
+    const trimmed = addressId?.trim() ?? '';
+    if (!trimmed) {
+      throw new HttpException(notFoundMessage, HttpStatus.NOT_FOUND);
+    }
+    return trimmed;
+  }
+
   /**
    * Calculate delivery fee for a given item based on distance
    * Uses tiered pricing model with fallback to delivery_fees table
@@ -10402,9 +10413,9 @@ export class OrdersService {
       }
 
       // Use explicit address, else first active primary, else first active
-      const targetAddressId = this.resolveDeliveryFeeTargetAddressId(
-        addressId,
-        user.addresses
+      const targetAddressId = this.requireDeliveryAddressId(
+        this.resolveDeliveryFeeTargetAddressId(addressId, user.addresses),
+        'User address not found'
       );
       const userAddresses = await this.addressesService.getAddressesByIds([
         targetAddressId,
@@ -10415,8 +10426,12 @@ export class OrdersService {
       }
 
       // Get business location address
+      const businessAddressId = this.requireDeliveryAddressId(
+        item.business_location?.address_id,
+        'Business address not found'
+      );
       const businessAddresses = await this.addressesService.getAddressesByIds([
-        item.business_location.address_id,
+        businessAddressId,
       ]);
       const businessAddress = businessAddresses[0];
       if (!businessAddress) {
