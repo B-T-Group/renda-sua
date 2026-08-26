@@ -728,6 +728,9 @@
       "overdueBy": "overdue by {{duration}}",
       "onTrack": "On track",
       "openOrder": "Open order",
+      "lastUpdated": "Last updated",
+      "justNow": "just now",
+      "timeAgo": "{{duration}} ago",
       "emptyAtRisk": "Nothing needs attention right now.",
       "riskLabels": {
         "pendingAcceptance": "Not confirmed by merchant",

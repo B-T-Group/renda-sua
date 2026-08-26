@@ -83,6 +83,24 @@ export function formatMinutes(t: TFunction, minutes: number): string {
   });
 }
 
+/** "just now" / "12 min ago" style age, for columns tracking staleness. */
+export function formatTimeAgo(t: TFunction, iso: string | null): string {
+  if (!iso) return '—';
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return '—';
+  const minutes = Math.round((Date.now() - timestamp) / 60000);
+  if (minutes < 1) return t('admin.orders.justNow', 'just now');
+  return t('admin.orders.timeAgo', '{{duration}} ago', {
+    duration: formatMinutes(t, minutes),
+  });
+}
+
+export function formatAbsoluteTime(iso: string | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+}
+
 export function statusColor(
   status: string
 ): 'error' | 'success' | 'warning' | 'primary' {

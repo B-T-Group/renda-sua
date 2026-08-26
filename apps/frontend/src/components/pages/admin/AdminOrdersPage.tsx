@@ -33,8 +33,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { OrderRiskChip } from '../../admin/orders/OrderRiskChip';
 import {
+  formatAbsoluteTime,
   formatMinutes,
   formatOrderAmount,
+  formatTimeAgo,
   nextActionLabel,
   riskTypeLabel,
   statusColor,
@@ -276,6 +278,9 @@ export const AdminOrdersPage: React.FC = () => {
                   <TableCell>{t('admin.orders.business', 'Business')}</TableCell>
                   <TableCell>{t('admin.orders.agent', 'Agent')}</TableCell>
                   <TableCell>{t('admin.orders.amount', 'Amount')}</TableCell>
+                  <TableCell>
+                    {t('admin.orders.lastUpdated', 'Last updated')}
+                  </TableCell>
                   <TableCell align="right">
                     {t('admin.orders.actions', 'Actions')}
                   </TableCell>
@@ -283,15 +288,11 @@ export const AdminOrdersPage: React.FC = () => {
               </TableHead>
               <TableBody>
                 {data?.orders.map((order) => (
-                  <OrderQueueRow
-                    key={order.id}
-                    order={order}
-                    onOpen={() => navigate(`/admin/orders/${order.id}`)}
-                  />
+                  <OrderQueueRow key={order.id} order={order} />
                 ))}
                 {data?.orders.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <Typography
                         variant="body2"
                         color="text.secondary"
@@ -328,10 +329,7 @@ export const AdminOrdersPage: React.FC = () => {
   );
 };
 
-const OrderQueueRow: React.FC<{
-  order: AdminOrderRow;
-  onOpen: () => void;
-}> = ({ order, onOpen }) => {
+const OrderQueueRow: React.FC<{ order: AdminOrderRow }> = ({ order }) => {
   const { t } = useTranslation();
   const leading = order.risk_incidents[0];
   const recommendation = nextActionLabel(t, order.next_action);
@@ -389,8 +387,22 @@ const OrderQueueRow: React.FC<{
       <TableCell>
         {formatOrderAmount(order.total_amount, order.currency)}
       </TableCell>
+      <TableCell>
+        <Tooltip title={formatAbsoluteTime(order.timing.updated_at)}>
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {formatTimeAgo(t, order.timing.updated_at)}
+          </Typography>
+        </Tooltip>
+      </TableCell>
       <TableCell align="right">
-        <Button size="small" endIcon={<LaunchIcon />} onClick={onOpen}>
+        <Button
+          size="small"
+          endIcon={<LaunchIcon />}
+          component="a"
+          href={`/admin/orders/${order.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           {t('admin.orders.openOrder', 'Open order')}
         </Button>
       </TableCell>

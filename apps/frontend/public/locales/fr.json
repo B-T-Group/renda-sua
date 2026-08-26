@@ -487,6 +487,9 @@
       "overdueBy": "en retard de {{duration}}",
       "onTrack": "Dans les temps",
       "openOrder": "Ouvrir la commande",
+      "lastUpdated": "Dernière mise à jour",
+      "justNow": "à l'instant",
+      "timeAgo": "il y a {{duration}}",
       "emptyAtRisk": "Aucune commande ne nécessite d'intervention pour le moment.",
       "riskLabels": {
         "pendingAcceptance": "Non confirmée par le marchand",
