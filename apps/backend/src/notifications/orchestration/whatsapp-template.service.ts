@@ -5,7 +5,7 @@ import type {
 } from '../../whatsapp/whatsapp.types';
 import type { WhatsAppChannelPayload } from './notification.types';
 
-/** Maps internal template keys → Meta-approved template names (en_US / fr). */
+/** Maps internal template keys → Meta-approved template names (en / fr). */
 const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   order_created_business: { en: 'rs_order_new', fr: 'rs_order_new' },
   order_offer_agent: { en: 'rs_delivery_offer', fr: 'rs_delivery_offer' },
@@ -64,8 +64,13 @@ export class WhatsAppTemplateService {
     return locale === 'fr' ? entry.fr : entry.en;
   }
 
+  /**
+   * Meta rejects a send with #132001 when the template has no translation in the
+   * requested language. Our templates are approved as `en` and `fr` — not
+   * `en_US` — so those are the only two codes we may ask for.
+   */
   languageCode(locale?: string): string {
-    return locale === 'fr' ? 'fr' : 'en_US';
+    return locale === 'fr' ? 'fr' : 'en';
   }
 
   /** Meta's approved category for this template; drives transport and pricing. */

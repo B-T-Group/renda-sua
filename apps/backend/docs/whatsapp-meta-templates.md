@@ -1,6 +1,8 @@
 # WhatsApp Meta template submission checklist
 
-Submit these templates in Meta Business Manager (WhatsApp → Message templates) for **en_US** and **fr** before enabling `WHATSAPP_NOTIFICATIONS_ENABLED` in production.
+Submit these templates in Meta Business Manager (WhatsApp → Message templates) for **en** and **fr** before enabling `WHATSAPP_NOTIFICATIONS_ENABLED` in production.
+
+Those two codes are the only ones the backend asks for (`WhatsAppTemplateService.languageCode`). A template approved under any other translation — `en_US` in particular — is rejected at send time with **#132001 Template name does not exist in the translation**, so add the `en` translation rather than changing the code.
 
 Internal keys are mapped in `WhatsAppTemplateService`.
 
@@ -45,7 +47,7 @@ Marketing templates are also priced as marketing and are subject to WhatsApp's *
 **Vars:** `{{1}}` orderNumber · `{{2}}` customerName · `{{3}}` pickupWindow  
 **Button:** Open order → `https://rendasua.com/app/orders/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua: you have a new marketplace order.
 
@@ -76,7 +78,7 @@ Appuyez ci-dessous pour ouvrir la commande dans Rendasua.
 
 Meta categorizes this one as **marketing**, so it is priced as marketing, capped by per-user marketing limits, and routed through the Marketing Messages API when onboarding is complete. Push remains the primary channel for offers; WhatsApp is best-effort.
 
-**en_US**
+**en**
 ```
 Rendasua: a new delivery offer is available near you.
 
@@ -103,7 +105,7 @@ Ouvrez l’application rapidement pour accepter ou refuser cette offre avant qu�
 **Vars:** `{{1}}` orderNumber · `{{2}}` statusLabel  
 **Button:** View order → `https://rendasua.com/app/orders/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua order update for you.
 
@@ -128,7 +130,7 @@ Ouvrez l’application pour voir les détails et la suite.
 **Vars:** `{{1}}` orderNumber  
 **Button:** View order → `https://rendasua.com/app/orders/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua: your order is ready for pickup.
 
@@ -153,7 +155,7 @@ La commande {{1}} peut être récupérée maintenant. Rendez-vous au magasin ou 
 **Vars:** `{{1}}` itemName · `{{2}}` dates  
 **Button:** Review request → `https://rendasua.com/app/rentals/requests/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua: you received a new rental request.
 
@@ -180,7 +182,7 @@ Veuillez examiner et répondre dans l’application pour informer rapidement le 
 **Vars:** `{{1}}` reason  
 **Button (static):** Open documents → `https://rendasua.com/app/verification`
 
-**en_US**
+**en**
 ```
 Rendasua: your account verification needs attention.
 
@@ -231,7 +233,7 @@ Authentication templates go through **Cloud API** `/{phone-number-id}/messages`,
 **Vars:** `{{1}}` orderNumber · `{{2}}` window  
 **Button:** View order → `https://rendasua.com/app/orders/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua pickup reminder for your assigned order.
 
@@ -256,7 +258,7 @@ Ouvrez l’application pour les détails de la commande.
 **Vars:** `{{1}}` orderNumber  
 **Button:** View order → `https://rendasua.com/app/orders/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua could not complete a payment for your order.
 
@@ -281,7 +283,7 @@ Nous sommes disponibles si vous avez besoin d’aide.
 **Vars:** `{{1}}` itemName  
 **Button:** Review → `https://rendasua.com/app/items/{{1}}`
 
-**en_US**
+**en**
 ```
 Rendasua: an AI listing suggestion is ready for review.
 
@@ -312,7 +314,7 @@ Sent to platform staff (`superuser`, `order_manager`) and to the agent who refer
 
 `reason` is a single line built by `buildOrderRiskActionSummary` carrying the merchant, the phone number to call, the client, the amount, and the time left — capped at 300 characters.
 
-**en_US**
+**en**
 ```
 Rendasua: an order needs your intervention.
 
