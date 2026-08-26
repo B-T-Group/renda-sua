@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
 export type OrderRiskType =
@@ -142,6 +142,39 @@ export interface AdminOrdersResponse {
   };
 }
 
+export type AdminOrderStatsPeriod = 'today' | '7d' | '30d' | 'all';
+
+export interface AdminOrderStats {
+  period: AdminOrderStatsPeriod;
+  since: string | null;
+  counts: {
+    total: number;
+    completed: number;
+    in_progress: number;
+    cancelled: number;
+    failed: number;
+    refunds: number;
+    pending_payment: number;
+  };
+  rates: {
+    completion_rate: number | null;
+    cancellation_rate: number | null;
+  };
+  averages: {
+    completion_minutes: number | null;
+    acceptance_minutes: number | null;
+    prep_minutes: number | null;
+    delivery_minutes: number | null;
+    sample_size: number;
+    samples: {
+      completion: number;
+      acceptance: number;
+      prep: number;
+      delivery: number;
+    };
+  };
+}
+
 function buildQuery(filters: AdminOrderFilters): string {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
@@ -177,6 +210,40 @@ export const useAdminOrders = (filters: AdminOrderFilters = {}) => {
   }, [fetchOrders]);
 
   return { data, isLoading, error, refetch: fetchOrders };
+};
+
+export const useAdminOrderStats = (period: AdminOrderStatsPeriod = '7d') => {
+  const apiClient = useApiClient();
+  const [data, setData] = useState<AdminOrderStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  /** Toggling periods quickly must not let a slow older response win. */
+  const latestRequest = useRef(0);
+
+  const fetchStats = useCallback(async () => {
+    const requestId = ++latestRequest.current;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get(
+        `/admin/orders/stats?period=${period}`
+      );
+      if (requestId !== latestRequest.current) return;
+      setData(response.data);
+    } catch (err: any) {
+      if (requestId !== latestRequest.current) return;
+      setError(err);
+    } finally {
+      if (requestId === latestRequest.current) setIsLoading(false);
+    }
+  }, [apiClient, period]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  return { data, isLoading, error, refetch: fetchStats };
 };
 
 export const useAdminOrderDetail = (orderId?: string) => {

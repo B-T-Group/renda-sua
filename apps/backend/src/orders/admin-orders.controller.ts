@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -28,10 +29,16 @@ import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { AdminOrdersService } from './admin-orders.service';
-import type { AdminOrderDetail, AdminOrdersResponse } from './admin-orders.types';
+import type {
+  AdminOrderDetail,
+  AdminOrdersResponse,
+  AdminOrderStatsResponse,
+} from './admin-orders.types';
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AdminOrderStatsPeriod,
+  GetAdminOrderStatsDto,
   GetAdminOrdersDto,
   SendOrderContactEmailDto,
   SendOrderContactMessageDto,
@@ -123,6 +130,74 @@ export class AdminOrdersController {
       this.logger.error('Failed to fetch admin orders', error);
       throw new HttpException(
         error.message || 'Failed to fetch orders',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('stats')
+  @ApiOperation({
+    summary: 'Platform-wide order statistics',
+    description:
+      'Status totals, completion and cancellation rates, and average acceptance, prep, delivery, and end-to-end completion times for the selected period.',
+  })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: AdminOrderStatsPeriod,
+    description: 'Window applied to order creation date. Defaults to 7d.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order statistics for the selected period',
+    schema: {
+      type: 'object',
+      properties: {
+        period: { type: 'string' },
+        since: { type: 'string', nullable: true },
+        counts: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            completed: { type: 'number' },
+            in_progress: { type: 'number' },
+            cancelled: { type: 'number' },
+            failed: { type: 'number' },
+            refunds: { type: 'number' },
+            pending_payment: { type: 'number' },
+          },
+        },
+        rates: {
+          type: 'object',
+          properties: {
+            completion_rate: { type: 'number', nullable: true },
+            cancellation_rate: { type: 'number', nullable: true },
+          },
+        },
+        averages: {
+          type: 'object',
+          properties: {
+            completion_minutes: { type: 'number', nullable: true },
+            acceptance_minutes: { type: 'number', nullable: true },
+            prep_minutes: { type: 'number', nullable: true },
+            delivery_minutes: { type: 'number', nullable: true },
+            sample_size: { type: 'number' },
+            samples: { type: 'object' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Missing platform.orders.cross_business' })
+  async getAdminOrderStats(
+    @Query() query: GetAdminOrderStatsDto
+  ): Promise<AdminOrderStatsResponse> {
+    try {
+      return await this.adminOrdersService.getStats(query);
+    } catch (error: any) {
+      this.logger.error('Failed to fetch admin order stats', error);
+      throw new HttpException(
+        error.message || 'Failed to fetch order statistics',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

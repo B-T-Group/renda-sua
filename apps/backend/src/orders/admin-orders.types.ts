@@ -108,6 +108,46 @@ export interface AdminOrdersResponse {
   limit: number;
 }
 
+export interface AdminOrderStatsCounts {
+  total: number;
+  completed: number;
+  in_progress: number;
+  cancelled: number;
+  failed: number;
+  refunds: number;
+  pending_payment: number;
+}
+
+/** Percentages (0-100) of settled orders, null when there is nothing settled. */
+export interface AdminOrderStatsRates {
+  completion_rate: number | null;
+  cancellation_rate: number | null;
+}
+
+export interface AdminOrderStatsAverages {
+  completion_minutes: number | null;
+  acceptance_minutes: number | null;
+  prep_minutes: number | null;
+  delivery_minutes: number | null;
+  /** Terminal-success orders inspected for durations. */
+  sample_size: number;
+  /** How many of those orders had both endpoints for each metric. */
+  samples: {
+    completion: number;
+    acceptance: number;
+    prep: number;
+    delivery: number;
+  };
+}
+
+export interface AdminOrderStatsResponse {
+  period: string;
+  since: string | null;
+  counts: AdminOrderStatsCounts;
+  rates: AdminOrderStatsRates;
+  averages: AdminOrderStatsAverages;
+}
+
 export interface AdminOrderDetail extends AdminOrderRow {
   timeline: Array<{
     id: string;
