@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrderEventsService } from './order-events.service';
+import { OrderRiskContextService } from './order-risk-context.service';
 import type { RaisedIncident } from './order-risk-incidents.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
 import {
@@ -16,11 +17,12 @@ export class OrderRiskAlertService {
   constructor(
     private readonly notifications: NotificationsService,
     private readonly incidents: OrderRiskIncidentsService,
-    private readonly events: OrderEventsService
+    private readonly events: OrderEventsService,
+    private readonly context: OrderRiskContextService
   ) {}
 
   /**
-   * Sends the superuser alert for a raised incident when it is new, has escalated,
+   * Sends the ops alert for a raised incident when it is new, has escalated,
    * or has gone unresolved past the repeat cooldown.
    */
   async alertIfDue(params: {
@@ -42,7 +44,7 @@ export class OrderRiskAlertService {
     }
   }
 
-  /** Returns true only when at least one superuser channel actually went out. */
+  /** Returns true only when at least one ops channel actually went out. */
   private async deliver(params: {
     orderId: string;
     orderNumber: string;
@@ -50,13 +52,14 @@ export class OrderRiskAlertService {
     finding: OrderRiskFinding;
   }): Promise<boolean> {
     const { raised, finding } = params;
-    const attempts = await this.notifications.notifySuperusersOrderRisk({
+    const attempts = await this.notifications.notifyOpsOrderRisk({
       orderId: params.orderId,
       orderNumber: params.orderNumber,
       riskType: finding.riskType,
       severity: finding.severity,
       reason: finding.reason,
       incidentId: raised.incident.id,
+      action: await this.context.load(params.orderId),
     });
     const delivered = attempts.some(
       (attempt) => attempt.status === 'sent' || attempt.status === 'delivered'
@@ -69,7 +72,7 @@ export class OrderRiskAlertService {
     });
     if (!delivered) {
       this.logger.warn(
-        `No superuser channel delivered for incident ${raised.incident.id} (order ${params.orderId}); will retry next sweep`
+        `No ops channel delivered for incident ${raised.incident.id} (order ${params.orderId}); will retry next sweep`
       );
     }
     await this.events.recordEvent({

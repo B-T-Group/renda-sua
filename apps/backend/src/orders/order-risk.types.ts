@@ -94,6 +94,24 @@ export interface OrderRiskFinding {
   reason: string;
 }
 
+/**
+ * The order facts an operator needs to act straight from the alert, without
+ * first opening the admin panel. Every field is optional because an alert must
+ * still go out when the enrichment query fails.
+ */
+export interface OrderRiskActionContext {
+  businessName?: string | null;
+  locationName?: string | null;
+  /** Best number to reach the merchant on: location line, else owner mobile. */
+  merchantPhone?: string | null;
+  clientName?: string | null;
+  amountLabel?: string | null;
+  /** Minutes left before the system auto-declines a pending order. */
+  minutesUntilAutoDecline?: number | null;
+  /** Agent who onboarded this merchant, alerted so they can chase them. */
+  referringAgentUserId?: string | null;
+}
+
 export interface OrderRiskIncident {
   id: string;
   order_id: string;

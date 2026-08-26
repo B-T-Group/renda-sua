@@ -38,16 +38,29 @@ export function pendingAcceptanceRisk(
   if (order.acceptance_state === 'scheduled') {
     return scheduledActivationRisk(order, config, now);
   }
-  const deadline = acceptanceDeadline(order, config);
+  if (isGraceState(order.acceptance_state)) {
+    return graceAcceptanceRisk(order, config, now);
+  }
+  return awaitingAcceptanceRisk(order, config, now);
+}
+
+/**
+ * The merchant is still inside the confirm window, so only the buffer we owe
+ * them past the deadline (or plain age when no timer ever started) counts.
+ */
+function awaitingAcceptanceRisk(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig,
+  now: DateTime
+): OrderRiskFinding | null {
+  const deadline = toDateTime(order.acceptance_deadline_at);
   const reference =
-    deadline?.at ??
+    deadline ??
     toDateTime(order.created_at)?.plus({ minutes: config.pendingFallbackMinutes });
   if (!reference) return null;
 
-  const overdueMinutes = minutesBetween(
-    reference.plus({ minutes: deadline?.graceMinutes ?? 0 }),
-    now
-  );
+  const buffer = deadline ? config.pendingAcceptanceGraceMinutes : 0;
+  const overdueMinutes = minutesBetween(reference.plus({ minutes: buffer }), now);
   if (overdueMinutes <= 0) return null;
   return {
     riskType: 'pending_acceptance',
@@ -57,6 +70,34 @@ export function pendingAcceptanceRisk(
     reason: deadline
       ? `Merchant has not confirmed ${formatMinutes(overdueMinutes)} past the acceptance deadline`
       : `Order has been pending confirmation for ${formatMinutes(overdueMinutes + config.pendingFallbackMinutes)}`,
+  };
+}
+
+/**
+ * Grace is the last window before the system auto-declines and refunds, so ops
+ * is alerted the moment it starts. Waiting for `grace_deadline_at` would only
+ * surface the order once it had already been cancelled.
+ */
+function graceAcceptanceRisk(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig,
+  now: DateTime
+): OrderRiskFinding | null {
+  const dueAt =
+    toDateTime(order.acceptance_deadline_at) ??
+    toDateTime(order.grace_deadline_at) ??
+    statusSince(order);
+  if (!dueAt) return null;
+
+  const overdueMinutes = Math.max(0, minutesBetween(dueAt, now));
+  return {
+    riskType: 'pending_acceptance',
+    severity: severityFor(overdueMinutes, config.criticalAfterMinutes),
+    overdueMinutes,
+    dueAt: dueAt.toISO(),
+    reason: overdueMinutes
+      ? `Merchant has not confirmed ${formatMinutes(overdueMinutes)} past the acceptance deadline, final grace before auto-decline`
+      : 'Merchant missed the acceptance deadline, final grace before auto-decline',
   };
 }
 
@@ -261,23 +302,9 @@ function statusSince(order: RiskEvaluableOrder): DateTime | null {
   return toDateTime(order.status_changed_at) ?? toDateTime(order.created_at);
 }
 
-/**
- * The live acceptance deadline plus the buffer we still owe the merchant.
- * `grace_deadline_at` is already the extended, final deadline, so it carries no
- * further buffer — only the original deadline gets the acceptance grace.
- */
-function acceptanceDeadline(
-  order: RiskEvaluableOrder,
-  config: OrderRiskConfig
-): { at: DateTime; graceMinutes: number } | null {
-  const state = order.acceptance_state;
-  if (state === 'grace' || state === 'no_response') {
-    const grace = toDateTime(order.grace_deadline_at);
-    if (grace) return { at: grace, graceMinutes: 0 };
-  }
-  const deadline = toDateTime(order.acceptance_deadline_at);
-  if (!deadline) return null;
-  return { at: deadline, graceMinutes: config.pendingAcceptanceGraceMinutes };
+/** Merchant blew the confirm deadline and is on the final countdown. */
+function isGraceState(state?: string | null): boolean {
+  return state === 'grace' || state === 'no_response';
 }
 
 function assignedFallbackDue(

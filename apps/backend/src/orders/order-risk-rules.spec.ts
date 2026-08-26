@@ -91,36 +91,49 @@ describe('evaluateOrderRisk — pending acceptance', () => {
     expect(finding.reason).toContain('1h 30min ago');
   });
 
-  it('uses the grace deadline once the merchant is in the grace window', () => {
+  it('flags the order the moment the merchant enters grace', () => {
+    // Grace is the last window before auto-decline, so waiting for
+    // grace_deadline_at would only surface an order already cancelled.
     expect(
       evaluate({
         current_status: 'pending',
         acceptance_state: 'grace',
-        acceptance_deadline_at: minutesAgo(120),
-        grace_deadline_at: minutesAhead(20),
-      })
-    ).toEqual([]);
-    expect(
-      evaluate({
-        current_status: 'pending',
-        acceptance_state: 'grace',
-        acceptance_deadline_at: minutesAgo(120),
-        grace_deadline_at: minutesAgo(20),
+        acceptance_deadline_at: minutesAgo(15),
+        grace_deadline_at: minutesAhead(5),
       })
     ).toEqual(['pending_acceptance']);
   });
 
-  it('adds no further buffer once the grace deadline itself has passed', () => {
-    expect(
-      evaluate({
+  it('flags a grace order whose deadline only just fired', () => {
+    const [finding] = evaluateOrderRisk(
+      {
+        id: 'order-1',
         current_status: 'pending',
         acceptance_state: 'grace',
+        acceptance_deadline_at: NOW.toISO() as string,
+        grace_deadline_at: minutesAhead(5),
+      } as RiskEvaluableOrder,
+      DEFAULT_ORDER_RISK_CONFIG,
+      NOW
+    );
+    expect(finding.riskType).toBe('pending_acceptance');
+    expect(finding.overdueMinutes).toBe(0);
+  });
+
+  it('measures grace lateness from the acceptance deadline', () => {
+    const [finding] = evaluateOrderRisk(
+      {
+        id: 'order-1',
+        current_status: 'pending',
+        acceptance_state: 'no_response',
         acceptance_deadline_at: minutesAgo(120),
-        grace_deadline_at: minutesAgo(
-          DEFAULT_ORDER_RISK_CONFIG.pendingAcceptanceGraceMinutes - 2
-        ),
-      })
-    ).toEqual(['pending_acceptance']);
+        grace_deadline_at: minutesAgo(20),
+      } as RiskEvaluableOrder,
+      DEFAULT_ORDER_RISK_CONFIG,
+      NOW
+    );
+    expect(finding.overdueMinutes).toBe(120);
+    expect(finding.reason).toContain('2h 0min');
   });
 });
 

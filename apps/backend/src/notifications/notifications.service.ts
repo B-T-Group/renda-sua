@@ -50,6 +50,10 @@ import {
   smsPaymentFailed,
 } from './order-notification-sms.messages';
 import {
+  buildOrderRiskRecipients,
+  type OrderRiskRecipient,
+} from './order-risk-recipients.util';
+import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
@@ -72,6 +76,7 @@ import {
   buildNewOrderMessagePushMessage,
   buildNewRentalBookingMessagePushMessage,
   buildOrderAcceptanceEscalationPushMessage,
+  buildOrderAcceptanceEscalationStatusLabel,
   buildOrderAutoDeclinedPushMessage,
   buildOrderBusyPushMessage,
   buildOrderNoAgentPushMessage,
@@ -104,11 +109,13 @@ import {
   buildRentalListingAiProposalPushMessage,
 } from './ai-proposal-push.messages';
 import {
+  buildOrderRiskActionSummary,
   buildOrderRiskSuperuserEmail,
   buildOrderRiskSuperuserPushMessage,
   orderRiskLabel,
 } from './order-risk-push.messages';
 import type {
+  OrderRiskActionContext,
   OrderRiskSeverity,
   OrderRiskType,
 } from '../orders/order-risk.types';
@@ -144,6 +151,18 @@ export interface ExpoPushOptions {
   sound?: string | null;
   channelId?: string;
   ttlSeconds?: number;
+}
+
+/** One at-risk order, addressed to everyone who can intervene on it. */
+export interface OrderRiskAlertParams {
+  orderId: string;
+  orderNumber: string;
+  riskType: OrderRiskType;
+  severity: OrderRiskSeverity;
+  reason: string;
+  incidentId: string;
+  /** Contact and timing facts so the alert is actionable on its own. */
+  action?: OrderRiskActionContext;
 }
 
 /** Android channel + Expo flags for merchant incoming-order interrupts. */
@@ -696,7 +715,8 @@ export class NotificationsService {
     }
   }
 
-  async sendOrderAcceptanceEscalationPush(params: {
+  /** Last call for the merchant: push and WhatsApp, plus the location delegates. */
+  async sendOrderAcceptanceEscalation(params: {
     businessUserId?: string | null;
     orderId: string;
     orderNumber: string;
@@ -731,9 +751,10 @@ export class NotificationsService {
         );
       } catch (error: any) {
         this.logger.warn(
-          `sendOrderAcceptanceEscalationPush failed: ${error?.message ?? String(error)}`
+          `sendOrderAcceptanceEscalation failed: ${error?.message ?? String(error)}`
         );
       }
+      await this.sendAcceptanceEscalationWhatsApp(userId, params, graceSeconds);
     }
     await this.fanOutPushToOrderManagers(params.businessLocationId, {
       title,
@@ -746,6 +767,46 @@ export class NotificationsService {
       },
       excludeUserId: userId,
     });
+  }
+
+  /**
+   * Push alone is easy to miss mid-service, and this is the merchant's last
+   * chance before the order is auto-declined and the client refunded, so the
+   * escalation also lands on WhatsApp.
+   */
+  private async sendAcceptanceEscalationWhatsApp(
+    userId: string,
+    params: { orderId: string; orderNumber: string; preferredLanguage?: string | null },
+    graceSeconds?: number | null
+  ): Promise<void> {
+    try {
+      await this.orchestrator.notify({
+        type: 'order.acceptance.escalation',
+        category: 'actionable',
+        recipientUserId: userId,
+        preferenceCategory: 'order_updates',
+        entityType: 'order',
+        entityId: params.orderId,
+        dedupeKey: `order_acceptance_escalation:${params.orderId}`,
+        channels: {
+          whatsapp: {
+            templateKey: 'order_status_client',
+            ctaUrl: this.deepLinkService.order(params.orderId).universal,
+            variables: {
+              orderNumber: params.orderNumber,
+              statusLabel: buildOrderAcceptanceEscalationStatusLabel({
+                preferredLanguage: params.preferredLanguage,
+                graceSeconds,
+              }),
+            },
+          },
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendAcceptanceEscalationWhatsApp failed: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   async sendOrderAutoDeclinedPush(params: {
@@ -3952,19 +4013,15 @@ export class NotificationsService {
   }
 
   /**
-   * Alerts every platform superuser that an order needs intervention.
+   * Alerts the order operations audience that an order needs intervention:
+   * superusers, order managers, and the agent who referred the merchant.
    * Returns the per-recipient channel attempts so the incident can record them.
    */
-  async notifySuperusersOrderRisk(params: {
-    orderId: string;
-    orderNumber: string;
-    riskType: OrderRiskType;
-    severity: OrderRiskSeverity;
-    reason: string;
-    incidentId: string;
-  }): Promise<ChannelAttemptResult[]> {
+  async notifyOpsOrderRisk(
+    params: OrderRiskAlertParams
+  ): Promise<ChannelAttemptResult[]> {
     try {
-      const recipients = await this.listSuperuserRecipients();
+      const recipients = await this.listOrderRiskRecipients(params);
       const requests = recipients.map((recipient) =>
         this.buildOrderRiskNotifyRequest(params, recipient)
       );
@@ -3972,21 +4029,24 @@ export class NotificationsService {
       return results.flatMap((result) => result.attempts);
     } catch (error: any) {
       this.logger.error(
-        `notifySuperusersOrderRisk: ${error?.message ?? String(error)}`
+        `notifyOpsOrderRisk: ${error?.message ?? String(error)}`
       );
       return [];
     }
   }
 
+  private async listOrderRiskRecipients(
+    params: OrderRiskAlertParams
+  ): Promise<OrderRiskRecipient[]> {
+    return buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.ORDER_MANAGER],
+      referringAgentUserId: params.action?.referringAgentUserId,
+    });
+  }
+
   private buildOrderRiskNotifyRequest(
-    params: {
-      orderId: string;
-      orderNumber: string;
-      riskType: OrderRiskType;
-      severity: OrderRiskSeverity;
-      reason: string;
-      incidentId: string;
-    },
+    params: OrderRiskAlertParams,
     recipient: { userId: string; email: string | null }
   ): NotifyRequest {
     const links = this.deepLinkService.adminOrder(params.orderId);
@@ -4023,7 +4083,7 @@ export class NotificationsService {
           variables: {
             orderNumber: params.orderNumber,
             riskLabel: orderRiskLabel(params.riskType),
-            reason: params.reason,
+            reason: buildOrderRiskActionSummary(params.reason, params.action),
           },
         },
         email: recipient.email
@@ -4218,13 +4278,11 @@ export class NotificationsService {
     }
   }
 
-  private async listSuperuserRecipients(): Promise<
-    Array<{ userId: string; email: string | null }>
-  > {
-    const users = await this.rbacService.listUsersWithRoles();
-    return users
-      .filter((u) => u.roles.includes(PlatformRoles.SUPERUSER))
-      .map((u) => ({ userId: u.userId, email: u.email }));
+  private async listSuperuserRecipients(): Promise<OrderRiskRecipient[]> {
+    return buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER],
+    });
   }
 
   private async sendSimpleLifecycleEmail(params: {
