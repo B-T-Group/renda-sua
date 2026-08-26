@@ -1,8 +1,18 @@
 import { buildOrderRiskRecipients } from './order-risk-recipients.util';
 
 const STAFF = [
-  { userId: 'super-1', email: 'super@rendasua.com', roles: ['superuser'] },
-  { userId: 'ops-1', email: 'ops@rendasua.com', roles: ['order_manager'] },
+  {
+    userId: 'super-1',
+    email: 'super@rendasua.com',
+    preferredLanguage: 'fr',
+    roles: ['superuser'],
+  },
+  {
+    userId: 'ops-1',
+    email: 'ops@rendasua.com',
+    preferredLanguage: 'en',
+    roles: ['order_manager'],
+  },
   { userId: 'money-1', email: 'money@rendasua.com', roles: ['finance'] },
 ];
 
@@ -23,7 +33,27 @@ describe('buildOrderRiskRecipients', () => {
       roleKeys: ROLE_KEYS,
       referringAgentUserId: 'agent-9',
     });
-    expect(recipients).toContainEqual({ userId: 'agent-9', email: null });
+    expect(recipients).toContainEqual({
+      userId: 'agent-9',
+      email: null,
+      preferredLanguage: null,
+    });
+  });
+
+  it('carries each recipient language so Meta gets the right translation', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: STAFF,
+      roleKeys: ROLE_KEYS,
+      referringAgentUserId: 'agent-9',
+      referringAgentLanguage: 'fr',
+    });
+    expect(
+      recipients.map((r) => [r.userId, r.preferredLanguage])
+    ).toEqual([
+      ['super-1', 'fr'],
+      ['ops-1', 'en'],
+      ['agent-9', 'fr'],
+    ]);
   });
 
   it('leaves the referring agent without an email so only push and WhatsApp go out', () => {
@@ -42,7 +72,7 @@ describe('buildOrderRiskRecipients', () => {
       referringAgentUserId: 'ops-1',
     });
     expect(recipients.filter((r) => r.userId === 'ops-1')).toEqual([
-      { userId: 'ops-1', email: 'ops@rendasua.com' },
+      { userId: 'ops-1', email: 'ops@rendasua.com', preferredLanguage: 'en' },
     ]);
   });
 

@@ -6,6 +6,17 @@ import {
   PlatformRoles,
 } from './platform-permissions';
 
+/** A user holding at least one platform role, with the fields staff tooling needs. */
+export interface PlatformRoleUser {
+  userId: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  /** Raw `users.preferred_language`; normalize before using it as a locale. */
+  preferredLanguage: string | null;
+  roles: string[];
+}
+
 /** Per-request cache for effective RBAC resolution (set by RbacCacheInterceptor). */
 export const rbacRequestStore = new AsyncLocalStorage<
   Map<string, EffectiveAccess>
@@ -202,15 +213,7 @@ export class RbacService {
     return this.getUserRoleKeys(userId);
   }
 
-  async listUsersWithRoles(): Promise<
-    Array<{
-      userId: string;
-      email: string | null;
-      firstName: string | null;
-      lastName: string | null;
-      roles: string[];
-    }>
-  > {
+  async listUsersWithRoles(): Promise<PlatformRoleUser[]> {
     const result = await this.hasuraSystemService.executeQuery(`
       query ListUsersWithRoles {
         user_roles {
@@ -221,20 +224,12 @@ export class RbacService {
             email
             first_name
             last_name
+            preferred_language
           }
         }
       }
     `);
-    const byUser = new Map<
-      string,
-      {
-        userId: string;
-        email: string | null;
-        firstName: string | null;
-        lastName: string | null;
-        roles: string[];
-      }
-    >();
+    const byUser = new Map<string, PlatformRoleUser>();
     for (const row of result.user_roles ?? []) {
       const userId = row.user_id as string;
       const existing = byUser.get(userId);
@@ -245,6 +240,7 @@ export class RbacService {
           email: row.user?.email ?? null,
           firstName: row.user?.first_name ?? null,
           lastName: row.user?.last_name ?? null,
+          preferredLanguage: row.user?.preferred_language ?? null,
           roles: roleKey ? [roleKey] : [],
         });
       } else if (roleKey && !existing.roles.includes(roleKey)) {

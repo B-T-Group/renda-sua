@@ -7,7 +7,7 @@ describe('WhatsAppChannel', () => {
   };
   const templateService = {
     resolveMetaName: jest.fn(),
-    languageCode: jest.fn().mockReturnValue('en_US'),
+    languageCode: jest.fn().mockReturnValue('en'),
     buildComponents: jest.fn().mockReturnValue([]),
     category: jest.fn().mockReturnValue('UTILITY'),
   };
@@ -98,7 +98,7 @@ describe('WhatsAppChannel', () => {
     expect(whatsAppService.sendTemplateMessage).toHaveBeenCalledWith({
       to: '+237600000001',
       templateName: 'rs_order_new',
-      languageCode: 'en_US',
+      languageCode: 'en',
       components: [],
       category: 'UTILITY',
     });

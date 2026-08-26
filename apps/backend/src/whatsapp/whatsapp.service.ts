@@ -74,7 +74,7 @@ export class WhatsAppService {
   ): Record<string, unknown> {
     const template: Record<string, unknown> = {
       name: params.templateName,
-      language: { code: params.languageCode?.trim() || 'en_US' },
+      language: { code: params.languageCode?.trim() || 'en' },
     };
     if (params.components?.length) {
       template.components = params.components;

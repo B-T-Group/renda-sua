@@ -71,7 +71,7 @@ describe('WhatsAppService', () => {
     const result = await service.sendTemplateMessage({
       to: '+15551234567',
       templateName: '3p_direct_integration_test_template',
-      languageCode: 'en_US',
+      languageCode: 'en',
     });
 
     expect(post).toHaveBeenCalledWith(
@@ -83,7 +83,7 @@ describe('WhatsAppService', () => {
         type: 'template',
         template: {
           name: '3p_direct_integration_test_template',
-          language: { code: 'en_US' },
+          language: { code: 'en' },
         },
       },
       {
@@ -94,6 +94,19 @@ describe('WhatsAppService', () => {
       }
     );
     expect(result.messages[0]?.id).toBe('wamid.ABC');
+  });
+
+  it('defaults to the en translation, which is the one Meta approved', async () => {
+    post.mockResolvedValue({ data: { messages: [{ id: 'wamid.ABC' }] } });
+
+    await service.sendTemplateMessage({
+      to: '15551234567',
+      templateName: 'rs_admin_order_risk',
+    });
+
+    expect(post.mock.calls[0][1]).toMatchObject({
+      template: { language: { code: 'en' } },
+    });
   });
 
   describe('marketing templates', () => {

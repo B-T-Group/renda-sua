@@ -13,10 +13,10 @@ describe('WhatsAppTemplateService', () => {
     expect(service.resolveMetaName('missing_key', 'en')).toBeNull();
   });
 
-  it('maps language codes for Meta', () => {
+  it('only ever asks Meta for the two translations we have approved', () => {
     expect(service.languageCode('fr')).toBe('fr');
-    expect(service.languageCode('en')).toBe('en_US');
-    expect(service.languageCode(undefined)).toBe('en_US');
+    expect(service.languageCode('en')).toBe('en');
+    expect(service.languageCode(undefined)).toBe('en');
   });
 
   it('builds ordered body params and dynamic CTA button for UUID paths', () => {

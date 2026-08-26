@@ -1,6 +1,7 @@
 export interface PlatformRoleHolder {
   userId: string;
   email: string | null;
+  preferredLanguage?: string | null;
   roles: string[];
 }
 
@@ -8,6 +9,8 @@ export interface OrderRiskRecipient {
   userId: string;
   /** Null suppresses the email channel for this recipient. */
   email: string | null;
+  /** Raw preferred language; drives which WhatsApp translation Meta is asked for. */
+  preferredLanguage: string | null;
 }
 
 /**
@@ -23,14 +26,26 @@ export function buildOrderRiskRecipients(params: {
   staff: PlatformRoleHolder[];
   roleKeys: string[];
   referringAgentUserId?: string | null;
+  referringAgentLanguage?: string | null;
 }): OrderRiskRecipient[] {
   const recipients = params.staff
     .filter((user) => user.roles.some((role) => params.roleKeys.includes(role)))
-    .map((user) => ({ userId: user.userId, email: user.email }));
+    .map((user) => ({
+      userId: user.userId,
+      email: user.email,
+      preferredLanguage: user.preferredLanguage ?? null,
+    }));
 
   const agentUserId = params.referringAgentUserId?.trim();
   if (!agentUserId || recipients.some((r) => r.userId === agentUserId)) {
     return recipients;
   }
-  return [...recipients, { userId: agentUserId, email: null }];
+  return [
+    ...recipients,
+    {
+      userId: agentUserId,
+      email: null,
+      preferredLanguage: params.referringAgentLanguage ?? null,
+    },
+  ];
 }

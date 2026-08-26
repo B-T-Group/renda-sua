@@ -22,7 +22,9 @@ Reusing an already-listed template (e.g. sending `order_status_client` from a ne
 ## What to add
 
 1. A row in the table at the top: internal key, Meta name, category, body variables in positional order, button target.
-2. A numbered section with `**Vars:**`, `**Button:**`, and the exact **en_US** and **fr** body copy, matching the format of the existing sections.
+2. A numbered section with `**Vars:**`, `**Button:**`, and the exact **en** and **fr** body copy, matching the format of the existing sections.
+
+Meta must have the template approved under exactly the `en` and `fr` translation codes — those are the only two `languageCode` ever requests. Any other code (e.g. `en_US`) fails at send time with #132001.
 
 Keep the table row and the section consistent with `BODY_VARS` — the array order *is* the Meta `{{1}}, {{2}}, …` order.
 
