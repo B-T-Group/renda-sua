@@ -6927,6 +6927,7 @@
       "pendingInvites": "Invitations en attente",
       "noInvites": "Aucune invitation en attente",
       "role": "Rôle",
+      "noRoles": "Aucun rôle disponible",
       "roleUpdated": "Rôle mis à jour",
       "resend": "Renvoyer",
       "resent": "Invitation renvoyée",

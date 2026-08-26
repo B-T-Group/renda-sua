@@ -6911,6 +6911,7 @@
       "pendingInvites": "Pending invites",
       "noInvites": "No pending invites",
       "role": "Role",
+      "noRoles": "No roles available",
       "roleUpdated": "Role updated",
       "resend": "Resend",
       "resent": "Invite resent",

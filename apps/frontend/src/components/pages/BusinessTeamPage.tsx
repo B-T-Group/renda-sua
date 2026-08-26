@@ -59,10 +59,13 @@ const BusinessTeamPage: React.FC = () => {
   const [revokeId, setRevokeId] = useState<string | null>(null);
 
   const defaultRoleId = useMemo(() => roles[0]?.id || '', [roles]);
+  const selectedRoleId = roles.some((r) => r.id === roleId)
+    ? roleId
+    : defaultRoleId;
 
   useEffect(() => {
-    if (!roleId && defaultRoleId) setRoleId(defaultRoleId);
-  }, [defaultRoleId, roleId]);
+    if (roleId !== selectedRoleId) setRoleId(selectedRoleId);
+  }, [roleId, selectedRoleId]);
 
   useEffect(() => {
     if (!locationId && locations[0]?.id) setLocationId(locations[0].id);
@@ -76,14 +79,21 @@ const BusinessTeamPage: React.FC = () => {
     setLocationId(locations[0]?.id || '');
   };
 
+  const openInvite = () => {
+    if (!roleId && defaultRoleId) setRoleId(defaultRoleId);
+    if (!locationId && locations[0]?.id) setLocationId(locations[0].id);
+    if (!roles.length) void refresh();
+    setInviteOpen(true);
+  };
+
   const handleInvite = async () => {
-    if (!email.trim() || !locationId || !roleId) return;
+    if (!email.trim() || !locationId || !selectedRoleId) return;
     setSubmitting(true);
     try {
       await createInvite({
         email: email.trim(),
         business_location_id: locationId,
-        role_id: roleId,
+        role_id: selectedRoleId,
         first_name: firstName.trim() || undefined,
         last_name: lastName.trim() || undefined,
       });
@@ -143,7 +153,7 @@ const BusinessTeamPage: React.FC = () => {
           >
             {t('common.refresh', 'Refresh')}
           </Button>
-          <Button variant="contained" onClick={() => setInviteOpen(true)}>
+          <Button variant="contained" onClick={openInvite}>
             {t('delegation.team.invite', 'Invite')}
           </Button>
         </Stack>
@@ -355,14 +365,22 @@ const BusinessTeamPage: React.FC = () => {
               <InputLabel>{t('delegation.team.role', 'Role')}</InputLabel>
               <Select
                 label={t('delegation.team.role', 'Role')}
-                value={roleId}
+                value={selectedRoleId}
                 onChange={(e) => setRoleId(String(e.target.value))}
+                displayEmpty
+                MenuProps={{ disablePortal: true }}
               >
-                {roles.map((r) => (
-                  <MenuItem key={r.id} value={r.id}>
-                    {r.name}
+                {roles.length === 0 ? (
+                  <MenuItem value="" disabled>
+                    {t('delegation.team.noRoles', 'No roles available')}
                   </MenuItem>
-                ))}
+                ) : (
+                  roles.map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.name}
+                    </MenuItem>
+                  ))
+                )}
               </Select>
             </FormControl>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
@@ -372,7 +390,7 @@ const BusinessTeamPage: React.FC = () => {
               <Button
                 variant="contained"
                 onClick={() => void handleInvite()}
-                disabled={submitting || !email.trim() || !locationId || !roleId}
+                disabled={submitting || !email.trim() || !locationId || !selectedRoleId}
                 startIcon={
                   submitting ? <CircularProgress size={16} /> : undefined
                 }
