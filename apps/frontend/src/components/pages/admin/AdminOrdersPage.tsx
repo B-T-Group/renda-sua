@@ -32,6 +32,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { OrderRiskChip } from '../../admin/orders/OrderRiskChip';
+import { OrderStatsSection } from '../../admin/orders/OrderStatsSection';
 import {
   formatAbsoluteTime,
   formatMinutes,
@@ -77,6 +78,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const filters = useMemo(
     () => ({
@@ -96,6 +98,11 @@ export const AdminOrdersPage: React.FC = () => {
   const resetToFirstPage = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value);
     setPage(0);
+  };
+
+  const refreshAll = () => {
+    refetch();
+    setRefreshToken((token) => token + 1);
   };
 
   return (
@@ -126,12 +133,14 @@ export const AdminOrdersPage: React.FC = () => {
             {t('admin.orders.pickupOps', 'Pickup health')}
           </Button>
           <Tooltip title={t('common.refresh', 'Refresh')}>
-            <IconButton onClick={refetch}>
+            <IconButton onClick={refreshAll}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
         </Stack>
       </Stack>
+
+      <OrderStatsSection refreshToken={refreshToken} />
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

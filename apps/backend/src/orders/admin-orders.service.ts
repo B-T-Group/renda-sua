@@ -1,16 +1,26 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { DateTime } from 'luxon';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { DEFAULT_USER_TIMEZONE } from '../users/user-timezone.util';
+import {
+  computeOrderStatsAverages,
+  computeOrderStatsRates,
+} from './admin-order-stats.util';
 import { mapAdminOrderRow, mapIncidents } from './admin-orders.mapper';
 import type {
   AdminOrderDetail,
   AdminOrdersResponse,
   AdminOrdersQueueCounts,
+  AdminOrderStatsCounts,
+  AdminOrderStatsResponse,
 } from './admin-orders.types';
 import {
   AdminOrderQueue,
+  AdminOrderStatsPeriod,
   OrderStatusFilter,
   RiskSeverityFilter,
   type GetAdminOrdersDto,
+  type GetAdminOrderStatsDto,
 } from './dto/admin-orders.dto';
 import { RISK_ACTIONABLE_STATUSES } from './order-risk-monitor.service';
 
@@ -34,6 +44,72 @@ const ORDER_FIELDS = `
   delivery_time_window { id time_slot_start time_slot_end preferred_date }
   delivery_address { id address_line_1 city state }
 `;
+
+/**
+ * Fulfilled orders. Some flows stop at delivered, and a rejected refund leaves
+ * the order fulfilled with nothing returned to the client.
+ */
+const COMPLETED_STATUSES = ['delivered', 'complete', 'refund_rejected'];
+
+/** Orders where money is on its way back, so a rejected refund is excluded. */
+const REFUND_STATUSES = [
+  'refund_requested',
+  'refund_approved_full',
+  'refund_approved_partial',
+  'refund_approved_replace',
+  'refund_processing',
+  'refund_failed',
+  'refunded',
+];
+
+const IN_PROGRESS_STATUSES = [
+  ...RISK_ACTIONABLE_STATUSES,
+  'awaiting_shipment',
+  'shipped',
+];
+
+/** History rows needed to derive prep and delivery durations. */
+const DURATION_HISTORY_STATUSES = [
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'picked_up',
+];
+
+/** Averages read newest orders only, so the query stays predictable. */
+const STATS_SAMPLE_LIMIT = 1000;
+
+const STATS_QUERY = `query AdminOrderStats(
+  $totalWhere: orders_bool_exp!
+  $completedWhere: orders_bool_exp!
+  $inProgressWhere: orders_bool_exp!
+  $cancelledWhere: orders_bool_exp!
+  $failedWhere: orders_bool_exp!
+  $refundWhere: orders_bool_exp!
+  $pendingPaymentWhere: orders_bool_exp!
+  $historyWhere: order_status_history_bool_exp!
+  $sampleLimit: Int!
+) {
+  total: orders_aggregate(where: $totalWhere) { aggregate { count } }
+  completed: orders_aggregate(where: $completedWhere) { aggregate { count } }
+  inProgress: orders_aggregate(where: $inProgressWhere) { aggregate { count } }
+  cancelled: orders_aggregate(where: $cancelledWhere) { aggregate { count } }
+  failed: orders_aggregate(where: $failedWhere) { aggregate { count } }
+  refunds: orders_aggregate(where: $refundWhere) { aggregate { count } }
+  pendingPayment: orders_aggregate(where: $pendingPaymentWhere) {
+    aggregate { count }
+  }
+  samples: orders(
+    where: $completedWhere
+    order_by: { created_at: desc }
+    limit: $sampleLimit
+  ) {
+    created_at accepted_at completed_at actual_delivery_time
+    order_status_history(where: $historyWhere, order_by: { created_at: asc }) {
+      status created_at
+    }
+  }
+}`;
 
 @Injectable()
 export class AdminOrdersService {
@@ -80,6 +156,78 @@ export class AdminOrdersService {
       counts: this.buildCounts(res),
       offset,
       limit,
+    };
+  }
+
+  async getStats(
+    query: GetAdminOrderStatsDto
+  ): Promise<AdminOrderStatsResponse> {
+    const period = query.period ?? AdminOrderStatsPeriod.LAST_7_DAYS;
+    const since = this.statsPeriodStart(period);
+    const res = await this.hasura.executeQuery(
+      STATS_QUERY,
+      this.buildStatsVariables(since)
+    );
+    const counts = this.buildStatsCounts(res);
+    return {
+      period,
+      since,
+      counts,
+      rates: computeOrderStatsRates(counts),
+      averages: computeOrderStatsAverages(res.samples ?? []),
+    };
+  }
+
+  private buildStatsVariables(since: string | null): Record<string, unknown> {
+    const base: Record<string, unknown> = since
+      ? { created_at: { _gte: since } }
+      : {};
+    return {
+      totalWhere: base,
+      completedWhere: this.statusScope(base, COMPLETED_STATUSES),
+      inProgressWhere: this.statusScope(base, IN_PROGRESS_STATUSES),
+      cancelledWhere: this.statusScope(base, ['cancelled']),
+      failedWhere: this.statusScope(base, ['failed']),
+      refundWhere: this.statusScope(base, REFUND_STATUSES),
+      pendingPaymentWhere: this.statusScope(base, ['pending_payment']),
+      historyWhere: { status: { _in: DURATION_HISTORY_STATUSES } },
+      sampleLimit: STATS_SAMPLE_LIMIT,
+    };
+  }
+
+  private statusScope(
+    base: Record<string, unknown>,
+    statuses: string[]
+  ): Record<string, unknown> {
+    return { _and: [base, { current_status: { _in: statuses } }] };
+  }
+
+  /** "Today" follows the operating timezone so the day matches merchant hours. */
+  private statsPeriodStart(period: AdminOrderStatsPeriod): string | null {
+    const now = DateTime.now().setZone(DEFAULT_USER_TIMEZONE);
+    if (period === AdminOrderStatsPeriod.TODAY) {
+      return now.startOf('day').toISO();
+    }
+    if (period === AdminOrderStatsPeriod.LAST_7_DAYS) {
+      return now.minus({ days: 7 }).toISO();
+    }
+    if (period === AdminOrderStatsPeriod.LAST_30_DAYS) {
+      return now.minus({ days: 30 }).toISO();
+    }
+    return null;
+  }
+
+  private buildStatsCounts(res: any): AdminOrderStatsCounts {
+    const count = (key: string): number =>
+      res?.[key]?.aggregate?.count ?? 0;
+    return {
+      total: count('total'),
+      completed: count('completed'),
+      in_progress: count('inProgress'),
+      cancelled: count('cancelled'),
+      failed: count('failed'),
+      refunds: count('refunds'),
+      pending_payment: count('pendingPayment'),
     };
   }
 

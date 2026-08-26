@@ -100,6 +100,24 @@ export class GetAdminOrdersDto {
   limit?: number;
 }
 
+/** Statistics windows, evaluated on orders.created_at. */
+export enum AdminOrderStatsPeriod {
+  TODAY = 'today',
+  LAST_7_DAYS = '7d',
+  LAST_30_DAYS = '30d',
+  ALL = 'all',
+}
+
+export class GetAdminOrderStatsDto {
+  @ApiPropertyOptional({
+    enum: AdminOrderStatsPeriod,
+    default: AdminOrderStatsPeriod.LAST_7_DAYS,
+  })
+  @IsOptional()
+  @IsEnum(AdminOrderStatsPeriod)
+  period?: AdminOrderStatsPeriod = AdminOrderStatsPeriod.LAST_7_DAYS;
+}
+
 export class UnassignRedispatchDto {
   @ApiPropertyOptional({ description: 'Reason for unassigning and redispatching' })
   @IsOptional()
