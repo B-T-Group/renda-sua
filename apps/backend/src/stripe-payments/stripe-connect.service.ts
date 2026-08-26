@@ -42,6 +42,11 @@ const ACCOUNT_FIELDS = `
 
 @Injectable()
 export class StripeConnectService {
+  private readonly ensureAccountInFlight = new Map<
+    string,
+    Promise<StripeConnectAccount>
+  >();
+
   constructor(
     private readonly stripeService: StripeService,
     private readonly hasuraService: HasuraSystemService,
@@ -85,16 +90,30 @@ export class StripeConnectService {
 
   /** Create the Stripe Express account + DB row for a user if missing. */
   async ensureAccount(userId: string): Promise<StripeConnectAccount> {
+    const inFlight = this.ensureAccountInFlight.get(userId);
+    if (inFlight) return inFlight;
+
+    const promise = this.ensureAccountOnce(userId).finally(() => {
+      this.ensureAccountInFlight.delete(userId);
+    });
+    this.ensureAccountInFlight.set(userId, promise);
+    return promise;
+  }
+
+  private async ensureAccountOnce(
+    userId: string
+  ): Promise<StripeConnectAccount> {
     const existing = await this.getByUserId(userId);
     if (existing) return existing;
+    return this.createAccountForUser(userId);
+  }
 
-    const countryCode = await this.paymentRouting.getUserCountryCode(userId);
-    if (!countryCode) {
-      throw new HttpException(
-        { success: false, message: 'Unable to determine user country' },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+  private async createAccountForUser(
+    userId: string
+  ): Promise<StripeConnectAccount> {
+    const countryCode = this.requireCountryCode(
+      await this.paymentRouting.getUserCountryCode(userId)
+    );
     const profile = await this.getUserConnectPrefill(userId);
     const account = await this.stripeService.createExpressAccount({
       country: countryCode,
@@ -106,6 +125,14 @@ export class StripeConnectService {
       businessName: profile.businessName,
     });
     return this.insertAccountRow(userId, account, countryCode);
+  }
+
+  private requireCountryCode(countryCode?: string | null): string {
+    if (countryCode) return countryCode;
+    throw new HttpException(
+      { success: false, message: 'Unable to determine user country' },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   private async getUserConnectPrefill(userId: string): Promise<{
@@ -143,25 +170,76 @@ export class StripeConnectService {
     account: Stripe.Account,
     country: string
   ): Promise<StripeConnectAccount> {
-    const mutation = `
+    const inserted = await this.tryInsertAccountRow(userId, account, country);
+    if (inserted) return inserted;
+    return this.requireExistingAccount(userId);
+  }
+
+  private async tryInsertAccountRow(
+    userId: string,
+    account: Stripe.Account,
+    country: string
+  ): Promise<StripeConnectAccount | null> {
+    try {
+      const response = await this.hasuraService.executeMutation(
+        this.insertAccountMutation(),
+        { data: this.buildInsertAccountData(userId, account, country) }
+      );
+      return response.insert_stripe_connect_accounts_one ?? null;
+    } catch (error: any) {
+      if (this.isUniqueViolation(error)) return null;
+      throw error;
+    }
+  }
+
+  private insertAccountMutation(): string {
+    return `
       mutation InsertConnectAccount($data: stripe_connect_accounts_insert_input!) {
-        insert_stripe_connect_accounts_one(object: $data) { ${ACCOUNT_FIELDS} }
+        insert_stripe_connect_accounts_one(
+          object: $data
+          on_conflict: {
+            constraint: stripe_connect_accounts_user_id_key
+            update_columns: []
+          }
+        ) { ${ACCOUNT_FIELDS} }
       }
     `;
-    const response = await this.hasuraService.executeMutation(mutation, {
-      data: {
-        user_id: userId,
-        stripe_account_id: account.id,
-        account_type: 'express',
-        country,
-        default_currency: account.default_currency?.toUpperCase(),
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        status: this.deriveStatus(account),
-      },
-    });
-    return response.insert_stripe_connect_accounts_one;
+  }
+
+  private buildInsertAccountData(
+    userId: string,
+    account: Stripe.Account,
+    country: string
+  ) {
+    return {
+      user_id: userId,
+      stripe_account_id: account.id,
+      account_type: 'express',
+      country,
+      default_currency: account.default_currency?.toUpperCase(),
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      details_submitted: account.details_submitted,
+      status: this.deriveStatus(account),
+    };
+  }
+
+  private isUniqueViolation(error: any): boolean {
+    const message = String(error?.message ?? '');
+    return (
+      message.includes('Uniqueness violation') ||
+      message.includes('duplicate key value violates unique constraint')
+    );
+  }
+
+  private async requireExistingAccount(
+    userId: string
+  ): Promise<StripeConnectAccount> {
+    const existing = await this.getByUserId(userId);
+    if (existing) return existing;
+    throw new Error(
+      'Connect account insert conflicted but no existing row was found'
+    );
   }
 
   async createOnboardingLink(
