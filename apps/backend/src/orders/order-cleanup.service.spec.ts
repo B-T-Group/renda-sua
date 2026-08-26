@@ -316,6 +316,34 @@ describe('OrderCleanupService', () => {
       expect(n).toBe(0);
       expect(orderQueue.sendOrderCancelledMessage).not.toHaveBeenCalled();
     });
+
+    it('does not cancel a late-prepped ASAP order from a stale placement promise', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'R1',
+            current_status: 'ready_for_pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            promised_fulfill_by: '2026-08-01T19:30:00.000Z',
+            pickup_by: '2026-08-02T20:00:00.000Z',
+            delivery_address: { country: 'CA' },
+            client: { user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            failed_delivery: [],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+      const n = await service.cancelMissedPickupOrders(24, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
   });
 
   describe('failMissedDeliveryOrders', () => {

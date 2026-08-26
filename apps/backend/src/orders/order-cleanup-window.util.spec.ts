@@ -64,6 +64,28 @@ describe('order-cleanup-window.util', () => {
       expect(end?.toISOString()).toBe('2026-08-01T22:00:00.000Z');
     });
 
+    it('uses the later of pickup_by and promised_fulfill_by', () => {
+      const end = resolveWindowEndUtc(
+        {
+          promised_fulfill_by: '2026-08-01T11:00:00.000Z',
+          pickup_by: '2026-08-02T20:00:00.000Z',
+        },
+        'UTC'
+      );
+      expect(end?.toISOString()).toBe('2026-08-02T20:00:00.000Z');
+    });
+
+    it('keeps a later scheduled promise over an earlier pickup_by', () => {
+      const end = resolveWindowEndUtc(
+        {
+          promised_fulfill_by: '2026-08-02T18:00:00.000Z',
+          pickup_by: '2026-08-02T16:00:00.000Z',
+        },
+        'UTC'
+      );
+      expect(end?.toISOString()).toBe('2026-08-02T18:00:00.000Z');
+    });
+
     it('uses delivery window when pickup_by missing', () => {
       const end = resolveWindowEndUtc(
         {
@@ -89,6 +111,29 @@ describe('order-cleanup-window.util', () => {
       expect(isWindowStale(end, 24, new Date('2026-08-02T18:00:01.000Z'))).toBe(
         true
       );
+    });
+
+    it('does not treat a just-readied ASAP order as stale from placement promise', () => {
+      const order = {
+        promised_fulfill_by: '2026-08-01T19:30:00.000Z',
+        pickup_by: '2026-08-02T20:00:00.000Z',
+      };
+      expect(
+        isOrderWindowStale(
+          order,
+          24,
+          'UTC',
+          new Date('2026-08-03T12:00:00.000Z')
+        )
+      ).toBe(false);
+      expect(
+        isOrderWindowStale(
+          order,
+          24,
+          'UTC',
+          new Date('2026-08-03T20:00:01.000Z')
+        )
+      ).toBe(true);
     });
 
     it('isOrderWindowStale integrates timezone + grace', () => {
