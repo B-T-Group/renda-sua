@@ -14,6 +14,7 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   pickup_reminder: { en: 'rs_pickup_reminder', fr: 'rs_pickup_reminder' },
   payment_failed: { en: 'rs_payment_failed', fr: 'rs_payment_failed' },
   ai_proposal_ready: { en: 'rs_ai_proposal', fr: 'rs_ai_proposal' },
+  admin_order_risk: { en: 'rs_admin_order_risk', fr: 'rs_admin_order_risk' },
 };
 
 /** Ordered body variables per template (Meta positional params). */
@@ -28,6 +29,7 @@ const BODY_VARS: Record<string, string[]> = {
   pickup_reminder: ['orderNumber', 'window'],
   payment_failed: ['orderNumber'],
   ai_proposal_ready: ['itemName'],
+  admin_order_risk: ['orderNumber', 'riskLabel', 'reason'],
 };
 
 @Injectable()

@@ -461,6 +461,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/orders/:orderId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminOrderDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/location-transfers"
               element={
                 <ProtectedRoute>

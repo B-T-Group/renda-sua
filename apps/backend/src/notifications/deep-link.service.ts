@@ -21,6 +21,11 @@ export class DeepLinkService {
     return this.build(`orders/${orderId}`, `/orders/${orderId}`);
   }
 
+  /** Superuser-only intervention view; not the persona-owned order screen. */
+  adminOrder(orderId: string): DeepLinkPair {
+    return this.build(`admin/orders/${orderId}`, `/admin/orders/${orderId}`);
+  }
+
   delivery(offerOrDeliveryId: string): DeepLinkPair {
     return this.build(
       `deliveries/${offerOrDeliveryId}`,

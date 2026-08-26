@@ -1,6 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+import {
+  ORDER_RISK_TYPES,
+  type OrderRiskType,
+} from '../order-risk.types';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -18,26 +30,57 @@ export enum OrderStatusFilter {
   IN_DELIVERY = 'in_delivery',
 }
 
-export enum RiskLevelFilter {
+/** Attention-first queue by default; ALL widens to every active order. */
+export enum AdminOrderQueue {
+  AT_RISK = 'at_risk',
   ALL = 'all',
+}
+
+export enum RiskSeverityFilter {
+  ALL = 'all',
+  WARNING = 'warning',
   CRITICAL = 'critical',
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
+}
+
+export enum FulfillmentMethodFilter {
+  DELIVERY = 'delivery',
+  PICKUP = 'pickup',
+  SHIPPING = 'shipping',
 }
 
 export class GetAdminOrdersDto {
+  @ApiPropertyOptional({
+    enum: AdminOrderQueue,
+    default: AdminOrderQueue.AT_RISK,
+  })
+  @IsOptional()
+  @IsEnum(AdminOrderQueue)
+  queue?: AdminOrderQueue = AdminOrderQueue.AT_RISK;
+
   @ApiPropertyOptional({ enum: OrderStatusFilter, default: OrderStatusFilter.ALL })
   @IsOptional()
   @IsEnum(OrderStatusFilter)
   status?: OrderStatusFilter;
 
-  @ApiPropertyOptional({ enum: RiskLevelFilter, default: RiskLevelFilter.ALL })
+  @ApiPropertyOptional({
+    enum: RiskSeverityFilter,
+    default: RiskSeverityFilter.ALL,
+  })
   @IsOptional()
-  @IsEnum(RiskLevelFilter)
-  risk_level?: RiskLevelFilter;
+  @IsEnum(RiskSeverityFilter)
+  severity?: RiskSeverityFilter;
 
-  @ApiPropertyOptional({ description: 'Search by order number or client name' })
+  @ApiPropertyOptional({ enum: ORDER_RISK_TYPES })
+  @IsOptional()
+  @IsIn(ORDER_RISK_TYPES)
+  risk_type?: OrderRiskType;
+
+  @ApiPropertyOptional({ enum: FulfillmentMethodFilter })
+  @IsOptional()
+  @IsEnum(FulfillmentMethodFilter)
+  fulfillment_method?: FulfillmentMethodFilter;
+
+  @ApiPropertyOptional({ description: 'Order number, client name/email, or business' })
   @IsOptional()
   @IsString()
   search?: string;
@@ -49,7 +92,7 @@ export class GetAdminOrdersDto {
   @Min(0)
   offset?: number;
 
-  @ApiPropertyOptional({ default: 50 })
+  @ApiPropertyOptional({ default: 25 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -69,16 +112,32 @@ export class UpdateOrderStatusDto {
   @IsString()
   status!: string;
 
-  @ApiPropertyOptional({ description: 'Admin notes for status change' })
-  @IsOptional()
+  @ApiProperty({
+    description: 'Why the status is being corrected manually (audited)',
+  })
   @IsString()
-  notes?: string;
+  reason!: string;
 }
 
 export class AddAdminNoteDto {
   @ApiProperty({ description: 'Admin note content' })
   @IsString()
   note!: string;
+}
+
+export class AcknowledgeRiskIncidentDto {
+  @ApiPropertyOptional({ description: 'What the operator is doing about it' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @ApiPropertyOptional({
+    description: 'Close the incident instead of only acknowledging it',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  resolve?: boolean;
 }
 
 export const ORDER_CONTACT_RECIPIENT_TYPES = [
@@ -99,6 +158,30 @@ export class SendOrderContactMessageDto {
     description: 'Order participant to notify',
     enum: ORDER_CONTACT_RECIPIENT_TYPES,
   })
+  @IsIn(ORDER_CONTACT_RECIPIENT_TYPES)
+  recipient_type!: OrderContactRecipientType;
+}
+
+export class SendOrderContactEmailDto {
+  @ApiProperty({ description: 'Email subject' })
+  @IsString()
+  subject!: string;
+
+  @ApiProperty({ description: 'Email body (HTML allowed)' })
+  @IsString()
+  message!: string;
+
+  @ApiProperty({ enum: ORDER_CONTACT_RECIPIENT_TYPES })
+  @IsIn(ORDER_CONTACT_RECIPIENT_TYPES)
+  recipient_type!: OrderContactRecipientType;
+}
+
+export class SendOrderContactSmsDto {
+  @ApiProperty({ description: 'SMS body' })
+  @IsString()
+  message!: string;
+
+  @ApiProperty({ enum: ORDER_CONTACT_RECIPIENT_TYPES })
   @IsIn(ORDER_CONTACT_RECIPIENT_TYPES)
   recipient_type!: OrderContactRecipientType;
 }
