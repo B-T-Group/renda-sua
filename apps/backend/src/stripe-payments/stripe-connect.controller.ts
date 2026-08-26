@@ -35,6 +35,10 @@ export class StripeConnectController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create the Stripe Connect account for the user' })
   @ApiResponse({ status: 201, description: 'Connect account ensured' })
+  @ApiResponse({
+    status: 409,
+    description: 'Connect account creation already in progress',
+  })
   async createAccount(@ReqContext() ctx: RequestContext) {
     const userId = await this.userId(ctx);
     const account = await this.connectService.ensureAccount(userId);
@@ -53,6 +57,10 @@ export class StripeConnectController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Get a hosted Connect onboarding link' })
   @ApiResponse({ status: 201, description: 'Onboarding link created' })
+  @ApiResponse({
+    status: 409,
+    description: 'Connect account creation already in progress',
+  })
   async accountLink(
     @ReqContext() ctx: RequestContext,
     @Body()

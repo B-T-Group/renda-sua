@@ -5,6 +5,10 @@ describe('StripeService', () => {
   let nodeEnv = 'production';
   let service: StripeService;
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     nodeEnv = 'production';
@@ -79,5 +83,30 @@ describe('StripeService', () => {
       { idempotencyKey: 'connect_account_user-123' }
     );
     expect(createAccount.mock.calls[0][0].individual.phone).toBeUndefined();
+  });
+
+  it('retries Express account create on in-progress idempotency errors', async () => {
+    jest.useFakeTimers();
+    const inProgress = new Error(
+      'There is currently another in-progress request using this Idempotent Key: connect_account_user-123. Please try again later.'
+    );
+    createAccount
+      .mockRejectedValueOnce(inProgress)
+      .mockResolvedValueOnce({ id: 'acct_123' });
+
+    const pending = service.createExpressAccount({
+      country: 'CA',
+      userId: 'user-123',
+    });
+    await jest.runAllTimersAsync();
+
+    await expect(pending).resolves.toEqual({ id: 'acct_123' });
+    expect(createAccount).toHaveBeenCalledTimes(2);
+    expect(createAccount).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ type: 'express' }),
+      { idempotencyKey: 'connect_account_user-123' }
+    );
+    jest.useRealTimers();
   });
 });

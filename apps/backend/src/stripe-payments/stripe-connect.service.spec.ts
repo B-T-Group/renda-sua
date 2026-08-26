@@ -160,4 +160,38 @@ describe('StripeConnectService', () => {
     ]);
     expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
   });
+
+  it('maps exhausted Stripe idempotency-in-progress errors to HTTP 409', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockRejectedValue(
+      new Error(
+        'There is currently another in-progress request using this Idempotent Key: connect_account_user-123. Please try again later.'
+      )
+    );
+
+    try {
+      await service.ensureAccount('user-123');
+      fail('Expected ensureAccount to reject in-progress idempotency');
+    } catch (error: any) {
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+    }
+    expect(hasuraService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rethrows unrelated Stripe account-create errors', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockRejectedValue(
+      new Error('Your account is not set up to create accounts')
+    );
+
+    await expect(service.ensureAccount('user-123')).rejects.toThrow(
+      'Your account is not set up to create accounts'
+    );
+  });
 });

@@ -6,7 +6,16 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { DbPaymentCapabilityStatus } from '../merchant-lifecycle/merchant-lifecycle.types';
 import { PaymentRoutingService } from './payment-routing.service';
+import { isStripeIdempotencyInProgress } from './stripe-idempotency';
 import { StripeService } from './stripe.service';
+
+type ConnectPrefill = {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  businessName?: string;
+};
 
 export interface StripeConnectAccount {
   id: string;
@@ -115,16 +124,45 @@ export class StripeConnectService {
       await this.paymentRouting.getUserCountryCode(userId)
     );
     const profile = await this.getUserConnectPrefill(userId);
-    const account = await this.stripeService.createExpressAccount({
-      country: countryCode,
-      email: profile.email,
+    const account = await this.createExpressAccountForUser(
       userId,
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      phone: profile.phone,
-      businessName: profile.businessName,
-    });
+      countryCode,
+      profile
+    );
     return this.insertAccountRow(userId, account, countryCode);
+  }
+
+  private async createExpressAccountForUser(
+    userId: string,
+    country: string,
+    profile: ConnectPrefill
+  ): Promise<Stripe.Account> {
+    try {
+      return await this.stripeService.createExpressAccount({
+        country,
+        email: profile.email,
+        userId,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+        businessName: profile.businessName,
+      });
+    } catch (error: any) {
+      this.throwIfIdempotencyInProgress(error);
+      throw error;
+    }
+  }
+
+  private throwIfIdempotencyInProgress(error: any): void {
+    if (!isStripeIdempotencyInProgress(error)) return;
+    throw new HttpException(
+      {
+        success: false,
+        message:
+          'Connect account creation is already in progress. Please try again.',
+      },
+      HttpStatus.CONFLICT
+    );
   }
 
   private requireCountryCode(countryCode?: string | null): string {
@@ -135,13 +173,9 @@ export class StripeConnectService {
     );
   }
 
-  private async getUserConnectPrefill(userId: string): Promise<{
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    phone?: string;
-    businessName?: string;
-  }> {
+  private async getUserConnectPrefill(
+    userId: string
+  ): Promise<ConnectPrefill> {
     const query = `
       query GetUserConnectPrefill($userId: uuid!) {
         users_by_pk(id: $userId) {
