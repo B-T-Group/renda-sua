@@ -18,6 +18,11 @@ import {
   buildInventoryItemNotFoundShareHtml,
   buildInventoryItemShareHtml,
 } from './inventory-item-share-page.util';
+import {
+  buildFoodAvailabilityPayload,
+  type FoodAvailabilityPayload,
+} from '../food/food-item-availability.mapper';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 export type InventorySortMode =
   | 'relevance'
   | 'fastest'
@@ -81,6 +86,8 @@ export interface InventoryItem {
   distance_value?: number;
   avg_rating?: number | null;
   rating_count?: number | null;
+  /** Present only for items in the cooked-food category. */
+  food_availability?: FoodAvailabilityPayload | null;
     item: {
       id: string;
       name: string;
@@ -104,6 +111,7 @@ export interface InventoryItem {
     requires_special_handling: boolean;
     max_delivery_distance: number;
     estimated_delivery_time: number;
+    preparation_minutes?: number | null;
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
@@ -231,6 +239,8 @@ export interface GetInventoryItemsQuery {
   origin_lng?: number;
   /** Filter by platform collection slug. */
   collection?: string;
+  /** Restrict the list to the cooked-food category (the Food tab). */
+  food_only?: boolean;
 }
 
 export type InventorySearchSuggestion =
@@ -306,6 +316,14 @@ const CATALOG_INVENTORY_LIST_GQL = `
         item_variant_id
         selling_price
       }
+      food_settings {
+        marked_unavailable_at
+        availability_slots(order_by: [{ day_of_week: asc }, { start_time: asc }]) {
+          day_of_week
+          start_time
+          end_time
+        }
+      }
       item {
         id
         name
@@ -335,6 +353,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         requires_special_handling
         max_delivery_distance
         estimated_delivery_time
+        preparation_minutes
         min_order_quantity
         max_order_quantity
         is_active
@@ -691,6 +710,7 @@ export class InventoryItemsService {
     country_code?: string;
     state?: string;
     collection?: string;
+    food_only?: boolean;
     requireCanAcceptOrders?: boolean;
     /** Owner preview: skip storefront visibility + geo scope. */
     ownerPreview?: boolean;
@@ -714,6 +734,7 @@ export class InventoryItemsService {
       country_code,
       state,
       collection,
+      food_only,
       ownerPreview,
     } = params;
 
@@ -780,6 +801,15 @@ export class InventoryItemsService {
       whereConditions.push({
         item: {
           item_sub_category: { name: { _eq: subcategory.trim() } },
+        },
+      });
+    }
+    if (food_only) {
+      whereConditions.push({
+        item: {
+          item_sub_category: {
+            item_category: { name: { _eq: FOOD_CATEGORY_NAME } },
+          },
         },
       });
     }
@@ -1487,6 +1517,7 @@ export class InventoryItemsService {
       business_location_id,
       business_id,
       collection,
+      food_only = false,
       owner_preview: ownerPreviewRequested = false,
     } = query;
 
@@ -1542,6 +1573,7 @@ export class InventoryItemsService {
       country_code,
       state,
       collection,
+      food_only,
       requireCanAcceptOrders: sort === 'deals' || sort === 'top_rated',
       ownerPreview,
     });
@@ -1635,6 +1667,10 @@ export class InventoryItemsService {
       if (semanticScores?.size) {
         sorted = this.applySemanticPrimarySort(sorted, semanticScores);
       }
+      sorted = this.attachFoodAvailability(sorted);
+      if (food_only) {
+        sorted = this.sortOpenFoodFirst(sorted);
+      }
       const totalPages = Math.ceil(total / limit);
       const listOffset = (page - 1) * limit;
       const pageItems = sorted.slice(listOffset, listOffset + limit);
@@ -1657,6 +1693,24 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /** Adds the food availability block to any row in the cooked-food category. */
+  private attachFoodAvailability(items: InventoryItem[]): InventoryItem[] {
+    const now = new Date();
+    return items.map((item) => {
+      const food_availability = buildFoodAvailabilityPayload(item as any, now);
+      return food_availability ? { ...item, food_availability } : item;
+    });
+  }
+
+  /** Dishes being served right now rank above ones that are closed or sold out. */
+  private sortOpenFoodFirst(items: InventoryItem[]): InventoryItem[] {
+    return [...items].sort((a, b) => {
+      const aOpen = a.food_availability?.is_available_now === false ? 1 : 0;
+      const bOpen = b.food_availability?.is_available_now === false ? 1 : 0;
+      return aOpen - bOpen;
+    });
   }
 
   private async countDistinctCatalogItemIds(
@@ -2267,6 +2321,16 @@ export class InventoryItemsService {
             item_variant_id
             selling_price
           }
+          food_settings {
+            marked_unavailable_at
+            availability_slots(
+              order_by: [{ day_of_week: asc }, { start_time: asc }]
+            ) {
+              day_of_week
+              start_time
+              end_time
+            }
+          }
           item {
             id
             name
@@ -2296,6 +2360,7 @@ export class InventoryItemsService {
             requires_special_handling
             max_delivery_distance
             estimated_delivery_time
+            preparation_minutes
             min_order_quantity
             max_order_quantity
             is_active
@@ -2495,7 +2560,8 @@ export class InventoryItemsService {
         };
       }
       const [withLike] = await this.attachLikeState([enriched]);
-      return withLike;
+      const [withFood] = this.attachFoodAvailability([withLike]);
+      return withFood;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -2647,6 +2713,7 @@ export class InventoryItemsService {
               requires_special_handling
               max_delivery_distance
               estimated_delivery_time
+              preparation_minutes
               min_order_quantity
               max_order_quantity
               is_active
