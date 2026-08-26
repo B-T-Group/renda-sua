@@ -42,6 +42,7 @@ import {
   fetchStripeEnabledCountries,
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
+import { checkFoodOrderable } from '../food/food-order-guard.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -73,17 +74,29 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         }
         address { country state latitude longitude }
       }
+      food_settings {
+        marked_unavailable_at
+        availability_slots(order_by: [{ day_of_week: asc }, { start_time: asc }]) {
+          day_of_week
+          start_time
+          end_time
+        }
+      }
       item {
         id
         name
         currency
         weight
         max_order_quantity
+        preparation_minutes
         pay_on_delivery_enabled
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
         shipping_currency
+        item_sub_category {
+          item_category { name }
+        }
         item_variants(where: { is_active: { _eq: true } }, order_by: { sort_order: asc }) {
           id
           name
@@ -214,6 +227,9 @@ export class CheckoutPreflightService {
           code: 'LOCATION_PAYMENTS_COMING_SOON',
           message: `${inv.item?.name ?? 'An item'} is not available for purchase yet. Payments at this location are coming soon.`,
         });
+      } else {
+        const foodBlock = checkFoodOrderable(inv);
+        if (foodBlock) blockers.push(foodBlock);
       }
     }
 

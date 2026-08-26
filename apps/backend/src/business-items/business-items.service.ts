@@ -23,6 +23,7 @@ import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecyc
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
+import { resolveInitialInventoryQuantity } from '../food/food-inventory-quantity.util';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -741,6 +742,11 @@ const GET_ITEM_BY_ID = `
       sku
       price
       moderation_status
+      item_sub_category {
+        item_category {
+          name
+        }
+      }
     }
   }
 `;
@@ -1881,7 +1887,13 @@ export class BusinessItemsService {
     }
 
     const itemRow = await this.hasuraUserService.executeQuery<{
-      items_by_pk: { id: string; business_id: string } | null;
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        item_sub_category?: {
+          item_category?: { name?: string | null } | null;
+        } | null;
+      } | null;
     }>(GET_ITEM_BY_ID, { itemId: data.item_id });
     const item = itemRow.items_by_pk;
     if (!item || item.business_id !== businessId) {
@@ -1890,6 +1902,10 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
+    const quantity = resolveInitialInventoryQuantity({
+      requestedQuantity: data.quantity,
+      categoryName: item.item_sub_category?.item_category?.name,
+    });
 
     if (data.item_variant_id) {
       const variantRow = await this.hasuraUserService.executeQuery<{
@@ -1923,7 +1939,7 @@ export class BusinessItemsService {
         business_location_id: data.business_location_id,
         item_id: data.item_id,
         item_variant_id: data.item_variant_id ?? null,
-        quantity: data.quantity,
+        quantity,
         reserved_quantity: data.reserved_quantity,
         reorder_point: data.reorder_point,
         reorder_quantity: data.reorder_quantity,

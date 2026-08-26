@@ -93,6 +93,7 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { checkFoodOrderable } from '../food/food-order-guard.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -8041,6 +8042,16 @@ export class OrdersService {
               }
             }
           }
+          food_settings {
+            marked_unavailable_at
+            availability_slots(
+              order_by: [{ day_of_week: asc }, { start_time: asc }]
+            ) {
+              day_of_week
+              start_time
+              end_time
+            }
+          }
           item {
             id
             name
@@ -8053,7 +8064,11 @@ export class OrdersService {
             currency
             weight
             max_order_quantity
+            preparation_minutes
             stripe_tax_code_id
+            item_sub_category {
+              item_category { name }
+            }
             item_variants(
               where: { is_active: { _eq: true } }
               order_by: { sort_order: asc }
@@ -8237,6 +8252,11 @@ export class OrdersService {
           `Item ${businessInventory.item.name} is not available for purchase yet. Payments at this location are coming soon.`,
           HttpStatus.BAD_REQUEST
         );
+      }
+
+      const foodBlock = checkFoodOrderable(businessInventory);
+      if (foodBlock) {
+        throw new HttpException(foodBlock.message, HttpStatus.BAD_REQUEST);
       }
 
       const maxOrderQuantity = businessInventory.item?.max_order_quantity;
