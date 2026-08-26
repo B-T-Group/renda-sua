@@ -16,6 +16,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `pickup_reminder` | `rs_pickup_reminder` | UTILITY | orderNumber, window | URL CTA → `/app/orders/{{1}}` |
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
+| `admin_order_risk` | `rs_admin_order_risk` | UTILITY | orderNumber, riskLabel, reason | URL CTA → `/app/admin/orders/{{1}}` |
 
 ## Meta body rules (important)
 
@@ -281,6 +282,39 @@ Rendasua : une suggestion de fiche IA est prête à être examinée.
 La suggestion pour {{1}} attend dans votre espace commerçant. Ouvrez l’application pour l’approuver, la modifier ou la rejeter.
 
 Merci de vendre avec Rendasua.
+```
+
+---
+
+## 11. `rs_admin_order_risk`
+
+Sent to platform staff (`superuser`, `order_manager`) and to the agent who referred the merchant, so the audience is internal rather than customer-facing.
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` riskLabel · `{{3}}` reason  
+**Button:** Open order → `https://rendasua.com/app/admin/orders/{{1}}`
+
+`riskLabel` is one of: Not confirmed by merchant, Confirmed but not ready, Ready with no agent, Waiting to be collected, Agent has not picked up, Delivery running late.
+
+`reason` is a single line built by `buildOrderRiskActionSummary` carrying the merchant, the phone number to call, the client, the amount, and the time left — capped at 300 characters.
+
+**en_US**
+```
+Rendasua: an order needs your intervention.
+
+Order {{1}} is flagged as: {{2}}.
+Details: {{3}}
+
+Open the admin panel to contact the client, the business, or the agent.
+```
+
+**fr**
+```
+Rendasua : une commande nécessite votre intervention.
+
+La commande {{1}} est signalée : {{2}}.
+Détails : {{3}}
+
+Ouvrez le panneau d’administration pour contacter le client, le commerçant ou le livreur.
 ```
 
 ---

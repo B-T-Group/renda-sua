@@ -46,18 +46,20 @@ function setup(attempts: Array<{ channel: string; status: string }> = [
   { channel: 'push', status: 'sent' },
 ]) {
   const notifications = {
-    notifySuperusersOrderRisk: jest.fn().mockResolvedValue(attempts),
+    notifyOpsOrderRisk: jest.fn().mockResolvedValue(attempts),
   };
   const incidents = {
     recordAlertAttempt: jest.fn().mockResolvedValue(undefined),
   };
   const events = { recordEvent: jest.fn().mockResolvedValue(undefined) };
+  const context = { load: jest.fn().mockResolvedValue(undefined) };
   const service = new OrderRiskAlertService(
     notifications as never,
     incidents as never,
-    events as never
+    events as never,
+    context as never
   );
-  return { service, notifications, incidents, events };
+  return { service, notifications, incidents, events, context };
 }
 
 function raised(overrides: Partial<RaisedIncident> = {}): RaisedIncident {
@@ -80,7 +82,7 @@ describe('OrderRiskAlertService', () => {
       config: DEFAULT_ORDER_RISK_CONFIG,
     });
     expect(sent).toBe(true);
-    expect(notifications.notifySuperusersOrderRisk).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyOpsOrderRisk).toHaveBeenCalledTimes(1);
     expect(incidents.recordAlertAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         incidentId: 'incident-1',
@@ -138,7 +140,7 @@ describe('OrderRiskAlertService', () => {
       config: { ...DEFAULT_ORDER_RISK_CONFIG, alertsEnabled: false },
     });
     expect(sent).toBe(false);
-    expect(notifications.notifySuperusersOrderRisk).not.toHaveBeenCalled();
+    expect(notifications.notifyOpsOrderRisk).not.toHaveBeenCalled();
   });
 
   it('suppresses warnings when only critical incidents should alert', async () => {
@@ -151,7 +153,7 @@ describe('OrderRiskAlertService', () => {
       config: { ...DEFAULT_ORDER_RISK_CONFIG, minSeverity: 'critical' },
     });
     expect(sent).toBe(false);
-    expect(notifications.notifySuperusersOrderRisk).not.toHaveBeenCalled();
+    expect(notifications.notifyOpsOrderRisk).not.toHaveBeenCalled();
   });
 
   it('does not re-alert an open incident inside the repeat cooldown', async () => {
@@ -170,7 +172,7 @@ describe('OrderRiskAlertService', () => {
       config: DEFAULT_ORDER_RISK_CONFIG,
     });
     expect(sent).toBe(false);
-    expect(notifications.notifySuperusersOrderRisk).not.toHaveBeenCalled();
+    expect(notifications.notifyOpsOrderRisk).not.toHaveBeenCalled();
   });
 
   it('re-alerts once the repeat cooldown has elapsed', async () => {
@@ -189,7 +191,7 @@ describe('OrderRiskAlertService', () => {
       config: DEFAULT_ORDER_RISK_CONFIG,
     });
     expect(sent).toBe(true);
-    expect(notifications.notifySuperusersOrderRisk).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyOpsOrderRisk).toHaveBeenCalledTimes(1);
   });
 
   it('alerts immediately on escalation even inside the cooldown', async () => {
@@ -209,7 +211,7 @@ describe('OrderRiskAlertService', () => {
       config: DEFAULT_ORDER_RISK_CONFIG,
     });
     expect(sent).toBe(true);
-    expect(notifications.notifySuperusersOrderRisk).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyOpsOrderRisk).toHaveBeenCalledTimes(1);
   });
 
   it('stops repeat alerts once staff acknowledged the incident', async () => {
@@ -229,6 +231,6 @@ describe('OrderRiskAlertService', () => {
       config: DEFAULT_ORDER_RISK_CONFIG,
     });
     expect(sent).toBe(false);
-    expect(notifications.notifySuperusersOrderRisk).not.toHaveBeenCalled();
+    expect(notifications.notifyOpsOrderRisk).not.toHaveBeenCalled();
   });
 });

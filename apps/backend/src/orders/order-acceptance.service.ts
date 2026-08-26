@@ -22,6 +22,7 @@ import {
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
 import { OrderSystemJobsService } from './order-system-jobs.service';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import {
   ACTIVATION_LEAD_MINUTES_ALLOWED,
@@ -92,7 +93,8 @@ export class OrderAcceptanceService {
     private readonly notifications: NotificationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly fulfillmentPromiseService: FulfillmentPromiseService
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService,
+    private readonly riskMonitor: OrderRiskMonitorService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -157,9 +159,26 @@ export class OrderAcceptanceService {
       return { success: true, skipped: true };
     }
     const graceSec = this.orderConfig().acceptanceGraceSeconds;
-    const graceDeadline = new Date(Date.now() + graceSec * 1000).toISOString();
+    await this.persistGraceWindow(orderId, graceSec);
 
-    // no_response → grace in one step: escalate + start grace window.
+    await this.notifyEscalation(order);
+    // Grace is the last window before auto-decline refunds the client, so ops is
+    // pulled in now instead of after the order has already been cancelled.
+    await this.riskMonitor.evaluateOrderById(orderId);
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_grace_deadline',
+      { order_id: orderId },
+      graceSec
+    );
+    return { success: true };
+  }
+
+  /** no_response → grace in one step: escalate + start the grace window. */
+  private async persistGraceWindow(
+    orderId: string,
+    graceSec: number
+  ): Promise<void> {
+    const graceDeadline = new Date(Date.now() + graceSec * 1000).toISOString();
     await this.hasura.executeMutation(
       `mutation EscalateAcceptance($id: uuid!, $grace: timestamptz!) {
         update_orders_by_pk(
@@ -173,14 +192,6 @@ export class OrderAcceptanceService {
       }`,
       { id: orderId, grace: graceDeadline }
     );
-
-    await this.notifyEscalation(order);
-    await this.waitAndExecute.scheduleAcceptanceTimeout(
-      'order.acceptance_grace_deadline',
-      { order_id: orderId },
-      graceSec
-    );
-    return { success: true };
   }
 
   async onGraceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
@@ -1249,7 +1260,7 @@ export class OrderAcceptanceService {
     } | null;
   }): Promise<void> {
     try {
-      await this.notifications.sendOrderAcceptanceEscalationPush({
+      await this.notifications.sendOrderAcceptanceEscalation({
         businessUserId: order.business?.user_id,
         orderId: order.id,
         orderNumber: order.order_number,

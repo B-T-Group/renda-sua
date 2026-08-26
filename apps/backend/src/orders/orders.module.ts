@@ -50,6 +50,7 @@ import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
 import { OrderRiskAlertService } from './order-risk-alert.service';
 import { OrderRiskConfigService } from './order-risk-config.service';
+import { OrderRiskContextService } from './order-risk-context.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { PickupProgressService } from './pickup-progress.service';
@@ -95,6 +96,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderStatusService,
     OrderRiskService,
     OrderRiskConfigService,
+    OrderRiskContextService,
     OrderRiskIncidentsService,
     OrderRiskAlertService,
     OrderRiskMonitorService,

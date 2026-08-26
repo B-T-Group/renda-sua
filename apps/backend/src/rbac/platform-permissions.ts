@@ -36,6 +36,7 @@ export const PlatformRoles = {
   FINANCE: 'finance',
   SUPPORT: 'support',
   CONTENT: 'content',
+  ORDER_MANAGER: 'order_manager',
 } as const;
 
 export type PlatformRole = (typeof PlatformRoles)[keyof typeof PlatformRoles];
