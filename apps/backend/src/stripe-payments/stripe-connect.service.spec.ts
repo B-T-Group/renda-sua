@@ -70,7 +70,7 @@ describe('StripeConnectService', () => {
       businessName: 'Ada Rentals',
     });
     expect(hasuraService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('insert_stripe_connect_accounts_one'),
+      expect.stringContaining('stripe_connect_accounts_user_id_key'),
       {
         data: expect.objectContaining({
           user_id: 'user-123',
@@ -94,5 +94,70 @@ describe('StripeConnectService', () => {
     }
     expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
     expect(hasuraService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('returns the existing row when a concurrent insert races', async () => {
+    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockRejectedValue(
+      new Error(
+        'Uniqueness violation. duplicate key value violates unique constraint "stripe_connect_accounts_user_id_key"'
+      )
+    );
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
+  });
+
+  it('returns the existing row when Hasura on_conflict yields null', async () => {
+    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockResolvedValue({
+      insert_stripe_connect_accounts_one: null,
+    });
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
+  });
+
+  it('coalesces concurrent ensureAccount calls for the same user', async () => {
+    let releaseLookup: (value: unknown) => void;
+    hasuraService.executeQuery.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseLookup = resolve;
+        })
+    );
+
+    const first = service.ensureAccount('user-123');
+    const second = service.ensureAccount('user-123');
+    expect(hasuraService.executeQuery).toHaveBeenCalledTimes(1);
+
+    releaseLookup!({ stripe_connect_accounts: [{ id: 'row-1' }] });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { id: 'row-1' },
+      { id: 'row-1' },
+    ]);
+    expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
   });
 });
