@@ -787,7 +787,6 @@
       "timing": {
         "title": "Commitments",
         "created": "Created",
-        "statusSince": "In current status since",
         "acceptanceDeadline": "Acceptance deadline",
         "promisedReady": "Promised ready",
         "pickupDue": "Pickup due",

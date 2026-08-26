@@ -546,7 +546,6 @@
       "timing": {
         "title": "Engagements",
         "created": "Créée",
-        "statusSince": "Dans ce statut depuis",
         "acceptanceDeadline": "Échéance d'acceptation",
         "promisedReady": "Prête promise pour",
         "pickupDue": "Ramassage attendu",
