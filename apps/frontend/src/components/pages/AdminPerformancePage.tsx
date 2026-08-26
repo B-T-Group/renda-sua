@@ -1,4 +1,4 @@
-import { CheckCircle, ExpandLess, ExpandMore, Insights } from '@mui/icons-material';
+import { CheckCircle, ExpandLess, ExpandMore, Insights, ShoppingCart } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -45,6 +45,7 @@ import { usePermission } from '../../hooks/usePermissions';
 import LoadingScreen from '../common/LoadingScreen';
 import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
 import { AdminCompensationEventsDialog } from '../admin/AdminCompensationEventsDialog';
+import { formatPayoutMoney } from '../admin/AdminPayoutPreviewTable';
 import SEOHead from '../seo/SEOHead';
 
 const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
@@ -202,10 +203,24 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
             {` / ${agent.count}`}
           </Typography>
         </TableCell>
+        <TableCell align="right">
+          {agent.projectedPayoutAmount != null && agent.projectedPayoutCurrency ? (
+            <Typography variant="body2" fontWeight={700} color="success.main">
+              {formatPayoutMoney(
+                agent.projectedPayoutAmount,
+                agent.projectedPayoutCurrency
+              )}
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.disabled">
+              {'—'}
+            </Typography>
+          )}
+        </TableCell>
       </TableRow>
       <TableRow>
         <TableCell
-          colSpan={9}
+          colSpan={10}
           sx={{ py: 0, borderBottom: open ? undefined : 'none' }}
         >
           <Collapse in={open} timeout="auto" unmountOnExit>
@@ -239,6 +254,12 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                       <TableCell align="right">
                         {t('admin.performance.topAgents.score', 'Score')}
                       </TableCell>
+                      <TableCell align="center">
+                        {t(
+                          'admin.performance.topAgents.itemsQualified',
+                          '10+ items'
+                        )}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -247,6 +268,32 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                         <TableCell>{biz.businessName || biz.businessId}</TableCell>
                         <TableCell align="right">{biz.itemCount}</TableCell>
                         <TableCell align="right">{biz.score}</TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            size="small"
+                            color={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? 'success'
+                                : 'default'
+                            }
+                            variant={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? 'filled'
+                                : 'outlined'
+                            }
+                            label={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? t(
+                                    'admin.performance.topAgents.qualifiedYes',
+                                    'Qualified'
+                                  )
+                                : t(
+                                    'admin.performance.topAgents.qualifiedNo',
+                                    'Not yet'
+                                  )
+                            }
+                          />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -377,6 +424,22 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
                         {t(
                           'admin.performance.topAgents.stockedReferrals',
                           'Stocked'
+                        )}
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip
+                      title={t(
+                        'admin.performance.topAgents.projectedPayoutTooltip',
+                        'Estimated onboarding bonus: approved unpaid referred businesses with ≥{{n}} items × the configured market amount. A qualifying sale is also required for the bonus to pay out.',
+                        { n: GOLDEN_ITEMS_PER_REFERRAL }
+                      )}
+                    >
+                      <span>
+                        {t(
+                          'admin.performance.topAgents.projectedPayout',
+                          'Est. payout'
                         )}
                       </span>
                     </Tooltip>
@@ -626,10 +689,33 @@ const AdminPerformancePage: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               {t(
                 'admin.performance.golden.description',
-                'Goal: each referred business should reach at least {{n}} sale catalog items on average (items / referral).',
+                'Goal: each referred business should reach at least {{n}} approved sale items on average (items / referral).',
                 { n: GOLDEN_ITEMS_PER_REFERRAL }
               )}
             </Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap">
+              <Chip
+                size="small"
+                icon={<CheckCircle fontSize="small" />}
+                label={t(
+                  'admin.performance.golden.rule1',
+                  '{{n}}+ approved products',
+                  { n: GOLDEN_ITEMS_PER_REFERRAL }
+                )}
+                color="success"
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                icon={<ShoppingCart fontSize="small" />}
+                label={t(
+                  'admin.performance.golden.rule2',
+                  'Sale ≥ configured market minimum'
+                )}
+                color="info"
+                variant="outlined"
+              />
+            </Stack>
           </Box>
           <FormControlLabel
             sx={{ m: 0, flexShrink: 0 }}
