@@ -1423,6 +1423,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     await this.ensurePickupPinIfNeeded(order);
+    await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
     // Persist the dispatch gate BEFORE flipping the status: the status write
     // below fires an async event that triggers dispatchOrderOffers, which
     // reads dispatch_ready_at to decide whether to dispatch immediately. If
@@ -1451,17 +1452,18 @@ export class OrdersService {
   }
 
   /**
-   * Compute when agent dispatch/open-order visibility should open for a newly
-   * ready_for_pickup order (dispatch lead time before the scheduled delivery/
-   * pickup window) and persist it. Delivery orders only; pickup orders are
-   * never dispatched. Returns null for pickup orders or on failure.
+   * Persist ready-time pickup_by and, for delivery, the agent dispatch gate.
+   * Pickup orders are never dispatched (returns null after writing pickup_by).
    */
   private async scheduleAgentDispatchGate(
     order: Orders
   ): Promise<{ dispatchReadyAt: Date; pickupBy: Date | null } | null> {
-    if ((order as any).fulfillment_method === 'pickup') return null;
     try {
       const schedule = await this.computeDispatchSchedule(order);
+      if ((order as any).fulfillment_method === 'pickup') {
+        await this.persistPickupBy(order.id, schedule.pickupBy);
+        return null;
+      }
       await this.persistDispatchSchedule(
         order.id,
         schedule.dispatchReadyAt,
@@ -1509,10 +1511,9 @@ export class OrdersService {
     const now = new Date();
     const window = (order as any).delivery_time_windows?.[0];
     if (!window?.is_confirmed || !window.preferred_date || !window.time_slot_start) {
-      const promisedReady = (order as any).promised_ready_at;
       return {
         dispatchReadyAt: now,
-        pickupBy: promisedReady ? new Date(promisedReady) : now,
+        pickupBy: now,
       };
     }
     const countryCode =
@@ -1553,6 +1554,24 @@ export class OrdersService {
         ) { id }
       }`,
       { id: orderId }
+    );
+  }
+
+  private async persistPickupBy(
+    orderId: string,
+    pickupBy: Date | null
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation SetPickupBy($id: uuid!, $pickupBy: timestamptz) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { pickup_by: $pickupBy, updated_at: "now()" }
+        ) { id }
+      }`,
+      {
+        id: orderId,
+        pickupBy: pickupBy ? pickupBy.toISOString() : null,
+      }
     );
   }
 

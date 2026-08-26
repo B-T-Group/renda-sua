@@ -362,6 +362,7 @@ describe('OrdersService', () => {
           provide: FulfillmentPromiseService,
           useValue: {
             persistForOrder: jest.fn(),
+            reanchorAsapAtReady: jest.fn(),
             evaluateAsap: jest.fn().mockReturnValue({
               available: true,
               estimatedPrepMinutes: 30,
