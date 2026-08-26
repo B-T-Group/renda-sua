@@ -4038,16 +4038,22 @@ export class NotificationsService {
   private async listOrderRiskRecipients(
     params: OrderRiskAlertParams
   ): Promise<OrderRiskRecipient[]> {
+    const agentUserId = params.action?.referringAgentUserId?.trim();
+    const [staff, agent] = await Promise.all([
+      this.rbacService.listUsersWithRoles(),
+      agentUserId ? this.getUserRowForEmail(agentUserId) : null,
+    ]);
     return buildOrderRiskRecipients({
-      staff: await this.rbacService.listUsersWithRoles(),
+      staff,
       roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.ORDER_MANAGER],
-      referringAgentUserId: params.action?.referringAgentUserId,
+      referringAgentUserId: agentUserId,
+      referringAgentLanguage: agent?.preferred_language,
     });
   }
 
   private buildOrderRiskNotifyRequest(
     params: OrderRiskAlertParams,
-    recipient: { userId: string; email: string | null }
+    recipient: OrderRiskRecipient
   ): NotifyRequest {
     const links = this.deepLinkService.adminOrder(params.orderId);
     const push = buildOrderRiskSuperuserPushMessage(params);
@@ -4059,6 +4065,7 @@ export class NotificationsService {
       type: 'admin.order_risk',
       category: 'actionable',
       recipientUserId: recipient.userId,
+      locale: normalizeLanguage(recipient.preferredLanguage),
       preferenceCategory: 'order_updates',
       entityType: 'order_risk_incident',
       entityId: params.incidentId,
