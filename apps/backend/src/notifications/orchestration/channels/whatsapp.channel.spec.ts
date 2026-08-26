@@ -9,6 +9,7 @@ describe('WhatsAppChannel', () => {
     resolveMetaName: jest.fn(),
     languageCode: jest.fn().mockReturnValue('en_US'),
     buildComponents: jest.fn().mockReturnValue([]),
+    category: jest.fn().mockReturnValue('UTILITY'),
   };
   const configService = {
     get: jest.fn(),
@@ -99,6 +100,7 @@ describe('WhatsAppChannel', () => {
       templateName: 'rs_order_new',
       languageCode: 'en_US',
       components: [],
+      category: 'UTILITY',
     });
   });
 

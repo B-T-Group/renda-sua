@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { WhatsAppTemplateComponent } from '../../whatsapp/whatsapp.types';
+import type {
+  WhatsAppTemplateCategory,
+  WhatsAppTemplateComponent,
+} from '../../whatsapp/whatsapp.types';
 import type { WhatsAppChannelPayload } from './notification.types';
 
 /** Maps internal template keys → Meta-approved template names (en_US / fr). */
@@ -25,11 +28,32 @@ const BODY_VARS: Record<string, string[]> = {
   order_ready: ['orderNumber'],
   rental_request_business: ['itemName', 'dates'],
   verification_attention: ['reason'],
-  delivery_pin: ['pin', 'orderNumber'],
+  delivery_pin: ['pin'],
   pickup_reminder: ['orderNumber', 'window'],
   payment_failed: ['orderNumber'],
   ai_proposal_ready: ['itemName'],
   admin_order_risk: ['orderNumber', 'riskLabel', 'reason'],
+};
+
+/**
+ * Templates Meta approved under the AUTHENTICATION category, mapped to the
+ * variable holding the code. These do not follow the utility contract: the body
+ * takes the code and nothing else, and the copy-code button repeats it. Sending
+ * a second body parameter is rejected on parameter count.
+ */
+const AUTH_CODE_VARS: Record<string, string> = {
+  delivery_pin: 'pin',
+};
+
+/**
+ * Meta's approved category, which drives both transport and pricing. Only
+ * non-utility templates are listed; everything else defaults to UTILITY.
+ * Meta can recategorize a template after approval, so this must be kept in step
+ * with WhatsApp Manager — see `docs/whatsapp-meta-templates.md`.
+ */
+const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
+  delivery_pin: 'AUTHENTICATION',
+  order_offer_agent: 'MARKETING',
 };
 
 @Injectable()
@@ -44,9 +68,17 @@ export class WhatsAppTemplateService {
     return locale === 'fr' ? 'fr' : 'en_US';
   }
 
+  /** Meta's approved category for this template; drives transport and pricing. */
+  category(templateKey: string): WhatsAppTemplateCategory {
+    return TEMPLATE_CATEGORIES[templateKey] ?? 'UTILITY';
+  }
+
   buildComponents(
     payload: WhatsAppChannelPayload
   ): WhatsAppTemplateComponent[] {
+    const codeVar = AUTH_CODE_VARS[payload.templateKey];
+    if (codeVar) return this.buildAuthComponents(payload, codeVar);
+
     const keys = BODY_VARS[payload.templateKey] ?? Object.keys(payload.variables);
     const bodyParams = keys
       .map((k) => payload.variables[k])
@@ -68,17 +100,42 @@ export class WhatsAppTemplateService {
     return components;
   }
 
+  /**
+   * Authentication templates carry the code twice: once in the body and once on
+   * the OTP button. Meta keeps the send-time button `sub_type` as `url` even
+   * though the button is created as type OTP, and the template's own CTA is
+   * ignored — there is no URL to parameterize.
+   */
+  private buildAuthComponents(
+    payload: WhatsAppChannelPayload,
+    codeVariable: string
+  ): WhatsAppTemplateComponent[] {
+    const code = payload.variables[codeVariable]?.trim();
+    if (!code) return [];
+    return [
+      { type: 'body', parameters: [{ type: 'text', text: code }] },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: code }],
+      },
+    ];
+  }
+
   listTemplateCatalog(): Array<{
     templateKey: string;
     metaNameEn: string;
     metaNameFr: string;
     bodyVariables: string[];
+    category: WhatsAppTemplateCategory;
   }> {
     return Object.keys(TEMPLATE_NAMES).map((templateKey) => ({
       templateKey,
       metaNameEn: TEMPLATE_NAMES[templateKey].en,
       metaNameFr: TEMPLATE_NAMES[templateKey].fr,
       bodyVariables: BODY_VARS[templateKey] ?? [],
+      category: this.category(templateKey),
     }));
   }
 

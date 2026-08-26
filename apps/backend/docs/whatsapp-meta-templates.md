@@ -7,12 +7,12 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | Internal key | Meta name | Category | Body variables (positional) | Button |
 |--------------|-----------|----------|-------------------------------|--------|
 | `order_created_business` | `rs_order_new` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
-| `order_offer_agent` | `rs_delivery_offer` | UTILITY | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
+| `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 | `order_ready` | `rs_order_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `rental_request_business` | `rs_rental_request` | UTILITY | itemName, dates | URL CTA → `/app/rentals/requests/{{1}}` |
 | `verification_attention` | `rs_verification` | UTILITY | reason | URL CTA → `/app/verification` (static) |
-| `delivery_pin` | `rs_delivery_pin` | UTILITY | pin, orderNumber | URL CTA → `/app/orders/{{1}}` |
+| `delivery_pin` | `rs_delivery_pin` | **AUTHENTICATION** | pin (code only) | OTP copy-code button (no URL CTA) |
 | `pickup_reminder` | `rs_pickup_reminder` | UTILITY | orderNumber, window | URL CTA → `/app/orders/{{1}}` |
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
@@ -23,8 +23,20 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 - Do **not** start or end the body with a variable (`{{1}}`, `{{2}}`, …).
 - Keep enough fixed text around variables (short bodies with many vars are rejected).
 - Variable **order** must match the table above (backend positional params).
-- Category: **Utility** for all.
 - Dynamic URL buttons use base path + `{{1}}` for the entity id only. `rs_verification` is a **static** URL (no button parameter).
+
+## Category drives transport
+
+Meta owns the category and **can recategorize a template after approval**, so the `Category` column above must be re-checked against WhatsApp Manager. `TEMPLATE_CATEGORIES` in `whatsapp-template.service.ts` mirrors it, and `WhatsAppService` routes on it:
+
+| Category | Endpoint | Notes |
+|---|---|---|
+| UTILITY / AUTHENTICATION | `/PHONE_NUMBER_ID/messages` (Cloud API) | Default. |
+| MARKETING | `/PHONE_NUMBER_ID/marketing_messages` (Marketing Messages API) | Only when `WHATSAPP_MARKETING_MESSAGES_API_ENABLED=true`; otherwise falls back to Cloud API, which still carries non-optimized marketing. |
+
+Sending marketing over the Marketing Messages API needs the WABA to sign the MM API Terms of Service in WhatsApp Manager first; check `marketing_messages_onboarding_status` on the WABA for `ELIGIBLE` / `ONBOARDED`. See [Meta's onboarding guide](https://developers.facebook.com/documentation/business-messaging/whatsapp/marketing-messages/onboarding). Both APIs use the same registered phone number.
+
+Marketing templates are also priced as marketing and are subject to WhatsApp's **per-user marketing message limits**, so a send can be dropped even when Graph accepts it. Do not rely on a marketing template as the only path for anything operational.
 
 ---
 
@@ -57,10 +69,12 @@ Appuyez ci-dessous pour ouvrir la commande dans Rendasua.
 
 ---
 
-## 2. `rs_delivery_offer`
+## 2. `rs_delivery_offer` (MARKETING)
 
 **Vars:** `{{1}}` pickupArea · `{{2}}` distance  
 **Button:** View offer → `https://rendasua.com/app/deliveries/{{1}}`
+
+Meta categorizes this one as **marketing**, so it is priced as marketing, capped by per-user marketing limits, and routed through the Marketing Messages API when onboarding is complete. Push remains the primary channel for offers; WhatsApp is best-effort.
 
 **en_US**
 ```
@@ -186,28 +200,29 @@ Veuillez mettre à jour vos documents dans l’application afin que nous puissio
 
 ---
 
-## 7. `rs_delivery_pin`
+## 7. `rs_delivery_pin` (AUTHENTICATION)
 
-**Vars:** `{{1}}` pin · `{{2}}` orderNumber  
-**Button:** View order → `https://rendasua.com/app/orders/{{1}}`
+**This is the only authentication template, and it does not follow the utility contract above.** Authentication templates are created in Meta with a fixed body plus an `OTP` button (`otp_type: COPY_CODE`) — you do not author the body copy, you only toggle the security recommendation and the code expiry. Pricing and time-to-live also differ from utility.
 
-**en_US**
+**Vars:** `{{1}}` pin — the code and nothing else  
+**Button:** OTP copy-code (no URL CTA; the template's `ctaUrl` is ignored)
+
+The send payload repeats the code in **both** the body and the button. `WhatsAppTemplateService.buildAuthComponents` produces this; do not route it through the utility path:
+
+```json
+"components": [
+  { "type": "body",
+    "parameters": [{ "type": "text", "text": "123456" }] },
+  { "type": "button", "sub_type": "url", "index": "0",
+    "parameters": [{ "type": "text", "text": "123456" }] }
+]
 ```
-Rendasua delivery security code.
 
-Your PIN is {{1}} for order {{2}}. Share this code only with your Rendasua agent at handover.
+Meta keeps the send-time `sub_type` as `url` even though the button is created as type `OTP`. Adding a second body parameter (for example the order number) is rejected on parameter count.
 
-Keep this message private.
-```
+Authentication templates go through **Cloud API** `/{phone-number-id}/messages`, the same transport as every other template here. MM Lite / Marketing Messages API only optimizes *marketing* sends and does not apply.
 
-**fr**
-```
-Code de sécurité de livraison Rendasua.
-
-Votre code PIN est {{1}} pour la commande {{2}}. Partagez ce code uniquement avec votre agent Rendasua lors de la remise.
-
-Gardez ce message confidentiel.
-```
+> Not currently sent. No code passes `templateKey: 'delivery_pin'`; the delivery PIN notification is push-only. Wire it through the orchestrator before relying on it.
 
 ---
 

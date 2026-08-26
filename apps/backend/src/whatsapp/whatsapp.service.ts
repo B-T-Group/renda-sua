@@ -46,7 +46,19 @@ export class WhatsAppService {
   ): Promise<WhatsAppSendMessageResult> {
     this.assertConfigured();
     const payload = this.buildTemplatePayload(params);
-    return this.postMessages(payload);
+    return this.postMessages(payload, this.endpointFor(params.category));
+  }
+
+  /**
+   * Marketing templates go through the Marketing Messages API when the WABA has
+   * onboarded, which Meta reports delivers materially better than Cloud API.
+   * Everything else — authentication, utility, and non-optimized marketing —
+   * stays on Cloud API, which is also the safe fallback before onboarding.
+   */
+  private endpointFor(category?: SendWhatsAppTemplateParams['category']): string {
+    const useMarketingApi =
+      category === 'MARKETING' && this.config.marketingMessagesApiEnabled;
+    return useMarketingApi ? 'marketing_messages' : 'messages';
   }
 
   private assertConfigured(): void {
@@ -69,6 +81,7 @@ export class WhatsAppService {
     }
     return {
       messaging_product: 'whatsapp',
+      recipient_type: 'individual',
       to: this.normalizePhone(params.to),
       type: 'template',
       template,
@@ -80,12 +93,13 @@ export class WhatsAppService {
   }
 
   private async postMessages(
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    endpoint = 'messages'
   ): Promise<WhatsAppSendMessageResult> {
     const { phoneNumberId, accessToken } = this.config;
     try {
       const { data } = await this.http.post<WhatsAppGraphMessagesResponse>(
-        `/${phoneNumberId}/messages`,
+        `/${phoneNumberId}/${endpoint}`,
         payload,
         {
           headers: {
