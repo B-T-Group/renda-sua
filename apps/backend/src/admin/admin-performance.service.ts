@@ -8,10 +8,6 @@ import {
   buildReferredBusinessesQuery,
   buildSummaryQuery,
 } from './admin-performance.queries';
-import {
-  businessReferralPayoutConfigKey,
-  businessReferralPayoutTier,
-} from './business-referral-payout-config.util';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import type { TopAgentMetric } from './dto/admin-performance-query.dto';
 
@@ -343,20 +339,33 @@ export class AdminPerformanceService {
     countryCode: string,
     isInternal: boolean
   ): Promise<{ amount: number; currency: string }> {
-    const configKey = businessReferralPayoutConfigKey(
-      businessReferralPayoutTier({ isInternal, hasAgentPersona: true })
-    );
+    // Internal employees use a dedicated referral rate; standard agents earn the onboarding bonus.
+    const configKey = isInternal
+      ? 'business_referral_payout_amount_internal'
+      : 'onboarding_10_first_sale_amount';
+    const currency = this.currencyForCountry(countryCode);
     try {
       const config = await this.configurationsService.getConfigurationByKey(
         configKey,
         countryCode
       );
-      const amount = Number(config?.number_value ?? 0);
-      const currency = this.currencyForCountry(countryCode);
+      const configAmount = Number(config?.number_value ?? 0);
+      const amount = configAmount > 0
+        ? configAmount
+        : this.onboardingFallbackAmount(countryCode, isInternal);
       return { amount, currency };
     } catch {
-      return { amount: 0, currency: this.currencyForCountry(countryCode) };
+      return {
+        amount: this.onboardingFallbackAmount(countryCode, isInternal),
+        currency,
+      };
     }
+  }
+
+  private onboardingFallbackAmount(countryCode: string, isInternal: boolean): number {
+    if (isInternal) return 0;
+    const map: Record<string, number> = { CM: 7500, GA: 7500, CA: 25, US: 25 };
+    return map[countryCode.toUpperCase()] ?? 7500;
   }
 
   private currencyForCountry(countryCode: string): string {

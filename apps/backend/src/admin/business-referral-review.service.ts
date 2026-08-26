@@ -246,10 +246,12 @@ export class BusinessReferralReviewService {
         rejection_reason: string | null;
       }>;
       business_referral_payouts: Array<{ business_id: string }>;
+      representative_compensation_events: Array<{ business_id: string }>;
     }>(Q.REVIEWS_FOR_BUSINESS_IDS_QUERY, { ids });
-    const paid = new Set(
-      (result?.business_referral_payouts ?? []).map((p) => p.business_id)
-    );
+    const paid = new Set([
+      ...(result?.business_referral_payouts ?? []).map((p) => p.business_id),
+      ...(result?.representative_compensation_events ?? []).map((e) => e.business_id),
+    ]);
     for (const id of ids) {
       map.set(id, {
         payoutReviewStatus: 'pending',

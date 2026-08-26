@@ -634,8 +634,10 @@
       },
       "golden": {
         "title": "Objectif qualité des parrainages",
-        "description": "Objectif : chaque entreprise parrainée devrait atteindre en moyenne au moins {{n}} articles en vente (articles / parrainage).",
-        "filterLabel": "Uniquement les agents ≥{{n}} articles / parrainage"
+        "description": "Objectif : chaque entreprise parrainée devrait atteindre en moyenne au moins {{n}} articles de vente approuvés (articles / parrainage).",
+        "filterLabel": "Uniquement les agents ≥{{n}} articles / parrainage",
+        "rule1": "{{n}}+ produits approuvés",
+        "rule2": "Vente ≥ minimum configuré du marché"
       },
       "topAgents": {
         "deliveriesTitle": "Meilleurs agents par livraisons",
@@ -659,7 +661,12 @@
         "toggleBusinesses": "Afficher les entreprises parrainées",
         "referredBusinesses": "Entreprises parrainées",
         "noBusinesses": "Aucune entreprise parrainée",
-        "businessName": "Entreprise"
+        "businessName": "Entreprise",
+        "projectedPayout": "Paiement est.",
+        "projectedPayoutTooltip": "Bonus d’onboarding estimé : entreprises parrainées approuvées, non payées, avec 10+ articles × le montant configuré par marché. Une vente admissible est également requise pour le déclenchement du paiement.",
+        "itemsQualified": "10+ articles",
+        "qualifiedYes": "Qualifié",
+        "qualifiedNo": "Pas encore"
       },
       "payoutPreview": {
         "button": "Prévisualiser la compensation en attente",

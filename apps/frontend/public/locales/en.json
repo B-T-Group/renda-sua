@@ -876,7 +876,9 @@
       "golden": {
         "title": "Referral quality target",
         "description": "Goal: each referred business should reach at least {{n}} sale catalog items on average (items / referral).",
-        "filterLabel": "Only agents ≥{{n}} items / referral"
+        "filterLabel": "Only agents ≥{{n}} items / referral",
+        "rule1": "{{n}}+ approved products",
+        "rule2": "Sale ≥ configured market minimum"
       },
       "topAgents": {
         "deliveriesTitle": "Top agents by deliveries",
@@ -900,7 +902,12 @@
         "toggleBusinesses": "Show referred businesses",
         "referredBusinesses": "Referred businesses",
         "noBusinesses": "No referred businesses",
-        "businessName": "Business"
+        "businessName": "Business",
+        "projectedPayout": "Est. payout",
+        "projectedPayoutTooltip": "Estimated onboarding bonus: approved unpaid referred businesses with 10+ items × the configured market amount. A qualifying sale is also required for the bonus to pay out.",
+        "itemsQualified": "10+ items",
+        "qualifiedYes": "Qualified",
+        "qualifiedNo": "Not yet"
       },
       "payoutPreview": {
         "button": "Preview pending compensation",
