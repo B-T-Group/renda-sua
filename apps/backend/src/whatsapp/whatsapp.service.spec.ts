@@ -78,6 +78,7 @@ describe('WhatsAppService', () => {
       `/${phoneNumberId}/messages`,
       {
         messaging_product: 'whatsapp',
+        recipient_type: 'individual',
         to: '15551234567',
         type: 'template',
         template: {
@@ -93,6 +94,49 @@ describe('WhatsAppService', () => {
       }
     );
     expect(result.messages[0]?.id).toBe('wamid.ABC');
+  });
+
+  describe('marketing templates', () => {
+    const sendMarketing = async (marketingMessagesApiEnabled: boolean) => {
+      const configService = {
+        get: jest.fn().mockReturnValue({
+          webhookVerifyToken: 'verify',
+          accessToken,
+          phoneNumberId,
+          apiVersion: 'v25.0',
+          appSecret: 'app-secret',
+          notificationsEnabled: true,
+          marketingMessagesApiEnabled,
+        }),
+      } as unknown as ConfigService;
+      const marketingService = new WhatsAppService(configService);
+      const created = (axios.create as jest.Mock).mock.results.at(-1)?.value;
+      const marketingPost = created.post as jest.Mock;
+      marketingPost.mockReset();
+      marketingPost.mockResolvedValue({
+        data: { messages: [{ id: 'wamid.MKT' }] },
+      });
+
+      await marketingService.sendTemplateMessage({
+        to: '15551234567',
+        templateName: 'rs_delivery_offer',
+        languageCode: 'fr',
+        category: 'MARKETING',
+      });
+      return marketingPost;
+    };
+
+    it('routes through the Marketing Messages API once onboarded', async () => {
+      const marketingPost = await sendMarketing(true);
+      expect(marketingPost.mock.calls[0][0]).toBe(
+        `/${phoneNumberId}/marketing_messages`
+      );
+    });
+
+    it('falls back to Cloud API before onboarding', async () => {
+      const marketingPost = await sendMarketing(false);
+      expect(marketingPost.mock.calls[0][0]).toBe(`/${phoneNumberId}/messages`);
+    });
   });
 
   it('throws when WhatsApp is not configured', async () => {

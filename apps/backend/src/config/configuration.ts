@@ -446,6 +446,13 @@ export interface WhatsAppConfig {
   apiVersion: string;
   /** App secret for `X-Hub-Signature-256` webhook verification + action tokens. */
   appSecret: string;
+  /**
+   * Send MARKETING templates through the Marketing Messages API
+   * (`/PHONE_NUMBER_ID/marketing_messages`) for better delivery. Requires the
+   * WABA to have signed the MM API Terms of Service; leave false until then, as
+   * Cloud API still carries non-optimized marketing.
+   */
+  marketingMessagesApiEnabled: boolean;
   /** Master switch for product WhatsApp notifications (templates). Default false when unset. */
   notificationsEnabled: boolean;
 }
@@ -1031,6 +1038,8 @@ export default (): Configuration => {
       appSecret: process.env.WHATSAPP_APP_SECRET || '',
       notificationsEnabled:
         process.env.WHATSAPP_NOTIFICATIONS_ENABLED === 'true',
+      marketingMessagesApiEnabled:
+        process.env.WHATSAPP_MARKETING_MESSAGES_API_ENABLED === 'true',
     },
   };
 };

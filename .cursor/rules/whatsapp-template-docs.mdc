@@ -15,6 +15,7 @@ Update it in the **same change** whenever you:
 - Add a key to `TEMPLATE_NAMES` / `BODY_VARS` in `whatsapp-template.service.ts`
 - Change a template's body variables, their **order**, or its CTA URL
 - Rename or retire a Meta template
+- Learn that Meta **recategorized** a template (it can do this after approval) — update both `TEMPLATE_CATEGORIES` and the doc's `Category` column
 
 Reusing an already-listed template (e.g. sending `order_status_client` from a new flow) needs **no** doc change.
 
@@ -25,12 +26,24 @@ Reusing an already-listed template (e.g. sending `order_status_client` from a ne
 
 Keep the table row and the section consistent with `BODY_VARS` — the array order *is* the Meta `{{1}}, {{2}}, …` order.
 
-## Meta body constraints
+## Category changes behavior, not just price
+
+`TEMPLATE_CATEGORIES` drives the endpoint: MARKETING goes to `/PHONE_NUMBER_ID/marketing_messages` when `WHATSAPP_MARKETING_MESSAGES_API_ENABLED` is on, everything else to `/messages`. Marketing sends are also capped by per-user marketing limits, so treat WhatsApp as best-effort for anything operational that got recategorized to marketing — keep push or another channel as the primary path.
+
+## Meta body constraints (utility templates)
 
 - Never start or end a body with a variable.
 - Keep substantial fixed text around variables; short bodies with many variables get rejected.
-- Category is **Utility** for all current templates.
 - Dynamic URL buttons take the entity id only (`/app/orders/{{1}}`). A static CTA must send no button parameter.
+
+## Authentication templates are different
+
+`AUTH_CODE_VARS` in `whatsapp-template.service.ts` lists them (today: `delivery_pin`). Do **not** treat these as utility:
+
+- The body takes the **code and nothing else**. A second parameter is rejected on parameter count.
+- The code is repeated on the button: `sub_type: "url"`, `index: "0"` — Meta keeps the send-time sub_type as `url` even though the button is created as type `OTP`.
+- Any `ctaUrl` is ignored; there is no URL to parameterize.
+- You do not author the body copy in Meta, so the doc records the contract and category rather than en/fr strings.
 
 ## Prefer reuse over new templates
 

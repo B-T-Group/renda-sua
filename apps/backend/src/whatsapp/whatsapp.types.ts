@@ -12,6 +12,12 @@ export interface WhatsAppTemplateComponent {
   parameters?: WhatsAppTemplateParameter[];
 }
 
+/** Meta's approved template category. Drives transport, pricing, and consent. */
+export type WhatsAppTemplateCategory =
+  | 'AUTHENTICATION'
+  | 'UTILITY'
+  | 'MARKETING';
+
 export interface SendWhatsAppTemplateParams {
   /** Recipient phone in international format (digits, optional leading +). */
   to: string;
@@ -19,6 +25,8 @@ export interface SendWhatsAppTemplateParams {
   /** BCP-47 language code for the template, e.g. en_US. */
   languageCode?: string;
   components?: WhatsAppTemplateComponent[];
+  /** Defaults to UTILITY; MARKETING may route through the Marketing Messages API. */
+  category?: WhatsAppTemplateCategory;
 }
 
 export interface WhatsAppSendMessageResult {

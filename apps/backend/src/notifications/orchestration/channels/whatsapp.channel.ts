@@ -60,6 +60,7 @@ export class WhatsAppChannel {
         templateName,
         languageCode: this.templateService.languageCode(params.locale),
         components: this.templateService.buildComponents(params.payload),
+        category: this.templateService.category(params.payload.templateKey),
       });
       const messageId = result.messages[0]?.id;
       return {
