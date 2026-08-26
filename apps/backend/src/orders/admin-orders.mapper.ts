@@ -11,7 +11,9 @@ import type { OrderRiskIncident, OrderRiskType } from './order-risk.types';
 
 const NEXT_ACTION_BY_RISK: Record<OrderRiskType, AdminOrderNextAction> = {
   pending_acceptance: 'contact_business',
+  prep_overdue: 'contact_business',
   ready_unassigned: 'redispatch',
+  pickup_uncollected: 'contact_client',
   pickup_overdue: 'contact_agent',
   delivery_delayed: 'contact_agent',
 };
@@ -133,7 +135,9 @@ function mapTiming(order: any): AdminOrderTiming {
   return {
     created_at: order.created_at ?? null,
     updated_at: order.updated_at ?? null,
+    status_changed_at: order.status_changed_at ?? null,
     acceptance_deadline_at: order.acceptance_deadline_at ?? null,
+    promised_ready_at: order.promised_ready_at ?? null,
     pickup_due_at: order.pickup_due_at ?? null,
     estimated_delivery_time: order.estimated_delivery_time ?? null,
     promised_fulfill_by: order.promised_fulfill_by ?? null,

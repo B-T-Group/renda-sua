@@ -22,7 +22,8 @@ const INCIDENT_FIELDS = `
 
 const ORDER_FIELDS = `
   id order_number current_status fulfillment_method created_at updated_at
-  acceptance_deadline_at pickup_state pickup_due_at estimated_delivery_time
+  status_changed_at acceptance_deadline_at promised_ready_at
+  pickup_state pickup_due_at estimated_delivery_time
   promised_fulfill_by total_amount currency
   open_risk_rank open_risk_since open_risk_type
   risk_incidents(where: { resolved_at: { _is_null: true } }) { ${INCIDENT_FIELDS} }

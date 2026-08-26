@@ -734,7 +734,9 @@
       "emptyAtRisk": "Nothing needs attention right now.",
       "riskLabels": {
         "pendingAcceptance": "Not confirmed by merchant",
+        "prepOverdue": "Confirmed but not ready",
         "readyUnassigned": "Ready with no agent",
+        "pickupUncollected": "Waiting to be collected",
         "pickupOverdue": "Agent has not picked up",
         "deliveryDelayed": "Delivery running late",
         "critical": "Critical",
@@ -785,7 +787,9 @@
       "timing": {
         "title": "Commitments",
         "created": "Created",
+        "statusSince": "In current status since",
         "acceptanceDeadline": "Acceptance deadline",
+        "promisedReady": "Promised ready",
         "pickupDue": "Pickup due",
         "estimatedDelivery": "Estimated delivery",
         "promise": "Fulfillment promise",

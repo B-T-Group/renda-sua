@@ -11,9 +11,17 @@ export function riskTypeLabel(t: TFunction, riskType: OrderRiskType): string {
       'admin.orders.riskLabels.pendingAcceptance',
       'Not confirmed by merchant'
     ),
+    prep_overdue: t(
+      'admin.orders.riskLabels.prepOverdue',
+      'Confirmed but not ready'
+    ),
     ready_unassigned: t(
       'admin.orders.riskLabels.readyUnassigned',
       'Ready with no agent'
+    ),
+    pickup_uncollected: t(
+      'admin.orders.riskLabels.pickupUncollected',
+      'Waiting to be collected'
     ),
     pickup_overdue: t(
       'admin.orders.riskLabels.pickupOverdue',

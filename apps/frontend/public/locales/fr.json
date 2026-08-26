@@ -493,7 +493,9 @@
       "emptyAtRisk": "Aucune commande ne nécessite d'intervention pour le moment.",
       "riskLabels": {
         "pendingAcceptance": "Non confirmée par le marchand",
+        "prepOverdue": "Confirmée mais pas prête",
         "readyUnassigned": "Prête sans agent",
+        "pickupUncollected": "En attente de retrait",
         "pickupOverdue": "L'agent n'a pas encore ramassé",
         "deliveryDelayed": "Livraison en retard",
         "critical": "Critique",
@@ -544,7 +546,9 @@
       "timing": {
         "title": "Engagements",
         "created": "Créée",
+        "statusSince": "Dans ce statut depuis",
         "acceptanceDeadline": "Échéance d'acceptation",
+        "promisedReady": "Prête promise pour",
         "pickupDue": "Ramassage attendu",
         "estimatedDelivery": "Livraison estimée",
         "promise": "Promesse de livraison",

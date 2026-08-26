@@ -44,7 +44,10 @@ export interface AdminOrderRiskIncidentView {
 export interface AdminOrderTiming {
   created_at: string | null;
   updated_at: string | null;
+  /** When current_status last changed, so the queue can show real time-in-status. */
+  status_changed_at: string | null;
   acceptance_deadline_at: string | null;
+  promised_ready_at: string | null;
   pickup_due_at: string | null;
   estimated_delivery_time: string | null;
   promised_fulfill_by: string | null;

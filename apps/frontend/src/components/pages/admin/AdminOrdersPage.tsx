@@ -60,7 +60,9 @@ const STATUS_OPTIONS = [
 
 const RISK_TYPE_OPTIONS = [
   'pending_acceptance',
+  'prep_overdue',
   'ready_unassigned',
+  'pickup_uncollected',
   'pickup_overdue',
   'delivery_delayed',
 ] as const;

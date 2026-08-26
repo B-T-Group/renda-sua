@@ -3,7 +3,9 @@ import { useApiClient } from './useApiClient';
 
 export type OrderRiskType =
   | 'pending_acceptance'
+  | 'prep_overdue'
   | 'ready_unassigned'
+  | 'pickup_uncollected'
   | 'pickup_overdue'
   | 'delivery_delayed';
 
@@ -50,7 +52,9 @@ export interface AdminOrderRiskIncident {
 export interface AdminOrderTiming {
   created_at: string | null;
   updated_at: string | null;
+  status_changed_at: string | null;
   acceptance_deadline_at: string | null;
+  promised_ready_at: string | null;
   pickup_due_at: string | null;
   estimated_delivery_time: string | null;
   promised_fulfill_by: string | null;

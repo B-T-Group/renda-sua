@@ -1,6 +1,8 @@
 export const ORDER_RISK_TYPES = [
   'pending_acceptance',
+  'prep_overdue',
   'ready_unassigned',
+  'pickup_uncollected',
   'pickup_overdue',
   'delivery_delayed',
 ] as const;
@@ -19,13 +21,19 @@ export const IN_DELIVERY_STATUSES = [
   'in_delivery',
 ] as const;
 
+/** Statuses where the merchant owns the order and should be preparing it. */
+export const PREPARING_STATUSES = ['confirmed', 'preparing'] as const;
+
 export interface OrderRiskConfig {
   alertsEnabled: boolean;
   minSeverity: OrderRiskSeverity;
   alertRepeatMinutes: number;
   pendingAcceptanceGraceMinutes: number;
   pendingFallbackMinutes: number;
+  scheduledActivationGraceMinutes: number;
+  prepOverdueMinutes: number;
   readyUnassignedMinutes: number;
+  pickupUncollectedMinutes: number;
   pickupOverdueGraceMinutes: number;
   deliveryDelayedMinutes: number;
   criticalAfterMinutes: number;
@@ -37,7 +45,10 @@ export const DEFAULT_ORDER_RISK_CONFIG: OrderRiskConfig = {
   alertRepeatMinutes: 60,
   pendingAcceptanceGraceMinutes: 5,
   pendingFallbackMinutes: 30,
+  scheduledActivationGraceMinutes: 15,
+  prepOverdueMinutes: 45,
   readyUnassignedMinutes: 30,
+  pickupUncollectedMinutes: 720,
   pickupOverdueGraceMinutes: 10,
   deliveryDelayedMinutes: 60,
   criticalAfterMinutes: 60,
@@ -51,9 +62,15 @@ export interface RiskEvaluableOrder {
   fulfillment_method?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  /** When current_status last changed. Preferred over updated_at for time-in-status. */
+  status_changed_at?: string | null;
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;
+  acceptance_activates_at?: string | null;
   grace_deadline_at?: string | null;
+  accepted_at?: string | null;
+  promised_ready_at?: string | null;
+  dispatch_exhausted_at?: string | null;
   assigned_agent_id?: string | null;
   assigned_at?: string | null;
   pickup_state?: string | null;

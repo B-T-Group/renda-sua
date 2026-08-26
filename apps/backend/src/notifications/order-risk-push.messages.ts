@@ -10,9 +10,17 @@ const RISK_LABELS: Record<OrderRiskType, Record<Locale, string>> = {
     en: 'Not confirmed by merchant',
     fr: 'Non confirmée par le marchand',
   },
+  prep_overdue: {
+    en: 'Confirmed but not ready',
+    fr: 'Confirmée mais pas prête',
+  },
   ready_unassigned: {
     en: 'Ready with no agent',
     fr: 'Prête sans livreur',
+  },
+  pickup_uncollected: {
+    en: 'Waiting to be collected',
+    fr: 'En attente de retrait',
   },
   pickup_overdue: {
     en: 'Agent has not picked up',

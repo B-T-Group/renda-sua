@@ -26,8 +26,9 @@ const PAGE_SIZE = 200;
 
 const RISK_ORDER_FIELDS = `
   id order_number current_status fulfillment_method created_at updated_at
-  acceptance_state acceptance_deadline_at grace_deadline_at
-  assigned_agent_id assigned_at pickup_state pickup_due_at
+  status_changed_at acceptance_state acceptance_deadline_at
+  acceptance_activates_at grace_deadline_at accepted_at promised_ready_at
+  dispatch_exhausted_at assigned_agent_id assigned_at pickup_state pickup_due_at
   agent_arrived_pickup_at estimated_delivery_time promised_fulfill_by
   delivery_time_window { preferred_date time_slot_end }
 `;

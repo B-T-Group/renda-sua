@@ -170,8 +170,16 @@ const OrderTimingCard: React.FC<{ timing: AdminOrderTiming }> = ({
   const rows: Array<[string, string | null]> = [
     [t('admin.orders.timing.created', 'Created'), timing.created_at],
     [
+      t('admin.orders.timing.statusSince', 'In current status since'),
+      timing.status_changed_at,
+    ],
+    [
       t('admin.orders.timing.acceptanceDeadline', 'Acceptance deadline'),
       timing.acceptance_deadline_at,
+    ],
+    [
+      t('admin.orders.timing.promisedReady', 'Promised ready'),
+      timing.promised_ready_at,
     ],
     [t('admin.orders.timing.pickupDue', 'Pickup due'), timing.pickup_due_at],
     [

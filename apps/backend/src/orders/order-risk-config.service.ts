@@ -18,7 +18,10 @@ const CONFIG_KEYS = [
   'order_risk_alert_repeat_minutes',
   'order_risk_pending_acceptance_grace_minutes',
   'order_risk_pending_fallback_minutes',
+  'order_risk_scheduled_activation_grace_minutes',
+  'order_risk_prep_overdue_minutes',
   'order_risk_ready_unassigned_minutes',
+  'order_risk_pickup_uncollected_minutes',
   'order_risk_pickup_overdue_grace_minutes',
   'order_risk_delivery_delayed_minutes',
   'order_risk_critical_after_minutes',
@@ -72,8 +75,16 @@ export class OrderRiskConfigService {
         d.pendingAcceptanceGraceMinutes,
       pendingFallbackMinutes:
         numbers['order_risk_pending_fallback_minutes'] ?? d.pendingFallbackMinutes,
+      scheduledActivationGraceMinutes:
+        numbers['order_risk_scheduled_activation_grace_minutes'] ??
+        d.scheduledActivationGraceMinutes,
+      prepOverdueMinutes:
+        numbers['order_risk_prep_overdue_minutes'] ?? d.prepOverdueMinutes,
       readyUnassignedMinutes:
         numbers['order_risk_ready_unassigned_minutes'] ?? d.readyUnassignedMinutes,
+      pickupUncollectedMinutes:
+        numbers['order_risk_pickup_uncollected_minutes'] ??
+        d.pickupUncollectedMinutes,
       pickupOverdueGraceMinutes:
         numbers['order_risk_pickup_overdue_grace_minutes'] ??
         d.pickupOverdueGraceMinutes,

@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import {
   IN_DELIVERY_STATUSES,
+  PREPARING_STATUSES,
   type OrderRiskConfig,
   type OrderRiskFinding,
   type OrderRiskSeverity,
@@ -18,7 +19,9 @@ export function evaluateOrderRisk(
 ): OrderRiskFinding[] {
   const findings = [
     pendingAcceptanceRisk(order, config, now),
+    prepOverdueRisk(order, config, now),
     readyUnassignedRisk(order, config, now),
+    pickupUncollectedRisk(order, config, now),
     pickupOverdueRisk(order, config, now),
     deliveryDelayedRisk(order, config, now),
   ];
@@ -32,15 +35,19 @@ export function pendingAcceptanceRisk(
   now: DateTime
 ): OrderRiskFinding | null {
   if (order.current_status !== 'pending') return null;
-  if (order.acceptance_state === 'scheduled') return null;
-  const deadline = toDateTime(order.acceptance_deadline_at);
-  const grace = deadline ? config.pendingAcceptanceGraceMinutes : 0;
+  if (order.acceptance_state === 'scheduled') {
+    return scheduledActivationRisk(order, config, now);
+  }
+  const deadline = acceptanceDeadline(order, config);
   const reference =
-    deadline ??
+    deadline?.at ??
     toDateTime(order.created_at)?.plus({ minutes: config.pendingFallbackMinutes });
   if (!reference) return null;
 
-  const overdueMinutes = minutesBetween(reference.plus({ minutes: grace }), now);
+  const overdueMinutes = minutesBetween(
+    reference.plus({ minutes: deadline?.graceMinutes ?? 0 }),
+    now
+  );
   if (overdueMinutes <= 0) return null;
   return {
     riskType: 'pending_acceptance',
@@ -53,6 +60,63 @@ export function pendingAcceptanceRisk(
   };
 }
 
+/**
+ * A scheduled order should leave `scheduled` once acceptance_activates_at passes.
+ * When it does not, the confirmation timer never starts and the order would
+ * otherwise stay invisible to every other rule.
+ */
+function scheduledActivationRisk(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig,
+  now: DateTime
+): OrderRiskFinding | null {
+  const activatesAt = toDateTime(order.acceptance_activates_at);
+  if (!activatesAt) return null;
+
+  const dueAt = activatesAt.plus({
+    minutes: config.scheduledActivationGraceMinutes,
+  });
+  const overdueMinutes = minutesBetween(dueAt, now);
+  if (overdueMinutes <= 0) return null;
+  return {
+    riskType: 'pending_acceptance',
+    severity: severityFor(overdueMinutes, config.criticalAfterMinutes),
+    overdueMinutes,
+    dueAt: activatesAt.toISO(),
+    reason: `Scheduled order passed its start time ${formatMinutes(
+      overdueMinutes + config.scheduledActivationGraceMinutes
+    )} ago but the confirmation timer never started`,
+  };
+}
+
+/** Merchant confirmed the order but never got it ready. */
+export function prepOverdueRisk(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig,
+  now: DateTime
+): OrderRiskFinding | null {
+  if (!PREPARING_STATUSES.includes(order.current_status as never)) return null;
+  const promised = toDateTime(order.promised_ready_at);
+  const since = toDateTime(order.accepted_at) ?? statusSince(order);
+  const dueAt =
+    promised ?? since?.plus({ minutes: config.prepOverdueMinutes }) ?? null;
+  if (!dueAt) return null;
+
+  const overdueMinutes = minutesBetween(dueAt, now);
+  if (overdueMinutes <= 0) return null;
+  return {
+    riskType: 'prep_overdue',
+    severity: severityFor(overdueMinutes, config.criticalAfterMinutes),
+    overdueMinutes,
+    dueAt: dueAt.toISO(),
+    reason: promised
+      ? `Order is ${formatMinutes(overdueMinutes)} past the promised ready time`
+      : `Confirmed but still not ready after ${formatMinutes(
+          overdueMinutes + config.prepOverdueMinutes
+        )}`,
+  };
+}
+
 /** Delivery order is ready but no agent has taken it. */
 export function readyUnassignedRisk(
   order: RiskEvaluableOrder,
@@ -61,19 +125,53 @@ export function readyUnassignedRisk(
 ): OrderRiskFinding | null {
   if (order.current_status !== 'ready_for_pickup') return null;
   if (!isDeliveryOrder(order) || order.assigned_agent_id) return null;
-  const readySince = toDateTime(order.updated_at ?? order.created_at);
+  const readySince = statusSince(order);
   if (!readySince) return null;
 
   const dueAt = readySince.plus({ minutes: config.readyUnassignedMinutes });
   const overdueMinutes = minutesBetween(dueAt, now);
   if (overdueMinutes <= 0) return null;
+  // Dispatch already offered this to everyone nearby and nobody took it, so no
+  // amount of waiting will fix it on its own.
+  const exhausted = !!order.dispatch_exhausted_at;
   return {
     riskType: 'ready_unassigned',
+    severity: exhausted
+      ? 'critical'
+      : severityFor(overdueMinutes, config.criticalAfterMinutes),
+    overdueMinutes,
+    dueAt: dueAt.toISO(),
+    reason: exhausted
+      ? `Dispatch found no agent after ${formatMinutes(
+          overdueMinutes + config.readyUnassignedMinutes
+        )} ready for pickup`
+      : `Ready for pickup with no agent assigned for ${formatMinutes(
+          overdueMinutes + config.readyUnassignedMinutes
+        )}`,
+  };
+}
+
+/** Store pickup or shipping order is ready but nobody has collected it. */
+export function pickupUncollectedRisk(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig,
+  now: DateTime
+): OrderRiskFinding | null {
+  if (order.current_status !== 'ready_for_pickup') return null;
+  if (isDeliveryOrder(order)) return null;
+  const readySince = statusSince(order);
+  if (!readySince) return null;
+
+  const dueAt = readySince.plus({ minutes: config.pickupUncollectedMinutes });
+  const overdueMinutes = minutesBetween(dueAt, now);
+  if (overdueMinutes <= 0) return null;
+  return {
+    riskType: 'pickup_uncollected',
     severity: severityFor(overdueMinutes, config.criticalAfterMinutes),
     overdueMinutes,
     dueAt: dueAt.toISO(),
-    reason: `Ready for pickup with no agent assigned for ${formatMinutes(
-      overdueMinutes + config.readyUnassignedMinutes
+    reason: `Waiting to be collected for ${formatMinutes(
+      overdueMinutes + config.pickupUncollectedMinutes
     )}`,
   };
 }
@@ -115,7 +213,7 @@ export function deliveryDelayedRisk(
   const promised = earliestPromise(order);
   const dueAt =
     promised ??
-    toDateTime(order.updated_at)?.plus({ minutes: config.deliveryDelayedMinutes });
+    statusSince(order)?.plus({ minutes: config.deliveryDelayedMinutes });
   if (!dueAt) return null;
 
   const overdueMinutes = minutesBetween(dueAt, now);
@@ -151,6 +249,35 @@ export function formatMinutes(minutes: number): string {
 
 function isDeliveryOrder(order: RiskEvaluableOrder): boolean {
   return (order.fulfillment_method ?? 'delivery') === 'delivery';
+}
+
+/**
+ * How long the order has held its current status. `updated_at` is deliberately
+ * not consulted: a BEFORE UPDATE trigger on orders resets it on every write, so
+ * agent pings and monitor bookkeeping would keep pushing these deadlines out of
+ * reach. `created_at` only backstops rows written before the anchor existed.
+ */
+function statusSince(order: RiskEvaluableOrder): DateTime | null {
+  return toDateTime(order.status_changed_at) ?? toDateTime(order.created_at);
+}
+
+/**
+ * The live acceptance deadline plus the buffer we still owe the merchant.
+ * `grace_deadline_at` is already the extended, final deadline, so it carries no
+ * further buffer — only the original deadline gets the acceptance grace.
+ */
+function acceptanceDeadline(
+  order: RiskEvaluableOrder,
+  config: OrderRiskConfig
+): { at: DateTime; graceMinutes: number } | null {
+  const state = order.acceptance_state;
+  if (state === 'grace' || state === 'no_response') {
+    const grace = toDateTime(order.grace_deadline_at);
+    if (grace) return { at: grace, graceMinutes: 0 };
+  }
+  const deadline = toDateTime(order.acceptance_deadline_at);
+  if (!deadline) return null;
+  return { at: deadline, graceMinutes: config.pendingAcceptanceGraceMinutes };
 }
 
 function assignedFallbackDue(
