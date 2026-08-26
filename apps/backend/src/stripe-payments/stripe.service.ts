@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { StripeConfig } from '../config/configuration';
 import { STRIPE_TAX_CODE_SHIPPING } from '../stripe-tax/stripe-tax.constants';
+import { retryStripeIdempotencyInProgress } from './stripe-idempotency';
 
 export interface CreateCheckoutSessionParams {
   amount: number;
@@ -387,9 +388,17 @@ export class StripeService {
     businessName?: string;
   }): Promise<Stripe.Account> {
     const createParams = this.buildExpressAccountCreateParams(params);
-    return this.getClient().accounts.create(createParams, {
-      idempotencyKey: `connect_account_${params.userId}`,
-    });
+    return retryStripeIdempotencyInProgress(
+      () =>
+        this.getClient().accounts.create(createParams, {
+          idempotencyKey: `connect_account_${params.userId}`,
+        }),
+      (ms) => this.delay(ms)
+    );
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private buildExpressAccountCreateParams(params: {
