@@ -364,8 +364,8 @@ export class AdminOrdersController {
     await this.hasuraSystemService.executeMutation(
       `mutation AdminCorrectOrderStatus(
         $orderId: uuid!
-        $status: order_status_enum!
-        $fromStatus: order_status_enum!
+        $status: order_status!
+        $fromStatus: order_status!
         $notes: String
       ) {
         update_orders_by_pk(
@@ -375,9 +375,10 @@ export class AdminOrdersController {
         insert_order_status_history_one(
           object: {
             order_id: $orderId
-            from_status: $fromStatus
-            to_status: $status
+            status: $status
+            previous_status: $fromStatus
             notes: $notes
+            changed_by_type: "system"
           }
         ) { id }
       }`,

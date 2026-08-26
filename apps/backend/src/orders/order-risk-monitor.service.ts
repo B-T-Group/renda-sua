@@ -87,8 +87,23 @@ export class OrderRiskMonitorService {
     withOpenIncidents: Set<string>,
     config: OrderRiskConfig
   ): Promise<void> {
+    let failed = 0;
     for (const order of orders) {
-      await this.evaluateOrder(order, withOpenIncidents.has(order.id), config);
+      try {
+        await this.evaluateOrder(order, withOpenIncidents.has(order.id), config);
+      } catch (error: any) {
+        // Isolate per order: one bad row must not cost every later order in the
+        // sweep its evaluation, which would silently leave the queue empty.
+        failed += 1;
+        this.logger.error(
+          `Risk evaluation failed for order ${order.id}: ${error?.message}`
+        );
+      }
+    }
+    if (failed > 0) {
+      this.logger.warn(
+        `Order risk sweep skipped ${failed}/${orders.length} orders`
+      );
     }
   }
 
@@ -121,7 +136,7 @@ export class OrderRiskMonitorService {
     const res = await this.hasura.executeQuery<{
       order_risk_incidents: Array<{ order_id: string }>;
     }>(
-      `query ClosedOrdersWithOpenRisk($statuses: [order_status_enum!]!) {
+      `query ClosedOrdersWithOpenRisk($statuses: [order_status!]!) {
         order_risk_incidents(
           where: {
             resolved_at: { _is_null: true }
@@ -151,7 +166,7 @@ export class OrderRiskMonitorService {
   ): Promise<RiskEvaluableOrder[]> {
     const res = await this.hasura.executeQuery<{ orders: RiskEvaluableOrder[] }>(
       `query RiskActionableOrders(
-        $statuses: [order_status_enum!]!, $limit: Int!, $offset: Int!
+        $statuses: [order_status!]!, $limit: Int!, $offset: Int!
       ) {
         orders(
           where: { current_status: { _in: $statuses } }

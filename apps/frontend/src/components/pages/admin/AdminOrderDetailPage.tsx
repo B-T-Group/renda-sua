@@ -169,10 +169,7 @@ const OrderTimingCard: React.FC<{ timing: AdminOrderTiming }> = ({
   const { t } = useTranslation();
   const rows: Array<[string, string | null]> = [
     [t('admin.orders.timing.created', 'Created'), timing.created_at],
-    [
-      t('admin.orders.timing.statusSince', 'In current status since'),
-      timing.status_changed_at,
-    ],
+    [t('admin.orders.lastUpdated', 'Last updated'), timing.updated_at],
     [
       t('admin.orders.timing.acceptanceDeadline', 'Acceptance deadline'),
       timing.acceptance_deadline_at,
