@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
+import type { FoodAvailabilitySlot } from '../types/food';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
@@ -90,6 +91,12 @@ export interface Item {
       name_en: string;
       name_fr: string;
     };
+  }>;
+  /** Serving hours and sold-out state per location (cooked food only). */
+  food_item_settings?: Array<{
+    business_location_id: string;
+    marked_unavailable_at: string | null;
+    availability_slots?: FoodAvailabilitySlot[];
   }>;
   business_inventories?: {
     id: string;

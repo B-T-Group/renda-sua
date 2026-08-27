@@ -43,6 +43,10 @@ import {
   itemHasSponsoredPromotion,
 } from '../../utils/businessItemListing';
 import ItemModerationStatusChip from './ItemModerationStatusChip';
+import FoodSoldOutToggle from './food/FoodSoldOutToggle';
+import { isFoodCategoryName } from '../../constants/food';
+import type { FoodAvailabilitySlot } from '../../types/food';
+import { isMarkedUnavailableToday } from '../../utils/foodAvailability';
 
 interface BusinessInventory {
   id: string;
@@ -121,6 +125,11 @@ interface Item {
     };
   }>;
   business_inventories?: BusinessInventory[];
+  food_item_settings?: Array<{
+    business_location_id: string;
+    marked_unavailable_at: string | null;
+    availability_slots?: FoodAvailabilitySlot[];
+  }>;
   is_favorite?: boolean;
 }
 
@@ -175,6 +184,35 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false);
   const [togglingPayAtPickup, setTogglingPayAtPickup] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
+
+  /**
+   * A dish sold at exactly one location can be toggled straight from the card.
+   * With several locations the target is ambiguous, so those merchants use the
+   * inventory dialog, which asks for the location first.
+   */
+  const foodToggleTarget = useMemo(() => {
+    if (!isFoodCategoryName(item.item_sub_category?.item_category?.name)) {
+      return null;
+    }
+    const locationIds = [
+      ...new Set(
+        (item.business_inventories ?? []).map((inv) => inv.business_location_id)
+      ),
+    ];
+    if (locationIds.length !== 1) return null;
+    const businessLocationId = locationIds[0];
+    const settings = (item.food_item_settings ?? []).find(
+      (row) => row.business_location_id === businessLocationId
+    );
+    return {
+      businessLocationId,
+      soldOut: isMarkedUnavailableToday(settings?.marked_unavailable_at),
+    };
+  }, [
+    item.business_inventories,
+    item.food_item_settings,
+    item.item_sub_category?.item_category?.name,
+  ]);
 
   const galleryImages = useMemo(
     () => orderedCardGalleryImages(item.item_images),
@@ -636,6 +674,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
       </Box>
 
       {(onToggleItemActive ||
+        foodToggleTarget ||
         (offlinePaymentsSupported &&
           (onTogglePayOnDelivery || onTogglePayAtPickup))) && (
         <Box
@@ -651,6 +690,13 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             bgcolor: 'grey.50',
           }}
         >
+          {foodToggleTarget && (
+            <FoodSoldOutToggle
+              itemId={item.id}
+              businessLocationId={foodToggleTarget.businessLocationId}
+              initialSoldOut={foodToggleTarget.soldOut}
+            />
+          )}
           {onToggleItemActive && (
             <Box
               sx={{

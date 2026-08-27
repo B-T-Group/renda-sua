@@ -4,6 +4,7 @@ import {
   formatSlotRange,
   formatSlotTime,
   groupFoodSlotsByDay,
+  isMarkedUnavailableToday,
   isOvernightSlot,
   resolveFoodAvailabilityStatus,
   sortFoodSlots,
@@ -48,6 +49,31 @@ describe('resolveFoodAvailabilityStatus', () => {
     );
 
     expect(actual).toBe('closed');
+  });
+});
+
+describe('isMarkedUnavailableToday', () => {
+  it('is false when the dish was never marked sold out', () => {
+    expect(isMarkedUnavailableToday(null)).toBe(false);
+    expect(isMarkedUnavailableToday(undefined)).toBe(false);
+  });
+
+  it('is true for a stamp from earlier today', () => {
+    const earlierToday = new Date();
+    earlierToday.setHours(1, 0, 0, 0);
+
+    expect(isMarkedUnavailableToday(earlierToday.toISOString())).toBe(true);
+  });
+
+  it('is false for a stamp from yesterday', () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    expect(isMarkedUnavailableToday(yesterday.toISOString())).toBe(false);
+  });
+
+  it('is false for an unparseable stamp', () => {
+    expect(isMarkedUnavailableToday('not-a-date')).toBe(false);
   });
 });
 

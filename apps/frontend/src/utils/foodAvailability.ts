@@ -12,6 +12,26 @@ export function resolveFoodAvailabilityStatus(
   return 'available';
 }
 
+/**
+ * Whether a sold-out stamp still applies today, judged against the viewer's
+ * own calendar day. Intended for merchant screens, where the person managing
+ * the kitchen is in the restaurant's timezone. Shopper-facing screens use the
+ * flag the backend computes from the location's timezone instead.
+ */
+export function isMarkedUnavailableToday(
+  markedUnavailableAt?: string | null
+): boolean {
+  if (!markedUnavailableAt) return false;
+  const marked = new Date(markedUnavailableAt);
+  if (Number.isNaN(marked.getTime())) return false;
+  const now = new Date();
+  return (
+    marked.getFullYear() === now.getFullYear() &&
+    marked.getMonth() === now.getMonth() &&
+    marked.getDate() === now.getDate()
+  );
+}
+
 /** Trims the seconds Postgres `time` columns carry, so 12:30:00 reads as 12:30. */
 export function formatSlotTime(time: string): string {
   const match = /^(\d{1,2}):(\d{2})/.exec((time ?? '').trim());

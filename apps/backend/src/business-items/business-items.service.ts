@@ -155,6 +155,15 @@ const GET_ITEMS = `
           is_primary
         }
       }
+      food_item_settings {
+        business_location_id
+        marked_unavailable_at
+        availability_slots(order_by: [{ day_of_week: asc }, { start_time: asc }]) {
+          day_of_week
+          start_time
+          end_time
+        }
+      }
       business_inventories {
         id
         item_id

@@ -16,6 +16,15 @@ export interface FoodAvailability {
   slots: FoodAvailabilitySlot[];
 }
 
+/** Optional stock correction a merchant sends while confirming an order. */
+export interface FoodConfirmationStockUpdate {
+  order_item_id: string;
+  /** Portions still for sale after this order. */
+  remaining_quantity?: number;
+  /** Takes the dish off the menu for the rest of the day. */
+  last_one?: boolean;
+}
+
 export interface FoodSettings {
   item_id: string;
   business_location_id: string;
