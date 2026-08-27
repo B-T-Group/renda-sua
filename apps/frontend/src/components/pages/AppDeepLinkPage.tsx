@@ -6,65 +6,40 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  appRelativeFromLocation,
-  mapAppPathToWeb,
-  toAppSchemeUrl,
-} from '../../utils/appDeepLink';
-
-const APP_STORE_URL =
-  'https://apps.apple.com/app/rendasua/id6755989000';
-const PLAY_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.rendasua.agent';
+import { useNavigate } from 'react-router-dom';
+import { useAppDeepLinkLanding } from '../../hooks/useAppDeepLinkLanding';
+import { APP_STORE_URL, PLAY_STORE_URL } from '../../hooks/useAppStoreLinks';
 
 /**
- * Universal-link landing: /app/* → try custom scheme, else stores / in-web path.
+ * Universal-link landing: /app/* → custom scheme / Android intent, else stores.
+ * WhatsApp opens this in an in-app WebView that does not fire Universal Links.
  */
 const AppDeepLinkPage: React.FC = () => {
   const { t } = useTranslation();
-  const location = useLocation();
   const navigate = useNavigate();
-  const appRelative = useMemo(
-    () => appRelativeFromLocation(location.pathname, location.search),
-    [location.pathname, location.search]
-  );
-  const schemeUrl = toAppSchemeUrl(appRelative);
-  const webFallbackPath = useMemo(
-    () => mapAppPathToWeb(`/${appRelative}`),
-    [appRelative]
-  );
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      window.location.href = schemeUrl;
-    }, 50);
-    const fallback = window.setTimeout(() => {
-      // Stay on page so user can pick store / open web
-    }, 1500);
-    return () => {
-      window.clearTimeout(timer);
-      window.clearTimeout(fallback);
-    };
-  }, [schemeUrl]);
+  const { inAppBrowser, openHref, webFallbackPath } = useAppDeepLinkLanding();
+  const helper = inAppBrowser
+    ? t(
+        'deepLink.inAppHelper',
+        'Tap Open app. If nothing happens on iPhone, tap ⋯ then Open in Safari.'
+      )
+    : t(
+        'deepLink.helper',
+        'If the app does not open, download it or continue in the browser.'
+      );
 
   return (
     <Container maxWidth="sm" sx={{ py: 8 }}>
       <Stack spacing={3} alignItems="center" textAlign="center">
-        <CircularProgress size={28} />
+        {!inAppBrowser ? <CircularProgress size={28} /> : null}
         <Typography variant="h5" fontWeight={700}>
           {t('deepLink.openingApp', 'Opening Rendasua…')}
         </Typography>
-        <Typography color="text.secondary">
-          {t(
-            'deepLink.helper',
-            'If the app does not open, download it or continue in the browser.'
-          )}
-        </Typography>
+        <Typography color="text.secondary">{helper}</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <Button variant="contained" href={schemeUrl}>
+          <Button variant="contained" href={openHref}>
             {t('deepLink.openApp', 'Open app')}
           </Button>
           <Button variant="outlined" onClick={() => navigate(webFallbackPath)}>

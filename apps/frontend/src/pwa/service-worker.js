@@ -17,9 +17,12 @@ clientsClaim();
 // Precache build assets + app shell
 precacheAndRoute(self.__WB_MANIFEST);
 
-// SPA navigation fallback: serve cached index.html
+// SPA navigation fallback: serve cached index.html (never for Universal Link files)
 registerRoute(
-  ({ request }) => request.mode === 'navigate',
+  ({ request, url }) =>
+    request.mode === 'navigate' &&
+    !url.pathname.startsWith('/.well-known/') &&
+    url.pathname !== '/apple-app-site-association',
   createHandlerBoundToURL('/index.html')
 );
 

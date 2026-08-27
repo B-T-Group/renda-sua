@@ -158,7 +158,16 @@ module.exports = {
       main: './src/main.tsx',
       index: './src/index.html',
       baseHref: '/',
-      assets: ['./src/favicon.ico', './src/assets', './public'],
+      assets: [
+        './src/favicon.ico',
+        './src/assets',
+        './public',
+        {
+          glob: '**/*',
+          input: './public/.well-known',
+          output: '.well-known',
+        },
+      ],
       styles: ['./src/styles.css'],
       outputHashing: process.env['NODE_ENV'] === 'production' ? 'all' : 'none',
       optimization: process.env['NODE_ENV'] === 'production',

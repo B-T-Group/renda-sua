@@ -6914,6 +6914,7 @@
   "deepLink": {
     "openingApp": "Opening Rendasua…",
     "helper": "If the app does not open, download it or continue in the browser.",
+    "inAppHelper": "Tap Open app. If nothing happens on iPhone, tap ⋯ then Open in Safari.",
     "openApp": "Open app",
     "continueWeb": "Continue in browser"
   },
