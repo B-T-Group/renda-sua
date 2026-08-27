@@ -3480,6 +3480,15 @@
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
+    },
+    "home": {
+      "liveOrders": {
+        "title": "En cours",
+        "seeAll": "Voir les {{count}} commandes",
+        "ctaTrack": "Suivre la commande",
+        "ctaView": "Voir la commande",
+        "openDetail": "Ouvrez la commande pour plus de détails."
+      }
     }
   },
   "collections": {
