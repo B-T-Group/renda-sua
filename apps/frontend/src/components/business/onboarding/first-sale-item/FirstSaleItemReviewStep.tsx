@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
+import { FOOD_CATEGORY_NAME } from '../../../../constants/food';
 
 export interface ReviewFormValues {
   name: string;
@@ -33,6 +34,7 @@ export interface ReviewFormValues {
   currency: string;
   isUsed: boolean;
   dimensions: string;
+  preparationMinutes: string;
 }
 
 export interface FirstSaleItemReviewStepProps {
@@ -40,6 +42,10 @@ export interface FirstSaleItemReviewStepProps {
   merchantHint: string;
   /** Price captured on the description step — preferred over AI suggestion. */
   merchantPrice?: string;
+  /** Cooked food, chosen on the description step. Forces the food category. */
+  isFoodItem?: boolean;
+  /** Preparation minutes captured on the description step. */
+  merchantPreparationMinutes?: string;
   suggestions: ImageItemSuggestions | null;
   /** Prefer previously edited values when returning from publish. */
   initialValues?: ReviewFormValues | null;
@@ -50,6 +56,8 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
   imagePreviewUrls,
   merchantHint,
   merchantPrice = '',
+  isFoodItem = false,
+  merchantPreparationMinutes = '',
   suggestions,
   initialValues = null,
   onContinue,
@@ -69,6 +77,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
   const [price, setPrice] = useState('');
   const [isUsed, setIsUsed] = useState(false);
   const [dimensions, setDimensions] = useState('');
+  const [preparationMinutes, setPreparationMinutes] = useState('');
   const [filled, setFilled] = useState(false);
 
   useEffect(() => {
@@ -83,21 +92,33 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
       setPrice(initialValues.price);
       setIsUsed(initialValues.isUsed);
       setDimensions(initialValues.dimensions);
+      setPreparationMinutes(initialValues.preparationMinutes);
       return;
     }
     setName(suggestions?.name?.trim() || merchantHint.trim() || '');
     setDescription(suggestions?.descriptionSuggestion?.trim() || '');
-    setCategoryName(suggestions?.categoryName?.trim() || '');
+    setCategoryName(
+      isFoodItem ? FOOD_CATEGORY_NAME : suggestions?.categoryName?.trim() || ''
+    );
     setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
     setBrandName(suggestions?.brandName?.trim() || '');
     setIsUsed(suggestions?.isUsed === true);
     setDimensions(suggestions?.dimensions?.trim() || '');
+    setPreparationMinutes(merchantPreparationMinutes.trim());
     if (merchantPrice.trim()) {
       setPrice(merchantPrice.trim());
     } else if (suggestions?.price != null) {
       setPrice(String(suggestions.price));
     }
-  }, [filled, initialValues, merchantHint, merchantPrice, suggestions]);
+  }, [
+    filled,
+    initialValues,
+    isFoodItem,
+    merchantHint,
+    merchantPreparationMinutes,
+    merchantPrice,
+    suggestions,
+  ]);
 
   const currency =
     initialValues?.currency ||
@@ -214,6 +235,19 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
           startAdornment: <Typography sx={{ mr: 1 }}>{currency}</Typography>,
         }}
       />
+      {isFoodItem && (
+        <TextField
+          label={t(
+            'business.items.preparationMinutes',
+            'Preparation time (minutes)'
+          )}
+          value={preparationMinutes}
+          onChange={(e) => setPreparationMinutes(e.target.value)}
+          type="number"
+          fullWidth
+          inputProps={{ min: 0, max: 1440, step: 5 }}
+        />
+      )}
       <TextField
         label={t('business.onboarding.firstSale.create.category', 'Category')}
         value={categoryName}
@@ -285,6 +319,7 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
             name,
             description,
             categoryName,
+            preparationMinutes,
             subCategoryName,
             brandName,
             price,
