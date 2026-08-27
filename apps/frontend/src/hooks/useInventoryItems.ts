@@ -9,7 +9,10 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
 import { useSupportedCountries } from './useSupportedCountries';
-import { FOOD_CATEGORY_NAME, isFoodCatalogItem } from '../constants/food';
+import {
+  applyFoodOnlyCatalogFilter,
+  FOOD_CATEGORY_NAME,
+} from '../constants/food';
 
 export interface InventoryItem {
   id: string;
@@ -318,13 +321,15 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       if (controller.signal.aborted) return;
 
       if (response.data.success) {
-        const rawItems = response.data.data.items;
-        const nextItems =
-          query.food_only === true
-            ? rawItems.filter(isFoodCatalogItem)
-            : rawItems;
-        const leakedNonFood =
-          query.food_only === true && nextItems.length !== rawItems.length;
+        const filtered = applyFoodOnlyCatalogFilter(
+          response.data.data.items,
+          query.food_only === true,
+          {
+            total: response.data.data.total,
+            totalPages: response.data.data.totalPages,
+          }
+        );
+        const nextItems = filtered.items;
         if (isLoadMore) {
           setInventoryItems((prev) => {
             const seen = new Set(prev.map((item) => item.id));
@@ -335,10 +340,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           setInventoryItems(nextItems);
         }
         setPagination({
-          total: leakedNonFood ? nextItems.length : response.data.data.total,
+          total: filtered.total,
           page: response.data.data.page,
           limit: response.data.data.limit,
-          totalPages: leakedNonFood ? 1 : response.data.data.totalPages,
+          totalPages: filtered.totalPages,
         });
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');

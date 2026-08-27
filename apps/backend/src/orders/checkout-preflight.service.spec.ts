@@ -28,6 +28,11 @@ import {
   CheckoutPreflightDto,
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
+import {
+  FOOD_ITEM_CLOSED_CODE,
+  FOOD_ITEM_SOLD_OUT_CODE,
+} from '../food/food-order-guard.util';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,6 +90,41 @@ function makeInventoryRow(overrides: {
       shipping_enabled: overrides.shippingEnabled ?? false,
       shipping_price: overrides.shippingPrice ?? null,
       item_variants: [],
+    },
+  };
+}
+
+const MONDAY_LUNCH = {
+  day_of_week: 1,
+  start_time: '12:30:00',
+  end_time: '16:00:00',
+};
+
+function makeFoodInventoryRow(overrides: {
+  id?: string;
+  itemName?: string;
+  markedUnavailableAt?: string | null;
+  slots?: Array<{
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }>;
+} = {}) {
+  const row = makeInventoryRow({
+    id: overrides.id,
+    itemName: overrides.itemName ?? 'Pizza',
+  });
+  return {
+    ...row,
+    food_settings: [
+      {
+        marked_unavailable_at: overrides.markedUnavailableAt ?? null,
+        availability_slots: overrides.slots ?? [MONDAY_LUNCH],
+      },
+    ],
+    item: {
+      ...row.item,
+      item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
     },
   };
 }
@@ -676,5 +716,93 @@ describe('CheckoutPreflightService', () => {
         (e) => e.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
       )
     ).toBe(true);
+  });
+
+  describe('food serving and sold-out blockers', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-24T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('blocks a cooked dish outside its serving window', async () => {
+      jest.setSystemTime(new Date('2026-08-24T08:00:00.000Z'));
+      mockInventory([makeFoodInventoryRow()]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }] },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors[0]?.code).toBe(FOOD_ITEM_CLOSED_CODE);
+    });
+
+    it('blocks a cooked dish marked sold out for the day', async () => {
+      mockInventory([
+        makeFoodInventoryRow({
+          markedUnavailableAt: '2026-08-24T11:00:00.000Z',
+        }),
+      ]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }] },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors[0]?.code).toBe(FOOD_ITEM_SOLD_OUT_CODE);
+    });
+
+    it('does not attach food blockers to electronics', async () => {
+      mockInventory([
+        makeInventoryRow({
+          itemName: 'Phone charger',
+        }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          provisional_country: 'CM',
+        },
+        false
+      );
+
+      expect(
+        result.blocking_errors.some(
+          (error) =>
+            error.code === FOOD_ITEM_CLOSED_CODE ||
+            error.code === FOOD_ITEM_SOLD_OUT_CODE
+        )
+      ).toBe(false);
+      expect(result.can_proceed).toBe(true);
+    });
+
+    it('blocks a mixed cart when only the food line is closed', async () => {
+      jest.setSystemTime(new Date('2026-08-24T08:00:00.000Z'));
+      mockInventory([
+        makeFoodInventoryRow({ id: 'inv-food' }),
+        makeInventoryRow({ id: 'inv-retail', itemName: 'Phone charger' }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-food', quantity: 1 },
+            { business_inventory_id: 'inv-retail', quantity: 1 },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        FOOD_ITEM_CLOSED_CODE,
+      ]);
+    });
   });
 });

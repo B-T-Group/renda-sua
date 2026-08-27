@@ -9,6 +9,7 @@ jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
 }));
 
 import { InventoryItemsService } from './inventory-items.service';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 
 describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
   function createService(options?: {
@@ -182,5 +183,123 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
     const result = await (service as any).resolveSemanticSearch('phone');
     expect(result).toEqual({ fallback: true });
     expect(itemEmbeddingService.hasAnyItemEmbeddings).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventoryItemsService food catalog helpers', () => {
+  function createService() {
+    const hasuraSystemService = {
+      executeQuery: jest.fn().mockImplementation(async (query: string) => {
+        if (query.includes('GetSupportedCountryCodes')) {
+          return {
+            supported_country_states: [{ country_code: 'CM' }],
+          };
+        }
+        return {};
+      }),
+    };
+    const service = new InventoryItemsService(
+      hasuraSystemService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+    return {
+      service,
+      buildWhere: (params: Record<string, unknown>) =>
+        (service as any).buildInventoryCatalogWhere({
+          is_active: true,
+          include_unavailable: false,
+          ...params,
+        }),
+    };
+  }
+
+  function foodRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'inv-food',
+      item: {
+        item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+      },
+      business_location: { address: { country: 'CM' } },
+      food_settings: [
+        {
+          marked_unavailable_at: null,
+          availability_slots: [
+            { day_of_week: 1, start_time: '12:30:00', end_time: '16:00:00' },
+          ],
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it('adds an exact cooked-food category filter when food_only is set', async () => {
+    const { buildWhere } = createService();
+    const built = await buildWhere({ food_only: true });
+
+    expect(built).toHaveProperty('where');
+    const json = JSON.stringify(
+      (built as { where: Record<string, unknown> }).where
+    );
+    expect(json).toContain(`"name":{"_eq":"${FOOD_CATEGORY_NAME}"}`);
+  });
+
+  it('does not pin cooked food when food_only is off', async () => {
+    const { buildWhere } = createService();
+    const built = await buildWhere({ food_only: false });
+    const json = JSON.stringify(
+      (built as { where: Record<string, unknown> }).where
+    );
+
+    expect(json).not.toContain(`"name":{"_eq":"${FOOD_CATEGORY_NAME}"}`);
+  });
+
+  it('attaches availability only to cooked-food rows', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-24T12:00:00.000Z'));
+    const { service } = createService();
+    const electronics = {
+      id: 'inv-retail',
+      item: {
+        item_sub_category: { item_category: { name: 'Electronics' } },
+      },
+    };
+
+    const [food, retail] = (service as any).attachFoodAvailability([
+      foodRow(),
+      electronics,
+    ]);
+
+    expect(food.food_availability?.is_available_now).toBe(true);
+    expect(retail.food_availability).toBeUndefined();
+    jest.useRealTimers();
+  });
+
+  it('ranks dishes being served now ahead of closed or sold-out rows', () => {
+    const { service } = createService();
+    const closed = {
+      id: 'closed',
+      food_availability: { is_available_now: false },
+    };
+    const open = {
+      id: 'open',
+      food_availability: { is_available_now: true },
+    };
+    const soldOut = {
+      id: 'sold-out',
+      food_availability: { is_available_now: false },
+    };
+
+    const actual = (service as any).sortOpenFoodFirst([closed, open, soldOut]);
+
+    expect(actual.map((row: { id: string }) => row.id)).toEqual([
+      'open',
+      'closed',
+      'sold-out',
+    ]);
   });
 });
