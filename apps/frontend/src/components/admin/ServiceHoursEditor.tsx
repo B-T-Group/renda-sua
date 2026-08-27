@@ -22,6 +22,9 @@ interface ServiceHoursEditorProps {
   onChange: (value: ServiceHoursValue) => void;
   title?: string;
   description?: string;
+  disabled?: boolean;
+  /** Label when a day is off. Location hours leave times visible. */
+  offDayLabel?: string;
 }
 
 const DAYS: Array<{ key: string; labelKey: string; fallback: string }> = [
@@ -41,6 +44,8 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
   onChange,
   title,
   description,
+  disabled = false,
+  offDayLabel,
 }) => {
   const { t } = useTranslation();
 
@@ -49,6 +54,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
     field: keyof ServiceHourConfig,
     fieldValue: string | boolean
   ) => {
+    if (disabled) return;
     const current: ServiceHourConfig = value[dayKey] || {
       start: '',
       end: '',
@@ -92,6 +98,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
         <Grid size={{ xs: 2, sm: 1 }}>
           <Checkbox
             checked={isEnabled}
+            disabled={disabled}
             onChange={(event) =>
               handleDayChange(dayKey, 'enabled', event.target.checked)
             }
@@ -112,34 +119,44 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
             </Typography>
           </Box>
         </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
-          <TextField
-            fullWidth
-            type="time"
-            size="small"
-            label={t('admin.applicationSetup.startTime', 'Start time')}
-            value={config.start}
-            onChange={(event) =>
-              handleDayChange(dayKey, 'start', event.target.value)
-            }
-            disabled={!config.enabled}
-            inputProps={{ step: 900 }}
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
-          <TextField
-            fullWidth
-            type="time"
-            size="small"
-            label={t('admin.applicationSetup.endTime', 'End time')}
-            value={config.end}
-            onChange={(event) =>
-              handleDayChange(dayKey, 'end', event.target.value)
-            }
-            disabled={!config.enabled}
-            inputProps={{ step: 900 }}
-          />
-        </Grid>
+        {!isEnabled && offDayLabel ? (
+          <Grid size={{ xs: 12, sm: 8 }}>
+            <Typography variant="body2" color="text.secondary" align="right">
+              {offDayLabel}
+            </Typography>
+          </Grid>
+        ) : (
+          <>
+            <Grid size={{ xs: 6, sm: 4 }}>
+              <TextField
+                fullWidth
+                type="time"
+                size="small"
+                label={t('admin.applicationSetup.startTime', 'Start time')}
+                value={config.start}
+                onChange={(event) =>
+                  handleDayChange(dayKey, 'start', event.target.value)
+                }
+                disabled={disabled || !config.enabled}
+                inputProps={{ step: 900 }}
+              />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4 }}>
+              <TextField
+                fullWidth
+                type="time"
+                size="small"
+                label={t('admin.applicationSetup.endTime', 'End time')}
+                value={config.end}
+                onChange={(event) =>
+                  handleDayChange(dayKey, 'end', event.target.value)
+                }
+                disabled={disabled || !config.enabled}
+                inputProps={{ step: 900 }}
+              />
+            </Grid>
+          </>
+        )}
       </Grid>
     );
   };
