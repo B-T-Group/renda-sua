@@ -6965,6 +6965,12 @@
   "foods": {
     "title": "Food",
     "subtitle": "Meals cooked to order by restaurants near you.",
+    "hero": {
+      "title": "You order. They cook. You get pinged.",
+      "messageMomo": "Pay with Mobile Money — they cook, we ping you when it’s ready.",
+      "messageCard": "Pay by card — they cook, we ping you when it’s ready.",
+      "illustrationLabel": "Order food, restaurant prepares it, you get notified"
+    },
     "searchPlaceholder": "Search dishes",
     "allDishes": "All dishes",
     "prepMinutes": "~{{count}} min prep",

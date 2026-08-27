@@ -25,6 +25,7 @@ import {
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
+import FoodsMenuHero from '../foods/FoodsMenuHero';
 import FoodsEmptyStateIllustration from '../illustrations/FoodsEmptyStateIllustration';
 
 const PAGE_SIZE = 24;
@@ -187,15 +188,7 @@ const FoodsPage: React.FC = () => {
         )}
       />
       <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {t('foods.title', 'Food')}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          {t(
-            'foods.subtitle',
-            'Meals cooked to order by restaurants near you.'
-          )}
-        </Typography>
+        <FoodsMenuHero />
 
         <Stack spacing={2} sx={{ mb: 3 }}>
           <Box component="form" onSubmit={handleSearchSubmit}>
