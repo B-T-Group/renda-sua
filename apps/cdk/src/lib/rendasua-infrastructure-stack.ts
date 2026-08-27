@@ -836,12 +836,12 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // EventBridge rule: every Saturday at 02:00 UTC
+    // Saturday 19:00 UTC = 3:00pm EDT (2:00pm EST in winter).
     new events.Rule(this, `BusinessReferralPayoutsRule-${environment}`, {
       ruleName: `business-referral-payouts-rule-${environment}`,
       description:
-        'Triggers weekly business-referral commission payouts every Saturday at 02:00 UTC',
-      schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '2', minute: '0' }),
+        'Credits pending onboarding_10_first_sale rows every Saturday at 19:00 UTC (3pm Eastern DST)',
+      schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '19', minute: '0' }),
       targets: [new targets.LambdaFunction(businessReferralPayoutsFunction)],
     });
   }
