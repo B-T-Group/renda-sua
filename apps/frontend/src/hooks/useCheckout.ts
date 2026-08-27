@@ -169,6 +169,7 @@ export const useCheckout = () => {
 
       setLoading(true);
       setError(null);
+      let succeeded = false;
 
       try {
         const preflightItems = cartItems.map((item) => {
@@ -321,6 +322,7 @@ export const useCheckout = () => {
           variant: 'success',
         });
 
+        succeeded = true;
         return orders;
       } catch (err: any) {
         const errorMessage = parseCheckoutApiError(err, t);
@@ -335,7 +337,9 @@ export const useCheckout = () => {
 
         throw err;
       } finally {
-        setLoading(false);
+        if (!succeeded) {
+          setLoading(false);
+        }
       }
     },
     [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t, trackPurchase, trackInitiateCheckout]
@@ -364,6 +368,7 @@ export const useCheckout = () => {
 
       setLoading(true);
       setError(null);
+      let succeeded = false;
 
       try {
         const resolvedVariantId = toOrderItemVariantId(itemVariantId);
@@ -394,6 +399,7 @@ export const useCheckout = () => {
           variant: 'success',
         });
 
+        succeeded = true;
         return response.data.order;
       } catch (err: any) {
         const errorMessage = parseCheckoutApiError(err, t);
@@ -408,7 +414,9 @@ export const useCheckout = () => {
 
         throw err;
       } finally {
-        setLoading(false);
+        if (!succeeded) {
+          setLoading(false);
+        }
       }
     },
     [apiClient, enqueueSnackbar, t]
