@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { FoodService } from './food.service';
-import { FoodOrderStockService } from './food-order-stock.service';
+import { FoodOrdersService } from './food-orders.service';
 
 @Module({
   imports: [AuthModule],
-  providers: [FoodService, FoodOrderStockService],
-  exports: [FoodService, FoodOrderStockService],
+  providers: [FoodService, FoodOrdersService],
+  exports: [FoodService, FoodOrdersService],
 })
 export class FoodModule {}

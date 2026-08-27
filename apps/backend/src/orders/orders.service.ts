@@ -94,7 +94,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
-import { FoodOrderStockService } from '../food/food-order-stock.service';
+import { FoodOrdersService } from '../food/food-orders.service';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 
 export interface OrderStatusChangeRequest {
@@ -439,7 +439,7 @@ export class OrdersService {
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
-    private readonly foodOrderStockService: FoodOrderStockService,
+    private readonly foodOrdersService: FoodOrdersService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -1392,7 +1392,7 @@ export class OrdersService {
 
     await this.fulfillmentPromiseService.persistForOrder(request.orderId);
 
-    await this.foodOrderStockService.applyConfirmationUpdates(
+    await this.foodOrdersService.applyConfirmationUpdates(
       request.orderId,
       request.food_stock_updates ?? []
     );

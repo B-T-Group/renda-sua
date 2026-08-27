@@ -77,15 +77,30 @@ interface OrderItemStockRow {
   } | null;
 }
 
-/**
- * Stock corrections a merchant makes while confirming a food order, when they
- * know how many portions are actually left.
- */
+/** System-level food concerns for existing orders. */
 @Injectable()
-export class FoodOrderStockService {
-  private readonly logger = new Logger(FoodOrderStockService.name);
+export class FoodOrdersService {
+  private readonly logger = new Logger(FoodOrdersService.name);
 
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+
+  /** True when any line on the order is a cooked dish. */
+  async containsCookedFood(orderId: string): Promise<boolean> {
+    try {
+      const rows = await this.loadOrderItems(orderId);
+      return rows.some((row) => this.isFoodRow(row));
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not tell whether order ${orderId} contains food: ${error?.message}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Stock corrections a merchant makes while confirming a food order, when
+   * they know how many portions are actually left.
+   */
 
   async applyConfirmationUpdates(
     orderId: string,

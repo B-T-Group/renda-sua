@@ -40,6 +40,8 @@ import {
   type BusySlaPatch,
 } from './order-acceptance-busy.util';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { FoodOrdersService } from '../food/food-orders.service';
+import { capAcceptanceTimeoutForFood } from '../food/food-acceptance-timeout.util';
 
 interface SlaOrder {
   id: string;
@@ -94,7 +96,8 @@ export class OrderAcceptanceService {
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
-    private readonly riskMonitor: OrderRiskMonitorService
+    private readonly riskMonitor: OrderRiskMonitorService,
+    private readonly foodOrdersService: FoodOrdersService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -1031,9 +1034,15 @@ export class OrderAcceptanceService {
   private async beginActiveAcceptanceSla(
     order: SlaOrder,
     prep: number,
-    timeoutSec: number,
+    requestedTimeoutSec: number,
     fromScheduled = false
   ): Promise<void> {
+    const timeoutSec = capAcceptanceTimeoutForFood({
+      timeoutSeconds: requestedTimeoutSec,
+      containsCookedFood: await this.foodOrdersService.containsCookedFood(
+        order.id
+      ),
+    });
     const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
     await this.hasura.executeMutation(
       `mutation BeginActiveSla(
