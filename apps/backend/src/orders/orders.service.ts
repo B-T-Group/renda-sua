@@ -94,6 +94,8 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { FoodOrderStockService } from '../food/food-order-stock.service';
+import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -132,6 +134,11 @@ export interface ConfirmOrderRequest {
     preferred_date: string;
     special_instructions?: string;
   };
+  /**
+   * Optional stock corrections for cooked-food lines, for merchants who know
+   * how many portions are left once this order is in the kitchen.
+   */
+  food_stock_updates?: FoodConfirmationStockUpdate[];
 }
 
 export interface GetOrderRequest {
@@ -432,6 +439,7 @@ export class OrdersService {
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly foodOrderStockService: FoodOrderStockService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -1383,6 +1391,11 @@ export class OrdersService {
     }
 
     await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+
+    await this.foodOrderStockService.applyConfirmationUpdates(
+      request.orderId,
+      request.food_stock_updates ?? []
+    );
 
     await this.createStatusHistoryEntry(
       request.orderId,

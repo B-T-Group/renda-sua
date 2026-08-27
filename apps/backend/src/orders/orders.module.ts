@@ -13,6 +13,7 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
+import { FoodModule } from '../food/food.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -79,6 +80,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     MetaConversionsModule,
     MerchantLifecycleModule,
     RepresentativeCompensationModule,
+    FoodModule,
   ],
   controllers: [
     OrdersController,

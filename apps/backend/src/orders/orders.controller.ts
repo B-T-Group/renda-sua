@@ -389,6 +389,11 @@ export class OrdersController {
   }
 
   @Post('confirm')
+  @ApiOperation({
+    summary: 'Confirm an order (business only)',
+    description:
+      'Optionally accepts food_stock_updates so a kitchen can say how many portions of a dish are left after this order, or flag it as the last one, which takes the dish off the menu for the rest of the day.',
+  })
   async confirmOrder(@Body() request: ConfirmOrderRequest) {
     return this.ordersService.confirmOrder(request);
   }
