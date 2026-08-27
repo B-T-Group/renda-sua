@@ -60,6 +60,11 @@ export class CreateItemDto {
   @ApiPropertyOptional()
   estimated_delivery_time?: number | null;
 
+  @ApiPropertyOptional({
+    description: 'Typical minutes to cook the dish (cooked food only).',
+  })
+  preparation_minutes?: number | null;
+
   @ApiPropertyOptional()
   min_order_quantity?: number;
 

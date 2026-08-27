@@ -85,6 +85,9 @@ import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
 import { orderedVariantImages } from '../../types/itemVariant';
+import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
+import FoodScheduleList from '../common/FoodScheduleList';
+import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -791,8 +794,13 @@ export default function ItemDetailPage() {
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
+  const foodAvailability = inventoryItem.food_availability;
+  const foodStatus = resolveFoodAvailabilityStatus(foodAvailability);
+  const isFoodClosed = foodStatus != null && foodStatus !== 'available';
   const hasStock =
-    inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
+    inventoryItem.computed_available_quantity > 0 &&
+    inventoryItem.is_active &&
+    !isFoodClosed;
   const variantSelectionReady = variantSel.selectionComplete;
   const cartLineVariantId = toCartVariantId(variantSel.selectedVariantId);
   const inCartQuantity = cartLineVariantId
@@ -1340,14 +1348,56 @@ export default function ItemDetailPage() {
               ))}
             </Box>
 
+            {foodAvailability && (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  borderRadius: 2,
+                  bgcolor: 'action.hover',
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                    mb: foodAvailability.has_schedule ? 1 : 0,
+                  }}
+                >
+                  <FoodAvailabilityChip availability={foodAvailability} />
+                  {item.preparation_minutes ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('foods.prepMinutes', '~{{count}} min prep', {
+                        count: item.preparation_minutes,
+                      })}
+                    </Typography>
+                  ) : null}
+                </Box>
+                {foodAvailability.has_schedule && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                      {t('foods.schedule.title', 'Serving hours')}
+                    </Typography>
+                    <FoodScheduleList slots={foodAvailability.slots} />
+                  </>
+                )}
+              </Box>
+            )}
+
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
                 {!hasStock ? (
                   <Button variant="outlined" disabled size="medium">
-                    {inventoryItem.computed_available_quantity === 0
-                      ? t('items.outOfStock', 'Out of Stock')
-                      : t('items.notAvailable', 'Not Available')}
+                    {isFoodClosed
+                      ? foodStatus === 'sold_out'
+                        ? t('foods.status.soldOutToday', 'Sold out today')
+                        : t('foods.status.notServingNow', 'Not serving now')
+                      : inventoryItem.computed_available_quantity === 0
+                        ? t('items.outOfStock', 'Out of Stock')
+                        : t('items.notAvailable', 'Not Available')}
                   </Button>
                 ) : !paymentsEnabled || !merchantCanAcceptOrders ? (
                   <Button variant="outlined" disabled size="medium" fullWidth>

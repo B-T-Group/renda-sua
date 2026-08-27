@@ -3448,7 +3448,11 @@
       "weight": "Weight",
       "weightUnit": "Weight Unit",
       "dimensions": "Dimensions (Optional)",
-      "isUsed": "Used"
+      "isUsed": "Used",
+      "isFoodItem": "This is a cooked food item",
+      "isFoodItemHelp": "Cooked dishes get serving hours per location, and can be marked sold out for the day.",
+      "preparationMinutes": "Preparation time (minutes)",
+      "preparationMinutesHelp": "Roughly how long this dish takes to cook."
     },
     "variants": {
       "sectionTitle": "Variants",
@@ -3669,6 +3673,27 @@
       },
       "title": "Orders",
       "waitingForAgent": "📦 Order ready for pickup! Waiting for an agent to claim this delivery. Keep the order prepared and ready."
+    },
+    "food": {
+      "servingHours": "Serving hours",
+      "servingHoursHelp": "Set the times this dish is served. Leave every day empty to keep it on the menu at all times.",
+      "addWindow": "Add hours",
+      "removeWindow": "Remove hours",
+      "notServed": "Not served",
+      "from": "From",
+      "to": "To",
+      "nextDay": "next day",
+      "noHoursSet": "No hours set, so this dish can be ordered at any time.",
+      "saveHours": "Save serving hours",
+      "hoursSaved": "Serving hours saved",
+      "soldOutToday": "Sold out for today",
+      "onTheMenu": "On the menu today",
+      "soldOutHelp": "Turning this off hides the dish for the rest of the day. It comes back automatically the next day you serve it.",
+      "remainingTitle": "How many portions are left?",
+      "remainingHelp": "Optional. Only needed when this order changes what you can still sell today.",
+      "remainingLabel": "Portions left after this order",
+      "lastOne": "This was the last one",
+      "lastOneHelp": "Marks the dish sold out for the rest of today."
     }
   },
   "client": {
@@ -6935,6 +6960,40 @@
       "search": "Search by order number or client",
       "empty": "No orders in this queue",
       "noPermission": "You do not have permission to view orders for this location."
+    }
+  },
+  "foods": {
+    "title": "Food",
+    "subtitle": "Meals cooked to order by restaurants near you.",
+    "searchPlaceholder": "Search dishes",
+    "allDishes": "All dishes",
+    "prepMinutes": "~{{count}} min prep",
+    "sort": {
+      "relevance": "Best match",
+      "nearMe": "Near me",
+      "cheapest": "Lowest price",
+      "topRated": "Top rated"
+    },
+    "status": {
+      "openNow": "Serving now",
+      "soldOutToday": "Sold out today",
+      "closed": "Not being served now",
+      "notServingNow": "Not serving now",
+      "opensAt": "Opens {{when}}"
+    },
+    "schedule": {
+      "title": "Serving hours",
+      "alwaysAvailable": "Available at any time"
+    },
+    "empty": {
+      "noMatches": "No dishes match your search",
+      "noDishes": "No restaurants near you yet",
+      "tryAgain": "Try another dish name or clear the filters.",
+      "checkBack": "Check back soon as restaurants join the platform."
+    },
+    "seo": {
+      "title": "Order food from local restaurants",
+      "description": "Browse cooked meals from restaurants near you and order while the kitchen is open."
     }
   }
 }

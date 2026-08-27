@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageType } from '../types/image';
+import type { FoodAvailability } from '../types/food';
 import type {
   ItemVariant,
   VariantPriceOverride,
@@ -42,6 +43,8 @@ export interface InventoryItem {
   rating_count?: number | null;
   /** Location-specific variant price overrides (shared stock). */
   variant_price_overrides?: VariantPriceOverride[];
+  /** Present only for items in the cooked-food category. */
+  food_availability?: FoodAvailability | null;
   item: {
     id: string;
     name: string;
@@ -65,6 +68,8 @@ export interface InventoryItem {
     requires_special_handling: boolean;
     max_delivery_distance: number;
     estimated_delivery_time: number;
+    /** Typical minutes to cook the dish (cooked food only). */
+    preparation_minutes?: number | null;
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
@@ -160,6 +165,8 @@ export interface GetInventoryItemsQuery {
   owner_preview?: boolean;
   anonymousOrigin?: { lat: number; lng: number } | null;
   collection?: string;
+  /** Restrict the list to cooked food sold by restaurants (the Food tab). */
+  food_only?: boolean;
   /** When false, skip fetching (e.g. wait for store header). */
   enabled?: boolean;
 }
@@ -212,6 +219,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.owner_preview ?? '',
     query.collection ?? '',
     query.is_active ?? '',
+    query.food_only ?? '',
   ].join('|');
 
   const fetchInventoryItems = useCallback(async () => {
@@ -294,6 +302,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.collection?.trim() && {
             collection: query.collection.trim(),
           }),
+          ...(query.food_only === true && { food_only: true }),
           ...(!isAuthenticated &&
             query.anonymousOrigin && {
               origin_lat: query.anonymousOrigin.lat,

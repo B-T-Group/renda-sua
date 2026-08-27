@@ -5,6 +5,7 @@ import {
 } from '../contexts/OrdersApiPrefixContext';
 import { useApiClient } from './useApiClient';
 import { useApiWithLoading } from './useApiWithLoading';
+import type { FoodConfirmationStockUpdate } from '../types/food';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -76,6 +77,8 @@ export interface ConfirmOrderData {
     preferred_date: string;
     special_instructions?: string;
   };
+  /** Optional stock corrections for cooked-food lines on this order. */
+  food_stock_updates?: FoodConfirmationStockUpdate[];
 }
 
 export interface GetOrderRequest {

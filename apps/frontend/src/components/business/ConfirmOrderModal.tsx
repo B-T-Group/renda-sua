@@ -26,6 +26,11 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmOrderData } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import DeliveryTimeWindowSelector from '../common/DeliveryTimeWindowSelector';
+import { isFoodCategoryName } from '../../constants/food';
+import type { FoodConfirmationStockUpdate } from '../../types/food';
+import FoodOrderStockPrompt, {
+  type FoodOrderLine,
+} from './food/FoodOrderStockPrompt';
 
 interface ConfirmOrderModalProps {
   open: boolean;
@@ -63,6 +68,27 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     special_instructions?: string;
   } | null>(null);
   const [error, setError] = useState<string>('');
+  const [foodStockUpdates, setFoodStockUpdates] = useState<
+    Record<string, FoodConfirmationStockUpdate>
+  >({});
+
+  const foodLines: FoodOrderLine[] = useMemo(
+    () =>
+      (order?.order_items ?? [])
+        .filter((line) =>
+          isFoodCategoryName(line.item?.item_sub_category?.item_category?.name)
+        )
+        .map((line) => ({
+          order_item_id: line.id,
+          name: line.item_name || line.item?.name || '',
+          quantity: line.quantity,
+        })),
+    [order?.order_items]
+  );
+
+  useEffect(() => {
+    if (!open) setFoodStockUpdates({});
+  }, [open]);
 
   // Calculate existing windows using optional chaining
   const allExistingWindows: DeliveryWindowOption[] =
@@ -220,6 +246,11 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
         confirmData.delivery_window_details = newWindowData;
       }
 
+      const stockUpdates = Object.values(foodStockUpdates);
+      if (stockUpdates.length > 0) {
+        confirmData.food_stock_updates = stockUpdates;
+      }
+
       await onConfirm(confirmData);
       onClose();
     } catch (err: unknown) {
@@ -238,6 +269,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     existingWindows,
     isPickup,
     isAsap,
+    foodStockUpdates,
   ]);
 
   // Early return after all hooks
@@ -570,6 +602,13 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
               )}
             </CardContent>
           </Card>
+
+          <FoodOrderStockPrompt
+            lines={foodLines}
+            updates={foodStockUpdates}
+            onChange={setFoodStockUpdates}
+            disabled={loading}
+          />
         </Stack>
       </DialogContent>
 

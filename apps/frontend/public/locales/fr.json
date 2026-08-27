@@ -3157,7 +3157,11 @@
       "weight": "Poids",
       "weightUnit": "Unité de poids",
       "dimensions": "Dimensions (optionnel)",
-      "isUsed": "Occasion"
+      "isUsed": "Occasion",
+      "isFoodItem": "Ceci est un plat préparé",
+      "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée.",
+      "preparationMinutes": "Temps de préparation (minutes)",
+      "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner."
     },
     "variants": {
       "sectionTitle": "Variantes",
@@ -3406,6 +3410,27 @@
         "connect": "Connecter Shopify",
         "store": "Boutique"
       }
+    },
+    "food": {
+      "servingHours": "Heures de service",
+      "servingHoursHelp": "Indiquez les heures auxquelles ce plat est servi. Laissez tous les jours vides pour le garder disponible en permanence.",
+      "addWindow": "Ajouter des heures",
+      "removeWindow": "Supprimer les heures",
+      "notServed": "Non servi",
+      "from": "De",
+      "to": "À",
+      "nextDay": "jour suivant",
+      "noHoursSet": "Aucune heure définie, ce plat peut donc être commandé à tout moment.",
+      "saveHours": "Enregistrer les heures de service",
+      "hoursSaved": "Heures de service enregistrées",
+      "soldOutToday": "Épuisé pour aujourd'hui",
+      "onTheMenu": "Au menu aujourd'hui",
+      "soldOutHelp": "En désactivant, le plat est masqué pour le reste de la journée. Il revient automatiquement le jour suivant où vous le servez.",
+      "remainingTitle": "Combien de portions reste-t-il ?",
+      "remainingHelp": "Facultatif. Utile uniquement si cette commande change ce que vous pouvez encore vendre aujourd'hui.",
+      "remainingLabel": "Portions restantes après cette commande",
+      "lastOne": "C'était la dernière",
+      "lastOneHelp": "Marque le plat comme épuisé pour le reste de la journée."
     }
   },
   "client": {
@@ -6951,6 +6976,40 @@
       "search": "Rechercher par numéro de commande ou client",
       "empty": "Aucune commande dans cette file",
       "noPermission": "Vous n'avez pas la permission de voir les commandes de cet emplacement."
+    }
+  },
+  "foods": {
+    "title": "Restauration",
+    "subtitle": "Des plats préparés à la commande par les restaurants près de vous.",
+    "searchPlaceholder": "Rechercher un plat",
+    "allDishes": "Tous les plats",
+    "prepMinutes": "~{{count}} min de préparation",
+    "sort": {
+      "relevance": "Plus pertinent",
+      "nearMe": "Près de moi",
+      "cheapest": "Prix le plus bas",
+      "topRated": "Mieux notés"
+    },
+    "status": {
+      "openNow": "Service en cours",
+      "soldOutToday": "Épuisé pour aujourd'hui",
+      "closed": "Pas servi actuellement",
+      "notServingNow": "Pas servi actuellement",
+      "opensAt": "Ouvre {{when}}"
+    },
+    "schedule": {
+      "title": "Heures de service",
+      "alwaysAvailable": "Disponible à tout moment"
+    },
+    "empty": {
+      "noMatches": "Aucun plat ne correspond à votre recherche",
+      "noDishes": "Aucun restaurant près de vous pour le moment",
+      "tryAgain": "Essayez un autre nom de plat ou effacez les filtres.",
+      "checkBack": "Revenez bientôt, des restaurants rejoignent la plateforme."
+    },
+    "seo": {
+      "title": "Commandez des repas dans les restaurants près de vous",
+      "description": "Parcourez les plats préparés par les restaurants près de vous et commandez pendant les heures de service."
     }
   }
 }

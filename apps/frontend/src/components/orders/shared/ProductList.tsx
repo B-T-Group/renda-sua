@@ -18,6 +18,8 @@ export interface ProductListItem {
   currency?: string | null;
   notes?: string | null;
   imageUrl?: string | null;
+  /** Cooked food only: helps the kitchen sequence and agents time pickup. */
+  preparationMinutes?: number | null;
 }
 
 export interface ProductListProps {
@@ -59,6 +61,17 @@ export const ProductList: React.FC<ProductListProps> = ({
                   <Typography variant="body2" fontWeight={600} noWrap>
                     {item.quantity}× {item.name}
                   </Typography>
+                  {item.preparationMinutes ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                    >
+                      {t('foods.prepMinutes', '~{{count}} min prep', {
+                        count: item.preparationMinutes,
+                      })}
+                    </Typography>
+                  ) : null}
                   {item.notes ? (
                     <Typography variant="caption" color="text.secondary">
                       {item.notes}

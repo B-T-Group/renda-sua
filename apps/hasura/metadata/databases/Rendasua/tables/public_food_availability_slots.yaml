@@ -1,0 +1,125 @@
+table:
+  name: food_availability_slots
+  schema: public
+object_relationships:
+  - name: food_item_settings
+    using:
+      foreign_key_constraint_on: food_item_settings_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        food_item_settings:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        food_item_settings:
+          business_location:
+            is_active:
+              _eq: true
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        food_item_settings:
+          business_location:
+            is_active:
+              _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        food_item_settings:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        food_item_settings:
+          business_location:
+            is_active:
+              _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - food_item_settings_id
+        - day_of_week
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        food_item_settings:
+          business_location:
+            is_active:
+              _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - day_of_week
+        - start_time
+        - end_time
+      filter:
+        food_item_settings:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        food_item_settings:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id

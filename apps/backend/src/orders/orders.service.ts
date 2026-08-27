@@ -93,6 +93,9 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { FoodOrdersService } from '../food/food-orders.service';
+import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -131,6 +134,11 @@ export interface ConfirmOrderRequest {
     preferred_date: string;
     special_instructions?: string;
   };
+  /**
+   * Optional stock corrections for cooked-food lines, for merchants who know
+   * how many portions are left once this order is in the kitchen.
+   */
+  food_stock_updates?: FoodConfirmationStockUpdate[];
 }
 
 export interface GetOrderRequest {
@@ -431,6 +439,7 @@ export class OrdersService {
     private readonly rbacService: RbacService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly foodOrdersService: FoodOrdersService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -1361,6 +1370,29 @@ export class OrdersService {
 
     if (confirmedWindowId) {
       await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
+    }
+
+    // Apply kitchen stock corrections before marking confirmed so a Hasura
+    // failure does not leave a confirmed order with unchanged inventory.
+    if (request.food_stock_updates?.length) {
+      try {
+        await this.foodOrdersService.applyConfirmationUpdates(
+          request.orderId,
+          request.food_stock_updates
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Food stock update failed for order ${request.orderId}: ${error?.message}`
+        );
+        throw new HttpException(
+          {
+            success: false,
+            error:
+              'Could not update remaining portions. The order was not confirmed — try again.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
     }
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
@@ -8041,6 +8073,16 @@ export class OrdersService {
               }
             }
           }
+          food_settings {
+            marked_unavailable_at
+            availability_slots(
+              order_by: [{ day_of_week: asc }, { start_time: asc }]
+            ) {
+              day_of_week
+              start_time
+              end_time
+            }
+          }
           item {
             id
             name
@@ -8053,7 +8095,11 @@ export class OrdersService {
             currency
             weight
             max_order_quantity
+            preparation_minutes
             stripe_tax_code_id
+            item_sub_category {
+              item_category { name }
+            }
             item_variants(
               where: { is_active: { _eq: true } }
               order_by: { sort_order: asc }
@@ -8237,6 +8283,11 @@ export class OrdersService {
           `Item ${businessInventory.item.name} is not available for purchase yet. Payments at this location are coming soon.`,
           HttpStatus.BAD_REQUEST
         );
+      }
+
+      const foodBlock = checkFoodOrderable(businessInventory);
+      if (foodBlock) {
+        throw new HttpException(foodBlock.message, HttpStatus.BAD_REQUEST);
       }
 
       const maxOrderQuantity = businessInventory.item?.max_order_quantity;
