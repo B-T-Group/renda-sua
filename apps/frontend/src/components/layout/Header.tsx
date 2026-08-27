@@ -8,6 +8,7 @@ import {
     Menu,
     MoreVert,
     Person,
+    RestaurantMenu,
     ShoppingCart,
     SwapHoriz,
 } from '@mui/icons-material';
@@ -215,6 +216,7 @@ const Header: React.FC = () => {
       return [
         { label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> },
         { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
+        { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
         { label: t('nav.forBusiness', 'For Business'), path: '/for-business', icon: <Dashboard /> },
         { label: t('nav.becomeAgent', 'Become an Agent'), path: '/become-a-delivery-agent', icon: <Assignment /> },
         { label: t('footer.about', 'About'), path: '/about', icon: <Assignment /> },
@@ -236,6 +238,7 @@ const Header: React.FC = () => {
       return [
         { label: t('common.items', 'Items'), path: '/items', icon: <Assignment /> },
         { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
+        { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
         { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },
       ];
     }
