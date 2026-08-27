@@ -9,6 +9,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
 import { useSupportedCountries } from './useSupportedCountries';
+import { FOOD_CATEGORY_NAME, isFoodCatalogItem } from '../constants/food';
 
 export interface InventoryItem {
   id: string;
@@ -280,6 +281,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           is_active: query.is_active !== undefined ? query.is_active : true,
           ...(query.search && { search: query.search }),
           ...(query.category && { category: query.category }),
+          ...(query.food_only === true &&
+            !query.category && { category: FOOD_CATEGORY_NAME }),
           ...(query.subcategory && { subcategory: query.subcategory }),
           ...(query.business_name && { business_name: query.business_name }),
           ...(query.brand && { brand: query.brand }),
@@ -315,7 +318,13 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       if (controller.signal.aborted) return;
 
       if (response.data.success) {
-        const nextItems = response.data.data.items;
+        const rawItems = response.data.data.items;
+        const nextItems =
+          query.food_only === true
+            ? rawItems.filter(isFoodCatalogItem)
+            : rawItems;
+        const leakedNonFood =
+          query.food_only === true && nextItems.length !== rawItems.length;
         if (isLoadMore) {
           setInventoryItems((prev) => {
             const seen = new Set(prev.map((item) => item.id));
@@ -326,10 +335,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           setInventoryItems(nextItems);
         }
         setPagination({
-          total: response.data.data.total,
+          total: leakedNonFood ? nextItems.length : response.data.data.total,
           page: response.data.data.page,
           limit: response.data.data.limit,
-          totalPages: response.data.data.totalPages,
+          totalPages: leakedNonFood ? 1 : response.data.data.totalPages,
         });
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');
