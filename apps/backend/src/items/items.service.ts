@@ -32,6 +32,7 @@ const MUTABLE_ITEM_FIELDS = [
   'requires_special_handling',
   'max_delivery_distance',
   'estimated_delivery_time',
+  'preparation_minutes',
   'min_order_quantity',
   'max_order_quantity',
   'is_active',
@@ -99,6 +100,7 @@ const UPDATE_ITEM = `
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
+      preparation_minutes
       min_order_quantity
       max_order_quantity
       is_active

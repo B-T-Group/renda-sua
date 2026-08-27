@@ -55,6 +55,7 @@ const GET_ITEMS = `
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
+      preparation_minutes
       min_order_quantity
       max_order_quantity
       is_active
@@ -300,6 +301,7 @@ const GET_SINGLE_ITEM = `
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
+      preparation_minutes
       min_order_quantity
       max_order_quantity
       is_active
@@ -538,6 +540,7 @@ const GET_AVAILABLE_ITEMS = `
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
+      preparation_minutes
       min_order_quantity
       max_order_quantity
       is_active

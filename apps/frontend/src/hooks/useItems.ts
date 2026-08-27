@@ -27,6 +27,8 @@ export interface Item {
   requires_special_handling: boolean;
   max_delivery_distance: number | null;
   estimated_delivery_time: number | null;
+  /** Typical minutes to cook the dish (cooked food only). */
+  preparation_minutes?: number | null;
   min_order_quantity: number;
   max_order_quantity: number | null;
   is_active: boolean;
@@ -143,6 +145,7 @@ export interface CreateItemData {
   requires_special_handling?: boolean;
   max_delivery_distance?: number;
   estimated_delivery_time?: number;
+  preparation_minutes?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number;
   is_active?: boolean;
