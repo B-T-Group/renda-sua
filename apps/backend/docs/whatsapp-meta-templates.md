@@ -15,6 +15,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `rental_request_business` | `rs_rental_request` | UTILITY | itemName, dates | URL CTA → `/app/rentals/requests/{{1}}` |
 | `verification_attention` | `rs_verification` | UTILITY | reason | URL CTA → `/app/verification` (static) |
 | `delivery_pin` | `rs_delivery_pin` | **AUTHENTICATION** | pin (code only) | OTP copy-code button (no URL CTA) |
+| — (Auth0) | `rs_login_code` | **AUTHENTICATION** | code only | OTP copy-code button (no URL CTA) |
 | `pickup_reminder` | `rs_pickup_reminder` | UTILITY | orderNumber, window | URL CTA → `/app/orders/{{1}}` |
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
@@ -204,7 +205,7 @@ Veuillez mettre à jour vos documents dans l’application afin que nous puissio
 
 ## 7. `rs_delivery_pin` (AUTHENTICATION)
 
-**This is the only authentication template, and it does not follow the utility contract above.** Authentication templates are created in Meta with a fixed body plus an `OTP` button (`otp_type: COPY_CODE`) — you do not author the body copy, you only toggle the security recommendation and the code expiry. Pricing and time-to-live also differ from utility.
+**Authentication template (see also `rs_login_code`).** It does not follow the utility contract above. Authentication templates are created in Meta with a fixed body plus an `OTP` button (`otp_type: COPY_CODE`) — you do not author the body copy, you only toggle the security recommendation and the code expiry. Pricing and time-to-live also differ from utility.
 
 **Vars:** `{{1}}` pin — the code and nothing else  
 **Button:** OTP copy-code (no URL CTA; the template's `ctaUrl` is ignored)
@@ -336,8 +337,29 @@ Ouvrez le panneau d’administration pour contacter le client, le commerçant ou
 
 ---
 
+## 12. `rs_login_code` (AUTHENTICATION, Auth0)
+
+Auth0 sends this login OTP. It is **not** mapped in `WhatsAppTemplateService` and is not sent by Nest.
+
+**Vars:** `{{1}}` code — the code and nothing else  
+**Button:** OTP copy-code (`otp_type: COPY_CODE`)  
+**Create flags (match WhatsApp Manager):** security recommendation **on**, no code-expiry footer, message validity **10 minutes** (`message_send_ttl_seconds: 600`)
+
+Meta owns the body copy. Do not submit custom en/fr strings.
+
+---
+
 ## Ops notes
 
 1. After approval, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
 2. Set `WHATSAPP_NOTIFICATIONS_ENABLED=true` after templates are approved. Notifications stay off automatically while token/phone id/app secret are empty.
 3. Users with a phone number are opted in (`whatsapp_enabled`) by default.
+4. Create or update all `en`/`fr` templates (including `rs_login_code`) with:
+
+```bash
+npm run create:whatsapp-templates -- --access-token "$TOKEN"
+```
+
+WABA id defaults to `1014752277854609` and Graph API to `v25.0`. Override with `--waba-id` / `WHATSAPP_WABA_ID` or `--api-version`.
+
+Missing name+language rows are created. Existing translations are updated in place when body or buttons differ; unchanged rows are skipped so Meta does not re-review them. Use `--dry-run` to print payloads. Edited templates go back to `PENDING` review.
