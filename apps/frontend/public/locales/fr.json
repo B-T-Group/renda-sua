@@ -6981,6 +6981,12 @@
   "foods": {
     "title": "Restauration",
     "subtitle": "Des plats préparés à la commande par les restaurants près de vous.",
+    "hero": {
+      "title": "Vous commandez. Ils cuisinent. On vous ping.",
+      "messageMomo": "Payez avec Mobile Money — ils cuisinent, on vous prévient dès que c’est prêt.",
+      "messageCard": "Payez par carte — ils cuisinent, on vous prévient dès que c’est prêt.",
+      "illustrationLabel": "Commandez un plat, le restaurant le prépare, vous êtes notifié"
+    },
     "searchPlaceholder": "Rechercher un plat",
     "allDishes": "Tous les plats",
     "prepMinutes": "~{{count}} min de préparation",
