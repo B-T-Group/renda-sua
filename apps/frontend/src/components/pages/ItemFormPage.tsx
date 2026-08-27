@@ -11,6 +11,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   Collapse,
   Container,
@@ -30,10 +31,11 @@ import {
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { WEIGHT_UNITS } from '../../constants/enums';
+import { isFoodCategoryName } from '../../constants/food';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
@@ -115,6 +117,7 @@ interface ItemFormData {
   item_sub_category_id: number | null;
   is_active: boolean;
   stripe_tax_code_id: string;
+  preparation_minutes: number | null;
 }
 
 const ItemFormPage: React.FC = () => {
@@ -159,6 +162,7 @@ const ItemFormPage: React.FC = () => {
     item_sub_category_id: null,
     is_active: true,
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
+    preparation_minutes: null,
   });
 
   useEffect(() => {
@@ -185,6 +189,28 @@ const ItemFormPage: React.FC = () => {
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<
     number | null
   >(null);
+
+  const foodCategory = useMemo(
+    () => categories.find((category) => isFoodCategoryName(category.name)) ?? null,
+    [categories]
+  );
+  const isFoodItem = !!foodCategory && selectedCategoryId === foodCategory.id;
+
+  /** Checking the box picks the cooked-food category so the merchant only
+   * has to choose the kind of dish afterwards. */
+  const handleFoodToggle = useCallback(
+    (checked: boolean) => {
+      if (checked && !foodCategory) return;
+      setSelectedCategoryId(checked ? foodCategory!.id : null);
+      setSelectedSubCategoryId(null);
+      setFormData((prev) => ({
+        ...prev,
+        item_sub_category_id: null,
+        preparation_minutes: checked ? prev.preparation_minutes : null,
+      }));
+    },
+    [foodCategory]
+  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -294,6 +320,9 @@ const ItemFormPage: React.FC = () => {
               stripe_tax_code_id:
                 (foundItem as Item & { stripe_tax_code_id?: string })
                   .stripe_tax_code_id || STRIPE_TAX_CODE_GENERAL_TANGIBLE,
+              preparation_minutes:
+                (foundItem as Item & { preparation_minutes?: number | null })
+                  .preparation_minutes ?? null,
             });
 
             // Set category and subcategory for edit mode
@@ -1076,6 +1105,58 @@ const ItemFormPage: React.FC = () => {
                       )}
                     />
                   </Grid>
+
+                  {foodCategory && (
+                    <Grid size={{ xs: 12 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={isFoodItem}
+                            onChange={(e) => handleFoodToggle(e.target.checked)}
+                            disabled={loading || categoriesLoading}
+                          />
+                        }
+                        label={t(
+                          'business.items.isFoodItem',
+                          'This is a cooked food item'
+                        )}
+                      />
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t(
+                          'business.items.isFoodItemHelp',
+                          'Cooked dishes get serving hours per location, and can be marked sold out for the day.'
+                        )}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {isFoodItem && (
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label={t(
+                          'business.items.preparationMinutes',
+                          'Preparation time (minutes)'
+                        )}
+                        value={formData.preparation_minutes ?? ''}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'preparation_minutes',
+                            e.target.value === ''
+                              ? null
+                              : Math.max(0, parseInt(e.target.value, 10) || 0)
+                          )
+                        }
+                        disabled={loading}
+                        inputProps={{ min: 0, max: 1440, step: 5 }}
+                        helperText={t(
+                          'business.items.preparationMinutesHelp',
+                          'Roughly how long this dish takes to cook.'
+                        )}
+                      />
+                    </Grid>
+                  )}
                 </Grid>
               </Stack>
             </Box>

@@ -54,6 +54,8 @@ import {
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import ItemLikeButton from './ItemLikeButton';
 import { CatalogOptionChips } from './CatalogOptionChips';
+import FoodAvailabilityChip from './FoodAvailabilityChip';
+import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 
 /** Strip HTML and collapse whitespace for card preview text. */
 function plainTextSummary(text: string | null | undefined): string {
@@ -241,7 +243,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     inventory.avg_rating != null &&
     Number.isFinite(inventory.avg_rating);
 
-  const isUnavailable = inventory.computed_available_quantity <= 0;
+  const foodStatus = resolveFoodAvailabilityStatus(inventory.food_availability);
+  const isFoodClosed = foodStatus != null && foodStatus !== 'available';
+  const isUnavailable =
+    inventory.computed_available_quantity <= 0 || isFoodClosed;
 
   const viewDetailsLabel = t('items.itemCard.viewDetails', 'View details');
   const noImageLabel = t('items.itemCard.noImage', 'No image');
@@ -729,18 +734,35 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 flexWrap: 'wrap',
               }}
             >
-              <Chip
-                label={t('items.itemCard.availableCount', '{{count}} available', {
-                  count: inventory.computed_available_quantity,
-                })}
-                color={
-                  inventory.computed_available_quantity > 0
-                    ? 'success'
-                    : 'error'
-                }
-                size="small"
-                sx={{ fontSize: '0.7rem' }}
+              {inventory.item?.preparation_minutes ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                  label={t('foods.prepMinutes', '~{{count}} min prep', {
+                    count: inventory.item.preparation_minutes,
+                  })}
+                />
+              ) : null}
+              <FoodAvailabilityChip
+                availability={inventory.food_availability}
               />
+              {foodStatus == null ? (
+                <Chip
+                  label={t(
+                    'items.itemCard.availableCount',
+                    '{{count}} available',
+                    { count: inventory.computed_available_quantity }
+                  )}
+                  color={
+                    inventory.computed_available_quantity > 0
+                      ? 'success'
+                      : 'error'
+                  }
+                  size="small"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              ) : null}
             </Box>
             {hasVariantOptions ? (
               <CatalogOptionChips
@@ -1083,7 +1105,18 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           >
             {viewDetailsLabel}
           </Button>
-          {inventory.computed_available_quantity === 0 ? (
+          {isFoodClosed ? (
+            <Button
+              variant="outlined"
+              disabled
+              size="small"
+              sx={{ width: '75%' }}
+            >
+              {foodStatus === 'sold_out'
+                ? t('foods.status.soldOutToday', 'Sold out today')
+                : t('foods.status.notServingNow', 'Not serving now')}
+            </Button>
+          ) : inventory.computed_available_quantity === 0 ? (
             <Button
               variant="outlined"
               disabled

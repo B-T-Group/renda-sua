@@ -39,6 +39,7 @@ import ImageUploadDialog from './ImageUploadDialog';
 import ProductTaxCategorySelect from './ProductTaxCategorySelect';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { isFoodCategoryName } from '../../constants/food';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -137,6 +138,12 @@ export default function AddItemDialog({
   const { tags, fetchTags, createTag, setItemTags } = useTags();
   const { addInventoryItem } = useBusinessInventory();
   const { enqueueSnackbar } = useSnackbar();
+
+  const isFoodSubCategorySelected = isFoodCategoryName(
+    (itemSubCategories || itemSubCategoriesFromHook || []).find(
+      (category) => category.id === newItemData.item_sub_category_id
+    )?.item_category?.name
+  );
 
   useEffect(() => {
     if (open && businessId) {
@@ -611,6 +618,32 @@ export default function AddItemDialog({
                 )}
               />
             </Stack>
+
+            {isFoodSubCategorySelected && (
+              <TextField
+                fullWidth
+                type="number"
+                label={t(
+                  'business.items.preparationMinutes',
+                  'Preparation time (minutes)'
+                )}
+                value={newItemData.preparation_minutes ?? ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    preparation_minutes:
+                      e.target.value === ''
+                        ? null
+                        : Math.max(0, parseInt(e.target.value, 10) || 0),
+                  })
+                }
+                inputProps={{ min: 0, max: 1440, step: 5 }}
+                helperText={t(
+                  'business.items.preparationMinutesHelp',
+                  'Roughly how long this dish takes to cook.'
+                )}
+              />
+            )}
 
             <Stack direction="row" spacing={2}>
               <TextField

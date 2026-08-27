@@ -268,6 +268,7 @@ function App() {
               element={<LazyPages.RentalListingDetailPage />}
             />
             <Route path="/items" element={<LazyPages.ItemsPage />} />
+            <Route path="/foods" element={<LazyPages.FoodsPage />} />
             <Route
               path="/likes"
               element={

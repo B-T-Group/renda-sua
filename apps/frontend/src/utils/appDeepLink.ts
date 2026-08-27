@@ -42,6 +42,11 @@ export function mapAppPathToWeb(path: string): string {
     return `/orders/${id}`;
   }
   if (path.startsWith('/rentals/requests')) return '/business/rentals/requests';
+  // A dish links to the shopper-facing listing rather than the merchant view.
+  if (path.startsWith('/foods/')) {
+    const id = path.replace('/foods/', '').split(/[?#]/)[0];
+    return id ? `/items/${id}` : '/foods';
+  }
   if (path.startsWith('/items/')) {
     const id = path.replace('/items/', '').split(/[?#]/)[0];
     return `/business/items/${id}`;
