@@ -20,7 +20,9 @@ export interface FoodSettings {
   business_location_id: string;
   marked_unavailable_at: string | null;
   timezone: string;
+  has_schedule: boolean;
   is_open_now: boolean;
+  is_marked_unavailable_today: boolean;
   is_available_now: boolean;
   next_opening_at: string | null;
   slots: FoodAvailabilitySlot[];
@@ -226,7 +228,9 @@ export class FoodService {
       business_location_id: target.locationId,
       marked_unavailable_at: row?.marked_unavailable_at ?? null,
       timezone: target.timezone,
+      has_schedule: availability.hasSchedule,
       is_open_now: availability.isOpenNow,
+      is_marked_unavailable_today: availability.isMarkedUnavailableToday,
       is_available_now: availability.isAvailableNow,
       next_opening_at: availability.nextOpeningAt?.toISOString() ?? null,
       slots,

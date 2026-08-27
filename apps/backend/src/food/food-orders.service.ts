@@ -157,32 +157,20 @@ export class FoodOrdersService {
     inventoryId: string,
     quantity: number
   ): Promise<void> {
-    try {
-      await this.hasuraSystemService.executeMutation(SET_INVENTORY_QUANTITY, {
-        inventoryId,
-        quantity,
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `Failed to set food stock for inventory ${inventoryId}: ${error?.message}`
-      );
-    }
+    await this.hasuraSystemService.executeMutation(SET_INVENTORY_QUANTITY, {
+      inventoryId,
+      quantity,
+    });
   }
 
   private async markSoldOut(
     itemId: string,
     locationId: string
   ): Promise<void> {
-    try {
-      await this.hasuraSystemService.executeMutation(UPSERT_SOLD_OUT_FLAG, {
-        itemId,
-        locationId,
-        markedAt: new Date().toISOString(),
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `Failed to mark food item ${itemId} sold out: ${error?.message}`
-      );
-    }
+    await this.hasuraSystemService.executeMutation(UPSERT_SOLD_OUT_FLAG, {
+      itemId,
+      locationId,
+      markedAt: new Date().toISOString(),
+    });
   }
 }

@@ -90,8 +90,10 @@ const FoodAvailabilitySection: React.FC<FoodAvailabilitySectionProps> = ({
     );
   }
 
-  const soldOutToday = Boolean(settings?.marked_unavailable_at) &&
-    settings?.is_available_now === false;
+  // Use the service-day flag the API already computed. Closed hours make
+  // `is_available_now` false too, and a stale `marked_unavailable_at` from a
+  // prior day is not the same as sold out today.
+  const soldOutToday = settings?.is_marked_unavailable_today === true;
 
   return (
     <Box>

@@ -30,7 +30,9 @@ export interface FoodSettings {
   business_location_id: string;
   marked_unavailable_at: string | null;
   timezone: string;
+  has_schedule: boolean;
   is_open_now: boolean;
+  is_marked_unavailable_today: boolean;
   is_available_now: boolean;
   next_opening_at: string | null;
   slots: FoodAvailabilitySlot[];

@@ -206,7 +206,10 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
     );
     return {
       businessLocationId,
-      soldOut: isMarkedUnavailableToday(settings?.marked_unavailable_at),
+      soldOut: isMarkedUnavailableToday(
+        settings?.marked_unavailable_at,
+        settings?.availability_slots ?? []
+      ),
     };
   }, [
     item.business_inventories,

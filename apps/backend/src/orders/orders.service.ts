@@ -1372,6 +1372,29 @@ export class OrdersService {
       await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
     }
 
+    // Apply kitchen stock corrections before marking confirmed so a Hasura
+    // failure does not leave a confirmed order with unchanged inventory.
+    if (request.food_stock_updates?.length) {
+      try {
+        await this.foodOrdersService.applyConfirmationUpdates(
+          request.orderId,
+          request.food_stock_updates
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Food stock update failed for order ${request.orderId}: ${error?.message}`
+        );
+        throw new HttpException(
+          {
+            success: false,
+            error:
+              'Could not update remaining portions. The order was not confirmed — try again.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+    }
+
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed',
@@ -1391,11 +1414,6 @@ export class OrdersService {
     }
 
     await this.fulfillmentPromiseService.persistForOrder(request.orderId);
-
-    await this.foodOrdersService.applyConfirmationUpdates(
-      request.orderId,
-      request.food_stock_updates ?? []
-    );
 
     await this.createStatusHistoryEntry(
       request.orderId,

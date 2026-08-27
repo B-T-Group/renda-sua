@@ -53,6 +53,12 @@ describe('resolveFoodAvailabilityStatus', () => {
 });
 
 describe('isMarkedUnavailableToday', () => {
+  const fridayNight = {
+    day_of_week: 5,
+    start_time: '20:00:00',
+    end_time: '02:00:00',
+  };
+
   it('is false when the dish was never marked sold out', () => {
     expect(isMarkedUnavailableToday(null)).toBe(false);
     expect(isMarkedUnavailableToday(undefined)).toBe(false);
@@ -74,6 +80,45 @@ describe('isMarkedUnavailableToday', () => {
 
   it('is false for an unparseable stamp', () => {
     expect(isMarkedUnavailableToday('not-a-date')).toBe(false);
+  });
+
+  it('stays sold out after midnight while an overnight window is still open', () => {
+    const markedFridayNight = new Date(2026, 7, 28, 23, 0, 0);
+    const saturdayMorning = new Date(2026, 7, 29, 1, 0, 0);
+
+    expect(
+      isMarkedUnavailableToday(
+        markedFridayNight.toISOString(),
+        [fridayNight],
+        saturdayMorning
+      )
+    ).toBe(true);
+  });
+
+  it('clears once the overnight window has closed', () => {
+    const markedFridayNight = new Date(2026, 7, 28, 23, 0, 0);
+    const afterClose = new Date(2026, 7, 29, 3, 0, 0);
+
+    expect(
+      isMarkedUnavailableToday(
+        markedFridayNight.toISOString(),
+        [fridayNight],
+        afterClose
+      )
+    ).toBe(false);
+  });
+
+  it('uses the calendar day when no overnight window is carrying over', () => {
+    const markedFridayNight = new Date(2026, 7, 28, 23, 0, 0);
+    const saturdayMorning = new Date(2026, 7, 29, 1, 0, 0);
+
+    expect(
+      isMarkedUnavailableToday(
+        markedFridayNight.toISOString(),
+        [],
+        saturdayMorning
+      )
+    ).toBe(false);
   });
 });
 

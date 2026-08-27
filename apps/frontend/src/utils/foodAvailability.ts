@@ -12,24 +12,51 @@ export function resolveFoodAvailabilityStatus(
   return 'available';
 }
 
+function parseSlotMinutes(time: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})/.exec((time ?? '').trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+/** After-midnight tail of a window that started yesterday (end < start). */
+function isWithinOvernightTail(
+  slot: FoodAvailabilitySlot,
+  now: Date
+): boolean {
+  const startMinutes = parseSlotMinutes(slot.start_time);
+  const endMinutes = parseSlotMinutes(slot.end_time);
+  if (startMinutes == null || endMinutes == null) return false;
+  if (endMinutes >= startMinutes) return false;
+  const yesterday = (now.getDay() + 6) % 7;
+  if (slot.day_of_week !== yesterday) return false;
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return minutes < endMinutes;
+}
+
 /**
- * Whether a sold-out stamp still applies today, judged against the viewer's
- * own calendar day. Intended for merchant screens, where the person managing
- * the kitchen is in the restaurant's timezone. Shopper-facing screens use the
- * flag the backend computes from the location's timezone instead.
+ * Whether a sold-out stamp still applies for the current service day.
+ * Overnight windows keep Friday's stamp active after midnight until that
+ * window closes. Intended for merchant screens in the restaurant timezone;
+ * shopper-facing screens use the flag the backend computes instead.
  */
 export function isMarkedUnavailableToday(
-  markedUnavailableAt?: string | null
+  markedUnavailableAt?: string | null,
+  slots: FoodAvailabilitySlot[] = [],
+  now: Date = new Date()
 ): boolean {
   if (!markedUnavailableAt) return false;
   const marked = new Date(markedUnavailableAt);
   if (Number.isNaN(marked.getTime())) return false;
-  const now = new Date();
-  return (
-    marked.getFullYear() === now.getFullYear() &&
-    marked.getMonth() === now.getMonth() &&
-    marked.getDate() === now.getDate()
-  );
+  const serviceDay = new Date(now);
+  if ((slots ?? []).some((slot) => isWithinOvernightTail(slot, now))) {
+    serviceDay.setDate(serviceDay.getDate() - 1);
+  }
+  serviceDay.setHours(0, 0, 0, 0);
+  return marked.getTime() >= serviceDay.getTime();
 }
 
 /** Trims the seconds Postgres `time` columns carry, so 12:30:00 reads as 12:30. */
