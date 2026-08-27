@@ -79,6 +79,41 @@ function agentDisplayName(agent: TopAgentEntry): string {
   return `${agent.firstName} ${agent.lastName}`.trim() || agent.agentId;
 }
 
+function AgentEarnedCell({ agent }: { agent: TopAgentEntry }) {
+  const { t } = useTranslation();
+  const currency = agent.earnedCurrency ?? agent.projectedPayoutCurrency;
+  if (agent.earnedAmount == null || !currency) {
+    return (
+      <Typography variant="body2" color="text.disabled">
+        {'—'}
+      </Typography>
+    );
+  }
+  const upcoming =
+    agent.projectedPayoutAmount != null &&
+    agent.projectedPayoutAmount > 0 &&
+    agent.projectedPayoutCurrency
+      ? formatPayoutMoney(
+          agent.projectedPayoutAmount,
+          agent.projectedPayoutCurrency
+        )
+      : null;
+  return (
+    <>
+      <Typography variant="body2" fontWeight={700}>
+        {formatPayoutMoney(agent.earnedAmount, currency)}
+      </Typography>
+      {upcoming ? (
+        <Typography variant="caption" color="text.secondary">
+          {t('admin.performance.topAgents.upcomingPayout', 'Upcoming {{amount}}', {
+            amount: upcoming,
+          })}
+        </Typography>
+      ) : null}
+    </>
+  );
+}
+
 interface DeliveriesTableProps {
   agents: TopAgentEntry[];
   emptyLabel: string;
@@ -204,23 +239,12 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
           </Typography>
         </TableCell>
         <TableCell align="right">
-          {agent.projectedPayoutAmount != null && agent.projectedPayoutCurrency ? (
-            <Typography variant="body2" fontWeight={700} color="success.main">
-              {formatPayoutMoney(
-                agent.projectedPayoutAmount,
-                agent.projectedPayoutCurrency
-              )}
-            </Typography>
-          ) : (
-            <Typography variant="body2" color="text.disabled">
-              {'—'}
-            </Typography>
-          )}
+          <AgentEarnedCell agent={agent} />
         </TableCell>
       </TableRow>
       <TableRow>
         <TableCell
-          colSpan={10}
+          colSpan={11}
           sx={{ py: 0, borderBottom: open ? undefined : 'none' }}
         >
           <Collapse in={open} timeout="auto" unmountOnExit>
@@ -260,6 +284,9 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                           '10+ items'
                         )}
                       </TableCell>
+                      <TableCell align="right">
+                        {t('admin.performance.topAgents.earned', 'Earned')}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -293,6 +320,14 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                                   )
                             }
                           />
+                        </TableCell>
+                        <TableCell align="right">
+                          {biz.earnedAmount && agent.earnedCurrency
+                            ? formatPayoutMoney(
+                                biz.earnedAmount,
+                                agent.earnedCurrency
+                              )
+                            : '—'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -431,16 +466,12 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
                   <TableCell align="right">
                     <Tooltip
                       title={t(
-                        'admin.performance.topAgents.projectedPayoutTooltip',
-                        'Estimated onboarding bonus: approved unpaid referred businesses with ≥{{n}} items × the configured market amount. A qualifying sale is also required for the bonus to pay out.',
-                        { n: GOLDEN_ITEMS_PER_REFERRAL }
+                        'admin.performance.topAgents.earnedTooltip',
+                        'Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the remaining estimated onboarding bonus.'
                       )}
                     >
                       <span>
-                        {t(
-                          'admin.performance.topAgents.projectedPayout',
-                          'Est. payout'
-                        )}
+                        {t('admin.performance.topAgents.earned', 'Earned')}
                       </span>
                     </Tooltip>
                   </TableCell>

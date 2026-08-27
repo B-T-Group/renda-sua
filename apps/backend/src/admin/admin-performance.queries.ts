@@ -167,3 +167,35 @@ export const MARKETS_QUERY = `
     }
   }
 `;
+
+export function buildAgentEarningsQuery(hasCountry: boolean): string {
+  const countryVar = hasCountry ? ', $country: String!' : '';
+  const countryFilter = hasCountry ? 'country_code: { _eq: $country }' : '';
+  return `
+    query AdminPerformanceAgentEarnings(
+      $from: timestamptz!
+      $to: timestamptz!
+      $agentIds: [uuid!]!
+      $limit: Int!
+      $offset: Int!
+      ${countryVar}
+    ) {
+      representative_compensation_events(
+        where: {
+          earner_agent_id: { _in: $agentIds }
+          status: { _eq: "credited" }
+          created_at: { _gte: $from, _lte: $to }
+          ${countryFilter}
+        }
+        order_by: { id: asc }
+        limit: $limit
+        offset: $offset
+      ) {
+        earner_agent_id
+        business_id
+        amount
+        currency
+      }
+    }
+  `;
+}

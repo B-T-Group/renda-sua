@@ -65,6 +65,8 @@ export class AdminPerformanceController {
   @ApiOperation({
     summary:
       'Top performing agents by completed deliveries or business referrals',
+    description:
+      'For business_referrals, each agent includes earnedAmount from credited representative_compensation_events in the selected window (10-item bonus and 1% sales).',
   })
   @ApiResponse({
     status: 200,

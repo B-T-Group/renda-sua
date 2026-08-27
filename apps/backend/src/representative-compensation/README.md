@@ -32,7 +32,12 @@ Cutoff remains `2026-04-01`. Master flag: `business_referral_payout_enabled`.
 
 ## Triggers
 
-- Order complete/delivered (7,500 window + 1%)
-- Item approved (admin, AI, merchant accept-proposal) — B2B 10-item and
-  agent 7,500 if a qualifying sale already exists
-- Saturday job (`runWeeklyPayouts`) as an idempotent sweeper over unpaid orders
+- Order complete/delivered: insert pending `onboarding_10_first_sale` when
+  the 10-item + window/sales bar is met; **credit 1% immediately**.
+- Item approved (admin, AI, merchant accept-proposal): B2B 10-item credit
+  immediately; agent 7,500 is claimed as `pending` if a qualifying sale already
+  exists.
+- Saturday job (`runWeeklyPayouts` → `sweepPending`): wallet-credits **only**
+  pending or failed `onboarding_10_first_sale` rows and sets them to `credited`.
+  It does not re-evaluate sales or pay 1%. Missed or failed 1% is retried on
+  the next weekday sale for that business.
