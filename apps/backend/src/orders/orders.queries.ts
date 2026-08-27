@@ -97,6 +97,7 @@ export const GET_ORDERS = gql`
         item {
           sku
           currency
+          preparation_minutes
           model
           color
           weight
@@ -300,6 +301,7 @@ export const GET_ORDER_BY_ID = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -491,6 +493,7 @@ export const GET_ORDER_BY_NUMBER = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -645,6 +648,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -728,6 +732,7 @@ export const GET_OPEN_ORDERS = gql`
         item {
           sku
           currency
+          preparation_minutes
           model
           color
           weight
