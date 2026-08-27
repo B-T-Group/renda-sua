@@ -11,3 +11,15 @@ export const FOOD_WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 export function isFoodCategoryName(name?: string | null): boolean {
   return (name ?? '').trim() === FOOD_CATEGORY_NAME;
 }
+
+export function isFoodCatalogItem(item: {
+  item_sub_category?: { item_category?: { name?: string | null } | null } | null;
+  item?: {
+    item_sub_category?: { item_category?: { name?: string | null } | null } | null;
+  } | null;
+}): boolean {
+  const name =
+    item.item_sub_category?.item_category?.name ??
+    item.item?.item_sub_category?.item_category?.name;
+  return isFoodCategoryName(name);
+}
