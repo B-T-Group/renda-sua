@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import type { PayoutPreviewRow } from '../../hooks/useAdminPerformance';
 
 export function formatPayoutMoney(amount: number, currency: string): string {
+  const decimals = currency === 'CAD' || currency === 'USD' ? 2 : 0;
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(amount);
 }
 

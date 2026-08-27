@@ -905,6 +905,9 @@
         "businessName": "Business",
         "projectedPayout": "Est. payout",
         "projectedPayoutTooltip": "Estimated onboarding bonus: approved unpaid referred businesses with 10+ items × the configured market amount. A qualifying sale is also required for the bonus to pay out.",
+        "earned": "Earned",
+        "earnedTooltip": "Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the remaining estimated onboarding bonus.",
+        "upcomingPayout": "Upcoming {{amount}}",
         "itemsQualified": "10+ items",
         "qualifiedYes": "Qualified",
         "qualifiedNo": "Not yet"

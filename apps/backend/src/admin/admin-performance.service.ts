@@ -2,8 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ConfigurationsService } from './configurations.service';
 import {
+  groupEarnedByAgent,
+  primaryEarned,
+  type AgentEarnedTotals,
+  type CompensationEarningRow,
+} from './admin-performance-earnings.util';
+import {
   AGENTS_BY_IDS_QUERY,
   MARKETS_QUERY,
+  buildAgentEarningsQuery,
   buildDeliveryAgentsQuery,
   buildReferredBusinessesQuery,
   buildSummaryQuery,
@@ -41,6 +48,8 @@ export interface ReferredBusinessSummary {
   payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
   payoutReviewRejectionReason?: string | null;
   isPaid?: boolean;
+  /** Credited compensation for this shop in the selected window. */
+  earnedAmount?: number;
 }
 
 export interface TopAgentEntry {
@@ -62,6 +71,9 @@ export interface TopAgentEntry {
   /** Projected next payout: approved unpaid stocked × per-referral payout (internal rate when users.internal). */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
+  /** Credited representative compensation in the selected window. */
+  earnedAmount?: number;
+  earnedCurrency?: string;
   /** True when the agent's user has users.internal (higher referral commission). */
   isInternal?: boolean;
 }
@@ -233,7 +245,8 @@ export class AdminPerformanceService {
     const withNames = withReviews.map((entry) =>
       this.withAgentNames(entry, agents.get(entry.agentId))
     );
-    return this.attachProjectedPayouts(withNames, agents);
+    const withPayouts = await this.attachProjectedPayouts(withNames, agents);
+    return this.attachEarnedAmounts(withPayouts, params);
   }
 
   private async attachReferralReviewStatuses(
@@ -371,6 +384,73 @@ export class AdminPerformanceService {
   private currencyForCountry(countryCode: string): string {
     const map: Record<string, string> = { CA: 'CAD', US: 'USD', GA: 'XAF', CM: 'XAF' };
     return map[countryCode.toUpperCase()] ?? 'XAF';
+  }
+
+  private async attachEarnedAmounts(
+    entries: TopAgentEntry[],
+    params: PerformanceWindowParams
+  ): Promise<TopAgentEntry[]> {
+    if (entries.length === 0) return entries;
+    const rows = await this.loadEarnedEvents(
+      entries.map((entry) => entry.agentId),
+      params
+    );
+    const totals = groupEarnedByAgent(rows);
+    return entries.map((entry) => this.withEarned(entry, totals.get(entry.agentId)));
+  }
+
+  private async loadEarnedEvents(
+    agentIds: string[],
+    params: PerformanceWindowParams
+  ): Promise<CompensationEarningRow[]> {
+    const query = buildAgentEarningsQuery(Boolean(params.countryCode));
+    const rows: CompensationEarningRow[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const pageRows = await this.fetchEarnedPage(query, agentIds, params, page);
+      rows.push(...pageRows);
+      if (pageRows.length < PAGE_SIZE) return rows;
+    }
+    this.logger.warn(
+      `Agent earnings pagination cap reached (${MAX_PAGES * PAGE_SIZE} rows)`
+    );
+    return rows;
+  }
+
+  private async fetchEarnedPage(
+    query: string,
+    agentIds: string[],
+    params: PerformanceWindowParams,
+    page: number
+  ): Promise<CompensationEarningRow[]> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      representative_compensation_events: CompensationEarningRow[];
+    }>(query, {
+      ...this.windowVariables(params),
+      agentIds,
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    });
+    return result?.representative_compensation_events ?? [];
+  }
+
+  private withEarned(
+    entry: TopAgentEntry,
+    totals?: AgentEarnedTotals
+  ): TopAgentEntry {
+    const primary = primaryEarned(totals);
+    const currency =
+      primary.amount > 0
+        ? primary.currency
+        : entry.projectedPayoutCurrency || primary.currency;
+    return {
+      ...entry,
+      earnedAmount: primary.amount,
+      earnedCurrency: currency,
+      referredBusinesses: (entry.referredBusinesses ?? []).map((biz) => ({
+        ...biz,
+        earnedAmount: totals?.byBusiness.get(biz.businessId) ?? 0,
+      })),
+    };
   }
 
   private rawItemsPerReferral(entry: TopAgentEntry): number {

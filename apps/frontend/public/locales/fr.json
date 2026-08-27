@@ -664,6 +664,9 @@
         "businessName": "Entreprise",
         "projectedPayout": "Paiement est.",
         "projectedPayoutTooltip": "Bonus d’onboarding estimé : entreprises parrainées approuvées, non payées, avec 10+ articles × le montant configuré par marché. Une vente admissible est également requise pour le déclenchement du paiement.",
+        "earned": "Gagné",
+        "earnedTooltip": "Compensation représentative créditée sur cette période (bonus 10 articles et 1 % des ventes). « À venir » est le bonus d’onboarding estimé restant.",
+        "upcomingPayout": "À venir {{amount}}",
         "itemsQualified": "10+ articles",
         "qualifiedYes": "Qualifié",
         "qualifiedNo": "Pas encore"

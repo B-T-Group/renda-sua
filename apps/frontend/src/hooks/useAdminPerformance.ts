@@ -52,6 +52,8 @@ export interface ReferredBusinessSummary {
   payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
   payoutReviewRejectionReason?: string | null;
   isPaid?: boolean;
+  /** Credited compensation for this shop in the selected window. */
+  earnedAmount?: number;
 }
 
 export interface TopAgentEntry {
@@ -69,6 +71,9 @@ export interface TopAgentEntry {
   referredBusinesses?: ReferredBusinessSummary[];
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
+  /** Credited representative compensation in the selected window. */
+  earnedAmount?: number;
+  earnedCurrency?: string;
   isInternal?: boolean;
 }
 
