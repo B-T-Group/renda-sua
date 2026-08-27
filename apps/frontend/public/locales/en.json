@@ -3743,6 +3743,15 @@
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
       "subtitle": "Track your order status and history",
       "title": "My Orders"
+    },
+    "home": {
+      "liveOrders": {
+        "title": "In progress",
+        "seeAll": "View all {{count}} orders",
+        "ctaTrack": "Track order",
+        "ctaView": "View order",
+        "openDetail": "Open the order for details."
+      }
     }
   },
   "collections": {
