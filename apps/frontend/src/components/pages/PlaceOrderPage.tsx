@@ -761,6 +761,7 @@ const PlaceOrderPage: React.FC = () => {
 
   // State
   const [loading, setLoading] = useState(false);
+  const placingOrderRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const {
     appliedCode: appliedDiscountCode,
@@ -1306,6 +1307,7 @@ const PlaceOrderPage: React.FC = () => {
   const handleSubmit = useCallback(async () => {
     if (!selectedItem || !apiClient) return;
     if (!isPickupOrder && !selectedAddressId) return;
+    if (placingOrderRef.current) return;
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -1318,6 +1320,7 @@ const PlaceOrderPage: React.FC = () => {
       return;
     }
 
+    placingOrderRef.current = true;
     setLoading(true);
     setError(null); // Clear any previous errors
     try {
@@ -1424,7 +1427,7 @@ const PlaceOrderPage: React.FC = () => {
       }
 
       setError(errorMessage);
-    } finally {
+      placingOrderRef.current = false;
       setLoading(false);
     }
   }, [
@@ -1504,6 +1507,7 @@ const PlaceOrderPage: React.FC = () => {
   }, [refetchProfile, submitWithPhoneGate]);
 
   const handleSubmitWithPhoneGate = useCallback(async () => {
+    if (loading || placingOrderRef.current) return;
     if (isPickupOrder) {
       await submitWithEmailGate();
       return;
@@ -1513,7 +1517,7 @@ const PlaceOrderPage: React.FC = () => {
       return;
     }
     await submitWithEmailGate();
-  }, [isPayAtDeliveryEligible, isPickupOrder, submitWithEmailGate]);
+  }, [isPayAtDeliveryEligible, isPickupOrder, loading, submitWithEmailGate]);
 
   const handleChoosePaymentTimingAndSubmit = useCallback(
     async (timing: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup') => {

@@ -550,6 +550,7 @@ const CheckoutPage: React.FC = () => {
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
   const [isCheckoutInProgress, setIsCheckoutInProgress] = useState(false);
+  const placingOrderRef = useRef(false);
   const {
     appliedCode: appliedDiscountCode,
     discountPercentage,
@@ -850,6 +851,7 @@ const CheckoutPage: React.FC = () => {
 
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
+    if (placingOrderRef.current) return;
     const isPickup = fulfillment === 'pickup';
     if (!isPickup && !selectedAddressId) return;
     if (!isPickup && deliveryUnavailable) return;
@@ -859,6 +861,7 @@ const CheckoutPage: React.FC = () => {
       return;
     }
 
+    placingOrderRef.current = true;
     setIsCheckoutInProgress(true); // Set flag before checkout
 
     try {
@@ -909,6 +912,7 @@ const CheckoutPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Checkout error:', error);
+      placingOrderRef.current = false;
       setIsCheckoutInProgress(false); // Reset flag on error
     }
   };
@@ -1391,6 +1395,7 @@ const CheckoutPage: React.FC = () => {
             onClick={handleSubmit}
             disabled={
               checkoutLoading ||
+              isCheckoutInProgress ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }
@@ -1400,7 +1405,7 @@ const CheckoutPage: React.FC = () => {
               mb: isMobile && profile?.client ? 4 : 0,
             }}
           >
-            {checkoutLoading ? (
+            {checkoutLoading || isCheckoutInProgress ? (
               <CircularProgress size={24} color="inherit" />
             ) : (
               t('checkout.placeOrder', 'Place Order')
@@ -1425,7 +1430,7 @@ const CheckoutPage: React.FC = () => {
       />
 
       {/* Placing order overlay with animation */}
-      <PlacingOrderOverlay open={checkoutLoading} />
+      <PlacingOrderOverlay open={checkoutLoading || isCheckoutInProgress} />
       </Container>
     </Box>
   );
