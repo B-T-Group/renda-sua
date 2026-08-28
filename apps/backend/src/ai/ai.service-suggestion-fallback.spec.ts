@@ -68,6 +68,35 @@ describe('AiService suggestion fallbacks', () => {
     expect(result.isSizeRequired).toBe(true);
   });
 
+  it('applies cooked-food taxonomy when vision detects a restaurant dish', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'Grilled chicken plate',
+              isFoodItem: true,
+              categoryName: 'Food & Beverages',
+              subCategoryName: 'Snacks',
+              price: 3500,
+              currency: 'XAF',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateImageItemSuggestions({
+      imageUrls: ['https://uploads.example/plate.jpg'],
+      defaultCurrency: 'XAF',
+    });
+
+    expect(result.isFoodItem).toBe(true);
+    expect(result.categoryName).toBe('Restaurant & Cooked Food');
+    expect(result.subCategoryName).toBe('Local Dishes');
+  });
+
   it('defaults isSizeRequired to false when Bedrock omits the flag', async () => {
     const { service, bedrockLunaService } = makeService();
     bedrockLunaService.chatCompletions.mockResolvedValue({

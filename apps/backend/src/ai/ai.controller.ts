@@ -242,6 +242,7 @@ export class AiController {
       existingCatalogNames,
       existingBrandNames,
       existingCatalogPrompt: formatCatalogForVisionPrompt(categoryTree),
+      isFoodItem: body.isFoodItem === true ? true : undefined,
     });
     const suggestion = remapImageItemSuggestionCategories(
       suggestionRaw,
@@ -306,6 +307,7 @@ export class AiController {
         dimensions: suggestion.dimensions ?? undefined,
         isSizeRequired: suggestion.isSizeRequired ?? false,
         isUsed: suggestion.isUsed ?? undefined,
+        isFoodItem: suggestion.isFoodItem ?? undefined,
         confidence: suggestion.confidence,
         categoryAlternates: suggestion.categoryAlternates ?? [],
         subCategoryAlternates: suggestion.subCategoryAlternates ?? [],
