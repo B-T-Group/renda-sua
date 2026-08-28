@@ -4,28 +4,72 @@ import {
   CREDIT_FEEDBACK_WINDOW_DAYS,
   CREDIT_WEIGHTS,
 } from './credit-weights';
-import type { CreditEventType, UserCreditRow } from './credit.types';
+import type {
+  CreditEventType,
+  CreditsFeedbackOrderRow,
+  CreditsOrderItemBrief,
+  UserCreditRow,
+} from './credit.types';
 
 export interface CreditsLedgerQuery {
   limit: number;
   offset: number;
   userId?: string;
   eventType?: CreditEventType;
+  country?: string;
 }
 
 export interface CreditsSummaryQuery {
   limit: number;
   offset: number;
   eventType?: CreditEventType;
+  country?: string;
+}
+
+export interface CreditsQueueParams {
+  limit: number;
+  offset: number;
+  country?: string;
 }
 
 interface CreditsSummaryUser {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  country: string | null;
   agent: { id: string } | null;
   business: { id: string } | null;
 }
+
+const ORDER_ITEM_FIELDS = `
+  item_name quantity variant_name
+  item {
+    item_images(order_by: { display_order: asc }, limit: 1) {
+      image_url display_url
+    }
+  }
+  item_variant {
+    item_variant_images(order_by: [{ is_primary: desc }, { display_order: asc }], limit: 1) {
+      image_url
+    }
+  }
+`;
+
+type RawOrderItem = {
+  item_name: string | null;
+  quantity: number;
+  variant_name: string | null;
+  item?: {
+    item_images?: Array<{ image_url?: string | null; display_url?: string | null }>;
+  } | null;
+  item_variant?: {
+    item_variant_images?: Array<{ image_url?: string | null }>;
+  } | null;
+};
+
+type RawFeedbackOrder = Omit<CreditsFeedbackOrderRow, 'order_items'> & {
+  order_items?: RawOrderItem[] | null;
+};
 
 @Injectable()
 export class CreditsQueuesService {
@@ -83,6 +127,7 @@ export class CreditsQueuesService {
       first_name: string | null;
       last_name: string | null;
       email: string | null;
+      country: string | null;
       total_weight: number;
       credit_count: number;
       by_event: Record<string, { count: number; weight: number }>;
@@ -92,9 +137,10 @@ export class CreditsQueuesService {
     total: number;
     weights: Record<CreditEventType, number>;
   }> {
-    const where = query.eventType
-      ? { event_type: { _eq: query.eventType } }
-      : {};
+    const where = this.buildCreditWhere({
+      eventType: query.eventType,
+      country: query.country,
+    });
     const res = await this.hasura.executeQuery<{
       user_credits: Array<{
         user_id: string;
@@ -107,7 +153,7 @@ export class CreditsQueuesService {
         user_credits(where: $where, order_by: { created_at: desc }, limit: 5000) {
           user_id event_type weight
           user {
-            first_name last_name email
+            first_name last_name email country
             agent { id }
             business { id }
           }
@@ -128,19 +174,26 @@ export class CreditsQueuesService {
     };
   }
 
-  async listOpenEscalations(params: {
-    limit: number;
-    offset: number;
-  }): Promise<{ items: unknown[]; total: number }> {
+  async listOpenEscalations(
+    params: CreditsQueueParams
+  ): Promise<{ items: unknown[]; total: number }> {
+    const where = {
+      resolved_at: { _is_null: true },
+      ...this.orderClientCountryFilter(params.country),
+    };
     const res = await this.hasura.executeQuery<{
       order_risk_incidents: unknown[];
       order_risk_incidents_aggregate: {
         aggregate: { count: number } | null;
       };
     }>(
-      `query OpenEscalations($limit: Int!, $offset: Int!) {
+      `query OpenEscalations(
+        $where: order_risk_incidents_bool_exp!
+        $limit: Int!
+        $offset: Int!
+      ) {
         order_risk_incidents(
-          where: { resolved_at: { _is_null: true } }
+          where: $where
           order_by: [{ severity: desc }, { detected_at: asc }]
           limit: $limit
           offset: $offset
@@ -148,24 +201,26 @@ export class CreditsQueuesService {
           id order_id risk_type severity detected_at overdue_minutes
           acknowledged_at
           order {
-            id order_number current_status
+            id order_number current_status fulfillment_method
             client {
-              user { first_name last_name phone_number email }
+              user { first_name last_name phone_number email country }
             }
             business {
               name
               user { first_name last_name phone_number }
             }
-            order_items(limit: 10) { item_name quantity variant_name }
+            order_items(limit: 10) { ${ORDER_ITEM_FIELDS} }
           }
         }
-        order_risk_incidents_aggregate(
-          where: { resolved_at: { _is_null: true } }
-        ) {
+        order_risk_incidents_aggregate(where: $where) {
           aggregate { count }
         }
       }`,
-      { limit: Number(params.limit), offset: Number(params.offset) }
+      {
+        where,
+        limit: Number(params.limit),
+        offset: Number(params.offset),
+      }
     );
     return {
       items: res.order_risk_incidents ?? [],
@@ -173,10 +228,9 @@ export class CreditsQueuesService {
     };
   }
 
-  async listCancelledWithoutFeedback(params: {
-    limit: number;
-    offset: number;
-  }): Promise<{ items: unknown[]; total: number }> {
+  async listCancelledWithoutFeedback(
+    params: CreditsQueueParams
+  ): Promise<{ items: CreditsFeedbackOrderRow[]; total: number }> {
     const cutoff = this.feedbackCutoffIso();
     const where = {
       current_status: { _eq: 'cancelled' },
@@ -185,14 +239,14 @@ export class CreditsQueuesService {
       _not: {
         user_credits: { event_type: { _eq: 'cancelled_feedback' } },
       },
+      ...this.clientCountryFilter(params.country),
     };
     return this.listOrdersQueue(where, params);
   }
 
-  async listFirstOrderWithoutFeedback(params: {
-    limit: number;
-    offset: number;
-  }): Promise<{ items: unknown[]; total: number }> {
+  async listFirstOrderWithoutFeedback(
+    params: CreditsQueueParams
+  ): Promise<{ items: CreditsFeedbackOrderRow[]; total: number }> {
     const cutoff = this.feedbackCutoffIso();
     const where = {
       current_status: { _eq: 'complete' },
@@ -203,34 +257,13 @@ export class CreditsQueuesService {
           event_type: { _eq: 'first_order_completed_feedback' },
         },
       },
+      ...this.clientCountryFilter(params.country),
     };
     // Scan the full 14-day candidate set (ops-scale), then filter to true
     // first completions before applying page limit/offset.
     const candidateLimit = 5000;
     const res = await this.hasura.executeQuery<{
-      orders: Array<{
-        id: string;
-        order_number: string;
-        client_id: string;
-        current_status: string;
-        completed_at: string;
-        cancellation_notes: string | null;
-        client: {
-          user_id: string;
-          user: {
-            first_name: string | null;
-            last_name: string | null;
-            phone_number: string | null;
-            email: string | null;
-          } | null;
-        } | null;
-        business: { name: string | null } | null;
-        order_items: Array<{
-          item_name: string | null;
-          quantity: number;
-          variant_name: string | null;
-        }>;
-      }>;
+      orders: RawFeedbackOrder[];
     }>(
       `query FirstOrderCandidates(
         $where: orders_bool_exp!
@@ -241,18 +274,21 @@ export class CreditsQueuesService {
           order_by: { completed_at: asc_nulls_last }
           limit: $limit
         ) {
-          id order_number client_id current_status completed_at cancellation_notes
+          id order_number client_id current_status fulfillment_method
+          completed_at cancellation_notes
           client {
             user_id
-            user { first_name last_name phone_number email }
+            user { first_name last_name phone_number email country }
           }
           business { name }
-          order_items(limit: 10) { item_name quantity variant_name }
+          order_items(limit: 10) { ${ORDER_ITEM_FIELDS} }
         }
       }`,
       { where, limit: candidateLimit }
     );
-    const firsts = await this.filterFirstCompletedOrders(res.orders ?? []);
+    const firsts = await this.filterFirstCompletedOrders(
+      (res.orders ?? []).map((o) => this.mapFeedbackOrder(o))
+    );
     const offset = Number(params.offset);
     const limit = Number(params.limit);
     return {
@@ -337,9 +373,9 @@ export class CreditsQueuesService {
   private async listOrdersQueue(
     where: Record<string, unknown>,
     params: { limit: number; offset: number }
-  ): Promise<{ items: unknown[]; total: number }> {
+  ): Promise<{ items: CreditsFeedbackOrderRow[]; total: number }> {
     const res = await this.hasura.executeQuery<{
-      orders: unknown[];
+      orders: RawFeedbackOrder[];
       orders_aggregate: { aggregate: { count: number } | null };
     }>(
       `query CreditOrdersQueue(
@@ -353,14 +389,14 @@ export class CreditsQueuesService {
           limit: $limit
           offset: $offset
         ) {
-          id order_number current_status cancelled_at completed_at
-          cancellation_notes updated_at client_id
+          id order_number current_status fulfillment_method
+          cancelled_at completed_at cancellation_notes updated_at client_id
           client {
             user_id
-            user { first_name last_name phone_number email }
+            user { first_name last_name phone_number email country }
           }
           business { name }
-          order_items(limit: 10) { item_name quantity variant_name }
+          order_items(limit: 10) { ${ORDER_ITEM_FIELDS} }
         }
         orders_aggregate(where: $where) {
           aggregate { count }
@@ -373,23 +409,48 @@ export class CreditsQueuesService {
       }
     );
     return {
-      items: res.orders ?? [],
+      items: (res.orders ?? []).map((o) => this.mapFeedbackOrder(o)),
       total: res.orders_aggregate?.aggregate?.count ?? 0,
     };
   }
 
+  private mapFeedbackOrder(order: RawFeedbackOrder): CreditsFeedbackOrderRow {
+    return {
+      ...order,
+      order_items: (order.order_items ?? []).map((item) =>
+        this.mapOrderItem(item)
+      ),
+    };
+  }
+
+  private mapOrderItem(item: RawOrderItem): CreditsOrderItemBrief {
+    const variantImg =
+      item.item_variant?.item_variant_images?.[0]?.image_url ?? null;
+    const itemImg =
+      item.item?.item_images?.[0]?.display_url ||
+      item.item?.item_images?.[0]?.image_url ||
+      null;
+    return {
+      item_name: item.item_name,
+      quantity: item.quantity,
+      variant_name: item.variant_name,
+      image_url: variantImg || itemImg,
+    };
+  }
+
   private async filterFirstCompletedOrders(
-    orders: Array<{ id: string; client_id: string; completed_at: string }>
-  ): Promise<typeof orders> {
+    orders: CreditsFeedbackOrderRow[]
+  ): Promise<CreditsFeedbackOrderRow[]> {
     // Caller must pass candidates ordered by completed_at asc so the first
     // row per client is their earliest in-window completion.
     const seen = new Set<string>();
-    const out: typeof orders = [];
+    const out: CreditsFeedbackOrderRow[] = [];
     for (const order of orders) {
-      if (seen.has(order.client_id)) continue;
-      seen.add(order.client_id);
+      const clientId = order.client_id;
+      if (!clientId || seen.has(clientId)) continue;
+      seen.add(clientId);
       const isFirst = await this.isClientFirstCompletedOrder(
-        order.client_id,
+        clientId,
         order.id
       );
       if (isFirst) out.push(order);
@@ -397,10 +458,33 @@ export class CreditsQueuesService {
     return out;
   }
 
-  private buildCreditWhere(query: CreditsLedgerQuery): Record<string, unknown> {
+  private normalizeCountry(country?: string): string | null {
+    const code = country?.trim().toUpperCase();
+    return code && /^[A-Z]{2}$/.test(code) ? code : null;
+  }
+
+  private clientCountryFilter(country?: string): Record<string, unknown> {
+    const code = this.normalizeCountry(country);
+    if (!code) return {};
+    return { client: { user: { country: { _eq: code } } } };
+  }
+
+  private orderClientCountryFilter(country?: string): Record<string, unknown> {
+    const code = this.normalizeCountry(country);
+    if (!code) return {};
+    return { order: { client: { user: { country: { _eq: code } } } } };
+  }
+
+  private buildCreditWhere(query: {
+    userId?: string;
+    eventType?: CreditEventType;
+    country?: string;
+  }): Record<string, unknown> {
     const parts: Record<string, unknown>[] = [];
     if (query.userId) parts.push({ user_id: { _eq: query.userId } });
     if (query.eventType) parts.push({ event_type: { _eq: query.eventType } });
+    const code = this.normalizeCountry(query.country);
+    if (code) parts.push({ user: { country: { _eq: code } } });
     if (!parts.length) return {};
     return parts.length === 1 ? parts[0] : { _and: parts };
   }
@@ -420,6 +504,7 @@ export class CreditsQueuesService {
         first_name: string | null;
         last_name: string | null;
         email: string | null;
+        country: string | null;
         total_weight: number;
         credit_count: number;
         by_event: Record<string, { count: number; weight: number }>;
@@ -435,6 +520,7 @@ export class CreditsQueuesService {
           first_name: row.user?.first_name ?? null,
           last_name: row.user?.last_name ?? null,
           email: row.user?.email ?? null,
+          country: row.user?.country ?? null,
           total_weight: 0,
           credit_count: 0,
           by_event: {},

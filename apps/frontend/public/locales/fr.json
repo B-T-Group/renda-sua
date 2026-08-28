@@ -1267,12 +1267,30 @@
         "testOrder": "Commande test",
         "internalOrder": "Commande interne"
       },
+      "filterCountry": "Pays",
+      "allCountries": "Tous les pays",
+      "countries": {
+        "CM": "Cameroun",
+        "GA": "Gabon",
+        "CA": "Canada",
+        "US": "États-Unis"
+      },
+      "quickCall": "Appeler",
+      "quickEmail": "E-mail",
+      "fulfillment": {
+        "pickup": "Retrait",
+        "delivery": "Livraison",
+        "shipping": "Expédition",
+        "unknown": "Mode de livraison inconnu"
+      },
       "briefing": {
         "title": "Client et commande",
         "client": "Client",
+        "country": "Pays",
         "phone": "Téléphone",
         "email": "E-mail",
         "order": "Commande",
+        "fulfillment": "Mode de livraison",
         "cancelledAt": "Annulée",
         "completedAt": "Terminée",
         "cancelNotes": "Notes d’annulation",
@@ -1308,9 +1326,11 @@
         "risk": "Risque",
         "severity": "Gravité",
         "client": "Client",
+        "country": "Pays",
         "phone": "Téléphone",
         "business": "Commerce",
         "when": "Quand",
+        "items": "Articles",
         "user": "Utilisateur",
         "roles": "Rôles",
         "weight": "Poids",

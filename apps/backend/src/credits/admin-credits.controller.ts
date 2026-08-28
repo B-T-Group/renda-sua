@@ -68,6 +68,7 @@ export class AdminCreditsController {
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       eventType: query.eventType,
+      country: query.country,
     });
   }
 
@@ -80,6 +81,7 @@ export class AdminCreditsController {
       offset: query.offset ?? 0,
       userId: query.userId,
       eventType: query.eventType,
+      country: query.country,
     });
   }
 
@@ -89,6 +91,7 @@ export class AdminCreditsController {
     return this.queuesService.listOpenEscalations({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
+      country: query.country,
     });
   }
 
@@ -100,6 +103,7 @@ export class AdminCreditsController {
     return this.queuesService.listCancelledWithoutFeedback({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
+      country: query.country,
     });
   }
 
@@ -111,6 +115,7 @@ export class AdminCreditsController {
     return this.queuesService.listFirstOrderWithoutFeedback({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
+      country: query.country,
     });
   }
 

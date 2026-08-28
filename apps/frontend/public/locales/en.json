@@ -1519,12 +1519,30 @@
         "testOrder": "Test order",
         "internalOrder": "Internal order"
       },
+      "filterCountry": "Country",
+      "allCountries": "All countries",
+      "countries": {
+        "CM": "Cameroon",
+        "GA": "Gabon",
+        "CA": "Canada",
+        "US": "United States"
+      },
+      "quickCall": "Call",
+      "quickEmail": "Email",
+      "fulfillment": {
+        "pickup": "Pickup",
+        "delivery": "Delivery",
+        "shipping": "Shipping",
+        "unknown": "Fulfillment unknown"
+      },
       "briefing": {
         "title": "Client & order",
         "client": "Client",
+        "country": "Country",
         "phone": "Phone",
         "email": "Email",
         "order": "Order",
+        "fulfillment": "Fulfillment",
         "cancelledAt": "Cancelled",
         "completedAt": "Completed",
         "cancelNotes": "Cancel notes",
@@ -1560,9 +1578,11 @@
         "risk": "Risk",
         "severity": "Severity",
         "client": "Client",
+        "country": "Country",
         "phone": "Phone",
         "business": "Business",
         "when": "When",
+        "items": "Items",
         "user": "User",
         "roles": "Roles",
         "weight": "Weight",
