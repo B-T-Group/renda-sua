@@ -791,6 +791,36 @@
       "messageUnavailable": "In-app messaging needs a linked account.",
       "noEmail": "This participant has no email on file.",
       "noPhone": "This participant has no phone on file.",
+      "escalationReplies": {
+        "business": {
+          "confirm": {
+            "label": "Confirm order",
+            "body": "We've noticed you have a pending order. Please confirm it in the app soon to protect your store reputation and avoid cancellation."
+          },
+          "window": {
+            "label": "Window ending",
+            "body": "Your confirmation window is almost up. Please respond now, or this order may be cancelled and the customer refunded."
+          },
+          "support": {
+            "label": "Support check-in",
+            "body": "Rendasua support is checking in on this order. Please confirm or decline so we can help your customer."
+          }
+        },
+        "client": {
+          "patience": {
+            "label": "We're on it",
+            "body": "We're contacting the store about your order and will update you shortly. Thanks for your patience."
+          },
+          "followup": {
+            "label": "Following up",
+            "body": "Sorry for the delay — our team is following up with the merchant on your order right now."
+          },
+          "processing": {
+            "label": "Still processing",
+            "body": "Your order is still being processed. We'll notify you as soon as the store confirms."
+          }
+        }
+      },
       "inApp": "In-app",
       "intervene": "Intervene",
       "correctStatus": "Correct status (last resort)",

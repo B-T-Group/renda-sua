@@ -550,6 +550,36 @@
       "messageUnavailable": "La messagerie intégrée nécessite un compte lié.",
       "noEmail": "Ce participant n'a pas d'email enregistré.",
       "noPhone": "Ce participant n'a pas de téléphone enregistré.",
+      "escalationReplies": {
+        "business": {
+          "confirm": {
+            "label": "Confirmer la commande",
+            "body": "Nous avons remarqué que vous avez une commande en attente. Veuillez la confirmer bientôt dans l'application pour protéger la réputation de votre magasin et éviter une annulation."
+          },
+          "window": {
+            "label": "Délai bientôt écoulé",
+            "body": "Votre délai de confirmation est presque écoulé. Veuillez répondre maintenant, sinon cette commande risque d'être annulée et le client remboursé."
+          },
+          "support": {
+            "label": "Suivi support",
+            "body": "Le support Rendasua fait le point sur cette commande. Veuillez confirmer ou refuser afin que nous puissions aider votre client."
+          }
+        },
+        "client": {
+          "patience": {
+            "label": "On s'en occupe",
+            "body": "Nous contactons le magasin au sujet de votre commande et vous tiendrons informé sous peu. Merci de votre patience."
+          },
+          "followup": {
+            "label": "Relance en cours",
+            "body": "Désolé pour le retard — notre équipe relance actuellement le commerçant concernant votre commande."
+          },
+          "processing": {
+            "label": "Toujours en cours",
+            "body": "Votre commande est toujours en cours de traitement. Nous vous préviendrons dès que le magasin confirmera."
+          }
+        }
+      },
       "inApp": "Application",
       "intervene": "Intervenir",
       "correctStatus": "Corriger le statut (dernier recours)",
