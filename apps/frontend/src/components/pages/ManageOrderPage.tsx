@@ -375,10 +375,21 @@ const ManageOrderPageContent: React.FC = () => {
 
   const headerTrailing = canSeeMessages ? (
     <Button
-      variant="outlined"
+      variant="contained"
       size="small"
       startIcon={<MessageIcon />}
       onClick={() => navigate(messagesPath)}
+      sx={{
+        fontWeight: 700,
+        '@keyframes messagePulse': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.04)' },
+        },
+        animation: 'messagePulse 1.8s ease-in-out infinite',
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none',
+        },
+      }}
     >
       {t('orders.actions.message', 'Message')}
     </Button>
