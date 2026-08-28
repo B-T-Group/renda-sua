@@ -9,6 +9,40 @@ export type CreditEventType =
   | 'first_order_completed_feedback'
   | 'my_first_purchase';
 
+export type CreditFeedbackAction =
+  | 'called_client'
+  | 'emailed_client'
+  | 'spoke_in_person'
+  | 'test_order'
+  | 'internal_order';
+
+export interface CreditsOrderItemBrief {
+  item_name: string | null;
+  quantity: number;
+  variant_name: string | null;
+}
+
+export interface CreditsFeedbackOrderRow {
+  id: string;
+  order_number: string;
+  current_status: string;
+  cancelled_at?: string | null;
+  completed_at?: string | null;
+  cancellation_notes?: string | null;
+  updated_at?: string | null;
+  client?: {
+    user_id?: string;
+    user?: {
+      first_name: string | null;
+      last_name: string | null;
+      phone_number: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
+  business?: { name: string | null } | null;
+  order_items?: CreditsOrderItemBrief[];
+}
+
 export interface CreditsSummaryRow {
   user_id: string;
   first_name: string | null;
@@ -75,7 +109,7 @@ export function useAdminCredits() {
       const res = await apiClient.get(
         `/admin/credits/queues/cancelled?limit=${limit}&offset=${offset}`
       );
-      return res.data as CreditsQueuePage<any>;
+      return res.data as CreditsQueuePage<CreditsFeedbackOrderRow>;
     },
     [apiClient]
   );
@@ -87,7 +121,7 @@ export function useAdminCredits() {
       const res = await apiClient.get(
         `/admin/credits/queues/first-order?limit=${limit}&offset=${offset}`
       );
-      return res.data as CreditsQueuePage<any>;
+      return res.data as CreditsQueuePage<CreditsFeedbackOrderRow>;
     },
     [apiClient]
   );
@@ -111,10 +145,13 @@ export function useAdminCredits() {
   );
 
   const submitCancelledFeedback = useCallback(
-    async (orderId: string, notes: string) => {
+    async (
+      orderId: string,
+      body: { notes: string; action: CreditFeedbackAction }
+    ) => {
       const res = await apiClient.post(
         `/admin/credits/orders/${orderId}/cancelled-feedback`,
-        { notes }
+        body
       );
       return res.data;
     },
@@ -122,10 +159,13 @@ export function useAdminCredits() {
   );
 
   const submitFirstOrderFeedback = useCallback(
-    async (orderId: string, notes: string) => {
+    async (
+      orderId: string,
+      body: { notes: string; action: CreditFeedbackAction }
+    ) => {
       const res = await apiClient.post(
         `/admin/credits/orders/${orderId}/first-order-feedback`,
-        { notes }
+        body
       );
       return res.data;
     },

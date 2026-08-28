@@ -149,8 +149,14 @@ export class CreditsQueuesService {
           acknowledged_at
           order {
             id order_number current_status
-            client { user { first_name last_name phone_number } }
-            business { name user { first_name last_name phone_number } }
+            client {
+              user { first_name last_name phone_number email }
+            }
+            business {
+              name
+              user { first_name last_name phone_number }
+            }
+            order_items(limit: 10) { item_name quantity variant_name }
           }
         }
         order_risk_incidents_aggregate(
@@ -175,6 +181,7 @@ export class CreditsQueuesService {
     const where = {
       current_status: { _eq: 'cancelled' },
       cancelled_at: { _gte: cutoff },
+      ops_classification: { _is_null: true },
       _not: {
         user_credits: { event_type: { _eq: 'cancelled_feedback' } },
       },
@@ -190,6 +197,7 @@ export class CreditsQueuesService {
     const where = {
       current_status: { _eq: 'complete' },
       completed_at: { _gte: cutoff },
+      ops_classification: { _is_null: true },
       _not: {
         user_credits: {
           event_type: { _eq: 'first_order_completed_feedback' },
@@ -204,14 +212,24 @@ export class CreditsQueuesService {
         id: string;
         order_number: string;
         client_id: string;
+        current_status: string;
         completed_at: string;
+        cancellation_notes: string | null;
         client: {
+          user_id: string;
           user: {
             first_name: string | null;
             last_name: string | null;
             phone_number: string | null;
+            email: string | null;
           } | null;
         } | null;
+        business: { name: string | null } | null;
+        order_items: Array<{
+          item_name: string | null;
+          quantity: number;
+          variant_name: string | null;
+        }>;
       }>;
     }>(
       `query FirstOrderCandidates(
@@ -223,8 +241,13 @@ export class CreditsQueuesService {
           order_by: { completed_at: asc_nulls_last }
           limit: $limit
         ) {
-          id order_number client_id completed_at
-          client { user { first_name last_name phone_number } }
+          id order_number client_id current_status completed_at cancellation_notes
+          client {
+            user_id
+            user { first_name last_name phone_number email }
+          }
+          business { name }
+          order_items(limit: 10) { item_name quantity variant_name }
         }
       }`,
       { where, limit: candidateLimit }
@@ -238,15 +261,15 @@ export class CreditsQueuesService {
     };
   }
 
-  async getOrderForFeedback(
-    orderId: string
-  ): Promise<{
+  async getOrderForFeedback(orderId: string): Promise<{
     id: string;
     current_status: string;
     cancelled_at: string | null;
     completed_at: string | null;
     updated_at: string;
     client_id: string;
+    ops_classification: 'test' | 'internal' | null;
+    client_user_id: string | null;
   } | null> {
     const res = await this.hasura.executeQuery<{
       orders_by_pk: {
@@ -256,16 +279,31 @@ export class CreditsQueuesService {
         completed_at: string | null;
         updated_at: string;
         client_id: string;
+        ops_classification: 'test' | 'internal' | null;
+        client: { user_id: string } | null;
       } | null;
     }>(
       `query OrderForCreditFeedback($id: uuid!) {
         orders_by_pk(id: $id) {
           id current_status cancelled_at completed_at updated_at client_id
+          ops_classification
+          client { user_id }
         }
       }`,
       { id: orderId }
     );
-    return res.orders_by_pk;
+    const row = res.orders_by_pk;
+    if (!row) return null;
+    return {
+      id: row.id,
+      current_status: row.current_status,
+      cancelled_at: row.cancelled_at,
+      completed_at: row.completed_at,
+      updated_at: row.updated_at,
+      client_id: row.client_id,
+      ops_classification: row.ops_classification,
+      client_user_id: row.client?.user_id ?? null,
+    };
   }
 
   async isWithinFeedbackWindow(iso: string | null | undefined): Promise<boolean> {
@@ -315,9 +353,14 @@ export class CreditsQueuesService {
           limit: $limit
           offset: $offset
         ) {
-          id order_number current_status cancelled_at updated_at
-          client { user { first_name last_name phone_number } }
+          id order_number current_status cancelled_at completed_at
+          cancellation_notes updated_at client_id
+          client {
+            user_id
+            user { first_name last_name phone_number email }
+          }
           business { name }
+          order_items(limit: 10) { item_name quantity variant_name }
         }
         orders_aggregate(where: $where) {
           aggregate { count }

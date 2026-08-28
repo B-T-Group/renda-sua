@@ -6,9 +6,6 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   Link,
   Stack,
   Tab,
@@ -18,20 +15,24 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import {
   useAdminCredits,
+  type CreditsFeedbackOrderRow,
   type CreditsSummaryRow,
   type CreditEventType,
 } from '../../hooks/useAdminCredits';
 import { usePermission } from '../../hooks/usePermissions';
+import {
+  RecordFeedbackDialog,
+  type RecordFeedbackPayload,
+} from '../admin/orders/RecordFeedbackDialog';
 import {
   ResolveEscalationDialog,
   type ResolveEscalationPayload,
@@ -70,8 +71,8 @@ export const AdminCreditsPage: React.FC = () => {
   const [summary, setSummary] = useState<CreditsSummaryRow[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [escalations, setEscalations] = useState<any[]>([]);
-  const [cancelled, setCancelled] = useState<any[]>([]);
-  const [firstOrders, setFirstOrders] = useState<any[]>([]);
+  const [cancelled, setCancelled] = useState<CreditsFeedbackOrderRow[]>([]);
+  const [firstOrders, setFirstOrders] = useState<CreditsFeedbackOrderRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [resolveId, setResolveId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -79,7 +80,13 @@ export const AdminCreditsPage: React.FC = () => {
   const [feedbackMode, setFeedbackMode] = useState<
     'cancelled' | 'first-order' | null
   >(null);
-  const [feedbackNotes, setFeedbackNotes] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+
+  const feedbackOrder = useMemo(() => {
+    if (!feedbackOrderId) return null;
+    const rows = feedbackMode === 'cancelled' ? cancelled : firstOrders;
+    return rows.find((r) => r.id === feedbackOrderId) ?? null;
+  }, [feedbackOrderId, feedbackMode, cancelled, firstOrders]);
 
   const reload = useCallback(async () => {
     setBusy(true);
@@ -149,21 +156,20 @@ export const AdminCreditsPage: React.FC = () => {
     }
   };
 
-  const onFeedbackSubmit = async () => {
-    if (!feedbackOrderId || !feedbackMode || !feedbackNotes.trim()) return;
+  const onFeedbackSubmit = async (payload: RecordFeedbackPayload) => {
+    if (!feedbackOrderId || !feedbackMode || feedbackSubmitting) return;
+    setFeedbackSubmitting(true);
     try {
-      if (feedbackMode === 'cancelled') {
-        await submitCancelledFeedback(feedbackOrderId, feedbackNotes.trim());
-      } else {
-        await submitFirstOrderFeedback(feedbackOrderId, feedbackNotes.trim());
-      }
-      enqueueSnackbar(
-        t('admin.credits.feedbackSaved', 'Feedback recorded'),
-        { variant: 'success' }
-      );
+      const body = { notes: payload.notes, action: payload.action };
+      const res =
+        feedbackMode === 'cancelled'
+          ? await submitCancelledFeedback(feedbackOrderId, body)
+          : await submitFirstOrderFeedback(feedbackOrderId, body);
+      enqueueSnackbar(feedbackSuccessMessage(payload.action, res, t), {
+        variant: 'success',
+      });
       setFeedbackOrderId(null);
       setFeedbackMode(null);
-      setFeedbackNotes('');
       await reload();
     } catch (err: any) {
       enqueueSnackbar(
@@ -171,6 +177,9 @@ export const AdminCreditsPage: React.FC = () => {
           t('admin.credits.actionFailed', 'Action failed'),
         { variant: 'error' }
       );
+      throw err;
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
 
@@ -235,6 +244,7 @@ export const AdminCreditsPage: React.FC = () => {
       {!busy && tab === 1 ? (
         <FeedbackTable
           rows={cancelled}
+          mode="cancelled"
           empty={t('admin.credits.emptyCancelled', 'No cancelled orders waiting')}
           onOpen={(id) => {
             setFeedbackOrderId(id);
@@ -245,6 +255,7 @@ export const AdminCreditsPage: React.FC = () => {
       {!busy && tab === 2 ? (
         <FeedbackTable
           rows={firstOrders}
+          mode="first-order"
           empty={t(
             'admin.credits.emptyFirstOrder',
             'No first-order call-backs waiting'
@@ -266,52 +277,18 @@ export const AdminCreditsPage: React.FC = () => {
         onSubmit={onResolve}
       />
 
-      <Dialog
+      <RecordFeedbackDialog
         open={!!feedbackOrderId}
+        mode={feedbackMode}
+        order={feedbackOrder}
+        submitting={feedbackSubmitting}
         onClose={() => {
+          if (feedbackSubmitting) return;
           setFeedbackOrderId(null);
           setFeedbackMode(null);
-          setFeedbackNotes('');
         }}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {feedbackMode === 'cancelled'
-            ? t('admin.credits.cancelledFeedbackTitle', 'Cancelled-order feedback')
-            : t('admin.credits.firstOrderFeedbackTitle', 'First-order feedback')}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label={t('admin.credits.feedbackNotes', 'Feedback notes')}
-              value={feedbackNotes}
-              onChange={(e) => setFeedbackNotes(e.target.value)}
-              multiline
-              minRows={4}
-              fullWidth
-              required
-            />
-            <Stack direction="row" justifyContent="flex-end" spacing={1}>
-              <Button
-                onClick={() => {
-                  setFeedbackOrderId(null);
-                  setFeedbackMode(null);
-                }}
-              >
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button
-                variant="contained"
-                disabled={!feedbackNotes.trim()}
-                onClick={onFeedbackSubmit}
-              >
-                {t('admin.credits.saveFeedback', 'Save feedback')}
-              </Button>
-            </Stack>
-          </Stack>
-        </DialogContent>
-      </Dialog>
+        onSubmit={onFeedbackSubmit}
+      />
     </Container>
   );
 };
@@ -364,10 +341,11 @@ const EscalationsTable: React.FC<{
 };
 
 const FeedbackTable: React.FC<{
-  rows: any[];
+  rows: CreditsFeedbackOrderRow[];
   empty: string;
+  mode: 'cancelled' | 'first-order';
   onOpen: (orderId: string) => void;
-}> = ({ rows, empty, onOpen }) => {
+}> = ({ rows, empty, mode, onOpen }) => {
   const { t } = useTranslation();
   if (!rows.length) return <Alert severity="info">{empty}</Alert>;
   return (
@@ -376,6 +354,9 @@ const FeedbackTable: React.FC<{
         <TableRow>
           <TableCell>{t('admin.credits.col.order', 'Order')}</TableCell>
           <TableCell>{t('admin.credits.col.client', 'Client')}</TableCell>
+          <TableCell>{t('admin.credits.col.phone', 'Phone')}</TableCell>
+          <TableCell>{t('admin.credits.col.business', 'Business')}</TableCell>
+          <TableCell>{t('admin.credits.col.when', 'When')}</TableCell>
           <TableCell align="right">{t('common.actions', 'Actions')}</TableCell>
         </TableRow>
       </TableHead>
@@ -387,16 +368,42 @@ const FeedbackTable: React.FC<{
           ]
             .filter(Boolean)
             .join(' ');
+          const when =
+            mode === 'cancelled' ? row.cancelled_at : row.completed_at;
           return (
             <TableRow key={row.id}>
-              <TableCell>{row.order_number}</TableCell>
               <TableCell>
-                {name || row.client?.user?.phone_number || '—'}
+                <Link
+                  component={RouterLink}
+                  to={`/admin/orders/${row.id}`}
+                  underline="hover"
+                >
+                  {row.order_number}
+                </Link>
+              </TableCell>
+              <TableCell>{name || '—'}</TableCell>
+              <TableCell>{row.client?.user?.phone_number || '—'}</TableCell>
+              <TableCell>{row.business?.name || '—'}</TableCell>
+              <TableCell>
+                {when ? new Date(when).toLocaleString() : row.current_status}
               </TableCell>
               <TableCell align="right">
-                <Button size="small" variant="contained" onClick={() => onOpen(row.id)}>
-                  {t('admin.credits.recordFeedback', 'Record feedback')}
-                </Button>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    size="small"
+                    component={RouterLink}
+                    to={`/admin/orders/${row.id}`}
+                  >
+                    {t('admin.credits.openOrder', 'Open order')}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => onOpen(row.id)}
+                  >
+                    {t('admin.credits.recordFeedback', 'Record feedback')}
+                  </Button>
+                </Stack>
               </TableCell>
             </TableRow>
           );
@@ -462,3 +469,27 @@ const ProgressTable: React.FC<{ rows: CreditsSummaryRow[] }> = ({ rows }) => {
 };
 
 export default AdminCreditsPage;
+
+function feedbackSuccessMessage(
+  action: RecordFeedbackPayload['action'],
+  res: { classification?: string } | undefined,
+  t: (key: string, fallback: string) => string
+): string {
+  const classification = res?.classification ?? (
+    action === 'test_order'
+      ? 'test'
+      : action === 'internal_order'
+        ? 'internal'
+        : null
+  );
+  if (classification === 'test') {
+    return t('admin.credits.markedTest', 'Marked as test order (no credit)');
+  }
+  if (classification === 'internal') {
+    return t(
+      'admin.credits.markedInternal',
+      'Marked as internal order (no credit)'
+    );
+  }
+  return t('admin.credits.feedbackSaved', 'Feedback recorded');
+}
