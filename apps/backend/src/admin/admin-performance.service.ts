@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { ConfigurationsService } from './configurations.service';
 import {
   groupEarnedByAgent,
   primaryEarned,
@@ -11,6 +10,7 @@ import {
   AGENTS_BY_IDS_QUERY,
   MARKETS_QUERY,
   buildAgentEarningsQuery,
+  buildAgentPendingEventsQuery,
   buildDeliveryAgentsQuery,
   buildReferredBusinessesQuery,
   buildSummaryQuery,
@@ -68,7 +68,7 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
-  /** Projected next payout: approved unpaid stocked × per-referral payout (internal rate when users.internal). */
+  /** Sum of pending representative_compensation_events (Saturday onboarding credit). */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
   /** Credited representative compensation in the selected window. */
@@ -143,7 +143,6 @@ export class AdminPerformanceService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly configurationsService: ConfigurationsService,
     private readonly referralReviewService: BusinessReferralReviewService
   ) {}
 
@@ -245,8 +244,8 @@ export class AdminPerformanceService {
     const withNames = withReviews.map((entry) =>
       this.withAgentNames(entry, agents.get(entry.agentId))
     );
-    const withPayouts = await this.attachProjectedPayouts(withNames, agents);
-    return this.attachEarnedAmounts(withPayouts, params);
+    const withPending = await this.attachPendingAmounts(withNames, params);
+    return this.attachEarnedAmounts(withPending, params);
   }
 
   private async attachReferralReviewStatuses(
@@ -285,105 +284,65 @@ export class AdminPerformanceService {
     return { ...entry, referredBusinesses: businesses };
   }
 
-  private async attachProjectedPayouts(
+  private async attachPendingAmounts(
     entries: TopAgentEntry[],
-    agents: Map<string, AgentRow>
+    params: PerformanceWindowParams
   ): Promise<TopAgentEntry[]> {
-    const payoutCache = new Map<string, { amount: number; currency: string }>();
-    const results: TopAgentEntry[] = [];
-    for (const entry of entries) {
-      results.push(await this.withProjectedPayout(entry, agents, payoutCache));
-    }
-    return results;
-  }
-
-  private async withProjectedPayout(
-    entry: TopAgentEntry,
-    agents: Map<string, AgentRow>,
-    cache: Map<string, { amount: number; currency: string }>
-  ): Promise<TopAgentEntry> {
-    const agent = agents.get(entry.agentId);
-    const isInternal = agent?.user?.internal === true;
-    const withFlag = { ...entry, isInternal };
-    const payableCount = this.approvedUnpaidStockedCount(entry);
-    const countryCode = this.agentCountryCode(agent);
-    if (!countryCode || payableCount === 0) return withFlag;
-    const payout = await this.cachedPayoutConfig(
-      countryCode,
-      isInternal,
-      cache
+    if (entries.length === 0) return entries;
+    const rows = await this.loadPendingEvents(
+      entries.map((entry) => entry.agentId),
+      params
     );
-    if (payout.amount <= 0) return withFlag;
-    return {
-      ...withFlag,
-      projectedPayoutAmount: payableCount * payout.amount,
-      projectedPayoutCurrency: payout.currency,
-    };
+    const totals = groupEarnedByAgent(rows);
+    return entries.map((entry) => this.withPending(entry, totals.get(entry.agentId)));
   }
 
-  private approvedUnpaidStockedCount(entry: TopAgentEntry): number {
-    return (entry.referredBusinesses ?? []).filter(
-      (b) =>
-        b.itemCount >= GOLDEN_ITEMS_PER_REFERRAL &&
-        b.payoutReviewStatus === 'approved' &&
-        !b.isPaid
-    ).length;
-  }
-
-  private agentCountryCode(agent?: AgentRow): string | null {
-    const country = agent?.agent_addresses?.[0]?.address?.country;
-    return country?.trim().toUpperCase() || null;
-  }
-
-  private async cachedPayoutConfig(
-    countryCode: string,
-    isInternal: boolean,
-    cache: Map<string, { amount: number; currency: string }>
-  ): Promise<{ amount: number; currency: string }> {
-    const cacheKey = `${countryCode}:${isInternal ? 'internal' : 'standard'}`;
-    const cached = cache.get(cacheKey);
-    if (cached) return cached;
-    const payout = await this.fetchPayoutConfig(countryCode, isInternal);
-    cache.set(cacheKey, payout);
-    return payout;
-  }
-
-  private async fetchPayoutConfig(
-    countryCode: string,
-    isInternal: boolean
-  ): Promise<{ amount: number; currency: string }> {
-    // Internal employees use a dedicated referral rate; standard agents earn the onboarding bonus.
-    const configKey = isInternal
-      ? 'business_referral_payout_amount_internal'
-      : 'onboarding_10_first_sale_amount';
-    const currency = this.currencyForCountry(countryCode);
-    try {
-      const config = await this.configurationsService.getConfigurationByKey(
-        configKey,
-        countryCode
-      );
-      const configAmount = Number(config?.number_value ?? 0);
-      const amount = configAmount > 0
-        ? configAmount
-        : this.onboardingFallbackAmount(countryCode, isInternal);
-      return { amount, currency };
-    } catch {
-      return {
-        amount: this.onboardingFallbackAmount(countryCode, isInternal),
-        currency,
-      };
+  private async loadPendingEvents(
+    agentIds: string[],
+    params: PerformanceWindowParams
+  ): Promise<CompensationEarningRow[]> {
+    const query = buildAgentPendingEventsQuery(Boolean(params.countryCode));
+    const rows: CompensationEarningRow[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const pageRows = await this.fetchPendingPage(query, agentIds, params, page);
+      rows.push(...pageRows);
+      if (pageRows.length < PAGE_SIZE) return rows;
     }
+    this.logger.warn(
+      `Agent pending events pagination cap reached (${MAX_PAGES * PAGE_SIZE} rows)`
+    );
+    return rows;
   }
 
-  private onboardingFallbackAmount(countryCode: string, isInternal: boolean): number {
-    if (isInternal) return 0;
-    const map: Record<string, number> = { CM: 7500, GA: 7500, CA: 25, US: 25 };
-    return map[countryCode.toUpperCase()] ?? 7500;
+  private async fetchPendingPage(
+    query: string,
+    agentIds: string[],
+    params: PerformanceWindowParams,
+    page: number
+  ): Promise<CompensationEarningRow[]> {
+    const variables: Record<string, unknown> = {
+      agentIds,
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    };
+    if (params.countryCode) variables.country = params.countryCode;
+    const result = await this.hasuraSystemService.executeQuery<{
+      representative_compensation_events: CompensationEarningRow[];
+    }>(query, variables);
+    return result?.representative_compensation_events ?? [];
   }
 
-  private currencyForCountry(countryCode: string): string {
-    const map: Record<string, string> = { CA: 'CAD', US: 'USD', GA: 'XAF', CM: 'XAF' };
-    return map[countryCode.toUpperCase()] ?? 'XAF';
+  private withPending(
+    entry: TopAgentEntry,
+    totals?: AgentEarnedTotals
+  ): TopAgentEntry {
+    const primary = primaryEarned(totals);
+    if (primary.amount <= 0) return entry;
+    return {
+      ...entry,
+      projectedPayoutAmount: primary.amount,
+      projectedPayoutCurrency: primary.currency,
+    };
   }
 
   private async attachEarnedAmounts(
@@ -497,6 +456,7 @@ export class AdminPerformanceService {
       agentCode: agent?.agent_code ?? null,
       firstName: agent?.user?.first_name ?? '',
       lastName: agent?.user?.last_name ?? '',
+      isInternal: agent?.user?.internal === true,
     };
   }
 

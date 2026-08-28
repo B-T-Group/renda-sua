@@ -467,7 +467,7 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
                     <Tooltip
                       title={t(
                         'admin.performance.topAgents.earnedTooltip',
-                        'Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the remaining estimated onboarding bonus.'
+                        'Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the sum of pending compensation events waiting for Saturday credit.'
                       )}
                     >
                       <span>

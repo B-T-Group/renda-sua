@@ -2,7 +2,6 @@ import { AdminPerformanceService } from './admin-performance.service';
 
 describe('AdminPerformanceService referral earnings', () => {
   const hasuraSystemService = { executeQuery: jest.fn() };
-  const configurationsService = { getConfigurationByKey: jest.fn() };
   const referralReviewService = { getReviewStatusesForBusinessIds: jest.fn() };
   let service: AdminPerformanceService;
 
@@ -10,7 +9,6 @@ describe('AdminPerformanceService referral earnings', () => {
     jest.clearAllMocks();
     service = new AdminPerformanceService(
       hasuraSystemService as never,
-      configurationsService as never,
       referralReviewService as never
     );
     referralReviewService.getReviewStatusesForBusinessIds.mockResolvedValue(
@@ -69,6 +67,18 @@ describe('AdminPerformanceService referral earnings', () => {
           ],
         };
       }
+      if (query.includes('AdminPerformanceAgentPending')) {
+        return {
+          representative_compensation_events: [
+            {
+              earner_agent_id: 'agent-1',
+              business_id: 'biz-2',
+              amount: '7500',
+              currency: 'XAF',
+            },
+          ],
+        };
+      }
       return {};
     });
   });
@@ -90,6 +100,26 @@ describe('AdminPerformanceService referral earnings', () => {
     expect(
       hasuraSystemService.executeQuery.mock.calls.some((call) =>
         String(call[0]).includes('AdminPerformanceAgentEarnings')
+      )
+    ).toBe(true);
+  });
+
+  it('attaches upcoming from pending compensation events', async () => {
+    const agents = await service.getTopAgents(
+      {
+        from: '2026-05-01T00:00:00.000Z',
+        to: '2026-05-31T23:59:59.000Z',
+        countryCode: 'CM',
+      },
+      'business_referrals',
+      10
+    );
+
+    expect(agents[0].projectedPayoutAmount).toBe(7500);
+    expect(agents[0].projectedPayoutCurrency).toBe('XAF');
+    expect(
+      hasuraSystemService.executeQuery.mock.calls.some((call) =>
+        String(call[0]).includes('AdminPerformanceAgentPending')
       )
     ).toBe(true);
   });
