@@ -842,7 +842,7 @@ export class AiService {
         {
           role: 'system',
           content:
-            'You suggest fields for a new product variant (color/size option) of an existing catalog item. Use parent item data as ground truth; read distinguishing traits from photos.',
+            'You suggest fields for a new product variant (color/size option) of an existing catalog item. Use parent catalog data as ground truth; read distinguishing traits from the VARIANT photos provided.',
         },
         { role: 'user', content: userContent },
       ],
@@ -895,21 +895,21 @@ export class AiService {
   ): string {
     const json = JSON.stringify(parent, null, 2);
     return `
-You are suggesting fields for a NEW variant (color/size option) of an existing product. Parent item data (JSON):
+You are suggesting fields for a NEW variant (color/size option) of an existing product. Parent item catalog data (JSON) — use as ground truth for shared attributes:
 ${json}
 
-You are also given one or more product images (main image first). Use OCR and visual cues to identify the distinguishing trait (color, size, volume, etc.) for this variant.
+You are also given one or more photos of THIS NEW VARIANT (not the parent listing). Use OCR and visual cues from these variant photos to identify the distinguishing trait (color, size, volume, packaging, etc.).
 
 Rules:
 - This is a variant of the SAME product — not a new listing.
 - "name" MUST follow "{parent name} — {distinguishing trait}" using the parent name from the JSON.
 - Write "name" and "color" in ${languageLabel}.
 - Inherit price and currency from locked_price and locked_currency in the JSON — do NOT invent new values.
-- Inherit weight, weight_unit, and dimensions from the parent unless the image clearly shows a different size/volume.
+- Inherit weight, weight_unit, and dimensions from the parent unless the variant photo clearly shows a different size/volume.
 - Suggest a unique "sku" that does not collide with existing_variant_skus in the JSON.
 - weightUnit MUST be one of: "g", "kg", "lb", "oz" (lowercase).
-- "color" should be the visible color or primary distinguishing visual trait when applicable.
-- Only output fields you can justify from the parent data or images; use null for unknowns.
+- "color" should be the visible color or primary distinguishing visual trait from the variant photos.
+- Only output fields you can justify from the parent data or variant images; use null for unknowns.
 
 Return ONLY a single JSON object with this exact shape (null allowed):
 {

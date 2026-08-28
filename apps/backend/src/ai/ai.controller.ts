@@ -427,14 +427,17 @@ export class AiController {
   @Post('variant-suggestions')
   @ApiOperation({
     summary:
-      'Get AI suggestions for a new variant using parent item photos and catalog fields',
+      'Get AI suggestions for a new variant using parent catalog fields and variant photos',
   })
   @ApiBody({ type: VariantSuggestionsDto })
   @ApiResponse({
     status: 200,
     description: 'Variant suggestions generated successfully',
   })
-  @ApiResponse({ status: 400, description: 'Item has no images or invalid body' })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing variant images or invalid body',
+  })
   async getVariantSuggestions(
     @ReqContext() ctx: RequestContext,
     @Body() body: VariantSuggestionsDto
@@ -454,6 +457,19 @@ export class AiController {
       );
     }
 
+    const imageIds = [
+      ...new Set((body.imageIds ?? []).filter(Boolean)),
+    ].slice(0, 8);
+    if (!imageIds.length) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'At least one variant image is required',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     let item: Awaited<ReturnType<BusinessItemsService['getSingleItem']>>;
     try {
       item = await this.businessItemsService.getSingleItem(
@@ -467,12 +483,26 @@ export class AiController {
       );
     }
 
-    const imageUrls = this.sortItemImageUrls(item.item_images ?? []);
-    if (imageUrls.length === 0) {
+    const images = await Promise.all(
+      imageIds.map((id) =>
+        this.businessImagesService.getImageForBusiness(businessId, id)
+      )
+    );
+    if (images.some((img) => !img)) {
+      throw new HttpException(
+        { success: false, error: 'One or more images not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const imageUrls = images
+      .map((img) => img!.image_url)
+      .filter((url): url is string => Boolean(url));
+    if (!imageUrls.length) {
       throw new HttpException(
         {
           success: false,
-          error: 'Item must have at least one image for variant suggestions',
+          error: 'Variant images must have valid URLs',
         },
         HttpStatus.BAD_REQUEST
       );
@@ -500,22 +530,6 @@ export class AiController {
         dimensions: suggestion.dimensions ?? item.dimensions ?? undefined,
       },
     };
-  }
-
-  private sortItemImageUrls(
-    images: Array<{ image_type?: string; image_url?: string; display_order?: number }>
-  ): string[] {
-    const sorted = [...images].sort((a, b) => {
-      const main = (x: { image_type?: string }) =>
-        x.image_type === 'main' ? 0 : 1;
-      const diff = main(a) - main(b);
-      if (diff !== 0) return diff;
-      return (a.display_order ?? 0) - (b.display_order ?? 0);
-    });
-    return sorted
-      .map((img) => img.image_url)
-      .filter((url): url is string => Boolean(url))
-      .slice(0, 8);
   }
 
   private buildVariantParentSnapshot(

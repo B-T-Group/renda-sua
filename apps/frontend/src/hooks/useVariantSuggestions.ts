@@ -80,11 +80,13 @@ export function useVariantSuggestions() {
   const fetchAndApply = useCallback(
     async (
       itemId: string,
+      imageIds: string[],
       onApply: (
         updater: (current: CreateItemVariantPayload) => CreateItemVariantPayload
       ) => void
     ) => {
-      if (fetchedRef.current) return;
+      const ids = imageIds.filter(Boolean);
+      if (!ids.length || fetchedRef.current) return;
       fetchedRef.current = true;
       const session = sessionRef.current;
       setLoading(true);
@@ -93,7 +95,11 @@ export function useVariantSuggestions() {
           success: boolean;
           data?: VariantSuggestionData;
           error?: string;
-        }>('/ai/variant-suggestions', { itemId }, { timeout: 120000 });
+        }>(
+          '/ai/variant-suggestions',
+          { itemId, imageIds: ids },
+          { timeout: 120000 }
+        );
         if (session !== sessionRef.current) return;
         if (res.data.success && res.data.data) {
           const data = res.data.data;
