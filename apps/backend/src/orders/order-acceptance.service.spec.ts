@@ -107,7 +107,7 @@ describe('OrderAcceptanceService.onAcceptanceDeadline', () => {
       executeMutation: jest.fn().mockResolvedValue({}),
     };
     svc.configService = {
-      get: jest.fn().mockReturnValue({ acceptanceGraceSeconds: 300 }),
+      get: jest.fn().mockReturnValue({ acceptanceGraceSeconds: 900 }),
     };
     svc.notifications = {
       sendOrderAcceptanceEscalation: jest.fn().mockResolvedValue(undefined),
