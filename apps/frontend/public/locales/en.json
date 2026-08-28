@@ -1484,8 +1484,8 @@
       "empty": "No assigned orders currently monitored."
     },
     "credits": {
-      "pageTitle": "Ops credits",
-      "pageDescription": "Escalations, call-back feedback, and progress leaderboard",
+      "pageTitle": "Ops follow-ups",
+      "pageDescription": "Escalations, call-backs, and follow-up progress",
       "resolveTitle": "Record how you handled this",
       "contactChannel": "How you reached them",
       "orderResult": "What happened",
@@ -1493,17 +1493,17 @@
       "resolveSubmit": "Resolve",
       "resolveAction": "Resolve",
       "resolveSuccess": "Escalation resolved",
-      "loadFailed": "Could not load credits",
+      "loadFailed": "Could not load follow-ups",
       "actionFailed": "Action failed",
       "feedbackSaved": "Feedback recorded",
-      "markedTest": "Marked as test order (no credit)",
-      "markedInternal": "Marked as internal order (no credit)",
-      "selfAwardBlocked": "You cannot award feedback credit on your own order",
+      "markedTest": "Marked as test order (no points)",
+      "markedInternal": "Marked as internal order (no points)",
+      "selfAwardBlocked": "You cannot record follow-up points on your own order",
       "cancelledFeedbackTitle": "Cancelled-order feedback",
       "firstOrderFeedbackTitle": "First-order feedback",
       "feedbackNotes": "Feedback notes",
       "feedbackHint": "Call the client and record what they shared.",
-      "skipCreditHint": "Explain why this is not a real credit-worthy call-back. No credit will be awarded.",
+      "skipCreditHint": "Explain why this is not a real follow-up. No points will be awarded.",
       "actionTaken": "Action taken",
       "saveFeedback": "Save feedback",
       "recordFeedback": "Record feedback",
@@ -1511,11 +1511,12 @@
       "emptyEscalations": "No open escalations",
       "emptyCancelled": "No cancelled orders waiting",
       "emptyFirstOrder": "No first-order call-backs waiting",
-      "emptyProgress": "No credits awarded yet",
+      "emptyProgress": "No follow-ups recorded yet",
       "action": {
         "calledClient": "Called client",
+        "calledBusiness": "Called business",
         "emailedClient": "Emailed client",
-        "spokeInPerson": "Spoke to client personally",
+        "spokeInPerson": "Spoke in person",
         "testOrder": "Test order",
         "internalOrder": "Internal order"
       },
@@ -1529,6 +1530,7 @@
       },
       "quickCall": "Call",
       "quickEmail": "Email",
+      "cancelledFeedbackHint": "Call the client or business (whoever cancelled) and record what they shared.",
       "fulfillment": {
         "pickup": "Pickup",
         "delivery": "Delivery",
@@ -1537,7 +1539,9 @@
       },
       "briefing": {
         "title": "Client & order",
+        "titleCancelled": "Who to contact",
         "client": "Client",
+        "business": "Business",
         "country": "Country",
         "phone": "Phone",
         "email": "Email",
@@ -1545,6 +1549,9 @@
         "fulfillment": "Fulfillment",
         "cancelledAt": "Cancelled",
         "completedAt": "Completed",
+        "cancelledByClient": "Cancelled by client",
+        "cancelledByBusiness": "Cancelled by business",
+        "cancelledBySystem": "Cancelled by system",
         "cancelNotes": "Cancel notes",
         "items": "Items"
       },
@@ -1586,7 +1593,7 @@
         "user": "User",
         "roles": "Roles",
         "weight": "Weight",
-        "count": "Credits"
+        "count": "Actions"
       }
     }
   },
@@ -2459,8 +2466,8 @@
       "orderOperationsDescription": "Intervene on at-risk orders, contact every participant, and redispatch",
       "pickupOps": "Pickup health",
       "pickupOpsDescription": "Live pickup SLA board for orders waiting on agent collection",
-      "creditsModule": "Ops credits",
-      "creditsModuleDescription": "Escalations, call-back feedback, and progress leaderboard"
+      "creditsModule": "Ops follow-ups",
+      "creditsModuleDescription": "Escalations, call-backs, and follow-up progress"
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",

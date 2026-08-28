@@ -45,6 +45,7 @@ type FeedbackOrder = {
   id: string;
   client_id: string;
   client_user_id: string | null;
+  business_user_id: string | null;
 };
 
 @ApiTags('admin/credits')
@@ -220,7 +221,7 @@ export class AdminCreditsController {
     dto: OrderFeedbackCreditDto,
     status: 'cancelled' | 'complete'
   ) {
-    this.assertNotSelfAward(actorId, order.client_user_id);
+    this.assertNotSelfAward(actorId, order);
     const channel = this.requireChannel(dto.action);
     const credit = await this.insertFeedbackCredit(
       actorId,
@@ -263,13 +264,13 @@ export class AdminCreditsController {
     return this.creditsService.awardFirstOrderFeedback(params);
   }
 
-  private assertNotSelfAward(
-    actorId: string,
-    clientUserId: string | null
-  ): void {
-    if (clientUserId && actorId === clientUserId) {
+  private assertNotSelfAward(actorId: string, order: FeedbackOrder): void {
+    const partyIds = [order.client_user_id, order.business_user_id].filter(
+      (id): id is string => !!id
+    );
+    if (partyIds.includes(actorId)) {
       throw new ForbiddenException(
-        'You cannot award feedback credit on your own order'
+        'You cannot record follow-up points on your own order'
       );
     }
   }
@@ -301,6 +302,7 @@ export class AdminCreditsController {
       id: order.id,
       client_id: order.client_id,
       client_user_id: order.client_user_id,
+      business_user_id: order.business_user_id,
     };
   }
 }

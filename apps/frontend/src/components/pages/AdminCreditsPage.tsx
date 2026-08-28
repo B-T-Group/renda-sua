@@ -129,7 +129,7 @@ export const AdminCreditsPage: React.FC = () => {
     } catch (err: any) {
       enqueueSnackbar(
         err?.response?.data?.message ||
-          t('admin.credits.loadFailed', 'Could not load credits'),
+          t('admin.credits.loadFailed', 'Could not load follow-ups'),
         { variant: 'error' }
       );
     } finally {
@@ -211,10 +211,10 @@ export const AdminCreditsPage: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
       <SEOHead
-        title={t('admin.credits.pageTitle', 'Ops credits')}
+        title={t('admin.credits.pageTitle', 'Ops follow-ups')}
         description={t(
           'admin.credits.pageDescription',
-          'Escalations, call-back feedback, and progress leaderboard'
+          'Escalations, call-backs, and follow-up progress'
         )}
       />
       <Stack
@@ -229,7 +229,7 @@ export const AdminCreditsPage: React.FC = () => {
         <Stack direction="row" spacing={1} alignItems="center">
           <EmojiEventsIcon color="primary" />
           <Typography variant="h5" fontWeight={700}>
-            {t('admin.credits.pageTitle', 'Ops credits')}
+            {t('admin.credits.pageTitle', 'Ops follow-ups')}
           </Typography>
         </Stack>
         <Stack direction="row" spacing={1} alignItems="center">
@@ -536,7 +536,7 @@ const ProgressTable: React.FC<{ rows: CreditsSummaryRow[] }> = ({ rows }) => {
   if (!rows.length) {
     return (
       <Alert severity="info">
-        {t('admin.credits.emptyProgress', 'No credits awarded yet')}
+        {t('admin.credits.emptyProgress', 'No follow-ups recorded yet')}
       </Alert>
     );
   }
@@ -551,7 +551,7 @@ const ProgressTable: React.FC<{ rows: CreditsSummaryRow[] }> = ({ rows }) => {
             {t('admin.credits.col.weight', 'Weight')}
           </TableCell>
           <TableCell align="right">
-            {t('admin.credits.col.count', 'Credits')}
+            {t('admin.credits.col.count', 'Actions')}
           </TableCell>
         </TableRow>
       </TableHead>
@@ -603,12 +603,12 @@ function feedbackSuccessMessage(
         ? 'internal'
         : null);
   if (classification === 'test') {
-    return t('admin.credits.markedTest', 'Marked as test order (no credit)');
+    return t('admin.credits.markedTest', 'Marked as test order (no points)');
   }
   if (classification === 'internal') {
     return t(
       'admin.credits.markedInternal',
-      'Marked as internal order (no credit)'
+      'Marked as internal order (no points)'
     );
   }
   return t('admin.credits.feedbackSaved', 'Feedback recorded');
