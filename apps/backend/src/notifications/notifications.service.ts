@@ -77,6 +77,7 @@ import {
   buildNewRentalBookingMessagePushMessage,
   buildOrderAcceptanceEscalationPushMessage,
   buildOrderAcceptanceEscalationStatusLabel,
+  buildOrderAcceptanceReminderPushMessage,
   buildOrderAutoDeclinedPushMessage,
   buildOrderBusyPushMessage,
   buildOrderNoAgentPushMessage,
@@ -1014,6 +1015,68 @@ export class NotificationsService {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         event: 'order_acceptance_activate',
+      },
+      excludeUserId: userId,
+      expoOptions: MERCHANT_INCOMING_ORDER_PUSH,
+    });
+  }
+
+  /** Mid-window nudge while the confirm SLA is still active (push only). */
+  async sendOrderAcceptanceReminderPush(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    remainingSeconds: number;
+    businessLocationId?: string | null;
+  }): Promise<void> {
+    const userId = params.businessUserId?.trim();
+    const { title, body } = buildOrderAcceptanceReminderPushMessage({
+      orderNumber: params.orderNumber,
+      preferredLanguage: params.preferredLanguage,
+      remainingSeconds: params.remainingSeconds,
+    });
+    const isoMinute = new Date().toISOString().slice(0, 16);
+    if (userId) {
+      try {
+        await this.orchestrator.notify({
+          type: 'order.acceptance.reminder',
+          category: 'actionable',
+          recipientUserId: userId,
+          preferenceCategory: 'order_updates',
+          entityType: 'order',
+          entityId: params.orderId,
+          dedupeKey: `order.acceptance.reminder:${params.orderId}:${isoMinute}`,
+          channels: {
+            push: {
+              title,
+              body,
+              interruptible: true,
+              data: {
+                url: `/orders/${params.orderId}`,
+                orderId: params.orderId,
+                orderNumber: params.orderNumber,
+                event: 'order_acceptance_reminder',
+                persona: 'business',
+                remainingSeconds: String(params.remainingSeconds),
+              },
+            },
+          },
+        });
+      } catch (error: any) {
+        this.logger.warn(
+          `sendOrderAcceptanceReminderPush failed: ${error?.message ?? String(error)}`
+        );
+      }
+    }
+    await this.fanOutPushToOrderManagers(params.businessLocationId, {
+      title,
+      body,
+      data: {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_acceptance_reminder',
       },
       excludeUserId: userId,
       expoOptions: MERCHANT_INCOMING_ORDER_PUSH,
@@ -4046,6 +4109,7 @@ export class NotificationsService {
     return buildOrderRiskRecipients({
       staff,
       roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.ORDER_MANAGER],
+      orderCountryCode: params.action?.shopCountryCode,
       referringAgentUserId: agentUserId,
       referringAgentLanguage: agent?.preferred_language,
     });

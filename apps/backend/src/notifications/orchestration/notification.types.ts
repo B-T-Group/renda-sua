@@ -24,6 +24,7 @@ export type NotificationType =
   | 'order.no_agent'
   | 'order.acceptance.activate'
   | 'order.acceptance.escalation'
+  | 'order.acceptance.reminder'
   | 'order.busy'
   | 'order.missed'
   | 'order.auto_declined'

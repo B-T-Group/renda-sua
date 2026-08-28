@@ -44,7 +44,7 @@ export const DEFAULT_ORDER_RISK_CONFIG: OrderRiskConfig = {
   minSeverity: 'warning',
   alertRepeatMinutes: 60,
   pendingAcceptanceGraceMinutes: 5,
-  pendingFallbackMinutes: 30,
+  pendingFallbackMinutes: 45,
   scheduledActivationGraceMinutes: 15,
   prepOverdueMinutes: 45,
   readyUnassignedMinutes: 30,
@@ -110,6 +110,8 @@ export interface OrderRiskActionContext {
   minutesUntilAutoDecline?: number | null;
   /** Agent who onboarded this merchant, alerted so they can chase them. */
   referringAgentUserId?: string | null;
+  /** Shop market ISO alpha-2 (location address, else delivery address). */
+  shopCountryCode?: string | null;
 }
 
 export interface OrderRiskIncident {

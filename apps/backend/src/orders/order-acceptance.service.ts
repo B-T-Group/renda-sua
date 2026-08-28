@@ -23,6 +23,7 @@ import {
 } from '../users/user-timezone.util';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
+import { OrderEventsService } from './order-events.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import {
   ACTIVATION_LEAD_MINUTES_ALLOWED,
@@ -39,6 +40,10 @@ import {
   remainingWaitSeconds,
   type BusySlaPatch,
 } from './order-acceptance-busy.util';
+import {
+  firstReminderWaitSeconds,
+  planAcceptanceReminder,
+} from './order-acceptance-reminder.util';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { capAcceptanceTimeoutForFood } from '../food/food-acceptance-timeout.util';
@@ -54,6 +59,8 @@ interface SlaOrder {
   business_location_id?: string | null;
   estimated_prep_minutes?: number | null;
   acceptance_activates_at?: string | null;
+  busy_extra_prep_minutes?: number | null;
+  updated_at?: string | null;
   client?: {
     user_id?: string;
     user?: {
@@ -97,7 +104,8 @@ export class OrderAcceptanceService {
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
     private readonly riskMonitor: OrderRiskMonitorService,
-    private readonly foodOrdersService: FoodOrdersService
+    private readonly foodOrdersService: FoodOrdersService,
+    private readonly orderEvents: OrderEventsService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -1068,12 +1076,108 @@ export class OrderAcceptanceService {
       { order_id: order.id },
       timeoutSec
     );
+    await this.scheduleFirstAcceptanceReminder(order.id, timeoutSec);
     if (fromScheduled) {
       await this.notifyAcceptanceActivate(order, timeoutSec);
     }
     this.logger.log(
       `Started acceptance SLA for ${order.order_number} (${timeoutSec}s)`
     );
+  }
+
+  private async scheduleFirstAcceptanceReminder(
+    orderId: string,
+    timeoutSec: number
+  ): Promise<void> {
+    const waitSeconds = firstReminderWaitSeconds(timeoutSec);
+    if (waitSeconds == null) return;
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_reminder',
+      { order_id: orderId },
+      waitSeconds
+    );
+  }
+
+  async onAcceptanceReminder(
+    orderId: string
+  ): Promise<{ success: boolean; skipped?: boolean; reason?: string }> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!order) return { success: true, skipped: true, reason: 'not_found' };
+    const lastReminderAt = await this.lastAcceptanceReminderAt(orderId);
+    const cfg = this.orderConfig();
+    const plan = planAcceptanceReminder({
+      currentStatus: order.current_status,
+      acceptanceState: order.acceptance_state,
+      acceptanceDeadlineAt: order.acceptance_deadline_at,
+      busyExtraPrepMinutes: order.busy_extra_prep_minutes || 0,
+      updatedAt: order.updated_at,
+      snoozeMinutes:
+        cfg.busyInterruptSnoozeMinutes || DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES,
+      lastReminderAt,
+    });
+    if (plan.action === 'skip') {
+      return { success: true, skipped: true, reason: plan.reason };
+    }
+    if (plan.action === 'reschedule') {
+      await this.waitAndExecute.scheduleAcceptanceTimeout(
+        'order.acceptance_reminder',
+        { order_id: orderId },
+        plan.waitSeconds
+      );
+      return { success: true, skipped: true, reason: plan.reason };
+    }
+    await this.notifyAcceptanceReminder(order, plan.remainingSeconds);
+    await this.orderEvents.recordEvent({
+      orderId,
+      eventType: 'acceptance_reminder_sent',
+      actorType: 'system',
+      payload: { remainingSeconds: plan.remainingSeconds },
+    });
+    if (plan.nextWaitSeconds != null) {
+      await this.waitAndExecute.scheduleAcceptanceTimeout(
+        'order.acceptance_reminder',
+        { order_id: orderId },
+        plan.nextWaitSeconds
+      );
+    }
+    return { success: true };
+  }
+
+  private async lastAcceptanceReminderAt(
+    orderId: string
+  ): Promise<string | null> {
+    const res = await this.hasura.executeQuery(
+      `query LastAcceptanceReminder($orderId: uuid!) {
+        order_events(
+          where: {
+            order_id: { _eq: $orderId }
+            event_type: { _eq: "acceptance_reminder_sent" }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { created_at }
+      }`,
+      { orderId }
+    );
+    return res.order_events?.[0]?.created_at ?? null;
+  }
+
+  private async notifyAcceptanceReminder(
+    order: SlaOrder,
+    remainingSeconds: number
+  ): Promise<void> {
+    try {
+      await this.notifications.sendOrderAcceptanceReminderPush({
+        businessUserId: order.business?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        preferredLanguage: order.business?.user?.preferred_language,
+        remainingSeconds,
+        businessLocationId: order.business_location_id,
+      });
+    } catch (error: any) {
+      this.logger.error(`Acceptance reminder notify failed: ${error?.message}`);
+    }
   }
 
   private async beginScheduledAcceptance(
@@ -1194,6 +1298,7 @@ export class OrderAcceptanceService {
           id order_number current_status acceptance_state business_id
           business_location_id acceptance_deadline_at grace_deadline_at
           estimated_prep_minutes acceptance_activates_at
+          busy_extra_prep_minutes updated_at
           client {
             user_id
             user {
