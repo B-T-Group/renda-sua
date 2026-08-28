@@ -1,61 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
+import {
+  applySuggestionToForm,
+  type VariantSuggestionData,
+} from '../utils/applyVariantSuggestion';
 import { useApiClient } from './useApiClient';
 import type { CreateItemVariantPayload } from './useItemVariants';
 
-export interface VariantSuggestionData {
-  name?: string;
-  color?: string;
-  sku?: string;
-  price?: number;
-  currency?: string;
-  weight?: number;
-  weightUnit?: string;
-  dimensions?: string;
-}
-
-function applySuggestionToForm(
-  form: CreateItemVariantPayload,
-  suggestion: VariantSuggestionData,
-  locked: ReadonlySet<string>
-): CreateItemVariantPayload {
-  const applyStr = (
-    key: string,
-    current: string | null | undefined,
-    suggested?: string
-  ) => {
-    if (locked.has(key)) {
-      return current;
-    }
-    const suggestedTrimmed = suggested?.trim();
-    if (suggestedTrimmed) {
-      return suggestedTrimmed;
-    }
-    return current;
-  };
-  const applyNum = (
-    key: string,
-    current: number | null | undefined,
-    suggested?: number
-  ) => {
-    if (locked.has(key)) {
-      return current;
-    }
-    return suggested ?? current;
-  };
-
-  return {
-    ...form,
-    name: applyStr('name', form.name, suggestion.name) ?? form.name,
-    color: applyStr('color', form.color, suggestion.color),
-    sku: applyStr('sku', form.sku, suggestion.sku),
-    price: applyNum('price', form.price, suggestion.price),
-    weight: applyNum('weight', form.weight, suggestion.weight),
-    weight_unit:
-      applyStr('weight_unit', form.weight_unit, suggestion.weightUnit) ??
-      form.weight_unit,
-    dimensions: applyStr('dimensions', form.dimensions, suggestion.dimensions),
-  };
-}
+export type { VariantSuggestionData };
 
 export function useVariantSuggestions() {
   const apiClient = useApiClient();
