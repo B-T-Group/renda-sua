@@ -108,12 +108,14 @@ export class CreditsService {
     userId: string;
     orderId: string;
     notes: string;
+    contactChannel?: CreditContactChannel | null;
   }): Promise<UserCreditRow | null> {
     return this.awardSafe({
       userId: params.userId,
       eventType: 'cancelled_feedback',
       orderId: params.orderId,
       notes: params.notes,
+      contactChannel: params.contactChannel ?? null,
       createdBy: params.userId,
     });
   }
@@ -122,14 +124,84 @@ export class CreditsService {
     userId: string;
     orderId: string;
     notes: string;
+    contactChannel?: CreditContactChannel | null;
   }): Promise<UserCreditRow | null> {
     return this.awardSafe({
       userId: params.userId,
       eventType: 'first_order_completed_feedback',
       orderId: params.orderId,
       notes: params.notes,
+      contactChannel: params.contactChannel ?? null,
       createdBy: params.userId,
     });
+  }
+
+  async classifyOrderForOps(params: {
+    orderId: string;
+    classification: 'test' | 'internal';
+    actorId: string;
+    notes: string;
+  }): Promise<boolean> {
+    const res = await this.hasura.executeMutation<{
+      update_orders: { affected_rows: number };
+    }>(
+      `mutation ClassifyOrderOps(
+        $id: uuid!
+        $classification: order_ops_classification!
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $id }
+            ops_classification: { _is_null: true }
+          }
+          _set: { ops_classification: $classification }
+        ) {
+          affected_rows
+        }
+      }`,
+      { id: params.orderId, classification: params.classification }
+    );
+    if ((res.update_orders?.affected_rows ?? 0) < 1) return false;
+    await this.recordOpsClassifiedEvent(params);
+    return true;
+  }
+
+  private async recordOpsClassifiedEvent(params: {
+    orderId: string;
+    classification: 'test' | 'internal';
+    actorId: string;
+    notes: string;
+  }): Promise<void> {
+    try {
+      await this.hasura.executeMutation(
+        `mutation InsertOpsClassifiedEvent(
+          $orderId: uuid!
+          $actorId: uuid
+          $payload: jsonb!
+        ) {
+          insert_order_events_one(object: {
+            order_id: $orderId
+            event_type: "admin_intervention"
+            actor_type: "support"
+            actor_id: $actorId
+            payload: $payload
+          }) { id }
+        }`,
+        {
+          orderId: params.orderId,
+          actorId: params.actorId,
+          payload: {
+            action: 'ops_classified',
+            classification: params.classification,
+            note: params.notes.trim(),
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to record ops_classified for ${params.orderId}: ${error?.message}`
+      );
+    }
   }
 
   async resolveReferrerUserId(params: {

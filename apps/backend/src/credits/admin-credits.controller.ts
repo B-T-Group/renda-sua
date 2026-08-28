@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpException,
   HttpStatus,
@@ -24,6 +25,12 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
+import {
+  FEEDBACK_ACTION_TO_CHANNEL,
+  FEEDBACK_ACTION_TO_CLASSIFICATION,
+  type CreditContactChannel,
+  type CreditFeedbackAction,
+} from './credit.types';
 import { CreditsQueuesService } from './credits-queues.service';
 import { CreditsService } from './credits.service';
 import {
@@ -33,6 +40,12 @@ import {
   OrderFeedbackCreditDto,
   ResolveEscalationCreditDto,
 } from './dto/admin-credits.dto';
+
+type FeedbackOrder = {
+  id: string;
+  client_id: string;
+  client_user_id: string | null;
+};
 
 @ApiTags('admin/credits')
 @Controller('admin/credits')
@@ -137,20 +150,7 @@ export class AdminCreditsController {
     @Param('orderId') orderId: string,
     @Body() dto: OrderFeedbackCreditDto
   ) {
-    const actor = await this.hasuraUserService.getUser();
-    const order = await this.requireOrderInWindow(orderId, 'cancelled');
-    const credit = await this.creditsService.awardCancelledFeedback({
-      userId: actor.id,
-      orderId: order.id,
-      notes: dto.notes,
-    });
-    if (!credit) {
-      throw new HttpException(
-        'Feedback already recorded for this order',
-        HttpStatus.CONFLICT
-      );
-    }
-    return { success: true, credit };
+    return this.handleOrderFeedback(orderId, dto, 'cancelled');
   }
 
   @Post('orders/:orderId/first-order-feedback')
@@ -160,8 +160,25 @@ export class AdminCreditsController {
     @Param('orderId') orderId: string,
     @Body() dto: OrderFeedbackCreditDto
   ) {
+    return this.handleOrderFeedback(orderId, dto, 'complete');
+  }
+
+  private async handleOrderFeedback(
+    orderId: string,
+    dto: OrderFeedbackCreditDto,
+    status: 'cancelled' | 'complete'
+  ) {
     const actor = await this.hasuraUserService.getUser();
-    const order = await this.requireOrderInWindow(orderId, 'complete');
+    const order = await this.requireOrderInWindow(orderId, status);
+    if (status === 'complete') await this.requireFirstCompletion(order);
+    const classification = FEEDBACK_ACTION_TO_CLASSIFICATION[dto.action];
+    if (classification) {
+      return this.classifyWithoutCredit(actor.id, order.id, dto, classification);
+    }
+    return this.awardOrderFeedback(actor.id, order, dto, status);
+  }
+
+  private async requireFirstCompletion(order: FeedbackOrder) {
     const isFirst = await this.queuesService.isClientFirstCompletedOrder(
       order.client_id,
       order.id
@@ -169,11 +186,44 @@ export class AdminCreditsController {
     if (!isFirst) {
       throw new BadRequestException('Order is not the client first completion');
     }
-    const credit = await this.creditsService.awardFirstOrderFeedback({
-      userId: actor.id,
-      orderId: order.id,
+  }
+
+  private async classifyWithoutCredit(
+    actorId: string,
+    orderId: string,
+    dto: OrderFeedbackCreditDto,
+    classification: 'test' | 'internal'
+  ) {
+    const ok = await this.creditsService.classifyOrderForOps({
+      orderId,
+      classification,
+      actorId,
       notes: dto.notes,
     });
+    if (!ok) {
+      throw new HttpException(
+        'Order already classified or feedback recorded',
+        HttpStatus.CONFLICT
+      );
+    }
+    return { success: true, credit: null, classification };
+  }
+
+  private async awardOrderFeedback(
+    actorId: string,
+    order: FeedbackOrder,
+    dto: OrderFeedbackCreditDto,
+    status: 'cancelled' | 'complete'
+  ) {
+    this.assertNotSelfAward(actorId, order.client_user_id);
+    const channel = this.requireChannel(dto.action);
+    const credit = await this.insertFeedbackCredit(
+      actorId,
+      order.id,
+      dto.notes,
+      channel,
+      status
+    );
     if (!credit) {
       throw new HttpException(
         'Feedback already recorded for this order',
@@ -183,12 +233,54 @@ export class AdminCreditsController {
     return { success: true, credit };
   }
 
+  private requireChannel(action: CreditFeedbackAction): CreditContactChannel {
+    const channel = FEEDBACK_ACTION_TO_CHANNEL[action];
+    if (!channel) throw new BadRequestException('Invalid feedback action');
+    return channel;
+  }
+
+  private async insertFeedbackCredit(
+    actorId: string,
+    orderId: string,
+    notes: string,
+    channel: CreditContactChannel,
+    status: 'cancelled' | 'complete'
+  ) {
+    const params = {
+      userId: actorId,
+      orderId,
+      notes,
+      contactChannel: channel,
+    };
+    if (status === 'cancelled') {
+      return this.creditsService.awardCancelledFeedback(params);
+    }
+    return this.creditsService.awardFirstOrderFeedback(params);
+  }
+
+  private assertNotSelfAward(
+    actorId: string,
+    clientUserId: string | null
+  ): void {
+    if (clientUserId && actorId === clientUserId) {
+      throw new ForbiddenException(
+        'You cannot award feedback credit on your own order'
+      );
+    }
+  }
+
   private async requireOrderInWindow(
     orderId: string,
     status: 'cancelled' | 'complete'
-  ) {
+  ): Promise<FeedbackOrder> {
     const order = await this.queuesService.getOrderForFeedback(orderId);
     if (!order) throw new NotFoundException('Order not found');
+    if (order.ops_classification) {
+      throw new HttpException(
+        'Order already classified as test or internal',
+        HttpStatus.CONFLICT
+      );
+    }
     if (order.current_status !== status) {
       throw new BadRequestException(`Order is not ${status}`);
     }
@@ -200,6 +292,10 @@ export class AdminCreditsController {
         'Order is outside the 14-day feedback window'
       );
     }
-    return order;
+    return {
+      id: order.id,
+      client_id: order.client_id,
+      client_user_id: order.client_user_id,
+    };
   }
 }

@@ -14,6 +14,7 @@ import {
 import {
   CREDIT_CONTACT_CHANNELS,
   CREDIT_EVENT_TYPES,
+  CREDIT_FEEDBACK_ACTIONS,
   CREDIT_ORDER_RESULTS,
 } from '../credit.types';
 
@@ -100,6 +101,10 @@ export class ResolveEscalationCreditDto {
 }
 
 export class OrderFeedbackCreditDto {
+  @ApiProperty({ enum: CREDIT_FEEDBACK_ACTIONS })
+  @IsIn([...CREDIT_FEEDBACK_ACTIONS])
+  action!: (typeof CREDIT_FEEDBACK_ACTIONS)[number];
+
   @ApiProperty({ description: 'Call-back feedback notes' })
   @IsString()
   @MinLength(1)
