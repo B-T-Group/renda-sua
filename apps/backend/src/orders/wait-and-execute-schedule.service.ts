@@ -61,7 +61,8 @@ export class WaitAndExecuteScheduleService {
     eventType:
       | 'order.acceptance_deadline'
       | 'order.acceptance_grace_deadline'
-      | 'order.acceptance_activate',
+      | 'order.acceptance_activate'
+      | 'order.acceptance_reminder',
     payload: WaitExecutePayload,
     waitSeconds: number
   ): Promise<void> {

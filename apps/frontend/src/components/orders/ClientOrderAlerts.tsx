@@ -38,7 +38,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           message: t('client.orders.pendingNotice', {
             orderTotal: formatCurrency(orderTotal),
             defaultValue:
-              '⏳ Your {{orderTotal}} order is awaiting business confirmation. They typically respond within 10-15 minutes. You\'ll be notified once confirmed!',
+              "You'll be notified once the store confirms your {{orderTotal}} order (they have up to 45 minutes).",
           }),
         });
         if (isPayAtDelivery) {

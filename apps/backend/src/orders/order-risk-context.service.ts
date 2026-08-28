@@ -14,7 +14,12 @@ interface OrderContextRow {
     user?: { phone_number?: string | null } | null;
     referring_agent?: { user_id?: string | null } | null;
   } | null;
-  business_location?: { name?: string | null; phone?: string | null } | null;
+  business_location?: {
+    name?: string | null;
+    phone?: string | null;
+    address?: { country?: string | null } | null;
+  } | null;
+  delivery_address?: { country?: string | null } | null;
 }
 
 /**
@@ -43,7 +48,12 @@ export class OrderRiskContextService {
               user { phone_number }
               referring_agent { user_id }
             }
-            business_location { name phone }
+            business_location {
+              name
+              phone
+              address { country }
+            }
+            delivery_address { country }
           }
         }`,
         { id: orderId }
@@ -68,8 +78,19 @@ export class OrderRiskContextService {
       amountLabel: amountLabel(order.total_amount, order.currency),
       minutesUntilAutoDecline: minutesUntil(order.grace_deadline_at),
       referringAgentUserId: order.business?.referring_agent?.user_id ?? null,
+      shopCountryCode: shopCountryCode(order),
     };
   }
+}
+
+function shopCountryCode(order: OrderContextRow): string | null {
+  const raw =
+    order.business_location?.address?.country ||
+    order.delivery_address?.country ||
+    null;
+  if (!raw) return null;
+  const trimmed = String(raw).trim().toUpperCase();
+  return trimmed || null;
 }
 
 function fullName(

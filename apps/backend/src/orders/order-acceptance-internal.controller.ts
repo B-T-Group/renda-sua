@@ -76,6 +76,29 @@ export class OrderAcceptanceInternalController {
   }
 
   @Public()
+  @Post('internal/acceptance-reminder')
+  @ApiOperation({
+    summary: 'Internal: mid-window merchant acceptance reminder (wait-handler Lambda)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: { orderId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Processed' })
+  async acceptanceReminder(
+    @Body() body: { orderId?: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ) {
+    this.assertInternalKey(internalKey);
+    const orderId = body?.orderId?.trim();
+    if (!orderId) return { success: false, error: 'orderId is required' };
+    return this.orderAcceptanceService.onAcceptanceReminder(orderId);
+  }
+
+  @Public()
   @Post('internal/acceptance-grace-deadline')
   @ApiOperation({
     summary: 'Internal: merchant acceptance grace deadline (wait-handler Lambda)',

@@ -56,7 +56,7 @@ describe('evaluateOrderRisk — pending acceptance', () => {
 
   it('falls back to order age when no acceptance deadline exists', () => {
     expect(
-      evaluate({ current_status: 'pending', created_at: minutesAgo(45) })
+      evaluate({ current_status: 'pending', created_at: minutesAgo(60) })
     ).toEqual(['pending_acceptance']);
     expect(
       evaluate({ current_status: 'pending', created_at: minutesAgo(10) })
