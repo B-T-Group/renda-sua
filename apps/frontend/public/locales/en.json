@@ -3497,6 +3497,8 @@
       "noImage": "No image",
       "stepImages": "Images",
       "stepDetails": "Details",
+      "aiAnalyzing": "Analyzing item…",
+      "aiFilledBanner": "Filled from item — edit anything",
       "saveFailed": "Failed to save variant",
       "deleteTitle": "Delete variant?",
       "deleteMessage": "This cannot be undone. Orders that reference this variant keep their snapshot.",

@@ -8,6 +8,31 @@ export class CategoriesService {
 
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
+  async listCategoryTree() {
+    const query = `
+      query ListActiveCategoryTree {
+        item_categories(
+          where: { status: { _eq: active } }
+          order_by: { name: asc }
+        ) {
+          id
+          name
+          item_sub_categories(
+            where: { status: { _eq: active } }
+            order_by: { name: asc }
+          ) {
+            id
+            name
+            item_category_id
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {});
+    return result.item_categories || [];
+  }
+
   async getAllCategories(search?: string, status?: string) {
     const query = `
       query GetAllCategories($where: item_categories_bool_exp) {

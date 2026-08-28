@@ -58,6 +58,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/item-likes',
     '/ai/image-item-suggestions',
     '/ai/item-refinement-suggestions',
+    '/ai/variant-suggestions',
     '/business-items/create-from-image',
     '/business-items/ai-image-cleanup',
     '/aws/presigned-url/image',

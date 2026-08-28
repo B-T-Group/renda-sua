@@ -102,6 +102,18 @@ export interface ItemRefinementSuggestionResult {
   maxOrderQuantity?: number | null;
 }
 
+/** AI suggestions for a new variant of an existing catalog item. */
+export interface VariantSuggestionResult {
+  name?: string;
+  color?: string;
+  sku?: string;
+  price?: number | null;
+  currency?: string | null;
+  weight?: number | null;
+  weightUnit?: string | null;
+  dimensions?: string | null;
+}
+
 /** AI extraction for rental catalog items (vision). */
 export interface RentalImageSuggestionResult {
   name?: string;
@@ -497,6 +509,8 @@ export class AiService {
     country?: string | null;
     existingCatalogNames?: string[];
     existingBrandNames?: string[];
+    /** Compact category > subcategory list for vision prompt. */
+    existingCatalogPrompt?: string | null;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
@@ -532,6 +546,11 @@ export class AiService {
         `Existing product names (avoid near-duplicates): ${input.existingCatalogNames
           .slice(0, 40)
           .join(', ')}`
+      );
+    }
+    if (input.existingCatalogPrompt?.trim()) {
+      textContextParts.push(
+        `Platform catalog (prefer these exact category and subcategory names when they fit; only invent new names if nothing matches):\n${input.existingCatalogPrompt.trim()}`
       );
     }
     const textContext = textContextParts.join('\n');
@@ -772,6 +791,41 @@ export class AiService {
     };
   }
 
+  async generateVariantSuggestions(input: {
+    parentSnapshot: Record<string, unknown>;
+    imageUrls: string[];
+    preferredLanguage?: string | null;
+  }): Promise<VariantSuggestionResult> {
+    const languageLabel =
+      this.resolvePreferredLanguage(input.preferredLanguage) === 'fr'
+        ? 'French'
+        : 'English';
+    const userText = this.buildVariantSuggestionPrompt(
+      input.parentSnapshot,
+      languageLabel
+    );
+    const resolvedImages = await this.resolveVisionImageUrls(input.imageUrls);
+    const userContent =
+      resolvedImages.length > 0
+        ? this.buildVisionUserContentParts(userText, resolvedImages)
+        : userText;
+    const request: ChatCompletionRequest = {
+      model: this.bedrockLunaService.getDefaultChatModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You suggest fields for a new product variant (color/size option) of an existing catalog item. Use parent item data as ground truth; read distinguishing traits from photos.',
+        },
+        { role: 'user', content: userContent },
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+    };
+    return this.runVariantSuggestionCompletion(request);
+  }
+
   async generateItemRefinementSuggestions(input: {
     itemSnapshot: Record<string, unknown>;
     imageUrls: string[];
@@ -806,6 +860,104 @@ export class AiService {
       response_format: { type: 'json_object' },
     };
     return this.runItemRefinementCompletion(request);
+  }
+
+  private buildVariantSuggestionPrompt(
+    parent: Record<string, unknown>,
+    languageLabel: string
+  ): string {
+    const json = JSON.stringify(parent, null, 2);
+    return `
+You are suggesting fields for a NEW variant (color/size option) of an existing product. Parent item data (JSON):
+${json}
+
+You are also given one or more product images (main image first). Use OCR and visual cues to identify the distinguishing trait (color, size, volume, etc.) for this variant.
+
+Rules:
+- This is a variant of the SAME product — not a new listing.
+- "name" MUST follow "{parent name} — {distinguishing trait}" using the parent name from the JSON.
+- Write "name" and "color" in ${languageLabel}.
+- Inherit price and currency from locked_price and locked_currency in the JSON — do NOT invent new values.
+- Inherit weight, weight_unit, and dimensions from the parent unless the image clearly shows a different size/volume.
+- Suggest a unique "sku" that does not collide with existing_variant_skus in the JSON.
+- weightUnit MUST be one of: "g", "kg", "lb", "oz" (lowercase).
+- "color" should be the visible color or primary distinguishing visual trait when applicable.
+- Only output fields you can justify from the parent data or images; use null for unknowns.
+
+Return ONLY a single JSON object with this exact shape (null allowed):
+{
+  "name": string | null,
+  "color": string | null,
+  "sku": string | null,
+  "price": number | null,
+  "currency": string | null,
+  "weight": number | null,
+  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
+  "dimensions": string | null
+}
+
+Do not include any text outside the JSON.`;
+  }
+
+  private async runVariantSuggestionCompletion(
+    request: ChatCompletionRequest
+  ): Promise<VariantSuggestionResult> {
+    try {
+      const response = await this.bedrockLunaService.chatCompletions(
+        request,
+        90000,
+        { reasoningEffort: 'none', jsonObject: true }
+      );
+      const rawContent = response.choices?.[0]?.message?.content;
+      const contentString = this.messageContentToString(rawContent);
+      const jsonString = this.coerceJsonObjectString(contentString);
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(jsonString) as Record<string, unknown>;
+      } catch (parseError: unknown) {
+        this.logger.error(
+          'Failed to parse JSON from variant suggestions',
+          parseError
+        );
+        parsed = {};
+      }
+      return this.mapParsedVariantSuggestion(parsed);
+    } catch (error: unknown) {
+      return this.logAndDegrade(
+        error,
+        'Failed to generate variant suggestions',
+        {}
+      );
+    }
+  }
+
+  private mapParsedVariantSuggestion(
+    parsed: Record<string, unknown>
+  ): VariantSuggestionResult {
+    const num = (v: unknown): number | null => {
+      if (typeof v === 'number' && !Number.isNaN(v)) return v;
+      if (v != null && v !== '') {
+        const n = Number(v);
+        return Number.isNaN(n) ? null : n;
+      }
+      return null;
+    };
+    return {
+      name: this.sanitizeSuggestedProductName(
+        typeof parsed.name === 'string' ? parsed.name : undefined
+      ),
+      color: typeof parsed.color === 'string' ? parsed.color : undefined,
+      sku: typeof parsed.sku === 'string' ? parsed.sku : undefined,
+      price: num(parsed.price),
+      currency: typeof parsed.currency === 'string' ? parsed.currency : undefined,
+      weight: num(parsed.weight),
+      weightUnit:
+        typeof parsed.weightUnit === 'string'
+          ? normalizeWeightUnit(parsed.weightUnit) ?? undefined
+          : undefined,
+      dimensions:
+        typeof parsed.dimensions === 'string' ? parsed.dimensions : undefined,
+    };
   }
 
   private buildItemRefinementPrompt(
@@ -923,6 +1075,7 @@ Then extract from the images:
 - Product name (only if clearly readable on packaging/labels; otherwise null — never invent a name)
 - Category name
 - Subcategory name
+- Prefer an exact category/subcategory pair from the platform catalog in the text context when one fits. Only invent new category or subcategory names when nothing in the catalog applies.
 - Brand name
 - A short 2–3 sentence e-commerce description in ${languageLabel}
 - The product price as a number (no currency symbol)

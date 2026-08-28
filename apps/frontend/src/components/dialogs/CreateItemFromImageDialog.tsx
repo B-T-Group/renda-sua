@@ -20,6 +20,7 @@ import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency
 import { useCreateItemFromImage } from '../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../hooks/useImageItemSuggestions';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
+import ItemCategoryNamePickers from '../business/ItemCategoryNamePickers';
 
 interface CreateItemFromImageDialogProps {
   open: boolean;
@@ -230,25 +231,11 @@ export const CreateItemFromImageDialog: React.FC<
         disabled={createLoading || suggestionsLoading}
       />
 
-      <TextField
-        label={t(
-          'business.images.createItemFromImage.fields.category',
-          'Category'
-        )}
-        fullWidth
-        value={categoryName}
-        onChange={(e) => setCategoryName(e.target.value)}
-        disabled={createLoading || suggestionsLoading}
-      />
-
-      <TextField
-        label={t(
-          'business.images.createItemFromImage.fields.subcategory',
-          'Subcategory'
-        )}
-        fullWidth
-        value={subCategoryName}
-        onChange={(e) => setSubCategoryName(e.target.value)}
+      <ItemCategoryNamePickers
+        categoryName={categoryName}
+        subCategoryName={subCategoryName}
+        onCategoryNameChange={setCategoryName}
+        onSubCategoryNameChange={setSubCategoryName}
         disabled={createLoading || suggestionsLoading}
       />
 
