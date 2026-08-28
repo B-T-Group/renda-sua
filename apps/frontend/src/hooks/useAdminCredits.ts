@@ -11,6 +11,7 @@ export type CreditEventType =
 
 export type CreditFeedbackAction =
   | 'called_client'
+  | 'called_business'
   | 'emailed_client'
   | 'spoke_in_person'
   | 'test_order'
@@ -39,12 +40,16 @@ export interface CreditsFeedbackOrderRow {
   cancelled_at?: string | null;
   completed_at?: string | null;
   cancellation_notes?: string | null;
+  cancelled_by?: string | null;
   updated_at?: string | null;
   client?: {
     user_id?: string;
     user?: CreditsClientUser | null;
   } | null;
-  business?: { name: string | null } | null;
+  business?: {
+    name: string | null;
+    user?: CreditsClientUser | null;
+  } | null;
   order_items?: CreditsOrderItemBrief[];
 }
 

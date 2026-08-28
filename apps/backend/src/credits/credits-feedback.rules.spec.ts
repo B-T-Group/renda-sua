@@ -8,19 +8,20 @@ import {
 describe('ops credits feedback rules', () => {
   it('maps contact actions to channels and skip actions to classification', () => {
     expect(FEEDBACK_ACTION_TO_CHANNEL.called_client).toBe('call');
+    expect(FEEDBACK_ACTION_TO_CHANNEL.called_business).toBe('call');
     expect(FEEDBACK_ACTION_TO_CHANNEL.emailed_client).toBe('email');
     expect(FEEDBACK_ACTION_TO_CHANNEL.spoke_in_person).toBe('in_person');
     expect(FEEDBACK_ACTION_TO_CLASSIFICATION.test_order).toBe('test');
     expect(FEEDBACK_ACTION_TO_CLASSIFICATION.internal_order).toBe('internal');
   });
 
-  it('blocks self-award when actor is the order client', () => {
-    const actorId = 'user-1';
-    const clientUserId = 'user-1';
+  it('blocks self-award when actor is the order client or business', () => {
+    const actorId = 'biz-user-1';
+    const partyIds = ['client-1', 'biz-user-1'].filter(Boolean);
     expect(() => {
-      if (clientUserId && actorId === clientUserId) {
+      if (partyIds.includes(actorId)) {
         throw new ForbiddenException(
-          'You cannot award feedback credit on your own order'
+          'You cannot record follow-up points on your own order'
         );
       }
     }).toThrow(ForbiddenException);

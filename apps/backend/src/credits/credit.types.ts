@@ -28,6 +28,7 @@ export type CreditOrderResult = (typeof CREDIT_ORDER_RESULTS)[number];
 
 export const CREDIT_FEEDBACK_ACTIONS = [
   'called_client',
+  'called_business',
   'emailed_client',
   'spoke_in_person',
   'test_order',
@@ -44,6 +45,7 @@ export const FEEDBACK_ACTION_TO_CHANNEL: Partial<
   Record<CreditFeedbackAction, CreditContactChannel>
 > = {
   called_client: 'call',
+  called_business: 'call',
   emailed_client: 'email',
   spoke_in_person: 'in_person',
 };
@@ -70,6 +72,7 @@ export interface CreditsFeedbackOrderRow {
   cancelled_at?: string | null;
   completed_at?: string | null;
   cancellation_notes?: string | null;
+  cancelled_by?: string | null;
   updated_at?: string | null;
   client_id?: string;
   ops_classification?: OrderOpsClassification | null;
@@ -84,7 +87,15 @@ export interface CreditsFeedbackOrderRow {
       country?: string | null;
     } | null;
   } | null;
-  business?: { name: string | null } | null;
+  business?: {
+    name: string | null;
+    user?: {
+      first_name: string | null;
+      last_name: string | null;
+      phone_number: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
   order_items?: CreditsOrderItemBrief[];
 }
 

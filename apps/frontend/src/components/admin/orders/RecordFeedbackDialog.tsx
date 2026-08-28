@@ -7,24 +7,20 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   FormLabel,
-  Radio,
-  RadioGroup,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CreditsFeedbackOrderRow } from '../../../hooks/useAdminCredits';
+import type {
+  CreditFeedbackAction,
+  CreditsClientUser,
+  CreditsFeedbackOrderRow,
+} from '../../../hooks/useAdminCredits';
 
-export type CreditFeedbackAction =
-  | 'called_client'
-  | 'emailed_client'
-  | 'spoke_in_person'
-  | 'test_order'
-  | 'internal_order';
+export type { CreditFeedbackAction };
 
 export interface RecordFeedbackPayload {
   action: CreditFeedbackAction;
@@ -40,21 +36,39 @@ interface RecordFeedbackDialogProps {
   onSubmit: (payload: RecordFeedbackPayload) => void | Promise<void>;
 }
 
-const ACTIONS: Array<[CreditFeedbackAction, string, string]> = [
+type ActionOption = [CreditFeedbackAction, string, string];
+
+const SHARED_ACTIONS: ActionOption[] = [
   ['called_client', 'admin.credits.action.calledClient', 'Called client'],
   ['emailed_client', 'admin.credits.action.emailedClient', 'Emailed client'],
   [
     'spoke_in_person',
     'admin.credits.action.spokeInPerson',
-    'Spoke to client personally',
+    'Spoke in person',
   ],
   ['test_order', 'admin.credits.action.testOrder', 'Test order'],
   ['internal_order', 'admin.credits.action.internalOrder', 'Internal order'],
 ];
 
-function personName(user?: CreditsFeedbackOrderRow['client']): string {
-  const u = user?.user;
-  const name = [u?.first_name, u?.last_name].filter(Boolean).join(' ');
+const CANCELLED_ACTIONS: ActionOption[] = [
+  ['called_client', 'admin.credits.action.calledClient', 'Called client'],
+  [
+    'called_business',
+    'admin.credits.action.calledBusiness',
+    'Called business',
+  ],
+  ['emailed_client', 'admin.credits.action.emailedClient', 'Emailed client'],
+  [
+    'spoke_in_person',
+    'admin.credits.action.spokeInPerson',
+    'Spoke in person',
+  ],
+  ['test_order', 'admin.credits.action.testOrder', 'Test order'],
+  ['internal_order', 'admin.credits.action.internalOrder', 'Internal order'],
+];
+
+function displayName(user?: CreditsClientUser | null): string {
+  const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
   return name || '—';
 }
 
@@ -78,6 +92,26 @@ function fulfillmentLabel(
   return method || t('admin.credits.fulfillment.unknown', 'Fulfillment unknown');
 }
 
+function cancelledByLabel(
+  value: string | null | undefined,
+  t: (key: string, fallback: string) => string
+): string | null {
+  if (!value) return null;
+  if (value === 'client') {
+    return t('admin.credits.briefing.cancelledByClient', 'Cancelled by client');
+  }
+  if (value === 'business') {
+    return t(
+      'admin.credits.briefing.cancelledByBusiness',
+      'Cancelled by business'
+    );
+  }
+  if (value === 'system') {
+    return t('admin.credits.briefing.cancelledBySystem', 'Cancelled by system');
+  }
+  return value;
+}
+
 export const RecordFeedbackDialog: React.FC<RecordFeedbackDialogProps> = ({
   open,
   mode,
@@ -89,16 +123,36 @@ export const RecordFeedbackDialog: React.FC<RecordFeedbackDialogProps> = ({
   const { t } = useTranslation();
   const [action, setAction] = useState<CreditFeedbackAction>('called_client');
   const [notes, setNotes] = useState('');
+  const actions = mode === 'cancelled' ? CANCELLED_ACTIONS : SHARED_ACTIONS;
 
   useEffect(() => {
     if (!open) return;
     setAction('called_client');
     setNotes('');
-  }, [open, order?.id]);
+  }, [open, order?.id, mode]);
 
   const canSubmit = !!action && notes.trim().length > 0 && !submitting;
   const isSkipCredit =
     action === 'test_order' || action === 'internal_order';
+
+  const hint = useMemo(() => {
+    if (isSkipCredit) {
+      return t(
+        'admin.credits.skipCreditHint',
+        'Explain why this is not a real follow-up. No points will be awarded.'
+      );
+    }
+    if (mode === 'cancelled') {
+      return t(
+        'admin.credits.cancelledFeedbackHint',
+        'Call the client or business (whoever cancelled) and record what they shared.'
+      );
+    }
+    return t(
+      'admin.credits.feedbackHint',
+      'Call the client and record what they shared.'
+    );
+  }, [isSkipCredit, mode, t]);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -121,37 +175,36 @@ export const RecordFeedbackDialog: React.FC<RecordFeedbackDialogProps> = ({
         <Stack spacing={2.5} sx={{ pt: 1 }}>
           {order ? <OrderBriefing order={order} mode={mode} /> : null}
 
-          <FormControl>
-            <FormLabel>
+          <FormControl fullWidth>
+            <FormLabel sx={{ mb: 1 }}>
               {t('admin.credits.actionTaken', 'Action taken')}
             </FormLabel>
-            <RadioGroup
-              value={action}
-              onChange={(e) =>
-                setAction(e.target.value as CreditFeedbackAction)
-              }
-            >
-              {ACTIONS.map(([value, key, fallback]) => (
-                <FormControlLabel
-                  key={value}
-                  value={value}
-                  control={<Radio />}
-                  label={t(key, fallback)}
-                />
-              ))}
-            </RadioGroup>
+            <Stack spacing={0.75}>
+              {actions.map(([value, key, fallback]) => {
+                const selected = action === value;
+                return (
+                  <Button
+                    key={value}
+                    fullWidth
+                    size="small"
+                    variant={selected ? 'contained' : 'outlined'}
+                    color={selected ? 'primary' : 'inherit'}
+                    onClick={() => setAction(value)}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      textTransform: 'none',
+                      fontWeight: selected ? 700 : 500,
+                    }}
+                  >
+                    {t(key, fallback)}
+                  </Button>
+                );
+              })}
+            </Stack>
           </FormControl>
 
           <Typography variant="body2" color="text.secondary">
-            {isSkipCredit
-              ? t(
-                  'admin.credits.skipCreditHint',
-                  'Explain why this is not a real credit-worthy call-back. No credit will be awarded.'
-                )
-              : t(
-                  'admin.credits.feedbackHint',
-                  'Call the client and record what they shared.'
-                )}
+            {hint}
           </Typography>
 
           <TextField
@@ -182,37 +235,28 @@ export const RecordFeedbackDialog: React.FC<RecordFeedbackDialogProps> = ({
   );
 };
 
-const OrderBriefing: React.FC<{
-  order: CreditsFeedbackOrderRow;
-  mode: 'cancelled' | 'first-order' | null;
-}> = ({ order, mode }) => {
+const ContactBlock: React.FC<{
+  label: string;
+  user?: CreditsClientUser | null;
+  fallbackName?: string | null;
+  showCountry?: boolean;
+}> = ({ label, user, fallbackName, showCountry }) => {
   const { t } = useTranslation();
-  const phone = order.client?.user?.phone_number?.trim() || '';
-  const email = order.client?.user?.email?.trim() || '';
-  const stamp =
-    mode === 'cancelled' ? order.cancelled_at : order.completed_at;
-  const items = (order.order_items ?? []).slice(0, 10);
-
+  const phone = user?.phone_number?.trim() || '';
+  const email = user?.email?.trim() || '';
+  const name = displayName(user);
+  const title = name !== '—' ? name : fallbackName?.trim() || '—';
   return (
-    <Stack
-      spacing={1.25}
-      sx={{
-        p: 1.5,
-        borderRadius: 1,
-        bgcolor: 'action.hover',
-      }}
-    >
-      <Typography variant="subtitle2">
-        {t('admin.credits.briefing.title', 'Client & order')}
+    <Stack spacing={0.75}>
+      <Typography variant="body2" fontWeight={600}>
+        {label}: {title}
       </Typography>
-      <Typography variant="body2">
-        {t('admin.credits.briefing.client', 'Client')}: {personName(order.client)}
-      </Typography>
-      <Typography variant="body2">
-        {t('admin.credits.briefing.country', 'Country')}:{' '}
-        {order.client?.user?.country?.toUpperCase() || '—'}
-      </Typography>
-
+      {showCountry ? (
+        <Typography variant="body2">
+          {t('admin.credits.briefing.country', 'Country')}:{' '}
+          {user?.country?.toUpperCase() || '—'}
+        </Typography>
+      ) : null}
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
         <Typography variant="body2" sx={{ minWidth: 0 }}>
           {t('admin.credits.briefing.phone', 'Phone')}: {phone || '—'}
@@ -228,7 +272,6 @@ const OrderBriefing: React.FC<{
           </Button>
         ) : null}
       </Stack>
-
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
         <Typography variant="body2" sx={{ minWidth: 0 }}>
           {t('admin.credits.briefing.email', 'Email')}: {email || '—'}
@@ -244,11 +287,55 @@ const OrderBriefing: React.FC<{
           </Button>
         ) : null}
       </Stack>
+    </Stack>
+  );
+};
+
+const OrderBriefing: React.FC<{
+  order: CreditsFeedbackOrderRow;
+  mode: 'cancelled' | 'first-order' | null;
+}> = ({ order, mode }) => {
+  const { t } = useTranslation();
+  const stamp =
+    mode === 'cancelled' ? order.cancelled_at : order.completed_at;
+  const items = (order.order_items ?? []).slice(0, 10);
+  const cancelledBy = cancelledByLabel(order.cancelled_by, t);
+
+  return (
+    <Stack
+      spacing={1.5}
+      sx={{
+        p: 1.5,
+        borderRadius: 1,
+        bgcolor: 'action.hover',
+      }}
+    >
+      <Typography variant="subtitle2">
+        {mode === 'cancelled'
+          ? t('admin.credits.briefing.titleCancelled', 'Who to contact')
+          : t('admin.credits.briefing.title', 'Client & order')}
+      </Typography>
+
+      <ContactBlock
+        label={t('admin.credits.briefing.client', 'Client')}
+        user={order.client?.user}
+        showCountry
+      />
+
+      {mode === 'cancelled' ? (
+        <ContactBlock
+          label={t('admin.credits.briefing.business', 'Business')}
+          user={order.business?.user}
+          fallbackName={order.business?.name}
+        />
+      ) : null}
 
       <Typography variant="body2">
         {t('admin.credits.briefing.order', 'Order')}: #{order.order_number} ·{' '}
         {order.current_status}
-        {order.business?.name ? ` · ${order.business.name}` : ''}
+        {mode !== 'cancelled' && order.business?.name
+          ? ` · ${order.business.name}`
+          : ''}
       </Typography>
       <Typography variant="body2">
         {t('admin.credits.briefing.fulfillment', 'Fulfillment')}:{' '}
@@ -260,6 +347,7 @@ const OrderBriefing: React.FC<{
             ? t('admin.credits.briefing.cancelledAt', 'Cancelled')
             : t('admin.credits.briefing.completedAt', 'Completed')}
           : {new Date(stamp).toLocaleString()}
+          {cancelledBy ? ` · ${cancelledBy}` : ''}
         </Typography>
       ) : null}
       {order.cancellation_notes ? (

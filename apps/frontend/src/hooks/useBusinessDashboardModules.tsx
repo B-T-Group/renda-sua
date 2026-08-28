@@ -525,16 +525,16 @@ export function useBusinessDashboardModules({
         path: '/admin/account-recharge',
       },
       {
-        title: t('business.dashboard.creditsModule', 'Ops credits'),
+        title: t('business.dashboard.creditsModule', 'Ops follow-ups'),
         description: t(
           'business.dashboard.creditsModuleDescription',
-          'Escalations, call-back feedback, and progress leaderboard'
+          'Escalations, call-backs, and follow-up progress'
         ),
         icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#f9a825',
         requiredPermission: PlatformPermissions.OPS_CREDITS,
-        path: '/admin/credits',
+        path: '/admin/follow-ups',
       },
       {
         title: t('business.dashboard.siteEventsModule', 'Site events'),

@@ -590,12 +590,16 @@ function App() {
               }
             />
             <Route
-              path="/admin/credits"
+              path="/admin/follow-ups"
               element={
                 <ProtectedRoute>
                   <LazyPages.AdminCreditsPage />
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/admin/credits"
+              element={<Navigate to="/admin/follow-ups" replace />}
             />
 
             {/* Content Management routes */}

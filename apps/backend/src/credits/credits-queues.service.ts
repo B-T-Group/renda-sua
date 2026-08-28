@@ -275,12 +275,15 @@ export class CreditsQueuesService {
           limit: $limit
         ) {
           id order_number client_id current_status fulfillment_method
-          completed_at cancellation_notes
+          completed_at cancellation_notes cancelled_by
           client {
             user_id
             user { first_name last_name phone_number email country }
           }
-          business { name }
+          business {
+            name
+            user { first_name last_name phone_number email }
+          }
           order_items(limit: 10) { ${ORDER_ITEM_FIELDS} }
         }
       }`,
@@ -306,6 +309,7 @@ export class CreditsQueuesService {
     client_id: string;
     ops_classification: 'test' | 'internal' | null;
     client_user_id: string | null;
+    business_user_id: string | null;
   } | null> {
     const res = await this.hasura.executeQuery<{
       orders_by_pk: {
@@ -317,6 +321,7 @@ export class CreditsQueuesService {
         client_id: string;
         ops_classification: 'test' | 'internal' | null;
         client: { user_id: string } | null;
+        business: { user_id: string } | null;
       } | null;
     }>(
       `query OrderForCreditFeedback($id: uuid!) {
@@ -324,6 +329,7 @@ export class CreditsQueuesService {
           id current_status cancelled_at completed_at updated_at client_id
           ops_classification
           client { user_id }
+          business { user_id }
         }
       }`,
       { id: orderId }
@@ -339,6 +345,7 @@ export class CreditsQueuesService {
       client_id: row.client_id,
       ops_classification: row.ops_classification,
       client_user_id: row.client?.user_id ?? null,
+      business_user_id: row.business?.user_id ?? null,
     };
   }
 
@@ -390,12 +397,16 @@ export class CreditsQueuesService {
           offset: $offset
         ) {
           id order_number current_status fulfillment_method
-          cancelled_at completed_at cancellation_notes updated_at client_id
+          cancelled_at completed_at cancellation_notes cancelled_by
+          updated_at client_id
           client {
             user_id
             user { first_name last_name phone_number email country }
           }
-          business { name }
+          business {
+            name
+            user { first_name last_name phone_number email }
+          }
           order_items(limit: 10) { ${ORDER_ITEM_FIELDS} }
         }
         orders_aggregate(where: $where) {

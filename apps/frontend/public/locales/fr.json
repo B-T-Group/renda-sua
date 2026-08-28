@@ -1232,8 +1232,8 @@
       "empty": "Aucune commande assignée surveillée actuellement."
     },
     "credits": {
-      "pageTitle": "Crédits ops",
-      "pageDescription": "Escalades, retours d’appel et tableau de progression",
+      "pageTitle": "Suivis ops",
+      "pageDescription": "Escalades, retours d’appel et progression des suivis",
       "resolveTitle": "Enregistrer comment vous avez traité ceci",
       "contactChannel": "Comment vous les avez joints",
       "orderResult": "Ce qui s’est passé",
@@ -1241,17 +1241,17 @@
       "resolveSubmit": "Résoudre",
       "resolveAction": "Résoudre",
       "resolveSuccess": "Escalade résolue",
-      "loadFailed": "Impossible de charger les crédits",
+      "loadFailed": "Impossible de charger les suivis",
       "actionFailed": "Action échouée",
       "feedbackSaved": "Retour enregistré",
-      "markedTest": "Marqué comme commande test (pas de crédit)",
-      "markedInternal": "Marqué comme commande interne (pas de crédit)",
-      "selfAwardBlocked": "Vous ne pouvez pas attribuer un crédit de retour sur votre propre commande",
+      "markedTest": "Marqué comme commande test (pas de points)",
+      "markedInternal": "Marqué comme commande interne (pas de points)",
+      "selfAwardBlocked": "Vous ne pouvez pas enregistrer des points de suivi sur votre propre commande",
       "cancelledFeedbackTitle": "Retour commande annulée",
       "firstOrderFeedbackTitle": "Retour première commande",
       "feedbackNotes": "Notes de retour",
       "feedbackHint": "Appelez le client et notez ce qu’il a partagé.",
-      "skipCreditHint": "Expliquez pourquoi ce n’est pas un retour éligible au crédit. Aucun crédit ne sera attribué.",
+      "skipCreditHint": "Expliquez pourquoi ce n’est pas un vrai suivi. Aucun point ne sera attribué.",
       "actionTaken": "Action effectuée",
       "saveFeedback": "Enregistrer le retour",
       "recordFeedback": "Enregistrer un retour",
@@ -1259,11 +1259,12 @@
       "emptyEscalations": "Aucune escalade ouverte",
       "emptyCancelled": "Aucune annulation en attente",
       "emptyFirstOrder": "Aucun premier appel en attente",
-      "emptyProgress": "Aucun crédit attribué",
+      "emptyProgress": "Aucun suivi enregistré",
       "action": {
         "calledClient": "Appelé le client",
+        "calledBusiness": "Appelé le commerce",
         "emailedClient": "Envoyé un e-mail au client",
-        "spokeInPerson": "Parlé au client en personne",
+        "spokeInPerson": "Parlé en personne",
         "testOrder": "Commande test",
         "internalOrder": "Commande interne"
       },
@@ -1277,6 +1278,7 @@
       },
       "quickCall": "Appeler",
       "quickEmail": "E-mail",
+      "cancelledFeedbackHint": "Appelez le client ou le commerce (selon qui a annulé) et notez ce qu’ils ont partagé.",
       "fulfillment": {
         "pickup": "Retrait",
         "delivery": "Livraison",
@@ -1285,7 +1287,9 @@
       },
       "briefing": {
         "title": "Client et commande",
+        "titleCancelled": "Qui contacter",
         "client": "Client",
+        "business": "Commerce",
         "country": "Pays",
         "phone": "Téléphone",
         "email": "E-mail",
@@ -1293,6 +1297,9 @@
         "fulfillment": "Mode de livraison",
         "cancelledAt": "Annulée",
         "completedAt": "Terminée",
+        "cancelledByClient": "Annulée par le client",
+        "cancelledByBusiness": "Annulée par le commerce",
+        "cancelledBySystem": "Annulée par le système",
         "cancelNotes": "Notes d’annulation",
         "items": "Articles"
       },
@@ -1334,7 +1341,7 @@
         "user": "Utilisateur",
         "roles": "Rôles",
         "weight": "Poids",
-        "count": "Crédits"
+        "count": "Actions"
       }
     }
   },
@@ -2197,8 +2204,8 @@
       "orderOperationsDescription": "Intervenir sur les commandes à risque, contacter chaque participant et redispatcher",
       "pickupOps": "Santé des ramassages",
       "pickupOpsDescription": "Tableau SLA en direct des commandes en attente de ramassage",
-      "creditsModule": "Ops credits",
-      "creditsModuleDescription": "Escalations, call-back feedback, and progress leaderboard"
+      "creditsModule": "Suivis ops",
+      "creditsModuleDescription": "Escalades, retours d’appel et progression des suivis"
     },
     "clientCities": {
       "seoTitle": "D'où viennent vos clients",
