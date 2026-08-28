@@ -4,6 +4,9 @@
  */
 export const FOOD_CATEGORY_NAME = 'Restaurant & Cooked Food';
 
+/** Default subcategory for AI-detected and merchant-flagged cooked dishes. */
+export const FOOD_SUB_CATEGORY_NAME = 'Local Dishes';
+
 /**
  * Restaurants cook to order rather than counting stock, so food inventory is
  * seeded with a high quantity. Storefront visibility requires available

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsOptional,
   IsString,
   IsUUID,
@@ -37,4 +38,13 @@ export class ImageItemSuggestionsDto {
   @IsOptional()
   @MaxLength(200)
   hint?: string;
+
+  @ApiProperty({
+    description:
+      'When true, treat the item as a cooked restaurant dish and use the food category taxonomy.',
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isFoodItem?: boolean;
 }

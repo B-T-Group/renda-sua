@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
-import { FOOD_CATEGORY_NAME } from '../../../../constants/food';
+import { FOOD_CATEGORY_NAME, FOOD_SUB_CATEGORY_NAME } from '../../../../constants/food';
 import ItemCategoryNamePickers from '../../ItemCategoryNamePickers';
 
 export interface ReviewFormValues {
@@ -101,7 +101,11 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     setCategoryName(
       isFoodItem ? FOOD_CATEGORY_NAME : suggestions?.categoryName?.trim() || ''
     );
-    setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
+    setSubCategoryName(
+      isFoodItem
+        ? FOOD_SUB_CATEGORY_NAME
+        : suggestions?.subCategoryName?.trim() || ''
+    );
     setBrandName(suggestions?.brandName?.trim() || '');
     setIsUsed(suggestions?.isUsed === true);
     setDimensions(suggestions?.dimensions?.trim() || '');

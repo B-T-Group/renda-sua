@@ -3,6 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import FormData from 'form-data';
 import { normalizeWeightUnit } from '../common/weight-units';
+import {
+  applyCookedFoodCategories,
+  isCookedFoodSuggestion,
+} from '../food/apply-cooked-food-category';
+import {
+  FOOD_CATEGORY_NAME,
+  FOOD_SUB_CATEGORY_NAME,
+} from '../food/food.constants';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -70,6 +78,8 @@ export interface ImageItemSuggestionResult {
   isSizeRequired?: boolean | null;
   /** True when photos/text indicate a used / pre-owned item. */
   isUsed?: boolean | null;
+  /** True when the item is a cooked restaurant dish. */
+  isFoodItem?: boolean | null;
   confidence?: ImageItemSuggestionConfidence;
   categoryAlternates?: string[];
   subCategoryAlternates?: string[];
@@ -511,6 +521,8 @@ export class AiService {
     existingBrandNames?: string[];
     /** Compact category > subcategory list for vision prompt. */
     existingCatalogPrompt?: string | null;
+    /** Merchant indicated a cooked restaurant dish. */
+    isFoodItem?: boolean | null;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
@@ -553,25 +565,36 @@ export class AiService {
         `Platform catalog (prefer these exact category and subcategory names when they fit; only invent new names if nothing matches):\n${input.existingCatalogPrompt.trim()}`
       );
     }
+    if (input.isFoodItem) {
+      textContextParts.push(
+        `Merchant indicated this is a cooked restaurant dish. Set isFoodItem true and use category "${FOOD_CATEGORY_NAME}" with subcategory "${FOOD_SUB_CATEGORY_NAME}".`
+      );
+    }
     const textContext = textContextParts.join('\n');
-    const emptyResult = (): ImageItemSuggestionResult => ({
-      name: input.hint?.trim() || input.caption || input.altText || undefined,
-      categoryName: undefined,
-      subCategoryName: undefined,
-      brandName: undefined,
-      description: undefined,
-      price: null,
-      currency: defaultCurrency,
-      barcodeValues: null,
-      weight: null,
-      weightUnit: null,
-      dimensions: null,
-      isSizeRequired: false,
-      isUsed: null,
-      confidence: this.defaultConfidence(!!input.hint?.trim()),
-      categoryAlternates: [],
-      subCategoryAlternates: [],
-    });
+    const emptyResult = (): ImageItemSuggestionResult => {
+      const base: ImageItemSuggestionResult = {
+        name: input.hint?.trim() || input.caption || input.altText || undefined,
+        categoryName: undefined,
+        subCategoryName: undefined,
+        brandName: undefined,
+        description: undefined,
+        price: null,
+        currency: defaultCurrency,
+        barcodeValues: null,
+        weight: null,
+        weightUnit: null,
+        dimensions: null,
+        isSizeRequired: false,
+        isUsed: null,
+        isFoodItem: input.isFoodItem ? true : null,
+        confidence: this.defaultConfidence(!!input.hint?.trim()),
+        categoryAlternates: [],
+        subCategoryAlternates: [],
+      };
+      return isCookedFoodSuggestion(base, input.isFoodItem)
+        ? applyCookedFoodCategories(base)
+        : base;
+    };
 
     if (!urls.length) {
       return emptyResult();
@@ -633,33 +656,36 @@ export class AiService {
       );
       const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
       if (!barcode) {
-        return suggestion;
+        return this.finalizeImageItemSuggestion(suggestion, input.isFoodItem);
       }
 
       const lookup = await this.lookupProductByBarcode(barcode);
       if (!lookup) {
-        return suggestion;
+        return this.finalizeImageItemSuggestion(suggestion, input.isFoodItem);
       }
 
-      return {
-        ...suggestion,
-        name:
-          this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
-        brandName: lookup.brandName || suggestion.brandName,
-        categoryName: lookup.categoryName || suggestion.categoryName,
-        subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
-        weight: lookup.weight ?? suggestion.weight,
-        weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
-        dimensions: lookup.dimensions ?? suggestion.dimensions,
-        confidence: {
-          ...suggestion.confidence!,
-          name: 'high',
-          brandName: lookup.brandName ? 'high' : suggestion.confidence!.brandName,
-          categoryName: lookup.categoryName
-            ? 'high'
-            : suggestion.confidence!.categoryName,
+      return this.finalizeImageItemSuggestion(
+        {
+          ...suggestion,
+          name:
+            this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
+          brandName: lookup.brandName || suggestion.brandName,
+          categoryName: lookup.categoryName || suggestion.categoryName,
+          subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
+          weight: lookup.weight ?? suggestion.weight,
+          weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
+          dimensions: lookup.dimensions ?? suggestion.dimensions,
+          confidence: {
+            ...suggestion.confidence!,
+            name: 'high',
+            brandName: lookup.brandName ? 'high' : suggestion.confidence!.brandName,
+            categoryName: lookup.categoryName
+              ? 'high'
+              : suggestion.confidence!.categoryName,
+          },
         },
-      };
+        input.isFoodItem
+      );
     } catch (error: unknown) {
       return this.logAndDegrade(
         error,
@@ -785,6 +811,7 @@ export class AiService {
         typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
       isSizeRequired: this.parseOptionalBoolean(parsed.isSizeRequired) ?? false,
       isUsed: typeof parsed.isUsed === 'boolean' ? parsed.isUsed : null,
+      isFoodItem: this.parseOptionalBoolean(parsed.isFoodItem),
       confidence: { ...defaults, ...confidence },
       categoryAlternates,
       subCategoryAlternates,
@@ -1043,6 +1070,15 @@ Do not include any text outside the JSON.`;
     }
   }
 
+  private finalizeImageItemSuggestion(
+    suggestion: ImageItemSuggestionResult,
+    merchantFoodFlag?: boolean | null
+  ): ImageItemSuggestionResult {
+    return isCookedFoodSuggestion(suggestion, merchantFoodFlag)
+      ? applyCookedFoodCategories(suggestion)
+      : suggestion;
+  }
+
   private buildImageItemVisionSystemPrompt(): string {
     return (
       'You are an AI assistant that reads product photos (OCR, labels, price tags, barcodes) ' +
@@ -1086,6 +1122,8 @@ Then extract from the images:
 - Shopper-facing size in "dimensions" when a buyer needs it to purchase: clothing/shoe size (e.g. "M", "42"), volume for perfume/lotion/cream/cosmetics (e.g. "50ml", "1.5L"), or L×W×H (e.g. "20x10x5 cm"). Infer from labels, packaging, or the photo. Prefer shopper-facing size over shipping-box measurements when both exist. Use null if unknown.
 - isSizeRequired: true when size matters for the purchase decision (clothing, shoes, apparel, perfume, lotion, cream, cosmetics, and similar) — even if dimensions was inferred, so the merchant can confirm. false when size is not purchase-relevant (e.g. a phone charger). null only if truly uncertain.
 - Whether the item appears used / pre-owned (not new): set isUsed true only when photos or text clearly show wear, scratches, open packaging, or "used"/"second-hand"/"refurbished"/"open-box" labels. Set false only when clearly new/sealed. If uncertain, set isUsed to null (do not guess).
+- isFoodItem: true when the product is a cooked/prepared restaurant dish meant to be eaten soon (plated meal, soup, stew, rice dish, grilled meat, takeaway hot food, local cuisine). false for packaged groceries, beverages, raw ingredients, retail goods, or sealed supermarket products. null only if truly uncertain.
+- When isFoodItem is true, set categoryName to "${FOOD_CATEGORY_NAME}" and subCategoryName to "${FOOD_SUB_CATEGORY_NAME}" exactly.
 - Up to 3 alternate category names and subcategory names.
 - Per-field confidence: "high" | "medium" | "low".
 
@@ -1112,6 +1150,7 @@ Return ONLY a single JSON object with this exact shape:
   "dimensions": string | null,
   "isSizeRequired": boolean | null,
   "isUsed": boolean | null,
+  "isFoodItem": boolean | null,
   "categoryAlternates": string[] | null,
   "subCategoryAlternates": string[] | null,
   "confidence": {
