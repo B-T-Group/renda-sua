@@ -19,6 +19,14 @@ export interface CreditsSummaryQuery {
   eventType?: CreditEventType;
 }
 
+interface CreditsSummaryUser {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  agent: { id: string } | null;
+  business: { id: string } | null;
+}
+
 @Injectable()
 export class CreditsQueuesService {
   constructor(private readonly hasura: HasuraSystemService) {}
@@ -92,13 +100,7 @@ export class CreditsQueuesService {
         user_id: string;
         event_type: CreditEventType;
         weight: number;
-        user: {
-          first_name: string | null;
-          last_name: string | null;
-          email: string | null;
-          agents: Array<{ id: string }>;
-          businesses: Array<{ id: string }>;
-        } | null;
+        user: CreditsSummaryUser | null;
       }>;
     }>(
       `query CreditsSummary($where: user_credits_bool_exp!) {
@@ -106,8 +108,8 @@ export class CreditsQueuesService {
           user_id event_type weight
           user {
             first_name last_name email
-            agents(limit: 1) { id }
-            businesses(limit: 1) { id }
+            agent { id }
+            business { id }
           }
         }
       }`,
@@ -365,13 +367,7 @@ export class CreditsQueuesService {
       user_id: string;
       event_type: CreditEventType;
       weight: number;
-      user: {
-        first_name: string | null;
-        last_name: string | null;
-        email: string | null;
-        agents: Array<{ id: string }>;
-        businesses: Array<{ id: string }>;
-      } | null;
+      user: CreditsSummaryUser | null;
     }>
   ) {
     const map = new Map<
@@ -399,8 +395,8 @@ export class CreditsQueuesService {
           total_weight: 0,
           credit_count: 0,
           by_event: {},
-          is_agent: (row.user?.agents?.length ?? 0) > 0,
-          is_business: (row.user?.businesses?.length ?? 0) > 0,
+          is_agent: !!row.user?.agent,
+          is_business: !!row.user?.business,
         };
         map.set(row.user_id, entry);
       }

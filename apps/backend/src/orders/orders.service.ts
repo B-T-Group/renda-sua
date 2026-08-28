@@ -3059,8 +3059,8 @@ export class OrdersService {
       clients_by_pk: {
         user_id: string;
         user: {
-          agents: Array<{ id: string }>;
-          businesses: Array<{ id: string }>;
+          agent: { id: string } | null;
+          business: { id: string } | null;
         } | null;
       } | null;
     }>(
@@ -3068,8 +3068,8 @@ export class OrdersService {
         clients_by_pk(id: $id) {
           user_id
           user {
-            agents(limit: 1) { id }
-            businesses(limit: 1) { id }
+            agent { id }
+            business { id }
           }
         }
       }`,
@@ -3077,9 +3077,7 @@ export class OrdersService {
     );
     const row = res.clients_by_pk;
     if (!row?.user_id) return null;
-    const isAgentOrBusiness =
-      (row.user?.agents?.length ?? 0) > 0 ||
-      (row.user?.businesses?.length ?? 0) > 0;
+    const isAgentOrBusiness = !!row.user?.agent || !!row.user?.business;
     return isAgentOrBusiness ? row.user_id : null;
   }
 
