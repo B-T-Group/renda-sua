@@ -59,12 +59,14 @@ export interface CreditsOrderItemBrief {
   item_name: string | null;
   quantity: number;
   variant_name: string | null;
+  image_url?: string | null;
 }
 
 export interface CreditsFeedbackOrderRow {
   id: string;
   order_number: string;
   current_status: string;
+  fulfillment_method?: string | null;
   cancelled_at?: string | null;
   completed_at?: string | null;
   cancellation_notes?: string | null;
@@ -79,6 +81,7 @@ export interface CreditsFeedbackOrderRow {
       last_name: string | null;
       phone_number: string | null;
       email?: string | null;
+      country?: string | null;
     } | null;
   } | null;
   business?: { name: string | null } | null;

@@ -1,4 +1,7 @@
+import EmailIcon from '@mui/icons-material/Email';
+import PhoneIcon from '@mui/icons-material/Phone';
 import {
+  Box,
   Button,
   Dialog,
   DialogContent,
@@ -53,6 +56,26 @@ function personName(user?: CreditsFeedbackOrderRow['client']): string {
   const u = user?.user;
   const name = [u?.first_name, u?.last_name].filter(Boolean).join(' ');
   return name || '—';
+}
+
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function fulfillmentLabel(
+  method: string | null | undefined,
+  t: (key: string, fallback: string) => string
+): string {
+  if (method === 'pickup') {
+    return t('admin.credits.fulfillment.pickup', 'Pickup');
+  }
+  if (method === 'shipping') {
+    return t('admin.credits.fulfillment.shipping', 'Shipping');
+  }
+  if (method === 'delivery') {
+    return t('admin.credits.fulfillment.delivery', 'Delivery');
+  }
+  return method || t('admin.credits.fulfillment.unknown', 'Fulfillment unknown');
 }
 
 export const RecordFeedbackDialog: React.FC<RecordFeedbackDialogProps> = ({
@@ -164,21 +187,15 @@ const OrderBriefing: React.FC<{
   mode: 'cancelled' | 'first-order' | null;
 }> = ({ order, mode }) => {
   const { t } = useTranslation();
-  const phone = order.client?.user?.phone_number || '—';
-  const email = order.client?.user?.email || '—';
-  const items = (order.order_items ?? [])
-    .slice(0, 10)
-    .map((i) => {
-      const label = [i.item_name, i.variant_name].filter(Boolean).join(' · ');
-      return `${i.quantity}× ${label || '—'}`;
-    })
-    .join(', ');
+  const phone = order.client?.user?.phone_number?.trim() || '';
+  const email = order.client?.user?.email?.trim() || '';
   const stamp =
     mode === 'cancelled' ? order.cancelled_at : order.completed_at;
+  const items = (order.order_items ?? []).slice(0, 10);
 
   return (
     <Stack
-      spacing={0.75}
+      spacing={1.25}
       sx={{
         p: 1.5,
         borderRadius: 1,
@@ -192,15 +209,50 @@ const OrderBriefing: React.FC<{
         {t('admin.credits.briefing.client', 'Client')}: {personName(order.client)}
       </Typography>
       <Typography variant="body2">
-        {t('admin.credits.briefing.phone', 'Phone')}: {phone}
+        {t('admin.credits.briefing.country', 'Country')}:{' '}
+        {order.client?.user?.country?.toUpperCase() || '—'}
       </Typography>
-      <Typography variant="body2">
-        {t('admin.credits.briefing.email', 'Email')}: {email}
-      </Typography>
+
+      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+        <Typography variant="body2" sx={{ minWidth: 0 }}>
+          {t('admin.credits.briefing.phone', 'Phone')}: {phone || '—'}
+        </Typography>
+        {phone ? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PhoneIcon fontSize="small" />}
+            href={telHref(phone)}
+          >
+            {t('admin.credits.quickCall', 'Call')}
+          </Button>
+        ) : null}
+      </Stack>
+
+      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+        <Typography variant="body2" sx={{ minWidth: 0 }}>
+          {t('admin.credits.briefing.email', 'Email')}: {email || '—'}
+        </Typography>
+        {email ? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<EmailIcon fontSize="small" />}
+            href={`mailto:${email}`}
+          >
+            {t('admin.credits.quickEmail', 'Email')}
+          </Button>
+        ) : null}
+      </Stack>
+
       <Typography variant="body2">
         {t('admin.credits.briefing.order', 'Order')}: #{order.order_number} ·{' '}
         {order.current_status}
         {order.business?.name ? ` · ${order.business.name}` : ''}
+      </Typography>
+      <Typography variant="body2">
+        {t('admin.credits.briefing.fulfillment', 'Fulfillment')}:{' '}
+        {fulfillmentLabel(order.fulfillment_method, t)}
       </Typography>
       {stamp ? (
         <Typography variant="body2">
@@ -216,10 +268,43 @@ const OrderBriefing: React.FC<{
           {order.cancellation_notes}
         </Typography>
       ) : null}
-      {items ? (
-        <Typography variant="body2">
-          {t('admin.credits.briefing.items', 'Items')}: {items}
-        </Typography>
+
+      {items.length ? (
+        <Stack spacing={1} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" fontWeight={600}>
+            {t('admin.credits.briefing.items', 'Items')}
+          </Typography>
+          {items.map((item, index) => {
+            const label = [item.item_name, item.variant_name]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <Stack
+                key={`${label}-${index}`}
+                direction="row"
+                spacing={1.25}
+                alignItems="center"
+              >
+                <Box
+                  component="img"
+                  src={item.image_url || undefined}
+                  alt=""
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 1,
+                    objectFit: 'cover',
+                    bgcolor: 'action.selected',
+                    flexShrink: 0,
+                  }}
+                />
+                <Typography variant="body2">
+                  {item.quantity}× {label || '—'}
+                </Typography>
+              </Stack>
+            );
+          })}
+        </Stack>
       ) : null}
     </Stack>
   );

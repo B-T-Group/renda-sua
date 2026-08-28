@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -17,6 +18,8 @@ import {
   CREDIT_FEEDBACK_ACTIONS,
   CREDIT_ORDER_RESULTS,
 } from '../credit.types';
+
+const COUNTRY_CODE_PATTERN = /^[A-Za-z]{2}$/;
 
 export class AdminCreditsListQueryDto {
   @ApiPropertyOptional({ default: 50, maximum: 100 })
@@ -43,6 +46,15 @@ export class AdminCreditsListQueryDto {
   @IsOptional()
   @IsIn([...CREDIT_EVENT_TYPES])
   eventType?: (typeof CREDIT_EVENT_TYPES)[number];
+
+  @ApiPropertyOptional({
+    description: 'ISO alpha-2 country filter (credited user)',
+    example: 'CM',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(COUNTRY_CODE_PATTERN)
+  country?: string;
 }
 
 export class AdminCreditsSummaryQueryDto {
@@ -65,6 +77,15 @@ export class AdminCreditsSummaryQueryDto {
   @IsOptional()
   @IsIn([...CREDIT_EVENT_TYPES])
   eventType?: (typeof CREDIT_EVENT_TYPES)[number];
+
+  @ApiPropertyOptional({
+    description: 'ISO alpha-2 country filter (credited user)',
+    example: 'CM',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(COUNTRY_CODE_PATTERN)
+  country?: string;
 }
 
 export class AdminCreditsQueueQueryDto {
@@ -82,6 +103,15 @@ export class AdminCreditsQueueQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+
+  @ApiPropertyOptional({
+    description: 'ISO alpha-2 country filter (order client)',
+    example: 'CM',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(COUNTRY_CODE_PATTERN)
+  country?: string;
 }
 
 export class ResolveEscalationCreditDto {

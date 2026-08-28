@@ -20,24 +20,29 @@ export interface CreditsOrderItemBrief {
   item_name: string | null;
   quantity: number;
   variant_name: string | null;
+  image_url?: string | null;
+}
+
+export interface CreditsClientUser {
+  first_name: string | null;
+  last_name: string | null;
+  phone_number: string | null;
+  email?: string | null;
+  country?: string | null;
 }
 
 export interface CreditsFeedbackOrderRow {
   id: string;
   order_number: string;
   current_status: string;
+  fulfillment_method?: string | null;
   cancelled_at?: string | null;
   completed_at?: string | null;
   cancellation_notes?: string | null;
   updated_at?: string | null;
   client?: {
     user_id?: string;
-    user?: {
-      first_name: string | null;
-      last_name: string | null;
-      phone_number: string | null;
-      email?: string | null;
-    } | null;
+    user?: CreditsClientUser | null;
   } | null;
   business?: { name: string | null } | null;
   order_items?: CreditsOrderItemBrief[];
@@ -48,6 +53,7 @@ export interface CreditsSummaryRow {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  country?: string | null;
   total_weight: number;
   credit_count: number;
   by_event: Record<string, { count: number; weight: number }>;
@@ -60,20 +66,34 @@ export interface CreditsQueuePage<T> {
   total: number;
 }
 
+export type CreditsQueryParams = {
+  limit?: number;
+  offset?: number;
+  country?: string;
+};
+
+function withCountry(base: string, country?: string): string {
+  if (!country) return base;
+  return `${base}&country=${encodeURIComponent(country)}`;
+}
+
 export function useAdminCredits() {
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadSummary = useCallback(
-    async (params?: { limit?: number; offset?: number }) => {
+    async (params?: CreditsQueryParams) => {
       setLoading(true);
       setError(null);
       try {
         const limit = params?.limit ?? 50;
         const offset = params?.offset ?? 0;
         const res = await apiClient.get(
-          `/admin/credits/summary?limit=${limit}&offset=${offset}`
+          withCountry(
+            `/admin/credits/summary?limit=${limit}&offset=${offset}`,
+            params?.country
+          )
         );
         return res.data as {
           items: CreditsSummaryRow[];
@@ -91,11 +111,14 @@ export function useAdminCredits() {
   );
 
   const loadEscalations = useCallback(
-    async (params?: { limit?: number; offset?: number }) => {
+    async (params?: CreditsQueryParams) => {
       const limit = params?.limit ?? 50;
       const offset = params?.offset ?? 0;
       const res = await apiClient.get(
-        `/admin/credits/queues/escalations?limit=${limit}&offset=${offset}`
+        withCountry(
+          `/admin/credits/queues/escalations?limit=${limit}&offset=${offset}`,
+          params?.country
+        )
       );
       return res.data as CreditsQueuePage<any>;
     },
@@ -103,11 +126,14 @@ export function useAdminCredits() {
   );
 
   const loadCancelled = useCallback(
-    async (params?: { limit?: number; offset?: number }) => {
+    async (params?: CreditsQueryParams) => {
       const limit = params?.limit ?? 50;
       const offset = params?.offset ?? 0;
       const res = await apiClient.get(
-        `/admin/credits/queues/cancelled?limit=${limit}&offset=${offset}`
+        withCountry(
+          `/admin/credits/queues/cancelled?limit=${limit}&offset=${offset}`,
+          params?.country
+        )
       );
       return res.data as CreditsQueuePage<CreditsFeedbackOrderRow>;
     },
@@ -115,11 +141,14 @@ export function useAdminCredits() {
   );
 
   const loadFirstOrder = useCallback(
-    async (params?: { limit?: number; offset?: number }) => {
+    async (params?: CreditsQueryParams) => {
       const limit = params?.limit ?? 50;
       const offset = params?.offset ?? 0;
       const res = await apiClient.get(
-        `/admin/credits/queues/first-order?limit=${limit}&offset=${offset}`
+        withCountry(
+          `/admin/credits/queues/first-order?limit=${limit}&offset=${offset}`,
+          params?.country
+        )
       );
       return res.data as CreditsQueuePage<CreditsFeedbackOrderRow>;
     },
