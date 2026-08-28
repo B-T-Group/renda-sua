@@ -4,6 +4,7 @@ import { Auth0Service } from '../auth/auth0.service';
 import { AwsModule } from '../aws/aws.module';
 import { AgentsModule } from '../agents/agents.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
+import { CreditsModule } from '../credits/credits.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
@@ -23,6 +24,7 @@ import { UsersController } from './users.controller';
     AddressesModule,
     AgentsModule,
     BusinessReferralsModule,
+    CreditsModule,
     BusinessContractsModule,
     LaunchPromoModule,
     StripePaymentsModule,

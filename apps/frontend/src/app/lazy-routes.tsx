@@ -19,6 +19,9 @@ export const AdminAccountRechargePage = lazy(() =>
 export const AdminPerformancePage = lazy(() =>
   import('../components/pages/AdminPerformancePage')
 );
+export const AdminCreditsPage = lazy(() =>
+  import('../components/pages/AdminCreditsPage')
+);
 export const AdminSiteEventsPage = lazy(() =>
   import('../components/pages/AdminSiteEventsPage')
 );

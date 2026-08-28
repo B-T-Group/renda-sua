@@ -4,6 +4,7 @@ import {
   BusinessReferralsService,
   ResolvedBusinessReferral,
 } from '../../business-referrals/business-referrals.service';
+import { CreditsService } from '../../credits/credits.service';
 import type { PersonaId } from '../../users/persona.types';
 import type { ProvisionedEntity } from './user-provisioning.service';
 
@@ -13,7 +14,8 @@ export class ReferralProvisioningService {
 
   constructor(
     private readonly businessReferralsService: BusinessReferralsService,
-    private readonly agentReferralsService: AgentReferralsService
+    private readonly agentReferralsService: AgentReferralsService,
+    private readonly creditsService: CreditsService
   ) {}
 
   /** Fail-fast pre-insert resolution when agent or business persona + code present. */
@@ -67,22 +69,72 @@ export class ReferralProvisioningService {
   }): Promise<void> {
     const business = input.entities.find((e) => e.type === 'business');
     if (business && input.referral) {
-      try {
-        await this.businessReferralsService.notifyReferrerOfBusinessReferral(
-          {
-            businessId: business.id,
-            countryCode: input.country,
-            businessName: input.businessName,
-            businessOwnerName: input.ownerName,
-          },
-          input.referral
-        );
-      } catch (error: any) {
-        this.logger.warn(
-          `Business referral notify failed: ${error?.message}`
-        );
-      }
+      await this.notifyBusinessReferral(business.id, input);
+      await this.awardReferralCredit(input.referral, {
+        kind: 'business',
+        id: business.id,
+      });
     }
 
+    const agent = input.entities.find((e) => e.type === 'agent');
+    if (agent && input.referral) {
+      await this.awardReferralCredit(input.referral, {
+        kind: 'agent',
+        id: agent.id,
+      });
+    }
+  }
+
+  private async notifyBusinessReferral(
+    businessId: string,
+    input: {
+      referral: ResolvedBusinessReferral | null;
+      country?: string;
+      businessName: string;
+      ownerName: string;
+    }
+  ): Promise<void> {
+    if (!input.referral) return;
+    try {
+      await this.businessReferralsService.notifyReferrerOfBusinessReferral(
+        {
+          businessId,
+          countryCode: input.country,
+          businessName: input.businessName,
+          businessOwnerName: input.ownerName,
+        },
+        input.referral
+      );
+    } catch (error: any) {
+      this.logger.warn(`Business referral notify failed: ${error?.message}`);
+    }
+  }
+
+  private async awardReferralCredit(
+    referral: ResolvedBusinessReferral,
+    target: { kind: 'business' | 'agent'; id: string }
+  ): Promise<void> {
+    try {
+      const referrerUserId = await this.creditsService.resolveReferrerUserId({
+        kind: referral.kind,
+        agentId: referral.kind === 'agent' ? referral.agentId : undefined,
+        businessUserId:
+          referral.kind === 'business' ? referral.userId : undefined,
+      });
+      if (!referrerUserId) return;
+      if (target.kind === 'business') {
+        await this.creditsService.awardBusinessReferred({
+          referrerUserId,
+          businessId: target.id,
+        });
+        return;
+      }
+      await this.creditsService.awardAgentReferred({
+        referrerUserId,
+        agentId: target.id,
+      });
+    } catch (error: any) {
+      this.logger.warn(`Referral credit award failed: ${error?.message}`);
+    }
   }
 }

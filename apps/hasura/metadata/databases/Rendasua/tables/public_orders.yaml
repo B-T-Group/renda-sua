@@ -38,6 +38,13 @@ array_relationships:
         table:
           name: order_risk_incidents
           schema: public
+  - name: user_credits
+    using:
+      foreign_key_constraint_on:
+        column: order_id
+        table:
+          name: user_credits
+          schema: public
   - name: delivery_time_windows
     using:
       manual_configuration:

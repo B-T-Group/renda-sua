@@ -12,6 +12,11 @@ describe('AdminReferralService', () => {
     creditAfterFirstDelivery: jest.Mock;
   };
   let paymentRouting: { getUserCountryCode: jest.Mock };
+  let credits: {
+    resolveReferrerUserId: jest.Mock;
+    awardBusinessReferred: jest.Mock;
+    awardAgentReferred: jest.Mock;
+  };
 
   const resolved = {
     kind: 'agent' as const,
@@ -32,11 +37,17 @@ describe('AdminReferralService', () => {
       creditAfterFirstDelivery: jest.fn().mockResolvedValue(undefined),
     };
     paymentRouting = { getUserCountryCode: jest.fn().mockResolvedValue('CM') };
+    credits = {
+      resolveReferrerUserId: jest.fn().mockResolvedValue('ref-user'),
+      awardBusinessReferred: jest.fn().mockResolvedValue(null),
+      awardAgentReferred: jest.fn().mockResolvedValue(null),
+    };
     service = new AdminReferralService(
       hasura as any,
       businessReferrals as any,
       agentReferrals as any,
-      paymentRouting as any
+      paymentRouting as any,
+      credits as any
     );
   });
 

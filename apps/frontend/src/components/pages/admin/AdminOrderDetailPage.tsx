@@ -28,6 +28,7 @@ import { OrderInterventionPanel } from '../../admin/orders/OrderInterventionPane
 import { OrderParticipantsCard } from '../../admin/orders/OrderParticipantsCard';
 import { OrderRiskChip } from '../../admin/orders/OrderRiskChip';
 import { OrderRiskIncidentsCard } from '../../admin/orders/OrderRiskIncidentsCard';
+import type { ResolveEscalationPayload } from '../../admin/orders/ResolveEscalationDialog';
 import { OrderTimelineCard } from '../../admin/orders/OrderTimelineCard';
 import {
   formatOrderAmount,
@@ -43,13 +44,11 @@ export const AdminOrderDetailPage: React.FC = () => {
   const acknowledge = useAcknowledgeRiskIncident();
   const [recipient, setRecipient] = useState<OrderContactRole>('client');
 
-  const handleAcknowledge = async (incidentId: string, resolve: boolean) => {
+  const handleAcknowledge = async (incidentId: string) => {
     try {
-      await acknowledge.mutateAsync({ incidentId, resolve });
+      await acknowledge.mutateAsync({ incidentId, resolve: false });
       enqueueSnackbar(
-        resolve
-          ? t('admin.orders.incidentResolved', 'Incident resolved')
-          : t('admin.orders.incidentAcknowledged', 'Incident acknowledged'),
+        t('admin.orders.acknowledgeSuccess', 'Risk acknowledged'),
         { variant: 'success' }
       );
       refetch();
@@ -59,6 +58,33 @@ export const AdminOrderDetailPage: React.FC = () => {
           t('admin.orders.actionFailed', 'Action failed'),
         { variant: 'error' }
       );
+    }
+  };
+
+  const handleResolve = async (
+    incidentId: string,
+    payload: ResolveEscalationPayload
+  ) => {
+    try {
+      await acknowledge.mutateAsync({
+        incidentId,
+        resolve: true,
+        note: payload.notes,
+        contact_channel: payload.contact_channel,
+        order_result: payload.order_result,
+      });
+      enqueueSnackbar(
+        t('admin.orders.incidentResolved', 'Incident resolved'),
+        { variant: 'success' }
+      );
+      refetch();
+    } catch (err: any) {
+      enqueueSnackbar(
+        err?.response?.data?.message ||
+          t('admin.orders.actionFailed', 'Action failed'),
+        { variant: 'error' }
+      );
+      throw err;
     }
   };
 
@@ -136,6 +162,7 @@ export const AdminOrderDetailPage: React.FC = () => {
               nextAction={data.next_action}
               isAcknowledging={acknowledge.isPending}
               onAcknowledge={handleAcknowledge}
+              onResolve={handleResolve}
             />
             <OrderTimingCard timing={data.timing} />
             <OrderTimelineCard

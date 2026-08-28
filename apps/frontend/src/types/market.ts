@@ -45,6 +45,13 @@ export function isoToFlagEmoji(iso: string): string {
   );
 }
 
+/** Middle dot separator. Unicode escape so it cannot be saved as a Latin-1 `0xB7` byte. */
+export const MARKET_CAPTION_SEPARATOR = '\u00b7';
+
+export function formatMarketCaption(countryName: string, stateLabel: string): string {
+  return `${countryName} ${MARKET_CAPTION_SEPARATOR} ${stateLabel}`;
+}
+
 export function toMarket(country: {
   code: string;
   name: string;

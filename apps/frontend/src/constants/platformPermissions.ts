@@ -18,6 +18,7 @@ export const PlatformPermissions = {
   CONFIG_COUNTRY_ONBOARDING: 'platform.config.country_onboarding',
   CONFIG_APPLICATION_SETUP: 'platform.config.application_setup',
   OPS_SITE_EVENTS: 'platform.ops.site_events',
+  OPS_CREDITS: 'platform.ops.credits',
   CATALOG_CROSS_BUSINESS: 'platform.catalog.cross_business',
   ORDERS_CROSS_BUSINESS: 'platform.orders.cross_business',
   LOCATIONS_TRANSFERS_ADMIN: 'platform.locations.transfers_admin',

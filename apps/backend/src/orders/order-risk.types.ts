@@ -132,6 +132,9 @@ export interface OrderRiskIncident {
   acknowledged_at: string | null;
   acknowledged_by: string | null;
   acknowledged_note: string | null;
+  resolved_by?: string | null;
+  contact_channel?: string | null;
+  order_result?: string | null;
 }
 
 export function severityRank(severity: OrderRiskSeverity): number {

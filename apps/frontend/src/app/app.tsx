@@ -589,6 +589,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/credits"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminCreditsPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Content Management routes */}
             <Route

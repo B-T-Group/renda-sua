@@ -1482,6 +1482,63 @@
       "resume": "Resume",
       "pause": "Pause",
       "empty": "No assigned orders currently monitored."
+    },
+    "credits": {
+      "pageTitle": "Ops credits",
+      "pageDescription": "Escalations, call-back feedback, and progress leaderboard",
+      "resolveTitle": "Record how you handled this",
+      "contactChannel": "How you reached them",
+      "orderResult": "What happened",
+      "comments": "Comments",
+      "resolveSubmit": "Resolve",
+      "resolveAction": "Resolve",
+      "resolveSuccess": "Escalation resolved",
+      "loadFailed": "Could not load credits",
+      "actionFailed": "Action failed",
+      "feedbackSaved": "Feedback recorded",
+      "cancelledFeedbackTitle": "Cancelled-order feedback",
+      "firstOrderFeedbackTitle": "First-order feedback",
+      "feedbackNotes": "Feedback notes",
+      "saveFeedback": "Save feedback",
+      "recordFeedback": "Record feedback",
+      "emptyEscalations": "No open escalations",
+      "emptyCancelled": "No cancelled orders waiting",
+      "emptyFirstOrder": "No first-order call-backs waiting",
+      "emptyProgress": "No credits awarded yet",
+      "channel": {
+        "call": "Call",
+        "inApp": "In-app message",
+        "email": "Email"
+      },
+      "result": {
+        "confirmed": "Confirmed",
+        "cancelled": "Order cancelled",
+        "systemCancelled": "System cancelled"
+      },
+      "tabs": {
+        "escalations": "Escalations",
+        "cancelled": "Cancelled feedback",
+        "firstOrder": "First-order feedback",
+        "progress": "Progress"
+      },
+      "events": {
+        "escalation": "Escalation resolved",
+        "businessReferred": "Business referred",
+        "agentReferred": "Agent referred",
+        "cancelledFeedback": "Cancelled feedback",
+        "firstOrderFeedback": "First-order feedback",
+        "firstPurchase": "First purchase"
+      },
+      "col": {
+        "order": "Order",
+        "risk": "Risk",
+        "severity": "Severity",
+        "client": "Client",
+        "user": "User",
+        "roles": "Roles",
+        "weight": "Weight",
+        "count": "Credits"
+      }
     }
   },
   "referrals": {
@@ -2352,7 +2409,9 @@
       "orderOperations": "Order operations",
       "orderOperationsDescription": "Intervene on at-risk orders, contact every participant, and redispatch",
       "pickupOps": "Pickup health",
-      "pickupOpsDescription": "Live pickup SLA board for orders waiting on agent collection"
+      "pickupOpsDescription": "Live pickup SLA board for orders waiting on agent collection",
+      "creditsModule": "Ops credits",
+      "creditsModuleDescription": "Escalations, call-back feedback, and progress leaderboard"
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",

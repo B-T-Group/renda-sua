@@ -64,6 +64,8 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ inverted }) => {
         sx={{
           color: inverted ? '#ffffff' : '#1e40af',
           textTransform: 'none',
+          px: 1.5,
+          minWidth: 0,
           '&:hover': {
             backgroundColor: inverted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(30, 64, 175, 0.1)',
           },

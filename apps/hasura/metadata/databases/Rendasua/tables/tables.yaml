@@ -104,6 +104,7 @@
 - "!include public_order_returns.yaml"
 - "!include public_order_events.yaml"
 - "!include public_order_risk_incidents.yaml"
+- "!include public_user_credits.yaml"
 - "!include public_order_status_history.yaml"
 - "!include public_orders.yaml"
 - "!include public_partners.yaml"

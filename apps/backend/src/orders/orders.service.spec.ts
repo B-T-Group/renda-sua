@@ -44,6 +44,7 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { FoodOrdersService } from '../food/food-orders.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -390,6 +391,12 @@ describe('OrdersService', () => {
         {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
+        },
+        {
+          provide: FoodOrdersService,
+          useValue: {
+            isCookedFoodOrder: jest.fn().mockResolvedValue(false),
+          },
         },
       ],
     }).compile();

@@ -9,6 +9,7 @@ import { AgentHoldService } from '../agents/agent-hold.service';
 import { assertMobileLocationConsentAccepted } from '../agents/agent-location-claim.util';
 import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
 import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
+import { CreditsService } from '../credits/credits.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -443,7 +444,9 @@ export class OrdersService {
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
-    private readonly representativeCompensationService?: RepresentativeCompensationService
+    private readonly representativeCompensationService?: RepresentativeCompensationService,
+    @Optional()
+    private readonly creditsService?: CreditsService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -3022,11 +3025,62 @@ export class OrdersService {
 
       await this.maybeCreateFirstOrderCodeAndEmail(order);
       await this.maybeRewardDiscountCodeOwner(order);
+      await this.maybeAwardMyFirstPurchaseCredit(order);
     } catch (error: any) {
       this.logger.error(
         `Failed to handle loyalty rewards for order ${orderId}: ${error.message}`
       );
     }
+  }
+
+  private async maybeAwardMyFirstPurchaseCredit(order: {
+    id: string;
+    client_id: string;
+  }): Promise<void> {
+    if (!this.creditsService) return;
+    const completedCount = await this.countCompletedOrdersForClient(
+      order.client_id
+    );
+    if (completedCount !== 1) return;
+    const buyerUserId = await this.getClientUserIdIfAgentOrBusiness(
+      order.client_id
+    );
+    if (!buyerUserId) return;
+    await this.creditsService.awardMyFirstPurchase({
+      userId: buyerUserId,
+      orderId: order.id,
+    });
+  }
+
+  private async getClientUserIdIfAgentOrBusiness(
+    clientId: string
+  ): Promise<string | null> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      clients_by_pk: {
+        user_id: string;
+        user: {
+          agents: Array<{ id: string }>;
+          businesses: Array<{ id: string }>;
+        } | null;
+      } | null;
+    }>(
+      `query ClientBuyerPersonas($id: uuid!) {
+        clients_by_pk(id: $id) {
+          user_id
+          user {
+            agents(limit: 1) { id }
+            businesses(limit: 1) { id }
+          }
+        }
+      }`,
+      { id: clientId }
+    );
+    const row = res.clients_by_pk;
+    if (!row?.user_id) return null;
+    const isAgentOrBusiness =
+      (row.user?.agents?.length ?? 0) > 0 ||
+      (row.user?.businesses?.length ?? 0) > 0;
+    return isAgentOrBusiness ? row.user_id : null;
   }
 
   private async getOrderForLoyalty(orderId: string): Promise<{
