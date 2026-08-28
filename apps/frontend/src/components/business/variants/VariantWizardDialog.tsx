@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useUserProfileContext } from '../../../contexts/UserProfileContext';
 import { useAiImageCleanup } from '../../../hooks/useAiImageCleanup';
+import { useBusinessImages } from '../../../hooks/useBusinessImages';
 import { useVariantSuggestions } from '../../../hooks/useVariantSuggestions';
 import { useAws } from '../../../hooks/useAws';
 import {
@@ -34,6 +35,7 @@ import type {
   VariantParentDefaults,
 } from '../../../types/itemVariant';
 import { suggestVariantName } from '../../../types/itemVariant';
+import { presignUploadLibraryImage } from '../onboarding/onboardingPresignedUpload';
 import VariantDetailsStep from './VariantDetailsStep';
 import VariantImagesStep, {
   StagedImage,
@@ -120,6 +122,7 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const { profile, updateBusinessAiTokens } = useUserProfileContext();
   const { generateImageUploadUrl } = useAws();
+  const { bulkCreateImages } = useBusinessImages();
   const { requestVariantCleanup } = useAiImageCleanup();
   const {
     loading: aiSuggestLoading,
@@ -137,13 +140,19 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
   } = useItemVariants(itemId);
 
   const aiTokensRemaining = profile?.business?.ai_tokens ?? 0;
+  const businessId = profile?.business?.id;
 
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [uploadingForAi, setUploadingForAi] = useState(false);
   const [form, setForm] = useState<CreateItemVariantPayload>(
     emptyFromParent(parentItem)
   );
   const [images, setImages] = useState<StagedImage[]>([]);
+  const [aiImageIds, setAiImageIds] = useState<string[]>([]);
+  const [preUploadedByLocalId, setPreUploadedByLocalId] = useState<
+    Record<string, { id: string; image_url: string }>
+  >({});
   const [nameManual, setNameManual] = useState(false);
   const [lastAutoName, setLastAutoName] = useState('');
   const [skuError, setSkuError] = useState<string | null>(null);
@@ -166,6 +175,9 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
     setCleanupVariantId(null);
     setUploadedImages([]);
     setCleanupSelection([]);
+    setAiImageIds([]);
+    setPreUploadedByLocalId({});
+    setUploadingForAi(false);
     resetAiSuggest();
     setNameManual(!!initial);
     if (initial) {
@@ -188,7 +200,7 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
 
   useEffect(() => {
     if (!open || step !== 1 || initial) return;
-    void fetchVariantSuggestions(itemId, (updater) => {
+    void fetchVariantSuggestions(itemId, aiImageIds, (updater) => {
       setForm((current) => {
         const next = updater(current);
         const suggested = next.name?.trim() ?? '';
@@ -199,7 +211,87 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
         return next;
       });
     });
-  }, [open, step, initial, itemId, fetchVariantSuggestions]);
+  }, [open, step, initial, itemId, aiImageIds, fetchVariantSuggestions]);
+
+  const setImagesAndClearAi = (next: StagedImage[]) => {
+    setAiImageIds([]);
+    setPreUploadedByLocalId({});
+    resetAiSuggest();
+    setImages(next);
+  };
+
+  const goToDetails = async () => {
+    if (initial) {
+      setStep(1);
+      return;
+    }
+    const newImages = images.filter(
+      (img): img is Extract<StagedImage, { kind: 'new' }> => img.kind === 'new'
+    );
+    if (!newImages.length) {
+      setAiImageIds([]);
+      setPreUploadedByLocalId({});
+      resetAiSuggest();
+      setStep(1);
+      return;
+    }
+    if (!businessId) {
+      enqueueSnackbar(
+        t('business.variants.uploadError', 'Could not upload photos'),
+        { variant: 'error' }
+      );
+      return;
+    }
+    setUploadingForAi(true);
+    try {
+      const prefix = `businesses/${businessId}/images`;
+      const errMsg = t(
+        'business.variants.uploadError',
+        'Could not upload photos'
+      );
+      const payloads = [];
+      for (const img of newImages) {
+        payloads.push(
+          await presignUploadLibraryImage(
+            img.file,
+            bucketName,
+            prefix,
+            generateImageUploadUrl,
+            errMsg
+          )
+        );
+      }
+      const created = await bulkCreateImages(
+        { images: payloads },
+        { skipRefetch: true }
+      );
+      if (!created.length || created.length !== newImages.length) {
+        throw new Error(errMsg);
+      }
+      const byLocal: Record<string, { id: string; image_url: string }> = {};
+      const ids: string[] = [];
+      newImages.forEach((img, index) => {
+        const id = created[index].id;
+        ids.push(id);
+        byLocal[img.localId] = {
+          id,
+          image_url: payloads[index].image_url,
+        };
+      });
+      setPreUploadedByLocalId(byLocal);
+      setAiImageIds(ids);
+      resetAiSuggest();
+      setStep(1);
+    } catch (error: any) {
+      enqueueSnackbar(
+        error?.message ||
+          t('business.variants.uploadError', 'Could not upload photos'),
+        { variant: 'error' }
+      );
+    } finally {
+      setUploadingForAi(false);
+    }
+  };
 
   const patchForm = (patch: Partial<CreateItemVariantPayload>) => {
     if (aiSuggestLoading) {
@@ -262,6 +354,16 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
     for (let order = 0; order < kept.length; order += 1) {
       const img = kept[order];
       if (img.kind === 'new') {
+        const pre = preUploadedByLocalId[img.localId];
+        if (pre) {
+          const row = await addVariantImage(variantId, {
+            image_url: pre.image_url,
+            is_primary: !!img.is_primary,
+            display_order: order,
+          });
+          if (row) created.push(row);
+          continue;
+        }
         const row = await uploadNewImage(
           variantId,
           img.file,
@@ -408,7 +510,7 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
           </Alert>
         ) : null}
         {step === 0 ? (
-          <VariantImagesStep images={images} onChange={setImages} />
+          <VariantImagesStep images={images} onChange={setImagesAndClearAi} />
         ) : null}
         {step === 1 ? (
           <VariantDetailsStep
@@ -529,14 +631,20 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
               </Button>
             ) : null}
             {step === 0 ? (
-              <Button variant="contained" onClick={() => setStep(1)}>
-                {t('common.next', 'Next')}
+              <Button
+                variant="contained"
+                onClick={() => void goToDetails()}
+                disabled={saving || uploadingForAi}
+              >
+                {uploadingForAi
+                  ? t('common.uploading', 'Uploading…')
+                  : t('common.next', 'Next')}
               </Button>
             ) : (
               <Button
                 variant="contained"
                 onClick={() => void handleSave()}
-                disabled={saving}
+                disabled={saving || uploadingForAi}
               >
                 {t('common.save', 'Save')}
               </Button>

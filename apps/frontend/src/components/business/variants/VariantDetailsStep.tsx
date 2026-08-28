@@ -47,7 +47,7 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
         <Stack direction="row" spacing={1} alignItems="center">
           <CircularProgress size={18} />
           <Typography variant="body2" color="text.secondary">
-            {t('business.variants.aiAnalyzing', 'Analyzing item…')}
+            {t('business.variants.aiAnalyzing', 'Analyzing variant photo…')}
           </Typography>
         </Stack>
       ) : null}
@@ -55,7 +55,7 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
         <Alert severity="info" sx={{ py: 0.5 }}>
           {t(
             'business.variants.aiFilledBanner',
-            'Filled from item — edit anything'
+            'Filled from variant photo — edit anything'
           )}
         </Alert>
       ) : null}
