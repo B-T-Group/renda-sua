@@ -27,6 +27,8 @@ import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import FoodsMenuHero from '../foods/FoodsMenuHero';
 import FoodsEmptyStateIllustration from '../illustrations/FoodsEmptyStateIllustration';
+import { MarketSelector } from '../market/MarketSelector';
+import { useMarket } from '../../hooks/useMarket';
 
 const PAGE_SIZE = 24;
 
@@ -56,6 +58,7 @@ const FOODS_GRID_SX = {
 const FoodsPage: React.FC = () => {
   const { t } = useTranslation();
   const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { selectedMarket } = useMarket();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,7 +93,7 @@ const FoodsPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [search, subcategory, sort]);
+  }, [search, subcategory, sort, selectedMarket?.id]);
 
   const updateParam = useCallback(
     (key: string, value?: string) => {
@@ -191,6 +194,7 @@ const FoodsPage: React.FC = () => {
         <FoodsMenuHero />
 
         <Stack spacing={2} sx={{ mb: 3 }}>
+          <MarketSelector catalogContext="inventory" />
           <Box component="form" onSubmit={handleSearchSubmit}>
             <TextField
               fullWidth

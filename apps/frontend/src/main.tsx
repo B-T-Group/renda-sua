@@ -12,6 +12,7 @@ import { AnalyticsInit } from './components/analytics/AnalyticsInit';
 import { environment } from './config/environment';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { MarketProvider } from './contexts/MarketContext';
 import { SessionAuthProvider } from './contexts/SessionAuthContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import { ImageEnhancementsProvider } from './hooks/useImageEnhancements';
@@ -86,15 +87,17 @@ async function bootstrap() {
             <LoadingProvider>
               <SessionAuthProvider>
                 <UserProfileProvider>
-                  <CartProvider>
-                    <SnackbarProvider maxSnack={3} autoHideDuration={4000}>
-                      <ImageEnhancementsProvider>
-                        <ApolloProvider>
-                          <App />
-                        </ApolloProvider>
-                      </ImageEnhancementsProvider>
-                    </SnackbarProvider>
-                  </CartProvider>
+                  <MarketProvider>
+                    <CartProvider>
+                      <SnackbarProvider maxSnack={3} autoHideDuration={4000}>
+                        <ImageEnhancementsProvider>
+                          <ApolloProvider>
+                            <App />
+                          </ApolloProvider>
+                        </ImageEnhancementsProvider>
+                      </SnackbarProvider>
+                    </CartProvider>
+                  </MarketProvider>
                 </UserProfileProvider>
               </SessionAuthProvider>
             </LoadingProvider>

@@ -10,6 +10,7 @@ import {
 import { useCollections } from '../../hooks/useCollections';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import SEOHead from '../seo/SEOHead';
+import { MarketSelector } from '../market/MarketSelector';
 
 const CollectionsIndexPage: React.FC = () => {
   const { t } = useTranslation();
@@ -41,6 +42,9 @@ const CollectionsIndexPage: React.FC = () => {
       <Typography variant="h4" fontWeight={800} gutterBottom>
         {t('collections.indexTitle', 'Collections')}
       </Typography>
+      <Box sx={{ mb: 2 }}>
+        <MarketSelector catalogContext="inventory" />
+      </Box>
       <TextField
         fullWidth
         size="small"

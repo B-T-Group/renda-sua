@@ -68,8 +68,10 @@ import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
+import { MarketSelector } from '../market/MarketSelector';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import type { Order } from '../../hooks/useOrders';
+import { useMarket } from '../../hooks/useMarket';
 
 // ItemCardSkeleton component for better loading UX
 const ItemCardSkeleton: React.FC = () => (
@@ -220,6 +222,7 @@ const ItemsPage: React.FC = () => {
   );
 
   const { isAuthenticated, user } = useAuth0();
+  const { selectedMarket } = useMarket();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
@@ -386,6 +389,7 @@ const ItemsPage: React.FC = () => {
     filters.business,
     sort,
     businessLocationId,
+    selectedMarket?.id,
   ]);
 
   const totalPages = pagination?.totalPages ?? 0;
@@ -705,6 +709,7 @@ const ItemsPage: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
+              <MarketSelector catalogContext="inventory" />
               {isClient && nearbyAgentsCount > 0 && (
                 <Chip
                   size="small"

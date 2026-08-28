@@ -7,8 +7,10 @@ import type {
 } from '../types/itemVariant';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from './useCatalogGeoParams';
 import { FOOD_CATEGORY_NAME, isFoodCatalogItem } from '../constants/food';
 
 export interface InventoryItem {
@@ -186,9 +188,17 @@ export interface ApiResponse {
   message: string;
 }
 
+function isLocationScopedCatalogQuery(query: GetInventoryItemsQuery): boolean {
+  return Boolean(
+    query.owner_preview ||
+      query.business_location_id?.trim() ||
+      query.business_id?.trim()
+  );
+}
+
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const catalogGeo = useCatalogGeoParams();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -203,6 +213,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const apiClient = useApiClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const listScopeRef = useRef<string>('');
+  const locationScoped = isLocationScopedCatalogQuery(query);
+  const marketReady = locationScoped || catalogGeo.ready;
 
   const listScopeKey = [
     query.search ?? '',
@@ -221,6 +233,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.collection ?? '',
     query.is_active ?? '',
     query.food_only ?? '',
+    locationScoped ? '' : `${catalogGeo.country_code ?? ''}:${catalogGeo.state ?? ''}`,
   ].join('|');
 
   const fetchInventoryItems = useCallback(async () => {
@@ -230,6 +243,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       setLoading(false);
       setLoadingMore(false);
       setError(null);
+      return;
+    }
+
+    if (!marketReady) {
+      setLoading(true);
       return;
     }
 
@@ -254,24 +272,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     }
     setError(null);
 
-    // Logged-in: backend uses user address; do not pass country_code/state.
-    // Anonymous: pass country_code only if detected and supported.
-    let country_code: string | undefined;
-    let state: string | undefined;
-    if (isAuthenticated) {
-      country_code = undefined;
-      state = undefined;
-    } else {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-      state = undefined;
-    }
+    const geoParams = locationScoped
+      ? {}
+      : catalogGeoQueryParams(catalogGeo);
+    const country_code = query.country_code ?? geoParams.country_code;
+    const state = query.state ?? geoParams.state;
 
     try {
       const response = await apiClient.get<ApiResponse>('/inventory-items', {
@@ -371,7 +376,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     }
   }, [
     isAuthenticated,
-    supportedIsos,
+    marketReady,
+    locationScoped,
+    catalogGeo.country_code,
+    catalogGeo.state,
     listScopeKey,
     query.page,
     query.limit,
@@ -393,6 +401,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.enabled,
     query.anonymousOrigin?.lat,
     query.anonymousOrigin?.lng,
+    query.country_code,
+    query.state,
   ]);
 
   useEffect(() => {

@@ -26,6 +26,17 @@ export interface StoredMarket {
 export const MARKET_STORAGE_KEY = 'rendasua_market_v1';
 export const DEFAULT_MARKET_CODE = 'CM';
 
+export function pickSupportedCountryCode(
+  preferred: string | null | undefined,
+  supportedIsos: string[],
+  fallback = DEFAULT_MARKET_CODE
+): string {
+  const upper = preferred?.toUpperCase();
+  if (upper && supportedIsos.includes(upper)) return upper;
+  if (supportedIsos.includes(fallback)) return fallback;
+  return supportedIsos[0] ?? fallback;
+}
+
 export function isoToFlagEmoji(iso: string): string {
   const code = iso.toUpperCase();
   if (code.length !== 2) return '??';

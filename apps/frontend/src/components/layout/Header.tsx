@@ -57,7 +57,24 @@ import MobileBalanceChip from '../common/MobileBalanceChip';
 import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 import UserRatingSummary from '../common/UserRatingSummary';
+import { MarketSelector } from '../market/MarketSelector';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
+import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
+
+function catalogContextFromPath(pathname: string): MarketStatesCatalog {
+  if (pathname.startsWith('/rentals')) return 'rentals';
+  if (
+    pathname.startsWith('/items') ||
+    pathname.startsWith('/foods') ||
+    pathname.startsWith('/stores') ||
+    pathname.startsWith('/collections') ||
+    pathname.startsWith('/store') ||
+    pathname.startsWith('/deals')
+  ) {
+    return 'inventory';
+  }
+  return 'all';
+}
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
@@ -99,6 +116,7 @@ const Header: React.FC = () => {
   const guestMobileBreakpoint = theme.breakpoints.down('lg');
   const authMobileBreakpoint = theme.breakpoints.down('md');
   const isMobile = useMediaQuery(isAuthenticated ? authMobileBreakpoint : guestMobileBreakpoint);
+  const marketCatalogContext = catalogContextFromPath(location.pathname);
 
   const personaHeader = useMemo(() => {
     if (isAuthenticated && isDelegationContext) {
@@ -541,6 +559,12 @@ const Header: React.FC = () => {
         )}
 
         <ListItem>
+          <MarketSelector
+            catalogContext={marketCatalogContext}
+            onSelected={handleDrawerToggle}
+          />
+        </ListItem>
+        <ListItem>
           <LanguageSwitcher />
         </ListItem>
 
@@ -728,6 +752,12 @@ const Header: React.FC = () => {
                     <UserBalanceSummary compact={true} showIcon={false} inverted />
                   </Box>
                 )}
+
+              <MarketSelector
+                catalogContext={marketCatalogContext}
+                inverted
+                compact={isMobile}
+              />
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}

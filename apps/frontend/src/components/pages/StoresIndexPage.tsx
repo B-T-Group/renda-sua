@@ -17,6 +17,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useCatalogStores } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import SEOHead from '../seo/SEOHead';
+import { MarketSelector } from '../market/MarketSelector';
 import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 import { alpha } from '@mui/material/styles';
@@ -52,6 +53,9 @@ const StoresIndexPage: React.FC = () => {
       <Typography variant="h4" fontWeight={800} gutterBottom>
         {t('stores.listTitle', 'Store locations')}
       </Typography>
+      <Box sx={{ mb: 2 }}>
+        <MarketSelector catalogContext="inventory" />
+      </Box>
       <TextField
         fullWidth
         size="small"
