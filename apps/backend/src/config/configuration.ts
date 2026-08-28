@@ -744,7 +744,7 @@ export default (): Configuration => {
         10
       ),
       acceptanceGraceSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '300',
+        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '900',
         10
       ),
       defaultEstimatedPrepMinutes: parseInt(
