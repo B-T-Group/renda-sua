@@ -3974,6 +3974,10 @@
     "orderDropError": "Échec de l'abandon de la commande",
     "orderDropSuccess": "Order ${result.order_number} dropped successfully",
     "orderMessages": "Messages de Commande",
+    "orderMessagesPageTitle": "Messages · Commande #{{orderNumber}}",
+    "emptyPromptClient": "Écrivez au magasin ou à l'agent de livraison concernant cette commande.",
+    "emptyPromptBusiness": "Écrivez au client ou à l'agent de livraison concernant cette commande.",
+    "emptyPromptAgent": "Écrivez au client ou au magasin concernant cette livraison.",
     "orderPickupError": "Échec de la récupération de la commande",
     "orderPickupSuccess": "Order ${result.order_number} picked up successfully",
     "orderRefundError": "Failed to refund order",
@@ -4171,6 +4175,7 @@
       "openRefunds": "Gérer le remboursement",
       "generateOverwrite": "Générer un code de remplacement",
       "reconcileCash": "Réconcilier le cash",
+      "message": "Message",
       "none": ""
     },
     "addAddress": "Ajouter une Adresse de Livraison",

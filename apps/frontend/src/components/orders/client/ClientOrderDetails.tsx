@@ -23,6 +23,7 @@ export interface ClientOrderDetailsProps {
   messages?: React.ReactNode;
   tracking?: React.ReactNode;
   extras?: React.ReactNode;
+  headerTrailing?: React.ReactNode;
   hideDeliveryPin?: boolean;
   hideActions?: boolean;
   onActionComplete?: () => void;
@@ -40,6 +41,7 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
   messages,
   tracking,
   extras,
+  headerTrailing,
   hideDeliveryPin = false,
   hideActions = false,
   onActionComplete,
@@ -61,6 +63,7 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
         live={live}
         onRefresh={onRefresh}
         subtitle={vm.businessName}
+        trailing={headerTrailing}
       />
 
       <HeroActionCard

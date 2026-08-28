@@ -21,6 +21,7 @@ export interface BusinessOrderDetailsProps {
   alerts?: React.ReactNode;
   messages?: React.ReactNode;
   extras?: React.ReactNode;
+  headerTrailing?: React.ReactNode;
   hideActions?: boolean;
   onActionComplete?: () => void;
   onShowNotification?: (
@@ -36,6 +37,7 @@ export const BusinessOrderDetails: React.FC<BusinessOrderDetailsProps> = ({
   alerts,
   messages,
   extras,
+  headerTrailing,
   hideActions = false,
   onActionComplete,
   onShowNotification,
@@ -55,6 +57,7 @@ export const BusinessOrderDetails: React.FC<BusinessOrderDetailsProps> = ({
         statusLabel={vm.statusMessage}
         live={live}
         onRefresh={onRefresh}
+        trailing={headerTrailing}
       />
 
       <HeroActionCard

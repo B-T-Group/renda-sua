@@ -554,7 +554,9 @@ export class NotificationsService {
     const highlight = params.messageId ?? '';
     try {
       await this.sendPushNotificationByUserId(recipientUserId, title, body, {
-        url: `/orders/${params.orderId}?messages=1&highlight=${highlight}`,
+        url: `/orders/${params.orderId}/messages${
+          highlight ? `?highlight=${highlight}` : ''
+        }`,
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         messageId: params.messageId,
@@ -595,7 +597,9 @@ export class NotificationsService {
     const highlight = params.messageId ?? '';
     try {
       await this.sendPushNotificationByUserId(recipientUserId, title, body, {
-        url: `/orders/${params.orderId}?messages=1&highlight=${highlight}`,
+        url: `/orders/${params.orderId}/messages${
+          highlight ? `?highlight=${highlight}` : ''
+        }`,
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         messageId: params.messageId,
