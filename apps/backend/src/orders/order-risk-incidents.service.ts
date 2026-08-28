@@ -11,6 +11,7 @@ const INCIDENT_FIELDS = `
   id order_id risk_type severity detected_at last_seen_at resolved_at resolution
   due_at overdue_minutes context last_notified_at last_notified_severity
   notified_count acknowledged_at acknowledged_by acknowledged_note
+  resolved_by contact_channel order_result
 `;
 
 export interface RaisedIncident {
@@ -189,17 +190,40 @@ export class OrderRiskIncidentsService {
     userId: string;
     note?: string | null;
     resolve?: boolean;
-  }): Promise<OrderRiskIncident | null> {
+    contactChannel?: string | null;
+    orderResult?: string | null;
+  }): Promise<{ incident: OrderRiskIncident | null; applied: boolean }> {
+    if (params.resolve) return this.resolveIfOpen(params);
+    return this.touchAcknowledgement(params);
+  }
+
+  private ackSet(params: {
+    userId: string;
+    note?: string | null;
+    resolve?: boolean;
+    contactChannel?: string | null;
+    orderResult?: string | null;
+  }): Record<string, unknown> {
     const now = new Date().toISOString();
     const set: Record<string, unknown> = {
       acknowledged_at: now,
       acknowledged_by: params.userId,
       acknowledged_note: params.note?.trim() || null,
     };
-    if (params.resolve) {
-      set.resolved_at = now;
-      set.resolution = 'acknowledged_resolved';
-    }
+    if (!params.resolve) return set;
+    set.resolved_at = now;
+    set.resolution = 'acknowledged_resolved';
+    set.resolved_by = params.userId;
+    if (params.contactChannel) set.contact_channel = params.contactChannel;
+    if (params.orderResult) set.order_result = params.orderResult;
+    return set;
+  }
+
+  private async touchAcknowledgement(params: {
+    incidentId: string;
+    userId: string;
+    note?: string | null;
+  }): Promise<{ incident: OrderRiskIncident | null; applied: boolean }> {
     const res = await this.hasura.executeMutation<{
       update_order_risk_incidents_by_pk: OrderRiskIncident | null;
     }>(
@@ -211,9 +235,53 @@ export class OrderRiskIncidentsService {
           ${INCIDENT_FIELDS}
         }
       }`,
-      { id: params.incidentId, set }
+      { id: params.incidentId, set: this.ackSet(params) }
     );
-    return res.update_order_risk_incidents_by_pk;
+    const incident = res.update_order_risk_incidents_by_pk;
+    return { incident, applied: !!incident };
+  }
+
+  private async resolveIfOpen(params: {
+    incidentId: string;
+    userId: string;
+    note?: string | null;
+    contactChannel?: string | null;
+    orderResult?: string | null;
+  }): Promise<{ incident: OrderRiskIncident | null; applied: boolean }> {
+    const res = await this.hasura.executeMutation<{
+      update_order_risk_incidents: { returning: OrderRiskIncident[] };
+    }>(
+      `mutation ResolveOpenOrderRisk(
+        $id: uuid!
+        $set: order_risk_incidents_set_input!
+      ) {
+        update_order_risk_incidents(
+          where: { id: { _eq: $id }, resolved_at: { _is_null: true } }
+          _set: $set
+        ) {
+          returning { ${INCIDENT_FIELDS} }
+        }
+      }`,
+      { id: params.incidentId, set: this.ackSet({ ...params, resolve: true }) }
+    );
+    const updated = res.update_order_risk_incidents?.returning?.[0] ?? null;
+    if (updated) return { incident: updated, applied: true };
+    const existing = await this.getIncident(params.incidentId);
+    return { incident: existing, applied: false };
+  }
+
+  private async getIncident(
+    incidentId: string
+  ): Promise<OrderRiskIncident | null> {
+    const res = await this.hasura.executeQuery<{
+      order_risk_incidents_by_pk: OrderRiskIncident | null;
+    }>(
+      `query OrderRiskIncidentByPk($id: uuid!) {
+        order_risk_incidents_by_pk(id: $id) { ${INCIDENT_FIELDS} }
+      }`,
+      { id: incidentId }
+    );
+    return res.order_risk_incidents_by_pk;
   }
 
   private async findOpen(

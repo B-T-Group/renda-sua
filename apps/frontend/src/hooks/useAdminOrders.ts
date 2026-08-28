@@ -360,9 +360,13 @@ export const useAcknowledgeRiskIncident = () =>
     incidentId: string;
     note?: string;
     resolve?: boolean;
-  }>((apiClient, { incidentId, note, resolve }) =>
+    contact_channel?: string;
+    order_result?: string;
+  }>((apiClient, { incidentId, note, resolve, contact_channel, order_result }) =>
     apiClient.post(`/admin/orders/risk-incidents/${incidentId}/acknowledge`, {
       note,
       resolve,
+      contact_channel,
+      order_result,
     })
   );

@@ -5,6 +5,7 @@ import { AddressesModule } from '../addresses/addresses.module';
 import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
+import { CreditsModule } from '../credits/credits.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
@@ -29,6 +30,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     AddressesModule,
     AgentsModule,
     BusinessReferralsModule,
+    CreditsModule,
     BusinessContractsModule,
     LaunchPromoModule,
     MobilePaymentPhoneSeedModule,

@@ -50,8 +50,14 @@ import {
 import { OrderEventsService } from './order-events.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
+import type { OrderRiskIncident } from './order-risk.types';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { OrdersService } from './orders.service';
+import { CreditsService } from '../credits/credits.service';
+import type {
+  CreditContactChannel,
+  CreditOrderResult,
+} from '../credits/credit.types';
 
 /** Statuses support may correct manually; refunds stay on the refund flow. */
 const CORRECTABLE_STATUSES = [
@@ -89,7 +95,8 @@ export class AdminOrdersController {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly notificationsService: NotificationsService,
-    private readonly adminOrderContactService: AdminOrderContactService
+    private readonly adminOrderContactService: AdminOrderContactService,
+    private readonly creditsService: CreditsService
   ) {}
 
   @Get()
@@ -204,6 +211,10 @@ export class AdminOrdersController {
   }
 
   @Get(':orderId')
+  @RequirePermissions(
+    PlatformPermissions.ORDERS_CROSS_BUSINESS,
+    PlatformPermissions.OPS_CREDITS
+  )
   @ApiOperation({
     summary: 'Superuser order intervention detail',
     description:
@@ -326,25 +337,21 @@ export class AdminOrdersController {
     @Body() dto: AcknowledgeRiskIncidentDto
   ) {
     const actor = await this.hasuraUserService.getUser();
-    const incident = await this.riskIncidentsService.acknowledge({
+    const { incident, applied } = await this.riskIncidentsService.acknowledge({
       incidentId,
       userId: actor.id,
       note: dto.note,
       resolve: dto.resolve,
+      contactChannel: dto.contact_channel,
+      orderResult: dto.order_result,
     });
     if (!incident) {
       throw new HttpException('Incident not found', HttpStatus.NOT_FOUND);
     }
-    await this.orderEventsService.recordEvent({
-      orderId: incident.order_id,
-      eventType: dto.resolve
-        ? 'risk_incident_resolved'
-        : 'risk_incident_acknowledged',
-      actorType: 'support',
-      actorId: actor.id,
-      payload: { incidentId, note: dto.note ?? null },
-    });
-    return { success: true, incident };
+    const credit = applied
+      ? await this.recordAcknowledgeSideEffects(actor.id, incident, dto)
+      : null;
+    return { success: true, incident, credit };
   }
 
   @Post(':orderId/contact/message')
@@ -468,6 +475,51 @@ export class AdminOrdersController {
       from_status: fromStatus,
       to_status: dto.status,
       reason: dto.reason,
+    });
+  }
+
+  private async recordAcknowledgeSideEffects(
+    actorId: string,
+    incident: OrderRiskIncident,
+    dto: AcknowledgeRiskIncidentDto
+  ) {
+    await this.orderEventsService.recordEvent({
+      orderId: incident.order_id,
+      eventType: dto.resolve
+        ? 'risk_incident_resolved'
+        : 'risk_incident_acknowledged',
+      actorType: 'support',
+      actorId,
+      payload: {
+        incidentId: incident.id,
+        note: dto.note ?? null,
+        contact_channel: dto.contact_channel ?? null,
+        order_result: dto.order_result ?? null,
+      },
+    });
+    return this.awardResolveCredit(actorId, incident, dto);
+  }
+
+  private async awardResolveCredit(
+    actorId: string,
+    incident: OrderRiskIncident,
+    dto: AcknowledgeRiskIncidentDto
+  ) {
+    if (
+      !dto.resolve ||
+      !dto.contact_channel ||
+      !dto.order_result ||
+      !dto.note?.trim()
+    ) {
+      return null;
+    }
+    return this.creditsService.awardEscalationResolved({
+      userId: actorId,
+      incidentId: incident.id,
+      orderId: incident.order_id,
+      contactChannel: dto.contact_channel as CreditContactChannel,
+      orderResult: dto.order_result as CreditOrderResult,
+      notes: dto.note,
     });
   }
 

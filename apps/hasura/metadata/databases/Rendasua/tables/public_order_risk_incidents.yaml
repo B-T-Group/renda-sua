@@ -8,3 +8,6 @@ object_relationships:
   - name: acknowledged_by_user
     using:
       foreign_key_constraint_on: acknowledged_by
+  - name: resolved_by_user
+    using:
+      foreign_key_constraint_on: resolved_by

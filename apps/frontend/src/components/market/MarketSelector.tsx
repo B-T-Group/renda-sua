@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMarket } from '../../hooks/useMarket';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
+import { formatMarketCaption, MARKET_CAPTION_SEPARATOR } from '../../types/market';
 import { MarketPickerDialog } from './MarketPickerDialog';
 
 export interface MarketSelectorProps {
@@ -37,9 +38,10 @@ export function MarketSelector({
       <Button
         variant="outlined"
         size="small"
+        color="inherit"
         onClick={() => setOpen(true)}
         aria-label={t('market.selector.label', 'Selected market: {{name}}', {
-          name: selectedMarket.name,
+          name: formatMarketCaption(selectedMarket.name, stateLabel),
         })}
         sx={{
           borderRadius: 999,
@@ -47,9 +49,10 @@ export function MarketSelector({
           fontWeight: 600,
           maxWidth: compact ? 132 : 240,
           minWidth: 0,
-          px: compact ? 1 : 1.5,
+          px: compact ? 1.25 : 2,
+          py: 0.5,
           color: inverted ? '#ffffff' : 'text.primary',
-          borderColor: inverted ? 'rgba(255, 255, 255, 0.45)' : 'divider',
+          borderColor: inverted ? 'rgba(255, 255, 255, 0.55)' : 'divider',
           '&:hover': {
             borderColor: inverted ? '#ffffff' : 'text.primary',
             backgroundColor: inverted
@@ -61,16 +64,23 @@ export function MarketSelector({
         <Box component="span" sx={{ mr: 0.75, lineHeight: 1 }}>
           {selectedMarket.flag}
         </Box>
-        <Typography component="span" variant="body2" noWrap>
+        <Typography
+          component="span"
+          variant="body2"
+          noWrap
+          color="inherit"
+          sx={{ fontWeight: 600 }}
+        >
           {primaryLabel}
           {!compact && (
-            <Typography component="span" color={inverted ? 'inherit' : 'text.secondary'} sx={{ opacity: inverted ? 0.8 : 1 }}>
-              {' · '}
-              {stateLabel}
-            </Typography>
+            <Box component="span" sx={{ fontWeight: 500, opacity: inverted ? 1 : 0.85 }}>
+              {` ${MARKET_CAPTION_SEPARATOR} ${stateLabel}`}
+            </Box>
           )}
         </Typography>
-        <ExpandMoreIcon sx={{ ml: 0.25, fontSize: 18, opacity: 0.8 }} />
+        <ExpandMoreIcon
+          sx={{ ml: 0.25, fontSize: 18, color: 'inherit', opacity: 0.9 }}
+        />
       </Button>
       <MarketPickerDialog
         open={open}

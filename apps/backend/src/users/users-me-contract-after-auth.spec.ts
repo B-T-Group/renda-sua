@@ -111,6 +111,11 @@ describe('UsersController Auth0 /me contract sync', () => {
       {} as never,
       {} as never,
       {} as never,
+      {
+        resolveReferrerUserId: jest.fn().mockResolvedValue(null),
+        awardBusinessReferred: jest.fn().mockResolvedValue(null),
+        awardAgentReferred: jest.fn().mockResolvedValue(null),
+      } as never,
       {} as never,
       paymentRoutingService as never,
       businessContractsService as never,

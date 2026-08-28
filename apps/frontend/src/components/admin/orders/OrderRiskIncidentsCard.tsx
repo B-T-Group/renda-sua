@@ -8,7 +8,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AdminOrderRiskIncident } from '../../../hooks/useAdminOrders';
 import {
@@ -19,12 +19,20 @@ import {
   severityLabel,
 } from './orderRiskLabels';
 import type { AdminOrderNextAction } from '../../../hooks/useAdminOrders';
+import {
+  ResolveEscalationDialog,
+  type ResolveEscalationPayload,
+} from './ResolveEscalationDialog';
 
 interface OrderRiskIncidentsCardProps {
   incidents: AdminOrderRiskIncident[];
   nextAction: AdminOrderNextAction;
   isAcknowledging: boolean;
-  onAcknowledge: (incidentId: string, resolve: boolean) => void;
+  onAcknowledge: (incidentId: string) => void | Promise<void>;
+  onResolve: (
+    incidentId: string,
+    payload: ResolveEscalationPayload
+  ) => void | Promise<void>;
 }
 
 export const OrderRiskIncidentsCard: React.FC<OrderRiskIncidentsCardProps> = ({
@@ -32,9 +40,11 @@ export const OrderRiskIncidentsCard: React.FC<OrderRiskIncidentsCardProps> = ({
   nextAction,
   isAcknowledging,
   onAcknowledge,
+  onResolve,
 }) => {
   const { t } = useTranslation();
   const recommendation = nextActionLabel(t, nextAction);
+  const [resolveId, setResolveId] = useState<string | null>(null);
 
   if (incidents.length === 0) {
     return (
@@ -95,32 +105,52 @@ export const OrderRiskIncidentsCard: React.FC<OrderRiskIncidentsCardProps> = ({
               </Typography>
               {incident.acknowledged_at ? (
                 <Typography variant="caption" color="success.main" display="block">
-                  {t('admin.orders.acknowledged', 'Acknowledged — repeat alerts paused')}
-                  {incident.acknowledged_note ? ` · ${incident.acknowledged_note}` : ''}
+                  {t(
+                    'admin.orders.acknowledged',
+                    'Acknowledged — repeat alerts paused'
+                  )}
+                  {incident.acknowledged_note
+                    ? ` · ${incident.acknowledged_note}`
+                    : ''}
                 </Typography>
-              ) : (
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              ) : null}
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                {!incident.acknowledged_at ? (
                   <Button
                     size="small"
                     disabled={isAcknowledging}
-                    onClick={() => onAcknowledge(incident.id, false)}
+                    onClick={() => void onAcknowledge(incident.id)}
                   >
                     {t('admin.orders.acknowledgeAction', "I'm on it")}
                   </Button>
-                  <Button
-                    size="small"
-                    color="success"
-                    disabled={isAcknowledging}
-                    onClick={() => onAcknowledge(incident.id, true)}
-                  >
-                    {t('admin.orders.resolveAction', 'Mark resolved')}
-                  </Button>
-                </Stack>
-              )}
+                ) : null}
+                <Button
+                  size="small"
+                  color="success"
+                  variant="contained"
+                  disabled={isAcknowledging}
+                  onClick={() => setResolveId(incident.id)}
+                >
+                  {t('admin.credits.resolveAction', 'Resolve')}
+                </Button>
+              </Stack>
             </Box>
           ))}
         </Stack>
       </CardContent>
+
+      <ResolveEscalationDialog
+        open={!!resolveId}
+        submitting={isAcknowledging}
+        onClose={() => {
+          if (!isAcknowledging) setResolveId(null);
+        }}
+        onSubmit={async (payload) => {
+          if (!resolveId) return;
+          await onResolve(resolveId, payload);
+          setResolveId(null);
+        }}
+      />
     </Card>
   );
 };

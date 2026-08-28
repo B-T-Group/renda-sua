@@ -89,6 +89,11 @@ describe('UsersController', () => {
       {} as any,
       { creditAgentReferralIfPresent: jest.fn(), getAgentInsertReferralFields: jest.fn().mockReturnValue({}), creditResolvedAgentReferral: jest.fn() } as any,
       businessReferralsService as any,
+      {
+        resolveReferrerUserId: jest.fn().mockResolvedValue(null),
+        awardBusinessReferred: jest.fn().mockResolvedValue(null),
+        awardAgentReferred: jest.fn().mockResolvedValue(null),
+      } as any,
       {} as any,
       {
         getUserCountryCode: jest.fn().mockResolvedValue(null),
