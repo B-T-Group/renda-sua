@@ -49,6 +49,17 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       resolveRailForBusiness: jest.fn().mockResolvedValue('stripe'),
     };
     const merchantLifecycleService = { recompute: jest.fn() };
+    const categoriesService = {
+      listCategoryTree: jest.fn().mockResolvedValue([
+        {
+          id: 7,
+          name: 'Other',
+          item_sub_categories: [
+            { id: 99, name: 'Other', item_category_id: 7 },
+          ],
+        },
+      ]),
+    };
 
     const service = new BusinessItemsService(
       hasuraUserService as any,
@@ -60,7 +71,8 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
-      {} as any
+      {} as any,
+      categoriesService as any
     );
 
     return {
@@ -71,6 +83,7 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       aiService,
       itemsService,
       itemAiReviewService,
+      categoriesService,
     };
   };
 
@@ -94,11 +107,6 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
         if (query.includes('CheckItemSkus')) {
           return Promise.resolve({ items: [] });
         }
-        if (query.includes('FindCategoryAndSubcategory')) {
-          return Promise.resolve({
-            item_sub_categories: [{ id: 99, item_category_id: 7 }],
-          });
-        }
         return Promise.resolve({});
       });
       itemsService.createItem.mockResolvedValue({
@@ -117,9 +125,9 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
         name: 'Untitled product',
         sku: 'UNTITLED-PRO',
       });
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalledWith(
         expect.stringContaining('FindCategoryAndSubcategory'),
-        { categoryName: 'Other', subCategoryName: 'Other' }
+        expect.anything()
       );
       expect(itemsService.createItem).toHaveBeenCalledWith(
         businessId,
@@ -156,11 +164,6 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       hasuraSystemService.executeQuery.mockImplementation((query: string) => {
         if (query.includes('CheckItemSkus')) {
           return Promise.resolve({ items: [] });
-        }
-        if (query.includes('FindCategoryAndSubcategory')) {
-          return Promise.resolve({
-            item_sub_categories: [{ id: 99, item_category_id: 7 }],
-          });
         }
         return Promise.resolve({});
       });

@@ -23,6 +23,7 @@ import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCu
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
 import { FOOD_CATEGORY_NAME } from '../../../../constants/food';
+import ItemCategoryNamePickers from '../../ItemCategoryNamePickers';
 
 export interface ReviewFormValues {
   name: string;
@@ -248,20 +249,11 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
           inputProps={{ min: 0, max: 1440, step: 5 }}
         />
       )}
-      <TextField
-        label={t('business.onboarding.firstSale.create.category', 'Category')}
-        value={categoryName}
-        onChange={(e) => setCategoryName(e.target.value)}
-        fullWidth
-      />
-      <TextField
-        label={t(
-          'business.onboarding.firstSale.create.subCategory',
-          'Subcategory'
-        )}
-        value={subCategoryName}
-        onChange={(e) => setSubCategoryName(e.target.value)}
-        fullWidth
+      <ItemCategoryNamePickers
+        categoryName={categoryName}
+        subCategoryName={subCategoryName}
+        onCategoryNameChange={setCategoryName}
+        onSubCategoryNameChange={setSubCategoryName}
       />
       <TextField
         label={t('business.onboarding.firstSale.create.brand', 'Brand')}

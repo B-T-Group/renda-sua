@@ -95,6 +95,9 @@ describe('BusinessItemsService CSV upload', () => {
       resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
     };
     const merchantLifecycleService = { recompute: jest.fn() };
+    const categoriesService = {
+      listCategoryTree: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new BusinessItemsService(
       hasuraUserService as any,
@@ -106,7 +109,8 @@ describe('BusinessItemsService CSV upload', () => {
       paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
-      {} as any
+      {} as any,
+      categoriesService as any
     );
 
     return {
@@ -196,7 +200,8 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       {} as any,
       { recompute: jest.fn() } as any,
       {} as any,
-      {} as any
+      {} as any,
+      { listCategoryTree: jest.fn().mockResolvedValue([]) } as any
     );
     (service as any).updateInventoryItem = updateInventoryItem;
     (service as any).createInventoryItem = createInventoryItem;

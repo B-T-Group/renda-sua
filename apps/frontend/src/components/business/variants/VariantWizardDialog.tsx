@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useUserProfileContext } from '../../../contexts/UserProfileContext';
 import { useAiImageCleanup } from '../../../hooks/useAiImageCleanup';
+import { useVariantSuggestions } from '../../../hooks/useVariantSuggestions';
 import { useAws } from '../../../hooks/useAws';
 import {
   CreateItemVariantPayload,
@@ -121,6 +122,13 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
   const { generateImageUploadUrl } = useAws();
   const { requestVariantCleanup } = useAiImageCleanup();
   const {
+    loading: aiSuggestLoading,
+    filled: aiSuggestFilled,
+    reset: resetAiSuggest,
+    lockFields,
+    fetchAndApply: fetchVariantSuggestions,
+  } = useVariantSuggestions();
+  const {
     createVariant,
     updateVariant,
     addVariantImage,
@@ -158,6 +166,7 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
     setCleanupVariantId(null);
     setUploadedImages([]);
     setCleanupSelection([]);
+    resetAiSuggest();
     setNameManual(!!initial);
     if (initial) {
       setForm(formFromInitial(initial));
@@ -170,14 +179,32 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
     setForm(suggested ? { ...base, name: suggested } : base);
     setLastAutoName(suggested);
     setImages([]);
-  }, [initial, parentItem]);
+  }, [initial, parentItem, resetAiSuggest]);
 
   useEffect(() => {
     if (!open) return;
     resetWizard();
   }, [open, resetWizard]);
 
+  useEffect(() => {
+    if (!open || step !== 1 || initial) return;
+    void fetchVariantSuggestions(itemId, (updater) => {
+      setForm((current) => {
+        const next = updater(current);
+        const suggested = next.name?.trim() ?? '';
+        if (suggested) {
+          setLastAutoName(suggested);
+          setNameManual(false);
+        }
+        return next;
+      });
+    });
+  }, [open, step, initial, itemId, fetchVariantSuggestions]);
+
   const patchForm = (patch: Partial<CreateItemVariantPayload>) => {
+    if (aiSuggestLoading) {
+      lockFields(Object.keys(patch));
+    }
     if (patch.sku !== undefined) setSkuError(null);
     if (patch.color === undefined) {
       setForm((prev) => ({ ...prev, ...patch }));
@@ -391,6 +418,8 @@ const VariantWizardDialog: React.FC<VariantWizardDialogProps> = ({
             skuError={skuError}
             onChange={patchForm}
             onNameManualEdit={() => setNameManual(true)}
+            aiLoading={aiSuggestLoading}
+            aiFilled={aiSuggestFilled}
           />
         ) : null}
         {step === 2 ? (

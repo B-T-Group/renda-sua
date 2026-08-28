@@ -16,6 +16,8 @@ import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
+import { CategoriesService } from '../categories/categories.service';
+import { matchItemCategoryNames } from '../categories/match-item-category';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.constants';
 import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
@@ -653,30 +655,6 @@ const GET_ITEM_SUB_CATEGORY_IDS = `
   }
 `;
 
-const FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME = `
-  query FindCategoryAndSubcategory(
-    $categoryName: String!,
-    $subCategoryName: String!
-  ) {
-    item_sub_categories(
-      where: {
-        name: { _eq: $subCategoryName },
-        item_category: {
-          name: { _eq: $categoryName }
-        }
-      },
-      limit: 1
-    ) {
-      id
-      item_category_id
-      item_category {
-        id
-        name
-      }
-    }
-  }
-`;
-
 const DEFAULT_DRAFT_CATEGORY_NAME = 'Other';
 const DEFAULT_DRAFT_SUB_CATEGORY_NAME = 'Other';
 
@@ -839,7 +817,8 @@ export class BusinessItemsService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly stripeTaxCodesService: StripeTaxCodesService,
-    private readonly imageThumbnailsService: ImageThumbnailsService
+    private readonly imageThumbnailsService: ImageThumbnailsService,
+    private readonly categoriesService: CategoriesService
   ) {}
 
   private triggerLifecycleRecompute(businessId: string): void {
@@ -3055,35 +3034,35 @@ export class BusinessItemsService {
     categoryName: string,
     subCategoryName: string
   ): Promise<number> {
-    const existingSub =
-      await this.hasuraSystemService.executeQuery<{
-        item_sub_categories: {
-          id: number;
-          item_category_id: number;
-        }[];
-      }>(FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME, {
-        categoryName,
-        subCategoryName,
-      });
-    const existing = existingSub.item_sub_categories?.[0];
-    if (existing) {
-      return existing.id;
+    const tree = await this.categoriesService.listCategoryTree();
+    const match = matchItemCategoryNames(tree, categoryName, subCategoryName, {
+      allowGlobalSubMatch: false,
+    });
+    if (match.subCategoryId != null) {
+      return match.subCategoryId;
     }
 
+    const categoryId =
+      match.categoryId ?? (await this.ensureCategoryId(match.categoryName));
+    return this.insertSubCategory(categoryId, match.subCategoryName);
+  }
+
+  private async ensureCategoryId(categoryName: string): Promise<number> {
     const categoryLookup =
       await this.hasuraSystemService.executeQuery<{
         item_categories: { id: number }[];
       }>(FIND_CATEGORY_BY_NAME, { categoryName });
     const existingCategory = categoryLookup.item_categories?.[0];
+    if (existingCategory?.id != null) {
+      return existingCategory.id;
+    }
 
-    let categoryId = existingCategory?.id ?? null;
-    if (categoryId == null) {
-      try {
-        const categoryResult =
-          await this.hasuraSystemService.executeMutation<{
-            insert_item_categories_one: { id: number };
-          }>(
-            `
+    try {
+      const categoryResult =
+        await this.hasuraSystemService.executeMutation<{
+          insert_item_categories_one: { id: number };
+        }>(
+          `
             mutation InsertCategory($categoryName: String!) {
               insert_item_categories_one(
                 object: { name: $categoryName, status: active }
@@ -3092,30 +3071,39 @@ export class BusinessItemsService {
               }
             }
           `,
-            { categoryName }
-          );
-        categoryId = categoryResult.insert_item_categories_one?.id ?? null;
-      } catch (error: any) {
-        const message: string =
-          error?.response?.errors?.[0]?.message || String(error?.message || '');
-        const isConstraintViolation = message.includes('constraint-violation');
-        if (!isConstraintViolation) {
-          throw error;
-        }
-        const retryLookup =
-          await this.hasuraSystemService.executeQuery<{
-            item_categories: { id: number }[];
-          }>(FIND_CATEGORY_BY_NAME, { categoryName });
-        categoryId = retryLookup.item_categories?.[0]?.id ?? null;
+          { categoryName }
+        );
+      const categoryId = categoryResult.insert_item_categories_one?.id ?? null;
+      if (categoryId != null) {
+        return categoryId;
+      }
+    } catch (error: any) {
+      const message: string =
+        error?.response?.errors?.[0]?.message || String(error?.message || '');
+      const isConstraintViolation = message.includes('constraint-violation');
+      if (!isConstraintViolation) {
+        throw error;
       }
     }
+
+    const retryLookup =
+      await this.hasuraSystemService.executeQuery<{
+        item_categories: { id: number }[];
+      }>(FIND_CATEGORY_BY_NAME, { categoryName });
+    const categoryId = retryLookup.item_categories?.[0]?.id ?? null;
     if (categoryId == null) {
       throw new HttpException(
         { success: false, error: 'Failed to ensure item category' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+    return categoryId;
+  }
 
+  private async insertSubCategory(
+    categoryId: number,
+    subCategoryName: string
+  ): Promise<number> {
     const subResult =
       await this.hasuraSystemService.executeMutation<{
         insert_item_sub_categories_one: { id: number };

@@ -22,12 +22,18 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { BusinessItemsService } from '../business-items/business-items.service';
 import { ItemRefinementDto } from './dto/item-refinement.dto';
+import { VariantSuggestionsDto } from './dto/variant-suggestions.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import {
   computeListingQuality,
   nameSimilarity,
 } from './listing-quality.util';
+import { CategoriesService } from '../categories/categories.service';
+import {
+  formatCatalogForVisionPrompt,
+  remapImageItemSuggestionCategories,
+} from '../categories/match-item-category';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -39,7 +45,8 @@ export class AiController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
-    private readonly businessItemsService: BusinessItemsService
+    private readonly businessItemsService: BusinessItemsService,
+    private readonly categoriesService: CategoriesService
   ) {}
 
   @Post('generate-description')
@@ -187,10 +194,11 @@ export class AiController {
       .map((img) => img!.alt_text)
       .filter((a): a is string => !!a?.trim());
 
-    const [currency, country, catalogItems] = await Promise.all([
+    const [currency, country, catalogItems, categoryTree] = await Promise.all([
       this.hasuraSystemService.resolveBusinessCurrency(businessId),
       this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId),
       this.businessItemsService.getItems(businessId),
+      this.categoriesService.listCategoryTree(),
     ]);
 
     const linkedItemIds = new Set(
@@ -223,7 +231,7 @@ export class AiController {
       ),
     ];
 
-    const suggestion = await this.aiService.generateImageItemSuggestions({
+    const suggestionRaw = await this.aiService.generateImageItemSuggestions({
       imageUrls: images.map((img) => img!.image_url),
       caption: captions.length ? captions.join(' | ') : null,
       altText: alts.length ? alts.join(' | ') : null,
@@ -233,7 +241,12 @@ export class AiController {
       country,
       existingCatalogNames,
       existingBrandNames,
+      existingCatalogPrompt: formatCatalogForVisionPrompt(categoryTree),
     });
+    const suggestion = remapImageItemSuggestionCategories(
+      suggestionRaw,
+      categoryTree
+    );
 
     if (suggestion.barcodeValues?.length) {
       await this.businessImagesService.storeBarcodeValuesOnImage(
@@ -406,6 +419,136 @@ export class AiController {
         price: item.price,
         currency: item.currency,
       },
+    };
+  }
+
+  @Post('variant-suggestions')
+  @ApiOperation({
+    summary:
+      'Get AI suggestions for a new variant using parent item photos and catalog fields',
+  })
+  @ApiBody({ type: VariantSuggestionsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Variant suggestions generated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Item has no images or invalid body' })
+  async getVariantSuggestions(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: VariantSuggestionsDto
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!body?.itemId) {
+      throw new HttpException(
+        { success: false, error: 'itemId is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    let item: Awaited<ReturnType<BusinessItemsService['getSingleItem']>>;
+    try {
+      item = await this.businessItemsService.getSingleItem(
+        businessId,
+        body.itemId
+      );
+    } catch {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const imageUrls = this.sortItemImageUrls(item.item_images ?? []);
+    if (imageUrls.length === 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Item must have at least one image for variant suggestions',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const parentSnapshot = this.buildVariantParentSnapshot(
+      item as Record<string, unknown>
+    );
+    const suggestion = await this.aiService.generateVariantSuggestions({
+      parentSnapshot,
+      imageUrls,
+      preferredLanguage: user?.preferred_language ?? 'en',
+    });
+
+    return {
+      success: true,
+      data: {
+        name: suggestion.name,
+        color: suggestion.color,
+        sku: suggestion.sku,
+        price: suggestion.price ?? item.price,
+        currency: suggestion.currency ?? item.currency,
+        weight: suggestion.weight ?? item.weight ?? undefined,
+        weightUnit: suggestion.weightUnit ?? item.weight_unit ?? undefined,
+        dimensions: suggestion.dimensions ?? item.dimensions ?? undefined,
+      },
+    };
+  }
+
+  private sortItemImageUrls(
+    images: Array<{ image_type?: string; image_url?: string; display_order?: number }>
+  ): string[] {
+    const sorted = [...images].sort((a, b) => {
+      const main = (x: { image_type?: string }) =>
+        x.image_type === 'main' ? 0 : 1;
+      const diff = main(a) - main(b);
+      if (diff !== 0) return diff;
+      return (a.display_order ?? 0) - (b.display_order ?? 0);
+    });
+    return sorted
+      .map((img) => img.image_url)
+      .filter((url): url is string => Boolean(url))
+      .slice(0, 8);
+  }
+
+  private buildVariantParentSnapshot(
+    item: Record<string, unknown>
+  ): Record<string, unknown> {
+    const row = item as {
+      name?: string;
+      description?: string;
+      sku?: string;
+      color?: string;
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+      price?: number;
+      currency?: string;
+      brand?: { name?: string } | null;
+      item_variants?: Array<{ name?: string; sku?: string | null }>;
+    };
+    return {
+      locked_price: row.price,
+      locked_currency: row.currency,
+      name: row.name,
+      description: row.description,
+      sku: row.sku,
+      color: row.color,
+      weight: row.weight,
+      weight_unit: row.weight_unit,
+      dimensions: row.dimensions,
+      brand: row.brand?.name ?? null,
+      existing_variant_names: (row.item_variants ?? [])
+        .map((v) => v.name)
+        .filter((n): n is string => typeof n === 'string' && !!n.trim()),
+      existing_variant_skus: (row.item_variants ?? [])
+        .map((v) => v.sku)
+        .filter((s): s is string => typeof s === 'string' && !!s.trim()),
     };
   }
 
