@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { CREDITS_SUMMARY_QUERY } from '../users/user-persona-graphql';
+import { userHasPersona } from '../users/persona.util';
 import {
   CREDIT_FEEDBACK_WINDOW_DAYS,
   CREDIT_WEIGHTS,
@@ -96,23 +98,11 @@ export class CreditsQueuesService {
           first_name: string | null;
           last_name: string | null;
           email: string | null;
-          agents: Array<{ id: string }>;
-          businesses: Array<{ id: string }>;
+          agent?: { id: string } | null;
+          business?: { id: string } | null;
         } | null;
       }>;
-    }>(
-      `query CreditsSummary($where: user_credits_bool_exp!) {
-        user_credits(where: $where, order_by: { created_at: desc }, limit: 5000) {
-          user_id event_type weight
-          user {
-            first_name last_name email
-            agents(limit: 1) { id }
-            businesses(limit: 1) { id }
-          }
-        }
-      }`,
-      { where }
-    );
+    }>(CREDITS_SUMMARY_QUERY, { where });
     const map = this.aggregateByUser(res.user_credits ?? []);
     const sorted = [...map.values()].sort(
       (a, b) => b.total_weight - a.total_weight
@@ -369,8 +359,8 @@ export class CreditsQueuesService {
         first_name: string | null;
         last_name: string | null;
         email: string | null;
-        agents: Array<{ id: string }>;
-        businesses: Array<{ id: string }>;
+        agent?: { id: string } | null;
+        business?: { id: string } | null;
       } | null;
     }>
   ) {
@@ -399,8 +389,8 @@ export class CreditsQueuesService {
           total_weight: 0,
           credit_count: 0,
           by_event: {},
-          is_agent: (row.user?.agents?.length ?? 0) > 0,
-          is_business: (row.user?.businesses?.length ?? 0) > 0,
+          is_agent: userHasPersona(row.user ?? {}, 'agent'),
+          is_business: userHasPersona(row.user ?? {}, 'business'),
         };
         map.set(row.user_id, entry);
       }

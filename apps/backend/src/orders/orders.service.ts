@@ -50,6 +50,7 @@ import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.const
 import { StripeTaxCalculationService } from '../stripe-tax/stripe-tax-calculation.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import type { PersonaId } from '../users/persona.types';
+import { CLIENT_BUYER_PERSONAS_QUERY } from '../users/user-persona-graphql';
 import {
   isActivePersona,
   resolveActivePersona,
@@ -3059,27 +3060,16 @@ export class OrdersService {
       clients_by_pk: {
         user_id: string;
         user: {
-          agents: Array<{ id: string }>;
-          businesses: Array<{ id: string }>;
+          agent?: { id: string } | null;
+          business?: { id: string } | null;
         } | null;
       } | null;
-    }>(
-      `query ClientBuyerPersonas($id: uuid!) {
-        clients_by_pk(id: $id) {
-          user_id
-          user {
-            agents(limit: 1) { id }
-            businesses(limit: 1) { id }
-          }
-        }
-      }`,
-      { id: clientId }
-    );
+    }>(CLIENT_BUYER_PERSONAS_QUERY, { id: clientId });
     const row = res.clients_by_pk;
     if (!row?.user_id) return null;
     const isAgentOrBusiness =
-      (row.user?.agents?.length ?? 0) > 0 ||
-      (row.user?.businesses?.length ?? 0) > 0;
+      userHasPersona(row.user ?? {}, 'agent') ||
+      userHasPersona(row.user ?? {}, 'business');
     return isAgentOrBusiness ? row.user_id : null;
   }
 
