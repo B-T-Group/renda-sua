@@ -34,12 +34,6 @@ export class AppController {
     timestamp: string;
     hasura?: HealthHasura;
   }> {
-    this.logger.info('GET /health endpoint called', {
-      service: 'AppController',
-      method: 'getHealth',
-      endpoint: '/health',
-      timestamp: new Date().toISOString(),
-    });
 
     const base = this.appService.getHealth();
     const hasura = await this.checkHasuraHealth();
@@ -91,12 +85,7 @@ export class AppController {
 
   @Get()
   getHello(): string {
-    this.logger.info('GET / endpoint called', {
-      service: 'AppController',
-      method: 'getHello',
-      endpoint: '/',
-      timestamp: new Date().toISOString(),
-    });
+
 
     return this.appService.getHello();
   }
