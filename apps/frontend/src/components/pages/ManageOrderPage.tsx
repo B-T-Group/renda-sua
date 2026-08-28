@@ -1,10 +1,8 @@
-import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Star, Support as SupportIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Message as MessageIcon, Star, Support as SupportIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Container,
   IconButton,
@@ -32,7 +30,6 @@ import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
-import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import { OrderEventsTimeline } from '../orders/OrderEventsTimeline';
 import RatingDialog, { type RatingDialogMode } from '../dialogs/RatingDialog';
@@ -52,7 +49,6 @@ import {
   RefundProgressCard,
 } from '../orders/RefundProgressCard';
 import {
-  messagesDefaultExpandedForOrder,
   ORDER_PRIMARY_ACTION_LABEL,
   orderToPhaseInput,
   resolveOrderPhase,
@@ -169,6 +165,17 @@ const ManageOrderPageContent: React.FC = () => {
     searchParams.delete('rate');
     setSearchParams(searchParams, { replace: true });
   }, [eligibility, searchParams, setSearchParams]);
+
+  // Legacy deep links: /orders/:id?messages=1 → dedicated messages page
+  useEffect(() => {
+    if (!orderId || searchParams.get('messages') !== '1') return;
+    const highlight = searchParams.get('highlight');
+    const base = isDelegationContext
+      ? `/delegate/orders/${orderId}/messages`
+      : `/orders/${orderId}/messages`;
+    const qs = highlight ? `?highlight=${encodeURIComponent(highlight)}` : '';
+    navigate(`${base}${qs}`, { replace: true });
+  }, [orderId, searchParams, isDelegationContext, navigate]);
 
   useEffect(() => {
     if (!order || !isRefundOrderStatus(order.current_status)) {
@@ -362,6 +369,21 @@ const ManageOrderPageContent: React.FC = () => {
     (Boolean(profile?.agent?.id) &&
       order.assigned_agent_id === profile?.agent?.id);
 
+  const messagesPath = isDelegationContext
+    ? `/delegate/orders/${order.id}/messages`
+    : `/orders/${order.id}/messages`;
+
+  const headerTrailing = canSeeMessages ? (
+    <Button
+      variant="outlined"
+      size="small"
+      startIcon={<MessageIcon />}
+      onClick={() => navigate(messagesPath)}
+    >
+      {t('orders.actions.message', 'Message')}
+    </Button>
+  ) : null;
+
   const tracking =
     persona === 'client' &&
     CLIENT_TRACKING_STATUSES.includes(order.current_status) ? (
@@ -414,21 +436,6 @@ const ManageOrderPageContent: React.FC = () => {
       )}
     </>
   );
-
-  const messages = canSeeMessages ? (
-    <Card sx={{ mb: 2 }}>
-      <CardContent>
-        <UserMessagesComponent
-          entityType="order"
-          entityId={order.id}
-          title={t('messages.orderMessages', 'Order Messages')}
-          defaultExpanded={messagesDefaultExpandedForOrder(order.current_status)}
-          maxVisibleMessages={10}
-          compact={false}
-        />
-      </CardContent>
-    </Card>
-  ) : null;
 
   const extras = (
     <Stack spacing={2} sx={{ mt: 2 }}>
@@ -535,9 +542,9 @@ const ManageOrderPageContent: React.FC = () => {
             live={orderSubscriptionActive}
             onRefresh={refetch}
             alerts={alerts}
-            messages={messages}
             tracking={tracking}
             extras={extras}
+            headerTrailing={headerTrailing}
             hideActions={isMobile}
             onActionComplete={() => refetch()}
             onShowNotification={handleShowNotification}

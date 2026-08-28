@@ -40,6 +40,10 @@ interface UserMessagesComponentProps {
   maxVisibleMessages?: number;
   compact?: boolean;
   className?: string;
+  /** `page` = full chat layout (no collapse, all messages, sticky composer). */
+  variant?: 'embed' | 'page';
+  highlightMessageId?: string | null;
+  emptyPrompt?: string;
 }
 
 export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
@@ -50,8 +54,12 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   maxVisibleMessages = 3,
   compact = false,
   className,
+  variant = 'embed',
+  highlightMessageId = null,
+  emptyPrompt,
 }) => {
   const { t } = useTranslation();
+  const isPage = variant === 'page';
   const isOrder = entityType === 'order';
   const isRentalBooking = entityType === 'rental_booking';
   const usesRestThread = isOrder || isRentalBooking;
@@ -70,7 +78,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     ? rentalParticipants.loading
     : orderParticipants.loading;
 
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(isPage || defaultExpanded);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [viewAllDialog, setViewAllDialog] = useState(false);
@@ -84,6 +92,8 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const composerRef = useRef<HTMLDivElement | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
 
   const entityMessages = isOrder
     ? (orderMessagesHook.messages as OrderMessage[])
@@ -108,8 +118,13 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     entity_type_info: msg.entity_type_info,
   }));
 
-  const visibleMessages = expanded ? normalizedMessages.slice(0, maxVisibleMessages) : [];
-  const hasMoreMessages = normalizedMessages.length > maxVisibleMessages;
+  // Page: chronological (oldest first). Embed: newest-first capped list.
+  const displayMessages = isPage
+    ? [...normalizedMessages].reverse()
+    : expanded
+      ? normalizedMessages.slice(0, maxVisibleMessages)
+      : [];
+  const hasMoreMessages = !isPage && normalizedMessages.length > maxVisibleMessages;
 
   useEffect(() => {
     if (isOrder && entityId) {
@@ -121,7 +136,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   }, [entityType, entityId, isOrder, isRentalBooking]);
 
   useEffect(() => {
-    if (!usesRestThread || !expanded || entityMessages.length === 0) return;
+    if (!usesRestThread || !(isPage || expanded) || entityMessages.length === 0) return;
     const lastMessage = entityMessages[0];
     if (isOrder) {
       orderMessagesHook.markMessagesRead(entityId, lastMessage.id);
@@ -129,7 +144,17 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
       rentalMessagesHook.markMessagesRead(entityId, lastMessage.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, usesRestThread, isOrder, isRentalBooking]);
+  }, [expanded, isPage, usesRestThread, isOrder, isRentalBooking, entityMessages.length]);
+
+  useEffect(() => {
+    if (!isPage || !highlightMessageId || !highlightRef.current) return;
+    highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [isPage, highlightMessageId, displayMessages.length]);
+
+  useEffect(() => {
+    if (!isPage || highlightMessageId || !threadEndRef.current) return;
+    threadEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+  }, [isPage, highlightMessageId, displayMessages.length]);
 
   const handleMessageChange = useCallback(
     (text: string) => {
@@ -239,13 +264,226 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
       ? rentalMessagesHook.error
       : userMessagesHook.error;
 
+  const renderMessageRow = (message: UserMessage, dense = false) => {
+    const orderMsg = getOrderMessage(message);
+    const isHighlighted = Boolean(highlightMessageId && message.id === highlightMessageId);
+    return (
+      <Box
+        key={message.id}
+        ref={isHighlighted ? highlightRef : undefined}
+        sx={{
+          p: dense || compact ? 1 : 1.5,
+          bgcolor: isHighlighted ? 'primary.50' : 'grey.50',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: isHighlighted ? 'primary.main' : 'grey.200',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 0.5,
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              {message.user?.first_name} {message.user?.last_name}
+            </Typography>
+            {orderMsg?.sender_persona && (
+              <PersonaBadge persona={orderMsg.sender_persona} />
+            )}
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            {usesRestThread
+              ? new Date(message.created_at).toLocaleString()
+              : userMessagesHook.formatDate(message.created_at)}
+          </Typography>
+        </Box>
+        {(orderMsg?.mentions?.length
+          ? orderMsg.mentions
+          : orderMsg?.mention
+            ? [orderMsg.mention]
+            : []
+        ).map((m) => (
+          <Box key={m.mentionedUserId} sx={{ mb: 0.5, display: 'inline-block', mr: 0.5 }}>
+            <MentionChip displayName={m.displayName} persona={m.persona} />
+          </Box>
+        ))}
+        {orderMsg &&
+        (orderMsg.message_type === 'DELIVERY_PIN' ||
+          orderMsg.message_type === 'RENTAL_START_PIN' ||
+          orderMsg.message_type === 'QUICK_MESSAGE') ? (
+          <MessageRenderer message={orderMsg} compact={compact} />
+        ) : (
+          <Typography
+            variant="body2"
+            sx={{
+              wordBreak: 'break-word',
+              '& strong': { fontWeight: 'bold' },
+              '& em': { fontStyle: 'italic' },
+              '& del': { textDecoration: 'line-through' },
+              '& code': {
+                bgcolor: 'grey.100',
+                p: '2px 4px',
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.85em',
+              },
+              '& blockquote': {
+                borderLeft: '3px solid',
+                borderColor: 'grey.300',
+                pl: 1,
+                ml: 0,
+                fontStyle: 'italic',
+                color: 'text.secondary',
+              },
+            }}
+            dangerouslySetInnerHTML={{
+              __html: formatMessageText(message.message),
+            }}
+          />
+        )}
+      </Box>
+    );
+  };
+
+  const composer = (
+    <Box ref={composerRef}>
+      {isOrder ? (
+        <QuickMessageButtons
+          orderId={entityId}
+          onSent={() => void orderMessagesHook.refetch(entityId)}
+          onShowNotification={(message, severity) =>
+            setSnackbar({ message, severity })
+          }
+        />
+      ) : null}
+      {!isPage ? (
+        <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+          {t('messages.addNew', 'Add Message')}
+        </Typography>
+      ) : null}
+
+      {selectedMention && (
+        <Box sx={{ mb: 1 }}>
+          <MentionChip
+            displayName={selectedMention.displayName}
+            persona={selectedMention.persona}
+            onDelete={handleClearMention}
+          />
+        </Box>
+      )}
+
+      <MentionPicker
+        anchorEl={composerRef.current}
+        open={mentionPickerOpen && usesRestThread}
+        participants={participants}
+        loading={participantsLoading}
+        query={mentionQuery}
+        onSelect={handleMentionSelect}
+        onClose={() => setMentionPickerOpen(false)}
+      />
+
+      <RichTextEditor
+        value={newMessage}
+        onChange={handleMessageChange}
+        placeholder={
+          usesRestThread
+            ? t('messages.mentionPlaceholder', 'Type your message... Use @ to mention')
+            : t('messages.placeholder', 'Type your message...')
+        }
+        disabled={sending}
+      />
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={<Send />}
+          onClick={handleSendMessage}
+          disabled={!newMessage.trim() || sending}
+        >
+          {sending ? t('messages.sending', 'Sending...') : t('messages.send', 'Send')}
+        </Button>
+      </Box>
+    </Box>
+  );
+
   if (error) {
     return (
-      <Box className={className} sx={{ mt: 2 }}>
+      <Box className={className} sx={{ mt: isPage ? 0 : 2 }}>
         <Typography variant="body2" color="error">
           {t('messages.error', 'Failed to load messages')}
         </Typography>
       </Box>
+    );
+  }
+
+  if (isPage) {
+    return (
+      <>
+        <Box
+          className={className}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
+            height: '100%',
+          }}
+        >
+          <Box sx={{ flex: 1, overflowY: 'auto', px: { xs: 0, sm: 1 }, pb: 2 }}>
+            {displayMessages.length > 0 ? (
+              <Stack spacing={1}>
+                {displayMessages.map((message) => renderMessageRow(message))}
+                <div ref={threadEndRef} />
+              </Stack>
+            ) : (
+              <Box sx={{ py: 3 }}>
+                <Alert icon={<Info />} severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                    {t('messages.startConversation', 'Start a conversation')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {emptyPrompt ||
+                      t(
+                        'messages.conversationPrompt',
+                        'Use this messaging feature to communicate with other parties involved.'
+                      )}
+                  </Typography>
+                </Alert>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+                  {t('messages.noMessages', 'No messages yet')}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Box
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              pt: 2,
+              pb: 1,
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 1,
+            }}
+          >
+            {composer}
+          </Box>
+        </Box>
+
+        <Snackbar
+          open={!!snackbar}
+          autoHideDuration={4000}
+          onClose={() => setSnackbar(null)}
+          message={snackbar?.message}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        />
+      </>
     );
   }
 
@@ -254,7 +492,6 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
       <Box className={className} sx={{ mt: 2 }}>
         <Card variant="outlined" sx={{ border: '1px solid', borderColor: 'divider' }}>
           <CardContent sx={{ pb: compact ? 1 : 2 }}>
-            {/* Header */}
             <Box
               sx={{
                 display: 'flex',
@@ -298,94 +535,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 
             <Collapse in={expanded}>
               <Box>
-                {visibleMessages.length > 0 ? (
+                {displayMessages.length > 0 ? (
                   <Stack spacing={1} sx={{ mb: 2 }}>
-                    {visibleMessages.map((message) => {
-                      const orderMsg = getOrderMessage(message);
-                      return (
-                        <Box
-                          key={message.id}
-                          sx={{
-                            p: compact ? 1 : 1.5,
-                            bgcolor: 'grey.50',
-                            borderRadius: 1,
-                            border: '1px solid',
-                            borderColor: 'grey.200',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              mb: 0.5,
-                              gap: 1,
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                {message.user?.first_name} {message.user?.last_name}
-                              </Typography>
-                              {orderMsg?.sender_persona && (
-                                <PersonaBadge persona={orderMsg.sender_persona} />
-                              )}
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                              {usesRestThread
-                                ? new Date(message.created_at).toLocaleString()
-                                : userMessagesHook.formatDate(message.created_at)}
-                            </Typography>
-                          </Box>
-                          {(orderMsg?.mentions?.length
-                            ? orderMsg.mentions
-                            : orderMsg?.mention
-                              ? [orderMsg.mention]
-                              : []
-                          ).map((m) => (
-                            <Box key={m.mentionedUserId} sx={{ mb: 0.5, display: 'inline-block', mr: 0.5 }}>
-                              <MentionChip
-                                displayName={m.displayName}
-                                persona={m.persona}
-                              />
-                            </Box>
-                          ))}
-                          {orderMsg &&
-                          (orderMsg.message_type === 'DELIVERY_PIN' ||
-                            orderMsg.message_type === 'RENTAL_START_PIN' ||
-                            orderMsg.message_type === 'QUICK_MESSAGE') ? (
-                            <MessageRenderer message={orderMsg} compact={compact} />
-                          ) : (
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              wordBreak: 'break-word',
-                              '& strong': { fontWeight: 'bold' },
-                              '& em': { fontStyle: 'italic' },
-                              '& del': { textDecoration: 'line-through' },
-                              '& code': {
-                                bgcolor: 'grey.100',
-                                p: '2px 4px',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.85em',
-                              },
-                              '& blockquote': {
-                                borderLeft: '3px solid',
-                                borderColor: 'grey.300',
-                                pl: 1,
-                                ml: 0,
-                                fontStyle: 'italic',
-                                color: 'text.secondary',
-                              },
-                            }}
-                            dangerouslySetInnerHTML={{
-                              __html: formatMessageText(message.message),
-                            }}
-                          />
-                          )}
-                        </Box>
-                      );
-                    })}
+                    {displayMessages.map((message) => renderMessageRow(message))}
                   </Stack>
                 ) : (
                   <Box sx={{ py: 2 }}>
@@ -394,10 +546,11 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                         {t('messages.startConversation', 'Start a conversation')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {t(
-                          'messages.conversationPrompt',
-                          'Use this messaging feature to communicate with other parties involved.'
-                        )}
+                        {emptyPrompt ||
+                          t(
+                            'messages.conversationPrompt',
+                            'Use this messaging feature to communicate with other parties involved.'
+                          )}
                       </Typography>
                     </Alert>
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
@@ -414,65 +567,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                   </Box>
                 )}
 
-                {(visibleMessages.length > 0 || hasMoreMessages) && <Divider sx={{ mb: 2 }} />}
+                {(displayMessages.length > 0 || hasMoreMessages) && <Divider sx={{ mb: 2 }} />}
 
-                {/* Composer */}
-                <Box ref={composerRef}>
-                  {isOrder ? (
-                    <QuickMessageButtons
-                      orderId={entityId}
-                      onSent={() => void orderMessagesHook.refetch(entityId)}
-                      onShowNotification={(message, severity) =>
-                        setSnackbar({ message, severity })
-                      }
-                    />
-                  ) : null}
-                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-                    {t('messages.addNew', 'Add Message')}
-                  </Typography>
-
-                  {selectedMention && (
-                    <Box sx={{ mb: 1 }}>
-                      <MentionChip
-                        displayName={selectedMention.displayName}
-                        persona={selectedMention.persona}
-                        onDelete={handleClearMention}
-                      />
-                    </Box>
-                  )}
-
-                  <MentionPicker
-                    anchorEl={composerRef.current}
-                    open={mentionPickerOpen && usesRestThread}
-                    participants={participants}
-                    loading={participantsLoading}
-                    query={mentionQuery}
-                    onSelect={handleMentionSelect}
-                    onClose={() => setMentionPickerOpen(false)}
-                  />
-
-                  <RichTextEditor
-                    value={newMessage}
-                    onChange={handleMessageChange}
-                    placeholder={
-                      usesRestThread
-                        ? t('messages.mentionPlaceholder', 'Type your message... Use @ to mention')
-                        : t('messages.placeholder', 'Type your message...')
-                    }
-                    disabled={sending}
-                  />
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<Send />}
-                      onClick={handleSendMessage}
-                      disabled={!newMessage.trim() || sending}
-                    >
-                      {sending ? t('messages.sending', 'Sending...') : t('messages.send', 'Send')}
-                    </Button>
-                  </Box>
-                </Box>
+                {composer}
               </Box>
             </Collapse>
           </CardContent>
@@ -487,7 +584,6 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
 
-      {/* View All Dialog */}
       <Dialog open={viewAllDialog} onClose={() => setViewAllDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -502,76 +598,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
         <DialogContent>
           {normalizedMessages.length > 0 ? (
             <Stack spacing={2}>
-              {normalizedMessages.map((message) => {
-                const orderMsg = getOrderMessage(message);
-                return (
-                  <Box
-                    key={message.id}
-                    sx={{
-                      p: 2,
-                      bgcolor: 'grey.50',
-                      borderRadius: 1,
-                      border: '1px solid',
-                      borderColor: 'grey.200',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        mb: 1,
-                        gap: 1,
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="subtitle2" fontWeight="medium">
-                          {message.user?.first_name} {message.user?.last_name}
-                        </Typography>
-                        {orderMsg?.sender_persona && (
-                          <PersonaBadge persona={orderMsg.sender_persona} />
-                        )}
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {usesRestThread
-                          ? new Date(message.created_at).toLocaleString()
-                          : userMessagesHook.formatDate(message.created_at)}
-                      </Typography>
-                    </Box>
-                    {(orderMsg?.mentions?.length
-                      ? orderMsg.mentions
-                      : orderMsg?.mention
-                        ? [orderMsg.mention]
-                        : []
-                    ).map((m) => (
-                      <Box key={m.mentionedUserId} sx={{ mb: 0.5, display: 'inline-block', mr: 0.5 }}>
-                        <MentionChip
-                          displayName={m.displayName}
-                          persona={m.persona}
-                        />
-                      </Box>
-                    ))}
-                    {orderMsg &&
-                    (orderMsg.message_type === 'DELIVERY_PIN' ||
-                      orderMsg.message_type === 'RENTAL_START_PIN' ||
-                      orderMsg.message_type === 'QUICK_MESSAGE') ? (
-                      <MessageRenderer message={orderMsg} />
-                    ) : (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        wordBreak: 'break-word',
-                        '& strong': { fontWeight: 'bold' },
-                        '& em': { fontStyle: 'italic' },
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: formatMessageText(message.message),
-                      }}
-                    />
-                    )}
-                  </Box>
-                );
-              })}
+              {normalizedMessages.map((message) => renderMessageRow(message))}
             </Stack>
           ) : (
             <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>

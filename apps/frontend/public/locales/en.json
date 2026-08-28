@@ -4236,6 +4236,10 @@
     "orderDropError": "Failed to drop order",
     "orderDropSuccess": "Order ${result.order_number} dropped successfully",
     "orderMessages": "Order Messages",
+    "orderMessagesPageTitle": "Messages · Order #{{orderNumber}}",
+    "emptyPromptClient": "Message the store or delivery agent about this order.",
+    "emptyPromptBusiness": "Message the customer or delivery agent about this order.",
+    "emptyPromptAgent": "Message the customer or store about this delivery.",
     "orderPickupError": "Failed to pick up order",
     "orderPickupSuccess": "Order ${result.order_number} picked up successfully",
     "orderRefundError": "Failed to refund order",
@@ -4435,6 +4439,7 @@
       "openRefunds": "Manage refund",
       "generateOverwrite": "Generate overwrite code",
       "reconcileCash": "Reconcile cash",
+      "message": "Message",
       "none": ""
     },
     "addAddress": "Add Delivery Address",

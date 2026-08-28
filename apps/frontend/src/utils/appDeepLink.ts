@@ -35,7 +35,7 @@ export function mapAppPathToWeb(path: string): string {
   if (path.startsWith('/verification')) return '/documents';
   if (path.startsWith('/chat/')) {
     const id = path.replace('/chat/', '').split(/[?#]/)[0];
-    return `/orders/${id}?messages=1`;
+    return `/orders/${id}/messages`;
   }
   if (path.startsWith('/deliveries/')) {
     const id = path.replace('/deliveries/', '').split(/[?#]/)[0];

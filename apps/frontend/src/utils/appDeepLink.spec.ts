@@ -58,4 +58,8 @@ describe('appDeepLink', () => {
     expect(mapAppPathToWeb('/deliveries/abc')).toBe('/orders/abc');
     expect(mapAppPathToWeb('/admin/orders/abc')).toBe('/admin/orders/abc');
   });
+
+  it('maps chat app paths to the order messages page', () => {
+    expect(mapAppPathToWeb('/chat/abc')).toBe('/orders/abc/messages');
+  });
 });

@@ -35,6 +35,7 @@ export interface DeliveryOrderDetailsProps {
   messages?: React.ReactNode;
   tracking?: React.ReactNode;
   extras?: React.ReactNode;
+  headerTrailing?: React.ReactNode;
   hideActions?: boolean;
   onActionComplete?: () => void;
   onShowNotification?: (
@@ -51,6 +52,7 @@ export const DeliveryOrderDetails: React.FC<DeliveryOrderDetailsProps> = ({
   messages,
   tracking,
   extras,
+  headerTrailing,
   hideActions = false,
   onActionComplete,
   onShowNotification,
@@ -124,6 +126,7 @@ export const DeliveryOrderDetails: React.FC<DeliveryOrderDetailsProps> = ({
         statusLabel={vm.statusMessage}
         live={live}
         onRefresh={onRefresh}
+        trailing={headerTrailing}
       />
 
       <HeroActionCard

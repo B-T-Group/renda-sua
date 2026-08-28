@@ -680,6 +680,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/orders/:orderId/messages"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.OrderMessagesPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/delegate/orders"
@@ -694,6 +702,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.DelegateManageOrderPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/delegate/orders/:orderId/messages"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.DelegateOrderMessagesPage />
                 </ProtectedRoute>
               }
             />

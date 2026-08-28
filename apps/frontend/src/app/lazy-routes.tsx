@@ -288,6 +288,12 @@ export const AgentLandingPage = lazy(() =>
 export const ManageOrderPage = lazy(() =>
   import('../components/pages/ManageOrderPage')
 );
+export const OrderMessagesPage = lazy(() =>
+  import('../components/pages/OrderMessagesPage')
+);
+export const DelegateOrderMessagesPage = lazy(() =>
+  import('../components/pages/DelegateOrderMessagesPage')
+);
 export const MessagesCenterPage = lazy(() =>
   import('../components/pages/MessagesCenterPage').then((m) => ({
     default: m.MessagesCenterPage,

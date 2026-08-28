@@ -36,7 +36,7 @@ export class DeepLinkService {
   chat(threadOrOrderId: string): DeepLinkPair {
     return this.build(
       `chat/${threadOrOrderId}`,
-      `/orders/${threadOrOrderId}?messages=1`
+      `/orders/${threadOrOrderId}/messages`
     );
   }
 
