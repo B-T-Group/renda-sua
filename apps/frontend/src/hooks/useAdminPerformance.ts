@@ -69,6 +69,7 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
+  /** Pending representative_compensation_events waiting for Saturday credit. */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
   /** Credited representative compensation in the selected window. */
