@@ -7,5 +7,5 @@ export const WEIGHT_UNITS = ['g', 'kg', 'lb', 'oz'] as const;
 export type WeightUnit = (typeof WEIGHT_UNITS)[number];
 
 // Currency options (prefer business-country lock in item/rental forms)
-export const CURRENCIES = ['CAD', 'USD', 'EUR', 'GBP', 'XAF'] as const;
+export const CURRENCIES = ['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF'] as const;
 export type Currency = (typeof CURRENCIES)[number];

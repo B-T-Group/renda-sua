@@ -74,6 +74,7 @@ export function resolveCurrencyForCountry(
   }
   if (code === 'CA') return 'CAD';
   if (code === 'US') return 'USD';
+  if (['TG', 'BJ', 'CI'].includes(code)) return 'XOF';
   if (['GA', 'CM', 'TD', 'CF', 'CG', 'GQ'].includes(code)) return 'XAF';
   return 'XAF';
 }

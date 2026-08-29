@@ -22,6 +22,7 @@ import { CountryDeliveryConfigsSection } from '../admin/CountryDeliveryConfigsSe
 import { DeliveryTimeSlotsSection } from '../admin/DeliveryTimeSlotsSection';
 import LoadingScreen from '../common/LoadingScreen';
 import SEOHead from '../seo/SEOHead';
+import { SIGNUP_COUNTRY_CODES } from '../../constants/marketCountries';
 
 const ApplicationSetupPage: React.FC = () => {
   const { t } = useTranslation();
@@ -46,10 +47,10 @@ const ApplicationSetupPage: React.FC = () => {
   }, [countryCode, fetchSetup]);
 
   const countries = useMemo(() => {
-    const allowed = ['GA', 'CM', 'CA'];
+    const allowed = new Set<string>(SIGNUP_COUNTRY_CODES);
     if (!countryStateCity) return [];
     return countryStateCity.Country.getAllCountries()
-      .filter((country) => allowed.includes(country.isoCode))
+      .filter((country) => allowed.has(country.isoCode))
       .map((country) => ({
         code: country.isoCode,
         name: country.name,

@@ -6,7 +6,7 @@
  *   PREMIUM  → 15 %
  *   ELITE    → 20 %
  *
- * CM / GA commissions:
+ * CM / GA / TG / BJ / CI / CG commissions:
  *   STANDARD → 7 %
  *   PREMIUM  → 12 %
  *   ELITE    → 15 %
@@ -49,6 +49,10 @@ const COUNTRY_COMMISSION_MAPS: Record<
 > = {
   CM: AFRICA_COMMISSION_MAP,
   GA: AFRICA_COMMISSION_MAP,
+  TG: AFRICA_COMMISSION_MAP,
+  BJ: AFRICA_COMMISSION_MAP,
+  CI: AFRICA_COMMISSION_MAP,
+  CG: AFRICA_COMMISSION_MAP,
 };
 
 function normalizeCountry(
@@ -59,6 +63,23 @@ function normalizeCountry(
   if (raw.length === 2) return raw;
   if (raw === 'CAMEROON') return 'CM';
   if (raw === 'GABON') return 'GA';
+  if (raw === 'TOGO') return 'TG';
+  if (raw === 'BENIN') return 'BJ';
+  if (
+    raw === "COTE D'IVOIRE" ||
+    raw === "COTE D'IVOIRE (IVORY COAST)" ||
+    raw === 'IVORY COAST'
+  ) {
+    return 'CI';
+  }
+  if (
+    raw === 'CONGO' ||
+    raw === 'REPUBLIC OF THE CONGO' ||
+    raw === 'REPUBLIC OF CONGO' ||
+    raw === 'CONGO-BRAZZAVILLE'
+  ) {
+    return 'CG';
+  }
   if (raw === 'CANADA') return 'CA';
   return raw;
 }
