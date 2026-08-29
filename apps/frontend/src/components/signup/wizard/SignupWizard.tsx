@@ -18,6 +18,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
+import {
+  isAfricanMarketCountry,
+  isSignupCountryCode,
+} from '../../../constants/marketCountries';
 import { getMetaBrowserContext } from '../../../utils/metaBrowserIds';
 import LoginMethodDialog from '../../auth/LoginMethodDialog';
 import LaunchPromoCongrats, {
@@ -61,7 +65,7 @@ export const SignupWizard: React.FC = () => {
         code: c.code,
         name: c.name,
         currencyCode: c.currencyCode,
-        signupEnabled: c.signupEnabled ?? ['CM', 'GA', 'US', 'CA'].includes(c.code),
+        signupEnabled: c.signupEnabled ?? isSignupCountryCode(c.code),
         postalCodeRequired:
           c.postalCodeRequired ?? ['US', 'CA'].includes(c.code),
         verificationFlow: c.verificationFlow ?? 'national_id',
@@ -187,7 +191,7 @@ export const SignupWizard: React.FC = () => {
     const useSms =
       Boolean(phoneNormalized) &&
       isValidPhoneNumber(phoneNormalized) &&
-      (country === 'CM' || country === 'GA');
+      isAfricanMarketCountry(country);
     sessionStorage.setItem('pendingSignupUserId', user.id);
     sessionStorage.setItem('pendingSignupEmail', emailNormalized);
     if (useSms) {

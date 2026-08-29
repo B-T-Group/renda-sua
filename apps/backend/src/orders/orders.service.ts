@@ -10899,12 +10899,14 @@ export class OrdersService {
         error
       );
 
-      const isCmOrGa = countryCode === 'CM' || countryCode === 'GA';
-      // Fallback to hardcoded GA values if configuration lookup fails
+      const isCfaMarket = ['CM', 'GA', 'TG', 'BJ', 'CI', 'CG'].includes(
+        countryCode
+      );
+      // Fallback to hardcoded CFA values if configuration lookup fails
       const fallbackConfig = {
         baseFee: requiresFastDelivery ? 1500 : 1000,
-        ratePerKm: isCmOrGa ? 100 : 200,
-        maxPerKmFee: isCmOrGa ? 1500 : 0,
+        ratePerKm: isCfaMarket ? 100 : 200,
+        maxPerKmFee: isCfaMarket ? 1500 : 0,
         minFee: 1000,
       };
       const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;

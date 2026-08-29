@@ -22,7 +22,7 @@ describe('getCommissionForBusinessAccountType', () => {
     ).toBe(12);
   });
 
-  it('returns CM/GA commissions for each account tier', () => {
+  it('returns African CFA market commissions for each account tier', () => {
     expect(
       getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'CM')
     ).toBe(7);
@@ -34,6 +34,18 @@ describe('getCommissionForBusinessAccountType', () => {
     ).toBe(15);
     expect(
       getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'Cameroon')
+    ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'TG')
+    ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.PREMIUM, 'BJ')
+    ).toBe(12);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.ELITE, 'CI')
+    ).toBe(15);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'CG')
     ).toBe(7);
   });
 
