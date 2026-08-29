@@ -75,6 +75,15 @@ describe('AdminReferralService', () => {
       'ag1',
       'CM'
     );
+    expect(credits.resolveReferrerUserId).toHaveBeenCalledWith({
+      kind: 'agent',
+      agentId: 'ref-agent',
+      businessUserId: undefined,
+    });
+    expect(credits.awardAgentReferred).toHaveBeenCalledWith({
+      referrerUserId: 'ref-user',
+      agentId: 'ag1',
+    });
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
     ).not.toHaveBeenCalled();
@@ -98,6 +107,10 @@ describe('AdminReferralService', () => {
       success: true,
     });
     expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
+    expect(credits.awardBusinessReferred).toHaveBeenCalledWith({
+      referrerUserId: 'ref-user',
+      businessId: 'b1',
+    });
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
     ).toHaveBeenCalledWith(
