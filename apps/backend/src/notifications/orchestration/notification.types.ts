@@ -37,6 +37,7 @@ export type NotificationType =
   | 'rental.request'
   | 'rental.request.accepted'
   | 'rental.request.rejected'
+  | 'product.interest'
   | 'rental.booking.reserved'
   | 'rental.booking.confirmed'
   | 'rental.booking.cancelled'

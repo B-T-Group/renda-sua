@@ -108,6 +108,7 @@
 - "!include public_order_status_history.yaml"
 - "!include public_orders.yaml"
 - "!include public_partners.yaml"
+- "!include public_product_interest_requests.yaml"
 - "!include public_payment_callbacks.yaml"
 - "!include public_permissions.yaml"
 - "!include public_push_subscriptions.yaml"

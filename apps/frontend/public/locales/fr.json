@@ -7194,5 +7194,25 @@
       "title": "Commandez des repas dans les restaurants près de vous",
       "description": "Parcourez les plats préparés par les restaurants près de vous et commandez pendant les heures de service."
     }
+  },
+  "productInterest": {
+    "cta": "Je suis intéressé(e)",
+    "dialogTitle": "Je suis intéressé(e)",
+    "noteLabel": "Message (optionnel)",
+    "noteHelp": "Parlez au vendeur de {{name}}. Il vous contactera en dehors de l’application.",
+    "submit": "Envoyer mon intérêt",
+    "success": "Intérêt envoyé. Le vendeur vous contactera.",
+    "error": "Impossible d’envoyer l’intérêt",
+    "priceNotApplicable": "Prix sur demande",
+    "clientTitle": "Mes demandes d’intérêt",
+    "businessTitle": "Intérêt produit",
+    "businessHelp": "Des clients souhaitent être contactés pour ces articles. Suivez par téléphone ou e-mail hors application.",
+    "emptyClient": "Aucune demande d’intérêt pour le moment.",
+    "emptyBusiness": "Aucun lead d’intérêt pour le moment.",
+    "loadError": "Impossible de charger les demandes",
+    "viewItem": "Voir l’article",
+    "clientLabel": "Client",
+    "unknownItem": "Article",
+    "merchantToggle": "Prix non applicable (intérêt uniquement)"
   }
 }

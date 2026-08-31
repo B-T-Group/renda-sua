@@ -9,10 +9,11 @@ Header names are case-insensitive. Aliases in parentheses are accepted.
 | Column | Aliases | Notes |
 |--------|---------|--------|
 | `name` | `title`, `product_name`, `product` | Required after AI |
-| `price` | `catalog_price`, `list_price` | Catalog `items.price` |
+| `price` | `catalog_price`, `list_price` | Catalog `items.price` (> 0 unless `interest_only`) |
 | `selling_price` | `sale_price` | Inventory selling price; default = `price` |
+| `interest_only` | `pricing_not_applicable`, `sur_demande`, `quote_only` | Boolean; when true, set `items.interest_only` and allow missing/zero shopper price |
 | `quantity` | `qty`, `stock` | Default `10` |
-| `image_url` | `image`, `photo_url`, `url` | **Required** — missing image → do not insert |
+| `image_url` | `image`, `photo_url`, `url` | Prefer ≥1; **missing image → insert with `is_active=false`** |
 | `image_path` | `local_image`, `photo` | Relative/absolute file; needs upload or conversion to URL |
 
 ### Optional product fields
@@ -96,13 +97,16 @@ INSERT INTO public.items (
   price, currency, sku, brand_id,
   status, moderation_status, is_active, ai_review_version, is_used,
   min_order_quantity, max_order_quantity,
-  pay_on_delivery_enabled, shipping_enabled, stripe_tax_code_id
+  pay_on_delivery_enabled, shipping_enabled, stripe_tax_code_id,
+  interest_only
 ) VALUES (
   $business_id, $name, $description, $subcategory_id,
   $price, $currency, $sku, $brand_id,
-  'active', 'approved', true, 0, coalesce($is_used, false),
+  'active', 'approved', $is_active, 0, coalesce($is_used, false),
+  -- $is_active = true only when ≥1 image; false if imageless
   1, 10,
-  $pay_on_delivery, false, 'txcd_99999999'
+  $pay_on_delivery, false, 'txcd_99999999',
+  coalesce($interest_only, false)
 )
 RETURNING id;
 ```

@@ -161,6 +161,12 @@ export const CartPage = lazy(
 export const ClientRentalRequestsPage = lazy(() =>
   import('../components/pages/ClientRentalRequestsPage')
 );
+export const ClientProductInterestPage = lazy(() =>
+  import('../components/pages/ClientProductInterestPage')
+);
+export const BusinessProductInterestPage = lazy(() =>
+  import('../components/pages/BusinessProductInterestPage')
+);
 export const RentalRequestSubmittedPage = lazy(() =>
   import('../components/pages/RentalRequestSubmittedPage')
 );

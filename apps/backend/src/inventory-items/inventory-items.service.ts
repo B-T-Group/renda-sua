@@ -115,6 +115,7 @@ export interface InventoryItem {
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
+    interest_only?: boolean;
     created_at: string;
     updated_at: string;
     item_sub_category: {
@@ -329,6 +330,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         name
         description
         pay_on_delivery_enabled
+        interest_only
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -2336,6 +2338,7 @@ export class InventoryItemsService {
             name
             description
             pay_on_delivery_enabled
+            interest_only
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price

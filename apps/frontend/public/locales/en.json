@@ -7178,5 +7178,25 @@
       "title": "Order food from local restaurants",
       "description": "Browse cooked meals from restaurants near you and order while the kitchen is open."
     }
+  },
+  "productInterest": {
+    "cta": "I'm interested",
+    "dialogTitle": "I'm interested",
+    "noteLabel": "Message (optional)",
+    "noteHelp": "Tell the seller about {{name}}. They will contact you outside the app.",
+    "submit": "Send interest",
+    "success": "Interest sent. The seller will contact you.",
+    "error": "Could not send interest",
+    "priceNotApplicable": "Price on request",
+    "clientTitle": "My interest requests",
+    "businessTitle": "Product interest",
+    "businessHelp": "Clients asked to be contacted about these items. Follow up by phone or email outside the app.",
+    "emptyClient": "No interest submissions yet.",
+    "emptyBusiness": "No interest leads yet.",
+    "loadError": "Could not load interest submissions",
+    "viewItem": "View item",
+    "clientLabel": "Client",
+    "unknownItem": "Item",
+    "merchantToggle": "Pricing not applicable (interest only)"
   }
 }

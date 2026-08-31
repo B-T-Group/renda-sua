@@ -335,6 +335,11 @@ const Header: React.FC = () => {
           path: '/rentals/requests',
           icon: <Assignment />,
         },
+        {
+          label: t('productInterest.clientTitle', 'My interest requests'),
+          path: '/product-interest',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
