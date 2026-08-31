@@ -12,7 +12,7 @@ Header names are case-insensitive. Aliases in parentheses are accepted.
 | `price` | `catalog_price`, `list_price` | Catalog `items.price` |
 | `selling_price` | `sale_price` | Inventory selling price; default = `price` |
 | `quantity` | `qty`, `stock` | Default `10` |
-| `image_url` | `image`, `photo_url`, `url` | Public HTTPS preferred |
+| `image_url` | `image`, `photo_url`, `url` | **Required** — missing image → do not insert |
 | `image_path` | `local_image`, `photo` | Relative/absolute file; needs upload or conversion to URL |
 
 ### Optional product fields
@@ -88,7 +88,7 @@ RETURNING id;
 
 (`name` is UNIQUE on `item_categories`. Subcategories are not uniquely constrained by name globally — match by `(item_category_id, lower(name))` before insert.)
 
-## Item insert (minimal ready draft)
+## Item insert (minimal ready active)
 
 ```sql
 INSERT INTO public.items (
@@ -100,7 +100,7 @@ INSERT INTO public.items (
 ) VALUES (
   $business_id, $name, $description, $subcategory_id,
   $price, $currency, $sku, $brand_id,
-  'active', 'draft', false, 0, coalesce($is_used, false),
+  'active', 'approved', true, 0, coalesce($is_used, false),
   1, 10,
   $pay_on_delivery, false, 'txcd_99999999'
 )
@@ -168,6 +168,7 @@ If `ON CONFLICT` target is unclear, select existing inventory for `(business_loc
 }
 ```
 
+Actions include `create`, `skip_*`, and `blocked_ambiguous`. For `blocked_ambiguous`, include `ambiguity_reason` (required). Never promote a blocked row to `create` without an explicit user resolution.
 ## Nest alternative (JWT)
 
 | Step | Endpoint |
@@ -189,7 +190,7 @@ Direct inserts do **not** automatically:
 - Queue AI moderation / embeddings
 - Run image cleanup pipeline
 - Ensure location ledger accounts (location already exists)
-- Flip `moderation_status` to `approved`
+- Flip `moderation_status` / `is_active` (import skill defaults to **approved** + **active**; Nest publish still adds embeddings / AI side effects)
 
 After SQL import, user may ask to publish/approve via Nest or admin tools.
 

@@ -2,17 +2,40 @@
 name: import-location-products
 description: >-
   Imports sale products into a business location from a CSV (plus optional
-  image URLs/files), uses AI to enrich titles/descriptions/categories, shows a
-  preview, then inserts items / item_images / business_inventory via Postgres
+  image URLs/files), uses AI to enrich titles/descriptions/categories, then
+  inserts items / item_images / business_inventory immediately via Postgres
   using AWS Secrets Manager DATABASE_URL for development or prod. Use when the
   user asks to import products for a location, CSV catalog import, bulk seed
   inventory for a business_location_id, or AI-generate product details from a
   spreadsheet.
 ---
 
-# Import location products (CSV + AI → preview → DB)
+# Import location products (CSV + AI → DB)
 
-Create **ready catalog + inventory** rows for one `business_location_id` from a CSV. Enrich incomplete rows with AI (text + image when available). **Always preview and wait for explicit OK** before writing.
+Create **ready catalog + inventory** rows for one `business_location_id` from a CSV. Enrich incomplete rows with AI (text + image when available). **Insert immediately** for unambiguous rows — no preview / confirmation gate.
+
+## No ambiguity — do not import
+
+**Do not insert any row if anything is ambiguous.** Prefer skipping / blocking over guessing.
+
+Treat as ambiguous (examples, not exhaustive):
+
+- Env, location, or business ownership unclear or conflicting
+- Price unclear (range, “from / quote / sur demande”, unit mismatch, missing when required)
+- Category/subcategory could match multiple existing rows, or creating new taxonomy is speculative
+- Near-duplicate name/SKU — unclear whether to reuse or create
+- Brand unclear when multiple candidates exist
+- **Image missing** (no usable `image_url` / `image_path`) — **never insert** that row
+- Multiple candidate images with no clear primary
+- Currency / pay-on-delivery / perishable flags cannot be derived without assuming
+
+**Behavior:**
+
+1. Mark the row `action: blocked_ambiguous` in the plan with a short reason.
+2. **Insert unambiguous rows right away**; never write blocked rows.
+3. In the done report, list every blocked row and its reason so the user can clarify and re-run.
+4. Never invent prices, categories, brands, or identity matches to “make the import work.”
+5. Still confirm **prod** before any write when env is production.
 
 ## Required inputs
 
@@ -56,10 +79,9 @@ Import location products:
 - [ ] Load existing categories / subcategories / brands for that business context
 - [ ] Parse CSV; normalize columns (aliases in reference.md)
 - [ ] AI-enrich each row (name, description, category/subcategory, brand, attributes)
-- [ ] Build preview plan JSON; show summary to user
-- [ ] User says OK
-- [ ] Insert in FK order (categories → brands → items → images → inventory)
-- [ ] Report item ids / inventory ids / failures
+- [ ] Build plan JSON; mark blocked_ambiguous rows
+- [ ] Insert unambiguous rows immediately (categories → brands → items → images → inventory)
+- [ ] Report item ids / inventory ids / blocked / failures
 ```
 
 ### 1) Validate location
@@ -90,7 +112,7 @@ Required effective fields after enrichment (may be filled by AI):
 | `name` | Required |
 | `price` / `selling_price` | > 0 for ready product |
 | `quantity` | Default **10** if blank |
-| `image_url` or usable `image_path` | Strongly preferred; generate image only if user allows |
+| `image_url` or usable `image_path` | **Required** — at least **1** usable image. **No image → `blocked_ambiguous`, do not insert.** Generate image only if user explicitly allows |
 
 Optional: description, sku, brand, category, subcategory, unit_cost, reorder_*, weight, color, model, dimensions, is_used, etc. Full alias map: [reference.md](reference.md). Example: [scripts/products.example.csv](scripts/products.example.csv).
 
@@ -103,22 +125,14 @@ Using CSV text **and** the product image when available (vision):
 3. Propose **categoryName** + **subCategoryName** — prefer matching existing taxonomy (case-insensitive); otherwise propose **new** active category/subcategory (or fallback `Other` / `Other`).
 4. Propose **brandName** when obvious; else omit.
 5. Infer optional attributes (color, model, weight) only when confident from CSV/image.
-6. Set **unit_cost** default to `0` or ~60% of selling price if blank (document choice in preview).
+6. Set **unit_cost** default to `0` or ~60% of selling price if blank (document choice in plan notes).
 7. Do **not** invent SKUs that collide; generate `IMP-<shortuuid>` if blank.
 
-Write a plan file (temp or `scripts/plans/<locationId>-<timestamp>.json`) with one object per row: source fields, AI fields, resolved subcategory strategy (`existing_id` | `create` | `Other`), image disposition, inventory numbers.
+Write a plan file (temp or `scripts/plans/<locationId>-<timestamp>.json`) with one object per row: source fields, AI fields, resolved subcategory strategy (`existing_id` | `create` | `Other`), image disposition, inventory numbers. Then **insert immediately** (next step) — do not wait for user confirmation.
 
-### 4) Preview (mandatory gate)
+### 4) Insert (immediate)
 
-Show the user a compact table:
-
-- Row #, name, price, qty, category → subcategory, brand, image (url / local / none), create vs skip-duplicate
-
-Then ask: **Proceed with insert?** Do not write until they confirm. Allow edits to the plan JSON if they request changes.
-
-### 5) Insert (after OK)
-
-Prefer a **single transaction per batch** (or per row with clear error isolation). FK order:
+Prefer a **single transaction per batch** (or per row with clear error isolation). Skip `blocked_ambiguous` / `skip_*` rows. FK order:
 
 1. `item_categories` / `item_sub_categories` (find-or-create `status='active'`, description `''`)
 2. `brands` (find-or-create by unique name; `approved=true`, description = name)
@@ -126,17 +140,17 @@ Prefer a **single transaction per batch** (or per row with clear error isolation
 4. `item_images` — `business_id`, `item_id`, `image_url` NOT NULL; `image_type='main'` for first; `status='assigned'`; `tags='{}'`; `is_ai_cleaned=false`
 5. `business_inventory` — unique (location, item) with `item_variant_id` null
 
-**Idempotency**: if same business already has item with same name or sku, **skip create** and optionally upsert inventory at this location only (state that in preview). Do not silently duplicate items.
+**Idempotency**: if same business already has item with same name or sku, **skip create** and optionally upsert inventory at this location only (state in plan notes). Do not silently duplicate items.
 
 **Images**:
 
 - Remote `image_url` → store URL as-is (same as Nest CSV upload).
 - Local file → upload via Nest `POST /aws/presigned-url/image` + PUT + public URL **if** a business JWT is available; otherwise ask user for a public URL. Do not invent S3 URLs.
-- No image → create item without `item_images` only if user accepts; note that Nest activation requires ≥1 image for live catalog.
+- **0 images → always `blocked_ambiguous` (`missing_image`); never insert.**
 
-### 6) Done report
+### 5) Done report
 
-For each row: item id, inventory id, subcategory id, image linked?, skipped/error reason. Remind that direct SQL leaves items in **`moderation_status='draft'`**, **`is_active=false`** until publish/approve (or admin approve). Embeddings / AI moderation may be missing until Nest publish path runs.
+For each row: item id, inventory id, subcategory id, image linked?, skipped/error reason. Items are inserted **`is_active=true`** and **`moderation_status='approved'`** so they can appear in catalog (embeddings / AI moderation may still be missing until Nest publish path runs).
 
 ## Gap checklist (always fill)
 
@@ -151,8 +165,8 @@ When inserting `items`, set:
 | `price` | Catalog price (> 0) |
 | `sku` | Provided or generated unique per business |
 | `status` | `'active'` |
-| `moderation_status` | `'draft'` |
-| `is_active` | `false` |
+| `moderation_status` | `'approved'` |
+| `is_active` | `true` |
 | `ai_review_version` | `0` |
 | `is_used` | from CSV or `false` |
 | `min_order_quantity` | `1` |
@@ -186,8 +200,9 @@ Use Secrets Manager + SQL when they asked for DB import, JWT is unavailable, or 
 
 ## Guardrails
 
+- **No ambiguity:** do not import a row (or guess fields) when unclear — see “No ambiguity” above.
 - Confirm **prod** before any write.
 - Never commit secrets, plan files with credentials, or downloaded PII beyond the CSV the user provided.
 - Do not create users or businesses; location must already exist.
-- Do not force-approve items unless the user explicitly asks for admin approval.
+- Do not leave imported items inactive: set **`is_active=true`** and **`moderation_status='approved'`** unless the user explicitly asks for draft/review-first.
 - Skip Nest migrations / Hasura seed SQL for tenant catalog data.
