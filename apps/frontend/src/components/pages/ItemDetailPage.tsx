@@ -35,6 +35,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useSnackbar } from 'notistack';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -42,6 +43,8 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useProductInterest } from '../../hooks/useProductInterest';
+import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
 import { toCartVariantId } from '../../utils/shopperVariantSelection';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
@@ -411,14 +414,18 @@ export default function ItemDetailPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
   const { trackViewContent } = useMetaPixel();
   const trackAddToCart = useMetaAddToCartTrack();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
+  const [interestOpen, setInterestOpen] = React.useState(false);
+  const [interestSubmitting, setInterestSubmitting] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const { enqueueSnackbar } = useSnackbar();
+  const { submitInterest } = useProductInterest();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
@@ -820,10 +827,19 @@ export default function ItemDetailPage() {
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
+  const interestOnly = item.interest_only === true;
+  const displayPriceText = interestOnly
+    ? t('productInterest.priceNotApplicable', 'Price on request')
+    : checkoutPriceText;
   const showMobileStickyOrderBar =
-    isMobile && hasStock && merchantCanAcceptOrders && paymentsEnabled;
+    isMobile &&
+    hasStock &&
+    merchantCanAcceptOrders &&
+    paymentsEnabled &&
+    !interestOnly;
   const showInlineOrderNow = !showMobileStickyOrderBar;
   const showOrderCtaStack =
+    interestOnly ||
     !hasStock ||
     !paymentsEnabled ||
     !merchantCanAcceptOrders ||
@@ -1174,7 +1190,11 @@ export default function ItemDetailPage() {
                 })}
               >
                 <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
-                  {hasDeal ? (
+                  {interestOnly ? (
+                    <Typography variant="h6" color="primary.main" fontWeight={700}>
+                      {t('productInterest.priceNotApplicable', 'Price on request')}
+                    </Typography>
+                  ) : hasDeal ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                       <Typography
                         component="span"
@@ -1389,7 +1409,24 @@ export default function ItemDetailPage() {
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-                {!hasStock ? (
+                {interestOnly ? (
+                  <Button
+                    variant="contained"
+                    size="medium"
+                    fullWidth
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        void loginWithRedirect({
+                          appState: { returnTo: window.location.pathname },
+                        });
+                        return;
+                      }
+                      setInterestOpen(true);
+                    }}
+                  >
+                    {t('productInterest.cta', 'I’m interested')}
+                  </Button>
+                ) : !hasStock ? (
                   <Button variant="outlined" disabled size="medium">
                     {isFoodClosed
                       ? foodStatus === 'sold_out'
@@ -1794,6 +1831,34 @@ export default function ItemDetailPage() {
         }
         onOrder={handleOrderClick}
       />
+      <ProductInterestDialog
+        open={interestOpen}
+        itemName={item.name}
+        submitting={interestSubmitting}
+        onClose={() => setInterestOpen(false)}
+        onSubmit={async (note) => {
+          setInterestSubmitting(true);
+          try {
+            await submitInterest(inventoryItem.id, note);
+            setInterestOpen(false);
+            enqueueSnackbar(
+              t(
+                'productInterest.success',
+                'Interest sent. The seller will contact you.'
+              ),
+              { variant: 'success' }
+            );
+          } catch (e: any) {
+            enqueueSnackbar(
+              e?.response?.data?.message ||
+                t('productInterest.error', 'Could not send interest'),
+              { variant: 'error' }
+            );
+          } finally {
+            setInterestSubmitting(false);
+          }
+        }}
+      />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
@@ -1801,7 +1866,7 @@ export default function ItemDetailPage() {
         item={{
           title: item.name,
           imageUrl: primaryImage,
-          priceText: checkoutPriceText,
+          priceText: displayPriceText,
           quantity: 1,
         }}
         variantSlot={

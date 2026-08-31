@@ -38,6 +38,7 @@ const GET_ITEMS = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -293,6 +294,7 @@ const GET_SINGLE_ITEM = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -529,6 +531,7 @@ const GET_AVAILABLE_ITEMS = `
       name
       description
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -731,6 +734,7 @@ const GET_ITEM_BY_ID = `
       description
       sku
       price
+      interest_only
       moderation_status
       item_sub_category {
         item_category {
@@ -2076,7 +2080,12 @@ export class BusinessItemsService {
     itemId: string
   ): Promise<void> {
     const itemRow = await this.hasuraSystemService.executeQuery<{
-      items_by_pk: { id: string; business_id: string; price: number | null } | null;
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        price: number | null;
+        interest_only?: boolean;
+      } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = itemRow.items_by_pk;
     if (!item || item.business_id !== businessId) {
@@ -2085,7 +2094,10 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
-    if (item.price == null || Number.isNaN(item.price) || item.price <= 0) {
+    if (
+      !item.interest_only &&
+      (item.price == null || Number.isNaN(item.price) || item.price <= 0)
+    ) {
       throw new HttpException(
         {
           success: false,
@@ -2117,6 +2129,7 @@ export class BusinessItemsService {
         id: string;
         business_id: string;
         price: number | null;
+        interest_only?: boolean;
         moderation_status: string;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
@@ -2145,7 +2158,10 @@ export class BusinessItemsService {
       input.sellingPrice != null && !Number.isNaN(input.sellingPrice)
         ? input.sellingPrice
         : item.price;
-    if (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0) {
+    if (
+      !item.interest_only &&
+      (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0)
+    ) {
       throw new HttpException(
         {
           success: false,
@@ -2172,7 +2188,7 @@ export class BusinessItemsService {
       itemId,
       input.locationId,
       quantity,
-      sellingPrice,
+      sellingPrice ?? 0,
       item.moderation_status
     );
 

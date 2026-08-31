@@ -58,6 +58,13 @@ export class DeepLinkService {
     );
   }
 
+  productInterest(): DeepLinkPair {
+    return this.build(
+      'business/product-interest',
+      '/business/product-interest'
+    );
+  }
+
   verification(): DeepLinkPair {
     return this.build('verification', '/documents');
   }

@@ -247,6 +247,14 @@ function App() {
               }
             />
             <Route
+              path="/product-interest"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.ClientProductInterestPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/rentals/request-submitted"
               element={
                 <ProtectedRoute>
@@ -906,6 +914,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessRentalsRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/product-interest"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessProductInterestPage />
                 </ProtectedRoute>
               }
             />

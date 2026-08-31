@@ -238,6 +238,17 @@ export function useBusinessDashboardModules({
         path: '/business/rentals/requests',
       },
       {
+        title: t('productInterest.businessTitle', 'Product interest'),
+        description: t(
+          'productInterest.businessHelp',
+          'Clients asked to be contacted about these items. Follow up by phone or email outside the app.'
+        ),
+        icon: <RentalInboxIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00838f',
+        path: '/business/product-interest',
+      },
+      {
         title: t('business.dashboard.rentalScheduleModule', 'Rental schedule'),
         description: t(
           'business.dashboard.rentalScheduleModuleDescription',

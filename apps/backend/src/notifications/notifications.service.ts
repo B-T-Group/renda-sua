@@ -27,6 +27,7 @@ import { buildActivationStepsHtml } from '../business-referrals/business-referra
 import type {
   AgentBusinessReferredEmailPayload,
   AgentOrderPaymentFailedEmailPayload,
+  BusinessProductInterestNotificationPayload,
   BusinessRentalBookingRequestEmailPayload,
   ClientOrderPaymentFailedEmailPayload,
   ClientRentalRequestAcceptedEmailPayload,
@@ -2184,6 +2185,119 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendBusinessProductInterestNotification(
+    payload: BusinessProductInterestNotificationPayload
+  ): Promise<void> {
+    try {
+      await this.notifyProductInterestChannels(payload);
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessProductInterestNotification: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async notifyProductInterestChannels(
+    payload: BusinessProductInterestNotificationPayload
+  ): Promise<void> {
+    const u = await this.getUserRowForEmail(payload.businessUserId);
+    const contact =
+      [payload.clientPhone, payload.clientEmail].filter(Boolean).join(' · ') ||
+      'see app';
+    const note = (payload.clientNote || '').trim() || '—';
+    if (u?.email) {
+      const locale = normalizeLanguage(u.preferred_language);
+      const links = this.deepLinkService.productInterest();
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_product_interest',
+          locale
+        ),
+        variables: {
+          requestId: payload.requestId,
+          itemName: payload.itemName,
+          locationName: payload.locationName,
+          clientName: payload.clientName,
+          clientContact: contact,
+          clientNote: note,
+          dashboardUrl: links.universal,
+        },
+      });
+    }
+    const fr = normalizeLanguage(u?.preferred_language) === 'fr';
+    const links = this.deepLinkService.productInterest();
+    const pushEnabled =
+      !!this.configService.get<Configuration['push']>('push')?.enabled;
+    await this.orchestrator.notify({
+      type: 'product.interest',
+      category: 'actionable',
+      recipientUserId: payload.businessUserId,
+      locale: normalizeLanguage(u?.preferred_language),
+      preferenceCategory: 'order_updates',
+      entityType: 'product_interest_request',
+      entityId: payload.requestId,
+      channels: {
+        ...(pushEnabled
+          ? {
+              push: {
+                title: fr
+                  ? 'Nouveau manifeste d’intérêt'
+                  : 'New product interest',
+                body: fr
+                  ? `${payload.clientName} s’intéresse à ${payload.itemName}.`
+                  : `${payload.clientName} is interested in ${payload.itemName}.`,
+                data: {
+                  type: 'product_interest_new',
+                  productInterestRequestId: payload.requestId,
+                  url: links.path,
+                },
+              },
+            }
+          : {}),
+        // No Meta WhatsApp template yet for product interest — avoid rental_request
+        // copy/CTA until a dedicated template is approved.
+      },
+    });
+    await this.insertProductInterestUserMessage(payload, contact, note);
+  }
+
+  private async insertProductInterestUserMessage(
+    payload: BusinessProductInterestNotificationPayload,
+    contact: string,
+    note: string
+  ): Promise<void> {
+    const mutation = `
+      mutation InsertProductInterestMessage($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }
+    `;
+    try {
+      await this.hasuraSystemService.executeMutation(mutation, {
+        object: {
+          user_id: payload.businessUserId,
+          entity_type: 'product_interest_request',
+          entity_id: payload.requestId,
+          message_type: 'PRODUCT_INTEREST',
+          message: `${payload.clientName} is interested in ${payload.itemName}. Contact: ${contact}. Note: ${note}`,
+          message_payload: {
+            itemName: payload.itemName,
+            locationName: payload.locationName,
+            clientName: payload.clientName,
+            clientEmail: payload.clientEmail,
+            clientPhone: payload.clientPhone,
+            clientNote: payload.clientNote,
+            inventoryId: payload.inventoryId,
+          },
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `insertProductInterestUserMessage: ${error?.message ?? error}`
       );
     }
   }

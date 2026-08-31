@@ -8140,6 +8140,7 @@ export class OrdersService {
             name
             description
             pay_on_delivery_enabled
+            interest_only
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -8322,6 +8323,17 @@ export class OrdersService {
       if (!businessInventory.is_active) {
         throw new Error(
           `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      if (businessInventory.item?.interest_only === true) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'INTEREST_ONLY_ITEM',
+            message: `${businessInventory.item.name} cannot be purchased. Submit interest instead.`,
+          },
+          HttpStatus.BAD_REQUEST
         );
       }
 

@@ -90,6 +90,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         max_order_quantity
         preparation_minutes
         pay_on_delivery_enabled
+        interest_only
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -214,6 +215,11 @@ export class CheckoutPreflightService {
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,
+        });
+      } else if (inv.item?.interest_only === true) {
+        blockers.push({
+          code: 'INTEREST_ONLY_ITEM',
+          message: `${inv.item?.name ?? 'An item'} cannot be purchased. Submit interest instead.`,
         });
       } else if (inv.business_location?.is_active !== true) {
         blockers.push({

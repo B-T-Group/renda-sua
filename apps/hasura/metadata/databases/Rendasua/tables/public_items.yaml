@@ -127,6 +127,7 @@ insert_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -163,6 +164,7 @@ select_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -204,6 +206,7 @@ select_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -245,6 +248,7 @@ select_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -293,6 +297,7 @@ select_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -334,6 +339,7 @@ select_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -374,6 +380,7 @@ update_permissions:
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
