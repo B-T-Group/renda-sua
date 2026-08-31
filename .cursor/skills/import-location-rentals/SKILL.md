@@ -26,7 +26,7 @@ Treat as ambiguous (examples, not exhaustive):
 - Price unclear (hourly vs day, currency, “from / quote / sur demande”, range, unit mismatch)
 - Category could map to multiple existing `rental_categories`, or creating a new category is speculative
 - Near-duplicate name / possible reuse of an existing `rental_item` vs create — not a clear match
-- **Image missing** (no usable `image_url` / `image_urls` / `image_path`) — **never insert** that row
+- **Image missing** (no usable `image_url` / `image_urls` / `image_path`) — still insert, but set item **`is_active=false`** (and prefer listing `is_active=false` too). Never leave imageless rentals active
 - Multiple candidate images with no clear primary set
 - `operation_mode` not clear (`business_operated` vs `take_home`)
 - Deposit / units / hours / weekly availability cannot be derived without assuming
@@ -122,7 +122,7 @@ Required effective fields after enrichment (may be filled by AI):
 | `base_price_per_hour` | > 0 |
 | `base_price_per_day` | > 0 (all-day flat rate); if blank, AI/default = `hourly × 8` (document in plan notes) |
 | `units_available` | Default **1** |
-| `image_url` / `image_urls` | **Required** — at least **1** usable HTTPS URL (or uploaded local path). Prefer ≥2 (Nest activation). **No image → `blocked_ambiguous`, do not insert** |
+| `image_url` / `image_urls` | Prefer ≥1 usable HTTPS URL (or uploaded local path); prefer ≥2 (Nest activation). **No image → insert with item `is_active=false`** |
 
 Optional: description, rental_category, operation_mode, security_deposit, min/max hours, pickup/dropoff, tags, weekly hours. Full map: [reference.md](reference.md). Example: [scripts/rentals.example.csv](scripts/rentals.example.csv).
 
@@ -148,7 +148,7 @@ Single transaction per batch (or per-row isolation). Skip `blocked_ambiguous` / 
 1. `rental_categories` — find-or-create (`is_active=true`, unique `slug`)
 2. `rental_items` — see gap checklist
 3. `rental_item_images` — `status='assigned'`; `tags='{}'`; `is_ai_cleaned=false`; set `display_order` 0..n
-4. `rental_location_listings` — unique `(rental_item_id, business_location_id)`; **`moderation_status='approved'`**, **`is_active=true`**
+4. `rental_location_listings` — unique `(rental_item_id, business_location_id)`; **`moderation_status='approved'`**; **`is_active=true` only if item has ≥1 image**
 5. `rental_listing_weekly_availability` — 7 weekdays (default Sun off; Mon–Sat `08:00:00`–`20:00:00`)
 
 **Idempotency**:
@@ -161,14 +161,14 @@ Single transaction per batch (or per-row isolation). Skip `blocked_ambiguous` / 
 
 - Remote URL → store as-is.
 - Local file → Nest presign + PUT if JWT available; else ask for public URL.
-- **0 images → always `blocked_ambiguous` (`missing_image`); never insert.**
+- **0 images → insert with `rental_items.is_active=false`** (and set related listings `is_active=false`). Never leave imageless rentals active.
 - Prefer ≥2 image URLs per row when CSV has them (`image_url` + `image_url_2`, or pipe/comma-separated `image_urls`).
 
 ### 5) Done report
 
 For each row: `rental_item_id`, `listing_id`, category id, image count, weekly rows ok?, skipped/error reason.
 
-Remind: SQL import sets listings **`moderation_status='approved'`** and items/listings **`is_active=true`** (unless user asks for draft/review-first). Soft-deleted rows (`deleted_at`) must stay excluded from reuse unless user asks to restore. Nest publish still adds AI review / embeddings side effects if needed.
+Remind: SQL import sets listings **`moderation_status='approved'`**. Items/listings are **`is_active=true`** when images exist; **imageless items/listings stay `is_active=false`**. Soft-deleted rows (`deleted_at`) must stay excluded from reuse unless user asks to restore. Nest publish still adds AI review / embeddings side effects if needed.
 
 ## Gap checklist
 
@@ -183,7 +183,7 @@ Remind: SQL import sets listings **`moderation_status='approved'`** and items/li
 | `tags` | `{}` or inferred |
 | `currency` | Business currency (never trust CSV) |
 | `operation_mode` | `business_operated` default; or `take_home` |
-| `is_active` | `true` (only insert when ≥1 image exists; prefer ≥2) |
+| `is_active` | `true` if ≥1 image; **`false` if no image** |
 | `deleted_at` | NULL |
 
 ### `rental_location_listings`
@@ -197,7 +197,7 @@ Remind: SQL import sets listings **`moderation_status='approved'`** and items/li
 | `max_rental_hours` | NULL |
 | `units_available` | `1` |
 | `pickup_instructions` / `dropoff_instructions` | `''` |
-| `is_active` | `true` |
+| `is_active` | `true` if item has ≥1 image; **`false` if item has no image** |
 | `moderation_status` | `'approved'` |
 | `deleted_at` | NULL |
 
@@ -231,5 +231,6 @@ Use Secrets Manager + SQL when they asked for DB import, JWT is unavailable, or 
 - Never commit secrets or plan files with credentials.
 - Do not create users or businesses; location must already exist.
 - Do not write into sale `items` / `item_images` / `business_inventory`.
-- Do not leave imported rentals inactive: set item/listing **`is_active=true`** and listing **`moderation_status='approved'`** unless the user explicitly asks for draft/review-first.
+- Do not leave imported rentals with images inactive: set item/listing **`is_active=true`** and listing **`moderation_status='approved'`** when images exist, unless the user explicitly asks for draft/review-first.
+- **Imageless rental items (and their listings) must be `is_active=false`.**
 - Skip Nest migrations / Hasura seed SQL for tenant rental data.
