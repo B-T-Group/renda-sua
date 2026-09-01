@@ -3,6 +3,22 @@ import { WhatsAppTemplateService } from './whatsapp-template.service';
 describe('WhatsAppTemplateService', () => {
   const service = new WhatsAppTemplateService();
 
+  it('resolves an internal key from a Meta template name', () => {
+    expect(service.resolveTemplateKey('rs_order_created')).toBe(
+      'order_created_business'
+    );
+    expect(service.resolveTemplateKey('order_status_client')).toBe(
+      'order_status_client'
+    );
+    expect(service.resolveTemplateKey(' missing ')).toBeNull();
+  });
+
+  it('flags utility templates that need a dynamic URL button param', () => {
+    expect(service.needsDynamicCta('order_created_business')).toBe(true);
+    expect(service.needsDynamicCta('verification_attention')).toBe(false);
+    expect(service.needsDynamicCta('delivery_pin')).toBe(false);
+  });
+
   it('resolves Meta template names by locale', () => {
     expect(service.resolveMetaName('order_created_business', 'en')).toBe(
       'rs_order_created'
@@ -146,6 +162,7 @@ describe('WhatsAppTemplateService — authentication templates', () => {
       metaNameFr: 'rs_delivery_pin',
       bodyVariables: ['pin'],
       category: 'AUTHENTICATION',
+      needsDynamicCta: false,
     });
     expect(status?.category).toBe('UTILITY');
   });

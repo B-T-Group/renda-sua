@@ -349,6 +349,19 @@ Meta owns the body copy. Do not submit custom en/fr strings.
 
 ---
 
+## Admin test send
+
+Superusers (or `platform.ops.user_messages`) can list catalog params and send a live template without waiting on the product `WHATSAPP_NOTIFICATIONS_ENABLED` flag. Graph credentials must still be configured.
+
+- `GET /api/admin/whatsapp/templates?category=UTILITY`
+- `POST /api/admin/whatsapp/templates/test`
+
+`templateId` is the internal key **or** the Meta name. Body fields must match `Body variables` above. Templates with a dynamic URL button also need `entityId` (or a full `ctaUrl`).
+
+Import `apps/backend/postman/Rendasua.postman_collection.json` for ready-made examples.
+
+---
+
 ## Ops notes
 
 1. After approval, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.

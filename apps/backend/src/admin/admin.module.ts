@@ -44,6 +44,8 @@ import { AdminBroadcastAudienceService } from './admin-broadcast-audience.servic
 import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
 import { AdminCatalogItemsController } from './admin-catalog-items.controller';
 import { AdminCatalogItemsService } from './admin-catalog-items.service';
+import { AdminWhatsAppTemplatesController } from './admin-whatsapp-templates.controller';
+import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.service';
 
 @Module({
   imports: [
@@ -79,6 +81,7 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     RbacAdminController,
     AdminBroadcastController,
     AdminBroadcastInternalController,
+    AdminWhatsAppTemplatesController,
   ],
   providers: [
     AdminPerformanceService,
@@ -96,6 +99,7 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     AdminBroadcastService,
     AdminBroadcastAudienceService,
     AdminBroadcastQueueService,
+    AdminWhatsAppTemplatesService,
   ],
   exports: [
     AdminAuthModule,

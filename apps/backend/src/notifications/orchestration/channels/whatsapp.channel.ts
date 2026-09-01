@@ -35,14 +35,11 @@ export class WhatsAppChannel {
     to: string;
     locale?: string;
     payload: WhatsAppChannelPayload;
+    /** Admin/ops test sends skip the product WHATSAPP_NOTIFICATIONS_ENABLED flag. */
+    ignoreFeatureFlag?: boolean;
   }): Promise<ChannelAttemptResult> {
-    if (!this.featureEnabled()) {
-      return {
-        channel: 'whatsapp',
-        status: 'skipped',
-        skippedReason: 'whatsapp_disabled_or_not_configured',
-      };
-    }
+    const skipped = this.skipReason(params.ignoreFeatureFlag);
+    if (skipped) return skipped;
     const templateName = this.templateService.resolveMetaName(
       params.payload.templateKey,
       params.locale
@@ -55,6 +52,24 @@ export class WhatsAppChannel {
       };
     }
     return this.deliverTemplate(params, templateName);
+  }
+
+  private skipReason(ignoreFeatureFlag?: boolean): ChannelAttemptResult | null {
+    if (!ignoreFeatureFlag && !this.featureEnabled()) {
+      return {
+        channel: 'whatsapp',
+        status: 'skipped',
+        skippedReason: 'whatsapp_disabled_or_not_configured',
+      };
+    }
+    if (!this.isConfigured()) {
+      return {
+        channel: 'whatsapp',
+        status: 'skipped',
+        skippedReason: 'whatsapp_not_configured',
+      };
+    }
+    return null;
   }
 
   private async deliverTemplate(

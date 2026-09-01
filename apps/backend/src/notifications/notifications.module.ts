@@ -55,6 +55,7 @@ import { NotificationsService } from './notifications.service';
     WhatsAppReplyService,
     NotificationActionTokenService,
     WhatsAppTemplateService,
+    WhatsAppChannel,
   ],
 })
 export class NotificationsModule {}
