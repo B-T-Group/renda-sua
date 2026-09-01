@@ -61,7 +61,7 @@ const APP = 'https://rendasua.com';
 export const TEMPLATE_CATALOG: CatalogTemplate[] = [
   {
     kind: 'content',
-    name: 'rs_order_new',
+    name: 'rs_order_created',
     category: 'UTILITY',
     exampleValues: ['ORD-1001', 'Jane Doe', '30 minutes'],
     button: {

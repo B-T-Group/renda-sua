@@ -20,7 +20,7 @@ describe('WhatsAppChannel', () => {
     jest.clearAllMocks();
     whatsAppService.isConfigured.mockReturnValue(true);
     configService.get.mockReturnValue({ notificationsEnabled: true });
-    templateService.resolveMetaName.mockReturnValue('rs_order_new');
+    templateService.resolveMetaName.mockReturnValue('rs_order_created');
     whatsAppService.sendTemplateMessage.mockResolvedValue({
       messages: [{ id: 'wamid.1' }],
     });
@@ -97,7 +97,7 @@ describe('WhatsAppChannel', () => {
 
     expect(whatsAppService.sendTemplateMessage).toHaveBeenCalledWith({
       to: '+237600000001',
-      templateName: 'rs_order_new',
+      templateName: 'rs_order_created',
       languageCode: 'en',
       components: [],
       category: 'UTILITY',

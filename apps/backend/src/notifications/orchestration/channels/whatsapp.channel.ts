@@ -54,22 +54,39 @@ export class WhatsAppChannel {
         error: `Unknown template key: ${params.payload.templateKey}`,
       };
     }
+    return this.deliverTemplate(params, templateName);
+  }
+
+  private async deliverTemplate(
+    params: {
+      to: string;
+      locale?: string;
+      payload: WhatsAppChannelPayload;
+    },
+    templateName: string
+  ): Promise<ChannelAttemptResult> {
+    const languageCode = this.templateService.languageCode(params.locale);
+    const components = this.templateService.buildComponents(params.payload);
     try {
       const result = await this.whatsAppService.sendTemplateMessage({
         to: params.to,
         templateName,
-        languageCode: this.templateService.languageCode(params.locale),
-        components: this.templateService.buildComponents(params.payload),
+        languageCode,
+        components,
         category: this.templateService.category(params.payload.templateKey),
       });
-      const messageId = result.messages[0]?.id;
       return {
         channel: 'whatsapp',
         status: 'sent',
-        providerMessageId: messageId,
+        providerMessageId: result.messages[0]?.id,
       };
     } catch (error: any) {
-      this.logger.warn(`WhatsApp send failed: ${error?.message ?? String(error)}`);
+      this.logger.warn(`WhatsApp send failed: ${error?.message ?? String(error)}`, {
+        templateName,
+        templateKey: params.payload.templateKey,
+        languageCode,
+        components,
+      });
       return {
         channel: 'whatsapp',
         status: 'failed',

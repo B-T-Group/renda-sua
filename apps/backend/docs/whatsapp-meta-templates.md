@@ -8,7 +8,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 
 | Internal key | Meta name | Category | Body variables (positional) | Button |
 |--------------|-----------|----------|-------------------------------|--------|
-| `order_created_business` | `rs_order_new` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
+| `order_created_business` | `rs_order_created` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
 | `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 | `order_ready` | `rs_order_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
@@ -43,7 +43,7 @@ Marketing templates are also priced as marketing and are subject to WhatsApp's *
 
 ---
 
-## 1. `rs_order_new`
+## 1. `rs_order_created`
 
 **Vars:** `{{1}}` orderNumber · `{{2}}` customerName · `{{3}}` pickupWindow  
 **Button:** Open order → `https://rendasua.com/app/orders/{{1}}`
@@ -363,3 +363,11 @@ npm run create:whatsapp-templates -- --access-token "$TOKEN"
 WABA id defaults to `1014752277854609` and Graph API to `v25.0`. Override with `--waba-id` / `WHATSAPP_WABA_ID` or `--api-version`.
 
 Missing name+language rows are created. Existing translations are updated in place when body or buttons differ; unchanged rows are skipped so Meta does not re-review them. Use `--dry-run` to print payloads. Edited templates go back to `PENDING` review.
+
+**Approved templates cannot have their body or buttons changed.** Graph will not let you recreate a name that is still in `PENDING_DELETION` (Meta holds the name for **4 weeks**). `rs_order_new` is in that lock; merchant new-order sends use **`rs_order_created`** instead:
+
+```bash
+npm run create:whatsapp-templates -- --only rs_order_created --access-token "$TOKEN"
+```
+
+Sends work after the new `en` / `fr` rows are **APPROVED**. For other names that are approved but not deleting, `--force-recreate NAME` deletes then creates — only use that when Meta is not in the 4-week name lock.
