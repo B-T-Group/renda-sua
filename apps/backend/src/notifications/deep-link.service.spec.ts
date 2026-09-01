@@ -18,6 +18,15 @@ describe('DeepLinkService', () => {
     expect(links.path).toBe('/orders/abc-123');
   });
 
+  it('builds product interest inbox links', () => {
+    const links = service.productInterest();
+    expect(links.app).toBe('rendasua://business/product-interest');
+    expect(links.universal).toBe(
+      'https://rendasua.com/app/business/product-interest'
+    );
+    expect(links.path).toBe('/business/product-interest');
+  });
+
   it('builds wallet links', () => {
     const links = service.wallet();
     expect(links.app).toBe('rendasua://wallet');

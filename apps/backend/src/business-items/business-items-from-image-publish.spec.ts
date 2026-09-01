@@ -330,6 +330,63 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       expect(itemAiReviewService.requestReview).not.toHaveBeenCalled();
     });
 
+    it('allows publishing interest-only drafts without a shopper price', async () => {
+      const { service, hasuraSystemService, itemAiReviewService } =
+        createService();
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        items_by_pk: {
+          id: itemId,
+          business_id: businessId,
+          moderation_status: 'draft',
+          name: 'Quote part',
+          description: null,
+          status: 'active',
+          price: null,
+          interest_only: true,
+        },
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_items: {
+          affected_rows: 1,
+          returning: [{ id: itemId, moderation_status: 'pending' }],
+        },
+      });
+
+      await expect(
+        service.publishBusinessItem(businessId, itemId)
+      ).resolves.toEqual({
+        id: itemId,
+        moderation_status: 'pending',
+      });
+      expect(itemAiReviewService.requestReview).toHaveBeenCalledWith(itemId);
+    });
+
+    it('rejects publishing a regular draft without a valid price', async () => {
+      const { service, hasuraSystemService } = createService();
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        items_by_pk: {
+          id: itemId,
+          business_id: businessId,
+          moderation_status: 'draft',
+          name: 'Priced item',
+          description: null,
+          status: 'active',
+          price: null,
+          interest_only: false,
+        },
+      });
+
+      await expect(
+        service.publishBusinessItem(businessId, itemId)
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { error: 'PRICE_REQUIRED' },
+      });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
     it('rejects quick-publish when price is missing', async () => {
       const { service, hasuraSystemService } = createService();
 
