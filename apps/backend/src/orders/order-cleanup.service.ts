@@ -144,6 +144,95 @@ export class OrderCleanupService {
     );
   }
 
+  /**
+   * CAS-cancel a single unpaid pending_payment order (Lambda timeout / payment-failed grace).
+   * Shared by wait-handler and createOrder compensation.
+   */
+  async cancelUnpaidPendingPaymentAsSystem(
+    orderId: string,
+    notes: string,
+    options?: { reason?: 'timeout' | 'payment_failed_grace' }
+  ): Promise<{ cancelled: boolean; skipped?: boolean; reason?: string }> {
+    const order = await this.fetchOrderForUnpaidCancel(orderId);
+    if (!order) {
+      return { cancelled: false, skipped: true, reason: 'not_found' };
+    }
+    if (order.current_status !== 'pending_payment') {
+      return {
+        cancelled: false,
+        skipped: true,
+        reason: `status_${order.current_status}`,
+      };
+    }
+    if ((order.payment_status || '').toLowerCase() === 'paid') {
+      return { cancelled: false, skipped: true, reason: 'already_paid' };
+    }
+    if (options?.reason === 'payment_failed_grace') {
+      const graceSkip = this.shouldSkipPaymentFailedGraceCancel(order);
+      if (graceSkip) {
+        return { cancelled: false, skipped: true, reason: graceSkip };
+      }
+    }
+    const ok = await this.cancelWithClaim(
+      order,
+      'pending_payment',
+      CANCEL_REASON_PAYMENT_NOT_COMPLETED,
+      notes,
+      notes,
+      false
+    );
+    return ok
+      ? { cancelled: true }
+      : { cancelled: false, skipped: true, reason: 'claim_lost' };
+  }
+
+  private shouldSkipPaymentFailedGraceCancel(
+    order: CleanupOrderRow & { payment_failed_at?: string | null }
+  ): string | null {
+    if ((order.payment_status || '').toLowerCase() !== 'failed') {
+      return 'payment_not_failed';
+    }
+    const failedAtRaw = order.payment_failed_at;
+    if (!failedAtRaw) {
+      return 'missing_payment_failed_at';
+    }
+    const failedAt = new Date(failedAtRaw).getTime();
+    if (Number.isNaN(failedAt)) {
+      return 'invalid_payment_failed_at';
+    }
+    const elapsedMs = Date.now() - failedAt;
+    if (elapsedMs < PAYMENT_FAILED_GRACE_MINUTES * 60 * 1000) {
+      return 'grace_not_elapsed';
+    }
+    return null;
+  }
+
+  private async fetchOrderForUnpaidCancel(
+    orderId: string
+  ): Promise<
+    (CleanupOrderRow & { payment_failed_at?: string | null }) | null
+  > {
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: (CleanupOrderRow & { payment_failed_at?: string | null }) | null;
+    }>(
+      `
+      query OrderForUnpaidCancel($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          order_number
+          current_status
+          payment_status
+          payment_source
+          payment_failed_at
+          order_items { id business_inventory_id quantity }
+        }
+      }
+    `,
+      { orderId }
+    );
+    return res.orders_by_pk;
+  }
+
   /** Fail mid-fulfillment orders past window + grace; create failed_deliveries. */
   async failMissedDeliveryOrders(
     graceHours: number,
