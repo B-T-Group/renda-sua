@@ -42,6 +42,22 @@ describe('WhatsAppChannel', () => {
     expect(channel.featureEnabled()).toBe(false);
   });
 
+  it('sends when notifications are disabled if ignoreFeatureFlag is set', async () => {
+    configService.get.mockReturnValue({ notificationsEnabled: false });
+
+    await expect(
+      channel.send({
+        to: '+237600000001',
+        ignoreFeatureFlag: true,
+        payload: {
+          templateKey: 'order_created_business',
+          variables: { orderNumber: '1' },
+        },
+      })
+    ).resolves.toMatchObject({ status: 'sent', providerMessageId: 'wamid.1' });
+    expect(whatsAppService.sendTemplateMessage).toHaveBeenCalled();
+  });
+
   it('skips send when WhatsApp notifications are disabled', async () => {
     configService.get.mockReturnValue({ notificationsEnabled: false });
 

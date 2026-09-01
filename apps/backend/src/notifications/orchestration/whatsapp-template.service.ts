@@ -56,12 +56,43 @@ const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
   order_offer_agent: 'MARKETING',
 };
 
+/** Static URL buttons (no send-time {{1}}). Auth templates have no URL CTA. */
+const STATIC_CTA_KEYS = new Set(['verification_attention']);
+
+export type WhatsAppTemplateCatalogEntry = {
+  templateKey: string;
+  metaNameEn: string;
+  metaNameFr: string;
+  bodyVariables: string[];
+  category: WhatsAppTemplateCategory;
+  needsDynamicCta: boolean;
+};
+
 @Injectable()
 export class WhatsAppTemplateService {
   resolveMetaName(templateKey: string, locale?: string): string | null {
     const entry = TEMPLATE_NAMES[templateKey];
     if (!entry) return null;
     return locale === 'fr' ? entry.fr : entry.en;
+  }
+
+  /** Internal key from a catalog key or Meta template name. */
+  resolveTemplateKey(templateId: string): string | null {
+    const needle = templateId.trim();
+    if (!needle) return null;
+    if (TEMPLATE_NAMES[needle]) return needle;
+    return this.findKeyByMetaName(needle.toLowerCase());
+  }
+
+  requiredBodyVariables(templateKey: string): string[] {
+    return BODY_VARS[templateKey] ?? [];
+  }
+
+  needsDynamicCta(templateKey: string): boolean {
+    if (!TEMPLATE_NAMES[templateKey] || AUTH_CODE_VARS[templateKey]) {
+      return false;
+    }
+    return !STATIC_CTA_KEYS.has(templateKey);
   }
 
   /**
@@ -125,20 +156,25 @@ export class WhatsAppTemplateService {
     ];
   }
 
-  listTemplateCatalog(): Array<{
-    templateKey: string;
-    metaNameEn: string;
-    metaNameFr: string;
-    bodyVariables: string[];
-    category: WhatsAppTemplateCategory;
-  }> {
+  listTemplateCatalog(): WhatsAppTemplateCatalogEntry[] {
     return Object.keys(TEMPLATE_NAMES).map((templateKey) => ({
       templateKey,
       metaNameEn: TEMPLATE_NAMES[templateKey].en,
       metaNameFr: TEMPLATE_NAMES[templateKey].fr,
       bodyVariables: BODY_VARS[templateKey] ?? [],
       category: this.category(templateKey),
+      needsDynamicCta: this.needsDynamicCta(templateKey),
     }));
+  }
+
+  private findKeyByMetaName(metaName: string): string | null {
+    const match = Object.entries(TEMPLATE_NAMES).find(
+      ([key, names]) =>
+        key.toLowerCase() === metaName ||
+        names.en === metaName ||
+        names.fr === metaName
+    );
+    return match?.[0] ?? null;
   }
 
   private bodyTextParam(value: unknown): { type: 'text'; text: string } {
