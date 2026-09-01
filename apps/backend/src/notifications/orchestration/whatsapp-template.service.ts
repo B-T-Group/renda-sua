@@ -7,7 +7,7 @@ import type { WhatsAppChannelPayload } from './notification.types';
 
 /** Maps internal template keys → Meta-approved template names (en / fr). */
 const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
-  order_created_business: { en: 'rs_order_new', fr: 'rs_order_new' },
+  order_created_business: { en: 'rs_order_created', fr: 'rs_order_created' },
   order_offer_agent: { en: 'rs_delivery_offer', fr: 'rs_delivery_offer' },
   order_status_client: { en: 'rs_order_status', fr: 'rs_order_status' },
   order_ready: { en: 'rs_order_ready', fr: 'rs_order_ready' },
@@ -85,10 +85,7 @@ export class WhatsAppTemplateService {
     if (codeVar) return this.buildAuthComponents(payload, codeVar);
 
     const keys = BODY_VARS[payload.templateKey] ?? Object.keys(payload.variables);
-    const bodyParams = keys
-      .map((k) => payload.variables[k])
-      .filter((v): v is string => typeof v === 'string' && v.length > 0)
-      .map((text) => ({ type: 'text' as const, text }));
+    const bodyParams = keys.map((k) => this.bodyTextParam(payload.variables[k]));
 
     const components: WhatsAppTemplateComponent[] = [];
     if (bodyParams.length) {
@@ -142,6 +139,12 @@ export class WhatsAppTemplateService {
       bodyVariables: BODY_VARS[templateKey] ?? [],
       category: this.category(templateKey),
     }));
+  }
+
+  private bodyTextParam(value: unknown): { type: 'text'; text: string } {
+    const text =
+      typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+    return { type: 'text', text: text || '-' };
   }
 
   /**

@@ -4,6 +4,9 @@ describe('WhatsAppTemplateService', () => {
   const service = new WhatsAppTemplateService();
 
   it('resolves Meta template names by locale', () => {
+    expect(service.resolveMetaName('order_created_business', 'en')).toBe(
+      'rs_order_created'
+    );
     expect(service.resolveMetaName('order_status_client', 'en')).toBe(
       'rs_order_status'
     );
@@ -66,12 +69,34 @@ describe('WhatsAppTemplateService', () => {
     ]);
   });
 
-  it('skips empty body variable values', () => {
+  it('always sends every declared body param so Meta #132000 cannot fire on drops', () => {
+    const components = service.buildComponents({
+      templateKey: 'order_created_business',
+      variables: { orderNumber: '20123398', customerName: '', pickupWindow: '15 min' },
+      ctaUrl: 'https://rendasua.com/app/orders/e55d335b-233a-49c7-b9ee-d3c7eb941944',
+    });
+    const body = components.find((c) => c.type === 'body');
+    expect(body?.parameters).toEqual([
+      { type: 'text', text: '20123398' },
+      { type: 'text', text: '-' },
+      { type: 'text', text: '15 min' },
+    ]);
+    expect(components.find((c) => c.type === 'button')?.parameters).toEqual([
+      { type: 'text', text: 'e55d335b-233a-49c7-b9ee-d3c7eb941944' },
+    ]);
+  });
+
+  it('fills an empty single body var instead of omitting the body component', () => {
     const components = service.buildComponents({
       templateKey: 'order_ready',
       variables: { orderNumber: '' },
     });
-    expect(components).toEqual([]);
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: '-' }],
+      },
+    ]);
   });
 });
 
