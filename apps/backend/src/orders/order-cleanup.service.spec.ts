@@ -519,5 +519,87 @@ describe('OrderCleanupService', () => {
       expect(result.skipped).toBe(true);
     });
   });
+
+  describe('cancelUnpaidPendingPaymentAsSystem', () => {
+    it('cancels pending_payment orders', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({ cancelled: true });
+    });
+
+    it('skips when order is no longer pending_payment', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending',
+          payment_status: 'paid',
+          payment_source: 'wallet',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_pending',
+      });
+    });
+
+    it('skips payment_failed_grace until grace elapses', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: new Date().toISOString(),
+          payment_source: 'mobile_money',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'grace_not_elapsed',
+      });
+    });
+  });
 });
 
