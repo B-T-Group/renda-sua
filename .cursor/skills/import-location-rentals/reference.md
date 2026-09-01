@@ -12,7 +12,7 @@ Header names are case-insensitive. Aliases in parentheses are accepted.
 | `base_price_per_hour` | `hourly_price`, `price_per_hour`, `hourly` | Listing hourly rate |
 | `base_price_per_day` | `daily_price`, `price_per_day`, `day_rate`, `all_day_price` | Flat all-day rate |
 | `units_available` | `units`, `quantity`, `qty` | Concurrent identical units; default `1` |
-| `image_url` | `image`, `photo_url`, `url` | **Required** — at least one HTTPS URL; missing → do not insert |
+| `image_url` | `image`, `photo_url`, `url` | Prefer ≥1 HTTPS URL; missing → insert inactive |
 | `image_url_2` | `image_2`, `photo_url_2` | Second image (prefer ≥2) |
 | `image_urls` | `images`, `photos` | Pipe `\|` or comma-separated list |
 
