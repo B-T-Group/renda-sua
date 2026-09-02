@@ -170,4 +170,26 @@ describe('WhatsAppService', () => {
       })
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
+
+  it('sends free-form session text via Cloud API', async () => {
+    post.mockResolvedValue({
+      data: { messages: [{ id: 'wamid.TEXT' }] },
+    });
+    const result = await service.sendSessionText({
+      to: '+15557654321',
+      body: 'Thanks for writing in!',
+    });
+    expect(post).toHaveBeenCalledWith(
+      `/${phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: '15557654321',
+        type: 'text',
+        text: { preview_url: false, body: 'Thanks for writing in!' },
+      },
+      expect.any(Object)
+    );
+    expect(result.messages[0]?.id).toBe('wamid.TEXT');
+  });
 });

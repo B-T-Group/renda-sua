@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../../../config/configuration';
 import { WhatsAppService } from '../../../whatsapp/whatsapp.service';
-import type { ChannelAttemptResult, WhatsAppChannelPayload } from '../notification.types';
+import type {
+  ChannelAttemptResult,
+  WhatsAppChannelPayload,
+} from '../notification.types';
+import { WhatsAppInboxPersistenceService } from '../whatsapp-inbox-persistence.service';
 import { WhatsAppTemplateService } from '../whatsapp-template.service';
 
 @Injectable()
@@ -12,7 +16,8 @@ export class WhatsAppChannel {
   constructor(
     private readonly whatsAppService: WhatsAppService,
     private readonly templateService: WhatsAppTemplateService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly inbox: WhatsAppInboxPersistenceService
   ) {}
 
   /** True when Graph credentials + app secret are present. */
@@ -90,23 +95,56 @@ export class WhatsAppChannel {
         components,
         category: this.templateService.category(params.payload.templateKey),
       });
+      const providerMessageId = result.messages[0]?.id;
+      await this.recordTemplateOutbound(params, templateName, providerMessageId);
       return {
         channel: 'whatsapp',
         status: 'sent',
-        providerMessageId: result.messages[0]?.id,
+        providerMessageId,
       };
     } catch (error: any) {
-      this.logger.warn(`WhatsApp send failed: ${error?.message ?? String(error)}`, {
-        templateName,
-        templateKey: params.payload.templateKey,
-        languageCode,
-        components,
-      });
+      this.logger.warn(
+        `WhatsApp send failed: ${error?.message ?? String(error)}`,
+        {
+          templateName,
+          templateKey: params.payload.templateKey,
+          languageCode,
+          components,
+        }
+      );
       return {
         channel: 'whatsapp',
         status: 'failed',
         error: error?.message ?? String(error),
       };
+    }
+  }
+
+  private async recordTemplateOutbound(
+    params: { to: string; payload: WhatsAppChannelPayload },
+    templateName: string,
+    wamid?: string
+  ): Promise<void> {
+    const phone = params.to.replace(/^\+/, '').trim();
+    try {
+      await this.inbox.persistOutbound({
+        waId: phone,
+        customerPhone: phone,
+        wamid,
+        source: 'template',
+        type: 'template',
+        body: `Template: ${templateName}`,
+        rawPayload: {
+          templateKey: params.payload.templateKey,
+          templateName,
+          variables: params.payload.variables ?? {},
+        },
+        status: 'sent',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to persist template outbound: ${error?.message ?? String(error)}`
+      );
     }
   }
 }

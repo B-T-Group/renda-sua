@@ -37,6 +37,7 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { AdminAuthModule } from './admin-auth.module';
 import { ThreadsModule } from '../threads/threads.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { AdminBroadcastController } from './admin-broadcast.controller';
 import { AdminBroadcastInternalController } from './admin-broadcast-internal.controller';
 import { AdminBroadcastService } from './admin-broadcast.service';
@@ -46,6 +47,8 @@ import { AdminCatalogItemsController } from './admin-catalog-items.controller';
 import { AdminCatalogItemsService } from './admin-catalog-items.service';
 import { AdminWhatsAppTemplatesController } from './admin-whatsapp-templates.controller';
 import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.service';
+import { AdminWhatsAppInboxController } from './admin-whatsapp-inbox.controller';
+import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
 
 @Module({
   imports: [
@@ -70,6 +73,7 @@ import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.servic
     ImageValidationModule,
     AiImageCleanupModule,
     ThreadsModule,
+    WhatsAppModule,
   ],
   controllers: [
     AdminController,
@@ -82,6 +86,7 @@ import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.servic
     AdminBroadcastController,
     AdminBroadcastInternalController,
     AdminWhatsAppTemplatesController,
+    AdminWhatsAppInboxController,
   ],
   providers: [
     AdminPerformanceService,
@@ -100,6 +105,7 @@ import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.servic
     AdminBroadcastAudienceService,
     AdminBroadcastQueueService,
     AdminWhatsAppTemplatesService,
+    AdminWhatsAppInboxService,
   ],
   exports: [
     AdminAuthModule,

@@ -1,34 +1,47 @@
 import { createHmac, timingSafeEqual } from 'crypto';
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../../config/configuration';
 import { NotificationAnalyticsService } from './notification-analytics.service';
+import {
+  WhatsAppInboxPersistenceService,
+  type WhatsAppDeliveryStatus,
+  type WhatsAppMessageType,
+} from './whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './whatsapp-reply.service';
 
 interface WhatsAppStatusEvent {
   id?: string;
   status?: string;
   recipient_id?: string;
+  errors?: Array<{ message?: string }>;
+  [key: string]: unknown;
+}
+
+interface WhatsAppInboundMessage {
+  from?: string;
+  id?: string;
+  type?: string;
+  text?: { body?: string };
   [key: string]: unknown;
 }
 
 interface WhatsAppChangeValue {
   statuses?: WhatsAppStatusEvent[];
-  messages?: Array<{
-    from?: string;
-    id?: string;
-    type?: string;
-    text?: { body?: string };
-  }>;
+  messages?: WhatsAppInboundMessage[];
+  contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
   [key: string]: unknown;
 }
 
 @Injectable()
 export class WhatsAppInboundService {
+  private readonly logger = new Logger(WhatsAppInboundService.name);
+
   constructor(
     private readonly configService: ConfigService<Configuration>,
     private readonly analytics: NotificationAnalyticsService,
-    private readonly replyService: WhatsAppReplyService
+    private readonly replyService: WhatsAppReplyService,
+    private readonly inbox: WhatsAppInboxPersistenceService
   ) {}
 
   assertValidSignature(
@@ -75,7 +88,7 @@ export class WhatsAppInboundService {
       await this.handleStatus(status, value);
     }
     for (const message of value.messages ?? []) {
-      await this.handleMessage(message);
+      await this.handleMessage(message, value);
     }
   }
 
@@ -84,35 +97,87 @@ export class WhatsAppInboundService {
     event: WhatsAppChangeValue
   ): Promise<void> {
     if (!status.id || !status.status) return;
-    const mapped =
-      status.status === 'delivered'
-        ? 'delivered'
-        : status.status === 'failed'
-          ? 'failed'
-          : status.status === 'sent'
-            ? 'sent'
-            : status.status === 'read'
-              ? 'delivered'
-              : 'attempted';
+    const mapped = this.mapDeliveryStatus(status.status);
     await this.analytics.markByProviderMessageId(
       status.id,
-      mapped as any,
+      mapped === 'failed' ? 'failed' : mapped === 'sent' ? 'sent' : 'delivered',
       event as Record<string, unknown>
+    );
+    await this.inbox.markByWamid(
+      status.id,
+      mapped,
+      status.errors?.[0]?.message
     );
   }
 
-  private async handleMessage(message: {
-    from?: string;
-    id?: string;
-    type?: string;
-    text?: { body?: string };
-  }): Promise<void> {
+  private mapDeliveryStatus(status: string): WhatsAppDeliveryStatus {
+    if (status === 'delivered') return 'delivered';
+    if (status === 'failed') return 'failed';
+    if (status === 'sent') return 'sent';
+    if (status === 'read') return 'read';
+    return 'sent';
+  }
+
+  private async handleMessage(
+    message: WhatsAppInboundMessage,
+    value: WhatsAppChangeValue
+  ): Promise<void> {
+    const from = message.from?.trim();
+    if (!from) return;
+    const type = this.mapMessageType(message.type);
+    const body = this.extractBody(message, type);
+    try {
+      await this.inbox.persistInbound({
+        waId: from,
+        customerPhone: from,
+        wamid: message.id,
+        type,
+        body,
+        rawPayload: message as Record<string, unknown>,
+        bumpUnread: true,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
+      );
+    }
     const text = message.text?.body;
-    if (!message.from || !text) return;
+    if (!text) return;
     await this.replyService.handleInboundText({
-      fromPhone: message.from,
+      fromPhone: from,
       text,
       messageId: message.id,
     });
+    void value;
+  }
+
+  private mapMessageType(type?: string): WhatsAppMessageType {
+    const allowed: WhatsAppMessageType[] = [
+      'text',
+      'image',
+      'audio',
+      'video',
+      'document',
+      'location',
+      'interactive',
+    ];
+    if (type && allowed.includes(type as WhatsAppMessageType)) {
+      return type as WhatsAppMessageType;
+    }
+    return type === 'template' ? 'template' : 'unknown';
+  }
+
+  private extractBody(
+    message: WhatsAppInboundMessage,
+    type: WhatsAppMessageType
+  ): string {
+    if (type === 'text') return message.text?.body?.trim() || '';
+    if (type === 'location') return '[Location]';
+    if (type === 'interactive') return '[Interactive reply]';
+    if (type === 'image') return '[Image]';
+    if (type === 'audio') return '[Audio]';
+    if (type === 'video') return '[Video]';
+    if (type === 'document') return '[Document]';
+    return `[${type}]`;
   }
 }
