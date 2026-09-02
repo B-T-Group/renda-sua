@@ -15,6 +15,7 @@ import { NotificationOrchestrator } from './orchestration/notification-orchestra
 import { NotificationPolicyService } from './orchestration/notification-policy.service';
 import { NotificationPreferenceService } from './orchestration/notification-preference.service';
 import { WhatsAppInboundService } from './orchestration/whatsapp-inbound.service';
+import { WhatsAppInboxPersistenceService } from './orchestration/whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './orchestration/whatsapp-reply.service';
 import { WhatsAppTemplateService } from './orchestration/whatsapp-template.service';
 import { NotificationsController } from './notifications.controller';
@@ -42,6 +43,7 @@ import { NotificationsService } from './notifications.service';
     NotificationOrchestrator,
     NotificationActionTokenService,
     WhatsAppReplyService,
+    WhatsAppInboxPersistenceService,
     WhatsAppInboundService,
   ],
   controllers: [NotificationsController],
@@ -53,6 +55,7 @@ import { NotificationsService } from './notifications.service';
     NotificationAnalyticsService,
     WhatsAppInboundService,
     WhatsAppReplyService,
+    WhatsAppInboxPersistenceService,
     NotificationActionTokenService,
     WhatsAppTemplateService,
     WhatsAppChannel,

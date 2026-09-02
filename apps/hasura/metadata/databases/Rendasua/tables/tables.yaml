@@ -151,3 +151,5 @@
 - "!include public_user_uploads.yaml"
 - "!include public_users.yaml"
 - "!include public_vehicle_types.yaml"
+- "!include public_whatsapp_conversations.yaml"
+- "!include public_whatsapp_messages.yaml"

@@ -50,6 +50,23 @@ export class WhatsAppService {
   }
 
   /**
+   * Send a free-form session text message (allowed within 24h of last customer message).
+   */
+  async sendSessionText(params: {
+    to: string;
+    body: string;
+  }): Promise<WhatsAppSendMessageResult> {
+    this.assertConfigured();
+    return this.postMessages({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: this.normalizePhone(params.to),
+      type: 'text',
+      text: { preview_url: false, body: params.body },
+    });
+  }
+
+  /**
    * Marketing templates go through the Marketing Messages API when the WABA has
    * onboarded, which Meta reports delivers materially better than Cloud API.
    * Everything else — authentication, utility, and non-optimized marketing —
