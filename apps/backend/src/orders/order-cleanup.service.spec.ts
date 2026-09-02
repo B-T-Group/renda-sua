@@ -600,6 +600,184 @@ describe('OrderCleanupService', () => {
         reason: 'grace_not_elapsed',
       });
     });
+
+    it('skips when the order row is missing', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({ orders_by_pk: null });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'missing',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'not_found',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips already-paid pending_payment without claiming cancel', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'paid',
+          payment_source: 'wallet',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'already_paid',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips when CAS claim loses the payment-finalize race', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_source: 'mobile_money',
+          order_items: [],
+        },
+      });
+      hasura.executeMutation.mockResolvedValueOnce({
+        update_orders: { affected_rows: 0 },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'claim_lost',
+      });
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('skips payment_failed_grace when payment is not failed', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_failed_at: '2026-09-01T10:00:00.000Z',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'payment_not_failed',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips payment_failed_grace when payment_failed_at is missing', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: null,
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'missing_payment_failed_at',
+      });
+    });
+
+    it('skips payment_failed_grace when payment_failed_at is invalid', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: 'not-a-date',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'invalid_payment_failed_at',
+      });
+    });
+
+    it('cancels after payment_failed grace has elapsed', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-02T10:00:00.000Z'));
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'failed',
+            payment_failed_at: '2026-09-02T06:59:00.000Z',
+            payment_source: 'mobile_money',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'failed',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      jest.useRealTimers();
+
+      expect(result).toEqual({ cancelled: true });
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('CleanupClaimCancel')
+        )
+      ).toBe(true);
+    });
   });
 });
 
