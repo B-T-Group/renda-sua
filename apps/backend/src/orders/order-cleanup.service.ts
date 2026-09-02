@@ -151,39 +151,55 @@ export class OrderCleanupService {
   async cancelUnpaidPendingPaymentAsSystem(
     orderId: string,
     notes: string,
-    options?: { reason?: 'timeout' | 'payment_failed_grace' }
+    options?: {
+      reason?: 'timeout' | 'payment_failed_grace';
+      allowPendingUnpaid?: boolean;
+      releaseInventory?: boolean;
+    }
   ): Promise<{ cancelled: boolean; skipped?: boolean; reason?: string }> {
     const order = await this.fetchOrderForUnpaidCancel(orderId);
     if (!order) {
       return { cancelled: false, skipped: true, reason: 'not_found' };
     }
-    if (order.current_status !== 'pending_payment') {
-      return {
-        cancelled: false,
-        skipped: true,
-        reason: `status_${order.current_status}`,
-      };
-    }
-    if ((order.payment_status || '').toLowerCase() === 'paid') {
-      return { cancelled: false, skipped: true, reason: 'already_paid' };
-    }
-    if (options?.reason === 'payment_failed_grace') {
-      const graceSkip = this.shouldSkipPaymentFailedGraceCancel(order);
-      if (graceSkip) {
-        return { cancelled: false, skipped: true, reason: graceSkip };
-      }
+    const skipReason = this.unpaidCancelSkipReason(order, options);
+    if (skipReason) {
+      return { cancelled: false, skipped: true, reason: skipReason };
     }
     const ok = await this.cancelWithClaim(
       order,
-      'pending_payment',
+      order.current_status,
       CANCEL_REASON_PAYMENT_NOT_COMPLETED,
       notes,
       notes,
-      false
+      false,
+      options?.releaseInventory !== false
     );
     return ok
       ? { cancelled: true }
       : { cancelled: false, skipped: true, reason: 'claim_lost' };
+  }
+
+  private unpaidCancelSkipReason(
+    order: CleanupOrderRow,
+    options?: {
+      reason?: 'timeout' | 'payment_failed_grace';
+      allowPendingUnpaid?: boolean;
+    }
+  ): string | null {
+    const status = order.current_status;
+    const allowed =
+      status === 'pending_payment' ||
+      (options?.allowPendingUnpaid === true && status === 'pending');
+    if (!allowed) {
+      return `status_${status}`;
+    }
+    if ((order.payment_status || '').toLowerCase() === 'paid') {
+      return 'already_paid';
+    }
+    if (options?.reason === 'payment_failed_grace') {
+      return this.shouldSkipPaymentFailedGraceCancel(order);
+    }
+    return null;
   }
 
   private shouldSkipPaymentFailedGraceCancel(
@@ -318,7 +334,8 @@ export class OrderCleanupService {
     reasonId: number,
     notes: string,
     historyNotes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<boolean> {
     const claimed = await this.claimCancelled(
       order.id,
@@ -332,7 +349,8 @@ export class OrderCleanupService {
         order,
         expectedStatus,
         historyNotes,
-        notifyViaStatusUpdated
+        notifyViaStatusUpdated,
+        releaseInventory
       );
     } catch (error) {
       if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
@@ -371,7 +389,8 @@ export class OrderCleanupService {
     order: CleanupOrderRow,
     previousStatus: string,
     historyNotes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<boolean> {
     const payment = await this.getOrderPaymentFields(order.id);
     let paymentFinalized = false;
@@ -388,7 +407,8 @@ export class OrderCleanupService {
         order,
         previousStatus,
         historyNotes,
-        notifyViaStatusUpdated
+        notifyViaStatusUpdated,
+        releaseInventory
       );
     } catch (error) {
       if (paymentFinalized) {
@@ -415,7 +435,8 @@ export class OrderCleanupService {
           order,
           previousStatus,
           historyNotes,
-          notifyViaStatusUpdated
+          notifyViaStatusUpdated,
+          releaseInventory
         ).catch((sideEffectError: any) =>
           this.logger.error(
             `Cancellation side-effect retry failed for ${order.id}: ${sideEffectError?.message}`
@@ -908,9 +929,12 @@ export class OrderCleanupService {
     order: CleanupOrderRow,
     previousStatus: string,
     notes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<void> {
-    await this.decrementReservedQuantities(order.order_items || []);
+    if (releaseInventory) {
+      await this.decrementReservedQuantities(order.order_items || []);
+    }
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         order.id,
