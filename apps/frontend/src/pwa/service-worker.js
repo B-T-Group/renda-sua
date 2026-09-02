@@ -86,6 +86,11 @@ setCatchHandler(async ({ event }) => {
 
 const SYNC_TAG = 'agent-location-update';
 const CACHE_NAME = 'rendasua-location-cache-v1';
+const ORDER_INTERRUPT_EVENTS = new Set([
+  'order_created',
+  'order_acceptance_activate',
+  'order_acceptance_reminder',
+]);
 
 self.addEventListener('install', () => {
   // Activate new SW as soon as it’s ready.
@@ -137,8 +142,15 @@ self.addEventListener('push', (event) => {
     typeof data.requestId === 'string' && data.requestId.trim()
       ? data.requestId.trim()
       : null;
+  const orderId =
+    typeof data.orderId === 'string' && data.orderId.trim()
+      ? data.orderId.trim()
+      : typeof data.order_id === 'string' && data.order_id.trim()
+        ? data.order_id.trim()
+        : null;
   event.waitUntil(
     (async () => {
+      await postOrderInterruptToClients(data, orderId);
       try {
         await self.registration.showNotification(data.title || 'Rendasua', {
           body: data.body,
@@ -146,7 +158,7 @@ self.addEventListener('push', (event) => {
           badge: '/favicon.ico',
           data: {
             url: data.url || '/',
-            orderId: data.orderId,
+            orderId,
             requestId,
           },
           tag: requestId
@@ -235,6 +247,30 @@ async function handleLocationSync() {
     if (clients.length === 0) return;
 
     clients[0].postMessage({ type: 'REQUEST_LOCATION_SYNC' });
+  } catch (error) {
+    // no-op
+  }
+}
+
+async function postOrderInterruptToClients(data, orderId) {
+  const eventName =
+    typeof data?.event === 'string' && ORDER_INTERRUPT_EVENTS.has(data.event)
+      ? data.event
+      : null;
+  if (!eventName) return;
+  try {
+    const windowClients = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+    windowClients.forEach((client) =>
+      client.postMessage({
+        type: 'order-interrupt',
+        event: eventName,
+        orderId,
+        url: data?.url || '/',
+      })
+    );
   } catch (error) {
     // no-op
   }

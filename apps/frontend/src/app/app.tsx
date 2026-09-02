@@ -25,6 +25,7 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
 import StickyDownloadBar from '../components/common/StickyDownloadBar';
+import IncomingOrderOverlay from '../components/incoming-order/IncomingOrderOverlay';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
@@ -34,6 +35,7 @@ import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { useFlushPendingLike } from '../hooks/useFlushPendingLike';
+import { IncomingOrderInterruptProvider } from '../hooks/useIncomingOrderInterrupt';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
@@ -181,46 +183,46 @@ function App() {
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Header />
-
+    <IncomingOrderInterruptProvider>
       <Box
         sx={{
-          flex: 1,
-          py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
-          // Add bottom padding when any bottom nav is visible to prevent content overlap
-          paddingBottom:
-            showAgentBottomNav || showClientBottomNav || showGuestBottomNav
-              ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
-              : isHomePage
-                ? 0
-                : isBusinessItemsCatalog
-                  ? { xs: 1, sm: 1.5 }
-                  : 4,
+          minHeight: '100vh',
+          bgcolor: 'background.default',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Container
-          maxWidth={isHomePage ? false : 'xl'}
-          disableGutters={isHomePage}
+        <Header />
+
+        <Box
           sx={{
-            px: isHomePage
-              ? 0
-              : location.pathname === '/items' ||
-                location.pathname.startsWith('/items/') ||
-                isBusinessItemsCatalog
-                ? { xs: 0.5, sm: 1 }
-                : { xs: 1.5, sm: 2, md: 3 },
+            flex: 1,
+            py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
+            paddingBottom:
+              showAgentBottomNav || showClientBottomNav || showGuestBottomNav
+                ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
+                : isHomePage
+                  ? 0
+                  : isBusinessItemsCatalog
+                    ? { xs: 1, sm: 1.5 }
+                    : 4,
           }}
         >
-          <Suspense fallback={<RouteSuspenseFallback />}>
-            <Routes>
+          <Container
+            maxWidth={isHomePage ? false : 'xl'}
+            disableGutters={isHomePage}
+            sx={{
+              px: isHomePage
+                ? 0
+                : location.pathname === '/items' ||
+                  location.pathname.startsWith('/items/') ||
+                  isBusinessItemsCatalog
+                  ? { xs: 0.5, sm: 1 }
+                  : { xs: 1.5, sm: 2, md: 3 },
+            }}
+          >
+            <Suspense fallback={<RouteSuspenseFallback />}>
+              <Routes>
             <Route path="/" element={<SmartHome />} />
             {/* Legacy marketing page — redirect to homepage */}
             <Route path="/who-we-are" element={<Navigate to="/" replace />} />
@@ -408,6 +410,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.NotificationPreferencesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/kitchen"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.KitchenModePage />
                 </ProtectedRoute>
               }
             />
@@ -1071,43 +1081,45 @@ function App() {
 
             {/* Unknown paths: same persona rules as home */}
             <Route path="*" element={<SmartHome />} />
-          </Routes>
-          </Suspense>
-        </Container>
+              </Routes>
+            </Suspense>
+          </Container>
+        </Box>
+
+        <Footer />
+
+        {/* Agent Bottom Navigation - Only visible for agents on mobile */}
+        <AgentBottomNav />
+
+        {/* Client Bottom Navigation - Only visible for clients on mobile */}
+        <ClientBottomNav />
+
+        {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
+        <GuestBottomNav />
+
+        <DeferredFloatingWhatsApp
+          whatsappBottomOffset={whatsappBottomOffset}
+          hidden={shouldHideWhatsappWidget}
+        />
+
+        {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
+        <AgentOnboardingModal
+          open={agentNeedsOnboarding}
+          onComplete={handleOnboardingComplete}
+          loading={onboardingLoading}
+        />
+
+        <AgentLocationDisclosureModal
+          open={showLocationDisclosure}
+          saving={webLocationConsentSaving}
+          onAccept={() => void setWebLocationConsent('accepted')}
+          onDefer={() => void setWebLocationConsent('deferred')}
+        />
+
+        <IncomingOrderOverlay />
+        <StickyDownloadBar />
       </Box>
-
-      <Footer />
-
-      {/* Agent Bottom Navigation - Only visible for agents on mobile */}
-      <AgentBottomNav />
-
-      {/* Client Bottom Navigation - Only visible for clients on mobile */}
-      <ClientBottomNav />
-
-      {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
-      <GuestBottomNav />
-
-      <DeferredFloatingWhatsApp
-        whatsappBottomOffset={whatsappBottomOffset}
-        hidden={shouldHideWhatsappWidget}
-      />
-
-      {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
-      <AgentOnboardingModal
-        open={agentNeedsOnboarding}
-        onComplete={handleOnboardingComplete}
-        loading={onboardingLoading}
-      />
-
-      <AgentLocationDisclosureModal
-        open={showLocationDisclosure}
-        saving={webLocationConsentSaving}
-        onAccept={() => void setWebLocationConsent('accepted')}
-        onDefer={() => void setWebLocationConsent('deferred')}
-      />
-
-      <StickyDownloadBar />
-    </Box>
+    </IncomingOrderInterruptProvider>
   );
 }
 

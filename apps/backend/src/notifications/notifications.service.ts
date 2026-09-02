@@ -10,8 +10,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { SmsService } from '../sms/sms.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { DeepLinkService } from './deep-link.service';
 import { NotificationOrchestrator } from './orchestration/notification-orchestrator.service';
+import { WhatsAppTemplateService } from './orchestration/whatsapp-template.service';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
 import {
   isExpiredExpoPushError,
@@ -43,6 +45,12 @@ import type {
   SaleItemRejectedEmailPayload,
   SaleItemAiProposalEmailPayload,
 } from './notification-types';
+import {
+  merchantOrderCreatedSmsBody,
+  merchantOrderReminderSmsBody,
+  normalizeAlertPhone,
+  phonesEqual,
+} from './merchant-order-notify.util';
 import {
   smsFirstOrderShareCode,
   smsOrderCancelled,
@@ -259,7 +267,10 @@ export class NotificationsService {
     private readonly rbacService: RbacService,
     @Inject(forwardRef(() => NotificationOrchestrator))
     private readonly orchestrator: NotificationOrchestrator,
-    private readonly deepLinkService: DeepLinkService
+    private readonly deepLinkService: DeepLinkService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsappService: WhatsAppService,
+    private readonly whatsAppTemplateService: WhatsAppTemplateService
   ) {
     this.loadResendTemplateIds();
   }
@@ -338,7 +349,9 @@ export class NotificationsService {
     this.logger.log(
       `Order creation notification(s) processed for order ${data.orderNumber}`
     );
-    await this.fanOutOrderCreatedToDelegates(data);
+    if (data.acceptanceMode === 'scheduled') {
+      await this.fanOutOrderCreatedToDelegates(data);
+    }
   }
 
   /**
@@ -1026,7 +1039,7 @@ export class NotificationsService {
     });
   }
 
-  /** Mid-window nudge while the confirm SLA is still active (push only). */
+  /** Mid-window nudge while the confirm SLA is still active. */
   async sendOrderAcceptanceReminderPush(params: {
     businessUserId?: string | null;
     orderId: string;
@@ -1041,32 +1054,42 @@ export class NotificationsService {
       preferredLanguage: params.preferredLanguage,
       remainingSeconds: params.remainingSeconds,
     });
+    const locale = normalizeLanguage(params.preferredLanguage);
     const isoMinute = new Date().toISOString().slice(0, 16);
+    const smsBody = merchantOrderReminderSmsBody({
+      orderNumber: params.orderNumber,
+      locale,
+      remainingSeconds: params.remainingSeconds,
+    });
+    const links = this.deepLinkService.order(params.orderId);
     if (userId) {
       try {
-        await this.orchestrator.notify({
+        await this.notifyMerchantWithWaFallback({
           type: 'order.acceptance.reminder',
-          category: 'actionable',
-          recipientUserId: userId,
-          preferenceCategory: 'order_updates',
-          entityType: 'order',
-          entityId: params.orderId,
+          userId,
+          locale,
+          orderId: params.orderId,
           dedupeKey: `order.acceptance.reminder:${params.orderId}:${isoMinute}`,
-          channels: {
-            push: {
-              title,
-              body,
-              interruptible: true,
-              data: {
-                url: `/orders/${params.orderId}`,
-                orderId: params.orderId,
-                orderNumber: params.orderNumber,
-                event: 'order_acceptance_reminder',
-                persona: 'business',
-                remainingSeconds: String(params.remainingSeconds),
-              },
+          push: {
+            title,
+            body,
+            interruptible: true,
+            data: {
+              url: `/orders/${params.orderId}`,
+              orderId: params.orderId,
+              orderNumber: params.orderNumber,
+              event: 'order_acceptance_reminder',
+              persona: 'business',
+              remainingSeconds: String(params.remainingSeconds),
             },
           },
+          whatsappVars: {
+            orderNumber: params.orderNumber,
+            customerName: 'Customer',
+            pickupWindow: `${Math.max(1, Math.round(params.remainingSeconds / 60))} min`,
+          },
+          ctaUrl: links.universal,
+          smsBody,
         });
       } catch (error: any) {
         this.logger.warn(
@@ -1074,18 +1097,57 @@ export class NotificationsService {
         );
       }
     }
-    await this.fanOutPushToOrderManagers(params.businessLocationId, {
-      title,
-      body,
-      data: {
-        url: `/orders/${params.orderId}`,
+    const delegates = await this.listOrderManagerDelegates(
+      params.businessLocationId
+    );
+    for (const delegate of delegates) {
+      if (userId && delegate.userId === userId) continue;
+      await this.notifyMerchantWithWaFallback({
+        type: 'order.acceptance.reminder',
+        userId: delegate.userId,
+        locale,
         orderId: params.orderId,
-        orderNumber: params.orderNumber,
-        event: 'order_acceptance_reminder',
-      },
-      excludeUserId: userId,
-      expoOptions: MERCHANT_INCOMING_ORDER_PUSH,
-    });
+        dedupeKey: `order.acceptance.reminder:delegate:${params.orderId}:${delegate.userId}:${isoMinute}`,
+        push: {
+          title,
+          body,
+          interruptible: true,
+          data: {
+            url: `/delegate/orders/${params.orderId}`,
+            orderId: params.orderId,
+            orderNumber: params.orderNumber,
+            event: 'order_acceptance_reminder',
+            locationId: params.businessLocationId ?? undefined,
+          },
+        },
+        whatsappVars: {
+          orderNumber: params.orderNumber,
+          customerName: 'Customer',
+          pickupWindow: `${Math.max(1, Math.round(params.remainingSeconds / 60))} min`,
+        },
+        ctaUrl: links.universal,
+        smsBody,
+      });
+    }
+    const phone = await this.getLocationOrderAlertPhone(
+      params.businessLocationId
+    );
+    if (phone) {
+      const ownerPhone = userId ? await this.getUserPhone(userId) : null;
+      let skipSms = phonesEqual(phone, ownerPhone);
+      if (!skipSms) {
+        for (const delegate of delegates) {
+          const dp = await this.getUserPhone(delegate.userId);
+          if (phonesEqual(phone, dp)) {
+            skipSms = true;
+            break;
+          }
+        }
+      }
+      if (!skipSms) {
+        await this.sendInternalSms(phone, smsBody);
+      }
+    }
   }
 
   async sendPickupReminderPush(params: {
@@ -1334,7 +1396,22 @@ export class NotificationsService {
       await this.sendOrderCreatedBusinessPush(data);
       return false;
     }
-    const links = this.deepLinkService.order(data.orderId);
+    const waOk = await this.notifyMerchantOrderCreatedUser(data, businessUserId, false);
+    await this.fanOutMerchantOrderCreatedChannels(data, businessUserId);
+    return waOk;
+  }
+
+  private async notifyMerchantOrderCreatedUser(
+    data: NotificationData,
+    userId: string,
+    isDelegate: boolean
+  ): Promise<boolean> {
+    const links = isDelegate
+      ? {
+          path: `/delegate/orders/${data.orderId}`,
+          universal: this.deepLinkService.order(data.orderId).universal,
+        }
+      : this.deepLinkService.order(data.orderId);
     const { title, body } = buildBusinessOrderCreatedPushMessage({
       orderNumber: data.orderNumber,
       clientName: data.clientName,
@@ -1342,47 +1419,246 @@ export class NotificationsService {
       acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
     });
     const locale = this.languageForRecipient(data, 'business');
-    const result = await this.orchestrator.notify({
-      type: 'order.created',
-      category: 'actionable',
-      recipientUserId: businessUserId,
+    const vars = {
+      orderNumber: data.orderNumber,
+      customerName: data.clientName || 'Customer',
+      pickupWindow:
+        data.acceptanceTimeoutSeconds != null
+          ? `${Math.round(data.acceptanceTimeoutSeconds / 60)} min`
+          : 'soon',
+    };
+    const smsBody = merchantOrderCreatedSmsBody({
+      orderNumber: data.orderNumber,
       locale,
-      preferenceCategory: 'order_updates',
-      entityType: 'order',
-      entityId: data.orderId,
-      dedupeKey: `order.created:business:${data.orderId}`,
-      channels: {
-        push: {
-          title,
-          body,
-          interruptible: true,
-          data: {
-            url: links.path,
-            orderId: data.orderId,
-            orderNumber: data.orderNumber,
-            event: 'order_created',
-            persona: 'business',
-            acceptanceTimeoutSeconds:
-              data.acceptanceTimeoutSeconds != null
-                ? String(data.acceptanceTimeoutSeconds)
-                : undefined,
-          },
-        },
-        whatsapp: {
-          templateKey: 'order_created_business',
-          ctaUrl: links.universal,
-          variables: {
-            orderNumber: data.orderNumber,
-            customerName: data.clientName || 'Customer',
-            pickupWindow:
-              data.acceptanceTimeoutSeconds != null
-                ? `${Math.round(data.acceptanceTimeoutSeconds / 60)} min`
-                : 'soon',
-          },
+      acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
+    });
+    const result = await this.notifyMerchantWithWaFallback({
+      type: 'order.created',
+      userId,
+      locale,
+      orderId: data.orderId,
+      dedupeKey: `order.created:${isDelegate ? 'delegate' : 'business'}:${data.orderId}:${userId}`,
+      push: {
+        title,
+        body,
+        interruptible: true,
+        data: {
+          url: links.path,
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          event: 'order_created',
+          persona: isDelegate ? 'delegate' : 'business',
+          locationId: data.businessLocationId,
+          acceptanceTimeoutSeconds:
+            data.acceptanceTimeoutSeconds != null
+              ? String(data.acceptanceTimeoutSeconds)
+              : undefined,
         },
       },
+      whatsappVars: vars,
+      ctaUrl: links.universal,
+      smsBody,
+      phoneE164: undefined,
     });
-    return this.orchestrator.whatsAppSucceeded(result);
+    return result;
+  }
+
+  private async notifyMerchantWithWaFallback(params: {
+    type: 'order.created' | 'order.acceptance.reminder';
+    userId: string;
+    locale: EmailLocale;
+    orderId: string;
+    dedupeKey: string;
+    push: {
+      title: string;
+      body: string;
+      interruptible?: boolean;
+      data: Record<string, string | undefined>;
+    };
+    whatsappVars: Record<string, string>;
+    ctaUrl: string;
+    smsBody: string;
+    phoneE164?: string;
+  }): Promise<boolean> {
+    const pushEnabled =
+      !!this.configService.get<Configuration['push']>('push')?.enabled;
+    const phone =
+      params.phoneE164 || (await this.getUserPhone(params.userId)) || '';
+    const templateKeys = [
+      'order_action_business',
+      'order_created_business',
+    ] as const;
+    for (let i = 0; i < templateKeys.length; i++) {
+      const templateKey = templateKeys[i];
+      const isFallback = i > 0;
+      // Push/SMS only on the first attempt so a WhatsApp template fallback
+      // does not duplicate interruptible push or SMS.
+      const result = await this.orchestrator.notify({
+        type: params.type,
+        category: 'actionable',
+        recipientUserId: params.userId,
+        locale: params.locale,
+        preferenceCategory: 'order_updates',
+        allowSmsFallback: !isFallback,
+        entityType: 'order',
+        entityId: params.orderId,
+        dedupeKey: `${params.dedupeKey}:${templateKey}`,
+        channels: {
+          ...(!isFallback && pushEnabled
+            ? {
+                push: {
+                  title: params.push.title,
+                  body: params.push.body,
+                  interruptible: params.push.interruptible,
+                  data: params.push.data,
+                },
+              }
+            : {}),
+          whatsapp: {
+            templateKey,
+            ctaUrl:
+              templateKey === 'order_created_business'
+                ? params.ctaUrl
+                : undefined,
+            phoneE164: phone || undefined,
+            variables: params.whatsappVars,
+          },
+          ...(!isFallback && phone
+            ? {
+                sms: {
+                  to: phone.startsWith('+') ? phone : `+${phone}`,
+                  body: params.smsBody,
+                },
+              }
+            : {}),
+        },
+      });
+      if (this.orchestrator.whatsAppSucceeded(result)) return true;
+      if (!isFallback) continue;
+      return false;
+    }
+    return false;
+  }
+
+  private async fanOutMerchantOrderCreatedChannels(
+    data: NotificationData,
+    ownerUserId: string
+  ): Promise<void> {
+    const delegates = await this.listOrderManagerDelegates(
+      data.businessLocationId
+    );
+    for (const delegate of delegates) {
+      if (delegate.userId === ownerUserId) continue;
+      await this.notifyMerchantOrderCreatedUser(data, delegate.userId, true);
+    }
+    await this.notifyLocationAlertPhoneCreated(data, ownerUserId, delegates);
+  }
+
+  private async notifyLocationAlertPhoneCreated(
+    data: NotificationData,
+    ownerUserId: string,
+    delegates: Array<{ userId: string }>
+  ): Promise<void> {
+    const phone = await this.getLocationOrderAlertPhone(data.businessLocationId);
+    if (!phone) return;
+    const ownerPhone = await this.getUserPhone(ownerUserId);
+    if (phonesEqual(phone, ownerPhone)) return;
+    for (const d of delegates) {
+      const dp = await this.getUserPhone(d.userId);
+      if (phonesEqual(phone, dp)) return;
+    }
+    const locale = this.languageForRecipient(data, 'business');
+    const smsBody = merchantOrderCreatedSmsBody({
+      orderNumber: data.orderNumber,
+      locale,
+      acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
+    });
+    await this.sendInternalSms(phone, smsBody);
+    await this.sendLocationAlertWhatsApp(phone, data, locale);
+  }
+
+  private async sendLocationAlertWhatsApp(
+    phone: string,
+    data: NotificationData,
+    locale: EmailLocale
+  ): Promise<void> {
+    if (!this.whatsappService?.isConfigured?.()) return;
+    const vars = {
+      orderNumber: data.orderNumber,
+      customerName: data.clientName || 'Customer',
+      pickupWindow:
+        data.acceptanceTimeoutSeconds != null
+          ? `${Math.round(data.acceptanceTimeoutSeconds / 60)} min`
+          : 'soon',
+    };
+    for (const templateKey of [
+      'order_action_business',
+      'order_created_business',
+    ] as const) {
+      try {
+        const metaName = this.whatsAppTemplateService.resolveMetaName(
+          templateKey,
+          locale
+        );
+        if (!metaName) continue;
+        await this.whatsappService.sendTemplateMessage({
+          to: phone,
+          templateName: metaName,
+          languageCode: locale === 'fr' ? 'fr' : 'en',
+          category: 'UTILITY',
+          components: this.whatsAppTemplateService.buildComponents({
+            templateKey,
+            variables: vars,
+            ctaUrl:
+              templateKey === 'order_created_business'
+                ? this.deepLinkService.order(data.orderId).universal
+                : undefined,
+          }),
+        });
+        return;
+      } catch (error: any) {
+        this.logger.warn(
+          `Location alert WA ${templateKey} failed: ${error?.message ?? error}`
+        );
+      }
+    }
+  }
+
+  private async getLocationOrderAlertPhone(
+    locationId?: string | null
+  ): Promise<string | null> {
+    if (!locationId) return null;
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        business_locations_by_pk?: { order_alert_phone?: string | null };
+      }>(
+        `query LocAlertPhone($id: uuid!) {
+          business_locations_by_pk(id: $id) { order_alert_phone }
+        }`,
+        { id: locationId }
+      );
+      return normalizeAlertPhone(
+        res.business_locations_by_pk?.order_alert_phone
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  private async getUserPhone(userId: string): Promise<string | null> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        users_by_pk?: { phone_number?: string | null };
+      }>(
+        `query UserPhone($id: uuid!) {
+          users_by_pk(id: $id) { phone_number }
+        }`,
+        { id: userId }
+      );
+      return normalizeAlertPhone(res.users_by_pk?.phone_number);
+    } catch {
+      return null;
+    }
   }
 
   private async sendOrderCreatedEmailsUnlessWhatsApp(
@@ -3760,6 +4036,95 @@ export class NotificationsService {
         success: false,
         error: err?.message ?? 'Failed to load push token status',
       };
+    }
+  }
+
+  /** Business dashboard “you will miss orders” health check. */
+  async getBusinessReachability(userId: string): Promise<{
+    hasPush: boolean;
+    whatsappReady: boolean;
+    locationAlertPhoneSet: boolean;
+  }> {
+    const expo = await this.getExpoPushRegistrationStatus(userId);
+    const webPushCount = await this.countWebPushSubscriptions(userId);
+    const prefs = await this.loadReachabilityPrefs(userId);
+    const locationAlertPhoneSet = await this.businessHasLocationAlertPhone(
+      userId
+    );
+    return {
+      hasPush: !!expo.hasRegisteredTokens || webPushCount > 0,
+      whatsappReady: !!(prefs.whatsappEnabled && prefs.phoneNumber?.trim()),
+      locationAlertPhoneSet,
+    };
+  }
+
+  private async countWebPushSubscriptions(userId: string): Promise<number> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        push_subscriptions_aggregate: { aggregate: { count: number } | null };
+      }>(
+        `query WebPushCount($userId: uuid!) {
+          push_subscriptions_aggregate(where: { user_id: { _eq: $userId } }) {
+            aggregate { count }
+          }
+        }`,
+        { userId }
+      );
+      return result?.push_subscriptions_aggregate?.aggregate?.count ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private async loadReachabilityPrefs(userId: string): Promise<{
+    whatsappEnabled: boolean;
+    phoneNumber: string | null;
+  }> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        users_by_pk?: { phone_number?: string | null };
+        user_notification_preferences: Array<{
+          whatsapp_enabled?: boolean | null;
+        }>;
+      }>(
+        `query ReachPrefs($id: uuid!) {
+          users_by_pk(id: $id) { phone_number }
+          user_notification_preferences(where: { user_id: { _eq: $id } }, limit: 1) {
+            whatsapp_enabled
+          }
+        }`,
+        { id: userId }
+      );
+      return {
+        whatsappEnabled:
+          res.user_notification_preferences?.[0]?.whatsapp_enabled !== false,
+        phoneNumber: res.users_by_pk?.phone_number ?? null,
+      };
+    } catch {
+      return { whatsappEnabled: false, phoneNumber: null };
+    }
+  }
+
+  private async businessHasLocationAlertPhone(userId: string): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        businesses: Array<{
+          business_locations: Array<{ order_alert_phone?: string | null }>;
+        }>;
+      }>(
+        `query BizAlertPhone($uid: uuid!) {
+          businesses(where: { user_id: { _eq: $uid } }, limit: 1) {
+            business_locations(where: { is_active: { _eq: true } }) {
+              order_alert_phone
+            }
+          }
+        }`,
+        { uid: userId }
+      );
+      const locs = res.businesses?.[0]?.business_locations ?? [];
+      return locs.some((l) => !!normalizeAlertPhone(l.order_alert_phone));
+    } catch {
+      return false;
     }
   }
 

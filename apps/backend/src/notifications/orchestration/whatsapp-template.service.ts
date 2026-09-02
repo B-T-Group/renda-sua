@@ -8,6 +8,7 @@ import type { WhatsAppChannelPayload } from './notification.types';
 /** Maps internal template keys → Meta-approved template names (en / fr). */
 const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   order_created_business: { en: 'rs_order_created', fr: 'rs_order_created' },
+  order_action_business: { en: 'rs_order_action', fr: 'rs_order_action' },
   order_offer_agent: { en: 'rs_delivery_offer', fr: 'rs_delivery_offer' },
   order_status_client: { en: 'rs_order_status', fr: 'rs_order_status' },
   order_ready: { en: 'rs_order_ready', fr: 'rs_order_ready' },
@@ -23,6 +24,7 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
 /** Ordered body variables per template (Meta positional params). */
 const BODY_VARS: Record<string, string[]> = {
   order_created_business: ['orderNumber', 'customerName', 'pickupWindow'],
+  order_action_business: ['orderNumber', 'customerName', 'pickupWindow'],
   order_offer_agent: ['pickupArea', 'distance'],
   order_status_client: ['orderNumber', 'statusLabel'],
   order_ready: ['orderNumber'],
@@ -57,7 +59,10 @@ const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
 };
 
 /** Static URL buttons (no send-time {{1}}). Auth templates have no URL CTA. */
-const STATIC_CTA_KEYS = new Set(['verification_attention']);
+const STATIC_CTA_KEYS = new Set([
+  'verification_attention',
+  'order_action_business',
+]);
 
 export type WhatsAppTemplateCatalogEntry = {
   templateKey: string;

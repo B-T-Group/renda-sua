@@ -9,6 +9,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | Internal key | Meta name | Category | Body variables (positional) | Button |
 |--------------|-----------|----------|-------------------------------|--------|
 | `order_created_business` | `rs_order_created` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
+| `order_action_business` | `rs_order_action` | UTILITY | orderNumber, customerName, pickupWindow | QUICK_REPLY: Confirm / Need more time / Decline |
 | `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 | `order_ready` | `rs_order_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
@@ -69,6 +70,35 @@ Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
 
 Appuyez ci-dessous pour ouvrir la commande dans Rendasua.
 ```
+
+## 1b. `rs_order_action`
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` customerName · `{{3}}` pickupWindow  
+**Buttons:** QUICK_REPLY Confirm / Need more time / Decline (inbound ids: `confirm`, `busy`, `decline`)
+
+**en**
+```
+Rendasua: you have a new marketplace order.
+
+Order number: {{1}}
+Customer name: {{2}}
+Please confirm within {{3}} so the customer is not left waiting.
+
+Tap a button below to respond.
+```
+
+**fr**
+```
+Rendasua : vous avez une nouvelle commande marketplace.
+
+Numéro de commande : {{1}}
+Nom du client : {{2}}
+Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
+
+Appuyez sur un bouton ci-dessous pour répondre.
+```
+
+Until Meta approves `rs_order_action`, production keeps sending `rs_order_created`. After approval, prefer internal key `order_action_business`.
 
 ---
 

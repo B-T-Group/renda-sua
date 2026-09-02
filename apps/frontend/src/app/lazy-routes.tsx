@@ -321,6 +321,9 @@ export const Profile = lazy(() => import('../components/pages/Profile'));
 export const NotificationPreferencesPage = lazy(
   () => import('../components/pages/NotificationPreferencesPage')
 );
+export const KitchenModePage = lazy(
+  () => import('../components/pages/KitchenModePage')
+);
 export const AppDeepLinkPage = lazy(
   () => import('../components/pages/AppDeepLinkPage')
 );

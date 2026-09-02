@@ -12,11 +12,17 @@ export type ContentTemplate = {
   category: 'UTILITY' | 'MARKETING';
   body: Record<TemplateLanguage, string>;
   exampleValues: string[];
-  button: {
+  /** Single URL CTA (legacy templates). */
+  button?: {
     text: Record<TemplateLanguage, string>;
     url: string;
     dynamic: boolean;
   };
+  /** Quick-reply buttons (merchant action templates). */
+  quickReplies?: Array<{
+    id: string;
+    text: Record<TemplateLanguage, string>;
+  }>;
 };
 
 export type AuthTemplate = {
@@ -84,6 +90,42 @@ Nom du client : {{2}}
 Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
 
 Appuyez ci-dessous pour ouvrir la commande dans Rendasua.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_order_action',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001', 'Jane Doe', '30 minutes'],
+    quickReplies: [
+      {
+        id: 'confirm',
+        text: { en: 'Confirm', fr: 'Confirmer' },
+      },
+      {
+        id: 'busy',
+        text: { en: 'Need more time', fr: 'Besoin de temps' },
+      },
+      {
+        id: 'decline',
+        text: { en: 'Decline', fr: 'Refuser' },
+      },
+    ],
+    body: {
+      en: `Rendasua: you have a new marketplace order.
+
+Order number: {{1}}
+Customer name: {{2}}
+Please confirm within {{3}} so the customer is not left waiting.
+
+Tap a button below to respond.`,
+      fr: `Rendasua : vous avez une nouvelle commande marketplace.
+
+Numéro de commande : {{1}}
+Nom du client : {{2}}
+Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
+
+Appuyez sur un bouton ci-dessous pour répondre.`,
     },
   },
   {
@@ -396,6 +438,18 @@ function buttonsComponent(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphComponent {
+  if (template.quickReplies?.length) {
+    return {
+      type: 'BUTTONS',
+      buttons: template.quickReplies.map((qr) => ({
+        type: 'QUICK_REPLY',
+        text: qr.text[language],
+      })),
+    };
+  }
+  if (!template.button) {
+    return { type: 'BUTTONS', buttons: [] };
+  }
   return {
     type: 'BUTTONS',
     buttons: [urlButton(template, language)],
@@ -406,13 +460,14 @@ function urlButton(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphButton {
-  const button: GraphButton = {
+  const button = template.button!;
+  const graphButton: GraphButton = {
     type: 'URL',
-    text: template.button.text[language],
-    url: template.button.url,
+    text: button.text[language],
+    url: button.url,
   };
-  if (template.button.dynamic) button.example = [BUTTON_URL_EXAMPLE];
-  return button;
+  if (button.dynamic) graphButton.example = [BUTTON_URL_EXAMPLE];
+  return graphButton;
 }
 
 export function shouldSkipStatus(status?: string): boolean {
@@ -451,8 +506,18 @@ function urlButtonNeedsUpdate(
   template: ContentTemplate,
   language: TemplateLanguage
 ): boolean {
+  if (template.quickReplies?.length) {
+    if (buttons.length !== template.quickReplies.length) return true;
+    return template.quickReplies.some((qr, i) => {
+      const b = buttons[i];
+      return (
+        (b?.type ?? '').toUpperCase() !== 'QUICK_REPLY' ||
+        (b?.text ?? '') !== qr.text[language]
+      );
+    });
+  }
   const first = buttons[0];
-  if (!first) return true;
+  if (!first || !template.button) return true;
   return (
     (first.text ?? '') !== template.button.text[language] ||
     (first.url ?? '') !== template.button.url

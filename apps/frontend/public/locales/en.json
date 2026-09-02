@@ -2232,7 +2232,14 @@
       "ctaViewItems": "View items",
       "ctaViewRentals": "View rentals",
       "stepPreview": "Preview your store",
-      "stepPreviewDesc": "See how customers will discover your products."
+      "stepPreviewDesc": "See how customers will discover your products.",
+      "stepReachabilityDesc": "Keep at least one fast alert channel on so your kitchen notices new orders.",
+      "stepReachabilityMissingBoth": "Turn on push notifications or WhatsApp alerts so you do not miss new orders.",
+      "stepReachabilityMissingPush": "Allow browser notifications on this device for instant order alerts.",
+      "stepReachabilityMissingWhatsapp": "Turn on WhatsApp order updates so your team has a backup alert channel.",
+      "stepReachabilityMissingLocationPhone": "Add a kitchen or till phone on a location so WhatsApp reminders reach the right device.",
+      "stepReachability": "Order alerts",
+      "ctaReachability": "Set up alerts"
     },
     "verification": {
       "noticeTitle": "Account verification required",
@@ -2467,7 +2474,14 @@
       "pickupOps": "Pickup health",
       "pickupOpsDescription": "Live pickup SLA board for orders waiting on agent collection",
       "creditsModule": "Ops follow-ups",
-      "creditsModuleDescription": "Escalations, call-backs, and follow-up progress"
+      "creditsModuleDescription": "Escalations, call-backs, and follow-up progress",
+      "reachability": {
+        "missingBoth": "New orders can be missed on this device because both browser push and WhatsApp order alerts are not ready.",
+        "missingPush": "Browser push notifications are not ready on this device. Keep WhatsApp alerts on so your team still gets order interrupts.",
+        "missingWhatsapp": "WhatsApp order alerts are not ready. Turn them on so your kitchen has a backup when browser push is missed.",
+        "openNotifications": "Notification settings",
+        "openLocations": "Locations"
+      }
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",
@@ -3690,6 +3704,8 @@
       "noLocations": "No locations found",
       "noLocationsMessage": "Add your first business location to start managing inventory and deliveries",
       "phone": "Phone",
+      "orderAlertPhone": "Order alert phone",
+      "orderAlertPhoneHint": "Kitchen WhatsApp / till phone for new-order alerts",
       "primary": "Primary",
       "primaryLocationWarning": "This is your primary location. You cannot delete it.",
       "refresh": "Refresh",
@@ -7198,5 +7214,29 @@
     "clientLabel": "Client",
     "unknownItem": "Item",
     "merchantToggle": "Pricing not applicable (interest only)"
+  },
+  "incomingOrder": {
+    "awaitingAction": "Awaiting action",
+    "timeLeft": "{{m}}m {{s}}s to accept",
+    "secondsLeft": "{{seconds}}s to accept",
+    "title": "New order waiting",
+    "confirm": "Confirm",
+    "needMoreTime": "Need more time",
+    "decline": "Decline",
+    "startKitchenMode": "Start kitchen mode",
+    "kitchenTitle": "Kitchen mode",
+    "kitchenHint": "Keep this tab open. Sound starts after you tap Start kitchen mode.",
+    "armed": "Kitchen mode is on",
+    "kitchenAlert": "New order alert",
+    "orderNumber": "Order {{number}}"
+  },
+  "kitchenMode": {
+    "title": "Kitchen mode",
+    "subtitle": "Keep this screen open on a kitchen tablet to hear and handle new orders quickly.",
+    "start": "Start kitchen mode",
+    "soundReady": "Sound is enabled",
+    "soundHint": "Tap Start kitchen mode once to allow alarm sound in this browser.",
+    "waitingTitle": "Waiting for the next order",
+    "waitingBody": "When a new order needs confirmation, it will appear here immediately."
   }
 }

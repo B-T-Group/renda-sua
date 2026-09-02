@@ -135,4 +135,45 @@ describe('WhatsAppInboundService', () => {
     );
     expect(replyService.handleInboundText).not.toHaveBeenCalled();
   });
+
+  it('routes interactive button replies', async () => {
+    const service = buildService();
+    replyService.handleInteractiveReply = jest.fn();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.btn',
+                    type: 'interactive',
+                    interactive: {
+                      type: 'button_reply',
+                      button_reply: { id: 'confirm', title: 'Confirm' },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(inbox.persistInbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'interactive',
+        body: 'Confirm (confirm)',
+      })
+    );
+    expect(replyService.handleInteractiveReply).toHaveBeenCalledWith({
+      fromPhone: '15557654321',
+      buttonId: 'confirm',
+      buttonTitle: 'Confirm',
+      messageId: 'wamid.btn',
+    });
+  });
 });
