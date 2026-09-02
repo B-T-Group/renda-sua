@@ -1819,6 +1819,59 @@
     "successMessage": "Votre profil a été créé avec succès. Redirection vers votre tableau de bord…"
   },
   "business": {
+    "quietHome": {
+      "reach": {
+        "title": "Portée de la boutique",
+        "shareCta": "Partager la boutique",
+        "zeroViewsHint": "Partagez votre boutique pour que les clients vous trouvent."
+      },
+      "catalog": {
+        "title": "Santé du catalogue",
+        "progressBody": "{{approved}} sur {{target}} produits en ligne. Un catalogue plus riche attire plus de clients.",
+        "healthyBody": "{{count}} produits en ligne.",
+        "rejectedBody": "Corrigez les articles rejetés pour qu'ils soient visibles.",
+        "restockBody": "Un article populaire est en rupture. Réapprovisionnez-le tant que l'intérêt est fort.",
+        "manageCta": "Gérer les articles",
+        "pendingMeta": "{{count}} en attente",
+        "rejectedMeta": "{{count}} rejetés",
+        "emptyArt": "Catalogue vide"
+      },
+      "next": {
+        "label": "Prochaine étape",
+        "cannotAcceptTitle": "Terminez la configuration pour accepter des commandes",
+        "cannotAcceptMessage": "Votre boutique ne peut pas encore accepter de commandes. Complétez les étapes de vérification.",
+        "cannotAcceptCta": "Continuer la configuration",
+        "idReviewTitle": "Pièce d'identité en cours d'examen",
+        "idReviewMessage": "Nous examinons votre pièce d'identité. Vous pouvez vérifier le statut ou en téléverser une plus claire.",
+        "idReviewCta": "Voir le statut",
+        "mmPhoneTitle": "Confirmer le numéro Mobile Money",
+        "mmPhoneMessage": "Liez un numéro Mobile Money vérifié pour recevoir vos paiements.",
+        "mmPhoneCta": "Confirmer le numéro"
+      }
+    },
+    "tips": {
+      "rejectedTitle": "Astuce : corriger un produit rejeté",
+      "rejectedMessage": "Un ou plusieurs produits ont été rejetés. Mettez-les à jour et renvoyez-les.",
+      "rejectedCta": "Voir les articles",
+      "restockTitle": "Astuce : réapprovisionner un article populaire",
+      "restockMessage": "Des acheteurs consultent un article en rupture. Réapprovisionnez-le.",
+      "restockCta": "Gérer le stock",
+      "pendingTitle": "Astuce : articles en revue",
+      "pendingMessage": "{{count}} article(s) attendent une approbation.",
+      "pendingCta": "Voir les articles",
+      "catalogGoalTitle": "Astuce : atteindre 10 produits",
+      "catalogGoalMessage": "Un catalogue plus riche attire plus de clients. Ajoutez-en {{remaining}} pour atteindre 10.",
+      "catalogGoalCta": "Ajouter un produit",
+      "shareTitle": "Astuce : partagez votre boutique",
+      "shareMessage": "Partagez le lien de votre boutique pour que les clients commandent.",
+      "shareCta": "Partager",
+      "logoTitle": "Astuce : ajoutez votre logo",
+      "logoMessage": "Un logo aide les clients à reconnaître votre boutique.",
+      "logoCta": "Ajouter un logo",
+      "hoursTitle": "Astuce : définissez vos horaires",
+      "hoursMessage": "Les horaires indiquent quand vous êtes ouvert.",
+      "hoursCta": "Définir les horaires"
+    },
     "accountType": {
       "sectionTitle": "Compte & Forfait",
       "pageTitle": "Compte & Forfait",
