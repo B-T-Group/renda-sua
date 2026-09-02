@@ -4194,8 +4194,9 @@ export class NotificationsService {
   }
 
   /**
-   * Alerts the order operations audience that an order needs intervention:
-   * superusers, order managers, and the agent who referred the merchant.
+   * Alerts one randomly chosen order ops staff member (superuser or order
+   * manager, country-filtered) that an order needs intervention, plus the
+   * agent who referred the merchant when present.
    * Returns the per-recipient channel attempts so the incident can record them.
    */
   async notifyOpsOrderRisk(
@@ -4230,6 +4231,7 @@ export class NotificationsService {
       orderCountryCode: params.action?.shopCountryCode,
       referringAgentUserId: agentUserId,
       referringAgentLanguage: agent?.preferred_language,
+      singleStaffRecipient: true,
     });
   }
 
