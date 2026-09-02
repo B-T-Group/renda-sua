@@ -93,9 +93,9 @@ const SupportPage: React.FC = () => {
         'support.contact.phone.description',
         'Talk to our support team'
       ),
-      details: '+1 (555) 123-4567',
+      details: '+1 855-648-8855',
       hours: t('support.contact.phone.hours', 'Mon-Fri: 8AM-8PM EST'),
-      action: () => window.open('tel:+15551234567'),
+      action: () => window.open('tel:+18556488855'),
     },
     {
       icon: <Email color="primary" />,
@@ -112,9 +112,9 @@ const SupportPage: React.FC = () => {
         'support.contact.whatsapp.description',
         'Chat with us on WhatsApp'
       ),
-      details: '+1 (555) 123-4567',
+      details: '+1 855-648-8855',
       hours: t('support.contact.whatsapp.hours', 'Mon-Fri: 8AM-10PM EST'),
-      action: () => window.open('https://wa.me/15551234567'),
+      action: () => window.open('https://wa.me/18556488855'),
     },
     {
       icon: <LiveHelp color="info" />,
