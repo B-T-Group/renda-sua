@@ -141,6 +141,10 @@ export class WhatsAppInboundService {
         `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
       );
     }
+    if (type === 'interactive') {
+      await this.routeInteractive(from, message);
+      return;
+    }
     const text = message.text?.body;
     if (!text) return;
     await this.replyService.handleInboundText({
@@ -149,6 +153,25 @@ export class WhatsAppInboundService {
       messageId: message.id,
     });
     void value;
+  }
+
+  private async routeInteractive(
+    from: string,
+    message: WhatsAppInboundMessage
+  ): Promise<void> {
+    const interactive = message.interactive as
+      | {
+          button_reply?: { id?: string; title?: string };
+          list_reply?: { id?: string; title?: string };
+        }
+      | undefined;
+    const reply = interactive?.button_reply || interactive?.list_reply;
+    await this.replyService.handleInteractiveReply({
+      fromPhone: from,
+      buttonId: reply?.id,
+      buttonTitle: reply?.title,
+      messageId: message.id,
+    });
   }
 
   private mapMessageType(type?: string): WhatsAppMessageType {
@@ -173,7 +196,15 @@ export class WhatsAppInboundService {
   ): string {
     if (type === 'text') return message.text?.body?.trim() || '';
     if (type === 'location') return '[Location]';
-    if (type === 'interactive') return '[Interactive reply]';
+    if (type === 'interactive') {
+      const interactive = message.interactive as
+        | { button_reply?: { title?: string; id?: string } }
+        | undefined;
+      const title = interactive?.button_reply?.title?.trim();
+      const id = interactive?.button_reply?.id?.trim();
+      if (title && id) return `${title} (${id})`;
+      return title || id || '[Interactive reply]';
+    }
     if (type === 'image') return '[Image]';
     if (type === 'audio') return '[Audio]';
     if (type === 'video') return '[Video]';

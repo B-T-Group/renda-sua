@@ -28,6 +28,8 @@ import { NotificationsService } from './notifications.service';
     SmsModule,
     RbacModule,
     forwardRef(() => WhatsAppModule),
+    // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
+    forwardRef(() => require('../orders/orders.module').OrdersModule),
   ],
   providers: [
     NotificationsService,

@@ -9,7 +9,7 @@ import { MerchantLifecycleService } from './merchant-lifecycle.service';
 @Module({
   imports: [
     HasuraModule,
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
     LaunchPromoModule,
     forwardRef(() => StripePaymentsModule),
     forwardRef(() => BusinessContractsModule),

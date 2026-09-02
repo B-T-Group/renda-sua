@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Container,
+  Stack,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -13,6 +14,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
 import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
+import { useBusinessReachability } from '../../hooks/useBusinessReachability';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import AiImageCleanupPendingCard from '../business/AiImageCleanupPendingCard';
@@ -67,12 +69,18 @@ const BusinessDashboard: React.FC = () => {
     loading: verificationLoading,
     refresh: refreshVerification,
   } = useBusinessVerification(!!profile?.business?.id);
+  const { reachability } = useBusinessReachability(!!profile?.business?.id);
   const setupMode = isSetupMode(verificationStatus);
   // Avoid flashing operational modules before verification status resolves.
   const showOperationalModules = !verificationLoading && !setupMode;
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const goLiveDismissedRef = useRef(false);
   const canAcceptOrders = verificationStatus?.can_accept_orders === true;
+  const missingPush = !reachability.hasPush;
+  const missingWhatsapp = !reachability.whatsappReady;
+  const missingBothReachability = missingPush && missingWhatsapp;
+  const showReachabilityBanner =
+    showOperationalModules && canAcceptOrders && (missingPush || missingWhatsapp);
 
   const handleSetupRefresh = useCallback(async () => {
     try {
@@ -220,6 +228,53 @@ const BusinessDashboard: React.FC = () => {
 
       {showOperationalModules ? <BusinessAccountTypeLink /> : null}
 
+      {showReachabilityBanner ? (
+        <Alert
+          severity={missingBothReachability ? 'error' : 'warning'}
+          sx={{ mb: 2 }}
+          action={
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => navigate('/settings/notifications')}
+              >
+                {t(
+                  'business.dashboard.reachability.openNotifications',
+                  'Notification settings'
+                )}
+              </Button>
+              {reachability.locationAlertPhoneSet === false ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => navigate('/business/locations')}
+                >
+                  {t('business.dashboard.reachability.openLocations', 'Locations')}
+                </Button>
+              ) : null}
+            </Stack>
+          }
+        >
+          <Typography variant="body2">
+            {missingBothReachability
+              ? t(
+                  'business.dashboard.reachability.missingBoth',
+                  'New orders can be missed on this device because both browser push and WhatsApp order alerts are not ready.'
+                )
+              : missingPush
+                ? t(
+                    'business.dashboard.reachability.missingPush',
+                    'Browser push notifications are not ready on this device. Keep WhatsApp alerts on so your team still gets order interrupts.'
+                  )
+                : t(
+                    'business.dashboard.reachability.missingWhatsapp',
+                    'WhatsApp order alerts are not ready. Turn them on so your kitchen has a backup when browser push is missed.'
+                  )}
+          </Typography>
+        </Alert>
+      ) : null}
+
       {showOperationalModules ? (
         <BusinessExcitementStats
           clientCount={
@@ -254,6 +309,7 @@ const BusinessDashboard: React.FC = () => {
           status={verificationStatus}
           mainInterest={mainInterest}
           businessId={profile.business.id}
+          reachability={reachability}
           hasAnyItem={
             mainInterest === 'rent_items'
               ? rentalItemCount > 0

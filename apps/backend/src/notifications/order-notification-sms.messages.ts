@@ -9,6 +9,42 @@ export function smsOrderDelivered(
     : `Rendasua: order ${orderNumber} delivered. Thank you!`;
 }
 
+export function smsBusinessOrderCreated(
+  orderNumber: string,
+  locale: EmailLocale,
+  timeoutMinutes?: number | null
+): string {
+  const window =
+    typeof timeoutMinutes === 'number' && timeoutMinutes > 0
+      ? locale === 'fr'
+        ? `${timeoutMinutes} min`
+        : `${timeoutMinutes} min`
+      : locale === 'fr'
+        ? 'bientôt'
+        : 'soon';
+  return locale === 'fr'
+    ? `Rendasua: nouvelle commande ${orderNumber}. Confirmez sous ${window} dans l'app ou WhatsApp.`
+    : `Rendasua: new order ${orderNumber}. Confirm within ${window} in the app or WhatsApp.`;
+}
+
+export function smsBusinessOrderReminder(
+  orderNumber: string,
+  locale: EmailLocale,
+  remainingMinutes?: number | null
+): string {
+  const rem =
+    typeof remainingMinutes === 'number' && remainingMinutes > 0
+      ? locale === 'fr'
+        ? `${remainingMinutes} min restantes`
+        : `${remainingMinutes} min left`
+      : locale === 'fr'
+        ? 'délai bientôt écoulé'
+        : 'deadline soon';
+  return locale === 'fr'
+    ? `Rendasua: rappel commande ${orderNumber} (${rem}). Confirmez maintenant.`
+    : `Rendasua: reminder for order ${orderNumber} (${rem}). Confirm now.`;
+}
+
 export function smsOrderComplete(
   orderNumber: string,
   locale: EmailLocale
