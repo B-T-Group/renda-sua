@@ -28,6 +28,16 @@ export interface DashboardAggregates {
   agentsUnverified?: number;
   businessesVerified?: number;
   businessesNotVerified?: number;
+  approvedItemCount?: number;
+  approvedRentalCount?: number;
+  hasLogo?: boolean;
+  hasOperatingHours?: boolean;
+  lastCatalogItemAt?: string | null;
+  itemsNeedingAiCleanupCount?: number;
+  pendingItemCount?: number;
+  rejectedItemCount?: number;
+  topViewedOutOfStockCount?: number;
+  tipsRemindersEnabled?: boolean;
 }
 
 export function useDashboardAggregates(businessId: string | undefined) {

@@ -2081,6 +2081,59 @@
     "successMessage": "Your profile was created successfully. Redirecting to your dashboard…"
   },
   "business": {
+    "quietHome": {
+      "reach": {
+        "title": "Store reach",
+        "shareCta": "Share store",
+        "zeroViewsHint": "Share your shop so customers can find you."
+      },
+      "catalog": {
+        "title": "Catalog health",
+        "progressBody": "{{approved}} of {{target}} products live. Fuller catalogs get more discovery.",
+        "healthyBody": "{{count}} products live.",
+        "rejectedBody": "Fix rejected items so they can go live for customers.",
+        "restockBody": "A popular item is out of stock. Restock it while interest is high.",
+        "manageCta": "Manage items",
+        "pendingMeta": "{{count}} pending",
+        "rejectedMeta": "{{count}} rejected",
+        "emptyArt": "Empty catalog"
+      },
+      "next": {
+        "label": "Next step",
+        "cannotAcceptTitle": "Finish setup to accept orders",
+        "cannotAcceptMessage": "Your store is not yet able to accept orders. Complete the remaining verification steps.",
+        "cannotAcceptCta": "Continue setup",
+        "idReviewTitle": "ID under review",
+        "idReviewMessage": "We are reviewing your ID. You can check status or upload a clearer document.",
+        "idReviewCta": "View ID status",
+        "mmPhoneTitle": "Confirm mobile money number",
+        "mmPhoneMessage": "Link a verified mobile money number so payouts reach you when orders come in.",
+        "mmPhoneCta": "Confirm number"
+      }
+    },
+    "tips": {
+      "rejectedTitle": "Tip: fix a rejected product",
+      "rejectedMessage": "One or more products were rejected. Update them and resubmit so they can go live.",
+      "rejectedCta": "Review items",
+      "restockTitle": "Tip: restock a popular item",
+      "restockMessage": "Buyers are viewing an item that is out of stock. Restock it while interest is high.",
+      "restockCta": "Manage inventory",
+      "pendingTitle": "Tip: items under review",
+      "pendingMessage": "{{count}} item(s) are waiting for approval. We will notify you when they are live.",
+      "pendingCta": "View items",
+      "catalogGoalTitle": "Tip: reach your first 10 products",
+      "catalogGoalMessage": "Stores with a fuller catalog get more discovery. Add {{remaining}} more to hit 10.",
+      "catalogGoalCta": "Add a product",
+      "shareTitle": "Tip: share your storefront",
+      "shareMessage": "Share your shop link so customers outside the app can browse and order.",
+      "shareCta": "Share store",
+      "logoTitle": "Tip: add your business logo",
+      "logoMessage": "A logo helps buyers recognize your store in search and on your storefront.",
+      "logoCta": "Add logo",
+      "hoursTitle": "Tip: set your business hours",
+      "hoursMessage": "Hours tell customers when you are open and improve delivery-slot matching.",
+      "hoursCta": "Set hours"
+    },
     "accountType": {
       "sectionTitle": "Account & Plan",
       "pageTitle": "Account & Plan",
