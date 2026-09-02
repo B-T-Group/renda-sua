@@ -8934,7 +8934,8 @@ export class OrdersService {
     } catch (error: any) {
       await this.compensateUnpaidCreate(
         order.id,
-        'Create failed: inventory reservation error'
+        'Create failed: inventory reservation error',
+        { skipInventoryRelease: true }
       );
       throw error;
     }
@@ -9330,7 +9331,8 @@ export class OrdersService {
 
   private async compensateUnpaidCreate(
     orderId: string,
-    notes: string
+    notes: string,
+    options?: { skipInventoryRelease?: boolean }
   ): Promise<void> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
@@ -9354,7 +9356,8 @@ export class OrdersService {
     try {
       await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
         orderId,
-        notes
+        notes,
+        { skipInventoryRelease: options?.skipInventoryRelease }
       );
     } catch (error: any) {
       this.logger.error(
@@ -11141,55 +11144,113 @@ export class OrdersService {
     const validItems = orderItems.filter(
       (item) => item.business_inventory_id && item.quantity
     );
-
     if (validItems.length === 0) {
       this.logger.warn('No valid items to update reserved quantities for');
       return;
     }
+    this.warnInvalidReservedQuantityItems(orderItems);
+    const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
+    if (operation === 'increment') {
+      await this.reserveInventoryRows(quantityChanges);
+      return;
+    }
+    await this.applyInventoryQuantityChanges(quantityChanges, 'decrement');
+  }
 
-    const invalidItems = orderItems.filter(
+  private warnInvalidReservedQuantityItems(orderItems: any[]): void {
+    const invalidCount = orderItems.filter(
       (item) => !item.business_inventory_id || !item.quantity
-    );
-    if (invalidItems.length > 0) {
+    ).length;
+    if (invalidCount > 0) {
       this.logger.warn(
-        `Skipping ${invalidItems.length} items with missing reserved-quantity data`
+        `Skipping ${invalidCount} items with missing reserved-quantity data`
       );
     }
+  }
 
-    const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
+  private async reserveInventoryRows(
+    quantityChanges: Map<string, number>
+  ): Promise<void> {
+    const reserved: Array<{ inventoryId: string; quantity: number }> = [];
+    try {
+      for (const [inventoryId, quantity] of quantityChanges) {
+        await this.applyInventoryReservation(inventoryId, quantity, 'increment');
+        reserved.push({ inventoryId, quantity });
+      }
+    } catch (error: any) {
+      await this.releasePartialReserve(reserved);
+      throw error;
+    }
+  }
+
+  private async applyInventoryQuantityChanges(
+    quantityChanges: Map<string, number>,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    for (const [inventoryId, quantity] of quantityChanges) {
+      await this.applyInventoryReservation(inventoryId, quantity, operation);
+    }
+  }
+
+  private async releasePartialReserve(
+    reserved: Array<{ inventoryId: string; quantity: number }>
+  ): Promise<void> {
+    for (const row of reserved) {
+      try {
+        await this.applyInventoryReservation(
+          row.inventoryId,
+          row.quantity,
+          'decrement'
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to roll back reserve for ${row.inventoryId}: ${error?.message}`
+        );
+      }
+    }
+  }
+
+  private async applyInventoryReservation(
+    inventoryId: string,
+    quantity: number,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
     const fn =
       operation === 'increment'
         ? 'try_reserve_business_inventory'
         : 'try_release_business_inventory';
-
-    for (const [inventoryId, quantity] of quantityChanges) {
-      const result = await this.hasuraSystemService.executeMutation<{
-        [key: string]: Array<{ id: string }>;
-      }>(
-        `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
-          ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
-            id
-          }
-        }`,
-        { inventoryId, qty: quantity }
-      );
-      if (!result[fn]?.length) {
-        throw new HttpException(
-          {
-            success: false,
-            message:
-              operation === 'increment'
-                ? 'Insufficient stock to reserve for this order'
-                : 'Could not release reserved inventory',
-            error: 'INVENTORY_RESERVATION_FAILED',
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      this.logger.log(
-        `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
-      );
+    const result = await this.hasuraSystemService.executeMutation<{
+      [key: string]: Array<{ id: string }>;
+    }>(
+      `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
+        ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
+          id
+        }
+      }`,
+      { inventoryId, qty: quantity }
+    );
+    if (!result[fn]?.length) {
+      throw this.inventoryReservationFailed(operation);
     }
+    this.logger.log(
+      `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
+    );
+  }
+
+  private inventoryReservationFailed(
+    operation: 'increment' | 'decrement'
+  ): HttpException {
+    return new HttpException(
+      {
+        success: false,
+        message:
+          operation === 'increment'
+            ? 'Insufficient stock to reserve for this order'
+            : 'Could not release reserved inventory',
+        error: 'INVENTORY_RESERVATION_FAILED',
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**

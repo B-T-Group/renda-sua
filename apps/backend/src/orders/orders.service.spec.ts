@@ -571,6 +571,34 @@ describe('OrdersService', () => {
       finalizeSpy.mockRestore();
     });
 
+    it('tells cleanup not to release inventory after a reserve failure', async () => {
+      const orderCleanup = (service as any).orderCleanupService as {
+        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
+      };
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        id: 'order-123',
+        order_number: '12345678',
+        current_status: 'pending_payment',
+        payment_status: 'pending',
+        client: { user_id: 'client-456' },
+      });
+      jest
+        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
+        .mockResolvedValue(undefined);
+
+      await (service as any).compensateUnpaidCreate(
+        'order-123',
+        'Create failed: inventory reservation error',
+        { skipInventoryRelease: true }
+      );
+
+      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).toHaveBeenCalledWith(
+        'order-123',
+        'Create failed: inventory reservation error',
+        { skipInventoryRelease: true }
+      );
+    });
+
     it('does not release holds when wallet finalize fails after order is paid', async () => {
       const orderCleanup = (service as any).orderCleanupService as {
         cancelUnpaidPendingPaymentAsSystem: jest.Mock;
@@ -2243,6 +2271,37 @@ describe('OrdersService', () => {
         message: 'Business address not found',
       });
       expect(getAddressesByIds).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('updateReservedQuantities', () => {
+    it('releases earlier lines when a later reserve is out of stock', async () => {
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          try_reserve_business_inventory: [{ id: 'inv-a' }],
+        })
+        .mockResolvedValueOnce({
+          try_reserve_business_inventory: [],
+        })
+        .mockResolvedValueOnce({
+          try_release_business_inventory: [{ id: 'inv-a' }],
+        });
+
+      await expect(
+        service.updateReservedQuantities(
+          [
+            { business_inventory_id: 'inv-a', quantity: 1 },
+            { business_inventory_id: 'inv-b', quantity: 2 },
+          ],
+          'increment'
+        )
+      ).rejects.toBeInstanceOf(HttpException);
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('try_release_business_inventory'),
+        { inventoryId: 'inv-a', qty: 1 }
+      );
     });
   });
 });

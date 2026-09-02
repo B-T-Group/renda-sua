@@ -576,6 +576,85 @@ describe('OrderCleanupService', () => {
       });
     });
 
+    it('does not decrement reserved qty when skipInventoryRelease is set', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+            order_items: [
+              { id: 'oi1', business_inventory_id: 'inv-a', quantity: 1 },
+              { id: 'oi2', business_inventory_id: 'inv-b', quantity: 2 },
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Create failed: inventory reservation error',
+        { skipInventoryRelease: true }
+      );
+
+      expect(result).toEqual({ cancelled: true });
+      const reservedWrites = hasura.executeMutation.mock.calls.filter((call) =>
+        String(call[0]).includes('reserved_quantity')
+      );
+      expect(reservedWrites).toHaveLength(0);
+    });
+
+    it('decrements reserved qty for a fully reserved unpaid timeout', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+            order_items: [
+              { id: 'oi1', business_inventory_id: 'inv-b', quantity: 2 },
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        })
+        .mockResolvedValueOnce({
+          business_inventory: [{ id: 'inv-b', reserved_quantity: 5 }],
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      await service.cancelUnpaidPendingPaymentAsSystem('o1', 'Timeout');
+
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('reserved_quantity'),
+        { id: 'inv-b', reservedQuantity: 3 }
+      );
+    });
+
     it('skips payment_failed_grace until grace elapses', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
         orders_by_pk: {
