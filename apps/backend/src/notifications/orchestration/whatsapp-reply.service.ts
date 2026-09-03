@@ -106,11 +106,13 @@ export class WhatsAppReplyService {
     buttonId?: string;
     buttonTitle?: string;
     messageId?: string;
+    contextMessageId?: string;
   }): Promise<{ handled: boolean; command: WhatsAppCommand; userId?: string }> {
     return this.dispatch({
       fromPhone: params.fromPhone,
       command: this.parseButtonReply(params.buttonId, params.buttonTitle),
       messageId: params.messageId,
+      contextMessageId: params.contextMessageId,
     });
   }
 
@@ -118,6 +120,7 @@ export class WhatsAppReplyService {
     fromPhone: string;
     command: WhatsAppCommand;
     messageId?: string;
+    contextMessageId?: string;
   }): Promise<{ handled: boolean; command: WhatsAppCommand; userId?: string }> {
     const { command } = params;
     const userId = await this.prefs.findUserIdByPhoneE164(params.fromPhone);
@@ -136,7 +139,8 @@ export class WhatsAppReplyService {
         action,
         command,
         userId,
-        params.messageId
+        params.messageId,
+        params.contextMessageId
       );
     }
 
@@ -167,7 +171,8 @@ export class WhatsAppReplyService {
     action: MerchantWaAction,
     command: WhatsAppCommand,
     userId: string | null,
-    messageId?: string
+    messageId?: string,
+    contextMessageId?: string
   ): Promise<{ handled: boolean; command: WhatsAppCommand; userId?: string }> {
     if (!this.orderActions) {
       this.logger.warn('WhatsAppOrderActionService unavailable');
@@ -176,6 +181,7 @@ export class WhatsAppReplyService {
     const result = await this.orderActions.handleAction({
       fromPhone,
       action,
+      contextMessageId,
     });
     await this.ackSession(fromPhone, result.message);
     if (userId) {

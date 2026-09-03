@@ -150,6 +150,7 @@ describe('WhatsAppInboundService', () => {
                     from: '15557654321',
                     id: 'wamid.btn',
                     type: 'interactive',
+                    context: { id: 'wamid.out.order-b' },
                     interactive: {
                       type: 'button_reply',
                       button_reply: { id: 'confirm', title: 'Confirm' },
@@ -174,6 +175,7 @@ describe('WhatsAppInboundService', () => {
       buttonId: 'confirm',
       buttonTitle: 'Confirm',
       messageId: 'wamid.btn',
+      contextMessageId: 'wamid.out.order-b',
     });
   });
 });

@@ -116,6 +116,8 @@ export class NotificationOrchestrator {
         to: phone,
         locale: request.locale,
         payload: request.channels.whatsapp,
+        entityId: request.entityId,
+        entityType: request.entityType,
       });
     }
     return {

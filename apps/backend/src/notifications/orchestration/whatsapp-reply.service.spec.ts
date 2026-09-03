@@ -64,6 +64,28 @@ describe('WhatsAppReplyService', () => {
     expect(orderActions.handleAction).toHaveBeenCalledWith({
       fromPhone: '15551234567',
       action: 'CONFIRM',
+      contextMessageId: undefined,
+    });
+    expect(result.handled).toBe(true);
+  });
+
+  it('forwards interactive context wamid to order actions', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    orderActions.handleAction.mockResolvedValue({
+      handled: true,
+      message: 'Order ORD-2 confirmed.',
+    });
+    const result = await service.handleInteractiveReply({
+      fromPhone: '15551234567',
+      buttonId: 'confirm',
+      buttonTitle: 'Confirm',
+      messageId: 'wamid.btn',
+      contextMessageId: 'wamid.out.order-2',
+    });
+    expect(orderActions.handleAction).toHaveBeenCalledWith({
+      fromPhone: '15551234567',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.order-2',
     });
     expect(result.handled).toBe(true);
   });

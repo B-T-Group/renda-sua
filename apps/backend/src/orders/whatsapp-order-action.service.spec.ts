@@ -116,4 +116,74 @@ describe('WhatsAppOrderActionService', () => {
     expect(result.handled).toBe(true);
     expect(orders.confirmOrder).toHaveBeenCalled();
   });
+
+  it('confirms the order bound to the WhatsApp context wamid', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [
+          { entity_id: 'o-new' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o-new',
+          order_number: 'ORD-NEW',
+          current_status: 'pending',
+          acceptance_state: 'awaiting_acceptance',
+          business_id: 'b1',
+          business_location_id: 'loc1',
+          fulfillment_timing: 'asap',
+          fulfillment_method: 'pickup',
+          delivery_time_windows: [],
+          business_location: {
+            id: 'loc1',
+            business_id: 'b1',
+            order_alert_phone: null,
+            business: { user_id: 'u1' },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.newer',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-new' }),
+      expect.objectContaining({ businessId: 'b1', locationId: 'loc1' })
+    );
+    expect(result.message).toMatch(/ORD-NEW/);
+  });
+
+  it('does not fall back to an older order when the bound order is no longer pending', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'o-new' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o-new',
+          order_number: 'ORD-NEW',
+          current_status: 'confirmed',
+          acceptance_state: 'accepted',
+          business_id: 'b1',
+          business_location_id: 'loc1',
+          fulfillment_timing: 'asap',
+          fulfillment_method: 'pickup',
+          delivery_time_windows: [],
+        },
+      });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'DECLINE',
+      contextMessageId: 'wamid.out.newer',
+    });
+    expect(orders.cancelOrder).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/ORD-NEW/);
+    expect(result.message).toMatch(/no longer awaiting/i);
+  });
 });
