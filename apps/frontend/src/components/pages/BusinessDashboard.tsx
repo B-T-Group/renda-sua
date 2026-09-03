@@ -163,22 +163,39 @@ const BusinessDashboard: React.FC = () => {
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
   const quietCatalogModules = useMemo(() => {
-    const catalogEntry = isRentalFocused
-      ? rentalModules.filter((m) => m.path.includes('/rentals/catalog'))
-      : primaryCatalogModules.filter(
-          (m) =>
-            m.path.includes('/business/items') || m.path === '/business/items'
-        );
     const locations = primaryCatalogModules.filter((m) =>
       m.path.includes('location')
     );
-    const picked = [...catalogEntry, ...locations];
+    const rentalCatalog = rentalModules.filter((m) =>
+      m.path.includes('/rentals/catalog')
+    );
+    const saleItems = primaryCatalogModules.filter(
+      (m) =>
+        m.path.includes('/business/items') || m.path === '/business/items'
+    );
+    const secondaryCount = isRentalFocused
+      ? aggregates?.itemCount ?? 0
+      : aggregates?.rentalItemCount ?? 0;
+    const primary = isRentalFocused ? rentalCatalog : saleItems;
+    const secondary =
+      secondaryCount > 0
+        ? isRentalFocused
+          ? saleItems
+          : rentalCatalog
+        : [];
+    const picked = [...primary, ...secondary, ...locations];
     return picked.length > 0
       ? picked
       : isRentalFocused
         ? [...rentalModules.slice(0, 1), ...locations]
         : primaryCatalogModules.slice(0, 2);
-  }, [primaryCatalogModules, rentalModules, isRentalFocused]);
+  }, [
+    primaryCatalogModules,
+    rentalModules,
+    isRentalFocused,
+    aggregates?.itemCount,
+    aggregates?.rentalItemCount,
+  ]);
 
   const catalogHealth = useMemo(
     () => resolveCatalogHealth(aggregates, mainInterest),
@@ -296,6 +313,14 @@ const BusinessDashboard: React.FC = () => {
     }
     if (id === 'share_store' && profile?.business?.id) {
       navigate(`/store/${profile.business.id}?preview=1`);
+      return;
+    }
+    if (id === 'offer_rentals') {
+      navigate('/business/rentals/catalog');
+      return;
+    }
+    if (id === 'offer_sale_items') {
+      navigate('/business/items');
     }
   }, [
     quietNextAction,

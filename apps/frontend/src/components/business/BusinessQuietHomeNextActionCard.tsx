@@ -109,6 +109,24 @@ const COPY: Record<
     ctaKey: 'business.tips.hoursCta',
     cta: 'Set hours',
   },
+  offer_rentals: {
+    titleKey: 'business.quietHome.next.offerRentalsTitle',
+    title: 'Also offer rentals?',
+    messageKey: 'business.quietHome.next.offerRentalsMessage',
+    message:
+      'You can add rental items anytime — they live alongside your sale catalog.',
+    ctaKey: 'business.quietHome.next.offerRentalsCta',
+    cta: 'Open rentals',
+  },
+  offer_sale_items: {
+    titleKey: 'business.quietHome.next.offerSaleItemsTitle',
+    title: 'Also sell products?',
+    messageKey: 'business.quietHome.next.offerSaleItemsMessage',
+    message:
+      'You can add sale items anytime — they live alongside your rental catalog.',
+    ctaKey: 'business.quietHome.next.offerSaleItemsCta',
+    cta: 'Open items',
+  },
 };
 
 export function BusinessQuietHomeNextActionCard({ action, onAction }: Props) {

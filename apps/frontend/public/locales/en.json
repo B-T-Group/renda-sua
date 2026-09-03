@@ -2108,7 +2108,13 @@
         "idReviewCta": "View ID status",
         "mmPhoneTitle": "Confirm mobile money number",
         "mmPhoneMessage": "Link a verified mobile money number so payouts reach you when orders come in.",
-        "mmPhoneCta": "Confirm number"
+        "mmPhoneCta": "Confirm number",
+        "offerRentalsTitle": "Also offer rentals?",
+        "offerRentalsMessage": "You can add rental items anytime — they live alongside your sale catalog.",
+        "offerRentalsCta": "Open rentals",
+        "offerSaleItemsTitle": "Also sell products?",
+        "offerSaleItemsMessage": "You can add sale items anytime — they live alongside your rental catalog.",
+        "offerSaleItemsCta": "Open items"
       }
     },
     "tips": {
