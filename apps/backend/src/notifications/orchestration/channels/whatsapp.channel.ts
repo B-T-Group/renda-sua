@@ -40,6 +40,8 @@ export class WhatsAppChannel {
     to: string;
     locale?: string;
     payload: WhatsAppChannelPayload;
+    entityId?: string;
+    entityType?: string;
     /** Admin/ops test sends skip the product WHATSAPP_NOTIFICATIONS_ENABLED flag. */
     ignoreFeatureFlag?: boolean;
   }): Promise<ChannelAttemptResult> {
@@ -82,6 +84,8 @@ export class WhatsAppChannel {
       to: string;
       locale?: string;
       payload: WhatsAppChannelPayload;
+      entityId?: string;
+      entityType?: string;
     },
     templateName: string
   ): Promise<ChannelAttemptResult> {
@@ -121,7 +125,12 @@ export class WhatsAppChannel {
   }
 
   private async recordTemplateOutbound(
-    params: { to: string; payload: WhatsAppChannelPayload },
+    params: {
+      to: string;
+      payload: WhatsAppChannelPayload;
+      entityId?: string;
+      entityType?: string;
+    },
     templateName: string,
     wamid?: string
   ): Promise<void> {
@@ -138,6 +147,9 @@ export class WhatsAppChannel {
           templateKey: params.payload.templateKey,
           templateName,
           variables: params.payload.variables ?? {},
+          entityId: params.entityId,
+          entityType: params.entityType,
+          orderId: params.entityType === 'order' ? params.entityId : undefined,
         },
         status: 'sent',
       });

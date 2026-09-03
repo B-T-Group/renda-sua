@@ -1653,7 +1653,7 @@ export class NotificationsService {
           locale
         );
         if (!metaName) continue;
-        await this.whatsappService.sendTemplateMessage({
+        const result = await this.whatsappService.sendTemplateMessage({
           to: phone,
           templateName: metaName,
           languageCode: locale === 'fr' ? 'fr' : 'en',
@@ -1667,12 +1667,46 @@ export class NotificationsService {
                 : undefined,
           }),
         });
+        await this.bindWhatsAppMessageToOrder(
+          result.messages[0]?.id,
+          data.orderId
+        );
         return;
       } catch (error: any) {
         this.logger.warn(
           `Location alert WA ${templateKey} failed: ${error?.message ?? error}`
         );
       }
+    }
+  }
+
+  /** Persist wamid → order so WhatsApp button taps act on that order. */
+  private async bindWhatsAppMessageToOrder(
+    wamid: string | undefined,
+    orderId?: string | null
+  ): Promise<void> {
+    if (!wamid || !orderId) return;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation BindWaOrder($object: notification_events_insert_input!) {
+          insert_notification_events_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            notification_type: 'order.created',
+            category: 'actionable',
+            channel: 'whatsapp',
+            status: 'sent',
+            provider_message_id: wamid,
+            entity_type: 'order',
+            entity_id: orderId,
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `bindWhatsAppMessageToOrder failed: ${error?.message ?? error}`
+      );
     }
   }
 

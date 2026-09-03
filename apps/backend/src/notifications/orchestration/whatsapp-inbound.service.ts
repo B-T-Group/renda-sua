@@ -23,6 +23,7 @@ interface WhatsAppInboundMessage {
   id?: string;
   type?: string;
   text?: { body?: string };
+  context?: { id?: string; from?: string };
   [key: string]: unknown;
 }
 
@@ -171,6 +172,7 @@ export class WhatsAppInboundService {
       buttonId: reply?.id,
       buttonTitle: reply?.title,
       messageId: message.id,
+      contextMessageId: message.context?.id?.trim() || undefined,
     });
   }
 

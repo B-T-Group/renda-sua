@@ -124,6 +124,28 @@ describe('WhatsAppChannel', () => {
     });
   });
 
+  it('persists outbound wamid with order entity id', async () => {
+    await channel.send({
+      to: '+237600000001',
+      payload: {
+        templateKey: 'order_action_business',
+        variables: { orderNumber: '42' },
+      },
+      entityType: 'order',
+      entityId: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(inbox.persistOutbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wamid: 'wamid.1',
+        rawPayload: expect.objectContaining({
+          orderId: '11111111-1111-1111-1111-111111111111',
+          entityId: '11111111-1111-1111-1111-111111111111',
+          entityType: 'order',
+        }),
+      })
+    );
+  });
+
   it('returns failed status when Graph send throws', async () => {
     whatsAppService.sendTemplateMessage.mockRejectedValue(
       new Error('Graph timeout')
