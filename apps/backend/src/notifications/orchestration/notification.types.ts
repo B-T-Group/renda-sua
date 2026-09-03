@@ -30,6 +30,7 @@ export type NotificationType =
   | 'order.auto_declined'
   | 'order.payment_failed'
   | 'order.pickup.reminder'
+  | 'order.store_pickup.reminder'
   | 'order.pickup.at_risk'
   | 'order.pickup.overdue'
   | 'order.pickup.reassigned'

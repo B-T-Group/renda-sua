@@ -5445,6 +5445,13 @@
       "dueAt": "Pickup due by {{time}}",
       "needMoreTime": "Need more time",
       "timeline": "Operational timeline"
+    },
+    "storePickupReminder": {
+      "title": "Your order is waiting",
+      "body": "This store pickup order is still ready. Message the business to let them know you are coming, or cancel if you can no longer collect it.",
+      "messageBusiness": "Message the business",
+      "cancelOrder": "Cancel order",
+      "draftMessage": "Hi! Just confirming I'm still coming to pick up order {{orderNumber}}. See you soon."
     }
   },
   "items": {

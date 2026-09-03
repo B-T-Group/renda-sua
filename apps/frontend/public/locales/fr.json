@@ -5178,6 +5178,13 @@
       "dueAt": "Collecte prévue avant {{time}}",
       "needMoreTime": "Besoin de plus de temps",
       "timeline": "Chronologie opérationnelle"
+    },
+    "storePickupReminder": {
+      "title": "Votre commande vous attend",
+      "body": "Cette commande à retirer en magasin est toujours prête. Écrivez au commerce pour confirmer votre venue, ou annulez si vous ne pouvez plus la récupérer.",
+      "messageBusiness": "Écrire au commerce",
+      "cancelOrder": "Annuler la commande",
+      "draftMessage": "Bonjour ! Je confirme que je viens toujours récupérer la commande {{orderNumber}}. À bientôt."
     }
   },
   "items": {

@@ -151,6 +151,12 @@ export interface OrderConfig {
   cleanupBatchLimit: number;
   /** When false, OrderCleanupCronService no-ops. */
   cleanupEnabled: boolean;
+  /** Days a store-pickup order may stay ready_for_pickup before auto-cancel. */
+  storePickupCancelDays: number;
+  /** Hours between client store-pickup reminder pushes. */
+  storePickupReminderHours: number;
+  /** When false, StorePickupReminderCronService no-ops. */
+  storePickupReminderEnabled: boolean;
   /** Travel minutes added to prep for ASAP delivery ETA. */
   asapTravelBufferMinutes: number;
   /** Grace minutes after ready for ASAP pickup-by. */
@@ -786,6 +792,17 @@ export default (): Configuration => {
       cleanupEnabled:
         process.env.ORDER_CLEANUP_ENABLED !== 'false' &&
         process.env.ORDER_CLEANUP_ENABLED !== '0',
+      storePickupCancelDays: parseInt(
+        process.env.ORDER_STORE_PICKUP_CANCEL_DAYS || '7',
+        10
+      ),
+      storePickupReminderHours: parseInt(
+        process.env.ORDER_STORE_PICKUP_REMINDER_HOURS || '24',
+        10
+      ),
+      storePickupReminderEnabled:
+        process.env.ORDER_STORE_PICKUP_REMINDER_ENABLED !== 'false' &&
+        process.env.ORDER_STORE_PICKUP_REMINDER_ENABLED !== '0',
       asapTravelBufferMinutes: parseInt(
         process.env.ORDER_ASAP_TRAVEL_BUFFER_MINUTES || '30',
         10

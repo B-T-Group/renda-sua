@@ -1190,6 +1190,58 @@ export class NotificationsService {
     );
   }
 
+  /** Daily reminder for clients to collect a store-pickup order. */
+  async sendStorePickupReminderPush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const isFr = locale === 'fr';
+    const title = isFr
+      ? 'Commande à récupérer'
+      : 'Order ready for pickup';
+    const body = isFr
+      ? `Votre commande ${params.orderNumber} vous attend. Touchez pour annuler, écrire au commerce, ou fermer.`
+      : `Your order ${params.orderNumber} is waiting. Tap to cancel, message the store, or close.`;
+    const path = `/orders/${params.orderId}?pickupReminder=1`;
+    try {
+      await this.orchestrator.notify({
+        type: 'order.store_pickup.reminder',
+        category: 'actionable',
+        recipientUserId: userId,
+        locale,
+        preferenceCategory: 'order_updates',
+        entityType: 'order',
+        entityId: params.orderId,
+        dedupeKey: `order.store_pickup.reminder:${params.orderId}:${new Date()
+          .toISOString()
+          .slice(0, 13)}`,
+        channels: {
+          push: {
+            title,
+            body,
+            interruptible: true,
+            data: {
+              url: path,
+              orderId: params.orderId,
+              orderNumber: params.orderNumber,
+              event: 'store_pickup_reminder',
+              persona: 'client',
+            },
+          },
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendStorePickupReminderPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   async sendPickupAtRiskAgentPush(params: {
     agentUserId?: string | null;
     orderId: string;
