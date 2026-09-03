@@ -91,6 +91,7 @@ const ORDER_INTERRUPT_EVENTS = new Set([
   'order_acceptance_activate',
   'order_acceptance_reminder',
 ]);
+const STORE_PICKUP_REMINDER_EVENT = 'store_pickup_reminder';
 
 self.addEventListener('install', () => {
   // Activate new SW as soon as it’s ready.
@@ -151,6 +152,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     (async () => {
       await postOrderInterruptToClients(data, orderId);
+      await postStorePickupReminderToClients(data, orderId);
       try {
         await self.registration.showNotification(data.title || 'Rendasua', {
           body: data.body,
@@ -160,6 +162,12 @@ self.addEventListener('push', (event) => {
             url: data.url || '/',
             orderId,
             requestId,
+            event:
+              typeof data.event === 'string' ? data.event : undefined,
+            orderNumber:
+              typeof data.orderNumber === 'string'
+                ? data.orderNumber
+                : undefined,
           },
           tag: requestId
             ? `transfer-${requestId}`
@@ -178,17 +186,36 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || '/';
+  const clickEvent = event.notification.data?.event;
+  const orderId = event.notification.data?.orderId;
+  const orderNumber = event.notification.data?.orderNumber;
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      if (clickEvent === STORE_PICKUP_REMINDER_EVENT && orderId) {
         if (clientList.length > 0) {
-          clientList[0].focus();
-          clientList[0].navigate(url);
-        } else if (self.clients.openWindow) {
-          self.clients.openWindow(url);
+          await clientList[0].focus();
+          clientList.forEach((client) =>
+            client.postMessage({
+              type: 'store-pickup-reminder',
+              orderId,
+              orderNumber,
+              url,
+            })
+          );
+          return;
         }
-      })
+      }
+      if (clientList.length > 0) {
+        clientList[0].focus();
+        clientList[0].navigate(url);
+      } else if (self.clients.openWindow) {
+        self.clients.openWindow(url);
+      }
+    })()
   );
 });
 
@@ -268,6 +295,27 @@ async function postOrderInterruptToClients(data, orderId) {
         type: 'order-interrupt',
         event: eventName,
         orderId,
+        url: data?.url || '/',
+      })
+    );
+  } catch (error) {
+    // no-op
+  }
+}
+
+async function postStorePickupReminderToClients(data, orderId) {
+  if (data?.event !== STORE_PICKUP_REMINDER_EVENT || !orderId) return;
+  try {
+    const windowClients = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+    windowClients.forEach((client) =>
+      client.postMessage({
+        type: 'store-pickup-reminder',
+        orderId,
+        orderNumber:
+          typeof data?.orderNumber === 'string' ? data.orderNumber : undefined,
         url: data?.url || '/',
       })
     );

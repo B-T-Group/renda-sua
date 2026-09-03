@@ -239,6 +239,7 @@ select_permissions:
         - cancellation_notes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -326,6 +327,7 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -412,6 +414,7 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by

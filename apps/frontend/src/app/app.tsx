@@ -26,6 +26,7 @@ import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
 import StickyDownloadBar from '../components/common/StickyDownloadBar';
 import IncomingOrderOverlay from '../components/incoming-order/IncomingOrderOverlay';
+import StorePickupReminderOverlay from '../components/orders/StorePickupReminderOverlay';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
@@ -36,6 +37,7 @@ import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { useFlushPendingLike } from '../hooks/useFlushPendingLike';
 import { IncomingOrderInterruptProvider } from '../hooks/useIncomingOrderInterrupt';
+import { StorePickupReminderProvider } from '../hooks/useStorePickupReminder';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
@@ -184,6 +186,7 @@ function App() {
 
   return (
     <IncomingOrderInterruptProvider>
+      <StorePickupReminderProvider>
       <Box
         sx={{
           minHeight: '100vh',
@@ -1117,8 +1120,10 @@ function App() {
         />
 
         <IncomingOrderOverlay />
+        <StorePickupReminderOverlay />
         <StickyDownloadBar />
       </Box>
+      </StorePickupReminderProvider>
     </IncomingOrderInterruptProvider>
   );
 }
