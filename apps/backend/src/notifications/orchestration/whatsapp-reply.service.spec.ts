@@ -7,7 +7,10 @@ describe('WhatsAppReplyService', () => {
   };
   const analytics = { track: jest.fn() };
   const orderActions = { handleAction: jest.fn() };
-  const whatsapp = { isConfigured: () => false, sendSessionText: jest.fn() };
+  const whatsapp = {
+    isConfigured: jest.fn(() => false),
+    sendSessionText: jest.fn(),
+  };
   const service = new WhatsAppReplyService(
     prefs as any,
     analytics as any,
@@ -17,6 +20,7 @@ describe('WhatsAppReplyService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    whatsapp.isConfigured.mockReturnValue(false);
   });
 
   it('parses STOP and aliases', () => {
@@ -66,5 +70,56 @@ describe('WhatsAppReplyService', () => {
       action: 'CONFIRM',
     });
     expect(result.handled).toBe(true);
+  });
+
+  it('maps YES and NON to confirm and decline actions', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    orderActions.handleAction.mockResolvedValue({
+      handled: true,
+      message: 'ok',
+    });
+    await service.handleInboundText({ fromPhone: '1555', text: 'YES' });
+    await service.handleInboundText({ fromPhone: '1555', text: 'NON' });
+    expect(orderActions.handleAction).toHaveBeenNthCalledWith(1, {
+      fromPhone: '1555',
+      action: 'CONFIRM',
+    });
+    expect(orderActions.handleAction).toHaveBeenNthCalledWith(2, {
+      fromPhone: '1555',
+      action: 'DECLINE',
+    });
+  });
+
+  it('does not mutate orders for unknown text', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    const result = await service.handleInboundText({
+      fromPhone: '1555',
+      text: 'hello there',
+    });
+    expect(orderActions.handleAction).not.toHaveBeenCalled();
+    expect(result.command).toBe('UNKNOWN');
+  });
+
+  it('routes interactive Busy and acks when WhatsApp is configured', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    orderActions.handleAction.mockResolvedValue({
+      handled: true,
+      message: 'Order ORD-1: extra prep time added. Customer notified.',
+    });
+    whatsapp.isConfigured.mockReturnValue(true);
+    await service.handleInteractiveReply({
+      fromPhone: '1555',
+      buttonId: 'busy',
+      buttonTitle: 'Need more time',
+      messageId: 'wamid.busy',
+    });
+    expect(orderActions.handleAction).toHaveBeenCalledWith({
+      fromPhone: '1555',
+      action: 'BUSY',
+    });
+    expect(whatsapp.sendSessionText).toHaveBeenCalledWith({
+      to: '1555',
+      body: 'Order ORD-1: extra prep time added. Customer notified.',
+    });
   });
 });

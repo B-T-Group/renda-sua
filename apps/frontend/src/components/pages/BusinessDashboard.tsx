@@ -40,7 +40,10 @@ import {
   shouldShowGoLiveCelebration,
 } from '../../utils/businessSetup';
 import { resolveCatalogHealth } from '../../utils/catalogHealth';
-import { resolveQuietHomeNextAction } from '../../utils/resolveQuietHomeNextAction';
+import {
+  resolveQuietHomeGating,
+  resolveQuietHomeNextAction,
+} from '../../utils/resolveQuietHomeNextAction';
 import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import SEOHead from '../seo/SEOHead';
 
@@ -145,12 +148,12 @@ const BusinessDashboard: React.FC = () => {
   const isLoading = aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
   const rentalItemCount = aggregates?.rentalItemCount ?? 0;
-  const ordersTotal = aggregates?.ordersTotal ?? 0;
-  const aggregatesReady = !aggregatesLoading && !!aggregates && !aggregatesError;
-  const quietHomeMode =
-    showOperationalModules && aggregatesReady && ordersTotal === 0;
-  // Show day-to-day modules whenever we are not in quiet home (incl. loading/error).
-  const fulfillmentMode = showOperationalModules && !quietHomeMode;
+  const { quietHomeMode, fulfillmentMode } = resolveQuietHomeGating({
+    showOperationalModules,
+    aggregatesLoading,
+    aggregates,
+    aggregatesError,
+  });
 
   const {
     primaryOrderModules,
