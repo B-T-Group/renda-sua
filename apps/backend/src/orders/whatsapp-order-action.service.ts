@@ -15,14 +15,17 @@ type WaActor =
       kind: 'delegate';
       userId: string;
       businessId: string;
-      locationId: string;
+      locationIds: string[];
     }
   | {
       kind: 'location_alert';
       businessId: string;
-      locationId: string;
+      locationIds: string[];
       ownerUserId: string;
-    };
+    }
+  | { kind: 'ambiguous' };
+
+type ResolvedWaActor = Exclude<WaActor, { kind: 'ambiguous' }>;
 
 type PendingWaOrder = PendingAcceptanceOrder & {
   business_location_id?: string | null;
@@ -54,6 +57,9 @@ export class WhatsAppOrderActionService {
     if (!actor) {
       return { handled: false, message: this.msgUnknown(params.preferredLanguage) };
     }
+    if (actor.kind === 'ambiguous') {
+      return { handled: true, message: this.msgAmbiguous(params.preferredLanguage) };
+    }
     const order = await this.loadOldestPending(actor);
     if (!order) {
       return { handled: true, message: this.msgNone(params.preferredLanguage) };
@@ -72,7 +78,7 @@ export class WhatsAppOrderActionService {
   private async runAction(
     action: MerchantWaAction,
     order: PendingWaOrder,
-    actor: WaActor,
+    actor: ResolvedWaActor,
     lang?: string | null
   ): Promise<string> {
     try {
@@ -86,7 +92,7 @@ export class WhatsAppOrderActionService {
 
   private async doConfirm(
     order: PendingWaOrder,
-    actor: WaActor,
+    actor: ResolvedWaActor,
     lang?: string | null
   ): Promise<string> {
     if (!this.isAsapConfirmable(order)) {
@@ -101,7 +107,7 @@ export class WhatsAppOrderActionService {
 
   private async doBusy(
     order: PendingWaOrder,
-    actor: WaActor,
+    actor: ResolvedWaActor,
     lang?: string | null
   ): Promise<string> {
     await this.acceptance.markBusy(order.id, this.busyAuth(actor, order));
@@ -110,7 +116,7 @@ export class WhatsAppOrderActionService {
 
   private async doDecline(
     order: PendingWaOrder,
-    actor: WaActor,
+    actor: ResolvedWaActor,
     lang?: string | null
   ): Promise<string> {
     await this.orders.cancelOrder(
@@ -127,12 +133,10 @@ export class WhatsAppOrderActionService {
   }
 
   private toActor(
-    actor: WaActor,
+    actor: ResolvedWaActor,
     order: PendingWaOrder
   ): AuthorizedBusinessActor {
-    const locationId =
-      order.business_location_id ||
-      (actor.kind === 'owner' ? '' : actor.locationId);
+    const locationId = this.actorLocationId(actor, order);
     if (!locationId) {
       throw new HttpException(
         'Order has no business location',
@@ -150,7 +154,7 @@ export class WhatsAppOrderActionService {
       return {
         userId: actor.userId,
         businessId: actor.businessId,
-        locationId: actor.locationId,
+        locationId,
       };
     }
     return {
@@ -160,8 +164,17 @@ export class WhatsAppOrderActionService {
     };
   }
 
+  private actorLocationId(
+    actor: ResolvedWaActor,
+    order: PendingWaOrder
+  ): string {
+    if (order.business_location_id) return order.business_location_id;
+    if (actor.kind === 'owner') return '';
+    return actor.locationIds[0] || '';
+  }
+
   private busyAuth(
-    actor: WaActor,
+    actor: ResolvedWaActor,
     order: PendingWaOrder
   ): {
     userId: string;
@@ -172,13 +185,13 @@ export class WhatsAppOrderActionService {
     if (actor.kind === 'delegate') {
       return {
         userId: actor.userId,
-        asDelegateLocationId: actor.locationId,
+        asDelegateLocationId: this.actorLocationId(actor, order),
       };
     }
     return {
       userId: actor.ownerUserId,
       locationAlertAuthorized: true,
-      asDelegateLocationId: order.business_location_id ?? actor.locationId,
+      asDelegateLocationId: this.actorLocationId(actor, order),
     };
   }
 
@@ -225,17 +238,36 @@ export class WhatsAppOrderActionService {
     if (user.business?.id) {
       return { kind: 'owner', userId: user.id, businessId: user.business.id };
     }
-    const manage = (user.location_delegations ?? []).find((d) =>
-      (d.role?.role_permissions ?? []).some(
-        (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
-      )
+    return this.delegateActorFromDelegations(user.id, user.location_delegations);
+  }
+
+  private delegateActorFromDelegations(
+    userId: string,
+    delegations:
+      | Array<{
+          business_location_id: string;
+          business_location?: { business_id: string } | null;
+          role?: {
+            role_permissions?: Array<{ permission?: { key?: string } | null }>;
+          } | null;
+        }>
+      | undefined
+  ): WaActor | null {
+    const manage = (delegations ?? []).filter(
+      (d) =>
+        !!d.business_location?.business_id &&
+        (d.role?.role_permissions ?? []).some(
+          (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
+        )
     );
-    if (!manage?.business_location?.business_id) return null;
+    if (!manage.length) return null;
+    const businessIds = [...new Set(manage.map((d) => d.business_location!.business_id))];
+    if (businessIds.length > 1) return { kind: 'ambiguous' };
     return {
       kind: 'delegate',
-      userId: user.id,
-      businessId: manage.business_location.business_id,
-      locationId: manage.business_location_id,
+      userId,
+      businessId: businessIds[0],
+      locationIds: [...new Set(manage.map((d) => d.business_location_id))],
     };
   }
 
@@ -262,39 +294,39 @@ export class WhatsAppOrderActionService {
         }
       }`
     );
-    const loc = (res.business_locations ?? []).find((row) =>
-      phonesEqual(row.order_alert_phone, normalized)
+    const matches = (res.business_locations ?? []).filter(
+      (row) => !!row.business?.user_id && phonesEqual(row.order_alert_phone, normalized)
     );
-    if (!loc?.business?.user_id) return null;
+    if (!matches.length) return null;
+    const businessIds = [...new Set(matches.map((row) => row.business_id))];
+    if (businessIds.length > 1) return { kind: 'ambiguous' };
     return {
       kind: 'location_alert',
-      businessId: loc.business_id,
-      locationId: loc.id,
-      ownerUserId: loc.business.user_id,
+      businessId: businessIds[0],
+      locationIds: [...new Set(matches.map((row) => row.id))],
+      ownerUserId: matches[0].business!.user_id,
     };
   }
 
-  private async loadOldestPending(actor: WaActor): Promise<PendingWaOrder | null> {
-    const locationId = actor.kind === 'owner' ? null : actor.locationId;
+  private async loadOldestPending(
+    actor: ResolvedWaActor
+  ): Promise<PendingWaOrder | null> {
+    const locationIds = actor.kind === 'owner' ? null : actor.locationIds;
+    if (locationIds && !locationIds.length) return null;
     const res = await this.hasura.executeQuery<{ orders: PendingWaOrder[] }>(
-      locationId
-        ? `query WaPendingLoc($bid: uuid!, $lid: uuid!) {
+      locationIds
+        ? `query WaPendingLocs($bid: uuid!, $lids: [uuid!]!) {
             orders(
               where: {
                 business_id: { _eq: $bid }
-                business_location_id: { _eq: $lid }
+                business_location_id: { _in: $lids }
                 current_status: { _eq: pending }
                 acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
               }
               order_by: { created_at: asc }
               limit: 1
             ) {
-              id order_number current_status acceptance_state
-              acceptance_deadline_at grace_deadline_at
-              busy_extra_prep_minutes estimated_prep_minutes
-              created_at total_amount currency fulfillment_method
-              fulfillment_timing business_id business_location_id
-              delivery_time_windows(limit: 1) { id }
+              ${this.pendingOrderFields()}
             }
           }`
         : `query WaPendingBiz($bid: uuid!) {
@@ -307,19 +339,23 @@ export class WhatsAppOrderActionService {
               order_by: { created_at: asc }
               limit: 1
             ) {
-              id order_number current_status acceptance_state
+              ${this.pendingOrderFields()}
+            }
+          }`,
+      locationIds
+        ? { bid: actor.businessId, lids: locationIds }
+        : { bid: actor.businessId }
+    );
+    return res.orders?.[0] ?? null;
+  }
+
+  private pendingOrderFields(): string {
+    return `id order_number current_status acceptance_state
               acceptance_deadline_at grace_deadline_at
               busy_extra_prep_minutes estimated_prep_minutes
               created_at total_amount currency fulfillment_method
               fulfillment_timing business_id business_location_id
-              delivery_time_windows(limit: 1) { id }
-            }
-          }`,
-      locationId
-        ? { bid: actor.businessId, lid: locationId }
-        : { bid: actor.businessId }
-    );
-    return res.orders?.[0] ?? null;
+              delivery_time_windows(limit: 1) { id }`;
   }
 
   private normalizePhone(phone: string): string {
@@ -342,6 +378,12 @@ export class WhatsAppOrderActionService {
     return lang === 'fr'
       ? 'Numéro non reconnu pour les commandes Rendasua.'
       : 'This number is not linked to Rendasua orders.';
+  }
+
+  private msgAmbiguous(lang?: string | null): string {
+    return lang === 'fr'
+      ? 'Ce numéro est lié à plusieurs commerces. Ouvrez Rendasua pour confirmer.'
+      : 'This number is linked to more than one business. Open Rendasua to confirm.';
   }
 
   private msgNone(lang?: string | null): string {
