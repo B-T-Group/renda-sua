@@ -91,4 +91,26 @@ describe('web quiet home utils', () => {
     });
     expect(action).toBeNull();
   });
+
+  it('offers rentals after primary catalog tips for sale merchants', () => {
+    const action = resolveQuietHomeNextAction({
+      aggregates: aggregates({
+        approvedItemCount: 12,
+        rentalItemCount: 0,
+        hasLogo: true,
+        hasOperatingHours: true,
+      }),
+      verification: {
+        is_verified: true,
+        can_accept_orders: true,
+        accountFullName: 'A',
+        nextAction: 'complete',
+        steps: { agreement: { complete: true } },
+      },
+      mainInterest: 'sell_items',
+      showIdReview: false,
+      showMmPhoneConfirm: false,
+    });
+    expect(action?.id).toBe('offer_rentals');
+  });
 });

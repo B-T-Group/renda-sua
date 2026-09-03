@@ -17,7 +17,9 @@ export type QuietHomeNextActionId =
   | 'catalog_goal'
   | 'share_store'
   | 'logo'
-  | 'hours';
+  | 'hours'
+  | 'offer_rentals'
+  | 'offer_sale_items';
 
 export type QuietHomeNextAction = {
   id: QuietHomeNextActionId;
@@ -105,6 +107,21 @@ export function resolveQuietHomeNextAction(
   }
   if (!a.hasOperatingHours) {
     return { id: 'hours', kind: 'tip' };
+  }
+
+  if (approved >= 1) {
+    if (
+      input.mainInterest === 'sell_items' &&
+      (a.rentalItemCount ?? 0) === 0
+    ) {
+      return { id: 'offer_rentals', kind: 'tip' };
+    }
+    if (
+      input.mainInterest === 'rent_items' &&
+      (a.itemCount ?? 0) === 0
+    ) {
+      return { id: 'offer_sale_items', kind: 'tip' };
+    }
   }
 
   return null;

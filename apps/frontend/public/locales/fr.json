@@ -1846,7 +1846,13 @@
         "idReviewCta": "Voir le statut",
         "mmPhoneTitle": "Confirmer le numéro Mobile Money",
         "mmPhoneMessage": "Liez un numéro Mobile Money vérifié pour recevoir vos paiements.",
-        "mmPhoneCta": "Confirmer le numéro"
+        "mmPhoneCta": "Confirmer le numéro",
+        "offerRentalsTitle": "Proposer aussi des locations ?",
+        "offerRentalsMessage": "Vous pouvez ajouter des articles à louer à tout moment — ils coexistent avec votre catalogue de vente.",
+        "offerRentalsCta": "Ouvrir les locations",
+        "offerSaleItemsTitle": "Vendre aussi des produits ?",
+        "offerSaleItemsMessage": "Vous pouvez ajouter des articles à vendre à tout moment — ils coexistent avec votre catalogue de location.",
+        "offerSaleItemsCta": "Ouvrir les articles"
       }
     },
     "tips": {
