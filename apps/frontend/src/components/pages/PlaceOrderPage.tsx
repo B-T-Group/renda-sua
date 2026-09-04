@@ -96,6 +96,7 @@ import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -1398,6 +1399,34 @@ const PlaceOrderPage: React.FC = () => {
         );
       }
 
+      const effectiveTiming = isPickupOrder
+        ? itemCountrySupportsStripe
+          ? 'pay_now'
+          : 'pay_at_pickup'
+        : paymentTiming;
+      const momoAwaiting =
+        !itemCountrySupportsStripe &&
+        effectiveTiming === 'pay_now' &&
+        order.payment_status !== 'paid' &&
+        order.payment_source !== 'wallet';
+      if (momoAwaiting) {
+        const phoneE164 = (
+          useDifferentPhone
+            ? overridePhoneNumber
+            : profile?.phone_number || ''
+        ).trim();
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164,
+            source: 'checkout',
+            orderNumbers: [order.order_number],
+            confirmationState: { order },
+          })
+        );
+        return;
+      }
+
       // Navigate to order confirmation page
       navigate('/orders/confirmation', {
         state: {
@@ -1450,6 +1479,7 @@ const PlaceOrderPage: React.FC = () => {
     trackPurchase,
     useDifferentPhone,
     overridePhoneNumber,
+    profile?.phone_number,
   ]);
 
   const submitWithPhoneGate = useCallback(async () => {

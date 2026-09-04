@@ -20,6 +20,11 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import {
+  buildMomoAwaitingPaymentTo,
+  type MobileMoneyAwaitingPaymentState,
+} from '../../utils/momoAwaitingPaymentNav';
+import { useNavigate } from 'react-router-dom';
 
 function isPickupMomoPhone(phone: string): boolean {
   if (!phone.trim()) return false;
@@ -49,6 +54,7 @@ export default function RequestPayAtPickupPaymentDialog({
   audience = 'business',
 }: RequestPayAtPickupPaymentDialogProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const backendOrders = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
@@ -90,8 +96,20 @@ export default function RequestPayAtPickupPaymentDialog({
         order.id,
         useDifferentPhone ? effectivePhone : undefined
       );
-      onSuccess?.();
       onClose();
+      if (audience === 'client') {
+        const phoneE164 = effectivePhone || clientPhone;
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164,
+            source: 'pickup',
+            orderNumbers: [order.order_number],
+          } satisfies MobileMoneyAwaitingPaymentState)
+        );
+        return;
+      }
+      onSuccess?.();
     } catch (e) {
       setError(
         e instanceof Error

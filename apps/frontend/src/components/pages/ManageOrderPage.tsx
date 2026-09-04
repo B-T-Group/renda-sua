@@ -53,6 +53,7 @@ import {
   orderToPhaseInput,
   resolveOrderPhase,
 } from '../../utils/orderPhase';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import SEOHead from '../seo/SEOHead';
 
 const CLIENT_TRACKING_STATUSES = ['picked_up', 'in_transit', 'out_for_delivery'];
@@ -244,14 +245,21 @@ const ManageOrderPageContent: React.FC = () => {
         window.location.assign(result.checkout_url);
         return;
       }
+      if (!isStripeOrder) {
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164: order.client?.user?.phone_number?.trim() || '',
+            source: 'retry',
+            orderNumbers: [order.order_number],
+          })
+        );
+        return;
+      }
       enqueueSnackbar(
         t(
-          isStripeOrder
-            ? 'orders.retryPayment.successStripe'
-            : 'orders.retryPayment.success',
-          isStripeOrder
-            ? 'Opening secure card payment…'
-            : 'Payment retry started. Please check your phone to approve.'
+          'orders.retryPayment.successStripe',
+          'Opening secure card payment…'
         ),
         { variant: 'success' }
       );

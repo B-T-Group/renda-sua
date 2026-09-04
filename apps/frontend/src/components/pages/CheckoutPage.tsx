@@ -54,6 +54,7 @@ import {
 } from '../common/CheckoutTaxSummaryLines';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -903,6 +904,35 @@ const CheckoutPage: React.FC = () => {
       // Stripe-currency single order: redirect to hosted Checkout.
       const redirected = await maybeRedirectToStripeCheckout(orders);
       if (redirected) return;
+
+      const momoAwaiting =
+        checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+        paymentTiming === 'pay_now' &&
+        orders.some(
+          (o) =>
+            o.payment_status !== 'paid' &&
+            (o as { payment_source?: string }).payment_source !== 'wallet'
+        );
+      if (momoAwaiting) {
+        const phoneE164 = (
+          useDifferentPhone
+            ? overridePhoneNumber
+            : profile?.phone_number || ''
+        ).trim();
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: orders.map((o) => o.id),
+            phoneE164,
+            source: 'checkout',
+            orderNumbers: orders.map((o) => o.order_number),
+            confirmationState: {
+              orders,
+              multipleOrders: orders.length > 1,
+            },
+          })
+        );
+        return;
+      }
 
       // Navigate to order confirmation
       navigate('/orders/confirmation', {
